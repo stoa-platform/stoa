@@ -94,7 +94,12 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
           </div>
 
           {/* UAC Badge */}
-          <div className="flex-shrink-0" onClick={(e) => e.preventDefault()}>
+          <div
+            className="flex-shrink-0"
+            role="presentation"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
             <UACBadge contractName={contract.name} bindings={badgeBindings} variant="default" />
           </div>
         </div>

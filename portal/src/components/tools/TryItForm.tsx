@@ -37,6 +37,7 @@ interface TryItFormProps {
   className?: string;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- validation utility co-located with form
 export function validateField(
   value: unknown,
   property: MCPPropertySchema,

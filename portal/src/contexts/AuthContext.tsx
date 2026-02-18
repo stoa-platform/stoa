@@ -284,6 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isReady && user && !user.tenant_id) {
       provisionPersonalTenant().then(() => fetchUserPermissions());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally narrow deps to avoid infinite loop
   }, [isReady, user?.tenant_id, provisionPersonalTenant, fetchUserPermissions]);
 
   // Auto-login if we have auth params in URL (callback from Keycloak)
@@ -291,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!oidc.isAuthenticated && !oidc.isLoading && hasAuthParams()) {
       oidc.signinRedirect();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- oidc object recreated every render
   }, [oidc.isAuthenticated, oidc.isLoading]);
 
   // RBAC Helpers

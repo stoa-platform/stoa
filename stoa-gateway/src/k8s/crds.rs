@@ -386,6 +386,7 @@ mod tests {
                 auth: Some(UpstreamAuth {
                     auth_type: "bearer".to_string(),
                     secret_ref: "api-token".to_string(),
+                    secret_key: None,
                     header_name: None,
                 }),
                 timeout_seconds: Some(30),

@@ -26,6 +26,7 @@ use crate::resilience::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, FallbackChain,
 };
 use crate::routes::{PolicyRegistry, RouteRegistry};
+use crate::skills::resolver::SkillResolver;
 use crate::uac::cache::VersionedPolicyCache;
 use crate::uac::enforcer::ClassificationEnforcer;
 use crate::uac::{Action, ContractRegistry};
@@ -76,6 +77,8 @@ pub struct AppState {
     /// Classification-based enforcer for contract routes (CAB-1299)
     /// None when classification enforcement is disabled.
     pub classification_enforcer: Option<Arc<ClassificationEnforcer>>,
+    /// Skill resolver for CSS cascade context injection (CAB-1314)
+    pub skill_resolver: Arc<SkillResolver>,
     /// Federation allow-list cache for sub-account routing (CAB-1362)
     pub federation_cache: Arc<FederationCache>,
 }
@@ -280,6 +283,13 @@ impl AppState {
             None
         };
 
+        // Initialize skill resolver (CAB-1314)
+        let skill_resolver = Arc::new(SkillResolver::new(config.skill_cache_ttl_secs));
+        tracing::info!(
+            cache_ttl_secs = config.skill_cache_ttl_secs,
+            "Skill resolver initialized"
+        );
+
         // Initialize federation cache (CAB-1362)
         let federation_cache = Arc::new(FederationCache::new(
             config.federation_cache_ttl_secs,
@@ -336,6 +346,7 @@ impl AppState {
             event_buffer,
             contract_registry,
             classification_enforcer,
+            skill_resolver,
             federation_cache,
         }
     }

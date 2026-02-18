@@ -238,6 +238,97 @@ pub struct ToolSetStatus {
 }
 
 // =============================================================================
+// Skill CRD (CAB-1314)
+// =============================================================================
+
+/// CSS cascade context injection for AI agents
+///
+/// # Example YAML
+///
+/// ```yaml
+/// apiVersion: gostoa.dev/v1alpha1
+/// kind: Skill
+/// metadata:
+///   name: python-style
+///   namespace: tenant-acme
+/// spec:
+///   name: Python Style Guide
+///   scope: tenant
+///   priority: 50
+///   instructions: "Always use type hints and follow PEP 8."
+///   enabled: true
+/// ```
+#[derive(CustomResource, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[kube(
+    group = "gostoa.dev",
+    version = "v1alpha1",
+    kind = "Skill",
+    namespaced,
+    status = "SkillStatus",
+    printcolumn = r#"{"name":"Scope","type":"string","jsonPath":".spec.scope"}"#,
+    printcolumn = r#"{"name":"Priority","type":"integer","jsonPath":".spec.priority"}"#,
+    printcolumn = r#"{"name":"Enabled","type":"boolean","jsonPath":".spec.enabled"}"#,
+    printcolumn = r#"{"name":"Registered","type":"boolean","jsonPath":".status.registered"}"#
+)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillSpec {
+    /// Human-readable skill name
+    pub name: String,
+
+    /// Skill description for context
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// CSS-like specificity scope: global, tenant, tool, user
+    pub scope: String,
+
+    /// Priority within same scope (0-100, higher wins)
+    #[serde(default = "default_skill_priority")]
+    pub priority: i32,
+
+    /// System prompt instructions injected into agent context
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+
+    /// Tool name this skill applies to (scope=tool)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_ref: Option<String>,
+
+    /// User ID this skill applies to (scope=user)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_ref: Option<String>,
+
+    /// Whether this skill is active
+    #[serde(default = "default_skill_enabled")]
+    pub enabled: bool,
+}
+
+fn default_skill_priority() -> i32 {
+    50
+}
+
+fn default_skill_enabled() -> bool {
+    true
+}
+
+/// Skill status (updated by controller)
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillStatus {
+    /// Whether the skill is registered in the resolver
+    #[serde(default)]
+    pub registered: bool,
+
+    /// Last time the skill was seen/updated
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_seen: Option<String>,
+
+    /// Error message if registration failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -309,5 +400,41 @@ mod tests {
         let status = ToolSetStatus::default();
         assert!(!status.connected);
         assert_eq!(status.tool_count, 0);
+    }
+
+    #[test]
+    fn test_skill_spec_serialization() {
+        let spec = SkillSpec {
+            name: "Python Style".to_string(),
+            description: Some("PEP 8 conventions".to_string()),
+            scope: "tenant".to_string(),
+            priority: 80,
+            instructions: Some("Use type hints.".to_string()),
+            tool_ref: None,
+            user_ref: None,
+            enabled: true,
+        };
+
+        let json = serde_json::to_value(&spec).unwrap();
+        assert_eq!(json["name"], "Python Style");
+        assert_eq!(json["scope"], "tenant");
+        assert_eq!(json["priority"], 80);
+        assert_eq!(json["enabled"], true);
+    }
+
+    #[test]
+    fn test_skill_status_default() {
+        let status = SkillStatus::default();
+        assert!(!status.registered);
+        assert!(status.last_seen.is_none());
+    }
+
+    #[test]
+    fn test_skill_spec_defaults() {
+        let json_str = r#"{"name":"test","scope":"global"}"#;
+        let spec: SkillSpec = serde_json::from_str(json_str).unwrap();
+        assert_eq!(spec.priority, 50);
+        assert!(spec.enabled);
+        assert!(spec.description.is_none());
     }
 }

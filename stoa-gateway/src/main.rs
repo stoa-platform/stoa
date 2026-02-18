@@ -127,6 +127,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 
+    // Flush pending OTel spans before exit
+    stoa_gateway::telemetry::shutdown_telemetry();
+
     info!("STOA Gateway shutdown complete");
     Ok(())
 }
@@ -193,12 +196,32 @@ fn init_tracing(config: &Config) {
 
     let fmt_layer = fmt::layer().json();
 
-    if config.otel_endpoint.is_some() {
-        warn!(
-            "STOA_OTEL_ENDPOINT set but OTel export not yet available — using local tracing only"
-        );
+    #[cfg(feature = "otel")]
+    {
+        use stoa_gateway::telemetry::{init_telemetry_tracer, TelemetryConfig};
+
+        let telem_config = TelemetryConfig {
+            otlp_endpoint: config.otel_endpoint.clone(),
+            ..TelemetryConfig::default()
+        };
+        if let Some(tracer) = init_telemetry_tracer(&telem_config) {
+            let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(fmt_layer)
+                .with(otel_layer)
+                .init();
+            return;
+        }
     }
 
+    #[cfg(not(feature = "otel"))]
+    {
+        let _ = config; // Used only with otel feature
+        stoa_gateway::telemetry::init_telemetry_noop();
+    }
+
+    // Fallback: no OTel (feature disabled or init failed)
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt_layer)

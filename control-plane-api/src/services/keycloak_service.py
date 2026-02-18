@@ -177,6 +177,15 @@ class KeycloakService:
                 return client
         return None
 
+    async def get_client_by_id(self, client_uuid: str) -> dict | None:
+        """Get client by Keycloak internal UUID."""
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+        try:
+            return self._admin.get_client(client_uuid)
+        except Exception:
+            return None
+
     async def create_client(
         self, tenant_id: str, name: str, display_name: str, redirect_uris: list[str], description: str = ""
     ) -> dict:

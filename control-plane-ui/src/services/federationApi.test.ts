@@ -130,4 +130,36 @@ describe('FederationService', () => {
       expect(result).toEqual({ allowed_tools: ['tool-1', 'tool-2'] });
     });
   });
+
+  describe('getUsage', () => {
+    it('calls correct endpoint with default days', async () => {
+      const usageData = { master_account_id: M, period_days: 7, total_requests: 100 };
+      mockGet.mockResolvedValue({ data: usageData } as any);
+      const result = await federationService.getUsage(T, M);
+      expect(mockGet).toHaveBeenCalledWith(`/v1/tenants/${T}/federation/accounts/${M}/usage`, {
+        params: { days: 7 },
+      });
+      expect(result).toEqual(usageData);
+    });
+
+    it('passes custom days parameter', async () => {
+      mockGet.mockResolvedValue({ data: { period_days: 30 } } as any);
+      await federationService.getUsage(T, M, 30);
+      expect(mockGet).toHaveBeenCalledWith(`/v1/tenants/${T}/federation/accounts/${M}/usage`, {
+        params: { days: 30 },
+      });
+    });
+  });
+
+  describe('bulkRevoke', () => {
+    it('posts to correct endpoint', async () => {
+      const result = { revoked_count: 2, already_revoked: 1, total: 3 };
+      mockPost.mockResolvedValue({ data: result } as any);
+      const response = await federationService.bulkRevoke(T, M);
+      expect(mockPost).toHaveBeenCalledWith(
+        `/v1/tenants/${T}/federation/accounts/${M}/bulk-revoke`
+      );
+      expect(response).toEqual(result);
+    });
+  });
 });

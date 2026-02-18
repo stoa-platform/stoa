@@ -24,11 +24,15 @@ vi.mock('react-router-dom', async (importOriginal) => {
 // Mock federation service
 const mockGetMasterAccount = vi.fn();
 const mockListSubAccounts = vi.fn();
+const mockGetUsage = vi.fn();
+const mockBulkRevoke = vi.fn();
 
 vi.mock('../../services/federationApi', () => ({
   federationService: {
     getMasterAccount: (...args: unknown[]) => mockGetMasterAccount(...args),
     listSubAccounts: (...args: unknown[]) => mockListSubAccounts(...args),
+    getUsage: (...args: unknown[]) => mockGetUsage(...args),
+    bulkRevoke: (...args: unknown[]) => mockBulkRevoke(...args),
     updateMasterAccount: vi.fn().mockResolvedValue({}),
     deleteMasterAccount: vi.fn().mockResolvedValue({}),
     revokeSubAccount: vi.fn().mockResolvedValue({}),
@@ -79,6 +83,33 @@ const defaultSubAccounts = {
   page_size: 20,
 };
 
+const defaultUsage = {
+  master_account_id: 'master-1',
+  period_days: 7,
+  total_requests: 1234,
+  total_tokens: 56789,
+  sub_accounts: [
+    {
+      sub_account_id: 'sub-1',
+      sub_account_name: 'Partner Agent',
+      total_requests: 800,
+      total_tokens: 40000,
+      avg_latency_ms: 120,
+      error_count: 3,
+      last_active_at: '2026-02-17T10:00:00Z',
+    },
+    {
+      sub_account_id: 'sub-2',
+      sub_account_name: 'Internal Bot',
+      total_requests: 434,
+      total_tokens: 16789,
+      avg_latency_ms: 85,
+      error_count: 0,
+      last_active_at: null,
+    },
+  ],
+};
+
 function renderComponent() {
   return renderWithProviders(<FederationAccountDetail />, {
     route: '/federation/accounts/master-1',
@@ -92,6 +123,8 @@ describe('FederationAccountDetail', () => {
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
     mockGetMasterAccount.mockResolvedValue(defaultAccount);
     mockListSubAccounts.mockResolvedValue(defaultSubAccounts);
+    mockGetUsage.mockResolvedValue(defaultUsage);
+    mockBulkRevoke.mockResolvedValue({ revoked_count: 1, already_revoked: 1, total: 2 });
   });
 
   it('renders the account name', async () => {
@@ -113,9 +146,11 @@ describe('FederationAccountDetail', () => {
   it('renders sub-accounts table', async () => {
     renderComponent();
     await waitFor(() => {
-      expect(screen.getByText('Partner Agent')).toBeInTheDocument();
+      const agents = screen.getAllByText('Partner Agent');
+      expect(agents.length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getByText('Internal Bot')).toBeInTheDocument();
+    const bots = screen.getAllByText('Internal Bot');
+    expect(bots.length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows API key prefix', async () => {
@@ -158,6 +193,58 @@ describe('FederationAccountDetail', () => {
     expect(await screen.findByText('Back to Federation')).toBeInTheDocument();
   });
 
+  it('renders usage total requests', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('1,234')).toBeInTheDocument();
+    });
+  });
+
+  it('renders usage breakdown table', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Usage Breakdown (last 7 days)')).toBeInTheDocument();
+    });
+    expect(screen.getByText('800')).toBeInTheDocument();
+    expect(screen.getByText('120ms')).toBeInTheDocument();
+  });
+
+  it('shows error count with styling for non-zero errors', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('3')).toBeInTheDocument();
+    });
+  });
+
+  it('shows dash for usage when data not loaded', async () => {
+    mockGetUsage.mockResolvedValue(undefined);
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Partner Federation')).toBeInTheDocument();
+    });
+    // The usage card shows '-' when no data is loaded
+    expect(screen.getByText('Requests (7d)')).toBeInTheDocument();
+    // Multiple '-' exist (dates too), so just verify the section renders
+    const dashes = screen.getAllByText('-');
+    expect(dashes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('hides usage breakdown when no usage data', async () => {
+    mockGetUsage.mockResolvedValue(undefined);
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Partner Federation')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Usage Breakdown/)).not.toBeInTheDocument();
+  });
+
+  it('shows Revoke All button for admin', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Revoke All')).toBeInTheDocument();
+    });
+  });
+
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',
     (role) => {
@@ -175,6 +262,7 @@ describe('FederationAccountDetail', () => {
             expect(screen.getByText('Suspend')).toBeInTheDocument();
           });
           expect(screen.getByText('Delete')).toBeInTheDocument();
+          expect(screen.getByText('Revoke All')).toBeInTheDocument();
           expect(screen.getByText('Add Sub-Account')).toBeInTheDocument();
         });
       }
@@ -188,6 +276,7 @@ describe('FederationAccountDetail', () => {
           });
           expect(screen.queryByText('Suspend')).not.toBeInTheDocument();
           expect(screen.queryByText('Delete')).not.toBeInTheDocument();
+          expect(screen.queryByText('Revoke All')).not.toBeInTheDocument();
           expect(screen.queryByText('Add Sub-Account')).not.toBeInTheDocument();
         });
       }

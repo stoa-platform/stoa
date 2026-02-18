@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Users, Clock, Wrench } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Plus, Users, Clock, Wrench, BarChart3, Ban } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { federationService } from '../../services/federationApi';
 import { SubAccountModal } from './SubAccountModal';
@@ -63,6 +63,50 @@ export function FederationAccountDetail() {
     queryFn: () => federationService.listSubAccounts(tenantId, id!),
     enabled: !!tenantId && !!id,
   });
+
+  const { data: usageData } = useQuery({
+    queryKey: ['federation-usage', tenantId, id],
+    queryFn: () => federationService.getUsage(tenantId, id!),
+    enabled: !!tenantId && !!id,
+  });
+
+  const subAccounts = subAccountsData?.items || [];
+
+  const bulkRevokeMutation = useMutation({
+    mutationFn: () => federationService.bulkRevoke(tenantId, id!),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: ['federation-sub-accounts', tenantId, id],
+      });
+      queryClient.invalidateQueries({ queryKey: ['federation-account', tenantId, id] });
+      queryClient.invalidateQueries({ queryKey: ['federation-usage', tenantId, id] });
+      toast.success('Bulk revoke complete', `${result.revoked_count} sub-account(s) revoked`);
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Failed to bulk revoke';
+      toast.error('Bulk revoke failed', message);
+    },
+  });
+
+  const handleBulkRevoke = useCallback(async () => {
+    if (!id) return;
+    const items = subAccountsData?.items || [];
+    const activeCount = items.filter((s) => s.status === 'active').length;
+    if (activeCount === 0) {
+      toast.info('No active sub-accounts', 'All sub-accounts are already revoked');
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Revoke All Sub-Accounts',
+      message: `Are you sure you want to revoke all ${activeCount} active sub-account(s)? All API keys will stop working immediately.`,
+      confirmLabel: 'Revoke All',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    bulkRevokeMutation.mutate();
+  }, [id, subAccountsData, toast, confirm, bulkRevokeMutation]);
 
   const handleSuspendToggle = useCallback(async () => {
     if (!account || !id) return;
@@ -147,7 +191,6 @@ export function FederationAccountDetail() {
     [tenantId, id, queryClient]
   );
 
-  const subAccounts = subAccountsData?.items || [];
   const isLoading = accountLoading || subAccountsLoading;
 
   if (isLoading) {
@@ -215,6 +258,14 @@ export function FederationAccountDetail() {
               {account.status === 'active' ? 'Suspend' : 'Reactivate'}
             </button>
             <button
+              onClick={handleBulkRevoke}
+              disabled={bulkRevokeMutation.isPending}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+            >
+              <Ban className="h-3.5 w-3.5" />
+              Revoke All
+            </button>
+            <button
               onClick={handleDelete}
               className="px-3 py-1.5 text-sm border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
             >
@@ -255,14 +306,76 @@ export function FederationAccountDetail() {
           </div>
           <div>
             <div className="text-xs text-gray-500 dark:text-neutral-400 uppercase font-medium">
-              Usage
+              Requests (7d)
             </div>
-            <div className="mt-1 text-sm text-gray-400 dark:text-neutral-500 italic">
-              Coming soon
+            <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-gray-900 dark:text-white">
+              <BarChart3 className="h-4 w-4 text-gray-400" />
+              {usageData ? usageData.total_requests.toLocaleString() : '-'}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Usage breakdown */}
+      {usageData && usageData.sub_accounts.length > 0 && (
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
+          <div className="px-4 py-3 border-b dark:border-neutral-700">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Usage Breakdown (last {usageData.period_days} days)
+            </h2>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 dark:bg-neutral-800 border-b dark:border-neutral-700">
+                <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  Sub-account
+                </th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  Requests
+                </th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  Tokens
+                </th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  Avg Latency
+                </th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  Errors
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y dark:divide-neutral-700">
+              {usageData.sub_accounts.map((stat) => (
+                <tr key={stat.sub_account_id}>
+                  <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
+                    {stat.sub_account_name}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-neutral-300">
+                    {stat.total_requests.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-neutral-300">
+                    {stat.total_tokens.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-neutral-300">
+                    {stat.avg_latency_ms}ms
+                  </td>
+                  <td className="px-4 py-2 text-sm text-right">
+                    <span
+                      className={
+                        stat.error_count > 0
+                          ? 'text-red-600 dark:text-red-400 font-medium'
+                          : 'text-gray-600 dark:text-neutral-300'
+                      }
+                    >
+                      {stat.error_count}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Sub-accounts section */}
       <div className="space-y-4">

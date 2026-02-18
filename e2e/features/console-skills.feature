@@ -1,4 +1,4 @@
-@wip @skills @console
+@skills @console
 Feature: Console - Skills Management
 
   As a tenant admin,

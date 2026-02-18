@@ -1,4 +1,4 @@
-@console @workflow @wip
+@console @workflow
 Feature: Onboarding Workflows (CAB-593)
   As a platform administrator
   I want to configure onboarding workflows per tenant

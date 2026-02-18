@@ -330,6 +330,7 @@ pub async fn handle_sse_post(
         roles,
         scopes,
         raw_token: validated_token,
+        skill_instructions: None, // SSE: skills resolved per-tool in handler
     };
 
     // Route to handler
@@ -575,6 +576,7 @@ async fn process_single_request(
         roles: vec![],
         scopes: vec![],
         raw_token: None,
+        skill_instructions: None,
     };
 
     // Route to handler

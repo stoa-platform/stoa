@@ -132,6 +132,20 @@ stoaGateway:
   tolerations: []
   extraEnv: []
 
+# Autoscaling (HPA) — gateway only (other components use standalone manifests)
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  scaleDownStabilizationSeconds: 300
+
+# Pod Disruption Budget — gateway only (other components use standalone manifests)
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
 # ==============================================================================
 # STOA Sidecar Configuration (ADR-028: Tier 2 - Third-Party Gateway Integration)
 # ==============================================================================

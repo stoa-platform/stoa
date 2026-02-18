@@ -10,7 +10,9 @@ metadata:
     app.kubernetes.io/component: gateway
     {{- include "stoa-platform.labels" . | nindent 4 }}
 spec:
+  {{- if not (and .Values.autoscaling .Values.autoscaling.enabled) }}
   replicas: {{ .Values.stoaGateway.replicas | default 2 }}
+  {{- end }}
   strategy:
     type: RollingUpdate
     rollingUpdate:

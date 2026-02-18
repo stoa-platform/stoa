@@ -1,0 +1,15 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stoa-control-plane-api
+  namespace: stoa-system
+  labels:
+    app: stoa-control-plane-api
+    app.kubernetes.io/name: stoa-control-plane-api
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: stoa-control-plane-api

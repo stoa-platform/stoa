@@ -1,0 +1,15 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stoa-portal
+  namespace: stoa-system
+  labels:
+    app: stoa-portal
+    app.kubernetes.io/name: stoa-portal
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: stoa-portal

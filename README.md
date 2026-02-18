@@ -16,6 +16,12 @@
   <img src="https://img.shields.io/badge/MCP-Compatible-purple.svg" alt="MCP Compatible">
   <a href="https://github.com/stoa-platform/stoa/discussions"><img src="https://img.shields.io/github/discussions/stoa-platform/stoa?logo=github" alt="GitHub Discussions"></a>
 </p>
+<p align="center">
+  <img src="https://img.shields.io/badge/SAST-Gitleaks%20%7C%20Bandit%20%7C%20Clippy-brightgreen?logo=shieldsdotio" alt="SAST: Gitleaks, Bandit, Clippy">
+  <img src="https://img.shields.io/badge/Container-Trivy-blue?logo=aquasecurity" alt="Container Scan: Trivy">
+  <img src="https://img.shields.io/badge/SBOM-CycloneDX%20%7C%20SPDX-blue?logo=dependabot" alt="SBOM: CycloneDX + SPDX">
+  <img src="https://img.shields.io/badge/License_Scan-Trivy-blue?logo=opensourceinitiative" alt="License Scan: Trivy">
+</p>
 
 ---
 
@@ -170,6 +176,26 @@ stoa/
 - **Architecture Decisions**: [ADRs](https://docs.gostoa.dev/docs/architecture/adr/)
 - **API Reference**: [Control Plane API](https://docs.gostoa.dev/docs/api/control-plane)
 - **Guides**: [Quick Start](https://docs.gostoa.dev/docs/guides/quickstart)
+
+## Security
+
+STOA runs a 9-job security pipeline on every PR and daily on `main`:
+
+| Tool | Scope | What It Catches |
+|------|-------|-----------------|
+| **Gitleaks** | Entire repo | Hardcoded secrets, API keys, tokens |
+| **Bandit** | Python (API, MCP GW) | SQL injection, eval(), insecure crypto |
+| **ESLint Security** | TypeScript (Console, Portal) | XSS, unsafe regex, eval |
+| **Clippy SAST** | Rust (Gateway) | `todo!()`, `dbg!()`, `unwrap()`, `panic()` |
+| **Trivy** | Container images | CVEs (CRITICAL + HIGH) |
+| **Cargo Audit** | Rust dependencies | Known vulnerability advisories |
+| **pip-audit / npm audit** | Python + Node deps | Dependency vulnerabilities |
+| **CycloneDX + SPDX** | All components | SBOM generation |
+| **Trivy License** | All components | License compliance (Apache 2.0 compatibility) |
+
+3 checks are **required** on every PR (branch protection): License Compliance, SBOM Generation, Verify Signed Commits.
+
+See [`security-scan.yml`](.github/workflows/security-scan.yml) for the full pipeline.
 
 ## Contributing
 

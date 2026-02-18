@@ -352,8 +352,11 @@ async fn init_k8s_watcher(config: &Config, state: &AppState) {
         info!("Initializing K8s CRD watcher for dynamic tool registration");
         match kube::Client::try_default().await {
             Ok(client) => {
-                let watcher =
-                    stoa_gateway::k8s::CrdWatcher::new(client, state.tool_registry.clone());
+                let watcher = stoa_gateway::k8s::CrdWatcher::new(
+                    client,
+                    state.tool_registry.clone(),
+                    state.skill_resolver.clone(),
+                );
                 tokio::spawn(async move {
                     watcher.start().await;
                 });

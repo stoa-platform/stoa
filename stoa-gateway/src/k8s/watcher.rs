@@ -14,24 +14,31 @@ use kube::{
 };
 use tracing::{debug, error, info, warn};
 
-use super::crds::{Tool, ToolAnnotationsCrd, ToolSet};
+use super::crds::{Skill, Tool, ToolAnnotationsCrd, ToolSet};
 use crate::federation::upstream::{TransportType, UpstreamMcpClient, UpstreamMcpConfig};
 use crate::federation::FederatedTool;
 use crate::mcp::tools::dynamic_tool::{schema_from_value, DynamicTool};
 use crate::mcp::tools::{ToolAnnotations, ToolRegistry};
+use crate::skills::resolver::{SkillResolver, SkillScope, StoredSkill};
 
-/// CRD Watcher for dynamic tool registration
+/// CRD Watcher for dynamic tool + skill registration
 pub struct CrdWatcher {
     client: Client,
     tool_registry: Arc<ToolRegistry>,
+    skill_resolver: Arc<SkillResolver>,
 }
 
 impl CrdWatcher {
     /// Create a new CRD watcher
-    pub fn new(client: Client, tool_registry: Arc<ToolRegistry>) -> Self {
+    pub fn new(
+        client: Client,
+        tool_registry: Arc<ToolRegistry>,
+        skill_resolver: Arc<SkillResolver>,
+    ) -> Self {
         Self {
             client,
             tool_registry,
+            skill_resolver,
         }
     }
 
@@ -47,6 +54,10 @@ impl CrdWatcher {
         let toolsets: Api<ToolSet> = Api::all(self.client.clone());
         let toolset_watcher = watcher(toolsets, watcher::Config::default());
 
+        // Watch Skill CRDs (CAB-1314)
+        let skills: Api<Skill> = Api::all(self.client.clone());
+        let skill_watcher = watcher(skills, watcher::Config::default());
+
         // Process events concurrently
         tokio::select! {
             result = self.watch_tools(tool_watcher) => {
@@ -57,6 +68,11 @@ impl CrdWatcher {
             result = self.watch_toolsets(toolset_watcher) => {
                 if let Err(e) = result {
                     error!(error = %e, "ToolSet watcher failed");
+                }
+            }
+            result = self.watch_skills(skill_watcher) => {
+                if let Err(e) = result {
+                    error!(error = %e, "Skill watcher failed");
                 }
             }
         }
@@ -126,6 +142,100 @@ impl CrdWatcher {
         }
 
         Ok(())
+    }
+
+    /// Watch Skill CRD events (CAB-1314)
+    async fn watch_skills(
+        &self,
+        watcher: impl futures::Stream<Item = Result<Event<Skill>, watcher::Error>>,
+    ) -> Result<(), watcher::Error> {
+        tokio::pin!(watcher);
+
+        while let Some(event) = watcher.next().await {
+            match event {
+                Ok(Event::Apply(skill)) => {
+                    self.handle_skill_apply(&skill);
+                }
+                Ok(Event::Delete(skill)) => {
+                    self.handle_skill_delete(&skill);
+                }
+                Ok(Event::Init) => {
+                    debug!("Skill watcher initialized");
+                }
+                Ok(Event::InitApply(skill)) => {
+                    self.handle_skill_apply(&skill);
+                }
+                Ok(Event::InitDone) => {
+                    info!(
+                        count = self.skill_resolver.count(),
+                        "Skill watcher initial sync complete"
+                    );
+                }
+                Err(e) => {
+                    warn!(error = %e, "Skill watcher error");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle Skill CRD apply — upsert into resolver (sync, no .await needed)
+    fn handle_skill_apply(&self, skill: &Skill) {
+        let namespace = skill.metadata.namespace.as_deref().unwrap_or("default");
+        let meta_name = skill.metadata.name.as_deref().unwrap_or("unknown");
+        let key = format!("{}/{}", namespace, meta_name);
+
+        let scope = match SkillScope::from_crd(&skill.spec.scope) {
+            Some(s) => s,
+            None => {
+                warn!(
+                    skill = %meta_name,
+                    scope = %skill.spec.scope,
+                    "Invalid skill scope — skipping"
+                );
+                return;
+            }
+        };
+
+        // Clamp priority to 0-100 and cast to u8
+        let priority = skill.spec.priority.clamp(0, 100) as u8;
+
+        let stored = StoredSkill {
+            key: key.clone(),
+            name: skill.spec.name.clone(),
+            description: skill.spec.description.clone(),
+            tenant_id: namespace.to_string(),
+            scope,
+            priority,
+            instructions: skill.spec.instructions.clone(),
+            tool_ref: skill.spec.tool_ref.clone(),
+            user_ref: skill.spec.user_ref.clone(),
+            enabled: skill.spec.enabled,
+        };
+
+        self.skill_resolver.upsert(stored);
+
+        info!(
+            skill = %key,
+            scope = %scope,
+            priority,
+            tenant = %namespace,
+            "Skill registered from CRD"
+        );
+    }
+
+    /// Handle Skill CRD delete — remove from resolver (sync)
+    fn handle_skill_delete(&self, skill: &Skill) {
+        let namespace = skill.metadata.namespace.as_deref().unwrap_or("default");
+        let meta_name = skill.metadata.name.as_deref().unwrap_or("unknown");
+        let key = format!("{}/{}", namespace, meta_name);
+
+        if self.skill_resolver.remove(&key) {
+            info!(skill = %key, "Skill unregistered (CRD deleted)");
+        } else {
+            debug!(skill = %key, "Skill was not registered");
+        }
     }
 
     /// Handle Tool CRD apply (create/update)

@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { ErrorFallback } from './ErrorFallback';
+import { captureErrorBoundary } from '../../services/errorTracking';
 
 interface Props {
   children: ReactNode;
@@ -35,17 +36,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log the error to console
     console.error('[ErrorBoundary] Caught error:', error);
     console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
 
-    // Call optional error handler
     this.props.onError?.(error, errorInfo);
-
-    // TODO: Send to error tracking service (e.g., Sentry)
-    // if (window.Sentry) {
-    //   window.Sentry.captureException(error, { extra: errorInfo });
-    // }
+    captureErrorBoundary(error, errorInfo);
   }
 
   resetError = () => {

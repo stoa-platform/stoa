@@ -21,6 +21,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::warn;
 
 use crate::proxy::credentials::{AuthType, BackendCredential};
@@ -110,7 +111,7 @@ pub async fn upsert_api(
     (status, Json(serde_json::json!({"id": id, "status": "ok"})))
 }
 
-pub async fn list_apis(State(state): State<AppState>) -> Json<Vec<ApiRoute>> {
+pub async fn list_apis(State(state): State<AppState>) -> Json<Vec<Arc<ApiRoute>>> {
     Json(state.route_registry.list())
 }
 

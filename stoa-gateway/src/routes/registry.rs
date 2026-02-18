@@ -6,6 +6,7 @@
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::uac::Classification;
 
@@ -37,8 +38,12 @@ pub struct ApiRoute {
 }
 
 /// Thread-safe in-memory registry of API routes.
+///
+/// Routes are stored as `Arc<ApiRoute>` to avoid cloning 7+ String fields
+/// on every lookup. `find_by_path()` returns `Arc<ApiRoute>` — one atomic
+/// increment vs deep clone. (CAB-1332 optimization)
 pub struct RouteRegistry {
-    routes: RwLock<HashMap<String, ApiRoute>>,
+    routes: RwLock<HashMap<String, Arc<ApiRoute>>>,
 }
 
 impl Default for RouteRegistry {
@@ -56,23 +61,25 @@ impl RouteRegistry {
     }
 
     /// Insert or update a route. Returns the previous value if it existed.
-    pub fn upsert(&self, route: ApiRoute) -> Option<ApiRoute> {
-        self.routes.write().insert(route.id.clone(), route)
+    pub fn upsert(&self, route: ApiRoute) -> Option<Arc<ApiRoute>> {
+        self.routes
+            .write()
+            .insert(route.id.clone(), Arc::new(route))
     }
 
     /// Remove a route by ID. Returns the removed route if it existed.
-    pub fn remove(&self, id: &str) -> Option<ApiRoute> {
+    pub fn remove(&self, id: &str) -> Option<Arc<ApiRoute>> {
         self.routes.write().remove(id)
     }
 
     /// Get a route by ID.
-    pub fn get(&self, id: &str) -> Option<ApiRoute> {
-        self.routes.read().get(id).cloned()
+    pub fn get(&self, id: &str) -> Option<Arc<ApiRoute>> {
+        self.routes.read().get(id).map(Arc::clone)
     }
 
     /// List all registered routes.
-    pub fn list(&self) -> Vec<ApiRoute> {
-        self.routes.read().values().cloned().collect()
+    pub fn list(&self) -> Vec<Arc<ApiRoute>> {
+        self.routes.read().values().map(Arc::clone).collect()
     }
 
     /// Number of registered routes.
@@ -93,9 +100,12 @@ impl RouteRegistry {
     ///
     /// Uses longest-prefix matching: if multiple routes match,
     /// the one with the longest `path_prefix` wins.
-    pub fn find_by_path(&self, path: &str) -> Option<ApiRoute> {
+    ///
+    /// Returns `Arc<ApiRoute>` — one atomic increment instead of cloning
+    /// 7+ String fields per request. (CAB-1332)
+    pub fn find_by_path(&self, path: &str) -> Option<Arc<ApiRoute>> {
         let routes = self.routes.read();
-        let mut best: Option<&ApiRoute> = None;
+        let mut best: Option<&Arc<ApiRoute>> = None;
         let mut best_len = 0;
 
         for route in routes.values() {
@@ -105,7 +115,7 @@ impl RouteRegistry {
             }
         }
 
-        best.cloned()
+        best.map(Arc::clone)
     }
 }
 
@@ -144,6 +154,16 @@ mod tests {
         assert!(prev.is_some());
         assert_eq!(prev.unwrap().path_prefix, "/apis/acme/payments");
         assert_eq!(reg.count(), 1);
+    }
+
+    #[test]
+    fn test_find_by_path_returns_arc() {
+        let reg = RouteRegistry::new();
+        reg.upsert(make_route("r1", "/apis/acme/payments"));
+        let a = reg.find_by_path("/apis/acme/payments").unwrap();
+        let b = reg.find_by_path("/apis/acme/payments").unwrap();
+        // Both Arc refs point to the same allocation
+        assert!(Arc::ptr_eq(&a, &b));
     }
 
     #[test]

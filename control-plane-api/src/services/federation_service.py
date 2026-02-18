@@ -1,4 +1,4 @@
-"""Federation service — orchestrates repos, KC helper, key generation (CAB-1313/CAB-1361)."""
+"""Federation service — orchestrates repos, KC helper, key generation (CAB-1313/CAB-1361/CAB-1370)."""
 
 import hashlib
 import logging
@@ -161,3 +161,58 @@ class FederationService:
         sub = await self.sub_repo.update(sub)
         logger.info("Sub-account revoked: %s", sub.name)
         return sub
+
+    # ============== CAB-1370: Delegation Token + Usage + Bulk Ops ==============
+
+    async def delegate_token(self, sub: SubAccount, scopes: list[str], ttl_seconds: int) -> dict:
+        """Exchange a sub-account's KC client credentials for a delegation token."""
+        if sub.status != SubAccountStatus.ACTIVE:
+            raise ValueError(f"Sub-account '{sub.name}' is not active (status={sub.status})")
+        if not sub.kc_client_id:
+            raise ValueError(f"Sub-account '{sub.name}' has no Keycloak client configured")
+
+        token_data = await keycloak_service.exchange_federation_token(
+            client_id=sub.kc_client_id, scopes=scopes, ttl_seconds=ttl_seconds
+        )
+        if not token_data:
+            raise ValueError(f"Token exchange failed for sub-account '{sub.name}'")
+
+        logger.info("Delegation token issued for sub-account %s", sub.name)
+        return token_data
+
+    async def get_usage_aggregation(self, master_id: UUID, period_days: int) -> list[dict]:
+        """Return usage statistics per sub-account (stub -- Phase 1 returns zeroes)."""
+        items, _ = await self.sub_repo.list_by_master(master_id, page=1, page_size=1000)
+        return [
+            {
+                "sub_account_id": sub.id,
+                "sub_account_name": sub.name,
+                "request_count": 0,
+                "token_count": 0,
+                "error_count": 0,
+                "last_active_at": None,
+            }
+            for sub in items
+        ]
+
+    async def bulk_revoke(self, master_id: UUID) -> tuple[int, int, int]:
+        """Revoke all active/suspended sub-accounts under a master."""
+        total = await self.master_repo.count_sub_accounts(master_id)
+        newly_revoked, already_revoked = await self.sub_repo.bulk_revoke(master_id)
+        logger.info(
+            "Bulk revoke for master %s: %d revoked, %d already revoked",
+            master_id,
+            newly_revoked,
+            already_revoked,
+        )
+        return newly_revoked, already_revoked, total
+
+    async def set_tool_allow_list(self, sub_id: UUID, tool_names: list[str]) -> list[str]:
+        """Replace the tool allow-list for a sub-account."""
+        tools = await self.sub_repo.set_tool_allow_list(sub_id, tool_names)
+        logger.info("Tool allow-list updated for sub %s: %d tools", sub_id, len(tools))
+        return tools
+
+    async def get_tool_allow_list(self, sub_id: UUID) -> list[str]:
+        """Get the tool allow-list for a sub-account."""
+        return await self.sub_repo.get_tool_allow_list(sub_id)

@@ -1,11 +1,18 @@
-"""Repository for federation master/sub-account CRUD (CAB-1313/CAB-1361)."""
+"""Repository for federation master/sub-account CRUD (CAB-1313/CAB-1361/CAB-1370)."""
 
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.federation import MasterAccount, MasterAccountStatus, SubAccount, SubAccountStatus
+from src.models.federation import (
+    MasterAccount,
+    MasterAccountStatus,
+    SubAccount,
+    SubAccountStatus,
+    SubAccountTool,
+)
 
 
 class MasterAccountRepository:
@@ -120,3 +127,52 @@ class SubAccountRepository:
         await self.session.flush()
         await self.session.refresh(sub)
         return sub
+
+    # ============== CAB-1370: Bulk Revoke + Tool Allow-List ==============
+
+    async def bulk_revoke(self, master_id: UUID) -> tuple[int, int]:
+        """Revoke all active/suspended sub-accounts under a master."""
+        already_q = select(func.count()).where(
+            and_(
+                SubAccount.master_account_id == master_id,
+                SubAccount.status == SubAccountStatus.REVOKED,
+            )
+        )
+        already_result = await self.session.execute(already_q)
+        already_revoked = already_result.scalar_one()
+
+        stmt = (
+            update(SubAccount)
+            .where(
+                and_(
+                    SubAccount.master_account_id == master_id,
+                    SubAccount.status.in_([SubAccountStatus.ACTIVE, SubAccountStatus.SUSPENDED]),
+                )
+            )
+            .values(
+                status=SubAccountStatus.REVOKED,
+                api_key_hash=None,
+                updated_at=datetime.utcnow(),
+            )
+        )
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+        return result.rowcount, already_revoked
+
+    async def set_tool_allow_list(self, sub_id: UUID, tool_names: list[str]) -> list[str]:
+        """Replace the tool allow-list for a sub-account."""
+        await self.session.execute(delete(SubAccountTool).where(SubAccountTool.sub_account_id == sub_id))
+        unique_tools = sorted(set(tool_names))
+        for tool_name in unique_tools:
+            self.session.add(SubAccountTool(sub_account_id=sub_id, tool_name=tool_name))
+        await self.session.flush()
+        return unique_tools
+
+    async def get_tool_allow_list(self, sub_id: UUID) -> list[str]:
+        """Get sorted tool names for a sub-account."""
+        result = await self.session.execute(
+            select(SubAccountTool.tool_name)
+            .where(SubAccountTool.sub_account_id == sub_id)
+            .order_by(SubAccountTool.tool_name)
+        )
+        return list(result.scalars().all())

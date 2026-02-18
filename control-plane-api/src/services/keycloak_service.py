@@ -865,6 +865,57 @@ class KeycloakService:
         roles = self._admin.get_realm_roles_of_user(user_id)
         return [r["name"] for r in roles if r["name"] not in system_roles]
 
+    async def exchange_federation_token(
+        self,
+        client_id: str,
+        scopes: list[str],
+        ttl_seconds: int,
+    ) -> dict | None:
+        """Exchange a federation sub-account's KC client credentials for an access token (CAB-1370).
+
+        Best-effort: returns token dict on success, None on any failure.
+        Never raises -- caller handles None gracefully.
+        """
+        try:
+            if not self._admin:
+                logger.warning("Keycloak not connected, cannot exchange federation token")
+                return None
+
+            internal_id = self._admin.get_client_id(client_id)
+            if not internal_id:
+                logger.warning("Federation token exchange: KC client '%s' not found", client_id)
+                return None
+
+            secret_data = self._admin.get_client_secret(internal_id)
+            client_secret = secret_data.get("value", "") if secret_data else ""
+            if not client_secret:
+                logger.warning("Federation token exchange: no secret for client '%s'", client_id)
+                return None
+
+            token_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}" "/protocol/openid-connect/token"
+            async with httpx.AsyncClient(timeout=10.0) as http:
+                resp = await http.post(
+                    token_url,
+                    data={
+                        "grant_type": "client_credentials",
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "scope": " ".join(scopes),
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            return {
+                "access_token": data["access_token"],
+                "token_type": data.get("token_type", "Bearer"),
+                "expires_in": data.get("expires_in", ttl_seconds),
+                "scope": data.get("scope", " ".join(scopes)),
+            }
+        except Exception as e:
+            logger.warning("Federation token exchange failed for client '%s': %s", client_id, e)
+            return None
+
     async def setup_federation_client(
         self,
         sub_account_id: str,
@@ -874,7 +925,7 @@ class KeycloakService:
         """Create a confidential KC client for federation Token Exchange (CAB-1313).
 
         Best-effort: returns client_id on success, None on any failure.
-        Never raises — caller handles None gracefully.
+        Never raises -- caller handles None gracefully.
         """
         try:
             if not self._admin:

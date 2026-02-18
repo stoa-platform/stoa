@@ -28,6 +28,7 @@ pub mod resilience;
 pub mod routes;
 pub mod security_headers;
 pub mod shadow;
+pub mod skills;
 pub mod state;
 pub mod telemetry;
 pub mod uac;
@@ -114,6 +115,11 @@ pub fn build_router(state: AppState) -> Router {
         // CAB-1362: Federation admin
         .route("/federation/status", get(admin::federation_status))
         .route("/federation/cache", get(admin::federation_cache_stats))
+        // CAB-1371: Federation cache invalidation
+        .route(
+            "/federation/cache/:sub_account_id",
+            delete(admin::federation_cache_invalidate),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

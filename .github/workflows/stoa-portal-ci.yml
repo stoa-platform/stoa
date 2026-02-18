@@ -110,10 +110,10 @@ jobs:
           chmod 600 ~/.kube/config
       - name: Apply k8s manifest
         run: |
-          kubectl apply -f portal/k8s/deployment.yaml 2>&1 || {
+          kubectl apply -f portal/k8s/ 2>&1 || {
             echo "Apply failed (likely immutable selector). Deleting and recreating..."
             kubectl delete deployment stoa-portal -n stoa-system --ignore-not-found
-            kubectl apply -f portal/k8s/deployment.yaml
+            kubectl apply -f portal/k8s/
           }
 
   # === Deploy: K3s rollout with auto-rollback ===

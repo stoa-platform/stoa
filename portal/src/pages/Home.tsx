@@ -1,8 +1,9 @@
 /**
- * Home Page - Dashboard (CAB-299, CAB-691)
+ * Home Page - Dashboard (CAB-299, CAB-691, CAB-1323)
  *
  * Main landing page with stats, quick actions, and recent activity.
  * Uses React Query for caching (CAB-691).
+ * RBAC widget visibility: scope-gated sections (CAB-1323 P2).
  */
 
 import { useAuth } from '../contexts/AuthContext';
@@ -16,6 +17,9 @@ import {
   FeaturedAITools,
 } from '../components/dashboard';
 import { PermissionGate } from '../components/common/PermissionGate';
+import { GrafanaDashboard } from '../components/usage/GrafanaDashboard';
+import { TenantBadge } from '../components/layout/TenantBadge';
+import { config } from '../config';
 
 export function HomePage() {
   const { user } = useAuth();
@@ -26,8 +30,11 @@ export function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* Welcome Header */}
-      <WelcomeHeader user={user} />
+      {/* Welcome Header + Tenant Context */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <WelcomeHeader user={user} />
+        <TenantBadge />
+      </div>
 
       {/* Stats Cards */}
       <DashboardStats stats={stats ?? null} isLoading={isLoading} />
@@ -48,6 +55,11 @@ export function HomePage() {
       {/* Recent Activity */}
       <PermissionGate scope="stoa:subscriptions:read">
         <RecentActivity activity={activity ?? []} isLoading={isLoading} />
+      </PermissionGate>
+
+      {/* Analytics Dashboard - metrics scope only */}
+      <PermissionGate scope="stoa:metrics:read">
+        <GrafanaDashboard url={config.grafana.url} title="Usage Analytics" />
       </PermissionGate>
     </div>
   );

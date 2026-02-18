@@ -55,16 +55,22 @@ All workflows include these safety measures:
 
 ### When Council Runs
 
-| Trigger | Council Mode | Model | Threshold | Approval |
-|---------|-------------|-------|-----------|----------|
-| Issue labeled `claude-implement` | Full (4 personas, detailed) | Sonnet | >= 8.0 | `/go` on issue |
-| Linear ticket → In Progress | Full (4 personas, detailed) | Sonnet | >= 8.0 | `/go` on issue |
-| Multi-agent batch dispatch | Quick (4 personas, scores only) | Sonnet | >= 8.0 | `/go-batch` |
-| Autopilot backlog scan | Quick (4 personas, scores only) | Haiku | >= 8.0 | Slack → `/go` |
-| Scheduled CI auto-fix | Skip (Ship mode, no Council) | — | N/A | Auto |
-| Self-improvement proposal | Full (analysis, no code) | Sonnet | >= 8.0 | Label `claude-implement` |
-| PR auto-review | Skip (read-only, no changes) | — | N/A | Auto |
-| Daily triage | Skip (read-only, no changes) | — | N/A | Auto |
+**Two-Stage Gate** (L1 Issue-to-PR, L3 Linear Dispatch):
+- **Stage 1** — Ticket Pertinence: "Is this ticket worth implementing?" → `council:ticket-*` labels
+- **Stage 2** — Plan Validation: "Is this implementation plan correct?" → `council:plan-*` labels
+
+| Trigger | Stage | Council Mode | Model | Threshold | Approval |
+|---------|-------|-------------|-------|-----------|----------|
+| Issue labeled `claude-implement` | Stage 1 | Full (4 personas, detailed) | Sonnet | >= 8.0 | `/go` → Stage 2 |
+| `/go` on Stage 1 issue | Stage 2 | Full (4 personas, plan-focused) | Sonnet | >= 8.0 | `/go-plan` → implement |
+| Linear ticket → In Progress | Stage 1 | Full (4 personas, detailed) | Sonnet | >= 8.0 | `/go` → Stage 2 |
+| `/go` on council-review issue | Stage 2 | Full (4 personas, plan-focused) | Sonnet | >= 8.0 | `/go-plan` → implement |
+| Multi-agent batch dispatch | Stage 1 only | Quick (4 personas, scores only) | Sonnet | >= 8.0 | `/go-batch` |
+| Autopilot backlog scan | Stage 1 only | Quick (4 personas, scores only) | Haiku | >= 8.0 | Slack → `/go` |
+| Scheduled CI auto-fix | Skip | — | — | N/A | Auto |
+| Self-improvement proposal | Stage 1 only | Full (analysis, no code) | Sonnet | >= 8.0 | Label `claude-implement` |
+| PR auto-review | Skip | — | — | N/A | Auto |
+| Daily triage | Skip | — | — | N/A | Auto |
 
 ### Council-Free Actions (Auto-Approved)
 
@@ -100,13 +106,22 @@ Files: N files in [component]
 [Review & Approve] → link to GitHub issue
 ```
 
-### Approval Flow
+### Approval Flow (Two-Stage)
 
 ```
-Council validates → Slack notification
-  ├── User comments `/go` on GitHub issue → Implementation starts
-  ├── User comments `/adjust <feedback>` → Council re-runs with feedback
-  └── No response in 24h → Reminder sent, then auto-close after 72h
+Stage 1: Ticket Pertinence
+  Council validates ticket → Slack notification → council:ticket-* label on Linear
+    ├── User comments `/go` → Stage 2 starts (plan validation)
+    ├── User comments `/adjust <feedback>` → Council re-runs with feedback
+    └── No response in 24h → Reminder sent, then auto-close after 72h
+
+Stage 2: Plan Validation (L1 + L3 only)
+  Council validates plan → Slack notification → council:plan-* label on Linear
+    ├── User comments `/go-plan` → Implementation starts
+    ├── User comments `/adjust <feedback>` → Plan re-validated with feedback
+    └── No response in 24h → Reminder sent
+
+Batch flows (L3.5 Autopilot, L5 Multi-Agent): Stage 1 only → `/go` starts implementation directly.
 ```
 
 ## Slack Notifications

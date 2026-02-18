@@ -209,6 +209,18 @@ pub static FALLBACK_EXHAUSTED: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_fallback_exhausted_total metric")
 });
 
+// === Federation Metrics (CAB-1371) ===
+
+/// Counter of federation requests by sub-account and status.
+pub static FEDERATION_REQUESTS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_federation_requests_total",
+        "Total federation requests by sub-account",
+        &["sub_account_id", "master_account_id", "status"]
+    )
+    .expect("Failed to create stoa_federation_requests_total metric")
+});
+
 // === Upstream Latency Metrics ===
 
 /// Histogram of upstream (backend) response times in seconds.
@@ -324,6 +336,15 @@ pub fn record_upstream_latency(upstream: &str, status: u16, duration_secs: f64) 
         .observe(duration_secs);
 }
 
+// === Federation metrics helpers ===
+
+/// Record a federation request with sub-account, master account, and status.
+pub fn record_federation_request(sub_account_id: &str, master_account_id: &str, status: &str) {
+    FEDERATION_REQUESTS_TOTAL
+        .with_label_values(&[sub_account_id, master_account_id, status])
+        .inc();
+}
+
 // === mTLS metrics helpers ===
 
 /// Record an mTLS validation outcome.
@@ -404,6 +425,7 @@ pub fn init_all_metrics() {
     Lazy::force(&MTLS_VALIDATIONS_TOTAL);
     Lazy::force(&MTLS_BINDING_CHECKS_TOTAL);
     Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
+    Lazy::force(&FEDERATION_REQUESTS_TOTAL);
 }
 
 /// Get the total number of MCP tool calls across all labels.
@@ -540,6 +562,13 @@ mod tests {
         // (e.g., "mcp", "sse", "v1" are fine)
         assert_eq!(normalize_path("/mcp/v1/tools"), "/mcp/v1/tools");
         assert_eq!(normalize_path("/mcp/sse"), "/mcp/sse");
+    }
+
+    #[test]
+    fn test_record_federation_request() {
+        record_federation_request("sub-acct-1", "master-acct-1", "success");
+        record_federation_request("sub-acct-1", "master-acct-1", "denied");
+        record_federation_request("sub-acct-2", "master-acct-1", "rate_limited");
     }
 
     #[test]

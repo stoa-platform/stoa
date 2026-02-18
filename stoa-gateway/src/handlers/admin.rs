@@ -574,6 +574,21 @@ pub async fn federation_cache_stats(
     Json(state.federation_cache.stats())
 }
 
+/// DELETE /admin/federation/cache/:sub_account_id -- invalidate cache for a sub-account (CAB-1371)
+pub async fn federation_cache_invalidate(
+    State(state): State<AppState>,
+    Path(sub_account_id): Path<String>,
+) -> impl IntoResponse {
+    state.federation_cache.invalidate(&sub_account_id).await;
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "ok",
+            "message": format!("Cache invalidated for sub-account '{}'", sub_account_id)
+        })),
+    )
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -790,6 +805,11 @@ mod tests {
             // CAB-1362: Federation admin
             .route("/federation/status", get(federation_status))
             .route("/federation/cache", get(federation_cache_stats))
+            // CAB-1371: Federation cache invalidation
+            .route(
+                "/federation/cache/:sub_account_id",
+                delete(federation_cache_invalidate),
+            )
             .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
             .with_state(state)
     }
@@ -1701,6 +1721,23 @@ mod tests {
     // =========================================================================
     // Federation Admin (CAB-1362)
     // =========================================================================
+
+    #[tokio::test]
+    async fn test_federation_cache_invalidate() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("DELETE", "/federation/cache/sub-acct-123"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["status"], "ok");
+        assert!(data["message"].as_str().unwrap().contains("sub-acct-123"));
+    }
 
     #[tokio::test]
     async fn test_federation_status_disabled() {

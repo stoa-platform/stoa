@@ -40,7 +40,7 @@ jobs:
       - name: Check Velocity Cap
         id: velocity
         run: |
-          MAX_DAILY=${{ inputs.max_tickets || '3' }}
+          MAX_DAILY=${{ inputs.max_tickets || vars.AUTOPILOT_DAILY_MAX || '5' }}
           TODAY=$(date -u +%Y-%m-%d)
           COUNTER="${{ vars.AUTOPILOT_TODAY_COUNT }}"
           COUNT_DATE=$(echo "$COUNTER" | cut -d: -f1 2>/dev/null || echo "")

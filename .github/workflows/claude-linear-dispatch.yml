@@ -32,6 +32,10 @@ jobs:
       github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      fast_path: ${{ steps.check-fast.outputs.fast_path }}
+      issue_num: ${{ steps.create-issue.outputs.issue_num }}
+      issue_url: ${{ steps.create-issue.outputs.issue_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -83,6 +87,7 @@ jobs:
 
       # Extract Claude's report from execution log and create GitHub issue
       - name: Create Council Issue
+        id: create-issue
         if: steps.council.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -141,8 +146,38 @@ jobs:
             --label "${TICKET}" \
             --body-file council-body.md)
 
-          echo "Created issue: ${ISSUE_URL}"
+          ISSUE_NUM=$(echo "$ISSUE_URL" | grep -oE '/issues/[0-9]+' | grep -oE '[0-9]+')
+          echo "Created issue #${ISSUE_NUM}: ${ISSUE_URL}"
           echo "ISSUE_URL=${ISSUE_URL}" >> "$GITHUB_ENV"
+          echo "issue_url=${ISSUE_URL}" >> "$GITHUB_OUTPUT"
+          echo "issue_num=${ISSUE_NUM}" >> "$GITHUB_OUTPUT"
+
+      # Check if this ticket qualifies for Ship fast-path (skip Stage 2)
+      - name: Check Ship Fast Path
+        id: check-fast
+        if: steps.council.outcome == 'success'
+        run: |
+          source scripts/ai-ops/model-router.sh
+
+          ESTIMATE="${{ github.event.client_payload.ticket_estimate }}"
+          ESTIMATE="${ESTIMATE:-0}"
+
+          # Extract Ship/Show/Ask from Council report
+          MODE="ask"
+          if [ -f council-body.md ]; then
+            MODE=$(extract_mode "$(cat council-body.md)")
+          fi
+
+          echo "Estimate: ${ESTIMATE}, Mode: ${MODE}"
+
+          # Fast path: Ship mode + estimate <= 5 pts
+          if [ "$MODE" = "ship" ] && [ "${ESTIMATE:-0}" -le 5 ] && [ "${ESTIMATE:-0}" -gt 0 ]; then
+            echo "Ship fast-path: skipping Stage 2 for ${ESTIMATE}pt Ship ticket"
+            echo "fast_path=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Regular path: ${MODE} mode, ${ESTIMATE} pts"
+            echo "fast_path=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Sync Council result to Linear (apply council:ticket-* label + comment)
       - name: Sync Council to Linear
@@ -279,6 +314,175 @@ jobs:
                 }
               ]
             }"
+
+  # ----- Ship Fast Path: Skip Stage 2, go directly to implementation -----
+  # For Ship-mode tickets <= 5 pts, Council S1 is sufficient. No plan validation needed.
+  implement-fast:
+    needs: [council]
+    if: |
+      vars.DISABLE_L3_LINEAR != 'true' &&
+      needs.council.outputs.fast_path == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Route Model
+        id: route
+        run: |
+          source scripts/ai-ops/model-router.sh
+          ESTIMATE="${{ github.event.client_payload.ticket_estimate }}"
+          ROUTE=$(route_model "${ESTIMATE:-0}" "ship")
+          MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
+          TURNS=$(echo "$ROUTE" | cut -d'|' -f2)
+          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
+          echo "turns=$TURNS" >> "$GITHUB_OUTPUT"
+          echo "Routed: ${ESTIMATE:-0}pt Ship → ${MODEL}, ${TURNS} turns"
+
+      - name: Run Implementation (Ship Fast Path)
+        id: claude
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
+            Ship Fast Path — implement this ticket directly (Council S1 approved, small Ship-mode change).
+
+            Ticket: ${{ github.event.client_payload.ticket_id }}
+            Title: ${{ github.event.client_payload.ticket_title }}
+            Description: ${{ github.event.client_payload.ticket_description }}
+            Estimate: ${{ github.event.client_payload.ticket_estimate }} pts
+
+            Steps:
+            1. Create branch: feat/${{ github.event.client_payload.ticket_id }}-<slug>
+            2. Implement the change (keep it small, Ship-mode)
+            3. Run quality gates (lint, test, format)
+            4. Commit with conventional messages including ticket ID
+            5. Create PR referencing the ticket
+            6. Merge after CI green (Ship mode — auto-merge)
+
+            Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
+            IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
+          claude_args: "--model ${{ steps.route.outputs.model }} --max-turns ${{ steps.route.outputs.turns }} --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model }}, MaxTurns=${{ steps.route.outputs.turns }}, Stage=implement-fast"
+
+      # Close the loop: find PR, close issue, update Linear, notify Slack
+      - name: Close the Loop
+        if: steps.claude.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          ISSUE_NUM="${{ needs.council.outputs.issue_num }}"
+          TICKET_ID="${{ github.event.client_payload.ticket_id }}"
+
+          # Find merged PR
+          PR_INFO=$(gh pr list --state merged --search "${TICKET_ID}" \
+            --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+          PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
+          PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
+
+          if [ -z "$PR_NUM" ]; then
+            PR_INFO=$(gh pr list --state open --search "${TICKET_ID}" \
+              --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
+            PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
+          fi
+
+          # Close GitHub issue
+          if [ -n "$ISSUE_NUM" ] && [ -n "$PR_NUM" ]; then
+            gh issue close "$ISSUE_NUM" --comment "Ship fast-path: completed via PR #${PR_NUM}." || true
+          fi
+
+          # Update Linear → Done
+          if [ -n "$LINEAR_API_KEY" ] && [ -n "$TICKET_ID" ] && [ -n "$PR_NUM" ]; then
+            DONE_STATE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{"query": "{ workflowStates(filter: { name: { eq: \"Done\" }, team: { key: { eq: \"CAB\" } } }) { nodes { id } } }"}' \
+              | jq -r '.data.workflowStates.nodes[0].id // empty' 2>/dev/null || echo "")
+            ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+              | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+            if [ -n "$DONE_STATE_ID" ] && [ -n "$ISSUE_ID" ]; then
+              curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: ${LINEAR_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { stateId: \\\"${DONE_STATE_ID}\\\" }) { success } }\"}" \
+                > /dev/null 2>&1 || true
+              COMMENT="Ship fast-path: completed via PR [#${PR_NUM}](${PR_URL})"
+              curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: ${LINEAR_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+                > /dev/null 2>&1 || true
+            fi
+          fi
+
+          echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
+          echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
+          echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
+
+      - name: Notify Slack — Ship Fast Path
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          STATUS="${{ steps.claude.outcome }}"
+          TICKET="${{ github.event.client_payload.ticket_id }}"
+          if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
+            MSG=":rocket: *${TICKET}* Ship fast-path complete! PR <${PR_URL}|#${PR_NUM}> merged | Linear → Done"
+          elif [ "$STATUS" = "success" ]; then
+            MSG=":white_check_mark: *${TICKET}* Ship fast-path implementation done."
+          else
+            MSG=":x: *${TICKET}* Ship fast-path failed. <https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}|Logs>"
+          fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"blocks\": [
+                {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"${MSG}\"}},
+                {\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"STOA AI Factory | L3 Ship Fast Path | $(date -u +%H:%M) UTC\"}]}
+              ]
+            }"
+
+      # Self-feeding: trigger next scan if under daily cap
+      - name: Trigger Next Scan
+        if: steps.claude.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ vars.DISABLE_AUTOPILOT_SCAN }}" = "true" ]; then exit 0; fi
+          MAX_DAILY=${{ vars.AUTOPILOT_DAILY_MAX || '5' }}
+          TODAY=$(date -u +%Y-%m-%d)
+          COUNTER="${{ vars.AUTOPILOT_TODAY_COUNT }}"
+          COUNT_DATE=$(echo "$COUNTER" | cut -d: -f1 2>/dev/null || echo "")
+          COUNT_VAL=$(echo "$COUNTER" | cut -d: -f2 2>/dev/null || echo "0")
+          if [ "$COUNT_DATE" != "$TODAY" ]; then COUNT_VAL=0; fi
+          if [ "$COUNT_VAL" -ge "$MAX_DAILY" ]; then
+            echo "Daily cap reached (${COUNT_VAL}/${MAX_DAILY})"
+            exit 0
+          fi
+          NEW_COUNT=$((COUNT_VAL + 1))
+          gh api repos/stoa-platform/stoa/actions/variables/AUTOPILOT_TODAY_COUNT \
+            -X PATCH -f value="${TODAY}:${NEW_COUNT}" 2>/dev/null || \
+          gh api repos/stoa-platform/stoa/actions/variables \
+            -X POST -f name=AUTOPILOT_TODAY_COUNT -f value="${TODAY}:${NEW_COUNT}" 2>/dev/null || true
+          echo "Velocity: ${NEW_COUNT}/${MAX_DAILY} — triggering next scan"
+          gh workflow run claude-autopilot-scan.yml -f max_tickets=1 2>/dev/null || true
 
   # ----- Stage 2: Plan Validation (triggered by /go on council-review issues) -----
   plan-validate:
@@ -529,6 +733,24 @@ jobs:
             echo "valid=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Route model based on ticket estimate (extracted from issue body)
+      - name: Route Model
+        if: steps.verify.outputs.valid == 'true'
+        id: route
+        run: |
+          source scripts/ai-ops/model-router.sh
+          ISSUE_BODY=$(gh issue view "${{ github.event.issue.number }}" --json body --jq '.body' 2>/dev/null || echo "")
+          ESTIMATE=$(extract_estimate "$ISSUE_BODY")
+          MODE=$(extract_mode "$ISSUE_BODY")
+          ROUTE=$(route_model "$ESTIMATE" "$MODE")
+          MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
+          TURNS=$(echo "$ROUTE" | cut -d'|' -f2)
+          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
+          echo "turns=$TURNS" >> "$GITHUB_OUTPUT"
+          echo "Routed: ${ESTIMATE}pt ${MODE} → ${MODEL}, ${TURNS} turns"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Run Implementation
         if: steps.verify.outputs.valid == 'true'
         continue-on-error: true
@@ -563,13 +785,13 @@ jobs:
             If Ask: leave PR open for human review.
 
             IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
-          # Model tier: sonnet (code generation, full tool access)
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+          # Model tier: routed dynamically based on ticket estimate
+          claude_args: "--model ${{ steps.route.outputs.model }} --max-turns ${{ steps.route.outputs.turns }} --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=60, Stage=implement"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-5' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
 
       # ----- Close the Loop (post-merge feedback) -----
       # After implementation: find merged PR, close GitHub issue, update Linear, notify Slack
@@ -740,7 +962,7 @@ jobs:
 
           # Check daily velocity cap (stored in repo variable AUTOPILOT_TODAY_COUNT)
           # Format: YYYY-MM-DD:N (e.g., 2026-02-17:2)
-          MAX_DAILY=3
+          MAX_DAILY=${{ vars.AUTOPILOT_DAILY_MAX || '5' }}
           TODAY=$(date -u +%Y-%m-%d)
           COUNTER="${{ vars.AUTOPILOT_TODAY_COUNT }}"
           COUNT_DATE=$(echo "$COUNTER" | cut -d: -f1 2>/dev/null || echo "")

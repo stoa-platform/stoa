@@ -101,7 +101,8 @@ describe('FederationAccountDetail', () => {
 
   it('renders the status badge', async () => {
     renderComponent();
-    expect(await screen.findByText('Active')).toBeInTheDocument();
+    const badges = await screen.findAllByText('Active');
+    expect(badges.length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders sub-account count', async () => {

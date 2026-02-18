@@ -364,7 +364,6 @@ async def delegate_token(
 
     target_sub = None
     if sub_account_id:
-        # Target a specific sub-account
         sub = await svc.get_sub_account(sub_account_id)
         if not sub or sub.master_account_id != account_id or sub.tenant_id != tenant_id:
             raise HTTPException(status_code=404, detail="Sub-account not found")
@@ -374,7 +373,7 @@ async def delegate_token(
             raise HTTPException(status_code=400, detail="Sub-account has no Keycloak client configured")
         target_sub = sub
     else:
-        # Fallback: first active sub-account with a KC client
+        # Fallback: find first active sub-account with a Keycloak client
         items, _ = await svc.list_sub_accounts(master.id, status=SubAccountStatus.ACTIVE, page=1, page_size=100)
         target_sub = next((s for s in items if s.kc_client_id), None)
     if not target_sub:

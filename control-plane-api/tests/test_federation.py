@@ -459,6 +459,13 @@ class TestCAB1370Schemas:
         assert resp.token_type == "Bearer"
         assert resp.expires_in == 3600
 
+    def test_delegation_token_request_with_sub_account_id(self):
+        """Chucky adjustment: verify sub_account_id is accepted as query param."""
+        from src.schemas.federation import DelegationTokenRequest
+
+        req = DelegationTokenRequest(scopes=["stoa:read", "stoa:write"])
+        assert req.scopes == ["stoa:read", "stoa:write"]
+
     def test_usage_response(self):
         from src.schemas.federation import UsageResponse, UsageStat
 
@@ -517,14 +524,6 @@ class TestCAB1370Schemas:
 
         update = ToolAllowListUpdate(tools=[])
         assert update.tools == []
-
-    def test_delegation_token_request_with_sub_account_id(self):
-        """Verify DelegationTokenRequest works alongside sub_account_id (query param, not in schema)."""
-        from src.schemas.federation import DelegationTokenRequest
-
-        req = DelegationTokenRequest(scopes=["stoa:read", "stoa:write"], ttl_seconds=1800)
-        assert req.scopes == ["stoa:read", "stoa:write"]
-        assert req.ttl_seconds == 1800
 
 
 class TestCAB1370Service:

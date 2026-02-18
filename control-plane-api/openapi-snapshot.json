@@ -108,11 +108,6 @@
       "APIListItem": {
         "description": "Lightweight API for list views \u2014 no deployments/backend_url.",
         "properties": {
-          "audience": {
-            "default": "public",
-            "title": "Audience",
-            "type": "string"
-          },
           "category": {
             "anyOf": [
               {
@@ -3140,6 +3135,72 @@
         "title": "DashboardStats",
         "type": "object"
       },
+      "DelegationTokenRequest": {
+        "description": "Request schema for token delegation via master account.",
+        "properties": {
+          "scopes": {
+            "description": "OAuth2 scopes to request",
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "ttl_seconds": {
+            "default": 3600,
+            "description": "Token TTL in seconds (1min to 24h)",
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Ttl Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "DelegationTokenRequest",
+        "type": "object"
+      },
+      "DelegationTokenResponse": {
+        "description": "Response schema for a delegated federation token.",
+        "properties": {
+          "access_token": {
+            "description": "Delegated OAuth2 access token",
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "description": "Token lifetime in seconds",
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "scope": {
+            "description": "Granted scopes (space-separated)",
+            "title": "Scope",
+            "type": "string"
+          },
+          "sub_account_id": {
+            "format": "uuid",
+            "title": "Sub Account Id",
+            "type": "string"
+          },
+          "sub_account_name": {
+            "title": "Sub Account Name",
+            "type": "string"
+          },
+          "token_type": {
+            "default": "Bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "scope",
+          "sub_account_id",
+          "sub_account_name"
+        ],
+        "title": "DelegationTokenResponse",
+        "type": "object"
+      },
       "DeploymentCreate": {
         "properties": {
           "api_id": {
@@ -4917,6 +4978,33 @@
           "visibility"
         ],
         "title": "FacetsResponse",
+        "type": "object"
+      },
+      "FederationBulkRevokeResponse": {
+        "description": "Response schema for bulk sub-account revocation.",
+        "properties": {
+          "already_revoked": {
+            "description": "Number already in revoked state",
+            "title": "Already Revoked",
+            "type": "integer"
+          },
+          "revoked_count": {
+            "description": "Number of sub-accounts newly revoked",
+            "title": "Revoked Count",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total sub-accounts in master account",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revoked_count",
+          "already_revoked",
+          "total"
+        ],
+        "title": "FederationBulkRevokeResponse",
         "type": "object"
       },
       "FileContent": {
@@ -9760,11 +9848,6 @@
       "PortalAPIResponse": {
         "description": "API response for Portal catalog.",
         "properties": {
-          "audience": {
-            "default": "public",
-            "title": "Audience",
-            "type": "string"
-          },
           "backend_url": {
             "anyOf": [
               {
@@ -13793,6 +13876,48 @@
         "title": "TokenExchangeResponse",
         "type": "object"
       },
+      "ToolAllowListResponse": {
+        "description": "Response schema for sub-account tool allow-list.",
+        "properties": {
+          "sub_account_id": {
+            "format": "uuid",
+            "title": "Sub Account Id",
+            "type": "string"
+          },
+          "tools": {
+            "description": "Currently allowed tool names",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sub_account_id",
+          "tools"
+        ],
+        "title": "ToolAllowListResponse",
+        "type": "object"
+      },
+      "ToolAllowListUpdate": {
+        "description": "Request schema for updating a sub-account tool allow-list.",
+        "properties": {
+          "tools": {
+            "description": "List of tool names (replaces existing)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tools"
+        ],
+        "title": "ToolAllowListUpdate",
+        "type": "object"
+      },
       "ToolInvokeRequest": {
         "description": "Tool invocation request.",
         "properties": {
@@ -14199,6 +14324,94 @@
           "avg_latency_ms"
         ],
         "title": "UsagePeriodStats",
+        "type": "object"
+      },
+      "UsageResponse": {
+        "description": "Aggregated usage statistics for all sub-accounts of a master account.",
+        "properties": {
+          "master_account_id": {
+            "format": "uuid",
+            "title": "Master Account Id",
+            "type": "string"
+          },
+          "period_days": {
+            "title": "Period Days",
+            "type": "integer"
+          },
+          "sub_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/UsageStat"
+            },
+            "title": "Sub Accounts",
+            "type": "array"
+          },
+          "total_requests": {
+            "default": 0,
+            "title": "Total Requests",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "master_account_id",
+          "period_days",
+          "sub_accounts"
+        ],
+        "title": "UsageResponse",
+        "type": "object"
+      },
+      "UsageStat": {
+        "description": "Single sub-account usage statistics entry.",
+        "properties": {
+          "error_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "last_active_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Active At"
+          },
+          "request_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "sub_account_id": {
+            "format": "uuid",
+            "title": "Sub Account Id",
+            "type": "string"
+          },
+          "sub_account_name": {
+            "title": "Sub Account Name",
+            "type": "string"
+          },
+          "token_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Token Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sub_account_id",
+          "sub_account_name"
+        ],
+        "title": "UsageStat",
         "type": "object"
       },
       "UsageSummary": {
@@ -25410,24 +25623,6 @@
               "description": "Filter by universe: oasis, enterprise",
               "title": "Universe"
             }
-          },
-          {
-            "description": "Filter by audience: public, internal, partner",
-            "in": "query",
-            "name": "audience",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Filter by audience: public, internal, partner",
-              "title": "Audience"
-            }
           }
         ],
         "responses": {
@@ -29245,6 +29440,151 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/bulk-revoke": {
+      "post": {
+        "description": "Revoke all active/suspended sub-accounts under a master account.",
+        "operationId": "bulk_revoke_v1_tenants__tenant_id__federation_accounts__account_id__bulk_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FederationBulkRevokeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Revoke",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/delegate-token": {
+      "post": {
+        "description": "Issue a delegation token for a sub-account with a KC client.\n\nIf sub_account_id is provided, targets that specific sub-account.\nOtherwise falls back to the first active sub-account with a Keycloak client.",
+        "operationId": "delegate_token_v1_tenants__tenant_id__federation_accounts__account_id__delegate_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target sub-account ID (defaults to first active)",
+            "in": "query",
+            "name": "sub_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target sub-account ID (defaults to first active)",
+              "title": "Sub Account Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelegationTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelegationTokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delegate Token",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/sub-accounts": {
       "get": {
         "description": "List sub-accounts for a federation master account.",
@@ -29556,7 +29896,7 @@
     },
     "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/sub-accounts/{sub_id}/revoke": {
       "post": {
-        "description": "Revoke a sub-account \u2014 clears API key and sets status to revoked.",
+        "description": "Revoke a sub-account -- clears API key and sets status to revoked.",
         "operationId": "revoke_sub_account_v1_tenants__tenant_id__federation_accounts__account_id__sub_accounts__sub_id__revoke_post",
         "parameters": [
           {
@@ -29617,6 +29957,222 @@
           }
         ],
         "summary": "Revoke Sub Account",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/sub-accounts/{sub_id}/tools": {
+      "get": {
+        "description": "Get the tool allow-list for a sub-account.",
+        "operationId": "get_tool_allow_list_v1_tenants__tenant_id__federation_accounts__account_id__sub_accounts__sub_id__tools_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sub_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAllowListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tool Allow List",
+        "tags": [
+          "Federation"
+        ]
+      },
+      "put": {
+        "description": "Replace the tool allow-list for a sub-account.",
+        "operationId": "set_tool_allow_list_v1_tenants__tenant_id__federation_accounts__account_id__sub_accounts__sub_id__tools_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sub_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolAllowListUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAllowListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Tool Allow List",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/usage": {
+      "get": {
+        "description": "Get aggregated usage statistics for a master account's sub-accounts.",
+        "operationId": "get_usage_v1_tenants__tenant_id__federation_accounts__account_id__usage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Usage period in days",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "description": "Usage period in days",
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Usage",
         "tags": [
           "Federation"
         ]

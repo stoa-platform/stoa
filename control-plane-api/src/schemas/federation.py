@@ -1,4 +1,4 @@
-"""Pydantic schemas for federation endpoints (CAB-1313/CAB-1361)."""
+"""Pydantic schemas for federation endpoints (CAB-1313/CAB-1361/CAB-1370)."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -166,3 +166,66 @@ class SubAccountListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# ============== CAB-1370: Delegation Token + Usage Schemas ==============
+
+
+class DelegationTokenRequest(BaseModel):
+    """Request schema for token delegation via master account."""
+
+    scopes: list[str] = Field(default_factory=lambda: ["stoa:read"], description="OAuth2 scopes to request")
+    ttl_seconds: int = Field(3600, ge=60, le=86400, description="Token TTL in seconds (1min to 24h)")
+
+
+class DelegationTokenResponse(BaseModel):
+    """Response schema for a delegated federation token."""
+
+    access_token: str = Field(description="Delegated OAuth2 access token")
+    token_type: str = Field(default="Bearer")
+    expires_in: int = Field(description="Token lifetime in seconds")
+    scope: str = Field(description="Granted scopes (space-separated)")
+    sub_account_id: UUID
+    sub_account_name: str
+
+
+class UsageStat(BaseModel):
+    """Single sub-account usage statistics entry."""
+
+    sub_account_id: UUID
+    sub_account_name: str
+    request_count: int = Field(0, ge=0)
+    token_count: int = Field(0, ge=0)
+    error_count: int = Field(0, ge=0)
+    last_active_at: datetime | None = None
+
+
+class UsageResponse(BaseModel):
+    """Aggregated usage statistics for all sub-accounts of a master account."""
+
+    master_account_id: UUID
+    period_days: int
+    total_requests: int = 0
+    total_tokens: int = 0
+    sub_accounts: list[UsageStat]
+
+
+class FederationBulkRevokeResponse(BaseModel):
+    """Response schema for bulk sub-account revocation."""
+
+    revoked_count: int = Field(description="Number of sub-accounts newly revoked")
+    already_revoked: int = Field(description="Number already in revoked state")
+    total: int = Field(description="Total sub-accounts in master account")
+
+
+class ToolAllowListUpdate(BaseModel):
+    """Request schema for updating a sub-account tool allow-list."""
+
+    tools: list[str] = Field(..., description="List of tool names (replaces existing)")
+
+
+class ToolAllowListResponse(BaseModel):
+    """Response schema for sub-account tool allow-list."""
+
+    sub_account_id: UUID
+    tools: list[str] = Field(description="Currently allowed tool names")

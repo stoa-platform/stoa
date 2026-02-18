@@ -534,6 +534,10 @@ jobs:
           echo "turns=$TURNS" >> "$GITHUB_OUTPUT"
           echo "Routed: ${ESTIMATE}pt ${MODE} → ${MODEL}, ${TURNS} turns"
 
+      - name: Record Start Time
+        if: steps.verify-council.outputs.validated == 'true'
+        run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Run Implementation
         if: steps.verify-council.outputs.validated == 'true'
         continue-on-error: true
@@ -584,9 +588,15 @@ jobs:
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
-          notify_implement "$TICKET" "${{ steps.implement.outcome || 'skipped' }}" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR"
-          if [ "${{ steps.implement.outcome }}" = "success" ]; then
-            linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR" || true
+          STATUS="${{ steps.implement.outcome || 'skipped' }}"
+          DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
+          if [ "$STATUS" = "success" ]; then
+            notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR" "$DURATION"
+            linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR" "$DURATION" || true
+          elif [ "$STATUS" = "failure" ]; then
+            notify_error "claude-issue-to-pr" "implement" "$TICKET" "" "$DURATION"
+          else
+            notify_implement "$TICKET" "$STATUS" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR"
           fi
 
       - name: Write Job Summary — Implement
@@ -594,4 +604,6 @@ jobs:
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
-          write_job_summary "$TICKET" "${{ steps.implement.outcome || 'skipped' }}" "" "${{ steps.route.outputs.model || 'sonnet-4-5' }}" "L1-implement"
+          write_job_summary "$TICKET" "${{ steps.implement.outcome || 'skipped' }}" "" \
+            "${{ steps.route.outputs.model || 'sonnet-4-5' }}" "L1-implement" \
+            "$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))"

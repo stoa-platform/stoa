@@ -2,6 +2,16 @@
 # AI Factory Notification Library — centralized Slack, Linear, GHA Job Summary
 # Source this file: source scripts/ai-ops/ai-factory-notify.sh
 # All functions are best-effort (never fail the parent step).
+#
+# Notification types:
+#   notify_council    — Council validation report with approve button
+#   notify_implement  — Implementation success/failure/ask with PR + metrics
+#   notify_error      — Vercel-style error with log excerpt + retry button
+#   notify_scan       — Autopilot scan summary with candidate count
+#   notify_scheduled  — Daily/weekly task results with key metrics
+#   notify_plan       — Stage 2 plan validation result
+#   linear_comment    — Rich completion report posted to Linear ticket
+#   write_job_summary — Structured markdown table in $GITHUB_STEP_SUMMARY
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -11,6 +21,11 @@ _linear_url() {
 
 _run_url() {
   echo "https://github.com/stoa-platform/stoa/actions/runs/${GITHUB_RUN_ID:-0}"
+}
+
+_retry_url() {
+  # Build "Retry Workflow" button URL pointing to the GHA re-run page
+  echo "https://github.com/stoa-platform/stoa/actions/runs/${GITHUB_RUN_ID:-0}/attempts"
 }
 
 _escape_json() {
@@ -32,6 +47,22 @@ _approve_url() {
     echo "${N8N_WEBHOOK}?issue=${ISSUE_NUM}&token=${HMAC}"
   else
     echo "$FALLBACK_URL"
+  fi
+}
+
+_format_duration() {
+  # Convert seconds to human-readable "Xm Ys" format
+  local SECS="${1:-0}"
+  if [ "$SECS" -le 0 ] 2>/dev/null; then
+    echo ""
+    return
+  fi
+  local MINS=$((SECS / 60))
+  local REMAINING=$((SECS % 60))
+  if [ "$MINS" -gt 0 ]; then
+    echo "${MINS}m ${REMAINING}s"
+  else
+    echo "${REMAINING}s"
   fi
 }
 
@@ -71,15 +102,19 @@ _send_slack() {
 
 # ── Public functions ──────────────────────────────────────────────────────────
 
-# notify_council TICKET_ID TITLE SCORE VERDICT ISSUE_URL [ISSUE_NUM]
+# notify_council TICKET_ID TITLE SCORE VERDICT ISSUE_URL [ISSUE_NUM] [MODE] [LOC] [FILES]
 # Sends Council validation report to Slack with approve button + Linear link.
+# MODE: Ship|Show|Ask (optional, shown in detail line)
+# LOC: estimated lines of code (optional)
+# FILES: number of files affected (optional)
 notify_council() {
   local TICKET_ID="${1:?}" TITLE="${2:?}" SCORE="${3:-?}" VERDICT="${4:-Go}"
   local ISSUE_URL="${5:-}" ISSUE_NUM="${6:-}"
+  local MODE="${7:-}" LOC="${8:-}" FILES="${9:-}"
   local LINEAR_LINK="$(_linear_url "$TICKET_ID")"
   local RUN_LINK="$(_run_url)"
 
-  # Determine emoji + color
+  # Determine emoji
   local EMOJI=":white_check_mark:"
   case "$VERDICT" in
     Fix|fix) EMOJI=":warning:" ;;
@@ -97,6 +132,17 @@ notify_council() {
   local ESCAPED_TITLE
   ESCAPED_TITLE=$(_escape_json "$TITLE")
 
+  # Build optional detail line: "Ship mode | ~150 LOC | 3 files"
+  local DETAIL_LINE=""
+  local PARTS=()
+  [ -n "$MODE" ] && PARTS+=("${MODE} mode")
+  [ -n "$LOC" ] && PARTS+=("~${LOC} LOC")
+  [ -n "$FILES" ] && PARTS+=("${FILES} files")
+  if [ ${#PARTS[@]} -gt 0 ]; then
+    local IFS=" | "
+    DETAIL_LINE="\n${PARTS[*]}"
+  fi
+
   _send_slack "{
     \"blocks\": [
       {
@@ -107,7 +153,7 @@ notify_council() {
         \"type\": \"section\",
         \"text\": {
           \"type\": \"mrkdwn\",
-          \"text\": \"*${ESCAPED_TITLE}*\n\n<${LINEAR_LINK}|Linear> | <${RUN_LINK}|GHA Run>\"
+          \"text\": \"*${ESCAPED_TITLE}*${DETAIL_LINE}\n\n<${LINEAR_LINK}|Linear> | <${RUN_LINK}|GHA Run>\"
         },
         \"accessory\": {
           \"type\": \"button\",
@@ -118,34 +164,51 @@ notify_council() {
       },
       {
         \"type\": \"context\",
-        \"elements\": [{\"type\": \"mrkdwn\", \"text\": \"STOA AI Factory | $(date -u +%H:%M) UTC\"}]
+        \"elements\": [{\"type\": \"mrkdwn\", \"text\": \"STOA AI Factory | L3 Pipeline | $(date -u +%H:%M) UTC\"}]
       }
     ]
   }"
 }
 
-# notify_implement TICKET_ID STATUS [PR_NUM] [PR_URL] [ISSUE_NUM] [PIPELINE]
+# notify_implement TICKET_ID STATUS [PR_NUM] [PR_URL] [ISSUE_NUM] [PIPELINE] [DURATION_SECS] [FILES] [LOC]
 # STATUS: success|failure|ask|skipped
+# DURATION_SECS: elapsed seconds (from $SECONDS). Shown as "Duration: Xm Ys".
+# FILES: number of changed files (optional)
+# LOC: lines of code changed (optional)
 notify_implement() {
   local TICKET_ID="${1:?}" STATUS="${2:?}"
   local PR_NUM="${3:-}" PR_URL="${4:-}" ISSUE_NUM="${5:-}" PIPELINE="${6:-L3 Pipeline}"
+  local DURATION_SECS="${7:-}" FILES="${8:-}" LOC="${9:-}"
   local LINEAR_LINK="$(_linear_url "$TICKET_ID")"
   local RUN_LINK="$(_run_url)"
+
+  # Build optional metrics line: "3 files, ~120 LOC | Duration: 12m 34s"
+  local METRICS=""
+  local MPARTS=()
+  [ -n "$FILES" ] && [ "$FILES" != "0" ] && MPARTS+=("${FILES} files")
+  [ -n "$LOC" ] && [ "$LOC" != "0" ] && MPARTS+=("~${LOC} LOC")
+  local DURATION_FMT
+  DURATION_FMT=$(_format_duration "$DURATION_SECS")
+  [ -n "$DURATION_FMT" ] && MPARTS+=("Duration: ${DURATION_FMT}")
+  if [ ${#MPARTS[@]} -gt 0 ]; then
+    local IFS=" | "
+    METRICS="\n${MPARTS[*]}"
+  fi
 
   local MSG=""
   case "$STATUS" in
     success)
       if [ -n "$PR_NUM" ]; then
-        MSG=":tada: *${TICKET_ID}* completed! PR <${PR_URL}|#${PR_NUM}> merged | <${LINEAR_LINK}|Linear> → Done"
+        MSG=":tada: *${TICKET_ID}* completed — PR <${PR_URL}|#${PR_NUM}> merged${METRICS}\n<${LINEAR_LINK}|Linear> → Done"
       else
-        MSG=":white_check_mark: *${TICKET_ID}* implementation complete. <${LINEAR_LINK}|Linear>"
+        MSG=":white_check_mark: *${TICKET_ID}* implementation complete${METRICS}\n<${LINEAR_LINK}|Linear>"
       fi
       ;;
     ask)
-      MSG=":eyes: *${TICKET_ID}* — PR <${PR_URL}|#${PR_NUM}> created (Ask mode). <${LINEAR_LINK}|Linear>"
+      MSG=":eyes: *${TICKET_ID}* — PR <${PR_URL}|#${PR_NUM}> created (Ask mode)${METRICS}\n<${LINEAR_LINK}|Linear>"
       ;;
     failure)
-      MSG=":x: *${TICKET_ID}* implementation failed. <${RUN_LINK}|View Logs> | <${LINEAR_LINK}|Linear>"
+      MSG=":x: *${TICKET_ID}* implementation failed${METRICS}\n<${RUN_LINK}|View Logs> | <${LINEAR_LINK}|Linear>"
       ;;
     skipped)
       MSG=":warning: *${TICKET_ID}* implementation skipped. <${RUN_LINK}|View Logs>"
@@ -160,12 +223,13 @@ notify_implement() {
   }"
 }
 
-# notify_error WORKFLOW JOB [TICKET_ID] [EXEC_FILE]
-# Vercel-style error report with log excerpt + links.
+# notify_error WORKFLOW JOB [TICKET_ID] [EXEC_FILE] [DURATION_SECS]
+# Vercel-style error report with log excerpt + View Full Logs + Retry Workflow buttons.
 notify_error() {
   local WORKFLOW="${1:?}" JOB="${2:?}"
-  local TICKET_ID="${3:-}" EXEC_FILE="${4:-}"
+  local TICKET_ID="${3:-}" EXEC_FILE="${4:-}" DURATION_SECS="${5:-}"
   local RUN_LINK="$(_run_url)"
+  local RETRY_LINK="$(_retry_url)"
   local LINEAR_REF=""
   [ -n "$TICKET_ID" ] && LINEAR_REF=" | <$(_linear_url "$TICKET_ID")|Linear>"
 
@@ -173,6 +237,12 @@ notify_error() {
   EXCERPT=$(_extract_error "$EXEC_FILE")
   local ESCAPED_EXCERPT
   ESCAPED_EXCERPT=$(_escape_json "$EXCERPT")
+
+  # Optional duration line
+  local DURATION_LINE=""
+  local DURATION_FMT
+  DURATION_FMT=$(_format_duration "$DURATION_SECS")
+  [ -n "$DURATION_FMT" ] && DURATION_LINE="\n*Duration*: ${DURATION_FMT}"
 
   _send_slack "{
     \"blocks\": [
@@ -184,13 +254,14 @@ notify_error() {
         \"type\": \"section\",
         \"text\": {
           \"type\": \"mrkdwn\",
-          \"text\": \"*Workflow*: ${WORKFLOW}\n*Job*: ${JOB}${TICKET_ID:+\n*Ticket*: ${TICKET_ID}}\n\n\`\`\`${ESCAPED_EXCERPT}\`\`\`\"
+          \"text\": \"*Workflow*: ${WORKFLOW}\n*Job*: ${JOB}${TICKET_ID:+\n*Ticket*: ${TICKET_ID}}${DURATION_LINE}\n\n\`\`\`${ESCAPED_EXCERPT}\`\`\`\"
         }
       },
       {
         \"type\": \"actions\",
         \"elements\": [
-          {\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"View Full Logs\"},\"url\":\"${RUN_LINK}\"}
+          {\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"View Full Logs\"},\"url\":\"${RUN_LINK}\"},
+          {\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"Retry Workflow\"},\"url\":\"${RETRY_LINK}\"}
         ]
       },
       {
@@ -277,21 +348,35 @@ notify_plan() {
 
 # ── Linear integration ────────────────────────────────────────────────────────
 
-# linear_comment TICKET_ID STATUS [PR_NUM] [PR_URL] [PIPELINE]
+# linear_comment TICKET_ID STATUS [PR_NUM] [PR_URL] [PIPELINE] [DURATION_SECS] [FILES] [LOC] [MODE]
 # Post rich completion report to Linear ticket. Requires LINEAR_API_KEY env var.
 linear_comment() {
   local TICKET_ID="${1:?}" STATUS="${2:?}"
   local PR_NUM="${3:-}" PR_URL="${4:-}" PIPELINE="${5:-L3 Pipeline}"
+  local DURATION_SECS="${6:-}" FILES="${7:-}" LOC="${8:-}" MODE="${9:-Ship}"
 
   if [ -z "${LINEAR_API_KEY:-}" ]; then
     echo "::notice::LINEAR_API_KEY not set — skipping Linear comment"
     return 0
   fi
 
-  local PR_REF=""
-  [ -n "$PR_NUM" ] && PR_REF="PR [#${PR_NUM}](${PR_URL})"
+  # Build rich markdown report
+  local DURATION_FMT
+  DURATION_FMT=$(_format_duration "$DURATION_SECS")
 
-  local BODY="Completed autonomously via AI Factory ${PIPELINE}. ${PR_REF}"
+  local BODY="## AI Factory Report\n\n"
+  BODY+="**Status**: ${STATUS}\n"
+  [ -n "$PR_NUM" ] && BODY+="**PR**: [#${PR_NUM}](${PR_URL})\n"
+  if [ -n "$FILES" ] || [ -n "$LOC" ]; then
+    local CHANGES=""
+    [ -n "$FILES" ] && [ "$FILES" != "0" ] && CHANGES="${FILES} files"
+    [ -n "$LOC" ] && [ "$LOC" != "0" ] && CHANGES="${CHANGES:+${CHANGES}, }~${LOC} LOC"
+    [ -n "$CHANGES" ] && BODY+="**Changes**: ${CHANGES}\n"
+  fi
+  [ -n "$DURATION_FMT" ] && BODY+="**Duration**: ${DURATION_FMT}\n"
+  BODY+="**Mode**: ${MODE} (auto-merged)\n"
+  BODY+="\n*Auto-generated by STOA AI Factory ${PIPELINE}*"
+
   local ESCAPED_BODY
   ESCAPED_BODY=$(_escape_json "$BODY")
 
@@ -317,11 +402,12 @@ linear_comment() {
 
 # ── GHA Job Summary ───────────────────────────────────────────────────────────
 
-# write_job_summary TICKET_ID STATUS [PR_NUM] [MODEL] [PIPELINE]
+# write_job_summary TICKET_ID STATUS [PR_NUM] [MODEL] [PIPELINE] [DURATION_SECS] [ERROR_EXCERPT]
 # Write structured markdown table to $GITHUB_STEP_SUMMARY.
 write_job_summary() {
   local TICKET_ID="${1:?}" STATUS="${2:?}"
   local PR_NUM="${3:-}" MODEL="${4:-}" PIPELINE="${5:-}"
+  local DURATION_SECS="${6:-}" ERROR_EXCERPT="${7:-}"
 
   if [ -z "${GITHUB_STEP_SUMMARY:-}" ]; then
     echo "::notice::GITHUB_STEP_SUMMARY not set — skipping job summary"
@@ -330,6 +416,8 @@ write_job_summary() {
 
   local LINEAR_LINK="$(_linear_url "$TICKET_ID")"
   local RUN_LINK="$(_run_url)"
+  local DURATION_FMT
+  DURATION_FMT=$(_format_duration "$DURATION_SECS")
 
   {
     echo "## AI Factory: ${PIPELINE:-implement}"
@@ -339,8 +427,18 @@ write_job_summary() {
     echo "| Ticket | [${TICKET_ID}](${LINEAR_LINK}) |"
     echo "| Status | ${STATUS} |"
     [ -n "$PR_NUM" ] && echo "| PR | #${PR_NUM} |"
+    [ -n "$DURATION_FMT" ] && echo "| Duration | ${DURATION_FMT} |"
     [ -n "$MODEL" ] && echo "| Model | ${MODEL} |"
     echo "| Run | [#${GITHUB_RUN_NUMBER:-?}](${RUN_LINK}) |"
     echo ""
+    # Append error section if present
+    if [ -n "$ERROR_EXCERPT" ]; then
+      echo "### Error"
+      echo ""
+      echo '```'
+      echo "$ERROR_EXCERPT"
+      echo '```'
+      echo ""
+    fi
   } >> "$GITHUB_STEP_SUMMARY"
 }

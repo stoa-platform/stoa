@@ -199,8 +199,9 @@ The `repository_dispatch` `client_payload` includes phase-aware fields:
 
 | Guard | Value | Why |
 |-------|-------|-----|
-| Max turns per agent | 15 (review), 30 (implementation) | Prevent runaway costs |
-| Default model | Sonnet | 10x cheaper than Opus |
+| Model routing | Haiku/Sonnet/Opus tiers | 3x savings on read-only tasks, better Council quality |
+| Max turns per agent | 15 (review), 60 (implementation) | Prevent runaway costs |
+| Default model | Sonnet (code gen), Haiku (read-only), Opus (Council) | Right model per task |
 | Max parallel agents | 3 | Cost caps at ~3x single agent |
 | Timeout per job | 15-60 min | Hard stop on runaway jobs |
 | Skip Council for | Ship-mode, read-only | Avoid unnecessary validation |

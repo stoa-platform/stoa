@@ -121,6 +121,7 @@ jobs:
             - Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
             - Label the issue "self-improve". Do NOT label it "claude-implement" automatically.
               A human must review and explicitly label "claude-implement" to trigger implementation.
+          # Model tier: sonnet (self-improvement analysis, read-only but needs quality reasoning)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Glob,Grep"
 
       # Fallback comment if Claude fails

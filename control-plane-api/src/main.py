@@ -30,7 +30,7 @@ from .routers import (
     access_requests,
     admin_prospects,
     apis,
-    applications,  # noqa: F401 — router registered via import side-effect
+    applications,
     audit,
     backend_apis,
     business,
@@ -404,8 +404,7 @@ app.add_middleware(AuditMiddleware)
 # Routers
 app.include_router(tenants.router)
 app.include_router(apis.router)
-# CAB-1122: Applications router disabled — requires Keycloak service implementation
-# app.include_router(applications.router)
+app.include_router(applications.router)
 app.include_router(deployments.router)
 app.include_router(git.router)
 app.include_router(events.router)

@@ -366,14 +366,19 @@ class TestInternalGatewayEndpoint:
         with (
             patch(REPO_PATH) as MockRepo,
             patch(VAULT_PATH) as MockVault,
+            patch("src.routers.external_mcp_servers.settings") as mock_settings,
         ):
+            mock_settings.gateway_api_keys_list = ["test_key"]
             MockRepo.return_value.list_enabled_with_tools = AsyncMock(
                 return_value=[mock_srv]
             )
             MockVault.return_value.retrieve_credential = AsyncMock(return_value=None)
 
             with TestClient(app_with_cpi_admin) as client:
-                response = client.get(INTERNAL_BASE)
+                response = client.get(
+                    INTERNAL_BASE,
+                    headers={"X-Gateway-Key": "test_key"},
+                )
 
         assert response.status_code == 200
         data = response.json()

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { config } from '../../config';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface QuickAction {
   title: string;
@@ -28,6 +29,7 @@ interface QuickAction {
   color: string;
   external?: boolean;
   enabled?: boolean;
+  scope?: string;
 }
 
 const actions: QuickAction[] = [
@@ -47,6 +49,7 @@ const actions: QuickAction[] = [
     icon: BookOpen,
     color: 'from-indigo-500 to-indigo-600',
     enabled: config.features.enableAPICatalog,
+    scope: 'stoa:catalog:read',
   },
   {
     title: 'AI Tools',
@@ -55,6 +58,7 @@ const actions: QuickAction[] = [
     icon: Wrench,
     color: 'from-primary-500 to-primary-600',
     enabled: config.features.enableMCPTools,
+    scope: 'stoa:tools:read',
   },
   {
     title: 'Register as Consumer',
@@ -63,6 +67,7 @@ const actions: QuickAction[] = [
     icon: UserPlus,
     color: 'from-violet-500 to-violet-600',
     enabled: config.features.enableSubscriptions,
+    scope: 'stoa:subscriptions:write',
   },
   {
     title: 'View Usage',
@@ -71,6 +76,7 @@ const actions: QuickAction[] = [
     icon: BarChart3,
     color: 'from-cyan-500 to-cyan-600',
     enabled: config.features.enableSubscriptions,
+    scope: 'stoa:metrics:read',
   },
   {
     title: 'My Subscriptions',
@@ -79,12 +85,16 @@ const actions: QuickAction[] = [
     icon: CreditCard,
     color: 'from-emerald-500 to-emerald-600',
     enabled: config.features.enableSubscriptions,
+    scope: 'stoa:subscriptions:write',
   },
 ];
 
 export function QuickActions() {
   const { t } = useTranslation(['common', 'onboarding']);
-  const enabledActions = actions.filter((a) => a.enabled !== false);
+  const { hasScope } = useAuth();
+  const enabledActions = actions.filter(
+    (a) => a.enabled !== false && (!a.scope || hasScope(a.scope))
+  );
 
   return (
     <div>

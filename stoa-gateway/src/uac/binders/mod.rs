@@ -26,7 +26,7 @@ pub enum BindingOutput {
 ///
 /// Async from day 1 (Council adjustment #3) to support binders that
 /// need external lookups (e.g., schema validation, CP API calls).
-#[allow(async_fn_in_trait)] // stable since Rust 1.75
+#[allow(async_fn_in_trait)]
 pub trait ProtocolBinder {
     /// Bind a contract spec to protocol-specific artifacts.
     async fn bind(&self, contract: &UacContractSpec) -> Result<BindingOutput, String>;

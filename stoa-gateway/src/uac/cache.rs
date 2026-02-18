@@ -52,10 +52,6 @@ struct CacheEntry {
     /// Git commit hash when this was cached
     git_version: String,
 
-    /// When this entry was cached (audit metadata, not read in logic)
-    #[allow(dead_code)]
-    cached_at: DateTime<Utc>,
-
     /// When this entry expires
     expires_at: DateTime<Utc>,
 }
@@ -66,7 +62,6 @@ impl CacheEntry {
         Self {
             policy,
             git_version,
-            cached_at: now,
             expires_at: now + ttl,
         }
     }

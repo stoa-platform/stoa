@@ -53,7 +53,6 @@ pub enum Action {
 
 impl Action {
     /// Check if this action requires write permission
-    #[allow(dead_code)]
     pub fn is_write(&self) -> bool {
         matches!(
             self,
@@ -75,7 +74,6 @@ impl Action {
     }
 
     /// Check if this action requires admin permission
-    #[allow(dead_code)]
     pub fn is_admin(&self) -> bool {
         matches!(
             self,

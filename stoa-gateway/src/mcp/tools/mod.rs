@@ -120,7 +120,6 @@ impl ToolAnnotations {
     }
 
     /// Create annotations with a title
-    #[allow(dead_code)]
     pub fn with_title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
@@ -181,16 +180,6 @@ impl ToolResult {
             is_error: None,
         }
     }
-
-    #[allow(dead_code)]
-    pub fn error(message: impl Into<String>) -> Self {
-        Self {
-            content: vec![ToolContent::Text {
-                text: message.into(),
-            }],
-            is_error: Some(true),
-        }
-    }
 }
 
 /// Context provided to tool during execution
@@ -199,7 +188,6 @@ pub struct ToolContext {
     pub tenant_id: String,
     pub user_id: Option<String>,
     pub user_email: Option<String>,
-    #[allow(dead_code)]
     pub request_id: String,
     pub roles: Vec<String>,
     /// OAuth scopes from JWT (ADR-012 12-Scope Model)
@@ -261,7 +249,6 @@ pub trait Tool: Send + Sync {
 
 /// Tool execution error
 #[derive(Debug, thiserror::Error)]
-#[allow(dead_code)]
 pub enum ToolError {
     #[error("Invalid arguments: {0}")]
     InvalidArguments(String),
@@ -336,7 +323,6 @@ impl ToolRegistry {
     /// Unregister a tool by name (Phase 7: K8s CRD support)
     ///
     /// Returns true if the tool was found and removed, false otherwise.
-    #[allow(dead_code)] // Used by k8s::CrdWatcher when k8s feature enabled
     pub fn unregister(&self, name: &str) -> bool {
         let removed = self.tools.write().remove(name).is_some();
         if removed {
@@ -346,13 +332,11 @@ impl ToolRegistry {
     }
 
     /// Check if a tool exists
-    #[allow(dead_code)] // Used by k8s::CrdWatcher when k8s feature enabled
     pub fn exists(&self, name: &str) -> bool {
         self.tools.read().contains_key(name)
     }
 
     /// Get all tool names
-    #[allow(dead_code)] // Used by k8s::CrdWatcher when k8s feature enabled
     pub fn names(&self) -> Vec<String> {
         self.tools.read().keys().cloned().collect()
     }

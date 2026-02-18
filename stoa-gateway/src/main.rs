@@ -20,7 +20,7 @@ use stoa_gateway::state::AppState;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration first (needed for OTel endpoint)
     let config = Config::load()?;
-    config.validate()?;
+    config.validate();
 
     // Initialize tracing (with optional OTel export if configured)
     init_tracing(&config);
@@ -307,7 +307,6 @@ async fn shutdown_signal() {
 }
 
 /// Initialize Kafka CNS event bridge (CAB-1178: Kafka -> SSE push via NotificationBus)
-#[allow(unused_variables)]
 fn init_kafka_cns_consumer(config: &Config, state: &AppState) {
     if !config.kafka_cns_enabled {
         info!("Kafka CNS event bridge disabled (STOA_KAFKA_CNS_ENABLED=false)");
@@ -340,8 +339,7 @@ fn init_kafka_cns_consumer(config: &Config, state: &AppState) {
 }
 
 /// Initialize K8s CRD watcher for dynamic tool registration (Phase 7: CAB-1105)
-#[allow(unused_variables)]
-async fn init_k8s_watcher(config: &Config, state: &AppState) {
+async fn init_k8s_watcher(config: &Config, _state: &AppState) {
     if !config.k8s_enabled {
         info!("K8s CRD watcher disabled (STOA_K8S_ENABLED=false)");
         return;
@@ -354,8 +352,8 @@ async fn init_k8s_watcher(config: &Config, state: &AppState) {
             Ok(client) => {
                 let watcher = stoa_gateway::k8s::CrdWatcher::new(
                     client,
-                    state.tool_registry.clone(),
-                    state.skill_resolver.clone(),
+                    _state.tool_registry.clone(),
+                    _state.skill_resolver.clone(),
                 );
                 tokio::spawn(async move {
                     watcher.start().await;

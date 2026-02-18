@@ -739,9 +739,8 @@ impl Config {
         Ok(config)
     }
 
-    /// Validate configuration
-    pub fn validate(&self) -> Result<(), ConfigError> {
-        // Warn about missing recommended config
+    /// Validate configuration (logs warnings for missing recommended settings)
+    pub fn validate(&self) {
         if self.control_plane_url.is_none() {
             tracing::warn!("CONTROL_PLANE_URL not set - some features will be disabled");
         }
@@ -749,19 +748,7 @@ impl Config {
         if self.jwt_secret.is_none() && self.keycloak_url.is_none() {
             tracing::warn!("No JWT_SECRET or KEYCLOAK_URL - auth will be limited");
         }
-
-        Ok(())
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[allow(dead_code)]
-pub enum ConfigError {
-    #[error("Missing required config: {0}")]
-    Missing(String),
-
-    #[error("Invalid config value: {0}")]
-    Invalid(String),
 }
 
 #[cfg(test)]
@@ -894,7 +881,7 @@ mod tests {
     #[test]
     fn test_validate_warns_but_succeeds() {
         let config = Config::default();
-        // Default config has no CP URL and no JWT — validate should still succeed
-        assert!(config.validate().is_ok());
+        // Default config has no CP URL and no JWT — validate logs warnings but doesn't panic
+        config.validate();
     }
 }

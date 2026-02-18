@@ -77,7 +77,6 @@ pub struct HeartbeatPayload {
 
 /// Response from Control Plane registration
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)] // Fields used for JSON deserialization
 pub struct RegistrationResponse {
     /// Assigned gateway ID
     pub id: Uuid,
@@ -91,7 +90,6 @@ pub struct RegistrationResponse {
 
 /// Error types for registration operations
 #[derive(Debug, thiserror::Error)]
-#[allow(dead_code)] // Variants reserved for future use
 pub enum RegistrationError {
     #[error("HTTP request failed: {0}")]
     HttpError(#[from] reqwest::Error),
@@ -324,7 +322,6 @@ impl GatewayRegistrar {
     }
 
     /// Get the registered gateway ID (if any)
-    #[allow(dead_code)] // Public API for future use
     pub async fn gateway_id(&self) -> Option<Uuid> {
         *self.gateway_id.read().await
     }

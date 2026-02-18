@@ -56,9 +56,6 @@ pub struct ToolsListResponse {
 struct TokenResponse {
     access_token: String,
     expires_in: u64,
-    #[allow(dead_code)]
-    #[serde(default)]
-    token_type: String,
 }
 
 /// Cached access token

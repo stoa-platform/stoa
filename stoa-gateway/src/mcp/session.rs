@@ -16,12 +16,8 @@ use tracing::{debug, info, warn};
 #[derive(Debug, Clone)]
 pub struct Session {
     pub id: String,
-    #[allow(dead_code)]
     pub tenant_id: String,
-    #[allow(dead_code)]
-    pub created_at: DateTime<Utc>,
     pub last_activity: DateTime<Utc>,
-    #[allow(dead_code)]
     pub metadata: HashMap<String, String>,
 }
 
@@ -31,7 +27,6 @@ impl Session {
         Self {
             id,
             tenant_id,
-            created_at: now,
             last_activity: now,
             metadata: HashMap::new(),
         }

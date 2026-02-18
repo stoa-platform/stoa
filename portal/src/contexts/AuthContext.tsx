@@ -143,7 +143,10 @@ function filterSystemRoles(roles: string[]): string[] {
   );
 }
 
-function extractUserFromToken(oidcUser: any): Partial<User> | null {
+function extractUserFromToken(oidcUser: {
+  profile?: Record<string, unknown>;
+  access_token?: string;
+}): Partial<User> | null {
   if (!oidcUser?.profile) return null;
 
   const profile = oidcUser.profile;
@@ -180,11 +183,11 @@ function extractUserFromToken(oidcUser: any): Partial<User> | null {
   const isCpiAdmin = roles.includes('cpi-admin');
 
   return {
-    id: profile.sub,
-    email: profile.email || '',
-    name: profile.name || profile.preferred_username || '',
-    tenant_id: tenantId || profile.tenant_id,
-    organization: organization || profile.organization,
+    id: profile.sub as string | undefined,
+    email: (profile.email as string) || '',
+    name: (profile.name as string) || (profile.preferred_username as string) || '',
+    tenant_id: tenantId || (profile.tenant_id as string | undefined),
+    organization: organization || (profile.organization as string | undefined),
     roles,
     permissions: [], // Will be populated from /v1/me or fallback
     effective_scopes: [], // Will be populated from /v1/me or fallback

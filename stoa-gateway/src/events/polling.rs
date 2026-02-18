@@ -119,7 +119,6 @@ impl EventBuffer {
     }
 
     /// Get total event count across all tenants (for metrics)
-    #[allow(dead_code)]
     pub fn count(&self) -> usize {
         self.buffers.read().values().map(|b| b.len()).sum()
     }

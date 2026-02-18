@@ -40,7 +40,6 @@ pub struct AppState {
     pub tool_registry: Arc<ToolRegistry>,
     pub session_manager: Arc<SessionManager>,
     pub rate_limiter: Arc<RateLimiter>,
-    #[allow(dead_code)]
     pub api_key_validator: Arc<ApiKeyValidator>,
     pub uac_enforcer: Arc<UacEnforcer>,
     pub control_plane: Arc<ToolProxyClient>,
@@ -410,7 +409,6 @@ impl UacEnforcer {
     }
 
     /// Check if a tool invocation is allowed (legacy signature for compatibility)
-    #[allow(dead_code)]
     pub async fn check(&self, tenant_id: &str, action: Action) -> Result<(), String> {
         // Legacy check with empty context — allows all by default for backwards compat
         // New code should use check_with_context() for proper policy evaluation

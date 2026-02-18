@@ -23,7 +23,7 @@ thiserror = "1"
 chrono = { version = "0.4", features = ["serde"] }
 prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
 jsonwebtoken = "9"
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 async-trait = "0.1"
 
 # === NEW - Phase 1: Quality Fixes ===
@@ -67,18 +67,17 @@ kube = { version = "3.0", features = ["runtime", "derive"], optional = true }
 k8s-openapi = { version = "0.27", features = ["latest"], optional = true }
 schemars = { version = "1", optional = true }
 
+# === Phase 5: OpenTelemetry Distributed Tracing (CAB-1374) ===
+opentelemetry = { version = "0.27", features = ["trace"], optional = true }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.27", default-features = false, features = ["grpc-tonic", "trace"], optional = true }
+tracing-opentelemetry = { version = "0.28", optional = true }
+
 [features]
 default = []
 kafka = ["rdkafka"]
-otel = []  # OpenTelemetry support (Phase 6)
+otel = ["opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp", "tracing-opentelemetry"]
 k8s = ["kube", "k8s-openapi", "schemars"]  # K8s CRD watcher (Phase 7)
-
-# === Phase 5: OpenTelemetry Distributed Tracing (CAB-1088) ===
-# TODO: Re-enable once opentelemetry 0.27 API stabilizes
-# opentelemetry = { version = "0.27", features = ["trace"] }
-# opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
-# opentelemetry-otlp = { version = "0.27", features = ["tonic"] }
-# tracing-opentelemetry = "0.28"
 
 [dev-dependencies]
 criterion = "0.8"

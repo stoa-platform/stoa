@@ -204,12 +204,20 @@ pub struct RestToolInvokeRequest {
 ///
 /// Returns a flat JSON array of tool definitions.
 /// Used by demo scripts and simple HTTP clients (non-SSE).
-#[instrument(name = "mcp.v1.tools.list", skip(state, headers), fields(otel.kind = "server"))]
+#[instrument(
+    name = "mcp.v1.tools.list",
+    skip(state, headers),
+    fields(
+        otel.kind = "server",
+        tenant_id = tracing::field::Empty,
+    )
+)]
 pub async fn mcp_rest_tools_list(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let auth = extract_auth_context(&state, &headers).await;
+    tracing::Span::current().record("tenant_id", auth.tenant_id.as_str());
     debug!(tenant_id = %auth.tenant_id, "REST v1: listing MCP tools");
 
     // CAB-1317: stale-while-revalidate — return cached immediately, refresh in background
@@ -235,7 +243,15 @@ pub async fn mcp_rest_tools_list(
 ///
 /// Accepts `{"tool": "name", "arguments": {...}}` and delegates to the
 /// same execution pipeline as POST /mcp/tools/call (auth, OPA, metering).
-#[instrument(name = "mcp.v1.tools.invoke", skip(state, headers, request), fields(otel.kind = "server"))]
+#[instrument(
+    name = "mcp.v1.tools.invoke",
+    skip(state, headers, request),
+    fields(
+        otel.kind = "server",
+        tenant_id = tracing::field::Empty,
+        tool_name = tracing::field::Empty,
+    )
+)]
 pub async fn mcp_rest_tools_invoke(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -250,13 +266,21 @@ pub async fn mcp_rest_tools_invoke(
 }
 
 /// POST /mcp/tools/list - List available tools
-#[instrument(name = "mcp.tools.list", skip(state, headers, _request), fields(otel.kind = "server"))]
+#[instrument(
+    name = "mcp.tools.list",
+    skip(state, headers, _request),
+    fields(
+        otel.kind = "server",
+        tenant_id = tracing::field::Empty,
+    )
+)]
 pub async fn mcp_tools_list(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(_request): Json<ToolsListRequest>,
 ) -> impl IntoResponse {
     let auth = extract_auth_context(&state, &headers).await;
+    tracing::Span::current().record("tenant_id", auth.tenant_id.as_str());
 
     debug!(tenant_id = %auth.tenant_id, "Listing MCP tools");
 
@@ -310,7 +334,16 @@ fn with_rate_limit_headers(
 /// 4. Tool execution
 /// 5. Metering emission (Phase 3)
 /// 6. Token optimization (Phase 4)
-#[instrument(name = "mcp.tools.call", skip(state, headers, request), fields(otel.kind = "server"))]
+#[instrument(
+    name = "mcp.tools.call",
+    skip(state, headers, request),
+    fields(
+        otel.kind = "server",
+        tenant_id = tracing::field::Empty,
+        tool_name = tracing::field::Empty,
+        user_id = tracing::field::Empty,
+    )
+)]
 pub async fn mcp_tools_call(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -325,6 +358,14 @@ pub async fn mcp_tools_call(
     // Phase 1: Extract JWT auth context
     let auth = extract_auth_context(&state, &headers).await;
     let t_auth = start.elapsed();
+
+    // Enrich span with UAC attributes for OTel export (CAB-1374)
+    let current_span = tracing::Span::current();
+    current_span.record("tenant_id", auth.tenant_id.as_str());
+    current_span.record("tool_name", request.name.as_str());
+    if let Some(ref uid) = auth.user_id {
+        current_span.record("user_id", uid.as_str());
+    }
 
     debug!(
         tenant_id = %auth.tenant_id,

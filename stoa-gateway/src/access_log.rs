@@ -10,6 +10,8 @@
 use axum::{extract::Request, middleware::Next, response::Response};
 use std::time::Instant;
 
+use crate::telemetry::extract_trace_id;
+
 /// Paths to skip from access logging (noisy health/metrics endpoints).
 const SKIP_PATHS: &[&str] = &[
     "/health",
@@ -57,6 +59,9 @@ pub async fn access_log_middleware(request: Request, next: Next) -> Response {
     let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
     let status = response.status().as_u16();
 
+    // Extract trace_id from OTel span context when available (CAB-1374)
+    let trace_id = extract_trace_id();
+
     tracing::info!(
         target: "access_log",
         method = %method,
@@ -66,6 +71,7 @@ pub async fn access_log_middleware(request: Request, next: Next) -> Response {
         tenant_id = %tenant_id,
         consumer_id = %consumer_id,
         user_agent = %user_agent,
+        trace_id = %trace_id,
         log_type = "access_log",
         "request completed"
     );

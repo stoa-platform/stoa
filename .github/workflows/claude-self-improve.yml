@@ -118,31 +118,17 @@ jobs:
             --body "Self-improvement analysis could not complete. Check [workflow logs](https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }})." \
             || true
 
-      - name: Notify Slack
+      - name: Slack Self-Improvement Report
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"blocks\": [
-                {
-                  \"type\": \"header\",
-                  \"text\": {\"type\": \"plain_text\", \"text\": \"AI Factory Self-Improvement Report\", \"emoji\": true}
-                },
-                {
-                  \"type\": \"section\",
-                  \"text\": {
-                    \"type\": \"mrkdwn\",
-                    \"text\": \"Weekly retrospective complete. Review proposed improvements on GitHub.\nLabel the issue \`claude-implement\` to auto-create the improvement PR.\"
-                  },
-                  \"accessory\": {
-                    \"type\": \"button\",
-                    \"text\": {\"type\": \"plain_text\", \"text\": \"Review Improvements\"},
-                    \"url\": \"https://github.com/stoa-platform/stoa/issues?q=is%3Aissue+label%3Aself-improve+is%3Aopen\"
-                  }
-                }
-              ]
-            }"
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled "Self-Improvement Report" "${{ steps.batch.outcome }}" \
+            "Weekly retrospective complete. Label the issue \`claude-implement\` to auto-create the improvement PR."
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "self-improve-$(date -u +%Y-%m-%d)" "${{ steps.batch.outcome }}" "" "sonnet-4-5-batch" "self-improve"

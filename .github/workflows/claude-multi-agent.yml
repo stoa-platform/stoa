@@ -196,6 +196,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Record Start Time
+        run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+
       - uses: anthropics/claude-code-action@v1
         continue-on-error: true
         with:
@@ -238,10 +241,17 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          notify_implement "${{ matrix.ticket }}" "${{ job.status }}" "" "" "" "L5 Multi-Agent"
+          DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            notify_implement "${{ matrix.ticket }}" "success" "" "" "" "L5 Multi-Agent" "$DURATION"
+          else
+            notify_error "claude-multi-agent" "implement" "${{ matrix.ticket }}" "" "$DURATION"
+          fi
 
       - name: Write Job Summary
         if: always()
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          write_job_summary "${{ matrix.ticket }}" "${{ job.status }}" "" "sonnet-4-5" "L5-implement"
+          write_job_summary "${{ matrix.ticket }}" "${{ job.status }}" "" "sonnet-4-5" "L5-implement" \
+            "$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))"

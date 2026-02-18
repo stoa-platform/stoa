@@ -17,7 +17,7 @@ from src.schemas.uac import UacClassification, UacContractSpec, UacEndpointSpec
 logger = logging.getLogger(__name__)
 
 # SSRF blocklist — mirrors gateway's is_blocked_url() pattern
-_BLOCKED_HOSTS = {"localhost", "0.0.0.0"}  # nosec B104 — SSRF blocklist, not a bind  # nosec B104 — SSRF blocklist, not a bind
+_BLOCKED_HOSTS = {"localhost", "0.0.0.0"}  # nosec B104 — SSRF blocklist, not a bind
 
 
 def is_blocked_url(url: str) -> bool:

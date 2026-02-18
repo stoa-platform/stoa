@@ -94,7 +94,7 @@ pub fn start_cns_consumer(
 /// Converts event to MCP `notifications/send` format (CAB-1179),
 /// broadcasts to matching tenant SSE sessions, and pushes to
 /// the polling EventBuffer for clients without SSE support.
-#[allow(dead_code)]
+#[cfg(any(feature = "kafka", test))]
 fn process_cns_message(
     payload: &[u8],
     session_manager: &SessionManager,

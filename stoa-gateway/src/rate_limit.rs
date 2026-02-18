@@ -161,7 +161,6 @@ impl RateLimiter {
     }
 
     /// Get current bucket count (for metrics)
-    #[allow(dead_code)]
     pub fn bucket_count(&self) -> usize {
         self.buckets.read().len()
     }

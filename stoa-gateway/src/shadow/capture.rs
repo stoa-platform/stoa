@@ -445,7 +445,7 @@ impl TrafficCapture {
         use rdkafka::Message;
 
         let consumer: StreamConsumer = match ClientConfig::new()
-            .set("bootstrap.servers", &brokers.join(","))
+            .set("bootstrap.servers", brokers.join(","))
             .set("group.id", group_id)
             .set("auto.offset.reset", "earliest")
             .set("enable.auto.commit", "true")

@@ -204,16 +204,18 @@ All AI Factory notifications use `scripts/ai-ops/ai-factory-notify.sh` — a cen
 
 ### Functions
 
-| Function | Purpose | Slack | Linear | Summary |
-|----------|---------|-------|--------|---------|
-| `notify_council` | Council validation report | Block Kit + approve button | — | — |
-| `notify_implement` | Implementation success/failure | Status message | — | — |
-| `notify_error` | Error with log excerpt | Vercel-style error block | — | — |
-| `notify_scan` | Autopilot scan summary | Candidate count + velocity | — | — |
-| `notify_scheduled` | Daily/weekly task results | Task name + status | — | — |
-| `notify_plan` | Plan validation (Stage 2) | Plan status + review link | — | — |
-| `linear_comment` | Rich completion report | — | Markdown comment | — |
-| `write_job_summary` | GHA audit trail | — | — | `$GITHUB_STEP_SUMMARY` |
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `notify_council` | `TICKET TITLE SCORE VERDICT ISSUE_URL [ISSUE_NUM] [MODE] [LOC] [FILES]` | Council report + approve button |
+| `notify_implement` | `TICKET STATUS [PR_NUM] [PR_URL] [ISSUE_NUM] [PIPELINE] [DURATION_SECS] [FILES] [LOC]` | Implementation result |
+| `notify_error` | `WORKFLOW JOB [TICKET] [EXEC_FILE] [DURATION_SECS]` | Vercel-style error with log excerpt + retry button |
+| `notify_scan` | `TOTAL CREATED [CAPPED]` | Autopilot scan summary |
+| `notify_scheduled` | `TASK STATUS [DETAIL]` | Daily/weekly task results |
+| `notify_plan` | `TICKET TITLE SCORE VERDICT ISSUE_URL [ISSUE_NUM]` | Plan validation (Stage 2) |
+| `linear_comment` | `TICKET STATUS [PR_NUM] [PR_URL] [PIPELINE] [DURATION_SECS] [FILES] [LOC] [MODE]` | Rich markdown report on Linear |
+| `write_job_summary` | `TICKET STATUS [PR_NUM] [MODEL] [PIPELINE] [DURATION_SECS] [ERROR_EXCERPT]` | GHA audit trail |
+
+All optional `[params]` degrade gracefully — omit or pass empty string. Duration in seconds (formatted by `_format_duration`). Linear links are deterministic URLs (no API call).
 
 ### Env Vars (all optional, graceful degradation)
 
@@ -226,12 +228,23 @@ All AI Factory notifications use `scripts/ai-ops/ai-factory-notify.sh` — a cen
 | `GITHUB_RUN_ID` | Auto-set by GHA | All functions (run link) |
 | `GITHUB_STEP_SUMMARY` | Auto-set by GHA | `write_job_summary` |
 
+### Duration Tracking Pattern
+
+Every implementation job records start time before the Claude action:
+```yaml
+- name: Record Start Time
+  run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+```
+Then computes duration in the notification step: `DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))`
+
 ### Rules
 
 - Every workflow step that previously had inline `curl $SLACK_WEBHOOK` now uses `source ... && notify_*`
 - `write_job_summary` is called in ALL 8 Claude workflows for persistent audit trail
 - Notifications are best-effort: `SLACK_WEBHOOK` unset = silent skip, never fails the parent step
 - Linear comments only on implementation success/failure (not Council, not scheduled — too noisy)
+- Implementation failures use `notify_error` (Vercel-style) instead of `notify_implement` for richer diagnostics
+- PR stats (`FILES`, `LOC`) extracted via `gh pr diff "$PR_NUM" --stat | tail -1`
 - Deprecated scripts: `slack-notify.sh`, `council-slack-report.sh`, `daily-digest.sh` (use library instead)
 
 ## GitHub Labels for Automation

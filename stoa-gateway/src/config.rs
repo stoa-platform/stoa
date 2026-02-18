@@ -327,6 +327,17 @@ pub struct Config {
     #[serde(default = "default_skill_cache_ttl")]
     pub skill_cache_ttl_secs: u64,
 
+    /// Max merged skill context size in bytes (default: 8192).
+    /// Instructions exceeding this limit are truncated.
+    /// Env: STOA_SKILL_CONTEXT_MAX_BYTES
+    #[serde(default = "default_skill_context_max_bytes")]
+    pub skill_context_max_bytes: usize,
+
+    /// Header name for injecting skill context into DynamicTool calls.
+    /// Env: STOA_SKILL_CONTEXT_HEADER
+    #[serde(default = "default_skill_context_header")]
+    pub skill_context_header: String,
+
     // === Federation (CAB-1362) ===
     /// Enable federation routing for sub-accounts (default: false)
     /// Env: STOA_FEDERATION_ENABLED
@@ -589,6 +600,14 @@ fn default_skill_cache_ttl() -> u64 {
     300 // 5 minutes
 }
 
+fn default_skill_context_max_bytes() -> usize {
+    8192
+}
+
+fn default_skill_context_header() -> String {
+    "X-Skill-Context".to_string()
+}
+
 fn default_federation_cache_ttl() -> u64 {
     300
 }
@@ -664,6 +683,8 @@ impl Default for Config {
             cb_success_threshold: default_cb_success_threshold(),
             skill_context_enabled: false,
             skill_cache_ttl_secs: default_skill_cache_ttl(),
+            skill_context_max_bytes: default_skill_context_max_bytes(),
+            skill_context_header: default_skill_context_header(),
             federation_enabled: false,
             federation_cache_ttl_secs: default_federation_cache_ttl(),
             federation_cache_max_entries: default_federation_cache_max_entries(),

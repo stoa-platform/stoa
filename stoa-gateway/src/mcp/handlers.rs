@@ -597,7 +597,14 @@ pub async fn mcp_tools_call(
             if merged.is_empty() {
                 None
             } else {
-                Some(merged)
+                // Truncate to configured max bytes (CAB-1365 context size limit)
+                let max = state.config.skill_context_max_bytes;
+                if merged.len() > max {
+                    let truncated = &merged[..merged.floor_char_boundary(max)];
+                    Some(truncated.to_string())
+                } else {
+                    Some(merged)
+                }
             }
         }
     } else {

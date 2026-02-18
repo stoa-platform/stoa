@@ -639,6 +639,112 @@ pub struct SkillResolveParams {
     pub user_ref: Option<String>,
 }
 
+/// GET /admin/skills — list all stored skills (CAB-1366)
+pub async fn skills_list(State(state): State<AppState>) -> Json<Vec<SkillAdminEntry>> {
+    let entries: Vec<SkillAdminEntry> = state
+        .skill_resolver
+        .list_all()
+        .into_iter()
+        .map(|s| SkillAdminEntry {
+            key: s.key,
+            name: s.name,
+            description: s.description,
+            tenant_id: s.tenant_id,
+            scope: s.scope.to_string(),
+            priority: s.priority,
+            instructions: s.instructions,
+            tool_ref: s.tool_ref,
+            user_ref: s.user_ref,
+            enabled: s.enabled,
+        })
+        .collect();
+    Json(entries)
+}
+
+/// POST /admin/skills — upsert a skill (CAB-1366)
+pub async fn skills_upsert(
+    State(state): State<AppState>,
+    Json(payload): Json<SkillUpsertPayload>,
+) -> impl IntoResponse {
+    use crate::skills::resolver::{SkillScope, StoredSkill};
+
+    let scope = match SkillScope::from_crd(&payload.scope) {
+        Some(s) => s,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": format!("invalid scope: {}", payload.scope)})),
+            )
+                .into_response();
+        }
+    };
+
+    let skill = StoredSkill {
+        key: payload.key.clone(),
+        name: payload.name,
+        description: payload.description,
+        tenant_id: payload.tenant_id,
+        scope,
+        priority: payload.priority.unwrap_or(50),
+        instructions: payload.instructions,
+        tool_ref: payload.tool_ref,
+        user_ref: payload.user_ref,
+        enabled: payload.enabled.unwrap_or(true),
+    };
+
+    state.skill_resolver.upsert(skill);
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"key": payload.key})),
+    )
+        .into_response()
+}
+
+/// DELETE /admin/skills?key=X — remove a skill by key (CAB-1366)
+pub async fn skills_delete(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<SkillDeleteParams>,
+) -> impl IntoResponse {
+    if state.skill_resolver.remove(&params.key) {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+#[derive(Serialize)]
+pub struct SkillAdminEntry {
+    pub key: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub tenant_id: String,
+    pub scope: String,
+    pub priority: u8,
+    pub instructions: Option<String>,
+    pub tool_ref: Option<String>,
+    pub user_ref: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(Deserialize)]
+pub struct SkillUpsertPayload {
+    pub key: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub tenant_id: String,
+    pub scope: String,
+    pub priority: Option<u8>,
+    pub instructions: Option<String>,
+    pub tool_ref: Option<String>,
+    pub user_ref: Option<String>,
+    pub enabled: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct SkillDeleteParams {
+    pub key: String,
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

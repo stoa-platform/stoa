@@ -112,6 +112,10 @@ const FederationAccountDetail = lazy(() =>
   federationModule().then((m) => ({ default: m.FederationAccountDetail }))
 );
 
+// CAB-1366: Skills UI page
+const skillsModule = () => import('./pages/Skills');
+const SkillsList = lazy(() => skillsModule().then((m) => ({ default: m.SkillsList })));
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -402,6 +406,7 @@ function ProtectedRoutes() {
                 <Route path="/saas-api-keys" element={<SaasApiKeysList />} />
                 <Route path="/federation/accounts" element={<FederationAccountsList />} />
                 <Route path="/federation/accounts/:id" element={<FederationAccountDetail />} />
+                <Route path="/skills" element={<SkillsList />} />
               </Routes>
             </Suspense>
           )}

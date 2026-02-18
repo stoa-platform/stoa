@@ -227,6 +227,9 @@ class MCPServerSubscription(Base):
     # Usage tracking
     usage_count = Column(Integer, nullable=False, default=0)
 
+    # TTL extension tracking (CAB-86)
+    ttl_extensions = Column(Integer, nullable=False, default=0)
+
     # Relationships
     server = relationship("MCPServer", back_populates="subscriptions")
     tool_access = relationship("MCPToolAccess", back_populates="subscription", cascade="all, delete-orphan")

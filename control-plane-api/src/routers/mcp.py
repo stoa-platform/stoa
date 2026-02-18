@@ -19,7 +19,7 @@ Performance optimizations:
 import logging
 import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -55,11 +55,14 @@ from ..schemas.mcp_subscription import (
     MCPSubscriptionResponse,
     MCPSubscriptionStatusEnum,
     MCPSubscriptionWithKeyResponse,
+    MCPTTLExtensionRequest,
+    MCPTTLExtensionResponse,
     MCPToolAccessResponse,
     MCPToolAccessStatusEnum,
 )
 from ..services.api_key import APIKeyService
 from ..services.cache_service import api_key_cache
+from ..services.kafka_service import kafka_service, Topics
 
 logger = logging.getLogger(__name__)
 
@@ -283,6 +286,7 @@ def _convert_subscription_to_response(
         expires_at=subscription.expires_at,
         last_used_at=subscription.last_used_at,
         usage_count=subscription.usage_count or 0,
+        ttl_extensions=subscription.ttl_extensions or 0,
     )
 
 
@@ -635,6 +639,118 @@ async def rotate_api_key(
     except Exception as e:
         logger.error(f"Failed to rotate API key for MCP subscription {subscription_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to rotate API key")
+
+
+@subscriptions_router.patch(
+    "/{subscription_id}/ttl",
+    response_model=MCPTTLExtensionResponse,
+    summary="Extend subscription TTL",
+    description="Extend the expiration date of a subscription (self-service, max 2 extensions, 7d or 14d increments). CAB-86",
+    responses={
+        200: {"description": "TTL extended successfully"},
+        400: {"description": "Invalid extension or extension limit reached"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Access denied (not owner)"},
+        404: {"description": "Subscription not found"},
+        429: {"description": "Rate limit exceeded"},
+    },
+)
+@limiter.limit("10/minute")
+async def extend_subscription_ttl(
+    request: Request,
+    subscription_id: UUID,
+    body: MCPTTLExtensionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Extend the TTL (Time To Live) of a subscription.
+
+    This endpoint allows subscription owners to self-service extend the expiration date
+    of their subscription. Restrictions:
+    - Maximum 2 extensions per subscription
+    - Extension increments: 7 or 14 days only
+    - Maximum total lifetime: 60 days from creation
+    - Only the subscription owner can extend
+
+    **Audit trail**: Emits a Kafka event to `stoa.resource.lifecycle` topic.
+    """
+    repo = MCPSubscriptionRepository(db)
+    subscription = await repo.get_by_id(subscription_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    # Ownership check
+    if subscription.subscriber_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied: only subscription owner can extend TTL")
+
+    # Extension limit check (max 2 extensions)
+    if subscription.ttl_extensions >= 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Extension limit reached: maximum 2 extensions allowed (current: {subscription.ttl_extensions})"
+        )
+
+    # Valid increment check (7 or 14 days only)
+    if body.extend_days not in [7, 14]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid extension increment: only 7 or 14 days allowed"
+        )
+
+    # Calculate new expiration date
+    previous_expires_at = subscription.expires_at
+    if subscription.expires_at is None:
+        # If no expiration set, extend from now
+        new_expires_at = datetime.utcnow() + timedelta(days=body.extend_days)
+    else:
+        new_expires_at = subscription.expires_at + timedelta(days=body.extend_days)
+
+    # Update subscription
+    subscription.expires_at = new_expires_at
+    subscription.ttl_extensions += 1
+    subscription.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(subscription)
+
+    # Emit Kafka event for audit trail
+    try:
+        await kafka_service.publish(
+            topic=Topics.RESOURCE_LIFECYCLE,
+            event_type="resource-ttl-extended",
+            tenant_id=subscription.tenant_id,
+            payload={
+                "resource_type": "mcp_subscription",
+                "resource_id": str(subscription.id),
+                "owner": subscription.subscriber_email,
+                "extend_days": body.extend_days,
+                "reason": body.reason,
+                "previous_expires_at": previous_expires_at.isoformat() if previous_expires_at else None,
+                "new_expires_at": new_expires_at.isoformat(),
+                "ttl_extensions": subscription.ttl_extensions,
+            },
+            user_id=user.id,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to emit TTL extension event for {subscription_id}: {e}")
+        # Non-blocking: event emission failure doesn't fail the extension
+
+    logger.info(
+        f"TTL extended for MCP subscription {subscription_id} by {user.email}: "
+        f"+{body.extend_days} days, new expiry: {new_expires_at.isoformat()}, "
+        f"extensions: {subscription.ttl_extensions}/2"
+    )
+
+    return MCPTTLExtensionResponse(
+        subscription_id=subscription.id,
+        previous_expires_at=previous_expires_at,
+        new_expires_at=new_expires_at,
+        extend_days=body.extend_days,
+        ttl_extensions=subscription.ttl_extensions,
+        remaining_extensions=2 - subscription.ttl_extensions,
+    )
 
 
 # ============ API Key Validation (for MCP Gateway) ============

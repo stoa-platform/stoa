@@ -164,6 +164,7 @@ class MCPSubscriptionResponse(BaseModel):
     expires_at: datetime | None = None
     last_used_at: datetime | None = None
     usage_count: int = 0
+    ttl_extensions: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -261,6 +262,43 @@ class MCPKeyRotationResponse(BaseModel):
     old_key_expires_at: datetime
     grace_period_hours: int
     rotation_count: int
+
+
+# ============== TTL Extension Schemas ==============
+
+class MCPTTLExtensionRequest(BaseModel):
+    """Schema for TTL extension request (CAB-86)."""
+    extend_days: int = Field(
+        ...,
+        description="Number of days to extend (7 or 14 only)",
+        ge=7,
+        le=14
+    )
+    reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Reason for extension request"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "extend_days": 7,
+                "reason": "Need more time for integration testing"
+            }
+        }
+    )
+
+
+class MCPTTLExtensionResponse(BaseModel):
+    """Schema for TTL extension response (CAB-86)."""
+    subscription_id: UUID
+    previous_expires_at: datetime | None
+    new_expires_at: datetime | None
+    extend_days: int
+    ttl_extensions: int
+    remaining_extensions: int
 
 
 # ============== Admin Schemas ==============

@@ -320,11 +320,33 @@ impl CrdWatcher {
             "Processing ToolSet CRD"
         );
 
+        // Read auth token from K8s Secret if configured
+        let auth_token = if let Some(auth) = &toolset.spec.upstream.auth {
+            let secret_key = auth.secret_key.as_deref().unwrap_or("token");
+            match self
+                .read_secret(namespace, &auth.secret_ref, secret_key)
+                .await
+            {
+                Ok(token) => Some(token),
+                Err(e) => {
+                    warn!(
+                        secret = %auth.secret_ref,
+                        key = %secret_key,
+                        error = %e,
+                        "Failed to read auth secret"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         // Create upstream MCP client
         let config = UpstreamMcpConfig {
             url: toolset.spec.upstream.url.clone(),
             transport: TransportType::from_str(&toolset.spec.upstream.transport),
-            auth_token: None, // TODO: read from K8s Secret via secretRef
+            auth_token,
             timeout: std::time::Duration::from_secs(
                 toolset.spec.upstream.timeout_seconds.unwrap_or(30) as u64,
             ),
@@ -384,6 +406,32 @@ impl CrdWatcher {
             total_discovered = tools.len(),
             "ToolSet tools registered from upstream"
         );
+    }
+
+    /// Read a key from a K8s Secret
+    async fn read_secret(&self, namespace: &str, name: &str, key: &str) -> Result<String, String> {
+        let secrets: Api<k8s_openapi::api::core::v1::Secret> =
+            Api::namespaced(self.client.clone(), namespace);
+
+        let secret = secrets
+            .get(name)
+            .await
+            .map_err(|e| format!("Failed to get secret {}/{}: {}", namespace, name, e))?;
+
+        let data = secret
+            .data
+            .ok_or_else(|| format!("Secret {}/{} has no data", namespace, name))?;
+
+        let bytes = data
+            .get(key)
+            .ok_or_else(|| format!("Secret {}/{} has no key '{}'", namespace, name, key))?;
+
+        String::from_utf8(bytes.0.clone()).map_err(|e| {
+            format!(
+                "Secret {}/{} key '{}' is not valid UTF-8: {}",
+                namespace, name, key, e
+            )
+        })
     }
 
     /// Handle ToolSet CRD delete — unregister all tools with matching prefix

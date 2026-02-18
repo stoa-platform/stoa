@@ -207,9 +207,20 @@ pub struct UpstreamAuth {
     /// K8s Secret reference containing the credential
     pub secret_ref: String,
 
+    /// Key within the K8s Secret data map (default: "token")
+    #[serde(
+        default = "default_secret_key",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub secret_key: Option<String>,
+
     /// Header name (for "header" type)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_name: Option<String>,
+}
+
+fn default_secret_key() -> Option<String> {
+    Some("token".to_string())
 }
 
 /// ToolSet status

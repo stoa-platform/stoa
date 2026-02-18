@@ -548,7 +548,7 @@ impl ShadowService {
         Some(EndpointPattern {
             method,
             path_pattern,
-            query_params: Vec::new(), // TODO: Extract query param patterns
+            query_params: Self::extract_query_param_patterns(transactions),
             request_schema: transactions
                 .iter()
                 .find_map(|t| t.request.body.as_ref())
@@ -559,7 +559,7 @@ impl ShadowService {
             avg_latency_ms: avg_latency,
             p95_latency_ms: p95_latency,
             error_rate,
-            detected_rate_limit: None, // TODO: Detect rate limits
+            detected_rate_limit: Self::detect_rate_limit(transactions),
             auth_type,
         })
     }
@@ -597,6 +597,179 @@ impl ShadowService {
         }
     }
 
+    /// Extract query parameter patterns from transactions.
+    ///
+    /// For each parameter name observed, infers type (uuid/integer/boolean/string),
+    /// determines if required (appears in >80% of requests), and collects up to 5 examples.
+    fn extract_query_param_patterns(transactions: &[&CapturedTransaction]) -> Vec<ParamPattern> {
+        if transactions.is_empty() {
+            return Vec::new();
+        }
+
+        // Collect all observed values per param name
+        let mut param_values: HashMap<String, Vec<String>> = HashMap::new();
+        for tx in transactions {
+            for (name, value) in &tx.request.query_params {
+                param_values
+                    .entry(name.clone())
+                    .or_default()
+                    .push(value.clone());
+            }
+        }
+
+        let total = transactions.len();
+
+        param_values
+            .into_iter()
+            .map(|(name, values)| {
+                let required = values.len() as f64 / total as f64 > 0.8;
+
+                // Infer type from observed values
+                let param_type = Self::infer_param_type(&values);
+
+                // Deduplicate examples, take up to 5
+                let mut seen = std::collections::HashSet::new();
+                let examples: Vec<String> = values
+                    .into_iter()
+                    .filter(|v| seen.insert(v.clone()))
+                    .take(5)
+                    .collect();
+
+                ParamPattern {
+                    name,
+                    param_type,
+                    required,
+                    examples,
+                    description: None,
+                }
+            })
+            .collect()
+    }
+
+    /// Infer parameter type from observed values.
+    fn infer_param_type(values: &[String]) -> String {
+        if values.is_empty() {
+            return "string".to_string();
+        }
+
+        // Check if all values are UUIDs
+        if values.iter().all(|v| uuid::Uuid::parse_str(v).is_ok()) {
+            return "uuid".to_string();
+        }
+
+        // Check if all values are integers
+        if values.iter().all(|v| v.parse::<i64>().is_ok()) {
+            return "integer".to_string();
+        }
+
+        // Check if all values are booleans
+        if values
+            .iter()
+            .all(|v| v == "true" || v == "false" || v == "0" || v == "1")
+        {
+            return "boolean".to_string();
+        }
+
+        "string".to_string()
+    }
+
+    /// Detect rate limit patterns from response headers.
+    ///
+    /// Scans for `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`,
+    /// `retry-after` headers and HTTP 429 status codes.
+    fn detect_rate_limit(transactions: &[&CapturedTransaction]) -> Option<RateLimitPattern> {
+        if transactions.is_empty() {
+            return None;
+        }
+
+        let has_429 = transactions.iter().any(|t| t.response.status_code == 429);
+
+        // Look for rate limit headers
+        let mut limit_value: Option<u64> = None;
+        let mut reset_value: Option<u64> = None;
+        let mut has_rate_headers = false;
+
+        for tx in transactions {
+            if let Some(limit_str) = tx
+                .response
+                .headers
+                .get("x-ratelimit-limit")
+                .or_else(|| tx.response.headers.get("ratelimit-limit"))
+            {
+                if let Ok(limit) = limit_str.parse::<u64>() {
+                    limit_value = Some(limit);
+                    has_rate_headers = true;
+                }
+            }
+
+            if let Some(reset_str) = tx
+                .response
+                .headers
+                .get("x-ratelimit-reset")
+                .or_else(|| tx.response.headers.get("ratelimit-reset"))
+                .or_else(|| tx.response.headers.get("retry-after"))
+            {
+                if let Ok(reset) = reset_str.parse::<u64>() {
+                    reset_value = Some(reset);
+                    has_rate_headers = true;
+                }
+            }
+
+            // Check remaining header as a signal even without limit
+            if tx.response.headers.contains_key("x-ratelimit-remaining")
+                || tx.response.headers.contains_key("ratelimit-remaining")
+            {
+                has_rate_headers = true;
+            }
+        }
+
+        if !has_rate_headers && !has_429 {
+            return None;
+        }
+
+        let limit = limit_value.unwrap_or(100);
+        let window_secs = reset_value.unwrap_or(60);
+
+        let confidence = if has_429 && has_rate_headers {
+            1.0
+        } else if has_rate_headers {
+            0.7
+        } else {
+            // Only 429 status
+            0.5
+        };
+
+        Some(RateLimitPattern {
+            limit,
+            window_secs,
+            confidence,
+        })
+    }
+
+    /// Calculate overall confidence score based on sample size and analysis quality.
+    ///
+    /// Formula:
+    /// - base = 0.5 + (0.4 * min(sample_count / 100.0, 1.0))
+    /// - error_penalty = 1.0 - (avg_error_rate * 0.5)
+    /// - schema_bonus = 0.1 if any response schemas detected
+    /// - confidence = (base * error_penalty + schema_bonus).clamp(0.1, 1.0)
+    fn calculate_confidence(patterns: &HashMap<String, EndpointPattern>, sample_count: u64) -> f64 {
+        let base = 0.5 + (0.4 * (sample_count as f64 / 100.0).min(1.0));
+
+        let avg_error_rate = if patterns.is_empty() {
+            0.0
+        } else {
+            let total_error: f64 = patterns.values().map(|p| p.error_rate).sum();
+            total_error / patterns.len() as f64
+        };
+        let error_penalty = 1.0 - (avg_error_rate * 0.5);
+
+        let has_response_schemas = patterns.values().any(|p| !p.response_schemas.is_empty());
+        let schema_bonus = if has_response_schemas { 0.1 } else { 0.0 };
+
+        (base * error_penalty + schema_bonus).clamp(0.1, 1.0)
+    }
+
     /// Generate UAC contract from patterns
     #[instrument(skip(self))]
     pub async fn generate_uac(&self, api_name: &str, base_url: &str) -> Option<GeneratedUac> {
@@ -607,6 +780,7 @@ impl ShadowService {
         }
 
         let now = chrono::Utc::now();
+        let transaction_count = self.transactions.read().await.len() as u64;
         let endpoints: Vec<UacEndpoint> = patterns
             .values()
             .map(|p| UacEndpoint {
@@ -645,10 +819,10 @@ impl ShadowService {
                 analysis_start: now
                     - chrono::Duration::hours(self.settings.analysis_window_hours as i64),
                 analysis_end: now,
-                transactions_analyzed: self.transactions.read().await.len() as u64,
+                transactions_analyzed: transaction_count,
                 endpoints_detected: endpoints.len() as u64,
                 generator_version: env!("CARGO_PKG_VERSION").to_string(),
-                confidence: 0.8, // TODO: Calculate based on sample size
+                confidence: Self::calculate_confidence(&patterns, transaction_count),
             },
         };
 
@@ -1245,5 +1419,205 @@ mod tests {
             .build_endpoint_pattern("POST /api/v1/data", &txs)
             .unwrap();
         assert!(!pattern.content_types.is_empty()); // at least one content type
+    }
+
+    // === Phase 2: Query param extraction tests ===
+
+    fn make_tx_with_params(id: &str, path: &str, params: Vec<(&str, &str)>) -> CapturedTransaction {
+        let mut tx = make_tx(id, "GET", path, 200, 10);
+        for (k, v) in params {
+            tx.request.query_params.insert(k.to_string(), v.to_string());
+        }
+        tx
+    }
+
+    #[test]
+    fn test_query_param_extraction() {
+        let tx1 = make_tx_with_params("tx-1", "/api/search", vec![("q", "hello"), ("page", "1")]);
+        let tx2 = make_tx_with_params("tx-2", "/api/search", vec![("q", "world"), ("page", "2")]);
+        let tx3 = make_tx_with_params("tx-3", "/api/search", vec![("q", "test"), ("page", "3")]);
+        let txs = vec![&tx1, &tx2, &tx3];
+
+        let patterns = ShadowService::extract_query_param_patterns(&txs);
+        assert_eq!(patterns.len(), 2);
+
+        let q_param = patterns.iter().find(|p| p.name == "q").unwrap();
+        assert_eq!(q_param.param_type, "string");
+        assert!(q_param.required); // appears in all 3 (100% > 80%)
+        assert!(!q_param.examples.is_empty());
+
+        let page_param = patterns.iter().find(|p| p.name == "page").unwrap();
+        assert_eq!(page_param.param_type, "integer");
+        assert!(page_param.required);
+    }
+
+    #[test]
+    fn test_query_param_type_inference() {
+        // UUID detection
+        assert_eq!(
+            ShadowService::infer_param_type(&[
+                "550e8400-e29b-41d4-a716-446655440000".to_string(),
+                "6ba7b810-9dad-11d1-80b4-00c04fd430c8".to_string(),
+            ]),
+            "uuid"
+        );
+
+        // Integer detection
+        assert_eq!(
+            ShadowService::infer_param_type(&[
+                "1".to_string(),
+                "42".to_string(),
+                "100".to_string()
+            ]),
+            "integer"
+        );
+
+        // Boolean detection
+        assert_eq!(
+            ShadowService::infer_param_type(&["true".to_string(), "false".to_string()]),
+            "boolean"
+        );
+
+        // 0/1 detected as integer (integer check runs before boolean)
+        assert_eq!(
+            ShadowService::infer_param_type(&["0".to_string(), "1".to_string()]),
+            "integer"
+        );
+
+        // Mixed → string
+        assert_eq!(
+            ShadowService::infer_param_type(&["hello".to_string(), "123abc".to_string()]),
+            "string"
+        );
+
+        // Empty → string
+        assert_eq!(ShadowService::infer_param_type(&[]), "string");
+    }
+
+    // === Phase 2: Rate limit detection tests ===
+
+    fn make_tx_with_rate_headers(
+        id: &str,
+        status: u16,
+        headers: Vec<(&str, &str)>,
+    ) -> CapturedTransaction {
+        let mut tx = make_tx(id, "GET", "/api/v1/data", status, 10);
+        for (k, v) in headers {
+            tx.response.headers.insert(k.to_string(), v.to_string());
+        }
+        tx
+    }
+
+    #[test]
+    fn test_rate_limit_detection_from_headers() {
+        let tx1 = make_tx_with_rate_headers(
+            "tx-1",
+            200,
+            vec![
+                ("x-ratelimit-limit", "100"),
+                ("x-ratelimit-remaining", "95"),
+                ("x-ratelimit-reset", "60"),
+            ],
+        );
+        let txs = vec![&tx1];
+
+        let rl = ShadowService::detect_rate_limit(&txs).unwrap();
+        assert_eq!(rl.limit, 100);
+        assert_eq!(rl.window_secs, 60);
+        assert!((rl.confidence - 0.7).abs() < 0.01); // headers only → 0.7
+    }
+
+    #[test]
+    fn test_rate_limit_detection_from_429() {
+        let tx1 = make_tx_with_rate_headers(
+            "tx-1",
+            429,
+            vec![("x-ratelimit-limit", "50"), ("retry-after", "30")],
+        );
+        let txs = vec![&tx1];
+
+        let rl = ShadowService::detect_rate_limit(&txs).unwrap();
+        assert_eq!(rl.limit, 50);
+        assert_eq!(rl.window_secs, 30);
+        assert!((rl.confidence - 1.0).abs() < 0.01); // 429 + headers → 1.0
+    }
+
+    #[test]
+    fn test_rate_limit_detection_429_only() {
+        let tx1 = make_tx("tx-1", "GET", "/api/v1/data", 429, 10);
+        let txs = vec![&tx1];
+
+        let rl = ShadowService::detect_rate_limit(&txs).unwrap();
+        assert_eq!(rl.limit, 100); // default
+        assert_eq!(rl.window_secs, 60); // default
+        assert!((rl.confidence - 0.5).abs() < 0.01); // 429 only → 0.5
+    }
+
+    #[test]
+    fn test_rate_limit_detection_none() {
+        let tx1 = make_tx("tx-1", "GET", "/api/v1/data", 200, 10);
+        let txs = vec![&tx1];
+
+        assert!(ShadowService::detect_rate_limit(&txs).is_none());
+    }
+
+    // === Phase 2: Confidence score tests ===
+
+    #[test]
+    fn test_confidence_score_low_samples() {
+        let mut patterns = HashMap::new();
+        patterns.insert(
+            "GET /api".to_string(),
+            EndpointPattern {
+                method: "GET".to_string(),
+                path_pattern: "/api".to_string(),
+                query_params: vec![],
+                request_schema: None,
+                response_schemas: HashMap::new(),
+                content_types: vec![],
+                sample_count: 5,
+                avg_latency_ms: 10,
+                p95_latency_ms: 20,
+                error_rate: 0.0,
+                detected_rate_limit: None,
+                auth_type: None,
+            },
+        );
+
+        let confidence = ShadowService::calculate_confidence(&patterns, 5);
+        // base = 0.5 + 0.4 * min(5/100, 1.0) = 0.5 + 0.02 = 0.52
+        // error_penalty = 1.0, schema_bonus = 0.0
+        // confidence = 0.52 * 1.0 + 0.0 = 0.52
+        assert!((confidence - 0.52).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_confidence_score_high_samples() {
+        let mut patterns = HashMap::new();
+        let mut response_schemas = HashMap::new();
+        response_schemas.insert(200, serde_json::json!({"type": "object"}));
+        patterns.insert(
+            "GET /api".to_string(),
+            EndpointPattern {
+                method: "GET".to_string(),
+                path_pattern: "/api".to_string(),
+                query_params: vec![],
+                request_schema: None,
+                response_schemas,
+                content_types: vec![],
+                sample_count: 200,
+                avg_latency_ms: 10,
+                p95_latency_ms: 20,
+                error_rate: 0.0,
+                detected_rate_limit: None,
+                auth_type: None,
+            },
+        );
+
+        let confidence = ShadowService::calculate_confidence(&patterns, 200);
+        // base = 0.5 + 0.4 * min(200/100, 1.0) = 0.5 + 0.4 = 0.9
+        // error_penalty = 1.0, schema_bonus = 0.1 (has response schemas)
+        // confidence = 0.9 * 1.0 + 0.1 = 1.0 (clamped)
+        assert!((confidence - 1.0).abs() < 0.01);
     }
 }

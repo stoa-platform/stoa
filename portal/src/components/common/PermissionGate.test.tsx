@@ -7,7 +7,7 @@ import { render, screen } from '@testing-library/react';
 import { PermissionGate, withPermission } from './PermissionGate';
 
 // Mock AuthContext
-/* eslint-disable @typescript-eslint/no-explicit-any, jsx-a11y/aria-role */
+/* eslint-disable jsx-a11y/aria-role */
 const mockAuth = {
   user: null as any,
   isAuthenticated: true,

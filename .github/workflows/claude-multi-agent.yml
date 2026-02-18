@@ -47,6 +47,10 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
             Multi-Agent Council Validation.
 
             Tickets to implement in parallel: ${{ inputs.tickets }}
@@ -75,6 +79,11 @@ jobs:
             Comment "/go-batch" to start parallel execution.
           # Model tier: opus (Council gate decision — quality matters more than cost)
           claude_args: "--model claude-opus-4-6 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       - name: Notify Slack — Batch Council
         env:
@@ -128,10 +137,8 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
-            Do NOT read memory.md, plan.md, or operations.log.
-            Do NOT log SESSION-START or SESSION-END.
-            Do NOT run crash recovery checks.
-            Focus exclusively on implementing the task below.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
             Implement ticket: ${{ matrix.ticket }}
 
@@ -154,6 +161,11 @@ jobs:
             Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
           # Model tier: sonnet (code generation, full tool access)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       - name: Notify Slack — Agent Complete
         if: always()

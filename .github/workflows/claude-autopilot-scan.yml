@@ -140,7 +140,8 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
-            Do NOT read memory.md, plan.md, or operations.log.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
             You are the STOA Council. Validate each ticket below for autonomous implementation.
 
@@ -176,6 +177,11 @@ jobs:
           # Model tier: haiku (read-only Council scan, no code generation)
           claude_args: "--model claude-haiku-4-5-20251001 --max-turns 5 --allowedTools Read,Glob,Grep"
           show_full_output: true
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       # Parse Council output and create GitHub issues + Slack notifications
       - name: Create Issues and Notify

@@ -56,22 +56,23 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Daily triage task. Analyze the repository state:
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
-            1. List all open issues — label unlabeled ones (bug, feature, docs, chore)
+            Daily triage: analyze repo state and post a digest issue.
+            1. List open issues — label unlabeled ones (bug, feature, docs, chore)
             2. Check open PRs — flag stale ones (>3 days without activity)
-            3. Read plan.md — identify any drift from Linear cycle
-            4. Read memory.md — check for stale IN_PROGRESS items
-            5. Generate a summary comment on the most recent open issue tagged "daily-digest"
-               or create a new issue titled "Daily Digest — YYYY-MM-DD" with tag "daily-digest"
-
-            Post the digest as an issue comment with:
-            - Open issues count + new since yesterday
-            - Open PRs count + stale PRs
-            - Plan drift: any [~] items that should be [x] or vice versa
-            - Recommendations: top 3 priorities for today
+            3. Read plan.md — identify drift from Linear cycle
+            4. Create issue "Daily Digest — YYYY-MM-DD" with label "daily-digest"
+               Content: open/stale counts, plan drift, top 3 priorities
           # Model tier: haiku (read-only triage, no code generation)
           claude_args: "--model claude-haiku-4-5-20251001 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       - name: Notify Slack
         if: always()
@@ -101,24 +102,27 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            CI Health Check task. Analyze recent CI runs on main:
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
+            CI Health Check: analyze recent CI runs on main.
             1. Run: gh run list --branch main --limit 10 --json status,conclusion,name
-            2. Identify any failed workflows in the last 24h
+            2. Identify failed workflows in the last 24h
             3. For each failure:
-               a. Read the logs: gh run view <id> --log-failed
-               b. Diagnose the root cause
-               c. If auto-fixable (lint, format, type error): create a fix PR
-               d. If not auto-fixable: create an issue labeled "ci-failure" with diagnosis
-            4. Check if any required checks are flaky (passed then failed or vice versa)
+               a. Read logs: gh run view <id> --log-failed
+               b. If auto-fixable (lint, format, type error): create a fix PR
+               c. If not: create issue labeled "ci-failure" with diagnosis
+            4. Check for flaky checks
 
-            Report summary format:
-            - Total runs: X, Passed: Y, Failed: Z
-            - Auto-fixed: N (PR #xxx)
-            - Needs human: M (issues created)
-            - Flaky checks: [list]
+            Report: total/passed/failed runs, auto-fixed (PR#), needs human, flaky checks.
           # Model tier: sonnet (CI health, may create fix PRs)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       - name: Notify Slack
         if: always()
@@ -148,32 +152,27 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Weekly audit task:
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
+            Weekly audit: dependency scan + coverage check + stale branch cleanup.
             1. Dependency audit:
-               - Run pip-audit in control-plane-api/ (install pip-audit first: pip install pip-audit)
-               - Run npm audit in control-plane-ui/ and portal/
-               - Run cargo audit in stoa-gateway/ (if cargo-audit is available, install with: cargo install cargo-audit)
-               - For each vulnerability found: assess severity, check if fix exists
+               - pip-audit in control-plane-api/ (install first: pip install pip-audit)
+               - npm audit in control-plane-ui/ and portal/
+               - cargo audit in stoa-gateway/ (install: cargo install cargo-audit)
+            2. If safe upgrades exist (patch/minor): create PR "chore(deps): weekly dependency update YYYY-MM-DD"
+            3. Coverage check: read thresholds from .claude/rules/ci-quality-gates.md, check latest CI. If dropped: issue with "coverage-drop" label
+            4. Stale branches >14 days: report which can be deleted
 
-            2. If safe upgrades are available (patch/minor, no breaking):
-               - Create a single PR with all safe upgrades
-               - Title: "chore(deps): weekly dependency update YYYY-MM-DD"
-               - Run quality gates before committing
-
-            3. Coverage check:
-               - Read coverage thresholds from .claude/rules/ci-quality-gates.md
-               - Check latest CI runs for coverage data (do NOT run full test suites)
-               - If coverage dropped: create issue with "coverage-drop" label
-
-            4. Stale branch cleanup:
-               - List branches older than 14 days: gh api repos/{owner}/{repo}/branches --paginate --jq '.[].name'
-               - Report which ones can be safely deleted (already merged or abandoned)
-
-            Generate a weekly report as a GitHub issue titled
-            "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
+            Create issue "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
           # Model tier: sonnet (audit, may create upgrade PRs)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 20 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       - name: Notify Slack
         if: always()
@@ -200,17 +199,22 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Generate a weekly digest of the STOA AI Factory:
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
-            1. Read memory.md — extract all DONE items from this week
-            2. Read plan.md — calculate cycle progress (% done)
-            3. Count PRs merged this week: gh pr list --state merged --base main --json number,title,mergedAt
-            4. Count issues closed: gh issue list --state closed --json number,title,closedAt
-            5. Read metrics.log if it exists — extract PR-MERGED and CI-FIX counts
-
-            Format as a Slack-friendly summary and post it.
+            Weekly digest: summarize AI Factory activity.
+            1. Count PRs merged this week: gh pr list --state merged --base main --json number,title,mergedAt
+            2. Count issues closed: gh issue list --state closed --json number,title,closedAt
+            3. Read plan.md — calculate cycle progress (% done)
+            Format as a concise Slack-friendly summary.
           # Model tier: haiku (read-only digest, no code generation)
           claude_args: "--model claude-haiku-4-5-20251001 --max-turns 5 --allowedTools Bash,Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
   # ----- Weekly: Capacity Check -----
   weekly-capacity-check:
@@ -230,36 +234,24 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Weekly capacity check — read-only analysis of cycle health.
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
-            1. Read plan.md to find the current cycle section (marked "CURRENT").
-               Extract: cycle number, dates, scope (pts), done (pts), done percentage.
-
-            2. Compute velocity baseline:
-               - From plan.md, read the previous closed cycle's data
-               - Cycle 7 reference: 505 pts / 7 days = 72.1 pts/day
-               - Use this as the baseline if no other data available
-
-            3. Compute capacity gap:
-               - capacity = pts_per_day × cycle_days (typically 7)
-               - target = capacity × 0.80 (80% utilization target)
-               - gap = target - pts_committed
-               - utilization_pct = pts_committed / target × 100
-
-            4. Generate a capacity health report:
-               - Cycle name + dates
-               - Committed vs target vs capacity
-               - Utilization percentage
-               - Gap in points
-               - Top 5 backlog items from plan.md Backlog sections that could fill the gap
-
-            5. Create a GitHub issue titled "Weekly Capacity Check — YYYY-MM-DD" with label "daily-digest"
-               containing the full report.
-
-            This is a READ-ONLY check. Do NOT modify any files.
-            Suggest running `/fill-cycle` if utilization is below 70%.
+            Weekly capacity check — read-only cycle health analysis.
+            1. Read plan.md — find current cycle (marked "CURRENT"), extract scope/done pts
+            2. Velocity baseline: Cycle 7 = 505 pts / 7 days = 72.1 pts/day
+            3. Compute: capacity, target (80%), gap, utilization %
+            4. List top 5 backlog items that could fill the gap
+            5. Create issue "Weekly Capacity Check — YYYY-MM-DD" label "daily-digest"
+            READ-ONLY. Do NOT modify files.
           # Model tier: haiku (read-only capacity analysis, no code generation)
           claude_args: "--model claude-haiku-4-5-20251001 --max-turns 10 --allowedTools Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       - name: Notify Slack
         if: always()
@@ -289,30 +281,25 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Weekly backlog stock check — scan the codebase for improvement opportunities.
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
-            Step 1: Count current backlog items from plan.md.
-            Read plan.md and count items in "Backlog" sections that are NOT [x] (done).
-            Estimate total backlog points from the parenthesized estimates (e.g., "34 pts").
-
-            Step 2: Scan the codebase for improvement signals (do NOT use skills, just run commands):
-            - Count TODO/FIXME comments: grep -r "TODO\|FIXME" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.rs" -c src/ control-plane-api/ control-plane-ui/ portal/ stoa-gateway/src/ 2>/dev/null || true
-            - Check test coverage thresholds vs current in .claude/rules/ci-quality-gates.md
-            - Count lint suppressions: grep -r "noqa\|eslint-disable\|#\[allow" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.rs" -c 2>/dev/null || true
-            - List files with no corresponding test file in control-plane-ui/src/ and portal/src/
-
-            Step 3: Generate a report grouping findings by component (api, ui, portal, gateway).
-            For each component, suggest MEGA-sized improvements (20-40 pts) NOT micro-tickets.
-
-            Step 4: Evaluate backlog health.
-            - If estimated backlog < 400 pts: recommend running `/generate-backlog` to create new MEGAs
-            - If backlog >= 400 pts: report "Backlog stock healthy"
-
-            Create a GitHub issue titled "Backlog Stock Check — YYYY-MM-DD" with label "daily-digest".
-
-            IMPORTANT: This is a READ-ONLY check. Do NOT create Linear tickets or modify files.
+            Weekly backlog stock check — scan codebase for improvement opportunities.
+            1. Count backlog items from plan.md (non-[x] items, estimate total pts)
+            2. Scan codebase signals: TODO/FIXME counts, lint suppressions, untested files
+            3. Group findings by component (api, ui, portal, gateway)
+            4. Suggest MEGA-sized improvements (20-40 pts), NOT micro-tickets
+            5. If backlog < 400 pts: recommend `/generate-backlog`. Else: "Backlog healthy"
+            Create issue "Backlog Stock Check — YYYY-MM-DD" label "daily-digest".
+            READ-ONLY. Do NOT create Linear tickets or modify files.
           # Model tier: haiku (read-only backlog scan, no code generation)
           claude_args: "--model claude-haiku-4-5-20251001 --max-turns 15 --allowedTools Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       - name: Notify Slack
         if: always()

@@ -43,6 +43,10 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
             Council validation for a Linear ticket.
 
             Ticket: ${{ github.event.client_payload.ticket_id }}
@@ -76,6 +80,11 @@ jobs:
           # Model tier: opus (Council gate decision — quality matters more than cost)
           claude_args: "--model claude-opus-4-6 --max-turns 3 --allowedTools Read,Glob,Grep"
           show_full_output: true
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       # Extract Claude's report from execution log and create GitHub issue
       - name: Create Council Issue
@@ -239,10 +248,8 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
-            Do NOT read memory.md, plan.md, or operations.log.
-            Do NOT log SESSION-START or SESSION-END.
-            Do NOT run crash recovery checks.
-            Focus exclusively on implementing the task below.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
             Implement the feature described in issue #${{ github.event.issue.number }}.
 
@@ -268,6 +275,11 @@ jobs:
             IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
           # Model tier: sonnet (code generation, full tool access)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       # ----- Close the Loop (post-merge feedback) -----
       # After implementation: find merged PR, close GitHub issue, update Linear, notify Slack

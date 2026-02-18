@@ -97,7 +97,8 @@ jobs:
 
             ### Verdict
             <Go | Fix | Redo> — <1 sentence summary>
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
+          # Model tier: haiku (read-only PR review, no code generation)
+          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 5 --allowedTools Read,Glob,Grep"
 
       # Fallback comment if Claude fails
       - name: Post fallback on failure

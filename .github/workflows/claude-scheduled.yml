@@ -70,7 +70,8 @@ jobs:
             - Open PRs count + stale PRs
             - Plan drift: any [~] items that should be [x] or vice versa
             - Recommendations: top 3 priorities for today
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
+          # Model tier: haiku (read-only triage, no code generation)
+          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Notify Slack
         if: always()
@@ -116,6 +117,7 @@ jobs:
             - Auto-fixed: N (PR #xxx)
             - Needs human: M (issues created)
             - Flaky checks: [list]
+          # Model tier: sonnet (CI health, may create fix PRs)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
 
       - name: Notify Slack
@@ -170,6 +172,7 @@ jobs:
 
             Generate a weekly report as a GitHub issue titled
             "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
+          # Model tier: sonnet (audit, may create upgrade PRs)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 20 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
 
       - name: Notify Slack
@@ -206,7 +209,8 @@ jobs:
             5. Read metrics.log if it exists — extract PR-MERGED and CI-FIX counts
 
             Format as a Slack-friendly summary and post it.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Bash,Read,Glob,Grep"
+          # Model tier: haiku (read-only digest, no code generation)
+          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 5 --allowedTools Bash,Read,Glob,Grep"
 
   # ----- Weekly: Capacity Check -----
   weekly-capacity-check:
@@ -254,7 +258,8 @@ jobs:
 
             This is a READ-ONLY check. Do NOT modify any files.
             Suggest running `/fill-cycle` if utilization is below 70%.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Read,Glob,Grep"
+          # Model tier: haiku (read-only capacity analysis, no code generation)
+          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 10 --allowedTools Read,Glob,Grep"
 
       - name: Notify Slack
         if: always()
@@ -306,7 +311,8 @@ jobs:
             Create a GitHub issue titled "Backlog Stock Check — YYYY-MM-DD" with label "daily-digest".
 
             IMPORTANT: This is a READ-ONLY check. Do NOT create Linear tickets or modify files.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Read,Glob,Grep"
+          # Model tier: haiku (read-only backlog scan, no code generation)
+          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 15 --allowedTools Read,Glob,Grep"
 
       - name: Notify Slack
         if: always()

@@ -72,7 +72,8 @@ jobs:
             - [ ] State files updated
 
             IMPORTANT: Do NOT implement anything yet. Only validate and plan.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Read,Glob,Grep"
+          # Model tier: opus (Council gate decision — quality matters more than cost)
+          claude_args: "--model claude-opus-4-6 --max-turns 10 --allowedTools Read,Glob,Grep"
 
       # Add council-validated label so implement job can verify
       - name: Mark Council complete
@@ -216,6 +217,7 @@ jobs:
             If Ask: leave PR open for human review.
 
             IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
+          # Model tier: sonnet (code generation, full tool access)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       # Notify Slack on completion

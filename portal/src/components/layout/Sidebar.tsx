@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
+import { TenantBadge } from './TenantBadge';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -216,6 +217,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Footer info */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+          {/* Tenant context badge */}
+          <TenantBadge className="mb-3" />
           <a
             href={`https://api.${config.baseDomain}/docs`}
             target="_blank"

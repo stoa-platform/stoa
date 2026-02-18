@@ -84,6 +84,11 @@ export const config = {
     requireSandboxConfirmation: import.meta.env.VITE_REQUIRE_SANDBOX_CONFIRMATION === 'true',
   },
 
+  // Grafana Analytics (embedded dashboards, role-gated)
+  grafana: {
+    url: import.meta.env.VITE_GRAFANA_URL || '',
+  },
+
   // UI Configuration
   ui: {
     itemsPerPage: Number(import.meta.env.VITE_ITEMS_PER_PAGE) || 20,

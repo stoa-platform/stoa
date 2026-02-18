@@ -108,6 +108,11 @@
       "APIListItem": {
         "description": "Lightweight API for list views \u2014 no deployments/backend_url.",
         "properties": {
+          "audience": {
+            "default": "public",
+            "title": "Audience",
+            "type": "string"
+          },
           "category": {
             "anyOf": [
               {
@@ -9755,6 +9760,11 @@
       "PortalAPIResponse": {
         "description": "API response for Portal catalog.",
         "properties": {
+          "audience": {
+            "default": "public",
+            "title": "Audience",
+            "type": "string"
+          },
           "backend_url": {
             "anyOf": [
               {
@@ -25399,6 +25409,24 @@
               ],
               "description": "Filter by universe: oasis, enterprise",
               "title": "Universe"
+            }
+          },
+          {
+            "description": "Filter by audience: public, internal, partner",
+            "in": "query",
+            "name": "audience",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by audience: public, internal, partner",
+              "title": "Audience"
             }
           }
         ],

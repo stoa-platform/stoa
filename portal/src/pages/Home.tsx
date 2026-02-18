@@ -15,6 +15,7 @@ import {
   FeaturedAPIs,
   FeaturedAITools,
 } from '../components/dashboard';
+import { PermissionGate } from '../components/common/PermissionGate';
 
 export function HomePage() {
   const { user } = useAuth();
@@ -36,12 +37,18 @@ export function HomePage() {
 
       {/* Featured Catalogs - API and AI Tools */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <FeaturedAPIs />
-        <FeaturedAITools />
+        <PermissionGate scope="stoa:catalog:read">
+          <FeaturedAPIs />
+        </PermissionGate>
+        <PermissionGate scope="stoa:tools:read">
+          <FeaturedAITools />
+        </PermissionGate>
       </div>
 
       {/* Recent Activity */}
-      <RecentActivity activity={activity ?? []} isLoading={isLoading} />
+      <PermissionGate scope="stoa:subscriptions:read">
+        <RecentActivity activity={activity ?? []} isLoading={isLoading} />
+      </PermissionGate>
     </div>
   );
 }

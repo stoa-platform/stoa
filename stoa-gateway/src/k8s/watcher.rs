@@ -15,8 +15,10 @@ use kube::{
 use tracing::{debug, error, info, warn};
 
 use super::crds::{Skill, Tool, ToolAnnotationsCrd, ToolSet};
+use crate::events::notifications::format_tools_list_changed;
 use crate::federation::upstream::{TransportType, UpstreamMcpClient, UpstreamMcpConfig};
 use crate::federation::FederatedTool;
+use crate::mcp::session::SessionManager;
 use crate::mcp::tools::dynamic_tool::{schema_from_value, DynamicTool};
 use crate::mcp::tools::{ToolAnnotations, ToolRegistry};
 use crate::skills::resolver::{SkillResolver, SkillScope, StoredSkill};
@@ -26,6 +28,7 @@ pub struct CrdWatcher {
     client: Client,
     tool_registry: Arc<ToolRegistry>,
     skill_resolver: Arc<SkillResolver>,
+    session_manager: Arc<SessionManager>,
 }
 
 impl CrdWatcher {
@@ -34,11 +37,13 @@ impl CrdWatcher {
         client: Client,
         tool_registry: Arc<ToolRegistry>,
         skill_resolver: Arc<SkillResolver>,
+        session_manager: Arc<SessionManager>,
     ) -> Self {
         Self {
             client,
             tool_registry,
             skill_resolver,
+            session_manager,
         }
     }
 
@@ -279,6 +284,20 @@ impl CrdWatcher {
         // Register (overwrites if already exists)
         self.tool_registry.register(Arc::new(dynamic));
 
+        // Notify connected SSE clients that the tool list changed (MCP hot-reload)
+        let notification = format_tools_list_changed();
+        let sent = self
+            .session_manager
+            .broadcast_to_tenant(namespace, "message", &notification);
+        if sent > 0 {
+            debug!(
+                tool = %tool_name,
+                tenant = %namespace,
+                sessions_notified = sent,
+                "Sent tools/list_changed notification"
+            );
+        }
+
         info!(
             tool = %tool_name,
             display_name = %tool.spec.display_name,
@@ -301,6 +320,19 @@ impl CrdWatcher {
         );
 
         if self.tool_registry.unregister(&tool_name) {
+            // Notify connected SSE clients that the tool list changed (MCP hot-reload)
+            let notification = format_tools_list_changed();
+            let sent =
+                self.session_manager
+                    .broadcast_to_tenant(namespace, "message", &notification);
+            if sent > 0 {
+                debug!(
+                    tool = %tool_name,
+                    tenant = %namespace,
+                    sessions_notified = sent,
+                    "Sent tools/list_changed notification (tool deleted)"
+                );
+            }
             info!(tool = %tool_name, "Tool unregistered successfully");
         } else {
             debug!(tool = %tool_name, "Tool was not registered");
@@ -406,6 +438,22 @@ impl CrdWatcher {
             total_discovered = tools.len(),
             "ToolSet tools registered from upstream"
         );
+
+        // Notify connected SSE clients if any tools were registered
+        if registered > 0 {
+            let notification = format_tools_list_changed();
+            let sent =
+                self.session_manager
+                    .broadcast_to_tenant(namespace, "message", &notification);
+            if sent > 0 {
+                debug!(
+                    toolset = %name,
+                    tenant = %namespace,
+                    sessions_notified = sent,
+                    "Sent tools/list_changed notification (ToolSet applied)"
+                );
+            }
+        }
     }
 
     /// Read a key from a K8s Secret
@@ -458,6 +506,22 @@ impl CrdWatcher {
         }
 
         info!(toolset = %name, removed, "ToolSet tools removed");
+
+        // Notify connected SSE clients if any tools were removed
+        if removed > 0 {
+            let notification = format_tools_list_changed();
+            let sent =
+                self.session_manager
+                    .broadcast_to_tenant(namespace, "message", &notification);
+            if sent > 0 {
+                debug!(
+                    toolset = %name,
+                    tenant = %namespace,
+                    sessions_notified = sent,
+                    "Sent tools/list_changed notification (ToolSet deleted)"
+                );
+            }
+        }
     }
 }
 

@@ -56,6 +56,19 @@ fn event_namespace(event_type: &str) -> &str {
     }
 }
 
+/// Format an MCP `notifications/tools/list_changed` JSON-RPC notification.
+///
+/// Per MCP spec, this is a parameter-less notification sent when the tool list
+/// changes (tools added, removed, or updated). Clients should respond by
+/// re-fetching the tool list via `tools/list`.
+pub fn format_tools_list_changed() -> String {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/tools/list_changed"
+    })
+    .to_string()
+}
+
 /// Map event type to a suggested client-side action
 fn tool_hint(event_type: &str) -> Option<ToolHint> {
     match event_type {
@@ -164,6 +177,17 @@ mod tests {
             "stoa.subscription.events"
         );
         assert_eq!(event_namespace("unknown"), "stoa.events");
+    }
+
+    #[test]
+    fn test_format_tools_list_changed() {
+        let json_str = format_tools_list_changed();
+        let val: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(val["jsonrpc"], "2.0");
+        assert_eq!(val["method"], "notifications/tools/list_changed");
+        // MCP spec: no params field for list_changed
+        assert!(val.get("params").is_none());
     }
 
     #[test]

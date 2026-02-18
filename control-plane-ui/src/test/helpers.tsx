@@ -24,6 +24,8 @@ import type {
   SaasApiKey,
   WorkflowTemplate,
   WorkflowInstance,
+  MasterAccount,
+  SubAccount,
 } from '../types';
 
 // ============ Role-based Permissions (mirrors AuthContext.tsx L31-71) ============
@@ -346,6 +348,33 @@ export const mockDeployment = (overrides: Partial<Deployment> = {}): Deployment 
   updated_at: '2026-02-15T10:05:00Z',
   completed_at: '2026-02-15T10:05:00Z',
   attempt_count: 1,
+  ...overrides,
+});
+
+export const mockMasterAccount = (overrides: Partial<MasterAccount> = {}): MasterAccount => ({
+  id: 'master-1',
+  tenant_id: 'oasis-gunters',
+  name: 'Partner Federation',
+  description: 'Federation for partner integrations',
+  status: 'active',
+  max_sub_accounts: 10,
+  sub_account_count: 3,
+  created_at: '2026-02-01T00:00:00Z',
+  updated_at: '2026-02-15T00:00:00Z',
+  ...overrides,
+});
+
+export const mockSubAccount = (overrides: Partial<SubAccount> = {}): SubAccount => ({
+  id: 'sub-1',
+  master_account_id: 'master-1',
+  name: 'Partner Agent',
+  description: 'Sub-account for partner AI agent',
+  status: 'active',
+  api_key_prefix: 'stoa_fed_a1b2',
+  allowed_tools: ['tool-1', 'tool-2'],
+  created_at: '2026-02-10T00:00:00Z',
+  updated_at: '2026-02-15T00:00:00Z',
+  last_used_at: '2026-02-14T10:30:00Z',
   ...overrides,
 });
 

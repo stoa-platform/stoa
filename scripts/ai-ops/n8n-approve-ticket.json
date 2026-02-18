@@ -96,12 +96,12 @@
     {
       "parameters": {
         "respondWith": "redirect",
-        "redirectURL": "=https://github.com/stoa-platform/stoa/issues/{{ $('Validate HMAC').item.json.issue }}"
+        "redirectURL": "=https://github.com/stoa-platform/stoa/issues/{{ $('Validate HMAC').first().json.issue }}"
       },
       "id": "redirect-to-issue",
       "name": "Redirect to Issue",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "typeVersion": 1.1,
       "position": [1000, 300]
     },
     {
@@ -115,7 +115,7 @@
       "id": "error-response",
       "name": "Error Response",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "typeVersion": 1.1,
       "position": [600, 500]
     }
   ],

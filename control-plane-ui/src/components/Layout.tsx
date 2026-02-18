@@ -47,6 +47,7 @@ import {
   Lock,
   Users,
   KeyRound,
+  Share2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -186,6 +187,12 @@ const navigationSections: NavSection[] = [
         href: '/gateway-observability',
         icon: BarChart3,
         permission: 'tenants:read',
+      },
+      {
+        name: 'Federation',
+        href: '/federation/accounts',
+        icon: Share2,
+        permission: 'apis:read',
       },
     ],
   },

@@ -1205,3 +1205,75 @@ export interface WorkflowListResponse {
   page: number;
   page_size: number;
 }
+
+// =============================================================================
+// Federation Types (CAB-1372 — MCP Federation)
+// =============================================================================
+
+export type FederationAccountStatus = 'active' | 'suspended' | 'revoked';
+
+export interface MasterAccount {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string;
+  status: FederationAccountStatus;
+  max_sub_accounts: number;
+  sub_account_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MasterAccountCreate {
+  name: string;
+  description?: string;
+  max_sub_accounts?: number;
+}
+
+export interface MasterAccountUpdate {
+  name?: string;
+  description?: string;
+  status?: 'active' | 'suspended';
+  max_sub_accounts?: number;
+}
+
+export interface MasterAccountListResponse {
+  items: MasterAccount[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface SubAccount {
+  id: string;
+  master_account_id: string;
+  name: string;
+  description: string;
+  status: FederationAccountStatus;
+  api_key_prefix: string;
+  allowed_tools: string[];
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+}
+
+export interface SubAccountCreate {
+  name: string;
+  description?: string;
+}
+
+export interface SubAccountCreatedResponse extends SubAccount {
+  api_key: string;
+}
+
+export interface SubAccountListResponse {
+  items: SubAccount[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ToolAllowListResponse {
+  sub_account_id: string;
+  allowed_tools: string[];
+}

@@ -78,6 +78,18 @@ class TestTopics:
                 value = getattr(Topics, attr)
                 assert value.startswith("stoa."), f"{attr} = {value!r} missing stoa. prefix"
 
+    def test_audit_trail_topic(self):
+        """CAB-498: Verify audit trail topic name."""
+        assert Topics.AUDIT_TRAIL == "stoa.audit.trail"
+
+    def test_catalog_sync_topic(self):
+        """CAB-498: Verify catalog sync topic name."""
+        assert Topics.CATALOG_SYNC == "stoa.catalog.sync"
+
+    def test_error_snapshots_topic(self):
+        """CAB-498: Verify error snapshots topic name."""
+        assert Topics.ERROR_SNAPSHOTS == "stoa.errors.snapshots"
+
 
 class TestCreateEvent:
     def test_event_structure(self, kafka_svc):
@@ -227,3 +239,85 @@ class TestConvenienceMethods:
             user_id="user-1",
         )
         assert isinstance(event_id, str)
+
+    # CAB-498: Tests for sized topic convenience methods
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_audit_trail(self, mock_settings, kafka_svc):
+        """CAB-498: Audit trail convenience method."""
+        mock_settings.KAFKA_ENABLED = False
+        event_id = await kafka_svc.emit_audit_trail(
+            tenant_id="acme",
+            action="api.create",
+            resource_type="api",
+            resource_id="api-123",
+            user_id="user-1",
+            details={"spec": "openapi-3.0"},
+        )
+        assert isinstance(event_id, str)
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_catalog_sync(self, mock_settings, kafka_svc):
+        """CAB-498: Catalog sync convenience method with api_id partition key."""
+        mock_settings.KAFKA_ENABLED = False
+        event_id = await kafka_svc.emit_catalog_sync(
+            tenant_id="acme",
+            api_id="api-123",
+            operation="create",
+            spec={"name": "test-api", "version": "1.0"},
+            user_id="user-1",
+        )
+        assert isinstance(event_id, str)
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_catalog_sync_partitions_by_api_id(self, mock_settings, kafka_svc):
+        """CAB-498: Catalog sync uses api_id as partition key for ordering."""
+        mock_settings.KAFKA_ENABLED = True
+        mock_producer = MagicMock()
+        mock_future = MagicMock()
+        mock_future.get.return_value = None
+        mock_producer.send.return_value = mock_future
+        kafka_svc._producer = mock_producer
+
+        await kafka_svc.emit_catalog_sync(
+            tenant_id="acme",
+            api_id="api-456",
+            operation="update",
+            spec={"name": "updated-api"},
+            user_id="user-1",
+        )
+
+        call_kwargs = mock_producer.send.call_args[1]
+        assert call_kwargs["key"] == "api-456", "Partition key should be api_id"
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_error_snapshot(self, mock_settings, kafka_svc):
+        """CAB-498: Error snapshot convenience method."""
+        mock_settings.KAFKA_ENABLED = False
+        event_id = await kafka_svc.emit_error_snapshot(
+            tenant_id="acme",
+            error_id="err-789",
+            error_type="gateway_timeout",
+            context={"gateway": "kong", "endpoint": "/api/users"},
+            payload={"request": "...", "response": "..."},
+        )
+        assert isinstance(event_id, str)
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_error_snapshot_partitions_by_error_id(self, mock_settings, kafka_svc):
+        """CAB-498: Error snapshot uses error_id as partition key."""
+        mock_settings.KAFKA_ENABLED = True
+        mock_producer = MagicMock()
+        mock_future = MagicMock()
+        mock_future.get.return_value = None
+        mock_producer.send.return_value = mock_future
+        kafka_svc._producer = mock_producer
+
+        await kafka_svc.emit_error_snapshot(
+            tenant_id="acme",
+            error_id="err-999",
+            error_type="validation_error",
+            context={"field": "email"},
+        )
+
+        call_kwargs = mock_producer.send.call_args[1]
+        assert call_kwargs["key"] == "err-999", "Partition key should be error_id"

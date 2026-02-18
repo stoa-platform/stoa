@@ -50,6 +50,11 @@ class Topics:
     # Onboarding workflows (CAB-593)
     WORKFLOW_EVENTS = "stoa.workflow.events"
 
+    # CAB-498: Sized and configured topics for core use cases
+    AUDIT_TRAIL = "stoa.audit.trail"  # 6 partitions, 90d retention, lz4 compression
+    CATALOG_SYNC = "stoa.catalog.sync"  # 12 partitions, 7d retention, snappy compression
+    ERROR_SNAPSHOTS = "stoa.errors.snapshots"  # 3 partitions, 30d retention, gzip compression
+
 
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""
@@ -248,6 +253,84 @@ class KafkaService:
             tenant_id,
             subscription_data,
             user_id,
+        )
+
+    # CAB-498: Convenience methods for sized topics
+    async def emit_audit_trail(
+        self,
+        tenant_id: str,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        user_id: str,
+        details: dict | None = None,
+    ) -> str:
+        """
+        Emit audit trail event (90d retention, 6 partitions).
+        Producer config: acks=all, linger.ms=10, compression=lz4
+        """
+        return await self.publish(
+            Topics.AUDIT_TRAIL,
+            "audit",
+            tenant_id,
+            {
+                "action": action,
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "details": details or {},
+            },
+            user_id,
+        )
+
+    async def emit_catalog_sync(
+        self,
+        tenant_id: str,
+        api_id: str,
+        operation: str,
+        spec: dict,
+        user_id: str,
+    ) -> str:
+        """
+        Emit catalog sync event (7d retention, 12 partitions, low latency).
+        Producer config: acks=1, linger.ms=0, compression=snappy
+        """
+        return await self.publish(
+            Topics.CATALOG_SYNC,
+            f"catalog-{operation}",
+            tenant_id,
+            {
+                "api_id": api_id,
+                "operation": operation,
+                "spec": spec,
+            },
+            user_id,
+            key=api_id,  # Partition by api_id for ordered updates
+        )
+
+    async def emit_error_snapshot(
+        self,
+        tenant_id: str,
+        error_id: str,
+        error_type: str,
+        context: dict,
+        payload: dict | None = None,
+    ) -> str:
+        """
+        Emit error snapshot event (30d retention, 3 partitions).
+        Producer config: acks=all, linger.ms=100, compression=gzip
+        """
+        return await self.publish(
+            Topics.ERROR_SNAPSHOTS,
+            f"error-{error_type}",
+            tenant_id,
+            {
+                "error_id": error_id,
+                "error_type": error_type,
+                "context": context,
+                "payload": payload or {},
+            },
+            user_id=None,
+            key=error_id,
         )
 
     def create_consumer(self, topics: list[str], group_id: str, tenant_filter: str | None = None) -> KafkaConsumer:

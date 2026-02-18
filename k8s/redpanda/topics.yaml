@@ -1,0 +1,246 @@
+---
+# Kafka Topics Configuration for STOA Platform
+# CAB-498: Topics Kafka STOA — Sizing & Configuration
+#
+# This ConfigMap defines topic specifications for creation via init job or rpk CLI.
+# Topics are created with explicit partitioning and retention policies.
+#
+# Reference: https://docs.redpanda.com/current/manage/kubernetes/configure-kubernetes/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-topics-config
+  namespace: stoa-system
+  labels:
+    app: redpanda
+    component: topics-config
+data:
+  # Topic creation script to be run via Job or manual rpk commands
+  create-topics.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    echo "Creating STOA Kafka topics with specified configuration..."
+
+    # Wait for Redpanda to be ready
+    until rpk cluster health --brokers redpanda.stoa-system.svc.cluster.local:9092; do
+      echo "Waiting for Redpanda broker to be ready..."
+      sleep 5
+    done
+
+    # Function to create or update topic
+    create_topic() {
+      local topic=$1
+      local partitions=$2
+      local replication=$3
+      local retention_ms=$4
+      local compression=$5
+
+      echo "Creating topic: $topic (partitions=$partitions, replication=$replication, retention=$retention_ms)"
+
+      # Check if topic exists
+      if rpk topic list --brokers redpanda.stoa-system.svc.cluster.local:9092 | grep -q "^$topic"; then
+        echo "Topic $topic already exists, updating configuration..."
+        rpk topic alter-config "$topic" \
+          --brokers redpanda.stoa-system.svc.cluster.local:9092 \
+          --set retention.ms="$retention_ms" \
+          --set compression.type="$compression" \
+          --set cleanup.policy=delete
+      else
+        echo "Creating new topic $topic..."
+        rpk topic create "$topic" \
+          --brokers redpanda.stoa-system.svc.cluster.local:9092 \
+          --partitions "$partitions" \
+          --replicas "$replication" \
+          --config retention.ms="$retention_ms" \
+          --config compression.type="$compression" \
+          --config cleanup.policy=delete
+      fi
+    }
+
+    # CAB-498 Topics with Sizing & Configuration
+
+    # 1. Audit Trail (stoa.audit.trail)
+    # - Use case: Compliance, audit logs for all API operations
+    # - Retention: 90 days (7,776,000,000 ms)
+    # - Partitions: 6 (distribute by tenant_id for parallel processing)
+    # - Replication: 3 (production HA, 1 for single-node dev/staging)
+    # - Compression: lz4 (good balance of speed/ratio for logs)
+    # - Producer config: acks=all, linger.ms=10 (batch for efficiency)
+    REPLICATION=${REPLICATION_FACTOR:-1}  # Override for production (3)
+    create_topic "stoa.audit.trail" 6 "$REPLICATION" 7776000000 lz4
+
+    # 2. Catalog Sync (stoa.catalog.sync)
+    # - Use case: Real-time API catalog synchronization between control plane and gateways
+    # - Retention: 7 days (604,800,000 ms) - short retention, replay from DB if needed
+    # - Partitions: 12 (high throughput, distribute by api_id for ordered updates)
+    # - Replication: 3 (production HA, 1 for single-node dev/staging)
+    # - Compression: snappy (fast compression for high-throughput)
+    # - Producer config: acks=1, linger.ms=0 (low latency, immediate propagation)
+    create_topic "stoa.catalog.sync" 12 "$REPLICATION" 604800000 snappy
+
+    # 3. Error Snapshots (stoa.errors.snapshots)
+    # - Use case: Detailed error context for debugging (payload + headers + context)
+    # - Retention: 30 days (2,592,000,000 ms)
+    # - Partitions: 3 (lower volume, error events are less frequent)
+    # - Replication: 3 (production HA, 1 for single-node dev/staging)
+    # - Compression: gzip (higher compression for large payloads)
+    # - Producer config: acks=all, linger.ms=100 (batch errors, reliability over speed)
+    create_topic "stoa.errors.snapshots" 3 "$REPLICATION" 2592000000 gzip
+
+    echo "Topic creation completed."
+    echo ""
+    echo "Verifying topics:"
+    rpk topic list --brokers redpanda.stoa-system.svc.cluster.local:9092
+    echo ""
+    echo "Topic details:"
+    for topic in stoa.audit.trail stoa.catalog.sync stoa.errors.snapshots; do
+      echo "=== $topic ==="
+      rpk topic describe "$topic" --brokers redpanda.stoa-system.svc.cluster.local:9092 || echo "Topic not found"
+      echo ""
+    done
+
+  # Topic specifications in JSON format for documentation and automation
+  topics.json: |
+    {
+      "topics": [
+        {
+          "name": "stoa.audit.trail",
+          "description": "Compliance audit trail for all API operations",
+          "partitions": 6,
+          "replication_factor": 3,
+          "retention_ms": 7776000000,
+          "retention_days": 90,
+          "compression": "lz4",
+          "use_cases": [
+            "Compliance reporting",
+            "Security auditing",
+            "Forensic analysis"
+          ],
+          "producers": [
+            "control-plane-api",
+            "mcp-gateway",
+            "stoa-gateway"
+          ],
+          "consumers": [
+            "audit-indexer",
+            "compliance-reporter"
+          ],
+          "producer_config": {
+            "acks": "all",
+            "linger.ms": 10,
+            "compression.type": "lz4"
+          },
+          "partition_key": "tenant_id"
+        },
+        {
+          "name": "stoa.catalog.sync",
+          "description": "Real-time API catalog synchronization",
+          "partitions": 12,
+          "replication_factor": 3,
+          "retention_ms": 604800000,
+          "retention_days": 7,
+          "compression": "snappy",
+          "use_cases": [
+            "Gateway catalog updates",
+            "Multi-gateway synchronization",
+            "Real-time API propagation"
+          ],
+          "producers": [
+            "control-plane-api"
+          ],
+          "consumers": [
+            "stoa-gateway",
+            "kong-adapter",
+            "gravitee-adapter"
+          ],
+          "producer_config": {
+            "acks": "1",
+            "linger.ms": 0,
+            "compression.type": "snappy"
+          },
+          "partition_key": "api_id"
+        },
+        {
+          "name": "stoa.errors.snapshots",
+          "description": "Detailed error snapshots for debugging",
+          "partitions": 3,
+          "replication_factor": 3,
+          "retention_ms": 2592000000,
+          "retention_days": 30,
+          "compression": "gzip",
+          "use_cases": [
+            "Error debugging",
+            "Failure analysis",
+            "Support diagnostics"
+          ],
+          "producers": [
+            "stoa-gateway",
+            "mcp-gateway",
+            "control-plane-api"
+          ],
+          "consumers": [
+            "error-analysis-service",
+            "support-dashboard"
+          ],
+          "producer_config": {
+            "acks": "all",
+            "linger.ms": 100,
+            "compression.type": "gzip"
+          },
+          "partition_key": "error_id"
+        }
+      ]
+    }
+---
+# Kubernetes Job to create topics on cluster initialization
+# Run once or on-demand via: kubectl create job --from=cronjob/kafka-topics-init kafka-topics-init-$(date +%s)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics-init
+  namespace: stoa-system
+  labels:
+    app: redpanda
+    component: topics-init
+spec:
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: redpanda
+        component: topics-init
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: create-topics
+          image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
+          command: ["/bin/bash"]
+          args:
+            - /scripts/create-topics.sh
+          env:
+            # Set replication factor based on environment
+            # Production: 3, Staging: 1, Dev: 1
+            - name: REPLICATION_FACTOR
+              value: "1"  # Override to "3" for production cluster
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: scripts
+          configMap:
+            name: kafka-topics-config
+            defaultMode: 0755

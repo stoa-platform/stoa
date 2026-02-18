@@ -94,3 +94,7 @@ wiremock = "0.6"
 name = "gateway_bench"
 harness = false
 
+[[bench]]
+name = "proxy_bench"
+harness = false
+

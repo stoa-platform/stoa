@@ -100,8 +100,8 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     }
 
     // Check method allowed (empty methods list = all methods allowed)
-    let method_str = method.to_string();
-    if !route.methods.is_empty() && !route.methods.contains(&method_str) {
+    // Compare Method::as_str() directly — avoids method.to_string() allocation (CAB-1332)
+    if !route.methods.is_empty() && !route.methods.iter().any(|m| m == method.as_str()) {
         return (
             StatusCode::METHOD_NOT_ALLOWED,
             "Method not allowed for this API",
@@ -189,41 +189,45 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     let credential = state.credential_store.get(&route.id);
     let resolved_header = resolve_credential_header(&state, &route.id, credential.as_ref()).await;
 
-    // Clone headers before consuming the request (needed for potential retry)
-    let saved_headers = request.headers().clone();
+    // Save headers only if retry might be needed (idempotent methods with
+    // retryable responses). Deferred clone avoids HeaderMap copy on every
+    // request — only pays the cost when retry actually happens. (CAB-1332)
+    let save_headers_for_retry = is_idempotent(&method);
+    let saved_headers = if save_headers_for_retry {
+        Some(request.headers().clone())
+    } else {
+        None
+    };
 
     let upstream_start = std::time::Instant::now();
     let mut response =
         forward_request(request, &method, &target_url, resolved_header.as_ref()).await;
 
     // Retry transient errors on idempotent methods (CAB-362)
-    if is_retryable_status(response.status()) && is_idempotent(&method) {
-        let retry_config = RetryConfig {
-            max_attempts: 2,
-            initial_delay: Duration::from_millis(100),
-            max_delay: Duration::from_secs(1),
-            ..Default::default()
-        };
-        for attempt in 1..=retry_config.max_attempts {
-            let delay = retry_config.delay_for_attempt(attempt);
-            warn!(
-                method = %method,
-                route_id = %route.id,
-                target_url = %target_url,
-                attempt = attempt,
-                status = response.status().as_u16(),
-                "Retrying transient upstream error"
-            );
-            tokio::time::sleep(delay).await;
-            response = retry_forward(
-                &method,
-                &target_url,
-                &saved_headers,
-                resolved_header.as_ref(),
-            )
-            .await;
-            if !is_retryable_status(response.status()) {
-                break;
+    if is_retryable_status(response.status()) {
+        if let Some(ref headers) = saved_headers {
+            let retry_config = RetryConfig {
+                max_attempts: 2,
+                initial_delay: Duration::from_millis(100),
+                max_delay: Duration::from_secs(1),
+                ..Default::default()
+            };
+            for attempt in 1..=retry_config.max_attempts {
+                let delay = retry_config.delay_for_attempt(attempt);
+                warn!(
+                    method = %method,
+                    route_id = %route.id,
+                    target_url = %target_url,
+                    attempt = attempt,
+                    status = response.status().as_u16(),
+                    "Retrying transient upstream error"
+                );
+                tokio::time::sleep(delay).await;
+                response =
+                    retry_forward(&method, &target_url, headers, resolved_header.as_ref()).await;
+                if !is_retryable_status(response.status()) {
+                    break;
+                }
             }
         }
     }
@@ -520,31 +524,33 @@ fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuild
     }
 
     // Fallback: random traceparent (no OTel)
+    // Optimized: single 24-byte RNG fill + direct hex write into pre-sized
+    // buffer. Avoids 2 separate String allocations. (CAB-1332)
     let traceparent = TRACE_RNG.with(|rng| {
         let mut rng = rng.borrow_mut();
-        let mut trace_bytes = [0u8; 16];
-        let mut span_bytes = [0u8; 8];
-        rng.fill(&mut trace_bytes);
-        rng.fill(&mut span_bytes);
+        let mut bytes = [0u8; 24]; // 16 trace + 8 span in one fill
+        rng.fill(&mut bytes);
 
-        format!(
-            "00-{}-{}-01",
-            hex_encode(&trace_bytes),
-            hex_encode(&span_bytes),
-        )
+        // "00-" (3) + 32 hex (trace) + "-" (1) + 16 hex (span) + "-01" (3) = 55
+        let mut buf = String::with_capacity(55);
+        buf.push_str("00-");
+        hex_encode_into(&bytes[..16], &mut buf);
+        buf.push('-');
+        hex_encode_into(&bytes[16..], &mut buf);
+        buf.push_str("-01");
+        buf
     });
     builder.header("traceparent", traceparent)
 }
 
-/// Encode bytes as lowercase hex string (allocation-free for small buffers).
-fn hex_encode(bytes: &[u8]) -> String {
+/// Encode bytes as lowercase hex directly into an existing String.
+/// Zero extra allocation — writes into the caller's buffer.
+fn hex_encode_into(bytes: &[u8], buf: &mut String) {
     const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
-    let mut s = String::with_capacity(bytes.len() * 2);
     for &b in bytes {
-        s.push(HEX_CHARS[(b >> 4) as usize] as char);
-        s.push(HEX_CHARS[(b & 0x0f) as usize] as char);
+        buf.push(HEX_CHARS[(b >> 4) as usize] as char);
+        buf.push(HEX_CHARS[(b & 0x0f) as usize] as char);
     }
-    s
 }
 
 #[cfg(test)]

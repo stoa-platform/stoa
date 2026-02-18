@@ -74,17 +74,15 @@ jobs:
 
           REMAINING="${{ steps.velocity.outputs.remaining }}"
 
-          # Fetch Todo + Backlog tickets for team CAB-ING
-          # Filter: priority <= 3, not already in progress
-          # Note: estimate filter removed from GraphQL — applied client-side
-          # so tickets without estimates can pass through (Council will estimate them)
-          # Linear PaginationOrderBy only supports createdAt|updatedAt (NOT priority)
-          # Using an invalid orderBy causes a silent GraphQL error → empty results
+          # Fetch Todo + Backlog tickets for team CAB
+          # Priority filter REMOVED from GraphQL — null priority issues were excluded (37% of backlog)
+          # All filtering done client-side to handle nulls properly
+          # first: 100 (was 30 — too small for 250+ issue backlog)
           RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
             -H "Authorization: ${LINEAR_API_KEY}" \
             -H "Content-Type: application/json" \
             -d '{
-              "query": "{ issues(filter: { team: { key: { eq: \"CAB\" } }, state: { type: { in: [\"unstarted\", \"backlog\"] } }, priority: { lte: 3 } }, orderBy: updatedAt, first: 30) { nodes { id identifier title description priority estimate labels { nodes { name } } parent { identifier } } } }"
+              "query": "{ issues(filter: { team: { key: { eq: \"CAB\" } }, state: { type: { in: [\"unstarted\", \"backlog\"] } } }, orderBy: updatedAt, first: 100) { nodes { id identifier title description priority estimate labels { nodes { name } } parent { identifier } } } }"
             }')
 
           # Check for GraphQL errors
@@ -99,15 +97,16 @@ jobs:
           echo "Raw tickets from Linear API: ${RAW_COUNT}"
 
           # Client-side filters:
-          # 1. No "no-autopilot" label
-          # 2. Not a sub-ticket (no parent)
+          # 1. No "no-autopilot" or "strategy" label (strategy = human business tasks)
+          # 2. Sub-tickets ALLOWED (they are the actual implementable work items)
           # 3. Estimate <= 13 OR no estimate (null) — MEGAs >13 need manual decomposition
-          # Sort by priority (1=Urgent first) then cap at REMAINING
+          # 4. Priority <= 3 OR null priority (null = not yet triaged, still eligible)
+          # Sort by priority (1=Urgent first, null=last) then cap at REMAINING
           echo "$RESPONSE" | jq -c "[
             .data.issues.nodes[]
-            | select((.labels.nodes // []) | map(.name) | index(\"no-autopilot\") | not)
-            | select(.parent == null)
+            | select((.labels.nodes // []) | map(.name) | any(. == \"no-autopilot\" or . == \"strategy\") | not)
             | select(.estimate == null or .estimate <= 13)
+            | select(.priority == null or .priority <= 3)
             | {
                 id: .id,
                 identifier: .identifier,
@@ -115,19 +114,20 @@ jobs:
                 description: (.description // \"\" | .[0:500]),
                 priority: .priority,
                 estimate: .estimate,
-                labels: [(.labels.nodes // [])[].name]
+                labels: [(.labels.nodes // [])[].name],
+                parent: .parent.identifier
               }
-          ] | sort_by(.priority) | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
+          ] | sort_by(.priority // 99) | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
 
           TICKET_COUNT=$(jq 'length' eligible-tickets.json)
-          echo "Found ${TICKET_COUNT} eligible tickets"
+          echo "Found ${TICKET_COUNT} eligible tickets (from ${RAW_COUNT} raw)"
           echo "count=${TICKET_COUNT}" >> "$GITHUB_OUTPUT"
 
           if [ "$TICKET_COUNT" -eq 0 ]; then
             echo "No eligible tickets found in backlog"
           else
             echo "=== Eligible tickets ==="
-            jq -r '.[] | "\(.identifier) (\(.estimate // 0) pts, P\(.priority)) — \(.title)"' eligible-tickets.json
+            jq -r '.[] | "\(.identifier) (\(.estimate // 0) pts, P\(.priority // "none")) — \(.title)"' eligible-tickets.json
           fi
 
       # Run Council validation via Claude (one invocation for all tickets)

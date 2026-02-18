@@ -54,6 +54,7 @@ from .routers import (
     mcp_policy_proxy,
     mcp_proxy,
     monitoring,
+    onboarding,
     operations,
     plans,
     platform,
@@ -500,6 +501,9 @@ app.include_router(federation.router)
 
 # Skills — CSS cascade context injection for AI agents (CAB-1314)
 app.include_router(skills.router)
+
+# Onboarding (Zero-Touch Trial - CAB-1325)
+app.include_router(onboarding.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

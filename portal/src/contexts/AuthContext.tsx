@@ -15,6 +15,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isReady: boolean; // True when permissions are loaded
+  isNewUser: boolean; // True when tenant was just provisioned (CAB-1325)
   accessToken: string | null;
 
   // RBAC helpers
@@ -199,11 +200,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const oidc = useOidcAuth();
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   // Auto-provision personal tenant for users without one
   const provisionPersonalTenant = useCallback(async () => {
     try {
-      await apiClient.post('/v1/me/tenant');
+      const response = await apiClient.post<{ tenant_id: string; created: boolean }>(
+        '/v1/me/tenant'
+      );
+      if (response.data.created) {
+        setIsNewUser(true);
+      }
       // Force token refresh to get new tenant_id claim
       await oidc.signinSilent();
     } catch (error) {
@@ -352,6 +359,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: oidc.isAuthenticated,
     isLoading: oidc.isLoading,
     isReady,
+    isNewUser,
     accessToken: oidc.user?.access_token || null,
 
     // RBAC helpers

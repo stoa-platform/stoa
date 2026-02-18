@@ -172,8 +172,10 @@ export function createAuthMock(role: PersonaRole) {
       permissions.every((p) => user.permissions.includes(p)),
     hasRole: (r: string) => user.roles.includes(r),
     hasScope: (scope: string) => user.effective_scopes.includes(scope),
+    isNewUser: false,
     login: vi.fn(),
     logout: vi.fn(),
+    register: vi.fn(),
     refreshPermissions: vi.fn().mockResolvedValue(undefined),
   };
 }

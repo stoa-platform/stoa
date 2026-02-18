@@ -5,9 +5,11 @@ This endpoint allows frontends (Portal, Console) to fetch calculated
 permissions without duplicating the role-to-permission mapping logic.
 """
 
+import hashlib
 import logging
 import re
 import secrets
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -16,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.dependencies import User, get_current_user
 from ..auth.rbac import get_user_permissions
 from ..database import get_db
+from ..models.saas_api_key import SaasApiKey
 from ..models.tenant import Tenant, TenantStatus
+from ..repositories.backend_api import SaasApiKeyRepository
 from ..repositories.tenant import TenantRepository
 from ..services.kafka_service import kafka_service
 from ..services.keycloak_service import keycloak_service
@@ -261,6 +265,7 @@ class PersonalTenantResponse(BaseModel):
     tenant_id: str
     display_name: str
     created: bool
+    trial_api_key: str | None = None  # Plaintext returned once (CAB-1325)
 
 
 def _sanitize_slug(username: str) -> str:
@@ -350,8 +355,42 @@ async def provision_personal_tenant(
     except Exception as e:
         logger.warning(f"Failed to emit audit event: {e}")
 
+    # Best-effort trial API key generation (CAB-1325)
+    trial_key_plaintext: str | None = None
+    try:
+        key_repo = SaasApiKeyRepository(db)
+        # Check if trial key already exists (idempotent)
+        existing_keys, _ = await key_repo.list_by_tenant(tenant_id, page=1, page_size=100)
+        has_trial = any(k.name == "trial-key" for k in existing_keys)
+
+        if not has_trial:
+            random_part = secrets.token_hex(32)
+            prefix_hex = secrets.token_hex(2)
+            prefix = f"stoa_trial_{prefix_hex}"
+            trial_key_plaintext = f"{prefix}_{random_part}"
+            key_hash = hashlib.sha256(trial_key_plaintext.encode()).hexdigest()
+            now = datetime.now(UTC)
+
+            trial_key = SaasApiKey(
+                tenant_id=tenant_id,
+                name="trial-key",
+                description="Auto-generated trial key (30-day, 100 RPM)",
+                key_hash=key_hash,
+                key_prefix=prefix,
+                allowed_backend_api_ids=[],
+                rate_limit_rpm=100,
+                expires_at=now + timedelta(days=30),
+                created_by=current_user.id,
+            )
+            await key_repo.create(trial_key)
+            logger.info("Trial API key generated for tenant %s", tenant_id)
+    except Exception as e:
+        logger.warning(f"Failed to generate trial key for {tenant_id}: {e}")
+        trial_key_plaintext = None
+
     return PersonalTenantResponse(
         tenant_id=tenant_id,
         display_name=tenant.name,
         created=True,
+        trial_api_key=trial_key_plaintext,
     )

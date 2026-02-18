@@ -1,5 +1,5 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Suspense, lazy, useState } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Suspense, lazy, useState, useEffect } from 'react';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ErrorBoundary, SkipLink } from './components/common';
@@ -394,10 +394,33 @@ function ProtectedRoute({
   return <>{children}</>;
 }
 
+// Auto-redirect new users to onboarding (CAB-1325)
+function NewUserRedirect() {
+  const { isAuthenticated, isReady, isNewUser } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (
+      isAuthenticated &&
+      isReady &&
+      isNewUser &&
+      location.pathname !== '/onboarding' &&
+      !sessionStorage.getItem('onboarding_redirect_done')
+    ) {
+      sessionStorage.setItem('onboarding_redirect_done', 'true');
+      navigate('/onboarding');
+    }
+  }, [isAuthenticated, isReady, isNewUser, location.pathname, navigate]);
+
+  return null;
+}
+
 // Main app content with routes
 function AppContent() {
   return (
     <ProtectedRoute>
+      <NewUserRedirect />
       <Layout>
         <Suspense fallback={<PageLoader />}>
           <Routes>

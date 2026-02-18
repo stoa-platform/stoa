@@ -15,6 +15,7 @@ import {
   RecentActivity,
   FeaturedAPIs,
   FeaturedAITools,
+  GettingStartedChecklist,
 } from '../components/dashboard';
 import { PermissionGate } from '../components/common/PermissionGate';
 import { GrafanaDashboard } from '../components/usage/GrafanaDashboard';
@@ -35,6 +36,9 @@ export function HomePage() {
         <WelcomeHeader user={user} />
         <TenantBadge />
       </div>
+
+      {/* Onboarding Checklist — shown until complete (CAB-1325) */}
+      <GettingStartedChecklist />
 
       {/* Stats Cards */}
       <DashboardStats stats={stats ?? null} isLoading={isLoading} />

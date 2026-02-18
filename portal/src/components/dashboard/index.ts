@@ -8,3 +8,4 @@ export { QuickActions } from './QuickActions';
 export { RecentActivity } from './RecentActivity';
 export { FeaturedAPIs } from './FeaturedAPIs';
 export { FeaturedAITools } from './FeaturedAITools';
+export { GettingStartedChecklist } from './GettingStartedChecklist';

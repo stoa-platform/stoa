@@ -120,9 +120,15 @@ pub fn build_router(state: AppState) -> Router {
             "/federation/cache/:sub_account_id",
             delete(admin::federation_cache_invalidate),
         )
-        // CAB-1365: Skills admin
+        // CAB-1365/1366: Skills admin
         .route("/skills/status", get(admin::skills_status))
         .route("/skills/resolve", get(admin::skills_resolve))
+        .route(
+            "/skills",
+            get(admin::skills_list)
+                .post(admin::skills_upsert)
+                .delete(admin::skills_delete),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

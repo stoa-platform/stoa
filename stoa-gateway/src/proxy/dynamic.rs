@@ -493,16 +493,33 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
 
 /// Inject W3C Trace Context `traceparent` header into outgoing request.
 ///
-/// Format: `00-{trace_id}-{span_id}-{flags}`
-/// where trace_id is 32 hex chars, span_id is 16 hex chars, flags is `01` (sampled).
-/// This propagates a trace context to downstream services,
-/// enabling end-to-end distributed tracing visible in Tempo/Grafana.
+/// When OTel is active (CAB-1374), propagates the current OTel span context
+/// so downstream services share the same trace_id (visible in Tempo/Grafana).
 ///
-/// Uses thread-local SmallRng instead of uuid::Uuid::new_v4() to avoid
-/// 2x `getrandom()` syscalls per request. SmallRng is seeded from OS entropy
-/// once per thread, then generates IDs via fast Xoshiro256++ PRNG.
-/// CAB-1088: migrate to opentelemetry-propagator when OTel API stabilizes.
+/// Fallback (OTel disabled): generates random traceparent using thread-local
+/// SmallRng to avoid `getrandom()` syscalls per request.
 fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    #[cfg(feature = "otel")]
+    {
+        if crate::telemetry::is_otel_active() {
+            use opentelemetry::propagation::TextMapPropagator;
+            use opentelemetry_sdk::propagation::TraceContextPropagator;
+            use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+            let cx = tracing::Span::current().context();
+            let propagator = TraceContextPropagator::new();
+            let mut inject_map = std::collections::HashMap::new();
+            propagator.inject_context(&cx, &mut inject_map);
+
+            let mut b = builder;
+            for (key, value) in inject_map {
+                b = b.header(key, value);
+            }
+            return b;
+        }
+    }
+
+    // Fallback: random traceparent (no OTel)
     let traceparent = TRACE_RNG.with(|rng| {
         let mut rng = rng.borrow_mut();
         let mut trace_bytes = [0u8; 16];
@@ -510,7 +527,6 @@ fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuild
         rng.fill(&mut trace_bytes);
         rng.fill(&mut span_bytes);
 
-        // Format directly as hex — no intermediate UUID allocation
         format!(
             "00-{}-{}-01",
             hex_encode(&trace_bytes),

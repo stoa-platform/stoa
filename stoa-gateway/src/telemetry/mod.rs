@@ -2,9 +2,6 @@
 //!
 //! Optional OpenTelemetry support with graceful degradation.
 //! When `otel` feature is disabled, all functions become no-ops.
-//!
-//! Note: Infrastructure prepared for future tool instrumentation.
-//! Actual usage in NativeTool is a Phase 7 enhancement.
 
 // Types and functions prepared for future integration
 #![allow(dead_code)]
@@ -43,36 +40,69 @@ impl Default for TelemetryConfig {
     }
 }
 
-/// Initialize OpenTelemetry (no-op if feature disabled or already initialized)
+/// Initialize OTel and return an SDK Tracer for the tracing-opentelemetry layer.
 ///
-/// Returns true if OTel was successfully initialized.
-pub fn init_telemetry(config: &TelemetryConfig) -> bool {
-    // Only initialize once
+/// Returns `Some(Tracer)` when OTel feature is enabled and init succeeds.
+/// The caller should use this tracer to build the `OpenTelemetryLayer`.
+#[cfg(feature = "otel")]
+pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_sdk::trace::Tracer> {
     if OTEL_INITIALIZED.get().is_some() {
-        return *OTEL_INITIALIZED.get().unwrap();
+        return None; // Already initialized
     }
 
-    #[cfg(feature = "otel")]
+    use opentelemetry::global;
+    use opentelemetry::KeyValue;
+    use opentelemetry_otlp::WithExportConfig;
+    use opentelemetry_sdk::trace::TracerProvider;
+    use opentelemetry_sdk::Resource;
+
+    let endpoint = config
+        .otlp_endpoint
+        .as_deref()
+        .unwrap_or("http://localhost:4317");
+
+    let exporter = match opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint(endpoint)
+        .build()
     {
-        let result = init_otel_internal(config);
-        let _ = OTEL_INITIALIZED.set(result);
-        if result {
-            info!(
-                service = %config.service_name,
-                endpoint = ?config.otlp_endpoint,
-                "OpenTelemetry initialized"
-            );
+        Ok(e) => e,
+        Err(err) => {
+            tracing::warn!(error = %err, "Failed to create OTLP exporter — OTel disabled");
+            let _ = OTEL_INITIALIZED.set(false);
+            return None;
         }
-        result
-    }
+    };
 
-    #[cfg(not(feature = "otel"))]
-    {
-        let _ = config; // Silence unused warning
-        let _ = OTEL_INITIALIZED.set(false);
-        info!("OpenTelemetry disabled (feature not enabled)");
-        false
-    }
+    let resource = Resource::new([
+        KeyValue::new("service.name", config.service_name.clone()),
+        KeyValue::new("service.version", config.service_version.clone()),
+    ]);
+
+    let provider = TracerProvider::builder()
+        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        .with_resource(resource)
+        .build();
+
+    // Get SDK tracer BEFORE setting as global (returns concrete Tracer, not BoxedTracer)
+    use opentelemetry::trace::TracerProvider as _;
+    let tracer = provider.tracer("stoa-gateway");
+    global::set_tracer_provider(provider);
+
+    let _ = OTEL_INITIALIZED.set(true);
+    info!(
+        service = %config.service_name,
+        endpoint = ?config.otlp_endpoint,
+        "OpenTelemetry initialized"
+    );
+    Some(tracer)
+}
+
+/// Initialize telemetry as no-op (feature disabled).
+#[cfg(not(feature = "otel"))]
+pub fn init_telemetry_noop() {
+    let _ = OTEL_INITIALIZED.set(false);
+    info!("OpenTelemetry disabled (feature not enabled)");
 }
 
 /// Check if OTel is active
@@ -80,36 +110,36 @@ pub fn is_otel_active() -> bool {
     OTEL_INITIALIZED.get().copied().unwrap_or(false)
 }
 
+/// Extract the current OTel trace_id as hex string (for access logs).
+///
+/// Returns `"-"` when OTel is inactive or feature is disabled.
+pub fn extract_trace_id() -> String {
+    #[cfg(feature = "otel")]
+    {
+        if is_otel_active() {
+            use opentelemetry::trace::TraceContextExt;
+            use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+            let cx = tracing::Span::current().context();
+            let span_ref = cx.span();
+            let trace_id = span_ref.span_context().trace_id();
+            if trace_id != opentelemetry::trace::TraceId::INVALID {
+                return format!("{trace_id}");
+            }
+        }
+    }
+    "-".to_string()
+}
+
 /// Shutdown OpenTelemetry (flush pending spans)
 pub fn shutdown_telemetry() {
     #[cfg(feature = "otel")]
     {
         if is_otel_active() {
-            // opentelemetry::global::shutdown_tracer_provider();
-            info!("OpenTelemetry shutdown");
+            opentelemetry::global::shutdown_tracer_provider();
+            info!("OpenTelemetry shutdown complete");
         }
     }
-}
-
-#[cfg(feature = "otel")]
-fn init_otel_internal(_config: &TelemetryConfig) -> bool {
-    // TODO: Implement actual OTel initialization when deps stabilize
-    // For now, return false to indicate not fully initialized
-    //
-    // use opentelemetry::global;
-    // use opentelemetry_otlp::WithExportConfig;
-    // use opentelemetry_sdk::trace::TracerProvider;
-    //
-    // let exporter = opentelemetry_otlp::new_exporter()
-    //     .tonic()
-    //     .with_endpoint(config.otlp_endpoint.as_deref().unwrap_or("http://localhost:4317"));
-    //
-    // let provider = TracerProvider::builder()
-    //     .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-    //     .build();
-    //
-    // global::set_tracer_provider(provider);
-    false
 }
 
 #[cfg(test)]
@@ -125,17 +155,12 @@ mod tests {
 
     #[test]
     fn test_init_without_otel_feature() {
-        // Without otel feature, should return false
         let config = TelemetryConfig::default();
-        // Note: Can't test init_telemetry multiple times due to OnceLock
-        // Just verify config creation works
         assert_eq!(config.service_name, "stoa-gateway");
     }
 
     #[test]
     fn test_is_otel_active_default() {
-        // Before init, or without feature, should be false
-        // Note: This might be true if another test ran first
         let _ = is_otel_active(); // Just verify it doesn't panic
     }
 }

@@ -1,0 +1,80 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: skills.gostoa.dev
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  group: gostoa.dev
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [name, scope]
+              properties:
+                name:
+                  type: string
+                  description: Human-readable skill name
+                description:
+                  type: string
+                  description: Skill description for context
+                scope:
+                  type: string
+                  description: "CSS-like specificity scope"
+                  enum: [global, tenant, tool, user]
+                priority:
+                  type: integer
+                  description: "Priority within same scope (0-100, higher wins)"
+                  minimum: 0
+                  maximum: 100
+                  default: 50
+                instructions:
+                  type: string
+                  description: System prompt instructions injected into agent context
+                toolRef:
+                  type: string
+                  description: Tool name this skill applies to (scope=tool)
+                userRef:
+                  type: string
+                  description: User ID this skill applies to (scope=user)
+                enabled:
+                  type: boolean
+                  description: Whether this skill is active
+                  default: true
+            status:
+              type: object
+              properties:
+                registered:
+                  type: boolean
+                  default: false
+                lastSeen:
+                  type: string
+                error:
+                  type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Scope
+          type: string
+          jsonPath: .spec.scope
+        - name: Priority
+          type: integer
+          jsonPath: .spec.priority
+        - name: Enabled
+          type: boolean
+          jsonPath: .spec.enabled
+        - name: Registered
+          type: boolean
+          jsonPath: .status.registered
+  scope: Namespaced
+  names:
+    plural: skills
+    singular: skill
+    kind: Skill
+    shortNames: [sk]

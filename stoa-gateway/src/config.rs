@@ -316,6 +316,12 @@ pub struct Config {
     #[serde(default = "default_cb_success_threshold")]
     pub cb_success_threshold: u32,
 
+    // === Skills (CAB-1314) ===
+    /// TTL in seconds for skill resolver cache (default: 300 = 5 min)
+    /// Env: STOA_SKILL_CACHE_TTL_SECS
+    #[serde(default = "default_skill_cache_ttl")]
+    pub skill_cache_ttl_secs: u64,
+
     // === Federation (CAB-1362) ===
     /// Enable federation routing for sub-accounts (default: false)
     /// Env: STOA_FEDERATION_ENABLED
@@ -574,6 +580,10 @@ fn default_kafka_cns_consumer_group() -> String {
     "stoa-gateway-cns".to_string()
 }
 
+fn default_skill_cache_ttl() -> u64 {
+    300 // 5 minutes
+}
+
 fn default_federation_cache_ttl() -> u64 {
     300
 }
@@ -647,6 +657,7 @@ impl Default for Config {
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),
+            skill_cache_ttl_secs: default_skill_cache_ttl(),
             federation_enabled: false,
             federation_cache_ttl_secs: default_federation_cache_ttl(),
             federation_cache_max_entries: default_federation_cache_max_entries(),

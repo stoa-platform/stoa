@@ -55,6 +55,7 @@ from .prospect_event import EventType, ProspectEvent
 from .prospect_feedback import ProspectFeedback
 from .saas_api_key import SaasApiKey, SaasApiKeyStatus
 from .security_event import SecurityEvent
+from .skill import Skill, SkillScope
 from .subscription import Subscription, SubscriptionStatus
 from .tenant import Tenant, TenantProvisioningStatus, TenantStatus
 from .traces import PipelineTrace, TraceStatus, TraceStep, trace_store

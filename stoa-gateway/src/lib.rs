@@ -28,6 +28,7 @@ pub mod resilience;
 pub mod routes;
 pub mod security_headers;
 pub mod shadow;
+pub mod skills;
 pub mod state;
 pub mod telemetry;
 pub mod uac;

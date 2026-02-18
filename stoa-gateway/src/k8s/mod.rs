@@ -20,7 +20,7 @@ pub mod crds;
 pub mod watcher;
 
 #[cfg(feature = "k8s")]
-pub use crds::{Tool, ToolSet, ToolSetSpec, ToolSpec};
+pub use crds::{Skill, SkillSpec, SkillStatus, Tool, ToolSet, ToolSetSpec, ToolSpec};
 #[cfg(feature = "k8s")]
 pub use watcher::CrdWatcher;
 

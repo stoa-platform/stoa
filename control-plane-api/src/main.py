@@ -63,6 +63,7 @@ from .routers import (
     self_service,
     self_service_logs,
     service_accounts,
+    skills,
     subscriptions,
     tenant_webhooks,
     tenants,
@@ -497,6 +498,9 @@ app.include_router(backend_apis.keys_router)
 
 # Federation — enterprise MCP multi-account (CAB-1313)
 app.include_router(federation.router)
+
+# Skills — CSS cascade context injection for AI agents (CAB-1314)
+app.include_router(skills.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

@@ -223,52 +223,23 @@ jobs:
             > /dev/null 2>&1 || true
           echo "Posted Council comment on ${TICKET_ID}"
 
-      # Notify Slack with Council report
-      - name: Notify Slack — Council Report
-        if: always()
+      - name: Slack Council Report
+        if: always() && steps.guard.outputs.skip != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
+          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then
-            echo "SLACK_WEBHOOK_URL not set, skipping notification"
-            exit 0
-          fi
-          ISSUE_URL="${{ github.event.issue.html_url }}"
-          ISSUE_TITLE="${{ github.event.issue.title }}"
-          ISSUE_NUM="${{ github.event.issue.number }}"
-          STATUS="${{ steps.council.outcome }}"
-          if [ "$STATUS" = "success" ]; then
-            EMOJI=":white_check_mark:"
-          else
-            EMOJI=":warning:"
-          fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"blocks\": [
-                {
-                  \"type\": \"header\",
-                  \"text\": {
-                    \"type\": \"plain_text\",
-                    \"text\": \"${EMOJI} Stage 1 Council: #${ISSUE_NUM}\",
-                    \"emoji\": true
-                  }
-                },
-                {
-                  \"type\": \"section\",
-                  \"text\": {
-                    \"type\": \"mrkdwn\",
-                    \"text\": \"*${ISSUE_TITLE}*\nStage 1 Council complete (ticket pertinence).\nComment \`/go\` to start plan validation (Stage 2).\"
-                  },
-                  \"accessory\": {
-                    \"type\": \"button\",
-                    \"text\": {\"type\": \"plain_text\", \"text\": \"Review & Approve\"},
-                    \"url\": \"${ISSUE_URL}\",
-                    \"action_id\": \"council-review\"
-                  }
-                }
-              ]
-            }"
+          source scripts/ai-ops/ai-factory-notify.sh
+          TICKET=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "#${{ github.event.issue.number }}")
+          notify_council "$TICKET" "${{ github.event.issue.title }}" "" "Go" "${{ github.event.issue.html_url }}" "${{ github.event.issue.number }}"
+
+      - name: Write Job Summary — Council
+        if: always() && steps.guard.outputs.skip != 'true'
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
+          write_job_summary "$TICKET" "${{ steps.council.outcome }}" "" "" "council-s1"
 
   # ----- Stage 2: Plan Validation (runs on /go approval) -----
   plan-validate:
@@ -484,31 +455,20 @@ jobs:
             -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
             > /dev/null 2>&1 || true
 
-      - name: Notify Slack — Plan Validation
+      - name: Slack Plan Validation
         if: always() && steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          ISSUE_URL="${{ github.event.issue.html_url }}"
-          ISSUE_TITLE="${{ github.event.issue.title }}"
-          ISSUE_NUM="${{ github.event.issue.number }}"
-          STATUS="${{ steps.plan-council.outcome }}"
-          if [ "$STATUS" = "success" ]; then
-            EMOJI=":clipboard:"
-            TEXT="Stage 2 plan validation passed.\nComment \`/go-plan\` to start implementation."
-          else
-            EMOJI=":warning:"
-            TEXT="Stage 2 plan validation failed. Check the GitHub issue for details."
-          fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"blocks\": [
-                {\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"${EMOJI} Plan Validation: #${ISSUE_NUM}\",\"emoji\":true}},
-                {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*${ISSUE_TITLE}*\n${TEXT}\"},\"accessory\":{\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"Review Plan\"},\"url\":\"${ISSUE_URL}\",\"action_id\":\"plan-review\"}}
-              ]
-            }"
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_plan "${{ github.event.issue.number }}" "${{ github.event.issue.title }}" "${{ github.event.issue.html_url }}" "${{ steps.plan-council.outcome }}"
+
+      - name: Write Job Summary — Plan
+        if: always() && steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
+          write_job_summary "$TICKET" "${{ steps.plan-council.outcome }}" "" "" "council-s2"
 
   # ----- Stage 3: Implementation (runs on /go-plan approval) -----
   implement:
@@ -616,25 +576,22 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-5' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
 
-      # Notify Slack on completion
-      - name: Notify Slack — Implementation Done
+      - name: Slack Implementation Result
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          STATUS="${{ steps.implement.outcome || 'skipped' }}"
-          ISSUE_NUM="${{ github.event.issue.number }}"
-          if [ "$STATUS" = "success" ]; then
-            EMOJI="white_check_mark"
-            MSG="Implementation complete for #${ISSUE_NUM}. PR created."
-          elif [ "$STATUS" = "skipped" ]; then
-            EMOJI="warning"
-            MSG="Implementation skipped for #${ISSUE_NUM}. No plan validation."
-          else
-            EMOJI="x"
-            MSG="Implementation failed for #${ISSUE_NUM}. Check GitHub Actions logs."
+          source scripts/ai-ops/ai-factory-notify.sh
+          TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
+          notify_implement "$TICKET" "${{ steps.implement.outcome || 'skipped' }}" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR"
+          if [ "${{ steps.implement.outcome }}" = "success" ]; then
+            linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR" || true
           fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{\"text\":\":${EMOJI}: ${MSG}\"}"
+
+      - name: Write Job Summary — Implement
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
+          write_job_summary "$TICKET" "${{ steps.implement.outcome || 'skipped' }}" "" "${{ steps.route.outputs.model || 'sonnet-4-5' }}" "L1-implement"

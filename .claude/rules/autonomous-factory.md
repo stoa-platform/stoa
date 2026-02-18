@@ -187,33 +187,52 @@ Stage 2: Plan Validation (L1 + L3 only)
 Batch flows (L3.5 Autopilot, L5 Multi-Agent): Stage 1 only → `/go` starts implementation directly.
 ```
 
-## Slack Notifications
+## Notification Library
 
-### Channel Strategy
+All AI Factory notifications use `scripts/ai-ops/ai-factory-notify.sh` — a centralized shell library sourced by every workflow step. Zero extra Claude tokens (pure bash + jq).
 
-All AI Factory notifications go to a single Slack channel (configurable via `SLACK_WEBHOOK_URL`).
-Message types are distinguished by emoji prefix:
+### Usage
 
-| Emoji | Event | Action Required |
-|-------|-------|----------------|
-| :white_check_mark: | Council Go (>= 8.0) | Review and `/go` |
-| :warning: | Council Fix (6.0-7.9) | Review adjustments, `/go` or `/adjust` |
-| :x: | Council Redo (< 6.0) | Revise proposal |
-| :rocket: | Implementation started | None (info) |
-| :tada: | PR created | Review if Ask mode |
-| :merged: | PR merged | None (info) |
-| :stethoscope: | CI health check | Review if failures found |
-| :shield: | Weekly audit | Review report |
-| :brain: | Self-improvement | Review and approve |
-| :sunrise: | Daily triage | Review digest |
+```yaml
+- name: Notify
+  env:
+    SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+  run: |
+    source scripts/ai-ops/ai-factory-notify.sh
+    notify_council "CAB-1350" "Title" "8.5" "Go" "https://..." "42"
+```
 
-### Notification Frequency Control
+### Functions
 
-- **Max 10 Slack messages per day** — batch low-priority notifications
-- **Council reports**: always immediate (requires human decision)
-- **Implementation status**: immediate for Ask mode, batched for Ship/Show
-- **Digests**: once daily (07:00 UTC)
-- **Audits**: once weekly (Monday 08:00 UTC)
+| Function | Purpose | Slack | Linear | Summary |
+|----------|---------|-------|--------|---------|
+| `notify_council` | Council validation report | Block Kit + approve button | — | — |
+| `notify_implement` | Implementation success/failure | Status message | — | — |
+| `notify_error` | Error with log excerpt | Vercel-style error block | — | — |
+| `notify_scan` | Autopilot scan summary | Candidate count + velocity | — | — |
+| `notify_scheduled` | Daily/weekly task results | Task name + status | — | — |
+| `notify_plan` | Plan validation (Stage 2) | Plan status + review link | — | — |
+| `linear_comment` | Rich completion report | — | Markdown comment | — |
+| `write_job_summary` | GHA audit trail | — | — | `$GITHUB_STEP_SUMMARY` |
+
+### Env Vars (all optional, graceful degradation)
+
+| Variable | Source | Used By |
+|----------|--------|---------|
+| `SLACK_WEBHOOK` | `secrets.SLACK_WEBHOOK_URL` | All `notify_*` functions |
+| `LINEAR_API_KEY` | `secrets.LINEAR_API_KEY` | `linear_comment()` only |
+| `N8N_WEBHOOK` | `vars.N8N_APPROVE_WEBHOOK_URL` | `notify_council` approve button |
+| `HMAC_SECRET` | `secrets.APPROVE_HMAC_SECRET` | `notify_council` approve button |
+| `GITHUB_RUN_ID` | Auto-set by GHA | All functions (run link) |
+| `GITHUB_STEP_SUMMARY` | Auto-set by GHA | `write_job_summary` |
+
+### Rules
+
+- Every workflow step that previously had inline `curl $SLACK_WEBHOOK` now uses `source ... && notify_*`
+- `write_job_summary` is called in ALL 8 Claude workflows for persistent audit trail
+- Notifications are best-effort: `SLACK_WEBHOOK` unset = silent skip, never fails the parent step
+- Linear comments only on implementation success/failure (not Council, not scheduled — too noisy)
+- Deprecated scripts: `slack-notify.sh`, `council-slack-report.sh`, `daily-digest.sh` (use library instead)
 
 ## GitHub Labels for Automation
 

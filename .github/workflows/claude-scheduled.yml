@@ -74,15 +74,19 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
-      - name: Notify Slack
+      - name: Slack Daily Triage
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":sunrise: *Daily Triage Complete* — check GitHub issues for digest"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled "Daily Triage" "${{ job.status }}"
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "triage-$(date -u +%Y-%m-%d)" "${{ job.status }}" "" "haiku-4-5" "daily-triage"
 
   # ----- Daily: CI Health Check + Auto-Fix -----
   daily-ci-health:
@@ -124,15 +128,19 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
-      - name: Notify Slack
+      - name: Slack CI Health
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":stethoscope: *CI Health Check Complete* — check GitHub for results"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled "CI Health Check" "${{ job.status }}"
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "ci-health-$(date -u +%Y-%m-%d)" "${{ job.status }}" "" "sonnet-4-5" "ci-health"
 
   # ----- Weekly: Dependency Audit + Security -----
   weekly-audit:
@@ -174,15 +182,19 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
-      - name: Notify Slack
+      - name: Slack Weekly Audit
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":shield: *Weekly Audit Complete* — check GitHub issues for full report"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled "Weekly Audit" "${{ job.status }}"
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "audit-$(date -u +%Y-%m-%d)" "${{ job.status }}" "" "sonnet-4-5" "weekly-audit"
 
   # ----- Weekly Digest (Batch API — 50% cost reduction) -----
   weekly-digest:
@@ -250,6 +262,12 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Mode=batch"
 
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "digest-$(date -u +%Y-%m-%d)" "${{ steps.batch.outcome }}" "" "haiku-4-5-batch" "weekly-digest"
+
   # ----- Weekly: Capacity Check (Batch API — 50% cost reduction) -----
   weekly-capacity-check:
     if: |
@@ -309,15 +327,19 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Mode=batch"
 
-      - name: Notify Slack
+      - name: Slack Capacity Check
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":chart_with_upwards_trend: *Weekly Capacity Check Complete* — check GitHub issues for cycle health report"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled "Weekly Capacity Check" "${{ job.status }}"
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "capacity-$(date -u +%Y-%m-%d)" "${{ job.status }}" "" "haiku-4-5-batch" "capacity-check"
 
   # ----- Weekly: Backlog Stock Check (Batch API — 50% cost reduction) -----
   weekly-backlog-stock:
@@ -388,12 +410,16 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Mode=batch"
 
-      - name: Notify Slack
+      - name: Slack Backlog Stock
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":card_file_box: *Weekly Backlog Stock Check Complete* — check GitHub issues for scan report"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled "Backlog Stock Check" "${{ job.status }}"
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "backlog-$(date -u +%Y-%m-%d)" "${{ job.status }}" "" "haiku-4-5-batch" "backlog-stock"

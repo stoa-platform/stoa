@@ -118,22 +118,18 @@ fn bench_header_copy(c: &mut Criterion) {
     );
     headers.insert(
         "authorization",
-        HeaderValue::from_static("Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyJ9.sig"),
+        HeaderValue::from_static(
+            "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyJ9.sig",
+        ),
     );
     headers.insert(
         "user-agent",
         HeaderValue::from_static("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"),
     );
     headers.insert("x-request-id", HeaderValue::from_static("req-abc-123-def"));
-    headers.insert(
-        "x-forwarded-for",
-        HeaderValue::from_static("192.168.1.100"),
-    );
+    headers.insert("x-forwarded-for", HeaderValue::from_static("192.168.1.100"));
     headers.insert("x-forwarded-proto", HeaderValue::from_static("https"));
-    headers.insert(
-        "x-tenant-id",
-        HeaderValue::from_static("acme-corporation"),
-    );
+    headers.insert("x-tenant-id", HeaderValue::from_static("acme-corporation"));
     headers.insert(
         "x-correlation-id",
         HeaderValue::from_static("corr-550e8400-e29b-41d4"),

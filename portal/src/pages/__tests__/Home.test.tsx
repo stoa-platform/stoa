@@ -49,6 +49,7 @@ vi.mock('../../config', () => ({
   config: {
     api: { baseUrl: 'https://api.gostoa.dev', timeout: 30000 },
     mcp: { baseUrl: 'https://mcp.gostoa.dev', timeout: 30000 },
+    grafana: { url: 'https://grafana.gostoa.dev/d/portal' },
     features: {
       enableMCPTools: true,
       enableSubscriptions: true,
@@ -71,6 +72,16 @@ vi.mock('../../components/dashboard', () => ({
   FeaturedAITools: () => <div data-testid="featured-ai-tools">Featured AI Tools</div>,
 }));
 
+vi.mock('../../components/usage/GrafanaDashboard', () => ({
+  GrafanaDashboard: ({ url, title }: { url: string; title: string }) => (
+    <div data-testid="grafana-dashboard">{url ? `Grafana: ${title}` : 'No URL'}</div>
+  ),
+}));
+
+vi.mock('../../components/layout/TenantBadge', () => ({
+  TenantBadge: () => <div data-testid="tenant-badge">Tenant Badge</div>,
+}));
+
 describe('HomePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -89,6 +100,11 @@ describe('HomePage', () => {
     it('should render welcome header', () => {
       renderWithProviders(<HomePage />);
       expect(screen.getByTestId('welcome-header')).toBeInTheDocument();
+    });
+
+    it('should render tenant badge', () => {
+      renderWithProviders(<HomePage />);
+      expect(screen.getByTestId('tenant-badge')).toBeInTheDocument();
     });
 
     it('should render dashboard stats', () => {
@@ -115,6 +131,12 @@ describe('HomePage', () => {
       renderWithProviders(<HomePage />);
       expect(screen.getByTestId('recent-activity')).toBeInTheDocument();
     });
+
+    it('should render grafana dashboard', () => {
+      renderWithProviders(<HomePage />);
+      expect(screen.getByTestId('grafana-dashboard')).toBeInTheDocument();
+      expect(screen.getByText('Grafana: Usage Analytics')).toBeInTheDocument();
+    });
   });
 
   describe('Persona-based rendering', () => {
@@ -125,11 +147,13 @@ describe('HomePage', () => {
       renderWithProviders(<HomePage />);
 
       expect(screen.getByTestId('welcome-header')).toBeInTheDocument();
+      expect(screen.getByTestId('tenant-badge')).toBeInTheDocument();
       expect(screen.getByTestId('dashboard-stats')).toBeInTheDocument();
       expect(screen.getByTestId('quick-actions')).toBeInTheDocument();
       expect(screen.getByTestId('featured-apis')).toBeInTheDocument();
       expect(screen.getByTestId('featured-ai-tools')).toBeInTheDocument();
       expect(screen.getByTestId('recent-activity')).toBeInTheDocument();
+      expect(screen.getByTestId('grafana-dashboard')).toBeInTheDocument();
     });
   });
 
@@ -170,7 +194,18 @@ describe('HomePage', () => {
       expect(screen.getByTestId('dashboard-stats')).toBeInTheDocument();
     });
 
-    it('should always show WelcomeHeader and DashboardStats (no gate)', () => {
+    it('should hide GrafanaDashboard when user lacks stoa:metrics:read', () => {
+      const restrictedAuth = createAuthMock('viewer');
+      restrictedAuth.hasScope = (scope: string) => scope !== 'stoa:metrics:read';
+      mockUseAuth.mockReturnValue(restrictedAuth);
+
+      renderWithProviders(<HomePage />);
+
+      expect(screen.queryByTestId('grafana-dashboard')).not.toBeInTheDocument();
+      expect(screen.getByTestId('welcome-header')).toBeInTheDocument();
+    });
+
+    it('should always show WelcomeHeader, DashboardStats, TenantBadge (no gate)', () => {
       // Remove all scopes
       const noScopeAuth = createAuthMock('viewer');
       noScopeAuth.hasScope = () => false;
@@ -179,8 +214,14 @@ describe('HomePage', () => {
       renderWithProviders(<HomePage />);
 
       expect(screen.getByTestId('welcome-header')).toBeInTheDocument();
+      expect(screen.getByTestId('tenant-badge')).toBeInTheDocument();
       expect(screen.getByTestId('dashboard-stats')).toBeInTheDocument();
       expect(screen.getByTestId('quick-actions')).toBeInTheDocument();
+      // Gated widgets hidden
+      expect(screen.queryByTestId('featured-apis')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('featured-ai-tools')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recent-activity')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('grafana-dashboard')).not.toBeInTheDocument();
     });
   });
 });

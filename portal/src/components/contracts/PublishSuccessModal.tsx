@@ -63,7 +63,14 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
       aria-labelledby="publish-success-title"
     >
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={handleBackdropClick} />
+      <div
+        className="fixed inset-0 bg-black/50 transition-opacity"
+        onClick={handleBackdropClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose();
+        }}
+        role="presentation"
+      />
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">

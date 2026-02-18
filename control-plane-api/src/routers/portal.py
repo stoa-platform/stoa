@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.dependencies import User, get_current_user
 from ..database import get_db as get_async_db
 from ..models.mcp_subscription import MCPServer, MCPServerCategory, MCPServerStatus, MCPServerTool
-from ..repositories.catalog import CatalogRepository, escape_like
+from ..repositories.catalog import CatalogRepository, escape_like, get_allowed_audiences
 from ..schemas.portal import APIListItem, MCPServerListItem
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,7 @@ class PortalAPIResponse(BaseModel):
     tags: list[str] = []
     deployments: dict = {}
     is_promoted: bool = True  # Whether API is promoted to Portal (portal_published=True)
+    audience: str = "public"
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -184,6 +185,7 @@ async def list_portal_apis(
     status: str | None = Query(None),
     include_unpromoted: bool = Query(False, description="Include APIs not promoted to Portal"),
     universe: str | None = Query(None, description="Filter by universe: oasis, enterprise"),
+    audience: str | None = Query(None, description="Filter by audience: public, internal, partner"),
 ):
     """
     List all promoted APIs available in the Portal catalog.
@@ -206,6 +208,8 @@ async def list_portal_apis(
             status=status,
             tenant_ids=tenant_ids,
             include_unpublished=include_unpromoted,
+            user_roles=list(user.roles or []),
+            audience_filter=audience,
             page=page,
             page_size=page_size,
         )
@@ -224,6 +228,7 @@ async def list_portal_apis(
                     category=api.category,
                     tags=api.tags or [],
                     is_promoted=api.portal_published,
+                    audience=api.audience or "public",
                 )
                 for api in apis
             ],
@@ -264,6 +269,11 @@ async def get_portal_api(
         if not api:
             raise HTTPException(status_code=404, detail=f"API {api_id} not found")
 
+        # Audience enforcement (CAB-1323)
+        allowed = get_allowed_audiences(list(user.roles or []))
+        if (api.audience or "public") not in allowed:
+            raise HTTPException(status_code=404, detail=f"API {api_id} not found")
+
         metadata = api.api_metadata or {}
         return PortalAPIResponse(
             id=api.api_id,
@@ -279,6 +289,7 @@ async def get_portal_api(
             tags=api.tags or [],
             deployments=metadata.get("deployments", {}),
             is_promoted=api.portal_published,
+            audience=api.audience or "public",
         )
 
     except HTTPException:

@@ -181,6 +181,8 @@ export interface SubscriptionUsage {
 }
 
 // API Catalog types
+export type APIAudience = 'public' | 'internal' | 'partner';
+
 export interface API {
   id: string;
   name: string;
@@ -194,6 +196,7 @@ export interface API {
   openApiSpec?: object;
   endpoints?: APIEndpoint[];
   status: 'draft' | 'published' | 'deprecated';
+  audience?: APIAudience;
   createdAt: string;
   updatedAt: string;
 }

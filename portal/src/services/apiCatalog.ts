@@ -18,6 +18,7 @@ export interface ListAPIsParams {
   status?: 'published' | 'deprecated' | 'draft';
   tags?: string[];
   includeUnpromoted?: boolean; // Include APIs not promoted to Portal (for admin view)
+  audience?: string;
 }
 
 export interface Universe {
@@ -40,6 +41,7 @@ interface PortalAPI {
   tags?: string[];
   deployments?: Record<string, boolean>;
   is_promoted: boolean; // Whether API is promoted to Portal (has portal:published tag)
+  audience?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -65,6 +67,7 @@ function transformPortalAPI(portalApi: PortalAPI): API {
     status: portalApi.status as API['status'],
     category: portalApi.category,
     tags: portalApi.tags,
+    audience: (portalApi.audience as API['audience']) || 'public',
     createdAt: portalApi.created_at || new Date().toISOString(),
     updatedAt: portalApi.updated_at || new Date().toISOString(),
   };
@@ -87,6 +90,7 @@ export const apiCatalogService = {
           universe: params?.universe,
           status: params?.status,
           include_unpromoted: params?.includeUnpromoted || false,
+          audience: params?.audience,
         },
       });
 

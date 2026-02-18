@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# DEPRECATED: Use scripts/ai-ops/ai-factory-notify.sh instead.
+# This script is kept for backward compatibility but will be removed.
+#
 # slack-notify.sh — Envoie une notification Slack structurée
 # Usage: ./slack-notify.sh <type> <ticket> <message> [url]
 # Types: done, blocked, failed, info

@@ -155,6 +155,11 @@ impl Tool for DynamicTool {
             req = req.header("Authorization", format!("Bearer {}", token));
         }
 
+        // Inject skill context header if present (CAB-1365)
+        if let Some(ref instructions) = ctx.skill_instructions {
+            req = req.header("X-Skill-Context", instructions.as_str());
+        }
+
         // Send arguments as JSON body for POST/PUT/PATCH
         let has_body = matches!(
             self.method.to_uppercase().as_str(),
@@ -312,5 +317,90 @@ mod tests {
         let result = tool.execute(json!({}), &ctx).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not available"));
+    }
+
+    #[tokio::test]
+    async fn test_skill_context_header_injected() {
+        use wiremock::matchers::{header, method};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        let url = format!("{}/api/action", mock.uri());
+
+        Mock::given(method("POST"))
+            .and(header("X-Skill-Context", "Always use metric units"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"result": "ok"})))
+            .mount(&mock)
+            .await;
+
+        let schema = ToolSchema {
+            schema_type: "object".to_string(),
+            properties: HashMap::new(),
+            required: vec![],
+        };
+
+        let tool = DynamicTool::new("t1_action", "Action", &url, "POST", schema, "t1");
+
+        let ctx = ToolContext {
+            tenant_id: "t1".to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: None,
+            skill_instructions: Some("Always use metric units".to_string()),
+        };
+
+        let result = tool.execute(json!({"query": "temp"}), &ctx).await.unwrap();
+        assert!(result.content.iter().any(|c| {
+            if let super::super::ToolContent::Text { text } = c {
+                text.contains("ok")
+            } else {
+                false
+            }
+        }));
+    }
+
+    #[tokio::test]
+    async fn test_no_skill_context_header_when_none() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        let url = format!("{}/api/action", mock.uri());
+
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"clean": true})))
+            .mount(&mock)
+            .await;
+
+        let schema = ToolSchema {
+            schema_type: "object".to_string(),
+            properties: HashMap::new(),
+            required: vec![],
+        };
+
+        let tool = DynamicTool::new("t1_clean", "Clean", &url, "POST", schema, "t1");
+
+        let ctx = ToolContext {
+            tenant_id: "t1".to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: None,
+            skill_instructions: None,
+        };
+
+        let result = tool.execute(json!({}), &ctx).await.unwrap();
+        assert!(result.content.iter().any(|c| {
+            if let super::super::ToolContent::Text { text } = c {
+                text.contains("clean")
+            } else {
+                false
+            }
+        }));
     }
 }

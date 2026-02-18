@@ -282,7 +282,21 @@ impl ToolProxyClient {
             self.get_token().await?
         };
 
-        let payload = serde_json::json!({ "name": tool, "arguments": args });
+        // Inject _skill_context into arguments if present (CAB-1365)
+        let enriched_args = if let Some(ref instructions) = ctx.skill_instructions {
+            let mut args_obj = args.clone();
+            if let Some(obj) = args_obj.as_object_mut() {
+                obj.insert(
+                    "_skill_context".to_string(),
+                    serde_json::Value::String(instructions.clone()),
+                );
+            }
+            args_obj
+        } else {
+            args.clone()
+        };
+
+        let payload = serde_json::json!({ "name": tool, "arguments": enriched_args });
 
         let mut req = self
             .client
@@ -354,7 +368,7 @@ impl ToolProxyClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{header, method, path};
+    use wiremock::matchers::{body_string_contains, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn make_tool_context() -> ToolContext {
@@ -588,6 +602,53 @@ mod tests {
             .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("500"));
+    }
+
+    #[tokio::test]
+    async fn test_call_tool_forwards_skill_context() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/mcp/tools/my_tool/invoke"))
+            .and(body_string_contains("_skill_context"))
+            .and(body_string_contains("Always respond in French"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let mut ctx = make_tool_context();
+        ctx.raw_token = Some("jwt-token".to_string());
+        ctx.skill_instructions = Some("Always respond in French".to_string());
+
+        let result = client
+            .call_tool("my_tool", serde_json::json!({"query": "hello"}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(result["ok"], true);
+    }
+
+    #[tokio::test]
+    async fn test_call_tool_no_skill_context_when_none() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/mcp/tools/clean_tool/invoke"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"clean": true})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let mut ctx = make_tool_context();
+        ctx.raw_token = Some("jwt-token".to_string());
+
+        let result = client
+            .call_tool("clean_tool", serde_json::json!({}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(result["clean"], true);
     }
 
     #[tokio::test]

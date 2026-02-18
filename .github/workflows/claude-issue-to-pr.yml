@@ -84,6 +84,40 @@ jobs:
           gh label create "council-validated" --color "0e8a16" --description "Council validation passed" --force 2>/dev/null || true
           gh issue edit "${{ github.event.issue.number }}" --add-label "council-validated"
 
+      # Check if this ticket qualifies for Ship fast-path (skip Stage 2)
+      - name: Check Ship Fast Path
+        id: check-fast
+        if: steps.council.outcome == 'success'
+        run: |
+          source scripts/ai-ops/model-router.sh
+
+          # Extract estimate from issue body
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          ESTIMATE=$(extract_estimate "$ISSUE_BODY")
+
+          # Extract Ship/Show/Ask from Council output
+          MODE="ask"
+          EXEC_FILE="${{ steps.council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          if [ -f "$EXEC_FILE" ]; then
+            COUNCIL_TEXT=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null || echo "")
+            MODE=$(extract_mode "$COUNCIL_TEXT")
+          fi
+
+          echo "Estimate: ${ESTIMATE}, Mode: ${MODE}"
+
+          if [ "$MODE" = "ship" ] && [ "${ESTIMATE:-0}" -le 5 ] && [ "${ESTIMATE:-0}" -gt 0 ]; then
+            echo "Ship fast-path: adding label for S2 short-circuit"
+            gh label create "ship-fast-path" --color "d4c5f9" --description "Ship fast-path: skip Stage 2" --force 2>/dev/null || true
+            gh issue edit "${{ github.event.issue.number }}" --add-label "ship-fast-path"
+            echo "fast_path=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Regular path: ${MODE} mode, ${ESTIMATE} pts"
+            echo "fast_path=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       # Sync Council result to Linear (apply council:ticket-* label + comment)
       - name: Sync Council to Linear
         if: steps.council.outcome == 'success'
@@ -266,8 +300,28 @@ jobs:
           echo "Not an L1 council-validated issue — exiting cleanly"
           exit 0
 
-      - name: Run Plan Validation (Stage 2 Council)
+      # Ship fast-path: skip Stage 2, auto-add plan-validated + comment /go-plan
+      - name: Check Ship Fast Path
+        id: fast-path
         if: steps.verify-stage1.outputs.validated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "ship-fast-path"; then
+            echo "Ship fast-path detected — skipping Stage 2"
+            gh label create "plan-validated" --color "006b75" --description "Stage 2 plan validation passed" --force 2>/dev/null || true
+            gh issue edit "$ISSUE_NUM" --add-label "plan-validated"
+            gh issue comment "$ISSUE_NUM" --body "Ship fast-path: Stage 2 skipped (small Ship-mode change). Auto-triggering implementation.\n\n/go-plan"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Regular path — running Stage 2"
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Plan Validation (Stage 2 Council)
+        if: steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
         id: plan-council
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
@@ -322,7 +376,7 @@ jobs:
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=10, Stage=plan-validate"
 
       - name: Mark Plan validated
-        if: steps.plan-council.outcome == 'success'
+        if: steps.plan-council.outcome == 'success' && steps.fast-path.outputs.skipped != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -331,7 +385,7 @@ jobs:
 
       # Sync Stage 2 result to Linear (apply council:plan-* label + comment)
       - name: Sync Plan Council to Linear
-        if: steps.plan-council.outcome == 'success'
+        if: steps.plan-council.outcome == 'success' && steps.fast-path.outputs.skipped != 'true'
         continue-on-error: true
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
@@ -408,7 +462,7 @@ jobs:
             > /dev/null 2>&1 || true
 
       - name: Notify Slack — Plan Validation
-        if: always() && steps.verify-stage1.outputs.validated == 'true'
+        if: always() && steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
@@ -481,6 +535,22 @@ jobs:
             --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first to trigger plan validation, then \`/go-plan\` after it passes."
           exit 1
 
+      # Route model based on ticket estimate
+      - name: Route Model
+        if: steps.verify-council.outputs.validated == 'true'
+        id: route
+        run: |
+          source scripts/ai-ops/model-router.sh
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          ESTIMATE=$(extract_estimate "$ISSUE_BODY")
+          MODE=$(extract_mode "$ISSUE_BODY")
+          ROUTE=$(route_model "$ESTIMATE" "$MODE")
+          MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
+          TURNS=$(echo "$ROUTE" | cut -d'|' -f2)
+          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
+          echo "turns=$TURNS" >> "$GITHUB_OUTPUT"
+          echo "Routed: ${ESTIMATE}pt ${MODE} → ${MODEL}, ${TURNS} turns"
+
       - name: Run Implementation
         if: steps.verify-council.outputs.validated == 'true'
         continue-on-error: true
@@ -515,13 +585,13 @@ jobs:
             If Ask: leave PR open for human review.
 
             IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
-          # Model tier: sonnet (code generation, full tool access)
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+          # Model tier: routed dynamically based on ticket estimate
+          claude_args: "--model ${{ steps.route.outputs.model }} --max-turns ${{ steps.route.outputs.turns }} --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=60, Stage=implement"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-5' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
 
       # Notify Slack on completion
       - name: Notify Slack — Implementation Done

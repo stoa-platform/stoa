@@ -5,6 +5,7 @@ and admin approval workflow.
 
 Reference: PLAN-MCP-SUBSCRIPTIONS.md
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -29,21 +30,24 @@ from src.database import Base
 
 class MCPServerCategory(enum.StrEnum):
     """Category of MCP Server."""
-    PLATFORM = "platform"   # STOA platform tools (admin-only)
-    TENANT = "tenant"       # Tenant-specific APIs
-    PUBLIC = "public"       # Publicly available APIs
+
+    PLATFORM = "platform"  # STOA platform tools (admin-only)
+    TENANT = "tenant"  # Tenant-specific APIs
+    PUBLIC = "public"  # Publicly available APIs
 
 
 class MCPServerSyncStatus(enum.StrEnum):
     """GitOps sync status of an MCP Server."""
-    SYNCED = "synced"       # Successfully synced from GitLab
-    PENDING = "pending"     # Sync pending
-    ERROR = "error"         # Sync failed with error
-    ORPHAN = "orphan"       # Exists in DB but not in GitLab
+
+    SYNCED = "synced"  # Successfully synced from GitLab
+    PENDING = "pending"  # Sync pending
+    ERROR = "error"  # Sync failed with error
+    ORPHAN = "orphan"  # Exists in DB but not in GitLab
 
 
 class MCPServerStatus(enum.StrEnum):
     """Status of an MCP Server."""
+
     ACTIVE = "active"
     MAINTENANCE = "maintenance"
     DEPRECATED = "deprecated"
@@ -51,15 +55,17 @@ class MCPServerStatus(enum.StrEnum):
 
 class MCPSubscriptionStatus(enum.StrEnum):
     """MCP Subscription status enum."""
-    PENDING = "pending"       # Awaiting approval (if required)
-    ACTIVE = "active"         # Active subscription
-    SUSPENDED = "suspended"   # Temporarily suspended
-    REVOKED = "revoked"       # Permanently revoked
-    EXPIRED = "expired"       # Auto-expired
+
+    PENDING = "pending"  # Awaiting approval (if required)
+    ACTIVE = "active"  # Active subscription
+    SUSPENDED = "suspended"  # Temporarily suspended
+    REVOKED = "revoked"  # Permanently revoked
+    EXPIRED = "expired"  # Auto-expired
 
 
 class MCPToolAccessStatus(enum.StrEnum):
     """Status of tool access within a subscription."""
+
     ENABLED = "enabled"
     DISABLED = "disabled"
     PENDING_APPROVAL = "pending_approval"
@@ -67,6 +73,7 @@ class MCPToolAccessStatus(enum.StrEnum):
 
 class MCPServer(Base):
     """MCP Server model - a collection of related tools."""
+
     __tablename__ = "mcp_servers"
 
     # Primary key
@@ -82,7 +89,7 @@ class MCPServer(Base):
     category = Column(
         SQLEnum(MCPServerCategory, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=MCPServerCategory.PUBLIC
+        default=MCPServerCategory.PUBLIC,
     )
     tenant_id = Column(String(255), nullable=True, index=True)  # For tenant-specific servers
 
@@ -97,7 +104,7 @@ class MCPServer(Base):
     status = Column(
         SQLEnum(MCPServerStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=MCPServerStatus.ACTIVE
+        default=MCPServerStatus.ACTIVE,
     )
     version = Column(String(50), nullable=True)
     documentation_url = Column(String(500), nullable=True)
@@ -108,12 +115,10 @@ class MCPServer(Base):
 
     # GitOps tracking
     git_path = Column(String(500), nullable=True, index=True)  # Path in GitLab repo
-    git_commit_sha = Column(String(64), nullable=True)         # Last synced commit SHA
-    last_synced_at = Column(DateTime, nullable=True)           # Last successful sync time
+    git_commit_sha = Column(String(64), nullable=True)  # Last synced commit SHA
+    last_synced_at = Column(DateTime, nullable=True)  # Last successful sync time
     sync_status = Column(
-        SQLEnum(MCPServerSyncStatus, values_callable=lambda x: [e.value for e in x]),
-        nullable=True,
-        index=True
+        SQLEnum(MCPServerSyncStatus, values_callable=lambda x: [e.value for e in x]), nullable=True, index=True
     )
     sync_error = Column(Text, nullable=True)  # Error message if sync failed
 
@@ -123,8 +128,8 @@ class MCPServer(Base):
 
     # Indexes
     __table_args__ = (
-        Index('ix_mcp_servers_category_status', 'category', 'status'),
-        Index('ix_mcp_servers_tenant_status', 'tenant_id', 'status'),
+        Index("ix_mcp_servers_category_status", "category", "status"),
+        Index("ix_mcp_servers_tenant_status", "tenant_id", "status"),
     )
 
     def __repr__(self) -> str:
@@ -133,6 +138,7 @@ class MCPServer(Base):
 
 class MCPServerTool(Base):
     """Tool within an MCP Server."""
+
     __tablename__ = "mcp_server_tools"
 
     # Primary key
@@ -165,9 +171,7 @@ class MCPServerTool(Base):
     server = relationship("MCPServer", back_populates="tools")
 
     # Indexes
-    __table_args__ = (
-        Index('ix_mcp_server_tools_server_name', 'server_id', 'name', unique=True),
-    )
+    __table_args__ = (Index("ix_mcp_server_tools_server_name", "server_id", "name", unique=True),)
 
     def __repr__(self) -> str:
         return f"<MCPServerTool {self.name} server_id={self.server_id}>"
@@ -175,6 +179,7 @@ class MCPServerTool(Base):
 
 class MCPServerSubscription(Base):
     """MCP Server subscription model with approval workflow."""
+
     __tablename__ = "mcp_server_subscriptions"
 
     # Primary key
@@ -208,7 +213,7 @@ class MCPServerSubscription(Base):
     status = Column(
         SQLEnum(MCPSubscriptionStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=MCPSubscriptionStatus.PENDING
+        default=MCPSubscriptionStatus.PENDING,
     )
     status_reason = Column(Text, nullable=True)
 
@@ -222,7 +227,7 @@ class MCPServerSubscription(Base):
 
     # Audit fields
     approved_by = Column(String(255), nullable=True)  # Admin user ID who approved
-    revoked_by = Column(String(255), nullable=True)   # Admin user ID who revoked
+    revoked_by = Column(String(255), nullable=True)  # Admin user ID who revoked
 
     # Usage tracking
     usage_count = Column(Integer, nullable=False, default=0)
@@ -236,9 +241,9 @@ class MCPServerSubscription(Base):
 
     # Indexes for common queries
     __table_args__ = (
-        Index('ix_mcp_subs_subscriber_server', 'subscriber_id', 'server_id'),
-        Index('ix_mcp_subs_tenant_status', 'tenant_id', 'status'),
-        Index('ix_mcp_subs_server_status', 'server_id', 'status'),
+        Index("ix_mcp_subs_subscriber_server", "subscriber_id", "server_id"),
+        Index("ix_mcp_subs_tenant_status", "tenant_id", "status"),
+        Index("ix_mcp_subs_server_status", "server_id", "status"),
     )
 
     def __repr__(self) -> str:
@@ -247,6 +252,7 @@ class MCPServerSubscription(Base):
 
 class MCPToolAccess(Base):
     """Per-tool access control within a subscription."""
+
     __tablename__ = "mcp_tool_access"
 
     # Primary key
@@ -263,7 +269,7 @@ class MCPToolAccess(Base):
     status = Column(
         SQLEnum(MCPToolAccessStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=MCPToolAccessStatus.ENABLED
+        default=MCPToolAccessStatus.ENABLED,
     )
 
     # Approval tracking
@@ -278,9 +284,7 @@ class MCPToolAccess(Base):
     subscription = relationship("MCPServerSubscription", back_populates="tool_access")
 
     # Indexes
-    __table_args__ = (
-        Index('ix_mcp_tool_access_sub_tool', 'subscription_id', 'tool_id', unique=True),
-    )
+    __table_args__ = (Index("ix_mcp_tool_access_sub_tool", "subscription_id", "tool_id", unique=True),)
 
     def __repr__(self) -> str:
         return f"<MCPToolAccess {self.tool_name} status={self.status.value}>"

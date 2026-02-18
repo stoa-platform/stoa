@@ -2,6 +2,7 @@
 
 Reference: PLAN-MCP-SUBSCRIPTIONS.md
 """
+
 from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
@@ -10,8 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Enums ==============
 
+
 class MCPServerCategoryEnum(StrEnum):
     """MCP Server category for API responses."""
+
     PLATFORM = "platform"
     TENANT = "tenant"
     PUBLIC = "public"
@@ -19,6 +22,7 @@ class MCPServerCategoryEnum(StrEnum):
 
 class MCPServerStatusEnum(StrEnum):
     """MCP Server status for API responses."""
+
     ACTIVE = "active"
     MAINTENANCE = "maintenance"
     DEPRECATED = "deprecated"
@@ -26,6 +30,7 @@ class MCPServerStatusEnum(StrEnum):
 
 class MCPSubscriptionStatusEnum(StrEnum):
     """MCP Subscription status for API responses."""
+
     PENDING = "pending"
     ACTIVE = "active"
     SUSPENDED = "suspended"
@@ -35,6 +40,7 @@ class MCPSubscriptionStatusEnum(StrEnum):
 
 class MCPToolAccessStatusEnum(StrEnum):
     """Tool access status for API responses."""
+
     ENABLED = "enabled"
     DISABLED = "disabled"
     PENDING_APPROVAL = "pending_approval"
@@ -42,8 +48,10 @@ class MCPToolAccessStatusEnum(StrEnum):
 
 # ============== Server Schemas ==============
 
+
 class MCPServerVisibility(BaseModel):
     """Visibility configuration for MCP Servers."""
+
     roles: list[str] | None = Field(None, description="Required roles to see this server")
     exclude_roles: list[str] | None = Field(None, description="Roles that cannot see this server")
     public: bool = Field(True, description="If true, visible to all authenticated users")
@@ -51,6 +59,7 @@ class MCPServerVisibility(BaseModel):
 
 class MCPServerToolResponse(BaseModel):
     """Tool within an MCP Server."""
+
     id: UUID
     name: str
     display_name: str
@@ -64,6 +73,7 @@ class MCPServerToolResponse(BaseModel):
 
 class MCPServerResponse(BaseModel):
     """MCP Server response."""
+
     id: UUID
     name: str
     display_name: str
@@ -85,12 +95,14 @@ class MCPServerResponse(BaseModel):
 
 class MCPServerListResponse(BaseModel):
     """Response for listing MCP servers."""
+
     servers: list[MCPServerResponse]
     total_count: int
 
 
 class MCPServerCreate(BaseModel):
     """Schema for creating a new MCP Server (admin only)."""
+
     name: str = Field(..., min_length=1, max_length=255)
     display_name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)
@@ -111,7 +123,7 @@ class MCPServerCreate(BaseModel):
                 "description": "Get weather data from various sources",
                 "category": "public",
                 "visibility": {"public": True},
-                "requires_approval": False
+                "requires_approval": False,
             }
         }
     )
@@ -119,6 +131,7 @@ class MCPServerCreate(BaseModel):
 
 class MCPServerToolCreate(BaseModel):
     """Schema for creating a tool within a server."""
+
     name: str = Field(..., min_length=1, max_length=255)
     display_name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)
@@ -129,8 +142,10 @@ class MCPServerToolCreate(BaseModel):
 
 # ============== Subscription Schemas ==============
 
+
 class MCPToolAccessResponse(BaseModel):
     """Per-tool access control within a subscription."""
+
     tool_id: UUID
     tool_name: str
     status: MCPToolAccessStatusEnum
@@ -144,6 +159,7 @@ class MCPToolAccessResponse(BaseModel):
 
 class MCPSubscriptionResponse(BaseModel):
     """MCP Server subscription response."""
+
     id: UUID
     server_id: UUID
     server: MCPServerResponse | None = None
@@ -171,11 +187,13 @@ class MCPSubscriptionResponse(BaseModel):
 
 class MCPSubscriptionWithKeyResponse(MCPSubscriptionResponse):
     """Subscription response with full API key (shown only on creation)."""
+
     api_key: str = Field(..., description="Full API key - shown only once!")
 
 
 class MCPSubscriptionListResponse(BaseModel):
     """Response for listing subscriptions."""
+
     items: list[MCPSubscriptionResponse]
     total: int
     page: int
@@ -185,77 +203,58 @@ class MCPSubscriptionListResponse(BaseModel):
 
 class MCPSubscriptionCreate(BaseModel):
     """Schema for creating a new MCP subscription."""
+
     server_id: UUID
     plan: str = Field("free", max_length=100)
     requested_tools: list[UUID] = Field(
-        default_factory=list,
-        description="Tool IDs to request access to (empty = all enabled tools)"
+        default_factory=list, description="Tool IDs to request access to (empty = all enabled tools)"
     )
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "server_id": "550e8400-e29b-41d4-a716-446655440000",
-                "plan": "free",
-                "requested_tools": []
-            }
+            "example": {"server_id": "550e8400-e29b-41d4-a716-446655440000", "plan": "free", "requested_tools": []}
         }
     )
 
 
 class MCPSubscriptionApprove(BaseModel):
     """Schema for approving a subscription."""
-    expires_at: datetime | None = Field(
-        None,
-        description="Optional expiration date for the subscription"
-    )
-    approved_tools: list[UUID] | None = Field(
-        None,
-        description="Tool IDs to approve (None = approve all requested)"
-    )
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "expires_at": "2026-12-31T23:59:59Z"
-            }
-        }
-    )
+    expires_at: datetime | None = Field(None, description="Optional expiration date for the subscription")
+    approved_tools: list[UUID] | None = Field(None, description="Tool IDs to approve (None = approve all requested)")
+
+    model_config = ConfigDict(json_schema_extra={"example": {"expires_at": "2026-12-31T23:59:59Z"}})
 
 
 class MCPSubscriptionRevoke(BaseModel):
     """Schema for revoking a subscription."""
+
     reason: str = Field(..., min_length=1, max_length=500)
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "reason": "Violation of terms of service"
-            }
-        }
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"reason": "Violation of terms of service"}})
 
 
 class MCPToolAccessUpdate(BaseModel):
     """Schema for updating tool access within a subscription."""
+
     tool_ids: list[UUID]
     action: str = Field(..., description="Action: enable, disable, or request")
 
 
 # ============== Key Rotation Schemas ==============
 
+
 class MCPKeyRotationRequest(BaseModel):
     """Schema for requesting API key rotation."""
+
     grace_period_hours: int = Field(
-        default=24,
-        ge=1,
-        le=168,  # Max 7 days
-        description="Number of hours the old key remains valid (1-168)"
+        default=24, ge=1, le=168, description="Number of hours the old key remains valid (1-168)"  # Max 7 days
     )
 
 
 class MCPKeyRotationResponse(BaseModel):
     """Schema for key rotation response."""
+
     subscription_id: UUID
     new_api_key: str = Field(..., description="New API key - shown only once!")
     new_api_key_prefix: str
@@ -266,33 +265,21 @@ class MCPKeyRotationResponse(BaseModel):
 
 # ============== TTL Extension Schemas ==============
 
+
 class MCPTTLExtensionRequest(BaseModel):
     """Schema for TTL extension request (CAB-86)."""
-    extend_days: int = Field(
-        ...,
-        description="Number of days to extend (7 or 14 only)",
-        ge=7,
-        le=14
-    )
-    reason: str = Field(
-        ...,
-        min_length=1,
-        max_length=500,
-        description="Reason for extension request"
-    )
+
+    extend_days: int = Field(..., description="Number of days to extend (7 or 14 only)", ge=7, le=14)
+    reason: str = Field(..., min_length=1, max_length=500, description="Reason for extension request")
 
     model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "extend_days": 7,
-                "reason": "Need more time for integration testing"
-            }
-        }
+        json_schema_extra={"example": {"extend_days": 7, "reason": "Need more time for integration testing"}}
     )
 
 
 class MCPTTLExtensionResponse(BaseModel):
     """Schema for TTL extension response (CAB-86)."""
+
     subscription_id: UUID
     previous_expires_at: datetime | None
     new_expires_at: datetime | None
@@ -303,8 +290,10 @@ class MCPTTLExtensionResponse(BaseModel):
 
 # ============== Admin Schemas ==============
 
+
 class MCPPendingApprovalResponse(BaseModel):
     """Response for pending approvals (admin view)."""
+
     subscription: MCPSubscriptionResponse
     server_name: str
     server_display_name: str
@@ -314,12 +303,14 @@ class MCPPendingApprovalResponse(BaseModel):
 
 class MCPPendingApprovalsListResponse(BaseModel):
     """Response for listing pending approvals."""
+
     items: list[MCPPendingApprovalResponse]
     total: int
 
 
 class MCPSubscriptionStatsResponse(BaseModel):
     """Statistics about MCP subscriptions."""
+
     total_servers: int
     total_subscriptions: int
     by_status: dict[str, int]
@@ -329,13 +320,16 @@ class MCPSubscriptionStatsResponse(BaseModel):
 
 # ============== API Key Validation (for MCP Gateway) ==============
 
+
 class MCPAPIKeyValidateRequest(BaseModel):
     """Request for API key validation."""
+
     api_key: str
 
 
 class MCPAPIKeyValidateResponse(BaseModel):
     """Response for API key validation (used by MCP Gateway)."""
+
     valid: bool
     subscription_id: str | None = None
     server_id: str | None = None

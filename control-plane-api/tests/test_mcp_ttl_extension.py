@@ -9,7 +9,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -47,12 +46,12 @@ def _make_subscription(
 class TestTTLExtensionOwnership:
     """Test ownership validation."""
 
-    def test_owner_can_extend(self, app_with_user, mock_db_session):
+    def test_owner_can_extend(self, app_with_tenant_admin, mock_db_session):
         """Subscription owner can extend TTL."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",  # matches app_with_user
+            subscriber_id="tenant-admin-user-id",  # matches tenant-admin fixture user.id
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
             ttl_extensions=0,
         )
@@ -64,7 +63,7 @@ class TestTTLExtensionOwnership:
             with patch("src.routers.mcp.kafka_service") as mock_kafka:
                 mock_kafka.publish = AsyncMock()
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 7, "reason": "Need more time for testing"},
@@ -76,12 +75,12 @@ class TestTTLExtensionOwnership:
         assert data["ttl_extensions"] == 1
         assert data["remaining_extensions"] == 1
 
-    def test_non_owner_denied(self, app_with_user, mock_db_session):
+    def test_non_owner_denied(self, app_with_tenant_admin, mock_db_session):
         """Non-owner cannot extend TTL."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="other-user",  # different from app_with_user
+            subscriber_id="other-user",  # different from tenant-admin user.id
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
         )
 
@@ -89,7 +88,7 @@ class TestTTLExtensionOwnership:
             repo = MockRepo.return_value
             repo.get_by_id = AsyncMock(return_value=sub)
 
-            with TestClient(app_with_user) as client:
+            with TestClient(app_with_tenant_admin) as client:
                 response = client.patch(
                     f"/v1/mcp/subscriptions/{sub_id}/ttl",
                     json={"extend_days": 7, "reason": "Testing"},
@@ -98,7 +97,7 @@ class TestTTLExtensionOwnership:
         assert response.status_code == 403
         assert "Access denied" in response.json()["detail"]
 
-    def test_subscription_not_found(self, app_with_user, mock_db_session):
+    def test_subscription_not_found(self, app_with_tenant_admin, mock_db_session):
         """Returns 404 if subscription doesn't exist."""
         sub_id = uuid4()
 
@@ -106,7 +105,7 @@ class TestTTLExtensionOwnership:
             repo = MockRepo.return_value
             repo.get_by_id = AsyncMock(return_value=None)
 
-            with TestClient(app_with_user) as client:
+            with TestClient(app_with_tenant_admin) as client:
                 response = client.patch(
                     f"/v1/mcp/subscriptions/{sub_id}/ttl",
                     json={"extend_days": 7, "reason": "Testing"},
@@ -119,12 +118,12 @@ class TestTTLExtensionOwnership:
 class TestTTLExtensionLimits:
     """Test extension limit enforcement (max 2 extensions)."""
 
-    def test_first_extension_allowed(self, app_with_user, mock_db_session):
+    def test_first_extension_allowed(self, app_with_tenant_admin, mock_db_session):
         """First extension is allowed."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
             ttl_extensions=0,
         )
@@ -136,7 +135,7 @@ class TestTTLExtensionLimits:
             with patch("src.routers.mcp.kafka_service") as mock_kafka:
                 mock_kafka.publish = AsyncMock()
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 14, "reason": "Extended testing"},
@@ -146,12 +145,12 @@ class TestTTLExtensionLimits:
         data = response.json()
         assert data["ttl_extensions"] == 1
 
-    def test_second_extension_allowed(self, app_with_user, mock_db_session):
+    def test_second_extension_allowed(self, app_with_tenant_admin, mock_db_session):
         """Second extension is allowed."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=datetime(2026, 3, 8, tzinfo=UTC),
             ttl_extensions=1,
         )
@@ -163,7 +162,7 @@ class TestTTLExtensionLimits:
             with patch("src.routers.mcp.kafka_service") as mock_kafka:
                 mock_kafka.publish = AsyncMock()
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 7, "reason": "Final extension"},
@@ -174,12 +173,12 @@ class TestTTLExtensionLimits:
         assert data["ttl_extensions"] == 2
         assert data["remaining_extensions"] == 0
 
-    def test_third_extension_denied(self, app_with_user, mock_db_session):
+    def test_third_extension_denied(self, app_with_tenant_admin, mock_db_session):
         """Third extension is denied (limit reached)."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=datetime(2026, 3, 15, tzinfo=UTC),
             ttl_extensions=2,
         )
@@ -188,7 +187,7 @@ class TestTTLExtensionLimits:
             repo = MockRepo.return_value
             repo.get_by_id = AsyncMock(return_value=sub)
 
-            with TestClient(app_with_user) as client:
+            with TestClient(app_with_tenant_admin) as client:
                 response = client.patch(
                     f"/v1/mcp/subscriptions/{sub_id}/ttl",
                     json={"extend_days": 7, "reason": "One more please"},
@@ -201,12 +200,12 @@ class TestTTLExtensionLimits:
 class TestTTLExtensionIncrements:
     """Test valid increment validation (7 or 14 days only)."""
 
-    def test_7_days_valid(self, app_with_user, mock_db_session):
+    def test_7_days_valid(self, app_with_tenant_admin, mock_db_session):
         """7-day extension is valid."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
         )
 
@@ -217,7 +216,7 @@ class TestTTLExtensionIncrements:
             with patch("src.routers.mcp.kafka_service") as mock_kafka:
                 mock_kafka.publish = AsyncMock()
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 7, "reason": "Testing"},
@@ -225,12 +224,12 @@ class TestTTLExtensionIncrements:
 
         assert response.status_code == 200
 
-    def test_14_days_valid(self, app_with_user, mock_db_session):
+    def test_14_days_valid(self, app_with_tenant_admin, mock_db_session):
         """14-day extension is valid."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
         )
 
@@ -241,7 +240,7 @@ class TestTTLExtensionIncrements:
             with patch("src.routers.mcp.kafka_service") as mock_kafka:
                 mock_kafka.publish = AsyncMock()
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 14, "reason": "Testing"},
@@ -249,12 +248,12 @@ class TestTTLExtensionIncrements:
 
         assert response.status_code == 200
 
-    def test_1_day_invalid(self, app_with_user, mock_db_session):
+    def test_1_day_invalid(self, app_with_tenant_admin, mock_db_session):
         """1-day extension is invalid."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
         )
 
@@ -262,7 +261,7 @@ class TestTTLExtensionIncrements:
             repo = MockRepo.return_value
             repo.get_by_id = AsyncMock(return_value=sub)
 
-            with TestClient(app_with_user) as client:
+            with TestClient(app_with_tenant_admin) as client:
                 response = client.patch(
                     f"/v1/mcp/subscriptions/{sub_id}/ttl",
                     json={"extend_days": 1, "reason": "Testing"},
@@ -271,12 +270,12 @@ class TestTTLExtensionIncrements:
         # Pydantic validation fails before endpoint logic
         assert response.status_code == 422
 
-    def test_30_days_invalid(self, app_with_user, mock_db_session):
+    def test_30_days_invalid(self, app_with_tenant_admin, mock_db_session):
         """30-day extension is invalid."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
         )
 
@@ -284,7 +283,7 @@ class TestTTLExtensionIncrements:
             repo = MockRepo.return_value
             repo.get_by_id = AsyncMock(return_value=sub)
 
-            with TestClient(app_with_user) as client:
+            with TestClient(app_with_tenant_admin) as client:
                 response = client.patch(
                     f"/v1/mcp/subscriptions/{sub_id}/ttl",
                     json={"extend_days": 30, "reason": "Testing"},
@@ -297,13 +296,13 @@ class TestTTLExtensionIncrements:
 class TestTTLExtensionCalculation:
     """Test expires_at calculation logic."""
 
-    def test_extends_from_current_expiry(self, app_with_user, mock_db_session):
+    def test_extends_from_current_expiry(self, app_with_tenant_admin, mock_db_session):
         """Extension adds to current expires_at."""
         sub_id = uuid4()
         original_expiry = datetime(2026, 3, 1, 12, 0, 0, tzinfo=UTC)
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=original_expiry,
         )
 
@@ -314,7 +313,7 @@ class TestTTLExtensionCalculation:
             with patch("src.routers.mcp.kafka_service") as mock_kafka:
                 mock_kafka.publish = AsyncMock()
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 7, "reason": "Testing"},
@@ -327,12 +326,12 @@ class TestTTLExtensionCalculation:
         expected_new = original_expiry + timedelta(days=7)
         assert data["new_expires_at"] == expected_new.isoformat().replace("+00:00", "Z")
 
-    def test_extends_from_now_if_no_expiry(self, app_with_user, mock_db_session):
+    def test_extends_from_now_if_no_expiry(self, app_with_tenant_admin, mock_db_session):
         """If no expiry set, extends from now."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=None,
         )
 
@@ -343,7 +342,7 @@ class TestTTLExtensionCalculation:
             with patch("src.routers.mcp.kafka_service") as mock_kafka:
                 mock_kafka.publish = AsyncMock()
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 14, "reason": "Testing"},
@@ -358,12 +357,12 @@ class TestTTLExtensionCalculation:
 class TestKafkaEventEmission:
     """Test Kafka event emission for audit trail."""
 
-    def test_kafka_event_published(self, app_with_user, mock_db_session):
+    def test_kafka_event_published(self, app_with_tenant_admin, mock_db_session):
         """Kafka event is published on successful extension."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             tenant_id="acme",
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
         )
@@ -375,7 +374,7 @@ class TestKafkaEventEmission:
             with patch("src.routers.mcp.kafka_service") as mock_kafka:
                 mock_kafka.publish = AsyncMock()
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 7, "reason": "Integration testing"},
@@ -391,12 +390,12 @@ class TestKafkaEventEmission:
         assert call_args.kwargs["payload"]["extend_days"] == 7
         assert call_args.kwargs["payload"]["reason"] == "Integration testing"
 
-    def test_kafka_failure_non_blocking(self, app_with_user, mock_db_session):
+    def test_kafka_failure_non_blocking(self, app_with_tenant_admin, mock_db_session):
         """Kafka emission failure doesn't fail the extension."""
         sub_id = uuid4()
         sub = _make_subscription(
             sub_id=sub_id,
-            subscriber_id="user-123",
+            subscriber_id="tenant-admin-user-id",
             expires_at=datetime(2026, 3, 1, tzinfo=UTC),
         )
 
@@ -408,7 +407,7 @@ class TestKafkaEventEmission:
                 # Kafka publish raises an exception
                 mock_kafka.publish = AsyncMock(side_effect=Exception("Kafka down"))
 
-                with TestClient(app_with_user) as client:
+                with TestClient(app_with_tenant_admin) as client:
                     response = client.patch(
                         f"/v1/mcp/subscriptions/{sub_id}/ttl",
                         json={"extend_days": 7, "reason": "Testing"},

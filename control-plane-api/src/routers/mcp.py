@@ -55,14 +55,14 @@ from ..schemas.mcp_subscription import (
     MCPSubscriptionResponse,
     MCPSubscriptionStatusEnum,
     MCPSubscriptionWithKeyResponse,
-    MCPTTLExtensionRequest,
-    MCPTTLExtensionResponse,
     MCPToolAccessResponse,
     MCPToolAccessStatusEnum,
+    MCPTTLExtensionRequest,
+    MCPTTLExtensionResponse,
 )
 from ..services.api_key import APIKeyService
 from ..services.cache_service import api_key_cache
-from ..services.kafka_service import kafka_service, Topics
+from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
 
@@ -689,15 +689,12 @@ async def extend_subscription_ttl(
     if subscription.ttl_extensions >= 2:
         raise HTTPException(
             status_code=400,
-            detail=f"Extension limit reached: maximum 2 extensions allowed (current: {subscription.ttl_extensions})"
+            detail=f"Extension limit reached: maximum 2 extensions allowed (current: {subscription.ttl_extensions})",
         )
 
     # Valid increment check (7 or 14 days only)
     if body.extend_days not in [7, 14]:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid extension increment: only 7 or 14 days allowed"
-        )
+        raise HTTPException(status_code=400, detail="Invalid extension increment: only 7 or 14 days allowed")
 
     # Calculate new expiration date
     previous_expires_at = subscription.expires_at

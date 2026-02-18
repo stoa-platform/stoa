@@ -53,19 +53,12 @@ impl PolicyRegistry {
         self.policies.write().remove(id)
     }
 
-    /// Get a policy by ID.
-    #[allow(dead_code)]
-    pub fn get(&self, id: &str) -> Option<PolicyEntry> {
-        self.policies.read().get(id).cloned()
-    }
-
     /// List all registered policies.
     pub fn list(&self) -> Vec<PolicyEntry> {
         self.policies.read().values().cloned().collect()
     }
 
     /// List policies bound to a specific API route, sorted by priority.
-    #[allow(dead_code)]
     pub fn list_for_api(&self, api_id: &str) -> Vec<PolicyEntry> {
         let policies = self.policies.read();
         let mut matched: Vec<PolicyEntry> = policies

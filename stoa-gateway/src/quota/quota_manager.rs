@@ -126,7 +126,6 @@ impl QuotaManager {
 
     /// Set the plan quota for a consumer (shared with rate limiter).
     /// Called by admin API when CP pushes plan context via `upsert_policy`.
-    #[allow(dead_code)]
     pub fn set_plan_quota(&self, consumer_id: &str, quota: PlanQuota) {
         self.plan_quotas
             .write()
@@ -318,7 +317,6 @@ impl QuotaManager {
     }
 
     /// Get consumer count (for metrics).
-    #[allow(dead_code)]
     pub fn consumer_count(&self) -> usize {
         self.states.read().len()
     }

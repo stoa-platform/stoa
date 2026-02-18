@@ -135,7 +135,6 @@ pub struct TokenOptimizer {
     settings: OptimizationSettings,
 }
 
-#[allow(dead_code)]
 impl TokenOptimizer {
     /// Create a new optimizer with given settings
     pub fn new(settings: OptimizationSettings) -> Self {
@@ -147,11 +146,6 @@ impl TokenOptimizer {
         Self {
             settings: OptimizationSettings::default(),
         }
-    }
-
-    /// Get current optimization level
-    pub fn level(&self) -> OptimizationLevel {
-        self.settings.level
     }
 
     /// Optimize a JSON value through the pipeline

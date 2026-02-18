@@ -34,11 +34,7 @@ use crate::state::AppState;
 // === Request/Response Types ===
 
 #[derive(Debug, Deserialize)]
-pub struct ToolsListRequest {
-    #[allow(dead_code)]
-    #[serde(default)]
-    pub cursor: Option<String>,
-}
+pub struct ToolsListRequest {}
 
 #[derive(Debug, Serialize)]
 pub struct ToolsListResponse {

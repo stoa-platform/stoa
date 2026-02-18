@@ -122,14 +122,12 @@ impl HealthChecker {
 
     /// Check if webMethods is currently considered healthy.
     /// Used by non-shadow mode deployments (P0 failover router).
-    #[allow(dead_code)]
     pub fn is_healthy(&self) -> bool {
         self.current_state.load(Ordering::SeqCst)
     }
 
     /// Get the total number of failover events.
     /// Useful for debugging and testing.
-    #[allow(dead_code)]
     pub fn failover_count(&self) -> u64 {
         self.failover_count.load(Ordering::Relaxed)
     }

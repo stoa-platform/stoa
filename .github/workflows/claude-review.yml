@@ -96,6 +96,12 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "PR-${{ github.event.pull_request.number }}" "${{ steps.claude-review.outcome }}" "${{ github.event.pull_request.number }}" "haiku-4-5" "auto-review"
+
       # Fallback comment if Claude fails
       - name: Post fallback on failure
         if: steps.claude-review.outcome == 'failure'

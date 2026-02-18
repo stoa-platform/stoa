@@ -306,6 +306,7 @@ mod tests {
             roles: vec![],
             scopes: vec![],
             raw_token: None,
+            skill_instructions: None,
         };
 
         let result = tool.execute(json!({}), &ctx).await;

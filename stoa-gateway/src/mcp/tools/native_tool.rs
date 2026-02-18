@@ -1167,6 +1167,7 @@ mod tests {
             roles: vec!["viewer".to_string()],
             scopes: vec!["stoa:read".to_string()],
             raw_token: None,
+            skill_instructions: None,
         }
     }
 

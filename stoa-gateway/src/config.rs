@@ -317,6 +317,11 @@ pub struct Config {
     pub cb_success_threshold: u32,
 
     // === Skills (CAB-1314) ===
+    /// Enable skill context injection into tool calls (default: false)
+    /// Env: STOA_SKILL_CONTEXT_ENABLED
+    #[serde(default)]
+    pub skill_context_enabled: bool,
+
     /// TTL in seconds for skill resolver cache (default: 300 = 5 min)
     /// Env: STOA_SKILL_CACHE_TTL_SECS
     #[serde(default = "default_skill_cache_ttl")]
@@ -657,6 +662,7 @@ impl Default for Config {
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),
+            skill_context_enabled: false,
             skill_cache_ttl_secs: default_skill_cache_ttl(),
             federation_enabled: false,
             federation_cache_ttl_secs: default_federation_cache_ttl(),

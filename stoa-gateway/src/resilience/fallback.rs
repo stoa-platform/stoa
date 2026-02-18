@@ -247,6 +247,7 @@ mod tests {
             roles: vec![],
             scopes: vec!["stoa:read".into()],
             raw_token: None,
+            skill_instructions: None,
         }
     }
 

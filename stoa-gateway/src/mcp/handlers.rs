@@ -578,6 +578,32 @@ pub async fn mcp_tools_call(
         }
     };
 
+    // Resolve tool-specific skill instructions (CAB-1365)
+    let skill_instructions = if state.config.skill_context_enabled {
+        let resolved = state.skill_resolver.resolve(
+            &auth.tenant_id,
+            Some(&request.name),
+            auth.user_email.as_deref(),
+        );
+        if resolved.is_empty() {
+            None
+        } else {
+            let merged: String = resolved
+                .iter()
+                .filter_map(|s| s.instructions.as_deref())
+                .filter(|i| !i.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            if merged.is_empty() {
+                None
+            } else {
+                Some(merged)
+            }
+        }
+    } else {
+        None
+    };
+
     // Build tool context with real JWT claims (Phase 1)
     let ctx = ToolContext {
         tenant_id: auth.tenant_id.clone(),
@@ -587,6 +613,7 @@ pub async fn mcp_tools_call(
         roles: auth.roles.clone(),
         scopes: auth.scopes.clone(),
         raw_token: auth.raw_token.clone(),
+        skill_instructions,
     };
 
     // Phase 2: OPA policy evaluation with real scopes/roles

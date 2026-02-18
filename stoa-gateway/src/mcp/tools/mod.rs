@@ -206,6 +206,9 @@ pub struct ToolContext {
     pub scopes: Vec<String>,
     /// Raw JWT token for forwarding to downstream services (Control Plane)
     pub raw_token: Option<String>,
+    /// Merged skill instructions from CSS cascade resolution (CAB-1365).
+    /// Concatenated instructions from all matching skills, ordered by specificity.
+    pub skill_instructions: Option<String>,
 }
 
 /// The Tool trait - implement this for each MCP tool

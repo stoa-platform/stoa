@@ -20,7 +20,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use crate::proxy::credentials::{AuthType, BackendCredential};
@@ -587,6 +587,56 @@ pub async fn federation_cache_invalidate(
             "message": format!("Cache invalidated for sub-account '{}'", sub_account_id)
         })),
     )
+}
+
+// =============================================================================
+// Skills Admin (CAB-1365)
+// =============================================================================
+
+#[derive(Serialize)]
+pub struct SkillsStatusResponse {
+    pub enabled: bool,
+    pub cache_ttl_secs: u64,
+    pub skill_count: usize,
+}
+
+/// GET /admin/skills/status
+pub async fn skills_status(State(state): State<AppState>) -> Json<SkillsStatusResponse> {
+    Json(SkillsStatusResponse {
+        enabled: state.config.skill_context_enabled,
+        cache_ttl_secs: state.config.skill_cache_ttl_secs,
+        skill_count: state.skill_resolver.skill_count(),
+    })
+}
+
+/// GET /admin/skills/resolve?tenant_id=X&tool_ref=Y&user_ref=Z
+pub async fn skills_resolve(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<SkillResolveParams>,
+) -> impl IntoResponse {
+    use crate::skills::context::SkillContext;
+
+    let resolved = state.skill_resolver.resolve(
+        &params.tenant_id,
+        params.tool_ref.as_deref(),
+        params.user_ref.as_deref(),
+    );
+    let ctx = SkillContext::from_resolved(&resolved);
+    Json(serde_json::json!({
+        "tenant_id": params.tenant_id,
+        "tool_ref": params.tool_ref,
+        "user_ref": params.user_ref,
+        "skills": ctx.skills,
+        "merged_instructions": ctx.merged_instructions,
+        "count": ctx.count,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct SkillResolveParams {
+    pub tenant_id: String,
+    pub tool_ref: Option<String>,
+    pub user_ref: Option<String>,
 }
 
 // =============================================================================

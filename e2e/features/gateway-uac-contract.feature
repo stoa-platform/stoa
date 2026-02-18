@@ -1,4 +1,4 @@
-@gateway @uac @wip
+@gateway @uac
 Feature: UAC Contract Deployment Pipeline
 
   As a tenant admin,

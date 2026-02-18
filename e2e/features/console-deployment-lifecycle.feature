@@ -1,4 +1,4 @@
-@console @deployment @wip
+@console @deployment
 Feature: Console - Deployment Lifecycle
 
   As a devops user,

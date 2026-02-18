@@ -93,52 +93,22 @@ jobs:
           gh label create "council-validated" --color "0e8a16" --description "Council validation passed" --force 2>/dev/null || true
           gh issue edit "${{ github.event.issue.number }}" --add-label "council-validated"
 
-      # Notify Slack with Council report
+      # Notify Slack with Council report (centralized library)
       - name: Notify Slack — Council Report
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then
-            echo "SLACK_WEBHOOK_URL not set, skipping notification"
-            exit 0
-          fi
-          ISSUE_URL="${{ github.event.issue.html_url }}"
-          ISSUE_TITLE="${{ github.event.issue.title }}"
+          source scripts/ai-ops/ai-factory-notify.sh
           ISSUE_NUM="${{ github.event.issue.number }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_URL="${{ github.event.issue.html_url }}"
           STATUS="${{ steps.council.outcome }}"
-          if [ "$STATUS" = "success" ]; then
-            EMOJI=":white_check_mark:"
-          else
-            EMOJI=":warning:"
-          fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"blocks\": [
-                {
-                  \"type\": \"header\",
-                  \"text\": {
-                    \"type\": \"plain_text\",
-                    \"text\": \"${EMOJI} Council Validation: #${ISSUE_NUM}\",
-                    \"emoji\": true
-                  }
-                },
-                {
-                  \"type\": \"section\",
-                  \"text\": {
-                    \"type\": \"mrkdwn\",
-                    \"text\": \"*${ISSUE_TITLE}*\nCouncil has validated the implementation plan.\nComment \`/go\` on the GitHub issue to start autonomous implementation.\"
-                  },
-                  \"accessory\": {
-                    \"type\": \"button\",
-                    \"text\": {\"type\": \"plain_text\", \"text\": \"Review & Approve\"},
-                    \"url\": \"${ISSUE_URL}\",
-                    \"action_id\": \"council-review\"
-                  }
-                }
-              ]
-            }"
+          VERDICT="Go"
+          SCORE="—"
+          if [ "$STATUS" != "success" ]; then VERDICT="Redo"; fi
+          notify_council "issue-${ISSUE_NUM}" "$ISSUE_TITLE" "$SCORE" "$VERDICT" "Ask" "—" "$ISSUE_URL"
+          write_job_summary "council-validate" "issue-${ISSUE_NUM}" "$STATUS" "" ""
 
   # ----- Phase 2: Implementation (runs on /go approval comment) -----
   implement:
@@ -232,25 +202,14 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
-      # Notify Slack on completion
+      # Notify Slack on completion (centralized library)
       - name: Notify Slack — Implementation Done
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          source scripts/ai-ops/ai-factory-notify.sh
           STATUS="${{ steps.implement.outcome || 'skipped' }}"
           ISSUE_NUM="${{ github.event.issue.number }}"
-          if [ "$STATUS" = "success" ]; then
-            EMOJI="white_check_mark"
-            MSG="Implementation complete for #${ISSUE_NUM}. PR created."
-          elif [ "$STATUS" = "skipped" ]; then
-            EMOJI="warning"
-            MSG="Implementation skipped for #${ISSUE_NUM}. No Council validation."
-          else
-            EMOJI="x"
-            MSG="Implementation failed for #${ISSUE_NUM}. Check GitHub Actions logs."
-          fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{\"text\":\":${EMOJI}: ${MSG}\"}"
+          notify_implement "$STATUS" "issue-${ISSUE_NUM}" "" "" ""
+          write_job_summary "implement" "issue-${ISSUE_NUM}" "$STATUS" "" ""

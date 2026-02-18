@@ -85,19 +85,18 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
+      # Notify Slack (centralized library)
       - name: Notify Slack — Batch Council
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"blocks\": [
-                {\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"Multi-Agent Council: ${{ inputs.tickets }}\",\"emoji\":true}},
-                {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"Batch validation complete. Review on GitHub and approve to start parallel execution.\"}}
-              ]
-            }"
+          source scripts/ai-ops/ai-factory-notify.sh
+          STATUS="${{ steps.council.outcome }}"
+          VERDICT="Go"
+          if [ "$STATUS" != "success" ]; then VERDICT="Redo"; fi
+          notify_council "multi-agent" "Multi-Agent Batch: ${{ inputs.tickets }}" "—" "$VERDICT" "Ask" "—" "https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+          write_job_summary "council-batch" "multi-agent" "$STATUS" "" ""
 
   # ----- Phase 1: Parallel Implementation -----
   # Uses a matrix strategy to run each ticket as a separate job.
@@ -167,19 +166,14 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
+      # Notify Slack (centralized library)
       - name: Notify Slack — Agent Complete
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          source scripts/ai-ops/ai-factory-notify.sh
           STATUS="${{ job.status }}"
           TICKET="${{ matrix.ticket }}"
-          if [ "$STATUS" = "success" ]; then
-            MSG=":white_check_mark: *${TICKET}* — Agent complete, PR created"
-          else
-            MSG=":x: *${TICKET}* — Agent failed, check logs"
-          fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{\"text\":\"${MSG}\"}"
+          notify_implement "$STATUS" "$TICKET" "" "" ""
+          write_job_summary "implement" "$TICKET" "$STATUS" "" ""

@@ -79,10 +79,9 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":sunrise: *Daily Triage Complete* — check GitHub issues for digest"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled ":sunrise:" "Daily Triage" "Complete — check GitHub issues for digest"
+          write_job_summary "daily-triage" "" "${{ job.status }}" "" ""
 
   # ----- Daily: CI Health Check + Auto-Fix -----
   daily-ci-health:
@@ -129,10 +128,9 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":stethoscope: *CI Health Check Complete* — check GitHub for results"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled ":stethoscope:" "CI Health Check" "Complete — check GitHub for results"
+          write_job_summary "daily-ci-health" "" "${{ job.status }}" "" ""
 
   # ----- Weekly: Dependency Audit + Security -----
   weekly-audit:
@@ -179,10 +177,9 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":shield: *Weekly Audit Complete* — check GitHub issues for full report"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled ":shield:" "Weekly Audit" "Complete — check GitHub issues for full report"
+          write_job_summary "weekly-audit" "" "${{ job.status }}" "" ""
 
   # ----- Weekly Digest (Batch API — 50% cost reduction) -----
   weekly-digest:
@@ -250,6 +247,12 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Mode=batch"
 
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "weekly-digest" "" "${{ job.status }}" "" ""
+
   # ----- Weekly: Capacity Check (Batch API — 50% cost reduction) -----
   weekly-capacity-check:
     if: |
@@ -314,10 +317,9 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":chart_with_upwards_trend: *Weekly Capacity Check Complete* — check GitHub issues for cycle health report"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled ":chart_with_upwards_trend:" "Weekly Capacity Check" "Complete — check GitHub issues for cycle health report"
+          write_job_summary "weekly-capacity-check" "" "${{ job.status }}" "" ""
 
   # ----- Weekly: Backlog Stock Check (Batch API — 50% cost reduction) -----
   weekly-backlog-stock:
@@ -393,7 +395,6 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":":card_file_box: *Weekly Backlog Stock Check Complete* — check GitHub issues for scan report"}'
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_scheduled ":card_file_box:" "Weekly Backlog Stock Check" "Complete — check GitHub issues for scan report"
+          write_job_summary "weekly-backlog-stock" "" "${{ job.status }}" "" ""

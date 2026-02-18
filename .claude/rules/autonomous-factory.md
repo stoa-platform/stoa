@@ -136,6 +136,29 @@ Message types are distinguished by emoji prefix:
 - **Digests**: once daily (07:00 UTC)
 - **Audits**: once weekly (Monday 08:00 UTC)
 
+### Notification Library (`scripts/ai-ops/ai-factory-notify.sh`)
+
+All Claude workflows use a centralized shell library for Slack notifications, Linear comments, and GHA Job Summaries. Zero extra Claude tokens — pure bash + jq.
+
+**Usage**: `source scripts/ai-ops/ai-factory-notify.sh` at the start of any notification step.
+
+| Function | Purpose | Key Args |
+|----------|---------|----------|
+| `notify_council` | Council validation report | ticket_id, title, score, verdict, mode, loc, url |
+| `notify_implement` | Implementation success/failure | status, ticket_id, pr_num, branch, duration |
+| `notify_error` | Vercel-style error with log excerpt | workflow, job, ticket_id, error_excerpt |
+| `notify_scan` | Autopilot scan summary | candidates, dispatched, skipped |
+| `notify_scheduled` | Daily/weekly task results | emoji, title, message |
+| `linear_comment` | Post rich report to Linear ticket | ticket_id, body (markdown) |
+| `write_job_summary` | Write to `$GITHUB_STEP_SUMMARY` | job_name, ticket_id, status, pr_num, duration |
+
+**Rules**:
+- Notification steps use `continue-on-error: true` (non-blocking)
+- `SLACK_WEBHOOK` is optional — graceful no-op if unset
+- `LINEAR_API_KEY` is optional — `linear_comment()` is best-effort
+- Error excerpts capped at 500 chars via `_extract_error()`
+- Old scripts (`slack-notify.sh`, `council-slack-report.sh`, `daily-digest.sh`) are deprecated
+
 ## GitHub Labels for Automation
 
 | Label | Trigger | What Happens |

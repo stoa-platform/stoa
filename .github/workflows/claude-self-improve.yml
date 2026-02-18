@@ -123,26 +123,7 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"blocks\": [
-                {
-                  \"type\": \"header\",
-                  \"text\": {\"type\": \"plain_text\", \"text\": \"AI Factory Self-Improvement Report\", \"emoji\": true}
-                },
-                {
-                  \"type\": \"section\",
-                  \"text\": {
-                    \"type\": \"mrkdwn\",
-                    \"text\": \"Weekly retrospective complete. Review proposed improvements on GitHub.\nLabel the issue \`claude-implement\` to auto-create the improvement PR.\"
-                  },
-                  \"accessory\": {
-                    \"type\": \"button\",
-                    \"text\": {\"type\": \"plain_text\", \"text\": \"Review Improvements\"},
-                    \"url\": \"https://github.com/stoa-platform/stoa/issues?q=is%3Aissue+label%3Aself-improve+is%3Aopen\"
-                  }
-                }
-              ]
-            }"
+          source scripts/ai-ops/ai-factory-notify.sh
+          STATUS="${{ steps.batch.outcome }}"
+          notify_scheduled ":brain:" "Self-Improvement Report" "Weekly retrospective complete. Review proposed improvements on GitHub.\nLabel the issue \`claude-implement\` to auto-create the improvement PR."
+          write_job_summary "self-improve" "" "$STATUS" "" ""

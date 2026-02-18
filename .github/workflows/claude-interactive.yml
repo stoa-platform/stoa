@@ -49,3 +49,9 @@ jobs:
         if: always()
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "interactive" "" "${{ job.status }}" "" ""

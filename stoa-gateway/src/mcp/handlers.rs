@@ -411,56 +411,72 @@ pub async fn mcp_tools_call(
     };
 
     // CAB-1362: Federation tool allow-list enforcement
-    if state.config.federation_enabled {
-        if let (Some(ref sub_id), Some(ref master_id)) =
-            (&auth.sub_account_id, &auth.master_account_id)
-        {
-            let allowed_tools = state
-                .federation_cache
-                .get_allowed_tools(sub_id, &auth.tenant_id, master_id)
-                .await;
-            if let Some(ref tools) = allowed_tools {
-                if !tools.contains(&request.name) {
-                    warn!(
-                        tool = %request.name,
-                        sub_account_id = %sub_id,
-                        "Federation: tool not in sub-account allow-list"
-                    );
-                    emit_metering_event(
-                        &state,
-                        &auth,
-                        &request.name,
-                        &format!("{:?}", tool.required_action()),
-                        EventStatus::PolicyDenied,
-                        start,
-                        0,
-                        request_size,
-                        0,
-                    );
-                    return (
-                        StatusCode::FORBIDDEN,
-                        Json(ToolsCallResponse {
-                            content: vec![ToolContent::Text {
-                                text: format!(
-                                    "Tool '{}' not allowed for this sub-account",
-                                    request.name
-                                ),
-                            }],
-                            is_error: Some(true),
-                        }),
-                    )
-                        .into_response();
-                }
+    // CAB-1371: Sub-account rate limiting + federation metrics
+    let is_federation_request = state.config.federation_enabled
+        && auth.sub_account_id.is_some()
+        && auth.master_account_id.is_some();
+
+    if is_federation_request {
+        let sub_id = auth.sub_account_id.as_ref().expect("checked above");
+        let master_id = auth.master_account_id.as_ref().expect("checked above");
+        let allowed_tools = state
+            .federation_cache
+            .get_allowed_tools(sub_id, &auth.tenant_id, master_id)
+            .await;
+        if let Some(ref tools) = allowed_tools {
+            if !tools.contains(&request.name) {
+                warn!(
+                    tool = %request.name,
+                    sub_account_id = %sub_id,
+                    "Federation: tool not in sub-account allow-list"
+                );
+                metrics::record_federation_request(sub_id, master_id, "denied");
+                emit_metering_event(
+                    &state,
+                    &auth,
+                    &request.name,
+                    &format!("{:?}", tool.required_action()),
+                    EventStatus::PolicyDenied,
+                    start,
+                    0,
+                    request_size,
+                    0,
+                );
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(ToolsCallResponse {
+                        content: vec![ToolContent::Text {
+                            text: format!(
+                                "Tool '{}' not allowed for this sub-account",
+                                request.name
+                            ),
+                        }],
+                        is_error: Some(true),
+                    }),
+                )
+                    .into_response();
             }
-            // None = cache miss/error → permissive (logged in FederationCache)
         }
+        // None = cache miss/error -> permissive (logged in FederationCache)
     }
 
-    // Check rate limit
-    let rate_result = state.rate_limiter.check(&auth.tenant_id);
+    // Check rate limit (CAB-1371: per-sub-account isolation for federation requests)
+    let rate_result = if is_federation_request {
+        let sub_id = auth.sub_account_id.as_ref().expect("checked above");
+        state
+            .rate_limiter
+            .check_sub_account(&auth.tenant_id, sub_id)
+    } else {
+        state.rate_limiter.check(&auth.tenant_id)
+    };
     if !rate_result.allowed {
         warn!(tenant_id = %auth.tenant_id, "Rate limit exceeded");
         metrics::record_rate_limit_hit(&auth.tenant_id);
+        if is_federation_request {
+            let sub_id = auth.sub_account_id.as_ref().expect("checked above");
+            let master_id = auth.master_account_id.as_ref().expect("checked above");
+            metrics::record_federation_request(sub_id, master_id, "rate_limited");
+        }
         emit_metering_event(
             &state,
             &auth,
@@ -670,6 +686,11 @@ pub async fn mcp_tools_call(
             let t_gateway_ms = (t_auth + t_policy).as_millis() as u64;
 
             metrics::record_tool_call(&request.name, &auth.tenant_id, "success", duration_secs);
+            if is_federation_request {
+                let sub_id = auth.sub_account_id.as_ref().expect("checked above");
+                let master_id = auth.master_account_id.as_ref().expect("checked above");
+                metrics::record_federation_request(sub_id, master_id, "success");
+            }
 
             // Build response content
             let content: Vec<ToolContent> = result
@@ -754,6 +775,11 @@ pub async fn mcp_tools_call(
                 "error",
                 duration.as_secs_f64(),
             );
+            if is_federation_request {
+                let sub_id = auth.sub_account_id.as_ref().expect("checked above");
+                let master_id = auth.master_account_id.as_ref().expect("checked above");
+                metrics::record_federation_request(sub_id, master_id, "error");
+            }
 
             // Phase 3: Emit error metering event + error snapshot
             emit_metering_event(

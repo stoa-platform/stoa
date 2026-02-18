@@ -11,6 +11,11 @@ interface UniverseOption {
   label: string;
 }
 
+interface AudienceOption {
+  id: string;
+  label: string;
+}
+
 interface APIFiltersProps {
   search: string;
   onSearchChange: (value: string) => void;
@@ -20,6 +25,9 @@ interface APIFiltersProps {
   universe: string;
   onUniverseChange: (value: string) => void;
   universes: UniverseOption[];
+  audience: string;
+  onAudienceChange: (value: string) => void;
+  audienceOptions: AudienceOption[];
   isLoading?: boolean;
 }
 
@@ -32,15 +40,19 @@ export function APIFilters({
   universe,
   onUniverseChange,
   universes,
+  audience,
+  onAudienceChange,
+  audienceOptions,
   isLoading,
 }: APIFiltersProps) {
   const clearFilters = () => {
     onSearchChange('');
     onCategoryChange('');
     onUniverseChange('');
+    onAudienceChange('');
   };
 
-  const hasFilters = search || category || universe;
+  const hasFilters = search || category || universe || audience;
 
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4 mb-6">
@@ -71,6 +83,26 @@ export function APIFilters({
               {universes.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Audience filter (CAB-1323) */}
+        {audienceOptions.length > 1 && (
+          <div className="relative sm:w-44">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500" />
+            <select
+              value={audience}
+              onChange={(e) => onAudienceChange(e.target.value)}
+              disabled={isLoading}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
+            >
+              <option value="">All Audiences</option>
+              {audienceOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label}
                 </option>
               ))}
             </select>
@@ -123,6 +155,14 @@ export function APIFilters({
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-xs rounded-full">
               {universes.find((u) => u.id === universe)?.label || universe}
               <button onClick={() => onUniverseChange('')} className="hover:text-primary-900">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          {audience && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-xs rounded-full">
+              {audienceOptions.find((a) => a.id === audience)?.label || audience}
+              <button onClick={() => onAudienceChange('')} className="hover:text-primary-900">
                 <X className="h-3 w-3" />
               </button>
             </span>

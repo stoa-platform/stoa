@@ -7,7 +7,23 @@ instead of real-time GitLab API calls.
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.catalog import APICatalog, MCPToolsCatalog
+from src.models.catalog import APICatalog, AudienceEnum, MCPToolsCatalog
+
+# Role -> allowed audiences ceiling (CAB-1323)
+_AUDIENCE_BY_ROLE: dict[str, list[str]] = {
+    "cpi-admin": [AudienceEnum.PUBLIC, AudienceEnum.INTERNAL, AudienceEnum.PARTNER],
+    "tenant-admin": [AudienceEnum.PUBLIC, AudienceEnum.INTERNAL, AudienceEnum.PARTNER],
+    "devops": [AudienceEnum.PUBLIC, AudienceEnum.INTERNAL],
+    "viewer": [AudienceEnum.PUBLIC],
+}
+
+
+def get_allowed_audiences(roles: list[str]) -> list[str]:
+    """Return the union of audiences allowed by the user's roles."""
+    allowed: set[str] = set()
+    for role in roles:
+        allowed.update(_AUDIENCE_BY_ROLE.get(role, [AudienceEnum.PUBLIC]))
+    return sorted(allowed) if allowed else [AudienceEnum.PUBLIC]
 
 
 def escape_like(value: str) -> str:
@@ -35,6 +51,8 @@ class CatalogRepository:
         tenant_id: str | None = None,
         tenant_ids: list[str] | None = None,
         include_unpublished: bool = False,
+        user_roles: list[str] | None = None,
+        audience_filter: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[APICatalog], int]:
@@ -90,6 +108,14 @@ class CatalogRepository:
                     func.lower(APICatalog.api_id).like(search_pattern, escape="\\"),
                 )
             )
+
+        # Audience filter -- role-based ceiling intersected with optional explicit filter (CAB-1323)
+        if user_roles is not None:
+            allowed = get_allowed_audiences(user_roles)
+            if audience_filter and audience_filter in allowed:
+                query = query.where(APICatalog.audience == audience_filter)
+            else:
+                query = query.where(APICatalog.audience.in_(allowed))
 
         # Get total count before pagination
         count_query = select(func.count()).select_from(query.subquery())

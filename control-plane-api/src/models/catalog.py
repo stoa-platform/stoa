@@ -23,6 +23,13 @@ class SyncStatus(enum.StrEnum):
     FAILED = "failed"
 
 
+class AudienceEnum(enum.StrEnum):
+    """API audience visibility level (CAB-1323)"""
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    PARTNER = "partner"
+
+
 class APICatalog(Base):
     """Cached API catalog entry from GitLab"""
     __tablename__ = "api_catalog"
@@ -43,6 +50,9 @@ class APICatalog(Base):
 
     # Portal visibility
     portal_published = Column(Boolean, default=False, nullable=False, index=True)
+    audience = Column(
+        String(20), nullable=False, default=AudienceEnum.PUBLIC, server_default="public", index=True
+    )
 
     # Content
     api_metadata = Column("metadata", JSONB, nullable=False)  # Full api.yaml content

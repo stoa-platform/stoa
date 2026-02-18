@@ -130,6 +130,11 @@ impl SkillResolver {
         self.invalidate_cache();
     }
 
+    /// Return the number of stored skills.
+    pub fn skill_count(&self) -> usize {
+        self.store.read().len()
+    }
+
     /// Remove a skill by key.
     pub fn remove(&self, key: &str) -> bool {
         let mut store = self.store.write();

@@ -114,6 +114,7 @@ mod tests {
             roles: vec![],
             scopes: vec![],
             raw_token: None,
+            skill_instructions: None,
         }
     }
 

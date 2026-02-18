@@ -1,0 +1,15 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stoa-gateway
+  namespace: stoa-system
+  labels:
+    app: stoa-gateway
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: stoa-gateway

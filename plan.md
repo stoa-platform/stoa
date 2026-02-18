@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 538 pts (55 issues) | **Velocity**: 55+ issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 559 pts (56 issues) | **Velocity**: 56+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
@@ -194,7 +194,7 @@
 **Gateway** (97 pts):
 - [x] CAB-1305: [MEGA] Gateway: Security Jobs Pipeline — Trivy + Gitleaks + CIS Benchmarks (21 pts) — PRs #629, #630, #631
 - CAB-1313: [MEGA] Gateway: Enterprise MCP Federation — Multi-Dev/Agent Master Account (34 pts)
-- CAB-1314: [MEGA] Gateway: MCP Skills System — Context Injection + Agent Integration (21 pts)
+- [x] CAB-1314: [MEGA] Gateway: MCP Skills System — Context Injection + Agent Integration (21 pts) — PRs #702, #721, #710 (3 phases)
 - CAB-1317: [MEGA] Gateway: MCP Proxy Hardening P3 — OAuth Flows + Lazy Discovery + CB (21 pts)
 
 **DX** (47 pts):

@@ -68,15 +68,26 @@ vi.mock('../../components/apis/APIFilters', () => ({
     search,
     category,
     universe,
+    audience,
+    audienceOptions,
   }: {
     search: string;
     category: string;
     universe: string;
+    audience: string;
+    audienceOptions: { id: string; label: string }[];
   }) => (
     <div data-testid="api-filters">
       <input data-testid="search-input" value={search} readOnly />
       <input data-testid="category-input" value={category} readOnly />
       <input data-testid="universe-input" value={universe} readOnly />
+      <input data-testid="audience-input" value={audience} readOnly />
+      <span data-testid="audience-options-count">{audienceOptions?.length ?? 0}</span>
+      {audienceOptions?.map((opt: { id: string; label: string }) => (
+        <span key={opt.id} data-testid={`audience-opt-${opt.id}`}>
+          {opt.label}
+        </span>
+      ))}
     </div>
   ),
 }));
@@ -312,6 +323,58 @@ describe('APICatalog', () => {
 
       expect(screen.getByText('API Catalog')).toBeInTheDocument();
       expect(screen.getByTestId('api-card-api-1')).toBeInTheDocument();
+    });
+  });
+
+  describe('Audience Visibility by Role (CAB-1323)', () => {
+    it('cpi-admin should see all 3 audience options', () => {
+      mockUseAuth.mockReturnValue(createAuthMock('cpi-admin'));
+
+      renderWithProviders(<APICatalog />);
+
+      expect(screen.getByTestId('audience-options-count').textContent).toBe('3');
+      expect(screen.getByTestId('audience-opt-public')).toBeInTheDocument();
+      expect(screen.getByTestId('audience-opt-internal')).toBeInTheDocument();
+      expect(screen.getByTestId('audience-opt-partner')).toBeInTheDocument();
+    });
+
+    it('tenant-admin should see all 3 audience options', () => {
+      mockUseAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
+      renderWithProviders(<APICatalog />);
+
+      expect(screen.getByTestId('audience-options-count').textContent).toBe('3');
+    });
+
+    it('devops should see public + internal (2 options)', () => {
+      mockUseAuth.mockReturnValue(createAuthMock('devops'));
+
+      renderWithProviders(<APICatalog />);
+
+      expect(screen.getByTestId('audience-options-count').textContent).toBe('2');
+      expect(screen.getByTestId('audience-opt-public')).toBeInTheDocument();
+      expect(screen.getByTestId('audience-opt-internal')).toBeInTheDocument();
+      expect(screen.queryByTestId('audience-opt-partner')).not.toBeInTheDocument();
+    });
+
+    it('viewer should see only public (1 option)', () => {
+      mockUseAuth.mockReturnValue(createAuthMock('viewer'));
+
+      renderWithProviders(<APICatalog />);
+
+      expect(screen.getByTestId('audience-options-count').textContent).toBe('1');
+      expect(screen.getByTestId('audience-opt-public')).toBeInTheDocument();
+      expect(screen.queryByTestId('audience-opt-internal')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('audience-opt-partner')).not.toBeInTheDocument();
+    });
+
+    it('should pass audience param to useAPIs', () => {
+      mockUseAuth.mockReturnValue(createAuthMock('cpi-admin'));
+
+      renderWithProviders(<APICatalog />);
+
+      // useAPIs is called with audience: undefined (no filter selected initially)
+      expect(mockUseAPIs).toHaveBeenCalledWith(expect.objectContaining({ audience: undefined }));
     });
   });
 });

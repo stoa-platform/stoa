@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# DEPRECATED: Use scripts/ai-ops/ai-factory-notify.sh instead.
+# This script is kept for backward compatibility but will be removed.
+#
 # daily-digest.sh — Génère et envoie un résumé quotidien d'activité
 # Usage: ./daily-digest.sh [date]
 # Peut être lancé via cron: 0 9 * * * /path/to/daily-digest.sh

@@ -253,42 +253,8 @@ jobs:
 
             # Send Slack notification with approve button
             if [ -n "$SLACK_WEBHOOK" ]; then
-              if [ -n "$N8N_WEBHOOK" ] && [ -n "$HMAC_SECRET" ] && [ -n "$ISSUE_NUM" ]; then
-                HMAC=$(echo -n "$ISSUE_NUM" | openssl dgst -sha256 -hmac "$HMAC_SECRET" | awk '{print $NF}')
-                APPROVE_URL="${N8N_WEBHOOK}?issue=${ISSUE_NUM}&token=${HMAC}"
-                BUTTON_TEXT="Approve \\u0026 Start"
-              else
-                APPROVE_URL="$ISSUE_URL"
-                BUTTON_TEXT="Review \\u0026 Approve"
-              fi
-
-              curl -s -X POST "$SLACK_WEBHOOK" \
-                -H 'Content-Type: application/json' \
-                -d "{
-                  \"blocks\": [
-                    {
-                      \"type\": \"header\",
-                      \"text\": {\"type\": \"plain_text\", \"text\": \":robot_face: Autopilot: ${TICKET_ID} (${SCORE}/10)\", \"emoji\": true}
-                    },
-                    {
-                      \"type\": \"section\",
-                      \"text\": {
-                        \"type\": \"mrkdwn\",
-                        \"text\": \"*${TITLE}*\n\nAutopilot scan found this ticket eligible for autonomous implementation.\nCouncil score: *${SCORE}/10* — Go\"
-                      },
-                      \"accessory\": {
-                        \"type\": \"button\",
-                        \"text\": {\"type\": \"plain_text\", \"text\": \"${BUTTON_TEXT}\"},
-                        \"url\": \"${APPROVE_URL}\",
-                        \"style\": \"primary\"
-                      }
-                    },
-                    {
-                      \"type\": \"context\",
-                      \"elements\": [{\"type\": \"mrkdwn\", \"text\": \"STOA AI Factory | Autopilot Scan | $(date -u +%H:%M) UTC\"}]
-                    }
-                  ]
-                }"
+              source scripts/ai-ops/ai-factory-notify.sh
+              notify_council "$TICKET_ID" "$TITLE" "$SCORE" "Go" "" "" "$ISSUE_URL" "$ISSUE_NUM"
             fi
 
             CREATED=$((CREATED + 1))
@@ -296,26 +262,22 @@ jobs:
 
           echo "Created ${CREATED} autopilot candidate issues"
 
-      # Summary Slack notification
+      # Summary Slack notification + GHA Job Summary
       - name: Slack Summary
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          source scripts/ai-ops/ai-factory-notify.sh
 
           if [ "${{ steps.velocity.outputs.capped }}" = "true" ]; then
-            MSG=":pause_button: Autopilot scan skipped — daily velocity cap reached."
+            notify_scan "capped"
           elif [ "${{ steps.linear.outputs.count }}" = "0" ]; then
-            MSG=":inbox_tray: Autopilot scan complete — no eligible tickets in backlog."
+            notify_scan "0"
           elif [ "${{ steps.council.outcome }}" != "success" ]; then
-            MSG=":warning: Autopilot scan — Council validation failed. Check <https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}|workflow logs>."
+            notify_scan "council_failed"
           elif [ "${{ inputs.dry_run }}" = "true" ]; then
-            MSG=":mag: Autopilot scan (dry run) — found eligible tickets. No issues created."
+            notify_scan "dry_run"
           else
-            MSG=":sunrise: Autopilot scan complete. Check above for candidate tickets."
+            notify_scan "${{ steps.linear.outputs.count }}" "" "${{ steps.velocity.outputs.remaining }}"
           fi
-
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{\"text\":\"${MSG}\"}"

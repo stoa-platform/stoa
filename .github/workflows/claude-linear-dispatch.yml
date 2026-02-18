@@ -150,8 +150,6 @@ jobs:
           echo "ISSUE_URL=${ISSUE_URL}" >> "$GITHUB_ENV"
 
       # Post Council report to Slack with Approve button
-      # If N8N_APPROVE_WEBHOOK_URL + APPROVE_HMAC_SECRET are set, button goes through
-      # n8n relay (zero GitHub visits). Otherwise falls back to GitHub issue link.
       - name: Slack Council Report
         if: always()
         env:
@@ -159,52 +157,11 @@ jobs:
           N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          source scripts/ai-ops/ai-factory-notify.sh
           TICKET="${{ github.event.client_payload.ticket_id }}"
           TITLE="${{ github.event.client_payload.ticket_title }}"
           ISSUE="${ISSUE_URL:-https://github.com/stoa-platform/stoa/issues?q=is%3Aissue+Council+${TICKET}+is%3Aopen}"
-
-          # Extract issue number from URL (e.g., .../issues/42 -> 42)
-          ISSUE_NUM=$(echo "$ISSUE" | grep -oE '/issues/[0-9]+' | grep -oE '[0-9]+' || echo "")
-
-          # Build approve button URL: n8n relay if configured, else GitHub issue
-          if [ -n "$N8N_WEBHOOK" ] && [ -n "$HMAC_SECRET" ] && [ -n "$ISSUE_NUM" ]; then
-            HMAC=$(echo -n "$ISSUE_NUM" | openssl dgst -sha256 -hmac "$HMAC_SECRET" | awk '{print $NF}')
-            APPROVE_URL="${N8N_WEBHOOK}?issue=${ISSUE_NUM}&token=${HMAC}"
-            BUTTON_TEXT="Approve \\u0026 Start"
-            INSTRUCTIONS=":zap: Click *Approve & Start* to trigger implementation (1 click, no GitHub visit).\n:mag: Or open the <${ISSUE}|GitHub issue> to review the full plan first."
-          else
-            APPROVE_URL="$ISSUE"
-            BUTTON_TEXT="Review \\u0026 Approve"
-            INSTRUCTIONS=":point_right: Comment \`/go\` on the GitHub issue to start autonomous implementation.\n:point_right: Comment \`/adjust <feedback>\` to request changes."
-          fi
-
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"blocks\": [
-                {
-                  \"type\": \"header\",
-                  \"text\": {\"type\": \"plain_text\", \"text\": \"Council Report: ${TICKET}\", \"emoji\": true}
-                },
-                {
-                  \"type\": \"section\",
-                  \"text\": {
-                    \"type\": \"mrkdwn\",
-                    \"text\": \"*${TITLE}*\n\nCouncil validation complete.\n\n${INSTRUCTIONS}\"
-                  },
-                  \"accessory\": {
-                    \"type\": \"button\",
-                    \"text\": {\"type\": \"plain_text\", \"text\": \"${BUTTON_TEXT}\"},
-                    \"url\": \"${APPROVE_URL}\"
-                  }
-                },
-                {
-                  \"type\": \"context\",
-                  \"elements\": [{\"type\": \"mrkdwn\", \"text\": \"STOA AI Factory | Linear Pipeline | $(date -u +%H:%M) UTC\"}]
-                }
-              ]
-            }"
+          notify_council "$TICKET" "$TITLE" "" "" "" "" "$ISSUE"
 
   # ----- Phase 2: Implementation (triggered by /go on council-review issues) -----
   implement:
@@ -397,42 +354,36 @@ jobs:
           echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
           echo "SKIP_CLOSE=${SKIP_CLOSE}" >> "$GITHUB_ENV"
 
-      # Enhanced Slack notification (includes PR link + ticket status)
+      # Slack notification + Linear rich report + GHA Job Summary
       - name: Notify Slack — Implementation Result
         if: always() && steps.verify.outputs.valid == 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
-          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          source scripts/ai-ops/ai-factory-notify.sh
           STATUS="${{ steps.claude.outcome || 'skipped' }}"
           ISSUE_NUM="${{ github.event.issue.number }}"
+          ASK_MODE="false"
+          [ "${SKIP_CLOSE}" = "true" ] && ASK_MODE="true"
 
-          if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
-            MSG=":tada: *${TICKET_ID:-Issue #${ISSUE_NUM}}* completed!\nPR <${PR_URL}|#${PR_NUM}> merged | Linear -> Done | Issue #${ISSUE_NUM} closed"
-          elif [ "$STATUS" = "success" ] && [ "${SKIP_CLOSE}" = "true" ]; then
-            MSG=":eyes: *${TICKET_ID:-Issue #${ISSUE_NUM}}* — PR created (Ask mode). Awaiting human review."
-          elif [ "$STATUS" = "success" ]; then
-            MSG=":white_check_mark: Implementation complete for #${ISSUE_NUM}."
-          elif [ "$STATUS" = "skipped" ]; then
-            MSG=":warning: Implementation skipped for #${ISSUE_NUM}."
-          else
-            MSG=":x: Implementation failed for #${ISSUE_NUM}. Check <https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}|workflow logs>."
+          notify_implement "$STATUS" "${TICKET_ID:-}" "${PR_NUM:-}" "${PR_URL:-}" "" "$ISSUE_NUM" "$ASK_MODE"
+
+          # Post rich report to Linear on success
+          if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ] && [ -n "${TICKET_ID}" ]; then
+            linear_comment "$TICKET_ID" "$PR_NUM" "$PR_URL" "" "" "Ship"
           fi
 
-          curl -s -X POST "$SLACK_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"blocks\": [
-                {
-                  \"type\": \"section\",
-                  \"text\": {\"type\": \"mrkdwn\", \"text\": \"${MSG}\"}
-                },
-                {
-                  \"type\": \"context\",
-                  \"elements\": [{\"type\": \"mrkdwn\", \"text\": \"STOA AI Factory | L3 Pipeline | $(date -u +%H:%M) UTC\"}]
-                }
-              ]
-            }"
+      # Error notification if implementation failed
+      - name: Notify Error
+        if: steps.claude.outcome == 'failure' && steps.verify.outputs.valid == 'true'
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          EXEC_FILE="${{ steps.claude.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          notify_error "claude-linear-dispatch" "implement" "${TICKET_ID:-}" "" "" "$EXEC_FILE"
 
       # ----- Self-Feeding Loop -----
       # After successful close, trigger next autopilot scan if under daily velocity cap

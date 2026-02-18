@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import {
   createAuthMock,
   renderWithProviders,
@@ -56,6 +56,10 @@ vi.mock('@stoa/shared/components/EmptyState', () => ({
 // Mock modals
 vi.mock('./SubAccountModal', () => ({
   SubAccountModal: () => <div data-testid="sub-account-modal">Sub-Account Modal</div>,
+}));
+
+vi.mock('./ToolAllowListModal', () => ({
+  ToolAllowListModal: () => <div data-testid="tool-allow-list-modal">Tool Allow-List Modal</div>,
 }));
 
 vi.mock('./ApiKeyRevealDialog', () => ({
@@ -222,8 +226,8 @@ describe('FederationAccountDetail', () => {
     await waitFor(() => {
       expect(screen.getByText('Partner Federation')).toBeInTheDocument();
     });
-    // The usage card shows '-' when no data is loaded
-    expect(screen.getByText('Requests (7d)')).toBeInTheDocument();
+    // The usage card shows dynamic period label
+    expect(screen.getByText(/Requests \(\d+d\)/)).toBeInTheDocument();
     // Multiple '-' exist (dates too), so just verify the section renders
     const dashes = screen.getAllByText('-');
     expect(dashes.length).toBeGreaterThanOrEqual(1);
@@ -243,6 +247,35 @@ describe('FederationAccountDetail', () => {
     await waitFor(() => {
       expect(screen.getByText('Revoke All')).toBeInTheDocument();
     });
+  });
+
+  it('renders usage period selector', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Usage period')).toBeInTheDocument();
+    });
+    const select = screen.getByLabelText('Usage period') as HTMLSelectElement;
+    expect(select.value).toBe('7');
+  });
+
+  it('shows tools button for admin that opens modal', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByTestId('tools-btn-sub-1')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('tools-btn-sub-1'));
+    await waitFor(() => {
+      expect(screen.getByTestId('tool-allow-list-modal')).toBeInTheDocument();
+    });
+  });
+
+  it('hides tools button for non-admin', async () => {
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('viewer'));
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Partner Federation')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('tools-btn-sub-1')).not.toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

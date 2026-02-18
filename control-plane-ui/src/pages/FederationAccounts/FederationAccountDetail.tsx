@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, Users, Clock, Wrench, BarChart3, Ban } from 'lucide-re
 import { useAuth } from '../../contexts/AuthContext';
 import { federationService } from '../../services/federationApi';
 import { SubAccountModal } from './SubAccountModal';
+import { ToolAllowListModal } from './ToolAllowListModal';
 import { ApiKeyRevealDialog } from './ApiKeyRevealDialog';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
@@ -48,6 +49,8 @@ export function FederationAccountDetail() {
   const [confirm, ConfirmDialog] = useConfirm();
   const [showSubAccountModal, setShowSubAccountModal] = useState(false);
   const [revealedKey, setRevealedKey] = useState<SubAccountCreatedResponse | null>(null);
+  const [toolEditSub, setToolEditSub] = useState<{ id: string; name: string } | null>(null);
+  const [usageDays, setUsageDays] = useState<7 | 30 | 90>(7);
 
   const tenantId = user?.tenant_id || '';
   const isAdmin = hasRole('cpi-admin') || hasRole('tenant-admin');
@@ -65,8 +68,8 @@ export function FederationAccountDetail() {
   });
 
   const { data: usageData } = useQuery({
-    queryKey: ['federation-usage', tenantId, id],
-    queryFn: () => federationService.getUsage(tenantId, id!),
+    queryKey: ['federation-usage', tenantId, id, usageDays],
+    queryFn: () => federationService.getUsage(tenantId, id!, usageDays),
     enabled: !!tenantId && !!id,
   });
 
@@ -306,7 +309,7 @@ export function FederationAccountDetail() {
           </div>
           <div>
             <div className="text-xs text-gray-500 dark:text-neutral-400 uppercase font-medium">
-              Requests (7d)
+              Requests ({usageDays}d)
             </div>
             <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-gray-900 dark:text-white">
               <BarChart3 className="h-4 w-4 text-gray-400" />
@@ -319,10 +322,20 @@ export function FederationAccountDetail() {
       {/* Usage breakdown */}
       {usageData && usageData.sub_accounts.length > 0 && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
-          <div className="px-4 py-3 border-b dark:border-neutral-700">
+          <div className="px-4 py-3 border-b dark:border-neutral-700 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
               Usage Breakdown (last {usageData.period_days} days)
             </h2>
+            <select
+              value={usageDays}
+              onChange={(e) => setUsageDays(Number(e.target.value) as 7 | 30 | 90)}
+              aria-label="Usage period"
+              className="text-xs border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value={7}>7 days</option>
+              <option value={30}>30 days</option>
+              <option value={90}>90 days</option>
+            </select>
           </div>
           <table className="w-full">
             <thead>
@@ -459,10 +472,21 @@ export function FederationAccountDetail() {
                         {sub.api_key_prefix}...
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
-                        <span className="inline-flex items-center gap-1">
-                          <Wrench className="h-3.5 w-3.5" />
-                          {sub.allowed_tools.length}
-                        </span>
+                        {isAdmin ? (
+                          <button
+                            onClick={() => setToolEditSub({ id: sub.id, name: sub.name })}
+                            className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
+                            data-testid={`tools-btn-${sub.id}`}
+                          >
+                            <Wrench className="h-3.5 w-3.5" />
+                            {sub.allowed_tools.length}
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            <Wrench className="h-3.5 w-3.5" />
+                            {sub.allowed_tools.length}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
                         {formatDate(sub.last_used_at)}
@@ -493,6 +517,23 @@ export function FederationAccountDetail() {
           masterId={id}
           onClose={() => setShowSubAccountModal(false)}
           onCreated={handleSubAccountCreated}
+        />
+      )}
+
+      {toolEditSub && id && (
+        <ToolAllowListModal
+          tenantId={tenantId}
+          masterId={id}
+          subAccountId={toolEditSub.id}
+          subAccountName={toolEditSub.name}
+          isAdmin={isAdmin}
+          onClose={() => setToolEditSub(null)}
+          onSaved={() => {
+            setToolEditSub(null);
+            queryClient.invalidateQueries({
+              queryKey: ['federation-sub-accounts', tenantId, id],
+            });
+          }}
         />
       )}
 

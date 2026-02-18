@@ -366,6 +366,7 @@ mod tests {
             roles: vec!["admin".to_string()],
             scopes: vec!["stoa:read".to_string()],
             raw_token: None,
+            skill_instructions: None,
         }
     }
 

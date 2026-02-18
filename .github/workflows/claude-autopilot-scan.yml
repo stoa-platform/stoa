@@ -236,6 +236,40 @@ jobs:
 
             echo "Processing ${TICKET_ID} (score: ${SCORE})"
 
+            # Sync council:ticket-go label to Linear
+            if [ -n "$LINEAR_API_KEY" ]; then
+              LINEAR_ISSUE_ID=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .id' eligible-tickets.json)
+              if [ -n "$LINEAR_ISSUE_ID" ] && [ "$LINEAR_ISSUE_ID" != "null" ]; then
+                LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+                  -H "Authorization: ${LINEAR_API_KEY}" \
+                  -H "Content-Type: application/json" \
+                  -d '{"query": "{ issueLabels(filter: { name: { eq: \"council:ticket-go\" } }) { nodes { id } } }"}' \
+                  | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
+                if [ -n "$LABEL_ID" ]; then
+                  EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
+                    -H "Authorization: ${LINEAR_API_KEY}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"query\": \"{ issue(id: \\\"${LINEAR_ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
+                    | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:ticket-") | not) | .id]' 2>/dev/null || echo "[]")
+                  LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
+                  curl -s -X POST "https://api.linear.app/graphql" \
+                    -H "Authorization: ${LINEAR_API_KEY}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"query\": \"mutation { issueUpdate(id: \\\"${LINEAR_ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
+                    > /dev/null 2>&1 || true
+                  echo "Applied council:ticket-go to ${TICKET_ID} on Linear"
+                fi
+                # Post Council comment
+                GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+                COMMENT="Autopilot Council: **${SCORE}/10** — council:ticket-go\n[GitHub Actions](${GH_RUN})"
+                curl -s -X POST "https://api.linear.app/graphql" \
+                  -H "Authorization: ${LINEAR_API_KEY}" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${LINEAR_ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+                  > /dev/null 2>&1 || true
+              fi
+            fi
+
             # Create labels (idempotent)
             gh label create "${TICKET_ID}" --color "0075ca" --description "Linear ticket" --force 2>/dev/null || true
             gh label create "autopilot-candidate" --color "7057ff" --description "Selected by autopilot scan" --force 2>/dev/null || true

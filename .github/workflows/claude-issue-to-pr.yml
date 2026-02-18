@@ -93,6 +93,96 @@ jobs:
           gh label create "council-validated" --color "0e8a16" --description "Council validation passed" --force 2>/dev/null || true
           gh issue edit "${{ github.event.issue.number }}" --add-label "council-validated"
 
+      # Sync Council result to Linear (apply council:ticket-* label + comment)
+      - name: Sync Council to Linear
+        if: steps.council.outcome == 'success'
+        continue-on-error: true
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
+
+          # Extract CAB-XXXX from issue title or body
+          TICKET_ID=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" \
+            | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
+          if [ -z "$TICKET_ID" ]; then
+            echo "No CAB-XXXX found in issue — skipping Linear sync"
+            exit 0
+          fi
+
+          # Extract score from Council output (look for "Council Score: X.XX/10" pattern)
+          EXEC_FILE="${{ steps.council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          SCORE=""
+          if [ -f "$EXEC_FILE" ]; then
+            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
+              | grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
+          fi
+          if [ -z "$SCORE" ]; then
+            echo "Could not extract score — skipping Linear sync"
+            exit 0
+          fi
+
+          # Map score → label name
+          LABEL_NAME=""
+          if echo "$SCORE >= 8.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:ticket-go"
+          elif echo "$SCORE >= 6.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:ticket-fix"
+          else
+            LABEL_NAME="council:ticket-redo"
+          fi
+
+          echo "Syncing to Linear: ${TICKET_ID} — score ${SCORE} → ${LABEL_NAME}"
+
+          # Find Linear issue ID
+          ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -z "$ISSUE_ID" ]; then
+            echo "::warning::Could not find Linear issue for ${TICKET_ID}"
+            exit 0
+          fi
+
+          # Find label ID
+          LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueLabels(filter: { name: { eq: \\\"${LABEL_NAME}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -n "$LABEL_ID" ]; then
+            # Get existing labels and add the new one
+            EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issue(id: \\\"${ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
+              | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:ticket-") | not) | .id]' 2>/dev/null || echo "[]")
+
+            # Build label ID array: existing (minus old council:ticket-*) + new
+            LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
+
+            curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
+              > /dev/null 2>&1 || true
+            echo "Applied label ${LABEL_NAME} to ${TICKET_ID}"
+          fi
+
+          # Post Council comment on Linear
+          GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+          COMMENT="Council validation: **${SCORE}/10** — ${LABEL_NAME}\n[GitHub Actions run](${GH_RUN})"
+          curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+            > /dev/null 2>&1 || true
+          echo "Posted Council comment on ${TICKET_ID}"
+
       # Notify Slack with Council report
       - name: Notify Slack — Council Report
         if: always()

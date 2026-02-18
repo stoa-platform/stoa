@@ -38,44 +38,77 @@ jobs:
         with:
           fetch-depth: 100  # Need history for analysis
 
-      # Phase 1: Analyze patterns
-      - name: Run Self-Improvement Analysis
-        id: analysis
+      # Phase 1: Collect analysis context
+      - name: Collect context
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "=== CI Failure Patterns (last 30 runs) ===" > /tmp/context.txt
+          gh run list --branch main --limit 30 --json conclusion,name,headSha >> /tmp/context.txt 2>&1
+          echo "" >> /tmp/context.txt
+          echo "=== Rules Files ===" >> /tmp/context.txt
+          for f in .claude/rules/*.md; do
+            echo "--- $f ---" >> /tmp/context.txt
+            head -20 "$f" >> /tmp/context.txt
+            echo "" >> /tmp/context.txt
+          done
+          echo "=== CI Quality Gates Thresholds ===" >> /tmp/context.txt
+          cat .claude/rules/ci-quality-gates.md >> /tmp/context.txt
+
+      - name: Write prompt
+        run: |
+          cat > /tmp/prompt.txt << 'PROMPT'
+          Self-Improvement Agent: find recurring problems, propose rule improvements.
+
+          1. CI Failure Patterns: analyze the provided CI run data.
+             Find top 3 failure patterns. Check if rules cover them. Propose updates if not.
+          2. Rules Pruning: scan the rules summaries for contradictions, redundancy, outdated refs.
+          3. Coverage Ratchet: check thresholds in ci-quality-gates.md. Propose ratchet up if safe.
+
+          Format as markdown for a GitHub issue body. Include tables for:
+          - CI failure patterns (name, count, covered by rule?)
+          - Rules health (file, status, proposed action)
+          - Coverage ratchet (component, current threshold, proposed)
+
+          Rules:
+          - Only analyze and propose. Do NOT make changes.
+          - Max 3 rule changes per report (highest impact).
+          PROMPT
+
+      # Model tier: sonnet-batch (self-improvement needs quality reasoning, 50% batch discount)
+      - name: Run batch processor
         continue-on-error: true
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
-            Do NOT read memory.md, plan.md, or operations.log for session state.
-            Focus exclusively on the task below.
+        id: batch
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 scripts/ai-ops/batch-processor.py \
+            --prompt-file /tmp/prompt.txt \
+            --context-file /tmp/context.txt \
+            --model claude-sonnet-4-5-20250929 \
+            --max-tokens 4096 \
+            --max-wait 1200 \
+            --output /tmp/result.json
 
-            Self-Improvement Agent: find recurring problems, propose rule improvements.
-
-            1. CI Failure Patterns: gh run list --branch main --limit 30 --json conclusion,name,headSha
-               Find top 3 failure patterns. Check if .claude/rules/ covers them. Propose updates if not.
-            2. Gotchas Analysis: read gotchas from MEMORY.md. Promote recurring ones (2+) to rules.
-            3. Rules Pruning: scan .claude/rules/*.md for contradictions, redundancy, outdated refs.
-            4. Coverage Ratchet: check thresholds in ci-quality-gates.md vs latest CI. Propose ratchet up.
-
-            Create issue "AI Factory Self-Improvement — YYYY-MM-DD" label "self-improve".
-            Format: tables for CI patterns, gotchas, rules health, coverage ratchet.
-
-            Rules:
-            - Do NOT make changes. Only analyze and propose.
-            - Max 3 rule changes per report (highest impact).
-            - Label "self-improve" only. Human labels "claude-implement" to trigger PR.
-          # Model tier: sonnet (self-improvement analysis, read-only but needs quality reasoning)
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Glob,Grep"
+      - name: Post results
+        if: steps.batch.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BODY=$(python3 -c "import json; print(json.load(open('/tmp/result.json'))['text'])" 2>/dev/null || echo "Batch completed but no text output.")
+          gh issue create \
+            --title "AI Factory Self-Improvement — $(date -u +%Y-%m-%d)" \
+            --label "self-improve" \
+            --body "$BODY" || true
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Mode=batch"
 
-      # Fallback comment if Claude fails
+      # Fallback comment if batch fails
       - name: Post fallback on failure
-        if: steps.analysis.outcome == 'failure'
+        if: steps.batch.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

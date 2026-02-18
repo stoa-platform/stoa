@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 491 pts (53 issues) | **Velocity**: 50+ issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 538 pts (55 issues) | **Velocity**: 55+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
@@ -107,6 +107,9 @@
 - [x] CAB-1293: [MEGA] K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts) — PR #600
 - [x] CAB-1359: Arena Performance Optimization — Close the Kong Gap (13 pts) — PRs #626 + #632
 - [x] CAB-1305: [MEGA] Gateway: Security Jobs Pipeline — Trivy + TLS + CIS Benchmarks (21 pts) — PRs #629, #630, #631
+- [x] CAB-1381: [MEGA] Platform: API Stubs Cleanup — Applications CRUD & Legacy Routes (13 pts) — PR #718
+- [x] CAB-1323: [MEGA] DX: Portal Governance — Multi-Audience + RBAC Fine-Grained (34 pts) — PRs #697, #714, #719 (3 phases)
+- [x] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts) — PR #646
 
 ### In Progress
 
@@ -117,9 +120,6 @@
   - [ ] Repetition #1 (mercredi 19) — timer 5 min
   - [ ] Repetition #2 (vendredi 21) — avec Cedric comme temoin
   - [ ] Video backup filmee
-- [~] CAB-1298: [MEGA] Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts)
-  - [ ] Audit 14 actionable lint suppressions
-  - [ ] Auth module documentation
 
 ### Todo
 
@@ -171,7 +171,7 @@
 - [x] CAB-1295: [MEGA] DX: Console Test Coverage & UX Completion — 23 Untested Modules (21 pts, P3) — PR #590 (Council 7.50/10)
 - [x] CAB-1300: [MEGA] Platform: API Runtime Completion — Events, Deployments, Contracts, MCP RBAC (13 pts, P3) — PR #599
 - [x] CAB-1293: [MEGA] Platform: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts, P3) — PR #600
-- [~] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts, P3) — In Progress
+- [x] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts, P3) — PR #646
 - ~~CAB-1296: [MEGA] DX: E2E Test Expansion — Canceled (Council 5.50/10, fictional scope)~~
 
 ### Backlog — Promoted Strategic + Business (2026-02-16)

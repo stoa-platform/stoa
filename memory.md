@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-19 (CAB-1382 P2 DONE — PR #726, 20→0 ESLint warnings)
+> Dernière MAJ: 2026-02-19 (CAB-1330 P1 DONE — PR #727, MCP hot-reload SSE)
 
 ## ✅ DONE
 
@@ -20,6 +20,10 @@
 - CAB-1382: Code Hygiene Sprint (13 pts) — PRs #724, #725, #726 (P1: 38 dead_code removed, P2: 20→0 ESLint warnings + error tracking stub)
 
 ## 🔴 IN PROGRESS
+
+CAB-1330: MCP Hot-Reload & CI Security Showcase (13 pts MEGA)
+- ✅ P1: MCP hot-reload — CRD watcher → SSE tools/list_changed (PR #727)
+- [ ] P2: CI Security Showcase — blog post + security badges
 
 CAB-802: Dry Run + Script + Video Backup (3 pts)
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
@@ -41,4 +45,4 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - Demo MVP: mardi 24 février 2026
 - docs.gostoa.dev = 37 articles, 0 "Coming Soon"
 - ADR numbering: stoa-docs owns numbers (001-048). Next: **ADR-049**
-- Velocity C8: 616 pts / 65 issues
+- Velocity C8: 629 pts / 66 issues

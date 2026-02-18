@@ -114,6 +114,27 @@ def extract_text(results: list[dict]) -> str:
     return ""
 
 
+def extract_usage(results: list[dict]) -> dict:
+    """Extract token usage from batch results."""
+    for item in results:
+        msg = item.get("result", {})
+        if msg.get("type") == "succeeded":
+            message = msg.get("message", {})
+            usage = message.get("usage", {})
+            return {
+                "input_tokens": usage.get("input_tokens", 0),
+                "output_tokens": usage.get("output_tokens", 0),
+                "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+                "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+            }
+    return {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Anthropic Batch API processor")
     parser.add_argument("--prompt-file", required=True, help="Path to prompt text file")
@@ -153,6 +174,7 @@ def main() -> None:
 
     results = fetch_results(api_key, batch_id)
     text = extract_text(results)
+    token_usage = extract_usage(results)
 
     # Write output
     output = {
@@ -160,6 +182,7 @@ def main() -> None:
         "model": args.model,
         "status": status.get("processing_status"),
         "request_counts": counts,
+        "token_usage": token_usage,
         "text": text,
     }
     with open(args.output, "w") as f:

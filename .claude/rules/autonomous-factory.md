@@ -55,15 +55,16 @@ All workflows include these safety measures:
 
 ### When Council Runs
 
-| Trigger | Council Mode | Threshold | Approval |
-|---------|-------------|-----------|----------|
-| Issue labeled `claude-implement` | Full (4 personas, detailed) | >= 8.0 | `/go` on issue |
-| Linear ticket → In Progress | Full (4 personas, detailed) | >= 8.0 | `/go` on issue |
-| Multi-agent batch dispatch | Quick (4 personas, scores only) | >= 7.0 | `/go-batch` |
-| Scheduled CI auto-fix | Skip (Ship mode, no Council) | N/A | Auto |
-| Self-improvement proposal | Full (analysis, no code) | >= 8.0 | Label `claude-implement` |
-| PR auto-review | Skip (read-only, no changes) | N/A | Auto |
-| Daily triage | Skip (read-only, no changes) | N/A | Auto |
+| Trigger | Council Mode | Model | Threshold | Approval |
+|---------|-------------|-------|-----------|----------|
+| Issue labeled `claude-implement` | Full (4 personas, detailed) | Sonnet | >= 8.0 | `/go` on issue |
+| Linear ticket → In Progress | Full (4 personas, detailed) | Sonnet | >= 8.0 | `/go` on issue |
+| Multi-agent batch dispatch | Quick (4 personas, scores only) | Sonnet | >= 8.0 | `/go-batch` |
+| Autopilot backlog scan | Quick (4 personas, scores only) | Haiku | >= 8.0 | Slack → `/go` |
+| Scheduled CI auto-fix | Skip (Ship mode, no Council) | — | N/A | Auto |
+| Self-improvement proposal | Full (analysis, no code) | Sonnet | >= 8.0 | Label `claude-implement` |
+| PR auto-review | Skip (read-only, no changes) | — | N/A | Auto |
+| Daily triage | Skip (read-only, no changes) | — | N/A | Auto |
 
 ### Council-Free Actions (Auto-Approved)
 
@@ -148,6 +149,17 @@ Message types are distinguished by emoji prefix:
 | `ci-failure` | Auto-added | CI failure requiring human intervention |
 | `coverage-drop` | Auto-added | Test coverage regression |
 
+### Linear Council Labels
+
+| Label | Stage | Score Range | Color | Description |
+|-------|-------|-------------|-------|-------------|
+| `council:ticket-go` | Stage 1 (Pertinence) | >= 8.0 | green (#0e8a16) | Ticket validated |
+| `council:ticket-fix` | Stage 1 (Pertinence) | 6.0 - 7.9 | amber (#e4b400) | Ticket needs adjustments |
+| `council:ticket-redo` | Stage 1 (Pertinence) | < 6.0 | red (#d73a49) | Ticket rejected |
+| `council:plan-go` | Stage 2 (Plan) | >= 8.0 | teal (#006b75) | Plan validated |
+| `council:plan-fix` | Stage 2 (Plan) | 6.0 - 7.9 | dark amber (#b45309) | Plan needs revision |
+| `council:plan-redo` | Stage 2 (Plan) | < 6.0 | dark red (#8b0000) | Plan rejected |
+
 ## n8n Integration
 
 ### Linear → GitHub Pipeline
@@ -199,9 +211,10 @@ The `repository_dispatch` `client_payload` includes phase-aware fields:
 
 | Guard | Value | Why |
 |-------|-------|-----|
-| Model routing | Haiku/Sonnet/Opus tiers | 3x savings on read-only tasks, better Council quality |
-| Max turns per agent | 15 (review), 60 (implementation) | Prevent runaway costs |
-| Default model | Sonnet (code gen), Haiku (read-only), Opus (Council) | Right model per task |
+| Model routing | Haiku/Sonnet tiers | Haiku for read-only, Sonnet for Council + code gen |
+| Max turns per agent | 5 (Council), 60 (implementation) | Prevent runaway costs |
+| Default model | Sonnet (Council + code gen), Haiku (scan, digest, review) | Right model per task |
+| Council threshold | 8.0 (all levels) | Harmonized — no per-level exceptions |
 | Max parallel agents | 3 | Cost caps at ~3x single agent |
 | Timeout per job | 15-60 min | Hard stop on runaway jobs |
 | Skip Council for | Ship-mode, read-only | Avoid unnecessary validation |

@@ -77,13 +77,13 @@ jobs:
             **Estimated Total LOC**: XXX
 
             Comment "/go-batch" to start parallel execution.
-          # Model tier: opus (Council gate decision — quality matters more than cost)
-          claude_args: "--model claude-opus-4-6 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
+          # Model tier: sonnet (Council gate — structured rubric, Sonnet sufficient. Bash removed for security)
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=5, Stage=council-batch"
 
       - name: Notify Slack — Batch Council
         env:
@@ -165,7 +165,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=60, Stage=implement"
 
       - name: Notify Slack — Agent Complete
         if: always()

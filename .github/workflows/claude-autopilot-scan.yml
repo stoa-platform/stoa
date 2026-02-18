@@ -154,7 +154,7 @@ jobs:
             - Archi 50x50 (architecture): is the scope clear and well-bounded?
             - Better Call Saul (legal): any compliance concerns?
 
-            Score each persona /10. Compute average. Threshold: >= 7.5 = Go.
+            Score each persona /10. Compute average. Threshold: >= 8.0 = Go.
 
             IMPORTANT: If a ticket has NO estimate (null), you MUST provide one in the
             "estimated_points" field using Fibonacci scale (1,2,3,5,8,13). Analyze the
@@ -181,7 +181,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=haiku-4-5, MaxTurns=5, Stage=council-scan"
 
       # Parse Council output and create GitHub issues + Slack notifications
       - name: Create Issues and Notify
@@ -213,7 +213,7 @@ jobs:
           echo "Council validated ${CANDIDATE_COUNT} candidates"
 
           CREATED=0
-          echo "$CANDIDATES" | jq -c '.[] | select(.verdict == "Go" and .score >= 7.5)' | while IFS= read -r ticket; do
+          echo "$CANDIDATES" | jq -c '.[] | select(.verdict == "Go" and .score >= 8.0)' | while IFS= read -r ticket; do
             TICKET_ID=$(echo "$ticket" | jq -r '.ticket_id')
             TITLE=$(echo "$ticket" | jq -r '.title')
             SCORE=$(echo "$ticket" | jq -r '.score')

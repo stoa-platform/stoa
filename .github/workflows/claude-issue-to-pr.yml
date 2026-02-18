@@ -76,13 +76,13 @@ jobs:
             - [ ] State files updated
 
             IMPORTANT: Do NOT implement anything yet. Only validate and plan.
-          # Model tier: opus (Council gate decision — quality matters more than cost)
-          claude_args: "--model claude-opus-4-6 --max-turns 10 --allowedTools Read,Glob,Grep"
+          # Model tier: sonnet (Council gate — structured rubric evaluation, Sonnet sufficient)
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=5, Stage=council-validate"
 
       # Add council-validated label so implement job can verify
       - name: Mark Council complete
@@ -230,7 +230,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=60, Stage=implement"
 
       # Notify Slack on completion
       - name: Notify Slack — Implementation Done

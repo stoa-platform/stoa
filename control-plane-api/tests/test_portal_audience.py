@@ -12,9 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from src.models.catalog import APICatalog, AudienceEnum
+from src.models.catalog import APICatalog
 from src.repositories.catalog import get_allowed_audiences
-
 
 # ============================================================================
 # Unit Tests — get_allowed_audiences
@@ -22,7 +21,7 @@ from src.repositories.catalog import get_allowed_audiences
 
 
 class TestAudienceMapping:
-    """Role → audience ceiling mapping."""
+    """Role -> audience ceiling mapping."""
 
     def test_cpi_admin_sees_all(self):
         result = get_allowed_audiences(["cpi-admin"])
@@ -75,7 +74,7 @@ def _make_api(audience: str = "public", **kwargs) -> MagicMock:
     api.version = kwargs.get("version", "1.0.0")
     api.tenant_id = kwargs.get("tenant_id", "test-tenant")
     api.status = kwargs.get("status", "active")
-    api.category = kwargs.get("category", None)
+    api.category = kwargs.get("category")
     api.tags = kwargs.get("tags", [])
     api.portal_published = kwargs.get("portal_published", True)
     api.audience = audience
@@ -92,18 +91,15 @@ class TestPortalAPIsAudienceFilter:
         """Viewer role should only see public APIs."""
         from src.routers.portal import list_portal_apis
 
-        public_api = _make_api("public", api_id="pub-api")
-        internal_api = _make_api("internal", api_id="int-api")
-
         mock_repo = AsyncMock()
-        mock_repo.get_portal_apis.return_value = ([public_api], 1)
+        mock_repo.get_portal_apis.return_value = ([_make_api("public", api_id="pub-api")], 1)
 
         user = MagicMock()
         user.roles = ["viewer"]
         db = AsyncMock()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
-            result = await list_portal_apis(user=user, db=db)
+            await list_portal_apis(user=user, db=db, page=1, page_size=20)
 
         # Verify repo was called with viewer roles
         call_kwargs = mock_repo.get_portal_apis.call_args.kwargs
@@ -122,7 +118,7 @@ class TestPortalAPIsAudienceFilter:
         db = AsyncMock()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
-            result = await list_portal_apis(user=user, db=db)
+            await list_portal_apis(user=user, db=db, page=1, page_size=20)
 
         call_kwargs = mock_repo.get_portal_apis.call_args.kwargs
         assert call_kwargs["user_roles"] == ["devops"]
@@ -143,7 +139,7 @@ class TestPortalAPIsAudienceFilter:
         db = AsyncMock()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
-            result = await list_portal_apis(user=user, db=db)
+            result = await list_portal_apis(user=user, db=db, page=1, page_size=20)
 
         assert result.total == 3
         call_kwargs = mock_repo.get_portal_apis.call_args.kwargs
@@ -162,7 +158,7 @@ class TestPortalAPIsAudienceFilter:
         db = AsyncMock()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
-            await list_portal_apis(user=user, db=db, audience="internal")
+            await list_portal_apis(user=user, db=db, audience="internal", page=1, page_size=20)
 
         call_kwargs = mock_repo.get_portal_apis.call_args.kwargs
         assert call_kwargs["audience_filter"] == "internal"
@@ -180,7 +176,7 @@ class TestPortalAPIsAudienceFilter:
         db = AsyncMock()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
-            result = await list_portal_apis(user=user, db=db)
+            result = await list_portal_apis(user=user, db=db, page=1, page_size=20)
 
         assert result.apis[0].audience == "partner"
 
@@ -193,18 +189,18 @@ class TestPortalAPIDetailAudience:
         """Viewer should get 404 when requesting an internal API."""
         from src.routers.portal import get_portal_api
 
-        internal_api = _make_api("internal", api_id="secret-api")
-
         mock_repo = AsyncMock()
-        mock_repo.find_api_by_name.return_value = internal_api
+        mock_repo.find_api_by_name.return_value = _make_api("internal", api_id="secret-api")
 
         user = MagicMock()
         user.roles = ["viewer"]
         db = AsyncMock()
 
-        with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
-            with pytest.raises(HTTPException) as exc_info:
-                await get_portal_api(api_id="secret-api", user=user, db=db)
+        with (
+            patch("src.routers.portal.CatalogRepository", return_value=mock_repo),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_portal_api(api_id="secret-api", user=user, db=db)
 
         assert exc_info.value.status_code == 404
 
@@ -213,10 +209,10 @@ class TestPortalAPIDetailAudience:
         """cpi-admin should access partner APIs."""
         from src.routers.portal import get_portal_api
 
-        partner_api = _make_api("partner", api_id="partner-api", api_name="Partner API")
-
         mock_repo = AsyncMock()
-        mock_repo.find_api_by_name.return_value = partner_api
+        mock_repo.find_api_by_name.return_value = _make_api(
+            "partner", api_id="partner-api", api_name="Partner API"
+        )
 
         user = MagicMock()
         user.roles = ["cpi-admin"]
@@ -232,18 +228,18 @@ class TestPortalAPIDetailAudience:
         """Devops should get 404 when requesting a partner API."""
         from src.routers.portal import get_portal_api
 
-        partner_api = _make_api("partner", api_id="partner-api")
-
         mock_repo = AsyncMock()
-        mock_repo.find_api_by_name.return_value = partner_api
+        mock_repo.find_api_by_name.return_value = _make_api("partner", api_id="partner-api")
 
         user = MagicMock()
         user.roles = ["devops"]
         db = AsyncMock()
 
-        with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
-            with pytest.raises(HTTPException) as exc_info:
-                await get_portal_api(api_id="partner-api", user=user, db=db)
+        with (
+            patch("src.routers.portal.CatalogRepository", return_value=mock_repo),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_portal_api(api_id="partner-api", user=user, db=db)
 
         assert exc_info.value.status_code == 404
 
@@ -252,10 +248,10 @@ class TestPortalAPIDetailAudience:
         """Detail response includes audience field."""
         from src.routers.portal import get_portal_api
 
-        api = _make_api("internal", api_id="int-api", api_name="Internal API")
-
         mock_repo = AsyncMock()
-        mock_repo.find_api_by_name.return_value = api
+        mock_repo.find_api_by_name.return_value = _make_api(
+            "internal", api_id="int-api", api_name="Internal API"
+        )
 
         user = MagicMock()
         user.roles = ["tenant-admin"]

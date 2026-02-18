@@ -46,83 +46,32 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            You are the STOA AI Factory Self-Improvement Agent.
-            Your job: find recurring problems and propose rule improvements.
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
-            ## Analysis Steps
+            Self-Improvement Agent: find recurring problems, propose rule improvements.
 
-            ### 1. CI Failure Patterns (last 100 commits)
-            - Run: gh run list --branch main --limit 30 --json conclusion,name,headSha
-            - For failed runs: categorize the failure type
-            - Find top 3 most common failure patterns
-            - Check if .claude/rules/ already covers these patterns
-            - If not: propose a new rule or rule update
+            1. CI Failure Patterns: gh run list --branch main --limit 30 --json conclusion,name,headSha
+               Find top 3 failure patterns. Check if .claude/rules/ covers them. Propose updates if not.
+            2. Gotchas Analysis: read gotchas from MEMORY.md. Promote recurring ones (2+) to rules.
+            3. Rules Pruning: scan .claude/rules/*.md for contradictions, redundancy, outdated refs.
+            4. Coverage Ratchet: check thresholds in ci-quality-gates.md vs latest CI. Propose ratchet up.
 
-            ### 2. Gotchas Analysis
-            - Read all gotchas from memory files and MEMORY.md
-            - Identify gotchas that appear 2+ times (recurring)
-            - For recurring gotchas NOT in .claude/rules/: propose a new rule
+            Create issue "AI Factory Self-Improvement — YYYY-MM-DD" label "self-improve".
+            Format: tables for CI patterns, gotchas, rules health, coverage ratchet.
 
-            ### 3. Rules Pruning
-            - Read all .claude/rules/*.md files
-            - Identify rules that are:
-              a. Contradictory (rule A says X, rule B says NOT X)
-              b. Redundant (same advice in 2+ places)
-              c. Outdated (references decommissioned infra like AWS, Vault)
-            - Propose removals or consolidations
-
-            ### 4. Coverage Ratchet
-            - Check current coverage thresholds in ci-quality-gates.md
-            - Run test suites if possible, or check latest CI runs
-            - If coverage increased above threshold: propose raising the threshold (ratchet up)
-
-            ## Output
-
-            Create a single issue titled "AI Factory Self-Improvement — YYYY-MM-DD"
-            with label "self-improve".
-
-            The issue body MUST follow this format:
-
-            ## Self-Improvement Report
-
-            ### CI Pattern Learnings
-            | Pattern | Frequency | Current Rule | Proposed Action |
-            |---------|-----------|-------------|-----------------|
-            | ... | ... | ... | ... |
-
-            ### Gotchas → Rules Promotion
-            | Gotcha | Occurrences | Proposed Rule File | Content |
-            |--------|-------------|-------------------|---------|
-            | ... | ... | ... | ... |
-
-            ### Rules Health
-            | Issue | Files | Action |
-            |-------|-------|--------|
-            | Contradiction | rule-a.md vs rule-b.md | Resolve |
-            | Redundancy | rule-a.md + rule-b.md | Consolidate |
-            | Outdated | rule-x.md line Y | Remove/Update |
-
-            ### Coverage Ratchet
-            | Component | Current Threshold | Actual Coverage | Proposed Threshold |
-            |-----------|------------------|-----------------|-------------------|
-            | ... | ... | ... | ... |
-
-            ---
-            **Improvements proposed: N**
-            Label this issue "claude-implement" to auto-create the improvement PR.
-
-            IMPORTANT:
+            Rules:
             - Do NOT make changes. Only analyze and propose.
-            - Maximum 3 rule changes per report (focus on highest impact).
-            - Each proposal must include a Binary DoD:
-              - [ ] Rule change is specific and actionable
-              - [ ] No contradiction with existing rules
-              - [ ] Verified against 2+ CI failure instances
-            - Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
-            - Label the issue "self-improve". Do NOT label it "claude-implement" automatically.
-              A human must review and explicitly label "claude-implement" to trigger implementation.
+            - Max 3 rule changes per report (highest impact).
+            - Label "self-improve" only. Human labels "claude-implement" to trigger PR.
           # Model tier: sonnet (self-improvement analysis, read-only but needs quality reasoning)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       # Fallback comment if Claude fails
       - name: Post fallback on failure

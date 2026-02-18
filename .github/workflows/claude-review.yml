@@ -65,40 +65,36 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Review this PR following CLAUDE.md and .claude/rules/ci-quality-gates.md.
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
-            PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}
-            Files changed (stat view):
-            ```
-            $(cat /tmp/pr-diff-stat.txt)
-            ```
+            Review PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}
+
+            Stat: $(cat /tmp/pr-diff-stat.txt)
 
             Diff (${{ steps.diff-stats.outputs.truncated == 'true' && 'TRUNCATED to 500 lines' || 'full' }}):
             ```diff
             $(cat /tmp/pr-diff-truncated.txt)
             ```
 
-            Check for:
-            1. Code quality: naming, patterns, no over-engineering
-            2. Security: OWASP top 10, secrets, injection, XSS
-            3. Tests: coverage maintained, new code has tests
-            4. CI compatibility: will this pass lint/format/type checks?
-            5. Ship/Show/Ask classification: suggest the appropriate mode
+            Check: code quality, security (OWASP), tests, CI compatibility.
 
-            Output format:
+            Output:
             ## Auto-Review
-
             **Classification**: Ship | Show | Ask
             **Risk**: Low | Medium | High
-
             ### Findings
-            - <finding 1>
-            - <finding 2>
-
+            - ...
             ### Verdict
-            <Go | Fix | Redo> — <1 sentence summary>
+            Go | Fix | Redo — 1 sentence summary
           # Model tier: haiku (read-only PR review, no code generation)
           claude_args: "--model claude-haiku-4-5-20251001 --max-turns 5 --allowedTools Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       # Fallback comment if Claude fails
       - name: Post fallback on failure

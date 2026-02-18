@@ -42,6 +42,10 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
             You are the STOA Council Gate. Read the issue description and run a 4-persona
             Council validation (Chucky, OSS Killer, Archi, Better Call Saul).
 
@@ -74,6 +78,11 @@ jobs:
             IMPORTANT: Do NOT implement anything yet. Only validate and plan.
           # Model tier: opus (Council gate decision — quality matters more than cost)
           claude_args: "--model claude-opus-4-6 --max-turns 10 --allowedTools Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       # Add council-validated label so implement job can verify
       - name: Mark Council complete
@@ -190,10 +199,8 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
-            Do NOT read memory.md, plan.md, or operations.log.
-            Do NOT log SESSION-START or SESSION-END.
-            Do NOT run crash recovery checks.
-            Focus exclusively on implementing the task below.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
 
             Implement the feature described in issue #${{ github.event.issue.number }}.
 
@@ -219,6 +226,11 @@ jobs:
             IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
           # Model tier: sonnet (code generation, full tool access)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
 
       # Notify Slack on completion
       - name: Notify Slack — Implementation Done

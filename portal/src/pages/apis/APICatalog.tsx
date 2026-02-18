@@ -14,10 +14,35 @@ import { APICard } from '../../components/apis/APICard';
 import { APIFilters } from '../../components/apis/APIFilters';
 import { apiCatalogService } from '../../services/apiCatalog';
 import { config } from '../../config';
+import { useAuth } from '../../contexts/AuthContext';
 import { loadNamespace } from '../../i18n';
 import type { API } from '../../types';
 
 type ViewMode = 'grid' | 'list';
+
+const ALL_AUDIENCE_OPTIONS = [
+  { id: 'public', label: 'Public' },
+  { id: 'internal', label: 'Internal' },
+  { id: 'partner', label: 'Partner' },
+];
+
+const AUDIENCE_BY_ROLE: Record<string, string[]> = {
+  'cpi-admin': ['public', 'internal', 'partner'],
+  'tenant-admin': ['public', 'internal', 'partner'],
+  devops: ['public', 'internal'],
+  viewer: ['public'],
+};
+
+function getVisibleAudienceOptions(roles: string[]) {
+  const allowed = new Set<string>();
+  for (const role of roles) {
+    for (const aud of AUDIENCE_BY_ROLE[role] || ['public']) {
+      allowed.add(aud);
+    }
+  }
+  if (allowed.size === 0) allowed.add('public');
+  return ALL_AUDIENCE_OPTIONS.filter((o) => allowed.has(o.id));
+}
 
 // Debounce hook for search optimization
 function useDebounce<T>(value: T, delay: number): T {
@@ -38,6 +63,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export function APICatalog() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { t, i18n: i18nInstance } = useTranslation('catalog');
   const i18nEnabled = config.features.enableI18n;
 
@@ -51,9 +77,13 @@ export function APICatalog() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [universe, setUniverse] = useState('');
+  const [audience, setAudience] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [page, setPage] = useState(1);
   const pageSize = 12;
+
+  // Audience options based on user roles (cosmetic — backend enforces)
+  const visibleAudienceOptions = getVisibleAudienceOptions(user?.roles || []);
 
   // Prefetch API detail on hover for faster navigation
   const prefetchAPI = useCallback(
@@ -81,6 +111,7 @@ export function APICatalog() {
     search: debouncedSearch || undefined,
     category: category || undefined,
     universe: universe || undefined,
+    audience: audience || undefined,
     page,
     pageSize,
   });
@@ -107,6 +138,11 @@ export function APICatalog() {
 
   const handleUniverseChange = (value: string) => {
     setUniverse(value);
+    setPage(1);
+  };
+
+  const handleAudienceChange = (value: string) => {
+    setAudience(value);
     setPage(1);
   };
 
@@ -170,6 +206,9 @@ export function APICatalog() {
         universe={universe}
         onUniverseChange={handleUniverseChange}
         universes={universes}
+        audience={audience}
+        onAudienceChange={handleAudienceChange}
+        audienceOptions={visibleAudienceOptions}
         isLoading={categoriesLoading}
       />
 
@@ -187,7 +226,7 @@ export function APICatalog() {
               : totalCount === 1
                 ? '1 API available'
                 : `${totalCount} APIs available`}
-          {(search || category || universe) &&
+          {(search || category || universe || audience) &&
             (i18nEnabled ? ` ${t('matchingFilters')}` : ' matching your filters')}
         </div>
       )}
@@ -235,7 +274,7 @@ export function APICatalog() {
             {i18nEnabled ? t('noApisFound') : 'No APIs Found'}
           </h2>
           <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto">
-            {search || category || universe
+            {search || category || universe || audience
               ? i18nEnabled
                 ? t('noApisFiltered')
                 : 'No APIs match your current filters. Try adjusting your search criteria.'
@@ -243,12 +282,13 @@ export function APICatalog() {
                 ? t('noApisYet')
                 : 'There are no published APIs available yet. Check back later!'}
           </p>
-          {(search || category || universe) && (
+          {(search || category || universe || audience) && (
             <button
               onClick={() => {
                 setSearch('');
                 setCategory('');
                 setUniverse('');
+                setAudience('');
               }}
               className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >

@@ -7,6 +7,7 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { SkillFormModal } from './SkillFormModal';
+import { SkillPreview } from './SkillPreview';
 
 const scopeConfig: Record<string, { color: string; label: string; specificity: number }> = {
   global: {
@@ -273,6 +274,9 @@ export function SkillsList() {
           </table>
         </div>
       )}
+
+      {/* Resolution Preview */}
+      <SkillPreview />
 
       {/* Modal */}
       {showModal && (

@@ -61,6 +61,11 @@ vi.mock('./SkillFormModal', () => ({
   SkillFormModal: () => <div data-testid="skill-modal">Skill Modal</div>,
 }));
 
+// Mock preview
+vi.mock('./SkillPreview', () => ({
+  SkillPreview: () => <div data-testid="skill-preview">Resolution Preview</div>,
+}));
+
 import { SkillsList } from './SkillsList';
 
 function renderComponent() {
@@ -139,6 +144,11 @@ describe('SkillsList', () => {
   it('shows cascade legend', async () => {
     renderComponent();
     expect(await screen.findByText('Cascade order:')).toBeInTheDocument();
+  });
+
+  it('shows resolution preview panel', async () => {
+    renderComponent();
+    expect(await screen.findByTestId('skill-preview')).toBeInTheDocument();
   });
 
   it('shows empty state when no skills', async () => {

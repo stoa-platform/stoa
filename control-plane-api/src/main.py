@@ -55,6 +55,7 @@ from .routers import (
     mcp_proxy,
     monitoring,
     onboarding,
+    onboarding_admin,
     operations,
     plans,
     platform,
@@ -453,6 +454,7 @@ app.include_router(monitoring.router)
 
 # Onboarding (Zero-Touch Trial - CAB-1325)
 app.include_router(onboarding.router)
+app.include_router(onboarding_admin.router)
 
 # Platform Status (GitOps Observability - CAB-654)
 app.include_router(platform.router)

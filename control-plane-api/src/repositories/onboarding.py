@@ -1,8 +1,8 @@
-"""Onboarding repository — data access for onboarding progress (CAB-1325)."""
+"""Onboarding repository — data access + analytics for onboarding progress (CAB-1325)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.onboarding_progress import OnboardingProgress
@@ -80,3 +80,96 @@ class OnboardingRepository:
 
         await self.session.flush()
         return progress
+
+    # ============== Phase 3: Analytics ==============
+
+    async def get_funnel_stats(self) -> dict:
+        """Compute onboarding funnel metrics across all users.
+
+        Returns dict with: total_started, total_completed, step_counts,
+        avg_ttftc_seconds, p50_ttftc_seconds, p90_ttftc_seconds.
+        """
+        result = await self.session.execute(select(OnboardingProgress))
+        all_records = list(result.scalars().all())
+
+        total_started = len(all_records)
+        total_completed = sum(1 for r in all_records if r.completed_at is not None)
+
+        # Count users who reached each step
+        step_names = ["choose_use_case", "create_app", "subscribe_api", "first_call"]
+        step_counts: dict[str, int] = {}
+        for step in step_names:
+            step_counts[step] = sum(
+                1 for r in all_records if (r.steps_completed or {}).get(step) is not None
+            )
+
+        # TTFTC percentiles from completed users
+        ttftc_values = sorted(r.ttftc_seconds for r in all_records if r.ttftc_seconds is not None)
+        avg_ttftc = sum(ttftc_values) / len(ttftc_values) if ttftc_values else None
+        p50_ttftc = _percentile(ttftc_values, 50) if ttftc_values else None
+        p90_ttftc = _percentile(ttftc_values, 90) if ttftc_values else None
+
+        return {
+            "total_started": total_started,
+            "total_completed": total_completed,
+            "step_counts": step_counts,
+            "avg_ttftc_seconds": avg_ttftc,
+            "p50_ttftc_seconds": p50_ttftc,
+            "p90_ttftc_seconds": p90_ttftc,
+        }
+
+    async def get_stalled_users(self, stall_hours: float = 24.0) -> list[dict]:
+        """Find users who started onboarding but haven't completed within the threshold."""
+        cutoff = datetime.now(UTC) - timedelta(hours=stall_hours)
+        result = await self.session.execute(
+            select(OnboardingProgress).where(
+                OnboardingProgress.completed_at.is_(None),
+                OnboardingProgress.started_at < cutoff,
+            )
+        )
+        stalled = result.scalars().all()
+
+        now = datetime.now(UTC)
+        return [
+            {
+                "user_id": r.user_id,
+                "tenant_id": r.tenant_id,
+                "last_step": _last_step(r.steps_completed),
+                "started_at": r.started_at,
+                "hours_stalled": (now - (r.started_at.replace(tzinfo=UTC) if r.started_at.tzinfo is None else r.started_at)).total_seconds() / 3600,
+            }
+            for r in stalled
+        ]
+
+    async def count_all(self) -> int:
+        """Count total onboarding records."""
+        result = await self.session.execute(
+            select(func.count()).select_from(OnboardingProgress)
+        )
+        return result.scalar_one()
+
+
+def _percentile(sorted_values: list[int | float], pct: int) -> float:
+    """Simple percentile from a sorted list."""
+    if not sorted_values:
+        return 0.0
+    idx = (len(sorted_values) - 1) * pct / 100
+    lower = int(idx)
+    upper = lower + 1
+    if upper >= len(sorted_values):
+        return float(sorted_values[lower])
+    frac = idx - lower
+    return float(sorted_values[lower] * (1 - frac) + sorted_values[upper] * frac)
+
+
+def _last_step(steps_completed: dict | None) -> str | None:
+    """Find the most recently completed step by timestamp."""
+    if not steps_completed:
+        return None
+    latest_step = None
+    latest_ts = ""
+    for step, ts in steps_completed.items():
+        if ts and ts > latest_ts:
+            latest_ts = ts
+            latest_step = step
+    return latest_step

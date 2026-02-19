@@ -15,6 +15,7 @@ import {
   RecentActivity,
   FeaturedAPIs,
   FeaturedAITools,
+  OnboardingFunnel,
 } from '../components/dashboard';
 import { PermissionGate } from '../components/common/PermissionGate';
 import { GrafanaDashboard } from '../components/usage/GrafanaDashboard';
@@ -55,6 +56,11 @@ export function HomePage() {
       {/* Recent Activity */}
       <PermissionGate scope="stoa:subscriptions:read">
         <RecentActivity activity={activity ?? []} isLoading={isLoading} />
+      </PermissionGate>
+
+      {/* Onboarding Funnel - admin only */}
+      <PermissionGate scope="stoa:admin">
+        <OnboardingFunnel />
       </PermissionGate>
 
       {/* Analytics Dashboard - metrics scope only */}

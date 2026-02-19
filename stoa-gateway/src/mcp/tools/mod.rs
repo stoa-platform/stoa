@@ -14,6 +14,7 @@ pub mod api_bridge;
 pub mod dynamic_tool;
 pub mod native_tool;
 pub mod proxy_tool;
+pub mod sandbox;
 pub mod stoa_tools;
 
 use crate::uac::Action;

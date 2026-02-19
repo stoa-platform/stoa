@@ -338,6 +338,12 @@ pub struct Config {
     #[serde(default = "default_skill_context_header")]
     pub skill_context_header: String,
 
+    // === Sandbox (CAB-1325) ===
+    /// Enable sandbox echo tool for developer onboarding (default: true)
+    /// Env: STOA_SANDBOX_ENABLED
+    #[serde(default = "default_sandbox_enabled")]
+    pub sandbox_enabled: bool,
+
     // === Federation (CAB-1362) ===
     /// Enable federation routing for sub-accounts (default: false)
     /// Env: STOA_FEDERATION_ENABLED
@@ -608,6 +614,10 @@ fn default_skill_context_header() -> String {
     "X-Skill-Context".to_string()
 }
 
+fn default_sandbox_enabled() -> bool {
+    true // Enabled by default for onboarding; set false in prod manifests
+}
+
 fn default_federation_cache_ttl() -> u64 {
     300
 }
@@ -685,6 +695,7 @@ impl Default for Config {
             skill_cache_ttl_secs: default_skill_cache_ttl(),
             skill_context_max_bytes: default_skill_context_max_bytes(),
             skill_context_header: default_skill_context_header(),
+            sandbox_enabled: default_sandbox_enabled(),
             federation_enabled: false,
             federation_cache_ttl_secs: default_federation_cache_ttl(),
             federation_cache_max_entries: default_federation_cache_max_entries(),
@@ -876,6 +887,12 @@ mod tests {
         assert!(!config.guardrails_pii_enabled);
         assert!(config.guardrails_pii_redact); // redact by default when enabled
         assert!(!config.guardrails_injection_enabled);
+    }
+
+    #[test]
+    fn test_default_sandbox_enabled() {
+        let config = Config::default();
+        assert!(config.sandbox_enabled);
     }
 
     #[test]

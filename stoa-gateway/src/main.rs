@@ -255,6 +255,15 @@ async fn register_tools(state: &AppState) {
         stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
     }
 
+    // Register sandbox echo tool for developer onboarding (CAB-1325)
+    if state.config.sandbox_enabled {
+        use stoa_gateway::mcp::tools::sandbox::SandboxEchoTool;
+        state
+            .tool_registry
+            .register(std::sync::Arc::new(SandboxEchoTool));
+        info!("Sandbox echo tool registered (STOA_SANDBOX_ENABLED=true)");
+    }
+
     // Discover published APIs from CP catalog and register as MCP tools
     let cp_url = state.control_plane.base_url().to_string();
     let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();

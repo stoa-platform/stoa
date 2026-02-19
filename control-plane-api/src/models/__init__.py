@@ -8,6 +8,7 @@ from .catalog import (
 )
 from .consumer import Consumer, ConsumerStatus
 from .deployment import Deployment, DeploymentStatus, Environment
+from .execution_log import ErrorCategory, ExecutionLog, ExecutionStatus
 from .external_mcp_server import (
     ExternalMCPAuthType,
     ExternalMCPHealthStatus,

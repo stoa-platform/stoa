@@ -34,6 +34,8 @@ paths = [
   '''\.claude/rules/gateway-adapters\.md''',
   # VPS benchmark deploy scripts with example Pushgateway credentials
   '''deploy/vps/bench/.*''',
+  # Onboarding wizard with curl template literals (${trialKey} interpolation, not real secrets)
+  '''portal/src/components/onboarding/steps/FirstCall\.tsx''',
 ]
 
 regexes = [

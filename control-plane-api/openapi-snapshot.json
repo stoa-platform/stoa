@@ -760,6 +760,49 @@
         "title": "ApprovalStepDef",
         "type": "object"
       },
+      "AudienceUpdateRequest": {
+        "description": "Request to update an API's audience visibility level.",
+        "properties": {
+          "audience": {
+            "title": "Audience",
+            "type": "string"
+          }
+        },
+        "required": [
+          "audience"
+        ],
+        "title": "AudienceUpdateRequest",
+        "type": "object"
+      },
+      "AudienceUpdateResponse": {
+        "description": "Response after updating an API's audience.",
+        "properties": {
+          "api_id": {
+            "title": "Api Id",
+            "type": "string"
+          },
+          "audience": {
+            "title": "Audience",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_by": {
+            "title": "Updated By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "api_id",
+          "tenant_id",
+          "audience",
+          "updated_by"
+        ],
+        "title": "AudienceUpdateResponse",
+        "type": "object"
+      },
       "AuditEntry": {
         "description": "An audit log entry.",
         "properties": {
@@ -3984,6 +4027,18 @@
         "title": "EnvironmentStatusResponse",
         "type": "object"
       },
+      "ErrorCategoryEnum": {
+        "description": "Error category for API responses.",
+        "enum": [
+          "auth",
+          "rate_limit",
+          "backend",
+          "timeout",
+          "validation"
+        ],
+        "title": "ErrorCategoryEnum",
+        "type": "string"
+      },
       "ErrorSnapshot": {
         "description": "Complete error snapshot for time-travel debugging.\n\nCaptures the full context of an error including:\n- Request/response data (with PII masked)\n- Routing and policy information\n- Backend state and health\n- Related log entries\n- Environment information",
         "example": {
@@ -4123,6 +4178,39 @@
         "title": "ErrorSnapshot",
         "type": "object"
       },
+      "ErrorTaxonomyResponse": {
+        "description": "Aggregated error taxonomy.",
+        "properties": {
+          "error_rate": {
+            "description": "Error rate as percentage",
+            "title": "Error Rate",
+            "type": "number"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaxonomyItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total_errors": {
+            "title": "Total Errors",
+            "type": "integer"
+          },
+          "total_executions": {
+            "title": "Total Executions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total_errors",
+          "total_executions",
+          "error_rate"
+        ],
+        "title": "ErrorTaxonomyResponse",
+        "type": "object"
+      },
       "EventTypeInfo": {
         "description": "Information about a webhook event type",
         "properties": {
@@ -4163,6 +4251,353 @@
         ],
         "title": "EventTypesResponse",
         "type": "object"
+      },
+      "ExecutionLogListResponse": {
+        "description": "Paginated list of execution logs.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionLogSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "ExecutionLogListResponse",
+        "type": "object"
+      },
+      "ExecutionLogResponse": {
+        "description": "Full execution log entry.",
+        "properties": {
+          "api_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Id"
+          },
+          "api_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Name"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "consumer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Id"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorCategoryEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "request_headers": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Headers"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "response_summary": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Summary"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatusEnum"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "request_id",
+          "status",
+          "started_at"
+        ],
+        "title": "ExecutionLogResponse",
+        "type": "object"
+      },
+      "ExecutionLogSummary": {
+        "description": "Abbreviated execution log for list views.",
+        "properties": {
+          "api_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Name"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorCategoryEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatusEnum"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          }
+        },
+        "required": [
+          "id",
+          "request_id",
+          "status",
+          "started_at"
+        ],
+        "title": "ExecutionLogSummary",
+        "type": "object"
+      },
+      "ExecutionStatusEnum": {
+        "description": "Execution status for API responses.",
+        "enum": [
+          "success",
+          "error",
+          "timeout"
+        ],
+        "title": "ExecutionStatusEnum",
+        "type": "string"
       },
       "ExternalLinks": {
         "description": "External tool URLs for quick access.",
@@ -5033,6 +5468,96 @@
           "content"
         ],
         "title": "FileCreateUpdate",
+        "type": "object"
+      },
+      "FunnelResponse": {
+        "description": "Full funnel analytics response.",
+        "properties": {
+          "avg_ttftc_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Ttftc Seconds"
+          },
+          "p50_ttftc_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50 Ttftc Seconds"
+          },
+          "p90_ttftc_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90 Ttftc Seconds"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/FunnelStage"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "total_completed": {
+            "title": "Total Completed",
+            "type": "integer"
+          },
+          "total_started": {
+            "title": "Total Started",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stages",
+          "total_started",
+          "total_completed"
+        ],
+        "title": "FunnelResponse",
+        "type": "object"
+      },
+      "FunnelStage": {
+        "description": "Single stage in the onboarding funnel.",
+        "properties": {
+          "conversion_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversion Rate"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "count"
+        ],
+        "title": "FunnelStage",
         "type": "object"
       },
       "GatewayAPIResponse": {
@@ -8776,6 +9301,105 @@
         "title": "OIDCConfigResponse",
         "type": "object"
       },
+      "OnboardingCompleteResponse": {
+        "description": "Response from completing onboarding.",
+        "properties": {
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "ttftc_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttftc Seconds"
+          }
+        },
+        "required": [
+          "completed_at"
+        ],
+        "title": "OnboardingCompleteResponse",
+        "type": "object"
+      },
+      "OnboardingProgressResponse": {
+        "description": "Full onboarding progress response.",
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_complete": {
+            "default": false,
+            "title": "Is Complete",
+            "type": "boolean"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "steps_completed": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Steps Completed",
+            "type": "object"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "ttftc_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttftc Seconds"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "user_id",
+          "steps_completed",
+          "started_at"
+        ],
+        "title": "OnboardingProgressResponse",
+        "type": "object"
+      },
       "OperationsMetrics": {
         "description": "Operations dashboard metrics response.",
         "properties": {
@@ -12461,6 +13085,47 @@
         "title": "SortOrder",
         "type": "string"
       },
+      "StalledUserResponse": {
+        "description": "User who started but hasn't completed onboarding.",
+        "properties": {
+          "hours_stalled": {
+            "title": "Hours Stalled",
+            "type": "number"
+          },
+          "last_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Step"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "tenant_id",
+          "started_at",
+          "hours_stalled"
+        ],
+        "title": "StalledUserResponse",
+        "type": "object"
+      },
       "StepActionRequest": {
         "description": "Approve or reject a workflow step",
         "properties": {
@@ -13559,6 +14224,41 @@
         ],
         "title": "SyncTypeEnum",
         "type": "string"
+      },
+      "TaxonomyItem": {
+        "description": "Single error category aggregate.",
+        "properties": {
+          "avg_duration_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Duration Ms"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "percentage": {
+            "title": "Percentage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "category",
+          "count",
+          "percentage"
+        ],
+        "title": "TaxonomyItem",
+        "type": "object"
       },
       "TemplateCreate": {
         "description": "Create a workflow template",
@@ -16898,6 +17598,73 @@
         ]
       }
     },
+    "/v1/admin/catalog/{tenant_id}/{api_id}/audience": {
+      "patch": {
+        "description": "Update the audience visibility level for an API.\n\nValid audiences: public, internal, partner.\nRequires: cpi-admin (any tenant) or tenant-admin (own tenant only).",
+        "operationId": "update_api_audience_v1_admin_catalog__tenant_id___api_id__audience_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AudienceUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudienceUpdateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Api Audience",
+        "tags": [
+          "Catalog Admin"
+        ]
+      }
+    },
     "/v1/admin/deployments": {
       "get": {
         "description": "List all gateway deployments.",
@@ -18981,6 +19748,90 @@
         "summary": "Suspend Subscription",
         "tags": [
           "MCP Admin - Subscriptions"
+        ]
+      }
+    },
+    "/v1/admin/onboarding/funnel": {
+      "get": {
+        "description": "Get onboarding funnel analytics with conversion rates and TTFTC stats.",
+        "operationId": "get_onboarding_funnel_v1_admin_onboarding_funnel_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FunnelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Onboarding Funnel",
+        "tags": [
+          "onboarding-admin"
+        ]
+      }
+    },
+    "/v1/admin/onboarding/stalled": {
+      "get": {
+        "description": "Get users who started onboarding but haven't completed within the threshold.",
+        "operationId": "get_stalled_users_v1_admin_onboarding_stalled_get",
+        "parameters": [
+          {
+            "description": "Hours threshold",
+            "in": "query",
+            "name": "hours",
+            "required": false,
+            "schema": {
+              "default": 24.0,
+              "description": "Hours threshold",
+              "maximum": 720.0,
+              "minimum": 1.0,
+              "title": "Hours",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StalledUserResponse"
+                  },
+                  "title": "Response Get Stalled Users V1 Admin Onboarding Stalled Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Stalled Users",
+        "tags": [
+          "onboarding-admin"
         ]
       }
     },
@@ -25085,6 +25936,108 @@
         ]
       }
     },
+    "/v1/me/onboarding": {
+      "get": {
+        "description": "Get current user's onboarding progress (creates if none exists).",
+        "operationId": "get_onboarding_progress_v1_me_onboarding_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingProgressResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Onboarding Progress",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/v1/me/onboarding/complete": {
+      "post": {
+        "description": "Mark onboarding as fully complete.",
+        "operationId": "complete_onboarding_v1_me_onboarding_complete_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingCompleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Onboarding",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/v1/me/onboarding/steps/{step_name}": {
+      "put": {
+        "description": "Mark a specific onboarding step as completed (idempotent).",
+        "operationId": "mark_step_completed_v1_me_onboarding_steps__step_name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "step_name",
+            "required": true,
+            "schema": {
+              "title": "Step Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingProgressResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Step Completed",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
     "/v1/me/tenant": {
       "post": {
         "description": "Provision a personal tenant for a self-registered user.\n\nNo permission required \u2014 any authenticated user without a tenant can call this.\nIdempotent: returns existing tenant if user already has one.",
@@ -30168,6 +31121,246 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/executions": {
+      "get": {
+        "description": "List executions for a tenant (paginated, filtered).",
+        "operationId": "list_executions_v1_tenants__tenant_id__executions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ExecutionStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error_category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ErrorCategoryEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "consumer_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Consumer Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "api_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionLogListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Executions",
+        "tags": [
+          "Execution Logs"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/executions/taxonomy": {
+      "get": {
+        "description": "Get error taxonomy aggregate for a tenant.",
+        "operationId": "get_execution_taxonomy_v1_tenants__tenant_id__executions_taxonomy_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorTaxonomyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Execution Taxonomy",
+        "tags": [
+          "Execution Logs"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/executions/{execution_id}": {
+      "get": {
+        "description": "Get full execution detail.",
+        "operationId": "get_execution_detail_v1_tenants__tenant_id__executions__execution_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "execution_id",
+            "required": true,
+            "schema": {
+              "title": "Execution Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionLogResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Execution Detail",
+        "tags": [
+          "Execution Logs"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/federation/accounts": {
       "get": {
         "description": "List federation master accounts for a tenant.",
@@ -33716,6 +34909,111 @@
         "summary": "Get My Calls",
         "tags": [
           "Usage"
+        ]
+      }
+    },
+    "/v1/usage/me/executions": {
+      "get": {
+        "description": "List my executions (portal user, consumer-scoped).",
+        "operationId": "list_my_executions_v1_usage_me_executions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ExecutionStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionLogListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List My Executions",
+        "tags": [
+          "Execution Logs"
+        ]
+      }
+    },
+    "/v1/usage/me/executions/taxonomy": {
+      "get": {
+        "description": "Get my error taxonomy (portal user, consumer-scoped).",
+        "operationId": "get_my_execution_taxonomy_v1_usage_me_executions_taxonomy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorTaxonomyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Execution Taxonomy",
+        "tags": [
+          "Execution Logs"
         ]
       }
     },

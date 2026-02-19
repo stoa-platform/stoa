@@ -56,6 +56,7 @@ vi.mock('../components/dashboard', () => ({
   ),
   FeaturedAPIs: () => <div data-testid="featured-apis">Featured APIs</div>,
   FeaturedAITools: () => <div data-testid="featured-ai-tools">Featured AI Tools</div>,
+  OnboardingFunnel: () => <div data-testid="onboarding-funnel">Onboarding Funnel</div>,
 }));
 
 describe('HomePage', () => {

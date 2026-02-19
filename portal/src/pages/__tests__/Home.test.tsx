@@ -70,6 +70,7 @@ vi.mock('../../components/dashboard', () => ({
   RecentActivity: () => <div data-testid="recent-activity">Recent Activity</div>,
   FeaturedAPIs: () => <div data-testid="featured-apis">Featured APIs</div>,
   FeaturedAITools: () => <div data-testid="featured-ai-tools">Featured AI Tools</div>,
+  OnboardingFunnel: () => <div data-testid="onboarding-funnel">Onboarding Funnel</div>,
 }));
 
 vi.mock('../../components/usage/GrafanaDashboard', () => ({

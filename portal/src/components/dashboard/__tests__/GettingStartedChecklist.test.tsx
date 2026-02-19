@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
-import { renderWithProviders, createAuthMock } from '../../../test/helpers';
+import { renderWithProviders } from '../../../test/helpers';
 import { GettingStartedChecklist } from '../GettingStartedChecklist';
 import * as useOnboardingModule from '../../../hooks/useOnboarding';
 

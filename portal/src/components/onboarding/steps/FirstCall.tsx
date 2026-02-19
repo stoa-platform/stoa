@@ -1,11 +1,14 @@
 /**
  * Step 4: First Call — credentials + curl example (CAB-1306)
+ *
+ * Dual mode: normal (app credentials + API curl) or sandbox (trial key + echo tool)
  */
 
-import { Copy, Check, ExternalLink } from 'lucide-react';
+import { Copy, Check, ExternalLink, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { config } from '../../../config';
+import { useTrialKey } from '../../../hooks/useOnboarding';
 import type { Application, API } from '../../../types';
 import type { UseCase } from './ChooseUseCase';
 
@@ -13,16 +16,43 @@ interface FirstCallProps {
   app: Application | null;
   selectedApi: API | null;
   useCase: UseCase;
+  sandboxMode?: boolean;
   onFinish: () => void;
 }
 
-export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProps) {
+export function FirstCall({
+  app,
+  selectedApi,
+  useCase,
+  sandboxMode = false,
+  onFinish,
+}: FirstCallProps) {
   const { t } = useTranslation('onboarding');
   const [copied, setCopied] = useState<string | null>(null);
+  const { data: trialKey } = useTrialKey();
 
   const apiBaseUrl = config.api.baseUrl;
   const mcpBaseUrl = config.mcp.baseUrl;
 
+  // Sandbox mode: echo tool curl with trial key
+  const sandboxCurl = `curl -X POST "${mcpBaseUrl}/mcp/v1/tools/call" \\
+  -H "X-API-Key: YOUR_TRIAL_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name": "stoa_sandbox_echo", "arguments": {"message": "Hello STOA!"}}'`;
+
+  const sandboxMcpConfig = `{
+  "mcpServers": {
+    "stoa-sandbox": {
+      "url": "${mcpBaseUrl}/mcp/sse",
+      "transport": "sse",
+      "headers": {
+        "X-API-Key": "YOUR_TRIAL_KEY"
+      }
+    }
+  }
+}`;
+
+  // Normal mode: API curl with bearer token
   const curlCommand = selectedApi
     ? `curl -X GET "${apiBaseUrl}/v1/portal/apis/${selectedApi.id}" \\
   -H "Authorization: Bearer $TOKEN" \\
@@ -41,6 +71,10 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
 }`
     : '';
 
+  const showMcp = sandboxMode || useCase === 'mcp-agent';
+  const activeCode = showMcp ? (sandboxMode ? sandboxMcpConfig : mcpConfig) : curlCommand;
+  const activeCurl = sandboxMode ? sandboxCurl : curlCommand;
+
   const handleCopy = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text);
     setCopied(id);
@@ -50,12 +84,48 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('firstCall.title')}</h2>
-        <p className="mt-2 text-gray-500 dark:text-neutral-400">{t('firstCall.subtitle')}</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {sandboxMode ? 'Try the Sandbox' : t('firstCall.title')}
+        </h2>
+        <p className="mt-2 text-gray-500 dark:text-neutral-400">
+          {sandboxMode
+            ? 'Use your trial key to call the sandbox echo tool'
+            : t('firstCall.subtitle')}
+        </p>
       </div>
 
-      {/* Credentials summary */}
-      {app && (
+      {/* Sandbox: Trial key info */}
+      {sandboxMode && trialKey && (
+        <div className="bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Your Trial API Key
+            </h3>
+          </div>
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-gray-500 dark:text-neutral-400">Key prefix</dt>
+              <dd className="font-mono text-gray-900 dark:text-white">{trialKey.key_prefix}...</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-gray-500 dark:text-neutral-400">Rate limit</dt>
+              <dd className="text-gray-900 dark:text-white">{trialKey.rate_limit_rpm} req/min</dd>
+            </div>
+            {trialKey.expires_at && (
+              <div className="flex justify-between">
+                <dt className="text-gray-500 dark:text-neutral-400">Expires</dt>
+                <dd className="text-gray-900 dark:text-white">
+                  {new Date(trialKey.expires_at).toLocaleDateString()}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
+
+      {/* Normal mode: Credentials summary */}
+      {!sandboxMode && app && (
         <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
             {t('firstCall.credentials')}
@@ -103,29 +173,61 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
         </div>
       )}
 
-      {/* curl example */}
+      {/* Sandbox: curl command */}
+      {sandboxMode && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Try the Echo Tool
+            </h3>
+            <button
+              onClick={() => handleCopy(sandboxCurl, 'sandbox-curl')}
+              className="text-xs text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 flex items-center gap-1"
+            >
+              {copied === 'sandbox-curl' ? (
+                <>
+                  <Check className="h-3 w-3 text-green-500" /> {t('firstCall.copied', 'Copied!')}
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3 w-3" /> {t('firstCall.copy', 'Copy')}
+                </>
+              )}
+            </button>
+          </div>
+          <pre className="bg-gray-900 dark:bg-neutral-950 text-gray-100 rounded-lg p-4 text-sm overflow-x-auto">
+            <code>{sandboxCurl}</code>
+          </pre>
+        </div>
+      )}
+
+      {/* Code example (curl or MCP config) */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-            {useCase === 'mcp-agent' ? t('firstCall.mcpConfig') : t('firstCall.exampleCall')}
+            {showMcp
+              ? sandboxMode
+                ? 'MCP Configuration'
+                : t('firstCall.mcpConfig')
+              : t('firstCall.exampleCall')}
           </h3>
           <button
-            onClick={() => handleCopy(useCase === 'mcp-agent' ? mcpConfig : curlCommand, 'example')}
+            onClick={() => handleCopy(showMcp ? activeCode : activeCurl, 'example')}
             className="text-xs text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 flex items-center gap-1"
           >
             {copied === 'example' ? (
               <>
-                <Check className="h-3 w-3 text-green-500" /> {t('firstCall.copied')}
+                <Check className="h-3 w-3 text-green-500" /> {t('firstCall.copied', 'Copied!')}
               </>
             ) : (
               <>
-                <Copy className="h-3 w-3" /> {t('firstCall.copy')}
+                <Copy className="h-3 w-3" /> {t('firstCall.copy', 'Copy')}
               </>
             )}
           </button>
         </div>
         <pre className="bg-gray-900 dark:bg-neutral-950 text-gray-100 rounded-lg p-4 text-sm overflow-x-auto">
-          <code>{useCase === 'mcp-agent' ? mcpConfig : curlCommand}</code>
+          <code>{showMcp ? activeCode : activeCurl}</code>
         </pre>
       </div>
 

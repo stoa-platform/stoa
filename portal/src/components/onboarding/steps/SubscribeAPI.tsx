@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Search, Check, Loader2 } from 'lucide-react';
+import { Search, Check, Loader2, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAPIs } from '../../../hooks/useAPIs';
 import type { API } from '../../../types';
@@ -12,9 +12,10 @@ interface SubscribeAPIProps {
   onSelected: (api: API) => void;
   onBack: () => void;
   onSkip: () => void;
+  onSandbox?: () => void;
 }
 
-export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) {
+export function SubscribeAPI({ onSelected, onBack, onSkip, onSandbox }: SubscribeAPIProps) {
   const { t } = useTranslation('onboarding');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -31,6 +32,29 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
         </h2>
         <p className="mt-2 text-gray-500 dark:text-neutral-400">{t('subscribeApi.subtitle')}</p>
       </div>
+
+      {/* Sandbox shortcut */}
+      {onSandbox && (
+        <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4 text-center">
+          <Zap className="h-6 w-6 text-primary-600 dark:text-primary-400 mx-auto mb-2" />
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Try demo tools instantly
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+            {t(
+              'subscribeApi.sandboxDescription',
+              'Skip setup and try a sandbox echo tool right now'
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={onSandbox}
+            className="mt-3 px-4 py-2 bg-primary-600 text-white text-sm rounded-lg font-medium hover:bg-primary-700 transition-colors"
+          >
+            Try Sandbox
+          </button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative max-w-md mx-auto">

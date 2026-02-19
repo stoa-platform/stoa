@@ -21,6 +21,7 @@ export function OnboardingWizardPage() {
   const [useCase, setUseCase] = useState<UseCase>('rest-api');
   const [createdApp, setCreatedApp] = useState<Application | null>(null);
   const [selectedApi, setSelectedApi] = useState<API | null>(null);
+  const [sandboxMode, setSandboxMode] = useState(false);
   const { mutate: markStepDone } = useMarkStep();
   const { mutate: completeOnboarding } = useCompleteOnboarding();
 
@@ -55,6 +56,12 @@ export function OnboardingWizardPage() {
     setStep(3);
   }, []);
 
+  const handleSandboxShortcut = useCallback(() => {
+    setSandboxMode(true);
+    markStepDone('choose_use_case');
+    setStep(3);
+  }, [markStepDone]);
+
   const handleFinish = useCallback(() => {
     markStepDone('first_call');
     completeOnboarding();
@@ -73,6 +80,7 @@ export function OnboardingWizardPage() {
             onSelected={handleApiSelected}
             onBack={() => setStep(1)}
             onSkip={handleSkipSubscribe}
+            onSandbox={handleSandboxShortcut}
           />
         )}
         {step === 3 && (
@@ -80,6 +88,7 @@ export function OnboardingWizardPage() {
             app={createdApp}
             selectedApi={selectedApi}
             useCase={useCase}
+            sandboxMode={sandboxMode}
             onFinish={handleFinish}
           />
         )}

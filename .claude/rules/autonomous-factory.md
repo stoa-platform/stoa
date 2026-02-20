@@ -78,11 +78,11 @@ All implementation workflows use `scripts/ai-ops/model-router.sh` for cost-optim
 
 | Estimate | Mode | Model | Max Turns | Est. Cost/Ticket |
 |----------|------|-------|-----------|-----------------|
-| ≤3 pts | Ship | Haiku | 15 | ~$2.50 |
-| ≤8 pts | Any | Sonnet | 30 | ~$9.50 |
+| ≤3 pts | Ship | Sonnet | 25 | ~$7 |
+| ≤8 pts | Any | Sonnet | 40 | ~$12 |
 | >8 pts | Any | Sonnet | 60 | ~$16.50 |
 
-Weighted average: ~$6.50/ticket (vs $16.50 flat Sonnet-60).
+Weighted average: ~$11/ticket. Haiku dropped from implementation routing (PR #737) — lacks capacity for branch creation, code gen, and PR workflows.
 
 ### Ship Fast Path (Skip Stage 2)
 

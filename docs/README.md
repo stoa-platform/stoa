@@ -47,6 +47,7 @@ ADRs live in [stoa-docs](https://docs.gostoa.dev/architecture/adr/):
 - **[SLO/SLA](./SLO-SLA.md)** - Service level objectives
 - **[Benchmarks](./BENCHMARKS.md)** - Performance benchmarks
 - **[E2E Testing](./E2E-TESTING.md)** - End-to-end testing
+- **[Exit Strategy](./EXIT-STRATEGY.md)** - Vendor independence & migration paths
 
 ### Runbooks
 

@@ -253,6 +253,8 @@ groups:
 
 ## 7. STOA Kafka Topics
 
+See [Kafka Topic Management Runbook](../kafka-topics.md) for full topic inventory and configuration.
+
 | Topic | Producer | Consumer | Criticality |
 |-------|----------|----------|-------------|
 | `deploy-requests` | Control-Plane API, Webhooks | Deployment Worker | High |
@@ -261,6 +263,9 @@ groups:
 | `tenant-events` | Control-Plane API | Provisioning | Medium |
 | `app-events` | IAM Sync | Audit | Low |
 | `audit-log` | All services | OpenSearch | Low |
+| `audit.events` | All services | Compliance, OpenSearch | High |
+| `catalog.changes` | Control-Plane API | Catalog Sync | Medium |
+| `errors` | All services | Error Tracking, Monitoring | Medium |
 
 ---
 

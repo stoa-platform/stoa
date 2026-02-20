@@ -291,13 +291,15 @@ jobs:
             > /dev/null 2>&1 || true
           echo "Posted Council comment on ${TICKET_ID}"
 
-      # Notify Slack — Council report with approve button
+      # Notify Slack + Metrics — Council report with approve button
       - name: Slack Council Report
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET="${{ github.event.client_payload.ticket_id }}"
@@ -315,6 +317,14 @@ jobs:
           fi
 
           notify_council "$TICKET" "$TITLE" "${SCORE:-?}" "Go" "$ISSUE" "$ISSUE_NUM" "$MODE" "$LOC" "$FILES"
+
+          # Push council metrics
+          VERDICT="go"
+          if [ -n "$SCORE" ]; then
+            if echo "$SCORE < 8.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="fix"; fi
+            if echo "$SCORE < 6.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="redo"; fi
+          fi
+          push_metrics_council "linear-dispatch" "$TICKET" "${SCORE:-0}" "$VERDICT"
 
       - name: Write Job Summary — Council
         if: always()
@@ -480,11 +490,15 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET="${{ github.event.client_payload.ticket_id }}"
           STATUS="${{ steps.claude.outcome }}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
+          MODEL="${{ steps.route.outputs.model }}"
+          MAX_TURNS="${{ steps.route.outputs.turns }}"
           # Extract PR stats
           PR_FILES="" PR_LOC=""
           if [ -n "${PR_NUM}" ]; then
@@ -496,12 +510,16 @@ jobs:
           if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
             notify_implement "$TICKET" "success" "$PR_NUM" "$PR_URL" "" "L3 Ship Fast Path" "$DURATION" "$PR_FILES" "$PR_LOC"
             linear_comment "$TICKET" "success" "$PR_NUM" "$PR_URL" "L3 Ship Fast Path" "$DURATION" "$PR_FILES" "$PR_LOC" "Ship"
+            push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "" "L3 Ship Fast Path" "$DURATION"
+            push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "failure" ] && [ "${PR_FOUND}" = "true" ]; then
             notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "" "L3 Ship Fast Path (max_turns)" "$DURATION" "$PR_FILES" "$PR_LOC"
+            push_metrics_implement "linear-dispatch" "$TICKET" "max_turns" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
           else
             notify_error "claude-linear-dispatch" "implement-fast" "$TICKET" "" "$DURATION"
+            push_metrics_error "linear-dispatch" "implement-fast" "$TICKET"
           fi
 
       - name: Write Job Summary — Ship Fast Path
@@ -987,18 +1005,22 @@ jobs:
           echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
           echo "SKIP_CLOSE=${SKIP_CLOSE}" >> "$GITHUB_ENV"
 
-      # Notify Slack + Linear + Job Summary
+      # Notify Slack + Metrics + Linear + Job Summary
       - name: Notify Slack — Implementation Result
         if: always() && steps.verify.outputs.valid == 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           STATUS="${{ steps.claude.outcome || 'skipped' }}"
           TICKET="${TICKET_ID:-}"
           [ -z "$TICKET" ] && TICKET="Issue-${{ github.event.issue.number }}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
+          MODEL="${{ steps.route.outputs.model || 'sonnet-4-5' }}"
+          MAX_TURNS="${{ steps.route.outputs.turns || '60' }}"
           # Extract PR stats
           PR_FILES="" PR_LOC=""
           if [ -n "${PR_NUM}" ]; then
@@ -1011,20 +1033,25 @@ jobs:
           if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
             notify_implement "$TICKET" "success" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION" "$PR_FILES" "$PR_LOC"
             linear_comment "$TICKET" "success" "$PR_NUM" "$PR_URL" "L3 Pipeline" "$DURATION" "$PR_FILES" "$PR_LOC"
+            push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "success" ] && [ "${SKIP_CLOSE}" = "true" ]; then
             notify_implement "$TICKET" "ask" "${PR_NUM:-}" "${PR_URL:-}" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION"
+            push_metrics_implement "linear-dispatch" "$TICKET" "ask" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION"
+            push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" != "success" ] && [ "${PR_FOUND}" = "true" ]; then
             notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L3 Pipeline (max_turns)" "$DURATION" "$PR_FILES" "$PR_LOC"
+            push_metrics_implement "linear-dispatch" "$TICKET" "max_turns" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "skipped" ]; then
             notify_implement "$TICKET" "skipped" "" "" "${{ github.event.issue.number }}" "L3 Pipeline"
           else
             notify_error "claude-linear-dispatch" "implement" "$TICKET" "" "$DURATION"
+            push_metrics_error "linear-dispatch" "implement" "$TICKET"
           fi
 
           write_job_summary "$TICKET" "$STATUS" "${PR_NUM:-}" \
-            "${{ steps.route.outputs.model || 'sonnet-4-5' }}" "implement" "$DURATION"
+            "$MODEL" "implement" "$DURATION"
 
       # ----- Self-Feeding Loop -----
       # After successful close, trigger next autopilot scan if under daily velocity cap

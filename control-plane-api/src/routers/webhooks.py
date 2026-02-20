@@ -43,10 +43,17 @@ class GitLabMergeRequestEvent(BaseModel):
 
 
 def verify_gitlab_token(token: str | None, expected_token: str) -> bool:
-    """Verify GitLab webhook secret token"""
+    """Verify GitLab webhook secret token.
+
+    SECURITY (CAB-DDoS): Rejects ALL requests if no secret is configured.
+    Always configure GITLAB_WEBHOOK_SECRET in production.
+    """
     if not expected_token:
-        return True  # No token configured, allow all
-    return hmac.compare_digest(token or "", expected_token)
+        logger.error("GITLAB_WEBHOOK_SECRET not configured - rejecting webhook for security")
+        return False
+    if not token:
+        return False
+    return hmac.compare_digest(token, expected_token)
 
 
 @router.post("/gitlab")
@@ -127,14 +134,14 @@ async def gitlab_webhook(
             },
         )
 
-        # Step 2: Token Verification
+        # Step 2: Token Verification (CAB-DDoS: always enforce)
         webhook_secret = getattr(settings, 'GITLAB_WEBHOOK_SECRET', '')
-        if webhook_secret and not verify_gitlab_token(x_gitlab_token, webhook_secret):
+        if not verify_gitlab_token(x_gitlab_token, webhook_secret):
             await service.add_step(
                 trace,
                 name="token_verification",
                 status="failed",
-                error="Invalid webhook token",
+                error="Invalid or missing webhook token",
             )
             await service.complete(trace, TraceStatusDB.FAILED, "Authentication failed: Invalid webhook token")
             raise HTTPException(status_code=401, detail="Invalid webhook token")

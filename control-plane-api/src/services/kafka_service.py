@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 
 from kafka import KafkaConsumer, KafkaProducer
+from kafka.admin import KafkaAdminClient, ConfigResource, ConfigResourceType
 from kafka.errors import KafkaError
 
 from ..config import settings
@@ -15,6 +16,25 @@ logger = logging.getLogger(__name__)
 
 EVENT_SOURCE = "control-plane-api"
 EVENT_VERSION = "1.0"
+
+
+# Kafka quota tiers for multi-tenant noisy neighbor prevention
+class QuotaTier:
+    """Kafka quota configuration for tenant isolation."""
+
+    # Standard tier: reasonable defaults for most tenants
+    STANDARD = {
+        "producer_byte_rate": 10 * 1024 * 1024,  # 10 MB/s
+        "consumer_byte_rate": 20 * 1024 * 1024,  # 20 MB/s
+        "request_percentage": 25.0,  # 25% of broker request handling capacity
+    }
+
+    # Premium tier: higher limits for enterprise tenants
+    PREMIUM = {
+        "producer_byte_rate": 50 * 1024 * 1024,  # 50 MB/s
+        "consumer_byte_rate": 100 * 1024 * 1024,  # 100 MB/s
+        "request_percentage": 50.0,  # 50% of broker request handling capacity
+    }
 
 
 # Kafka topics — stoa.X.Y naming convention
@@ -57,6 +77,7 @@ class KafkaService:
     def __init__(self):
         self._producer: KafkaProducer | None = None
         self._consumers: dict[str, KafkaConsumer] = {}
+        self._admin_client: KafkaAdminClient | None = None
 
     async def connect(self):
         """Initialize Kafka producer with retry logic"""
@@ -80,7 +101,15 @@ class KafkaService:
                     request_timeout_ms=10000,
                     api_version_auto_timeout_ms=10000,
                 )
-                logger.info("Kafka producer connected")
+
+                # Initialize admin client for quota management
+                self._admin_client = KafkaAdminClient(
+                    bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS.split(","),
+                    request_timeout_ms=10000,
+                    api_version_auto_timeout_ms=10000,
+                )
+
+                logger.info("Kafka producer and admin client connected")
                 return
             except Exception as e:
                 if attempt < max_retries - 1:
@@ -95,6 +124,10 @@ class KafkaService:
         if self._producer:
             self._producer.close()
             self._producer = None
+
+        if self._admin_client:
+            self._admin_client.close()
+            self._admin_client = None
 
         for consumer in self._consumers.values():
             consumer.close()
@@ -276,6 +309,108 @@ class KafkaService:
 
         logger.info(f"Created consumer {consumer_id} for topics: {topics}")
         return consumer
+
+    def configure_tenant_quota(self, tenant_id: str, tier: str = "standard") -> bool:
+        """
+        Configure Kafka quotas for a tenant to prevent noisy neighbor issues.
+
+        Quotas are applied using client-id prefixes:
+        - Standard tenants: tenant-{tenant_id}-*
+        - Premium tenants: tenant-premium-{tenant_id}-*
+
+        Args:
+            tenant_id: Tenant identifier
+            tier: Quota tier ("standard" or "premium")
+
+        Returns:
+            True if quotas were configured successfully
+
+        Raises:
+            RuntimeError: If admin client is not initialized
+            ValueError: If tier is invalid
+        """
+        if not settings.KAFKA_ENABLED:
+            logger.info(f"Kafka disabled — skipping quota configuration for tenant {tenant_id}")
+            return True
+
+        if not self._admin_client:
+            raise RuntimeError("Kafka admin client not initialized")
+
+        if tier not in ["standard", "premium"]:
+            raise ValueError(f"Invalid tier: {tier}. Must be 'standard' or 'premium'")
+
+        quota_config = QuotaTier.STANDARD if tier == "standard" else QuotaTier.PREMIUM
+        client_id_prefix = f"tenant-{tier}-{tenant_id}" if tier == "premium" else f"tenant-{tenant_id}"
+
+        try:
+            # Create client quota entity for this tenant's client-id prefix
+            # Kafka quotas use ConfigResource with CLIENT entity type
+            quota_entity = ConfigResource(
+                ConfigResourceType.CLIENT,
+                name=client_id_prefix,
+                configs={
+                    "producer_byte_rate": str(quota_config["producer_byte_rate"]),
+                    "consumer_byte_rate": str(quota_config["consumer_byte_rate"]),
+                    "request_percentage": str(quota_config["request_percentage"]),
+                },
+            )
+
+            # Apply quota configuration
+            self._admin_client.alter_configs([quota_entity])
+
+            logger.info(
+                f"Configured {tier} quotas for tenant {tenant_id} "
+                f"(client-id prefix: {client_id_prefix}): "
+                f"{quota_config['producer_byte_rate'] / (1024*1024):.0f}MB/s prod, "
+                f"{quota_config['consumer_byte_rate'] / (1024*1024):.0f}MB/s cons, "
+                f"{quota_config['request_percentage']:.0f}% CPU"
+            )
+            return True
+
+        except KafkaError as e:
+            logger.error(f"Failed to configure quotas for tenant {tenant_id}: {e}")
+            raise
+
+    def get_tenant_quota(self, tenant_id: str, tier: str = "standard") -> dict:
+        """
+        Retrieve current quota configuration for a tenant.
+
+        Args:
+            tenant_id: Tenant identifier
+            tier: Quota tier ("standard" or "premium")
+
+        Returns:
+            Dictionary with quota values (producer_byte_rate, consumer_byte_rate, request_percentage)
+
+        Raises:
+            RuntimeError: If admin client is not initialized
+        """
+        if not settings.KAFKA_ENABLED:
+            return {}
+
+        if not self._admin_client:
+            raise RuntimeError("Kafka admin client not initialized")
+
+        client_id_prefix = f"tenant-{tier}-{tenant_id}" if tier == "premium" else f"tenant-{tenant_id}"
+
+        try:
+            # Describe client quota configuration
+            quota_entity = ConfigResource(ConfigResourceType.CLIENT, name=client_id_prefix)
+            configs = self._admin_client.describe_configs([quota_entity])
+
+            if not configs:
+                return {}
+
+            config_dict = configs[0].resources[0][4]  # configs tuple format: (type, name, error, msg, configs)
+            return {
+                "producer_byte_rate": int(config_dict.get("producer_byte_rate", {}).get("value", 0)),
+                "consumer_byte_rate": int(config_dict.get("consumer_byte_rate", {}).get("value", 0)),
+                "request_percentage": float(config_dict.get("request_percentage", {}).get("value", 0)),
+            }
+
+        except KafkaError as e:
+            logger.error(f"Failed to get quotas for tenant {tenant_id}: {e}")
+            return {}
 
 
 # Global instance

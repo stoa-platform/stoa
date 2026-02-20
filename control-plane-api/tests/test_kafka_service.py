@@ -8,6 +8,7 @@ from src.services.kafka_service import (
     EVENT_SOURCE,
     EVENT_VERSION,
     KafkaService,
+    QuotaTier,
     Topics,
 )
 
@@ -227,3 +228,155 @@ class TestConvenienceMethods:
             user_id="user-1",
         )
         assert isinstance(event_id, str)
+
+
+class TestQuotaTiers:
+    """Verify quota tier constants are correctly defined."""
+
+    def test_standard_tier_producer_rate(self):
+        assert QuotaTier.STANDARD["producer_byte_rate"] == 10 * 1024 * 1024  # 10 MB/s
+
+    def test_standard_tier_consumer_rate(self):
+        assert QuotaTier.STANDARD["consumer_byte_rate"] == 20 * 1024 * 1024  # 20 MB/s
+
+    def test_standard_tier_request_percentage(self):
+        assert QuotaTier.STANDARD["request_percentage"] == 25.0  # 25%
+
+    def test_premium_tier_producer_rate(self):
+        assert QuotaTier.PREMIUM["producer_byte_rate"] == 50 * 1024 * 1024  # 50 MB/s
+
+    def test_premium_tier_consumer_rate(self):
+        assert QuotaTier.PREMIUM["consumer_byte_rate"] == 100 * 1024 * 1024  # 100 MB/s
+
+    def test_premium_tier_request_percentage(self):
+        assert QuotaTier.PREMIUM["request_percentage"] == 50.0  # 50%
+
+
+class TestConfigureTenantQuota:
+    """Tests for Kafka tenant quota configuration."""
+
+    @patch("src.services.kafka_service.settings")
+    def test_configure_quota_disabled_returns_true(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = False
+        result = kafka_svc.configure_tenant_quota("acme", "standard")
+        assert result is True
+
+    @patch("src.services.kafka_service.settings")
+    def test_configure_quota_no_admin_client_raises(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = True
+        kafka_svc._admin_client = None
+        with pytest.raises(RuntimeError, match="not initialized"):
+            kafka_svc.configure_tenant_quota("acme", "standard")
+
+    @patch("src.services.kafka_service.settings")
+    def test_configure_quota_invalid_tier_raises(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = True
+        mock_admin = MagicMock()
+        kafka_svc._admin_client = mock_admin
+        with pytest.raises(ValueError, match="Invalid tier"):
+            kafka_svc.configure_tenant_quota("acme", "invalid")
+
+    @patch("src.services.kafka_service.settings")
+    def test_configure_standard_quota_success(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = True
+        mock_admin = MagicMock()
+        kafka_svc._admin_client = mock_admin
+
+        result = kafka_svc.configure_tenant_quota("acme", "standard")
+
+        assert result is True
+        mock_admin.alter_configs.assert_called_once()
+        call_args = mock_admin.alter_configs.call_args[0][0]
+        assert len(call_args) == 1
+        quota_entity = call_args[0]
+        assert quota_entity.name == "tenant-acme"
+        assert quota_entity.configs["producer_byte_rate"] == str(10 * 1024 * 1024)
+        assert quota_entity.configs["consumer_byte_rate"] == str(20 * 1024 * 1024)
+        assert quota_entity.configs["request_percentage"] == "25.0"
+
+    @patch("src.services.kafka_service.settings")
+    def test_configure_premium_quota_success(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = True
+        mock_admin = MagicMock()
+        kafka_svc._admin_client = mock_admin
+
+        result = kafka_svc.configure_tenant_quota("acme", "premium")
+
+        assert result is True
+        mock_admin.alter_configs.assert_called_once()
+        call_args = mock_admin.alter_configs.call_args[0][0]
+        quota_entity = call_args[0]
+        assert quota_entity.name == "tenant-premium-acme"
+        assert quota_entity.configs["producer_byte_rate"] == str(50 * 1024 * 1024)
+        assert quota_entity.configs["consumer_byte_rate"] == str(100 * 1024 * 1024)
+        assert quota_entity.configs["request_percentage"] == "50.0"
+
+    @patch("src.services.kafka_service.settings")
+    def test_configure_quota_kafka_error_raises(self, mock_settings, kafka_svc):
+        """Verify that Kafka errors are propagated."""
+        from kafka.errors import KafkaError
+
+        mock_settings.KAFKA_ENABLED = True
+        mock_admin = MagicMock()
+        mock_admin.alter_configs.side_effect = KafkaError("Connection failed")
+        kafka_svc._admin_client = mock_admin
+
+        with pytest.raises(KafkaError):
+            kafka_svc.configure_tenant_quota("acme", "standard")
+
+
+class TestGetTenantQuota:
+    """Tests for retrieving tenant quota configuration."""
+
+    @patch("src.services.kafka_service.settings")
+    def test_get_quota_disabled_returns_empty(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = False
+        result = kafka_svc.get_tenant_quota("acme", "standard")
+        assert result == {}
+
+    @patch("src.services.kafka_service.settings")
+    def test_get_quota_no_admin_client_raises(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = True
+        kafka_svc._admin_client = None
+        with pytest.raises(RuntimeError, match="not initialized"):
+            kafka_svc.get_tenant_quota("acme", "standard")
+
+    @patch("src.services.kafka_service.settings")
+    def test_get_quota_success(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = True
+        mock_admin = MagicMock()
+
+        # Mock the response structure from describe_configs
+        mock_config_entry = MagicMock()
+        mock_config_entry.resources = [
+            (
+                None,  # type
+                "tenant-acme",  # name
+                None,  # error
+                None,  # msg
+                {  # configs
+                    "producer_byte_rate": {"value": "10485760"},
+                    "consumer_byte_rate": {"value": "20971520"},
+                    "request_percentage": {"value": "25.0"},
+                },
+            )
+        ]
+        mock_admin.describe_configs.return_value = [mock_config_entry]
+        kafka_svc._admin_client = mock_admin
+
+        result = kafka_svc.get_tenant_quota("acme", "standard")
+
+        assert result["producer_byte_rate"] == 10485760
+        assert result["consumer_byte_rate"] == 20971520
+        assert result["request_percentage"] == 25.0
+
+    @patch("src.services.kafka_service.settings")
+    def test_get_quota_not_found_returns_empty(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = True
+        mock_admin = MagicMock()
+        mock_admin.describe_configs.return_value = []
+        kafka_svc._admin_client = mock_admin
+
+        result = kafka_svc.get_tenant_quota("nonexistent", "standard")
+
+        assert result == {}

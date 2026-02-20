@@ -27,6 +27,11 @@ metadata:
     # GF_SECURITY_ALLOW_EMBEDDING=true (disables X-Frame-Options: deny)
     # GF_AUTH_ANONYMOUS_ENABLED=true + GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
     # Note: nginx configuration-snippet is blocked by ingress admission webhook
+    # DDoS mitigation: rate limiting (CAB-DDoS)
+    nginx.ingress.kubernetes.io/limit-rps: "15"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+    nginx.ingress.kubernetes.io/limit-whitelist: "10.0.0.0/8,172.16.0.0/12"
 spec:
   ingressClassName: nginx
   tls:

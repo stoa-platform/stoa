@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from prometheus_client import openmetrics
+from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
 from .cache.cleanup import cache_cleanup_worker
@@ -273,6 +274,18 @@ def create_app() -> FastAPI:
     # OpenTelemetry distributed tracing (CAB-1088)
     # Must be configured before middleware so FastAPI auto-instrumentation works
     configure_tracing(app, settings)
+
+    # Rate limiting (CAB-DDoS) - defense-in-depth with nginx ingress limits
+    if settings.rate_limit_enabled:
+        from .middleware.rate_limit import limiter, rate_limit_exceeded_handler, OAUTH_LIMIT, TOOL_INVOKE_LIMIT
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+        logger.info(
+            "Rate limiting ENABLED",
+            default_limit="60/minute",
+            oauth_limit=OAUTH_LIMIT,
+            tool_limit=TOOL_INVOKE_LIMIT,
+        )
 
     # Shadow mode middleware for Python → Rust migration
     if settings.shadow_mode_enabled:
@@ -757,6 +770,7 @@ def register_routes(app: FastAPI) -> None:
         return {"subscriptions": []}
 
     @app.post("/tools/{tool_name}", tags=["MCP REST"])
+    @limiter.limit(TOOL_INVOKE_LIMIT)
     async def call_tool_rest(tool_name: str, request: Request) -> dict[str, Any]:
         """Call an MCP tool (REST endpoint for Claude.ai hybrid mode)."""
         from .models.mcp import ToolInvocation
@@ -890,6 +904,7 @@ def register_routes(app: FastAPI) -> None:
     # OAuth Token Proxy - Proxies token requests to Keycloak
     # This is needed because Claude.ai servers may not be able to reach auth.gostoa.dev directly
     @app.post("/oauth/token", tags=["OAuth"])
+    @limiter.limit(OAUTH_LIMIT)
     async def oauth_token_proxy(request: Request) -> JSONResponse:
         """Proxy OAuth token requests to Keycloak.
 
@@ -898,6 +913,12 @@ def register_routes(app: FastAPI) -> None:
         """
         settings = get_settings()
         keycloak_token_url = f"{settings.keycloak_issuer}/protocol/openid-connect/token"
+
+        # CAB-DDoS: Reject oversized payloads
+        content_length = request.headers.get("content-length", "0")
+        if int(content_length) > 8192:
+            logger.warning("OAuth token request too large", size=content_length)
+            raise HTTPException(status_code=413, detail="Request too large")
 
         # Get the form data from the request
         form_data = await request.form()
@@ -910,6 +931,7 @@ def register_routes(app: FastAPI) -> None:
             "Proxying token request to Keycloak",
             grant_type=form_dict.get("grant_type"),
             client_id=form_dict.get("client_id"),
+            client_ip=request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown"),
         )
 
         # Forward headers (especially Authorization for client credentials)
@@ -957,6 +979,7 @@ def register_routes(app: FastAPI) -> None:
     # OAuth Registration Proxy - Proxies DCR requests to Keycloak
     # Forces public client creation for MCP OAuth (PKCE-based authentication)
     @app.post("/oauth/register", tags=["OAuth"])
+    @limiter.limit(REGISTER_LIMIT)
     async def oauth_register_proxy(request: Request) -> JSONResponse:
         """Proxy OAuth Dynamic Client Registration to Keycloak.
 
@@ -974,6 +997,12 @@ def register_routes(app: FastAPI) -> None:
         keycloak_register_url = f"{settings.keycloak_issuer}/clients-registrations/openid-connect"
         keycloak_admin_url = f"{settings.keycloak_url}/admin/realms/{settings.keycloak_realm}"
         keycloak_token_url = f"{settings.keycloak_url}/realms/master/protocol/openid-connect/token"
+
+        # CAB-DDoS: Reject oversized payloads
+        content_length = request.headers.get("content-length", "0")
+        if int(content_length) > 16384:
+            logger.warning("OAuth register request too large", size=content_length)
+            raise HTTPException(status_code=413, detail="Request too large")
 
         body = await request.body()
 

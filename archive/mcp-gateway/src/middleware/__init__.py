@@ -16,6 +16,14 @@ from .metrics import (
     record_tool_invocation,
     update_tools_registered,
 )
+from .rate_limit import (
+    limiter,
+    rate_limit_exceeded_handler,
+    OAUTH_LIMIT,
+    TOOL_INVOKE_LIMIT,
+    REGISTER_LIMIT,
+    PUBLIC_LIMIT,
+)
 from .response_transformer import ResponseTransformerMiddleware
 from .shadow import ShadowMiddleware
 from .token_counter import TokenCounterMiddleware
@@ -35,6 +43,13 @@ __all__ = [
     "record_auth_attempt",
     "record_backend_request",
     "update_tools_registered",
+    # Rate Limiting (CAB-DDoS)
+    "limiter",
+    "rate_limit_exceeded_handler",
+    "OAUTH_LIMIT",
+    "TOOL_INVOKE_LIMIT",
+    "REGISTER_LIMIT",
+    "PUBLIC_LIMIT",
     # Shadow (Python → Rust Migration)
     "ShadowMiddleware",
     # Token Optimization (CAB-881)

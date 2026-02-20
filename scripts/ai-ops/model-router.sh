@@ -6,13 +6,15 @@
 #        TURNS=$(echo "$ROUTE" | cut -d'|' -f2)
 
 # Tiered model routing (implementation jobs):
-#   <=5pts       → Sonnet, 20 turns  (~$6/ticket)
-#   <=8pts       → Sonnet, 30 turns  (~$9.50/ticket)
+#   <=3pts       → Sonnet, 25 turns  (~$7/ticket)
+#   <=8pts       → Sonnet, 40 turns  (~$12/ticket)
 #   >8pts        → Sonnet, 60 turns  (~$16.50/ticket)
 #
 # Haiku is reserved for council/plan-validate (structured evaluation).
 # Implementation always requires Sonnet — Haiku lacks the capacity to
 # create branches, write code, run tests, and open PRs reliably.
+#
+# Turn budget accounts for action overhead (~5-8 turns for branch+PR+tests).
 
 route_model() {
   local ESTIMATE="${1:-0}"
@@ -26,10 +28,10 @@ route_model() {
     ESTIMATE=0
   fi
 
-  if [ "$ESTIMATE" -le 5 ]; then
-    echo "claude-sonnet-4-5-20250929|20"
+  if [ "$ESTIMATE" -le 3 ]; then
+    echo "claude-sonnet-4-5-20250929|25"
   elif [ "$ESTIMATE" -le 8 ]; then
-    echo "claude-sonnet-4-5-20250929|30"
+    echo "claude-sonnet-4-5-20250929|40"
   else
     echo "claude-sonnet-4-5-20250929|60"
   fi

@@ -53,3 +53,10 @@ console:
 # Monitoring
 monitoring:
   enabled: false
+
+# Event Backbone configuration (CAB-497)
+# For production deployments:
+# - Set statefulset.replicas: 3
+# - Enable monitoring: true
+# - Configure ISR: min.insync.replicas=2 (set per topic)
+# - Set replication.factor=3 (set per topic)

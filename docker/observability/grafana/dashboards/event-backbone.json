@@ -1,0 +1,298 @@
+{
+  "dashboard": {
+    "title": "Event Backbone - Kafka/Redpanda",
+    "tags": ["kafka", "redpanda", "event-backbone", "slo"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "title": "SLO Compliance Overview",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "slo:kafka_event_backbone:compliance * 100",
+            "legendFormat": "Overall Compliance",
+            "refId": "A"
+          },
+          {
+            "expr": "slo:kafka_audit:status * 100",
+            "legendFormat": "Audit SLO",
+            "refId": "B"
+          },
+          {
+            "expr": "slo:kafka_catalog:status * 100",
+            "legendFormat": "Catalog SLO",
+            "refId": "C"
+          },
+          {
+            "expr": "slo:kafka_error:status * 100",
+            "legendFormat": "Error SLO",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 90, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            }
+          }
+        },
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "orientation": "horizontal"
+        }
+      },
+      {
+        "title": "Producer Latency SLOs",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+        "targets": [
+          {
+            "expr": "slo:kafka_audit_producer_latency_p95:seconds * 1000",
+            "legendFormat": "Audit P95 (target: <500ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "slo:kafka_catalog_producer_latency_p95:seconds * 1000",
+            "legendFormat": "Catalog P95 (target: <2000ms)",
+            "refId": "B"
+          },
+          {
+            "expr": "slo:kafka_error_producer_latency_p95:seconds * 1000",
+            "legendFormat": "Error P95 (target: <1000ms)",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "custom": {
+              "drawStyle": "line",
+              "lineWidth": 2
+            }
+          }
+        },
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": ["mean", "max", "last"]
+          }
+        }
+      },
+      {
+        "title": "Consumer Lag (Records)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+        "targets": [
+          {
+            "expr": "kafka:audit_consumer_lag:records",
+            "legendFormat": "Audit Consumer Lag",
+            "refId": "A"
+          },
+          {
+            "expr": "kafka:catalog_consumer_lag:records",
+            "legendFormat": "Catalog Consumer Lag",
+            "refId": "B"
+          },
+          {
+            "expr": "kafka:error_consumer_lag:records",
+            "legendFormat": "Error Consumer Lag",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 20
+            }
+          }
+        }
+      },
+      {
+        "title": "Event Production Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+        "targets": [
+          {
+            "expr": "sum by (topic) (rate(kafka_producer_record_send_total{topic=~\"stoa.audit.events|stoa.catalog.changes|stoa.errors\"}[5m]))",
+            "legendFormat": "{{topic}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "stacking": {
+                "mode": "normal"
+              }
+            }
+          }
+        }
+      },
+      {
+        "title": "Event Consumption Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+        "targets": [
+          {
+            "expr": "sum by (topic) (rate(kafka_consumer_records_consumed_total{topic=~\"stoa.audit.events|stoa.catalog.changes|stoa.errors\"}[5m]))",
+            "legendFormat": "{{topic}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "stacking": {
+                "mode": "normal"
+              }
+            }
+          }
+        }
+      },
+      {
+        "title": "Redpanda Cluster Health",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 22},
+        "targets": [
+          {
+            "expr": "redpanda:under_replicated_partitions:count",
+            "legendFormat": "Under-Replicated",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "red"}
+              ]
+            }
+          }
+        },
+        "options": {
+          "colorMode": "background"
+        }
+      },
+      {
+        "title": "Partitions per Broker",
+        "type": "gauge",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 22},
+        "targets": [
+          {
+            "expr": "redpanda:partitions_per_broker:count",
+            "legendFormat": "Node {{node_id}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 100, "color": "yellow"},
+                {"value": 200, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "ISR Shrink Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 22},
+        "targets": [
+          {
+            "expr": "redpanda:isr_shrinks:rate",
+            "legendFormat": "ISR Shrinks/sec",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "custom": {
+              "drawStyle": "line"
+            }
+          }
+        }
+      },
+      {
+        "title": "Topic Retention & Partition Info",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "count by (topic) (kafka_topic_partition_current_offset{topic=~\"stoa.audit.events|stoa.catalog.changes|stoa.errors\"})",
+            "legendFormat": "{{topic}}",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "renameByName": {
+                "topic": "Topic",
+                "Value": "Partitions"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "text": "Prometheus",
+            "value": "Prometheus"
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Deployments",
+          "type": "tags"
+        }
+      ]
+    }
+  }
+}

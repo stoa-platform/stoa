@@ -1,0 +1,159 @@
+# Kafka Event Backbone SLO Recording Rules
+# SLOs for audit, catalog, and error event streams
+#
+# Target SLOs:
+# - Audit events: p95 latency < 500ms (compliance-critical)
+# - Catalog events: p95 latency < 2s (real-time sync)
+# - Error events: p95 latency < 1s (alerting/debugging)
+# - Overall availability: 99.9% (3 9s)
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kafka-event-backbone-slo
+  namespace: stoa-system
+  labels:
+    app: stoa-platform
+    prometheus: stoa
+    role: recording-rules
+spec:
+  groups:
+    # ==========================================================================
+    # Event Backbone Latency SLOs
+    # ==========================================================================
+    - name: kafka-event-backbone-latency
+      interval: 1m
+      rules:
+        # Audit event producer latency P95 (target: < 500ms)
+        - record: slo:kafka_audit_producer_latency_p95:seconds
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(kafka_producer_record_send_duration_seconds_bucket{topic="stoa.audit.events"}[5m])) by (le)
+            )
+
+        # Catalog event producer latency P95 (target: < 2s)
+        - record: slo:kafka_catalog_producer_latency_p95:seconds
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(kafka_producer_record_send_duration_seconds_bucket{topic="stoa.catalog.changes"}[5m])) by (le)
+            )
+
+        # Error event producer latency P95 (target: < 1s)
+        - record: slo:kafka_error_producer_latency_p95:seconds
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(kafka_producer_record_send_duration_seconds_bucket{topic="stoa.errors"}[5m])) by (le)
+            )
+
+        # Audit event end-to-end latency (produce → consume)
+        - record: slo:kafka_audit_e2e_latency_p95:seconds
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(kafka_consumer_records_lag_seconds_bucket{topic="stoa.audit.events"}[5m])) by (le)
+            )
+
+    # ==========================================================================
+    # Consumer Lag Monitoring
+    # ==========================================================================
+    - name: kafka-consumer-lag
+      interval: 30s
+      rules:
+        # Total consumer lag across all topics
+        - record: kafka:consumer_lag_total:records
+          expr: |
+            sum by (consumer_group, topic) (kafka_consumer_group_lag)
+
+        # Audit consumer lag (critical for compliance)
+        - record: kafka:audit_consumer_lag:records
+          expr: |
+            sum(kafka_consumer_group_lag{topic="stoa.audit.events"})
+
+        # Catalog consumer lag
+        - record: kafka:catalog_consumer_lag:records
+          expr: |
+            sum(kafka_consumer_group_lag{topic="stoa.catalog.changes"})
+
+        # Error consumer lag
+        - record: kafka:error_consumer_lag:records
+          expr: |
+            sum(kafka_consumer_group_lag{topic="stoa.errors"})
+
+    # ==========================================================================
+    # Kafka Availability & Throughput
+    # ==========================================================================
+    - name: kafka-availability
+      interval: 1m
+      rules:
+        # Event production success rate
+        - record: kafka:produce_success_rate:ratio
+          expr: |
+            sum(rate(kafka_producer_record_send_total{status="success"}[5m]))
+            /
+            sum(rate(kafka_producer_record_send_total[5m]))
+
+        # Messages produced per second
+        - record: kafka:messages_produced:rate
+          expr: |
+            sum(rate(kafka_producer_record_send_total[5m]))
+
+        # Messages consumed per second
+        - record: kafka:messages_consumed:rate
+          expr: |
+            sum(rate(kafka_consumer_records_consumed_total[5m]))
+
+        # Topic throughput (per topic)
+        - record: kafka:topic_throughput_by_topic:bytes_per_sec
+          expr: |
+            sum by (topic) (rate(kafka_topic_partition_current_offset[5m])) * 1024
+
+    # ==========================================================================
+    # Redpanda Cluster Health
+    # ==========================================================================
+    - name: redpanda-cluster-health
+      interval: 30s
+      rules:
+        # Under-replicated partitions (should be 0)
+        - record: redpanda:under_replicated_partitions:count
+          expr: |
+            sum(redpanda_kafka_under_replicated_replicas)
+
+        # Partition count per broker
+        - record: redpanda:partitions_per_broker:count
+          expr: |
+            sum by (node_id) (redpanda_kafka_partitions)
+
+        # ISR (In-Sync Replicas) shrink rate
+        - record: redpanda:isr_shrinks:rate
+          expr: |
+            sum(rate(redpanda_kafka_isr_shrinks_total[5m]))
+
+    # ==========================================================================
+    # SLO Compliance Indicators
+    # ==========================================================================
+    - name: kafka-slo-compliance
+      interval: 1m
+      rules:
+        # Audit SLO status (1 = compliant, 0 = non-compliant)
+        - record: slo:kafka_audit:status
+          expr: |
+            (slo:kafka_audit_producer_latency_p95:seconds < 0.5) * 1 + (slo:kafka_audit_producer_latency_p95:seconds >= 0.5) * 0
+
+        # Catalog SLO status
+        - record: slo:kafka_catalog:status
+          expr: |
+            (slo:kafka_catalog_producer_latency_p95:seconds < 2.0) * 1 + (slo:kafka_catalog_producer_latency_p95:seconds >= 2.0) * 0
+
+        # Error SLO status
+        - record: slo:kafka_error:status
+          expr: |
+            (slo:kafka_error_producer_latency_p95:seconds < 1.0) * 1 + (slo:kafka_error_producer_latency_p95:seconds >= 1.0) * 0
+
+        # Overall event backbone compliance
+        - record: slo:kafka_event_backbone:compliance
+          expr: |
+            (
+              slo:kafka_audit:status
+              + slo:kafka_catalog:status
+              + slo:kafka_error:status
+              + (kafka:produce_success_rate:ratio >= 0.999) * 1
+            ) / 4

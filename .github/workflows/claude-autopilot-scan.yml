@@ -142,6 +142,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_actors: "github-actions[bot]"
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
             Do NOT read memory.md, plan.md, or operations.log for session state.

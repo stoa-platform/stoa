@@ -77,6 +77,17 @@ Create these labels in your repository (Settings > Labels):
    - Events: Issue updates
 5. Activate the workflow
 
+## Step 5b: Setup Merge PR Relay (Ask Mode)
+
+1. Import `scripts/ai-ops/n8n-merge-pr.json` into n8n
+2. Ensure the workflow uses the same `GitHub PAT` credential and `APPROVE_HMAC_SECRET` variable as the approve-ticket workflow
+3. Add repo variable: `Settings > Secrets and variables > Actions > Variables > New repository variable`
+   - Name: `N8N_MERGE_WEBHOOK_URL`
+   - Value: `https://<your-n8n>/webhook/merge-pr`
+4. Activate the workflow in n8n
+
+This adds a one-click "Merge PR" button to Ask-mode Slack notifications. Without this variable, the button falls back to linking directly to the PR.
+
 ## Step 6: Verify Scheduled Tasks (Level 2)
 
 Scheduled tasks start automatically after merge to main.

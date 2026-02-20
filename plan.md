@@ -111,6 +111,7 @@
 - [x] CAB-1323: [MEGA] DX: Portal Governance — Multi-Audience + RBAC Fine-Grained (34 pts) — PRs #697, #714, #719 (3 phases)
 - [x] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts) — PR #646
 - [x] CAB-1386: AI Factory Observability Phase 1 — Pushgateway + Grafana Dashboard (13 pts) — PR #747 (Council 8.50/10)
+- [x] CAB-1386: AI Factory Observability Phase 2+3 — Alerting Rules + Merge PR Button + Scan Fix — PR #750
 
 ### In Progress
 

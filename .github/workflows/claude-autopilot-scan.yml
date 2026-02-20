@@ -317,11 +317,13 @@ jobs:
           # Write existing issue links to a file (multiline strings don't work in GITHUB_ENV)
           printf '%b' "$EXISTING_LINKS" > /tmp/existing-issues.txt
 
-      # Summary Slack notification + Job Summary
+      # Summary Slack notification + Metrics + Job Summary
       - name: Slack Summary
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
 
@@ -331,6 +333,7 @@ jobs:
           SKIPPED="${SCAN_SKIPPED:-0}"
           DRY="${{ inputs.dry_run }}"
           COUNCIL_OK="${{ steps.council.outcome }}"
+          MAX_DAILY=${{ inputs.max_tickets || vars.AUTOPILOT_DAILY_MAX || '5' }}
 
           DURATION=$(( $(date +%s) - ${SCAN_START:-$(date +%s)} ))
           if [ "$CAPPED" = "true" ]; then
@@ -339,11 +342,20 @@ jobs:
             notify_scan "0" "0"
           elif [ "$COUNCIL_OK" != "success" ]; then
             notify_error "claude-autopilot-scan" "council" "" "" "$DURATION"
+            push_metrics_error "autopilot-scan" "council"
           elif [ "$DRY" = "true" ]; then
             notify_scan "$TOTAL" "0"
           else
             notify_scan "$TOTAL" "$CREATED" "" "$SKIPPED"
           fi
+
+          # Push scan metrics (velocity, candidates, dispatched)
+          TODAY_COUNT="${{ vars.AUTOPILOT_TODAY_COUNT }}"
+          TODAY=$(date -u +%Y-%m-%d)
+          COUNT_DATE=$(echo "$TODAY_COUNT" | cut -d: -f1 2>/dev/null || echo "")
+          COUNT_VAL=$(echo "$TODAY_COUNT" | cut -d: -f2 2>/dev/null || echo "0")
+          [ "$COUNT_DATE" != "$TODAY" ] && COUNT_VAL=0
+          push_metrics_scan "$TOTAL" "$CREATED" "$COUNT_VAL" "$MAX_DAILY" "$CAPPED"
 
       - name: Write Job Summary
         if: always()

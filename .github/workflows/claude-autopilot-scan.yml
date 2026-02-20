@@ -7,7 +7,8 @@ name: Claude Autopilot Scan
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5'  # 08:00 UTC, Mon-Fri
+    - cron: '0 8 * * 1-5'   # Morning scan: 08:00 UTC, Mon-Fri
+    - cron: '0 14 * * 1-5'  # Afternoon scan: 14:00 UTC, Mon-Fri
   workflow_dispatch:
     inputs:
       max_tickets:

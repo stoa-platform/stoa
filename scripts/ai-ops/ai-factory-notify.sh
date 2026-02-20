@@ -50,6 +50,19 @@ _approve_url() {
   fi
 }
 
+_merge_url() {
+  # Build merge button URL: n8n HMAC relay if configured, else PR URL fallback
+  local PR_NUM="$1"
+  local FALLBACK_URL="$2"
+  if [ -n "${N8N_MERGE_WEBHOOK:-}" ] && [ -n "${HMAC_SECRET:-}" ] && [ -n "$PR_NUM" ]; then
+    local HMAC
+    HMAC=$(echo -n "$PR_NUM" | openssl dgst -sha256 -hmac "$HMAC_SECRET" | awk '{print $NF}')
+    echo "${N8N_MERGE_WEBHOOK}?pr=${PR_NUM}&token=${HMAC}"
+  else
+    echo "$FALLBACK_URL"
+  fi
+}
+
 _format_duration() {
   # Convert seconds to human-readable "Xm Ys" format
   local SECS="${1:-0}"
@@ -232,7 +245,20 @@ notify_implement() {
       fi
       ;;
     ask)
-      MSG=":eyes: *${TICKET_ID}* — PR <${PR_URL}|#${PR_NUM}> created (Ask mode)${METRICS}\n\n:point_right: *Manual merge required*\n1. Review the PR → <${PR_URL}|PR #${PR_NUM}>\n2. Merge → \`gh pr merge ${PR_NUM} --squash --delete-branch\`\n\n<${LINEAR_LINK}|Linear>"
+      local MERGE_BTN_URL
+      MERGE_BTN_URL=$(_merge_url "$PR_NUM" "${PR_URL:-}")
+      _send_slack "{
+        \"blocks\": [
+          {\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\":eyes: Ask Mode — Review Required\",\"emoji\":true}},
+          {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*${TICKET_ID}* — PR <${PR_URL}|#${PR_NUM}> created${METRICS}\n<${LINEAR_LINK}|Linear> | <$(_run_url)|GHA Run>\"}},
+          {\"type\":\"actions\",\"elements\":[
+            {\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"Review PR\"},\"url\":\"${PR_URL}\"},
+            {\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\":white_check_mark: Merge PR\",\"emoji\":true},\"url\":\"${MERGE_BTN_URL}\",\"style\":\"primary\"}
+          ]},
+          {\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"STOA AI Factory | ${PIPELINE} | $(date -u +%H:%M) UTC\"}]}
+        ]
+      }"
+      return 0
       ;;
     failure)
       MSG=":x: *${TICKET_ID}* implementation failed${METRICS}\n<${RUN_LINK}|View Logs> | <${LINEAR_LINK}|Linear>"

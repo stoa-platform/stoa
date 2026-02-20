@@ -492,6 +492,8 @@ jobs:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
+          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET="${{ github.event.client_payload.ticket_id }}"
@@ -1013,6 +1015,8 @@ jobs:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
+          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           STATUS="${{ steps.claude.outcome || 'skipped' }}"

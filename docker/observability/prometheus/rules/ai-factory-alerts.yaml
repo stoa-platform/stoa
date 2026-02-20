@@ -1,0 +1,139 @@
+# AI Factory Alerting Rules
+# Monitors AI Factory pipeline health via Pushgateway metrics.
+#
+# Recording rules: pre-computed aggregations (5m interval)
+# Alert rules: actionable conditions with severity labels
+#
+# Usage:
+#   kubectl apply -f docker/observability/prometheus/rules/ai-factory-alerts.yaml -n stoa-system
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ai-factory-alerts
+  namespace: stoa-system
+  labels:
+    app: stoa-platform
+    prometheus: stoa
+    role: alerting-rules
+spec:
+  groups:
+    # ======================================================================
+    # Recording Rules — pre-computed for dashboard efficiency
+    # ======================================================================
+    - name: ai-factory-recording
+      interval: 5m
+      rules:
+        # Implementation success rate over 24h
+        - record: ai_factory:success_rate:24h
+          expr: |
+            sum(ai_factory_events_total{stage="implement", verdict="success"}) by ()
+            / clamp_min(
+              sum(ai_factory_events_total{stage="implement"}) by (),
+              1
+            )
+
+        # Council go rate over 7d
+        - record: ai_factory:council_go_rate:7d
+          expr: |
+            sum(ai_factory_events_total{stage="council", verdict="go"}) by ()
+            / clamp_min(
+              sum(ai_factory_events_total{stage="council"}) by (),
+              1
+            )
+
+        # Velocity utilization ratio (daily / cap)
+        - record: ai_factory:velocity_utilization:ratio
+          expr: |
+            clamp_max(
+              ai_factory_velocity_daily / clamp_min(ai_factory_velocity_cap, 1),
+              1
+            )
+
+        # Max-turns hit rate over 7d
+        - record: ai_factory:max_turns_rate:7d
+          expr: |
+            sum(ai_factory_events_total{stage="implement", verdict="max_turns"}) by ()
+            / clamp_min(
+              sum(ai_factory_events_total{stage="implement"}) by (),
+              1
+            )
+
+    # ======================================================================
+    # Alert Rules
+    # ======================================================================
+    - name: ai-factory-alerts
+      rules:
+        # High failure rate — pipeline broken
+        - alert: AIFactoryHighFailureRate
+          expr: |
+            (
+              sum(ai_factory_events_total{stage="implement", verdict=~"error|failure"})
+              / clamp_min(sum(ai_factory_events_total{stage="implement"}), 1)
+            ) > 0.4
+          for: 6h
+          labels:
+            severity: warning
+            team: ai-factory
+          annotations:
+            summary: "AI Factory failure rate >40% over 6h"
+            description: >
+              Implementation failure rate is {{ $value | humanizePercentage }}.
+              Check workflow logs for recurring errors.
+
+        # Max-turns spike — turn budget too low or tickets too complex
+        - alert: AIFactoryMaxTurnsSpike
+          expr: |
+            sum(ai_factory_events_total{stage="implement", verdict="max_turns"}) > 3
+          for: 24h
+          labels:
+            severity: warning
+            team: ai-factory
+          annotations:
+            summary: "AI Factory hit max_turns >3 times in 24h"
+            description: >
+              {{ $value }} implementations hit the max_turns limit.
+              Consider increasing turn budgets or breaking down complex tickets.
+
+        # Low council scores — backlog quality or prompt degradation
+        - alert: AIFactoryLowCouncilScores
+          expr: |
+            avg(ai_factory_council_score) < 6.5
+          for: 1h
+          labels:
+            severity: warning
+            team: ai-factory
+          annotations:
+            summary: "AI Factory avg council score <6.5"
+            description: >
+              Average council score is {{ $value }}.
+              Check backlog ticket quality or council prompt effectiveness.
+
+        # Velocity cap saturated — time to increase AUTOPILOT_DAILY_MAX
+        - alert: AIFactoryVelocityCapSaturated
+          expr: |
+            ai_factory:velocity_utilization:ratio >= 1
+          for: 48h
+          labels:
+            severity: info
+            team: ai-factory
+          annotations:
+            summary: "AI Factory at 100% velocity cap for 48h"
+            description: >
+              Daily velocity has been at cap for 48h straight.
+              Consider increasing AUTOPILOT_DAILY_MAX per ramp schedule.
+
+        # Pipeline silent — no events on weekdays
+        - alert: AIFactoryPipelineSilent
+          expr: |
+            sum(ai_factory_events_total) == 0
+              and on() (day_of_week() >= 1 and day_of_week() <= 5)
+          for: 48h
+          labels:
+            severity: critical
+            team: ai-factory
+          annotations:
+            summary: "AI Factory zero events for 48h on weekdays"
+            description: >
+              No AI Factory events detected for 48h during business days.
+              Pipeline may be disabled or broken. Check kill-switches and workflow status.

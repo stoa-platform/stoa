@@ -21,16 +21,36 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 1
           },
           "conditions": [
             {
               "id": "filter-in-progress",
-              "leftValue": "={{ $json.data.status.name }}",
+              "leftValue": "={{ $json.body.data.state.name }}",
               "rightValue": "In Progress",
               "operator": {
                 "type": "string",
                 "operation": "equals"
+              }
+            },
+            {
+              "id": "filter-autopilot-label",
+              "leftValue": "={{ $json.body.data.labels.some(l => l.name === \"autopilot\") }}",
+              "rightValue": "=true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "filter-state-changed",
+              "leftValue": "={{ $json.body.updatedFrom?.stateId ?? '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
               }
             }
           ],
@@ -60,7 +80,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"event_type\": \"linear-ticket-started\",\n  \"client_payload\": {\n    \"ticket_id\": \"{{ $json.data.identifier }}\",\n    \"ticket_title\": \"{{ $json.data.title }}\",\n    \"ticket_description\": \"{{ $json.data.description }}\",\n    \"ticket_priority\": \"{{ $json.data.priority }}\",\n    \"ticket_estimate\": \"{{ $json.data.estimate }}\"\n  }\n}"
+        "jsonBody": "={\n  \"event_type\": \"linear-ticket-started\",\n  \"client_payload\": {\n    \"ticket_id\": \"{{ $json.body.data.identifier }}\",\n    \"ticket_title\": \"{{ $json.body.data.title }}\",\n    \"ticket_description\": \"{{ $json.body.data.description }}\",\n    \"ticket_priority\": \"{{ $json.body.data.priorityLabel }}\",\n    \"ticket_estimate\": \"{{ $json.body.data.estimate }}\"\n  }\n}"
       },
       "id": "dispatch-github",
       "name": "Dispatch GitHub Actions",
@@ -80,7 +100,7 @@
         "url": "={{ $env.SLACK_WEBHOOK }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \":rocket: Linear → Claude: {{ $json.data.identifier }}\",\n        \"emoji\": true\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*{{ $json.data.title }}*\\nTicket moved to In Progress. Council validation + autonomous implementation triggered.\\n\\n:hourglass: Waiting for Council report...\"\n      }\n    }\n  ]\n}"
+        "jsonBody": "={\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \":rocket: Linear → Claude: {{ $json.body.data.identifier }}\",\n        \"emoji\": true\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*{{ $json.body.data.title }}*\\nTicket moved to In Progress. Council validation + autonomous implementation triggered.\\n\\n:hourglass: Waiting for Council report...\"\n      }\n    }\n  ]\n}"
       },
       "id": "slack-notify-start",
       "name": "Slack: Pipeline Started",

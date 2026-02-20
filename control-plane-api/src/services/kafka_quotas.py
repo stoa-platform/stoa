@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import httpx
 
@@ -11,7 +11,7 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 
-class TenantTier(str, Enum):
+class TenantTier(StrEnum):
     """Tenant subscription tier"""
 
     STANDARD = "standard"

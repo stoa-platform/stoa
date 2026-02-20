@@ -385,9 +385,39 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model }}, MaxTurns=${{ steps.route.outputs.turns }}, Stage=implement-fast"
 
+      - name: Detect Partial Success
+        id: detect-partial
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TICKET_ID="${{ github.event.client_payload.ticket_id }}"
+
+          # Search for PRs created by this run (open or merged)
+          PR_INFO=$(gh pr list --state all --search "${TICKET_ID}" \
+            --json number,url,state --jq '.[0] // empty' 2>/dev/null || echo "")
+          PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
+          PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
+          PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")
+
+          if [ -n "$PR_NUM" ]; then
+            echo "pr_found=true" >> "$GITHUB_OUTPUT"
+            echo "pr_num=$PR_NUM" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            echo "pr_state=$PR_STATE" >> "$GITHUB_OUTPUT"
+            echo "PR #${PR_NUM} found (${PR_STATE}) — partial success"
+          else
+            echo "pr_found=false" >> "$GITHUB_OUTPUT"
+            echo "No PR found"
+          fi
+
+          echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
+          echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
+          echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
+
       # Close the loop: find PR, close issue, update Linear, notify Slack
       - name: Close the Loop
-        if: steps.claude.outcome == 'success'
+        if: steps.claude.outcome == 'success' || steps.detect-partial.outputs.pr_found == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -462,11 +492,14 @@ jobs:
             PR_FILES=$(echo "$STAT_LINE" | grep -oE '[0-9]+ files?' | grep -oE '[0-9]+' || echo "")
             PR_LOC=$(echo "$STAT_LINE" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "")
           fi
+          PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
           if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
             notify_implement "$TICKET" "success" "$PR_NUM" "$PR_URL" "" "L3 Ship Fast Path" "$DURATION" "$PR_FILES" "$PR_LOC"
             linear_comment "$TICKET" "success" "$PR_NUM" "$PR_URL" "L3 Ship Fast Path" "$DURATION" "$PR_FILES" "$PR_LOC" "Ship"
           elif [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "" "L3 Ship Fast Path" "$DURATION"
+          elif [ "$STATUS" = "failure" ] && [ "${PR_FOUND}" = "true" ]; then
+            notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "" "L3 Ship Fast Path (max_turns)" "$DURATION" "$PR_FILES" "$PR_LOC"
           else
             notify_error "claude-linear-dispatch" "implement-fast" "$TICKET" "" "$DURATION"
           fi
@@ -804,10 +837,44 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-5' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
 
+      - name: Detect Partial Success
+        id: detect-partial
+        if: always() && steps.verify.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          TICKET_ID=$(gh issue view "$ISSUE_NUM" --json labels --jq \
+            '[.labels[].name | select(test("^CAB-[0-9]+$"))][0] // empty')
+
+          # Search for PRs created by this run (open or merged)
+          PR_INFO=$(gh pr list --state all --search "${TICKET_ID:-issue-${ISSUE_NUM}}" \
+            --json number,url,state --jq '.[0] // empty' 2>/dev/null || echo "")
+          PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
+          PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
+          PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")
+
+          if [ -n "$PR_NUM" ]; then
+            echo "pr_found=true" >> "$GITHUB_OUTPUT"
+            echo "pr_num=$PR_NUM" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            echo "pr_state=$PR_STATE" >> "$GITHUB_OUTPUT"
+            echo "PR #${PR_NUM} found (${PR_STATE}) — partial success"
+          else
+            echo "pr_found=false" >> "$GITHUB_OUTPUT"
+            echo "No PR found"
+          fi
+
+          echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
+          echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
+          echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
+
       # ----- Close the Loop (post-merge feedback) -----
       # After implementation: find merged PR, close GitHub issue, update Linear, notify Slack
       - name: Close the Loop
-        if: steps.claude.outcome == 'success' && steps.verify.outputs.valid == 'true'
+        if: |
+          (steps.claude.outcome == 'success' || steps.detect-partial.outputs.pr_found == 'true') &&
+          steps.verify.outputs.valid == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -940,6 +1007,7 @@ jobs:
             PR_LOC=$(echo "$STAT_LINE" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "")
           fi
 
+          PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
           if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
             notify_implement "$TICKET" "success" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION" "$PR_FILES" "$PR_LOC"
             linear_comment "$TICKET" "success" "$PR_NUM" "$PR_URL" "L3 Pipeline" "$DURATION" "$PR_FILES" "$PR_LOC"
@@ -947,6 +1015,8 @@ jobs:
             notify_implement "$TICKET" "ask" "${PR_NUM:-}" "${PR_URL:-}" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION"
           elif [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION"
+          elif [ "$STATUS" != "success" ] && [ "${PR_FOUND}" = "true" ]; then
+            notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L3 Pipeline (max_turns)" "$DURATION" "$PR_FILES" "$PR_LOC"
           elif [ "$STATUS" = "skipped" ]; then
             notify_implement "$TICKET" "skipped" "" "" "${{ github.event.issue.number }}" "L3 Pipeline"
           else

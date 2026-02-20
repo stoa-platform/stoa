@@ -5,12 +5,14 @@
 #        MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
 #        TURNS=$(echo "$ROUTE" | cut -d'|' -f2)
 
-# Tiered model routing:
-#   Ship <=3pts  → Haiku, 15 turns  (~$2.50/ticket)
-#   <=8pts       → Sonnet, 30 turns (~$9.50/ticket)
-#   >8pts        → Sonnet, 60 turns (~$16.50/ticket)
-#   0pts (unknown) → Sonnet, 30 turns (safe default)
-# Weighted average: ~$6.50/ticket (vs $16.50 flat Sonnet-60)
+# Tiered model routing (implementation jobs):
+#   <=5pts       → Sonnet, 20 turns  (~$6/ticket)
+#   <=8pts       → Sonnet, 30 turns  (~$9.50/ticket)
+#   >8pts        → Sonnet, 60 turns  (~$16.50/ticket)
+#
+# Haiku is reserved for council/plan-validate (structured evaluation).
+# Implementation always requires Sonnet — Haiku lacks the capacity to
+# create branches, write code, run tests, and open PRs reliably.
 
 route_model() {
   local ESTIMATE="${1:-0}"
@@ -24,11 +26,8 @@ route_model() {
     ESTIMATE=0
   fi
 
-  # ESTIMATE=0 means unparsed/unknown — never route to Haiku for unknown complexity
-  if [ "$ESTIMATE" -eq 0 ]; then
-    echo "claude-sonnet-4-5-20250929|30"
-  elif [ "$ESTIMATE" -le 3 ] && [ "$MODE" = "ship" ]; then
-    echo "claude-haiku-4-5-20251001|15"
+  if [ "$ESTIMATE" -le 5 ]; then
+    echo "claude-sonnet-4-5-20250929|20"
   elif [ "$ESTIMATE" -le 8 ]; then
     echo "claude-sonnet-4-5-20250929|30"
   else

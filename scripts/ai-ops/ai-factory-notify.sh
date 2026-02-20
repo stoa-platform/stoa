@@ -100,6 +100,33 @@ _send_slack() {
   }
 }
 
+_push_metrics() {
+  # Internal: push Prometheus text format metrics to Pushgateway.
+  # Graceful degradation if PUSHGATEWAY_URL is unset.
+  # $1 = job path suffix (e.g., "workflow/linear-dispatch/stage/council")
+  # $2 = metrics text (Prometheus exposition format)
+  local JOB_PATH="${1:?}" METRICS_TEXT="${2:?}"
+  if [ -z "${PUSHGATEWAY_URL:-}" ]; then
+    echo "::notice::PUSHGATEWAY_URL not configured — skipping metrics push"
+    return 0
+  fi
+  local PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/ai_factory/${JOB_PATH}"
+  local CURL_AUTH=""
+  if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
+    CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
+  fi
+  local HTTP_CODE
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+    --data-binary "$METRICS_TEXT" \
+    -H "Content-Type: text/plain" \
+    $CURL_AUTH "$PUSH_URL" 2>/dev/null)
+  [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
+  if [ "$HTTP_CODE" -ge 300 ] || [ "$HTTP_CODE" = "000" ]; then
+    echo "::warning::Pushgateway returned HTTP ${HTTP_CODE} (non-blocking)"
+  fi
+  return 0
+}
+
 # ── Public functions ──────────────────────────────────────────────────────────
 
 # notify_council TICKET_ID TITLE SCORE VERDICT ISSUE_URL [ISSUE_NUM] [MODE] [LOC] [FILES]
@@ -205,7 +232,7 @@ notify_implement() {
       fi
       ;;
     ask)
-      MSG=":eyes: *${TICKET_ID}* — PR <${PR_URL}|#${PR_NUM}> created (Ask mode)${METRICS}\n<${LINEAR_LINK}|Linear>"
+      MSG=":eyes: *${TICKET_ID}* — PR <${PR_URL}|#${PR_NUM}> created (Ask mode)${METRICS}\n\n:point_right: *Manual merge required*\n1. Review the PR → <${PR_URL}|PR #${PR_NUM}>\n2. Merge → \`gh pr merge ${PR_NUM} --squash --delete-branch\`\n\n<${LINEAR_LINK}|Linear>"
       ;;
     failure)
       MSG=":x: *${TICKET_ID}* implementation failed${METRICS}\n<${RUN_LINK}|View Logs> | <${LINEAR_LINK}|Linear>"
@@ -441,4 +468,110 @@ write_job_summary() {
       echo ""
     fi
   } >> "$GITHUB_STEP_SUMMARY"
+}
+
+# ── Prometheus Metrics Push ──────────────────────────────────────────────────
+
+# push_metrics_council WORKFLOW TICKET_ID SCORE VERDICT
+# Push Council validation metrics to Pushgateway.
+push_metrics_council() {
+  local WORKFLOW="${1:-unknown}" TICKET_ID="${2:-}" SCORE="${3:-0}" VERDICT="${4:-unknown}"
+  local STAGE="council"
+  local METRICS=""
+  METRICS+="# HELP ai_factory_council_score Council validation score (0-10)\n"
+  METRICS+="# TYPE ai_factory_council_score gauge\n"
+  METRICS+="ai_factory_council_score{workflow=\"${WORKFLOW}\",ticket_id=\"${TICKET_ID}\"} ${SCORE}\n"
+  METRICS+="# HELP ai_factory_events_total AI Factory event counter\n"
+  METRICS+="# TYPE ai_factory_events_total gauge\n"
+  METRICS+="ai_factory_events_total{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",verdict=\"${VERDICT}\"} 1\n"
+  _push_metrics "workflow/${WORKFLOW}/stage/${STAGE}/instance/${TICKET_ID}" "$(printf '%b' "$METRICS")"
+}
+
+# push_metrics_implement WORKFLOW TICKET_ID VERDICT [DURATION_SECS] [FILES] [LOC] [MODEL] [MAX_TURNS]
+# Push implementation result metrics to Pushgateway.
+push_metrics_implement() {
+  local WORKFLOW="${1:-unknown}" TICKET_ID="${2:-}" VERDICT="${3:-unknown}"
+  local DURATION_SECS="${4:-0}" FILES="${5:-0}" LOC="${6:-0}"
+  local MODEL="${7:-sonnet}" MAX_TURNS="${8:-30}"
+  local STAGE="implement"
+  local METRICS=""
+  METRICS+="# HELP ai_factory_events_total AI Factory event counter\n"
+  METRICS+="# TYPE ai_factory_events_total gauge\n"
+  METRICS+="ai_factory_events_total{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",verdict=\"${VERDICT}\"} 1\n"
+  METRICS+="# HELP ai_factory_duration_seconds Implementation duration in seconds\n"
+  METRICS+="# TYPE ai_factory_duration_seconds gauge\n"
+  METRICS+="ai_factory_duration_seconds{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",model=\"${MODEL}\"} ${DURATION_SECS}\n"
+  if [ "${LOC:-0}" != "0" ]; then
+    METRICS+="# HELP ai_factory_pr_loc Lines of code changed in PR\n"
+    METRICS+="# TYPE ai_factory_pr_loc gauge\n"
+    METRICS+="ai_factory_pr_loc{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",ticket_id=\"${TICKET_ID}\"} ${LOC}\n"
+  fi
+  if [ "${FILES:-0}" != "0" ]; then
+    METRICS+="# HELP ai_factory_pr_files Files changed in PR\n"
+    METRICS+="# TYPE ai_factory_pr_files gauge\n"
+    METRICS+="ai_factory_pr_files{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",ticket_id=\"${TICKET_ID}\"} ${FILES}\n"
+  fi
+  # Estimated cost: max_turns * $0.015 (Sonnet upper bound)
+  local COST
+  COST=$(echo "${MAX_TURNS} * 0.015" | bc -l 2>/dev/null || echo "0")
+  METRICS+="# HELP ai_factory_estimated_cost_usd Estimated cost in USD (upper bound)\n"
+  METRICS+="# TYPE ai_factory_estimated_cost_usd gauge\n"
+  METRICS+="ai_factory_estimated_cost_usd{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",model=\"${MODEL}\"} ${COST}\n"
+  _push_metrics "workflow/${WORKFLOW}/stage/${STAGE}/instance/${TICKET_ID}" "$(printf '%b' "$METRICS")"
+}
+
+# push_metrics_scan TOTAL CREATED DAILY_COUNT DAILY_MAX [CAPPED]
+# Push autopilot scan metrics to Pushgateway.
+push_metrics_scan() {
+  local TOTAL="${1:-0}" CREATED="${2:-0}" DAILY_COUNT="${3:-0}" DAILY_MAX="${4:-5}"
+  local CAPPED="${5:-false}"
+  local STAGE="scan"
+  local TODAY
+  TODAY=$(date -u +%Y-%m-%d)
+  local METRICS=""
+  METRICS+="# HELP ai_factory_scan_candidates Eligible tickets found in scan\n"
+  METRICS+="# TYPE ai_factory_scan_candidates gauge\n"
+  METRICS+="ai_factory_scan_candidates{} ${TOTAL}\n"
+  METRICS+="# HELP ai_factory_scan_dispatched Tickets dispatched from scan\n"
+  METRICS+="# TYPE ai_factory_scan_dispatched gauge\n"
+  METRICS+="ai_factory_scan_dispatched{} ${CREATED}\n"
+  METRICS+="# HELP ai_factory_velocity_daily Tickets processed today\n"
+  METRICS+="# TYPE ai_factory_velocity_daily gauge\n"
+  METRICS+="ai_factory_velocity_daily{date=\"${TODAY}\"} ${DAILY_COUNT}\n"
+  METRICS+="# HELP ai_factory_velocity_cap Daily velocity cap\n"
+  METRICS+="# TYPE ai_factory_velocity_cap gauge\n"
+  METRICS+="ai_factory_velocity_cap{} ${DAILY_MAX}\n"
+  _push_metrics "workflow/autopilot-scan/stage/${STAGE}" "$(printf '%b' "$METRICS")"
+}
+
+# push_metrics_scheduled WORKFLOW TASK_NAME STATUS [DURATION_SECS]
+# Push scheduled task metrics to Pushgateway.
+push_metrics_scheduled() {
+  local WORKFLOW="${1:-unknown}" TASK_NAME="${2:-unknown}" STATUS="${3:-unknown}"
+  local DURATION_SECS="${4:-0}"
+  local STAGE="scheduled"
+  local VERDICT="success"
+  [ "$STATUS" != "success" ] && VERDICT="failure"
+  local METRICS=""
+  METRICS+="# HELP ai_factory_events_total AI Factory event counter\n"
+  METRICS+="# TYPE ai_factory_events_total gauge\n"
+  METRICS+="ai_factory_events_total{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",verdict=\"${VERDICT}\"} 1\n"
+  if [ "${DURATION_SECS:-0}" != "0" ]; then
+    METRICS+="# HELP ai_factory_duration_seconds Task duration in seconds\n"
+    METRICS+="# TYPE ai_factory_duration_seconds gauge\n"
+    METRICS+="ai_factory_duration_seconds{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",model=\"haiku\"} ${DURATION_SECS}\n"
+  fi
+  _push_metrics "workflow/${WORKFLOW}/stage/${STAGE}/instance/${TASK_NAME}" "$(printf '%b' "$METRICS")"
+}
+
+# push_metrics_error WORKFLOW JOB [TICKET_ID]
+# Push error event metric to Pushgateway.
+push_metrics_error() {
+  local WORKFLOW="${1:-unknown}" JOB="${2:-unknown}" TICKET_ID="${3:-}"
+  local STAGE="${JOB}"
+  local METRICS=""
+  METRICS+="# HELP ai_factory_events_total AI Factory event counter\n"
+  METRICS+="# TYPE ai_factory_events_total gauge\n"
+  METRICS+="ai_factory_events_total{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",verdict=\"error\"} 1\n"
+  _push_metrics "workflow/${WORKFLOW}/stage/${STAGE}/instance/${TICKET_ID:-error}" "$(printf '%b' "$METRICS")"
 }

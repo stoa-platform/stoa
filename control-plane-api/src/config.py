@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     # Kafka/Redpanda Event Streaming
     KAFKA_ENABLED: bool = True  # Set to False to skip Kafka health checks
     KAFKA_BOOTSTRAP_SERVERS: str = "redpanda.stoa-system.svc.cluster.local:9092"
+    KAFKA_ADMIN_URL: str = "http://redpanda.stoa-system.svc.cluster.local:9644"  # Redpanda Admin API for quotas
     KAFKA_SECURITY_PROTOCOL: str = "PLAINTEXT"  # PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
     KAFKA_SASL_MECHANISM: str = ""  # PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
     KAFKA_SASL_USERNAME: str = ""

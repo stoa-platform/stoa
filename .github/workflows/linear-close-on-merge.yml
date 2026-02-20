@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   close-linear:
@@ -111,3 +112,21 @@ jobs:
             -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
 
           echo "Comment added to $TICKET_ID"
+
+      # Close GitHub Council issue (L3/L3.5 create issues labeled with CAB-XXXX)
+      - name: Close GitHub Council issue
+        if: steps.extract.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TICKET_ID: ${{ steps.extract.outputs.ticket_id }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          # Find open issues labeled with the ticket ID (Council issues from L3/L3.5)
+          ISSUE_NUM=$(gh issue list --label "$TICKET_ID" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$ISSUE_NUM" ] && [ "$ISSUE_NUM" != "null" ]; then
+            gh issue close "$ISSUE_NUM" --comment "Completed via PR #${PR_NUM}. Auto-closed on merge." || true
+            echo "Closed GitHub issue #${ISSUE_NUM} (Council issue for ${TICKET_ID})"
+          else
+            echo "No open GitHub Council issue found for ${TICKET_ID} — skipping"
+          fi

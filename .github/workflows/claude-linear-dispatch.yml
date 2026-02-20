@@ -405,7 +405,19 @@ jobs:
 
           # Search for PRs created by this run (open or merged)
           PR_INFO=$(gh pr list --state all --search "${TICKET_ID}" \
-            --json number,url,state --jq '.[0] // empty' 2>/dev/null || echo "")
+            --json number,url,state,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+
+          # Verify: PR branch or title must contain ticket ID to prevent false positives
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+              echo "::warning::PR found but branch/title doesn't contain ${TICKET_ID} — false positive"
+              echo "  Branch: $VFY_BRANCH | Title: $VFY_TITLE"
+              PR_INFO=""
+            fi
+          fi
+
           PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
           PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
           PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")
@@ -436,15 +448,31 @@ jobs:
           ISSUE_NUM="${{ needs.council.outputs.issue_num }}"
           TICKET_ID="${{ github.event.client_payload.ticket_id }}"
 
-          # Find merged PR
+          # Find merged PR — verify branch/title contains ticket ID
           PR_INFO=$(gh pr list --state merged --search "${TICKET_ID}" \
-            --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            --json number,url,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+              echo "::warning::Merged PR found but doesn't match ${TICKET_ID} — false positive (branch=$VFY_BRANCH)"
+              PR_INFO=""
+            fi
+          fi
           PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
           PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
 
           if [ -z "$PR_NUM" ]; then
             PR_INFO=$(gh pr list --state open --search "${TICKET_ID}" \
-              --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+              --json number,url,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+            if [ -n "$PR_INFO" ]; then
+              VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+              VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+              if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+                echo "::warning::Open PR found but doesn't match ${TICKET_ID} — false positive"
+                PR_INFO=""
+              fi
+            fi
             PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
             PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
           fi
@@ -867,9 +895,26 @@ jobs:
           TICKET_ID=$(gh issue view "$ISSUE_NUM" --json labels --jq \
             '[.labels[].name | select(test("^CAB-[0-9]+$"))][0] // empty')
 
+          SEARCH_TERM="${TICKET_ID:-issue-${ISSUE_NUM}}"
+
           # Search for PRs created by this run (open or merged)
-          PR_INFO=$(gh pr list --state all --search "${TICKET_ID:-issue-${ISSUE_NUM}}" \
-            --json number,url,state --jq '.[0] // empty' 2>/dev/null || echo "")
+          PR_INFO=$(gh pr list --state all --search "${SEARCH_TERM}" \
+            --json number,url,state,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+
+          # Verify: PR branch or title must contain ticket ID or issue ref to prevent false positives
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            MATCH=false
+            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+            if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
+            if [ "$MATCH" = "false" ]; then
+              echo "::warning::PR found but branch/title doesn't contain ${SEARCH_TERM} — false positive"
+              echo "  Branch: $VFY_BRANCH | Title: $VFY_TITLE"
+              PR_INFO=""
+            fi
+          fi
+
           PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
           PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
           PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")
@@ -907,14 +952,37 @@ jobs:
           TICKET_ID=$(gh issue view "$ISSUE_NUM" --json labels --jq \
             '[.labels[].name | select(test("^CAB-[0-9]+$"))][0] // empty')
 
-          # Find merged PR referencing this issue
+          # Find merged PR referencing this issue — verify branch/title match
           PR_INFO=$(gh pr list --state merged --search "issue-${ISSUE_NUM}" \
-            --json number,title,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            --json number,title,url,headRefName --jq '.[0] // empty' 2>/dev/null || echo "")
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            MATCH=false
+            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+            if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
+            if [ "$MATCH" = "false" ]; then
+              echo "::warning::Merged PR found but doesn't match issue-${ISSUE_NUM} or ${TICKET_ID} — false positive (branch=$VFY_BRANCH)"
+              PR_INFO=""
+            fi
+          fi
 
           if [ -z "$PR_INFO" ]; then
-            # Fallback: search by issue mention in PR body
+            # Fallback: search by issue mention — still verify match
             PR_INFO=$(gh pr list --state merged --search "#${ISSUE_NUM}" \
-              --json number,title,url --jq '.[0] // empty' 2>/dev/null || echo "")
+              --json number,title,url,headRefName --jq '.[0] // empty' 2>/dev/null || echo "")
+            if [ -n "$PR_INFO" ]; then
+              VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+              VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+              MATCH=false
+              if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+              if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
+              if echo "$VFY_TITLE" | grep -q "#${ISSUE_NUM}"; then MATCH=true; fi
+              if [ "$MATCH" = "false" ]; then
+                echo "::warning::Fallback merged PR search also false positive — ignoring"
+                PR_INFO=""
+              fi
+            fi
           fi
 
           PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
@@ -930,10 +998,18 @@ jobs:
             # Search open PRs by branch name pattern (feat/issue-NNN-*)
             OPEN_PR=$(gh pr list --state open --head "feat/issue-${ISSUE_NUM}" \
               --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
-            # Fallback: search by issue mention
-            if [ -z "$OPEN_PR" ]; then
-              OPEN_PR=$(gh pr list --state open --search "#${ISSUE_NUM}" \
-                --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            # Fallback: search by ticket ID — verify match
+            if [ -z "$OPEN_PR" ] && [ -n "$TICKET_ID" ]; then
+              OPEN_PR=$(gh pr list --state open --search "${TICKET_ID}" \
+                --json number,url,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+              if [ -n "$OPEN_PR" ]; then
+                VFY_BRANCH=$(echo "$OPEN_PR" | jq -r '.headRefName // ""' 2>/dev/null)
+                VFY_TITLE=$(echo "$OPEN_PR" | jq -r '.title // ""' 2>/dev/null)
+                if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+                  echo "::warning::Open PR search false positive — ignoring"
+                  OPEN_PR=""
+                fi
+              fi
             fi
             OPEN_NUM=$(echo "$OPEN_PR" | jq -r '.number // empty' 2>/dev/null || echo "")
             if [ -n "$OPEN_NUM" ]; then

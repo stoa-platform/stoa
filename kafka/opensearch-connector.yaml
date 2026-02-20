@@ -1,0 +1,273 @@
+# OpenSearch Kafka Connector Configuration
+# Sinks audit events from stoa.audit.events topic to OpenSearch for compliance archival
+#
+# Deployment:
+#   kubectl apply -f kafka/opensearch-connector.yaml
+#
+# Reference:
+#   - https://docs.redpanda.com/current/deploy/deployment-option/cloud/managed-connectors/
+#   - https://opensearch.org/docs/latest/
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-kafka-connector
+  namespace: stoa-system
+  labels:
+    app: kafka-connector
+    component: opensearch-sink
+data:
+  connector.json: |
+    {
+      "name": "opensearch-audit-sink",
+      "config": {
+        "connector.class": "io.aiven.kafka.connect.opensearch.OpensearchSinkConnector",
+        "tasks.max": "1",
+        "topics": "stoa.audit.events",
+        "connection.url": "${OPENSEARCH_URL}",
+        "connection.username": "${OPENSEARCH_USERNAME}",
+        "connection.password": "${OPENSEARCH_PASSWORD}",
+        "type.name": "_doc",
+        "key.ignore": "false",
+        "schema.ignore": "true",
+        "behavior.on.null.values": "ignore",
+        "behavior.on.malformed.documents": "warn",
+        "max.retries": "10",
+        "retry.backoff.ms": "3000",
+        "max.in.flight.requests": "5",
+        "batch.size": "2000",
+        "linger.ms": "1000",
+        "flush.timeout.ms": "10000",
+        "index.write.method": "insert",
+        "compact.map.entries": "true",
+        "drop.invalid.message": "false",
+        "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+        "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "value.converter.schemas.enable": "false"
+      }
+    }
+
+  # Index template for audit events
+  index-template.json: |
+    {
+      "index_patterns": ["stoa-audit-*"],
+      "template": {
+        "settings": {
+          "number_of_shards": 3,
+          "number_of_replicas": 1,
+          "refresh_interval": "5s",
+          "index.lifecycle.name": "stoa-audit-policy",
+          "index.lifecycle.rollover_alias": "stoa-audit"
+        },
+        "mappings": {
+          "properties": {
+            "timestamp": {
+              "type": "date",
+              "format": "strict_date_optional_time||epoch_millis"
+            },
+            "tenant_id": {
+              "type": "keyword"
+            },
+            "user_id": {
+              "type": "keyword"
+            },
+            "action": {
+              "type": "keyword"
+            },
+            "resource_type": {
+              "type": "keyword"
+            },
+            "resource_id": {
+              "type": "keyword"
+            },
+            "request_id": {
+              "type": "keyword"
+            },
+            "ip_address": {
+              "type": "ip"
+            },
+            "user_agent": {
+              "type": "text",
+              "fields": {
+                "keyword": {
+                  "type": "keyword"
+                }
+              }
+            },
+            "status": {
+              "type": "keyword"
+            },
+            "error_message": {
+              "type": "text"
+            },
+            "metadata": {
+              "type": "object",
+              "enabled": true
+            }
+          }
+        }
+      }
+    }
+
+  # Index Lifecycle Management (ILM) policy
+  ilm-policy.json: |
+    {
+      "policy": {
+        "phases": {
+          "hot": {
+            "min_age": "0ms",
+            "actions": {
+              "rollover": {
+                "max_age": "30d",
+                "max_primary_shard_size": "50gb"
+              },
+              "set_priority": {
+                "priority": 100
+              }
+            }
+          },
+          "warm": {
+            "min_age": "30d",
+            "actions": {
+              "shrink": {
+                "number_of_shards": 1
+              },
+              "set_priority": {
+                "priority": 50
+              }
+            }
+          },
+          "cold": {
+            "min_age": "90d",
+            "actions": {
+              "freeze": {},
+              "set_priority": {
+                "priority": 0
+              }
+            }
+          },
+          "delete": {
+            "min_age": "1825d",
+            "actions": {
+              "delete": {}
+            }
+          }
+        }
+      }
+    }
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opensearch-credentials
+  namespace: stoa-system
+type: Opaque
+stringData:
+  # Set via kubectl create secret or external secrets operator
+  OPENSEARCH_URL: "https://opensearch.stoa-system.svc.cluster.local:9200"
+  OPENSEARCH_USERNAME: "admin"
+  OPENSEARCH_PASSWORD: "REPLACE_ME"
+
+---
+# Optional: Deploy Kafka Connect with OpenSearch connector
+# Requires kafka-connect image with opensearch-sink plugin
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-connect-opensearch
+  namespace: stoa-system
+  labels:
+    app: kafka-connect
+    component: opensearch-sink
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-connect
+  template:
+    metadata:
+      labels:
+        app: kafka-connect
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: kafka-connect
+          image: confluentinc/cp-kafka-connect:7.5.0
+          ports:
+            - containerPort: 8083
+              name: http
+          env:
+            - name: CONNECT_BOOTSTRAP_SERVERS
+              value: "redpanda.stoa-system.svc.cluster.local:9092"
+            - name: CONNECT_REST_PORT
+              value: "8083"
+            - name: CONNECT_GROUP_ID
+              value: "opensearch-sink-group"
+            - name: CONNECT_CONFIG_STORAGE_TOPIC
+              value: "stoa.connect.configs"
+            - name: CONNECT_OFFSET_STORAGE_TOPIC
+              value: "stoa.connect.offsets"
+            - name: CONNECT_STATUS_STORAGE_TOPIC
+              value: "stoa.connect.status"
+            - name: CONNECT_KEY_CONVERTER
+              value: "org.apache.kafka.connect.storage.StringConverter"
+            - name: CONNECT_VALUE_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE
+              value: "false"
+            - name: CONNECT_PLUGIN_PATH
+              value: "/usr/share/java,/usr/share/confluent-hub-components"
+            - name: OPENSEARCH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-credentials
+                  key: OPENSEARCH_URL
+            - name: OPENSEARCH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-credentials
+                  key: OPENSEARCH_USERNAME
+            - name: OPENSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-credentials
+                  key: OPENSEARCH_PASSWORD
+          volumeMounts:
+            - name: connector-config
+              mountPath: /etc/kafka-connect
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: connector-config
+          configMap:
+            name: opensearch-kafka-connector
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-connect
+  namespace: stoa-system
+  labels:
+    app: kafka-connect
+spec:
+  selector:
+    app: kafka-connect
+  ports:
+    - port: 8083
+      targetPort: 8083
+      name: http

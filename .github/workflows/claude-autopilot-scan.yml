@@ -216,7 +216,10 @@ jobs:
           echo "Council validated ${CANDIDATE_COUNT} candidates"
 
           CREATED=0
-          echo "$CANDIDATES" | jq -c '.[] | select(.verdict == "Go" and .score >= 8.0)' | while IFS= read -r ticket; do
+          SKIPPED=0
+          EXISTING_LINKS=""
+          # Use process substitution (not pipe) so counters propagate to parent shell
+          while IFS= read -r ticket; do
             TICKET_ID=$(echo "$ticket" | jq -r '.ticket_id')
             TITLE=$(echo "$ticket" | jq -r '.title')
             SCORE=$(echo "$ticket" | jq -r '.score')
@@ -243,6 +246,8 @@ jobs:
             EXISTING_ISSUE=$(gh issue list --label "$TICKET_ID" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
             if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
               echo "Issue #${EXISTING_ISSUE} already exists for ${TICKET_ID} — skipping"
+              SKIPPED=$((SKIPPED + 1))
+              EXISTING_LINKS="${EXISTING_LINKS}• <https://github.com/stoa-platform/stoa/issues/${EXISTING_ISSUE}|#${EXISTING_ISSUE}> ${TICKET_ID} — ${TITLE}\n"
               continue
             fi
 
@@ -297,16 +302,20 @@ jobs:
 
             # Send Slack notification with approve button
             source scripts/ai-ops/ai-factory-notify.sh
-            # Extract mode and LOC from council output
-            C_MODE=$(jq -r '.mode // empty' council-output.json 2>/dev/null || echo "")
-            C_LOC=$(jq -r '.loc // empty' council-output.json 2>/dev/null || echo "")
-            C_FILES=$(jq -r '.files // empty' council-output.json 2>/dev/null || echo "")
-            notify_council "$TICKET_ID" "$TITLE" "$SCORE" "Go" "$ISSUE_URL" "$ISSUE_NUM" "$C_MODE" "$C_LOC" "$C_FILES"
+            # Extract mode and LOC from council candidate JSON
+            C_MODE=$(echo "$ticket" | jq -r '.ship_show_ask // empty' 2>/dev/null || echo "")
+            C_LOC=$(echo "$ticket" | jq -r '.estimated_points // empty' 2>/dev/null || echo "")
+            notify_council "$TICKET_ID" "$TITLE" "$SCORE" "Go" "$ISSUE_URL" "$ISSUE_NUM" "$C_MODE" "$C_LOC" ""
 
             CREATED=$((CREATED + 1))
-          done
+          done < <(echo "$CANDIDATES" | jq -c '.[] | select(.verdict == "Go" and .score >= 8.0)')
 
-          echo "Created ${CREATED} autopilot candidate issues"
+          echo "Created ${CREATED} autopilot candidate issues (${SKIPPED} skipped — already existed)"
+          # Export to GITHUB_ENV so the summary step can read accurate counts
+          echo "SCAN_CREATED=${CREATED}" >> "$GITHUB_ENV"
+          echo "SCAN_SKIPPED=${SKIPPED}" >> "$GITHUB_ENV"
+          # Write existing issue links to a file (multiline strings don't work in GITHUB_ENV)
+          printf '%b' "$EXISTING_LINKS" > /tmp/existing-issues.txt
 
       # Summary Slack notification + Job Summary
       - name: Slack Summary
@@ -318,7 +327,8 @@ jobs:
 
           CAPPED="${{ steps.velocity.outputs.capped }}"
           TOTAL="${{ steps.linear.outputs.count || '0' }}"
-          # CREATED is set in the council step env, may not propagate — use fallback
+          CREATED="${SCAN_CREATED:-0}"
+          SKIPPED="${SCAN_SKIPPED:-0}"
           DRY="${{ inputs.dry_run }}"
           COUNCIL_OK="${{ steps.council.outcome }}"
 
@@ -332,7 +342,7 @@ jobs:
           elif [ "$DRY" = "true" ]; then
             notify_scan "$TOTAL" "0"
           else
-            notify_scan "$TOTAL" "$TOTAL"
+            notify_scan "$TOTAL" "$CREATED" "" "$SKIPPED"
           fi
 
       - name: Write Job Summary

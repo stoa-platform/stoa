@@ -272,11 +272,10 @@ notify_error() {
   }"
 }
 
-# notify_scan TOTAL_ELIGIBLE CREATED [CAPPED] [SKIPPED]
+# notify_scan TOTAL_ELIGIBLE CREATED [CAPPED]
 # Autopilot scan summary notification.
-# SKIPPED = candidates that already had open GitHub issues (dedup guard).
 notify_scan() {
-  local TOTAL="${1:-0}" CREATED="${2:-0}" CAPPED="${3:-false}" SKIPPED="${4:-0}"
+  local TOTAL="${1:-0}" CREATED="${2:-0}" CAPPED="${3:-false}"
   local RUN_LINK="$(_run_url)"
 
   local MSG=""
@@ -284,29 +283,15 @@ notify_scan() {
     MSG=":pause_button: Autopilot scan skipped — daily velocity cap reached."
   elif [ "$TOTAL" = "0" ]; then
     MSG=":inbox_tray: Autopilot scan complete — no eligible tickets in backlog."
-  elif [ "$CREATED" = "0" ] && [ "$SKIPPED" = "0" ]; then
+  elif [ "$CREATED" = "0" ]; then
     MSG=":mag: Autopilot scan — ${TOTAL} eligible tickets found (dry run, no issues created)."
-  elif [ "$CREATED" = "0" ] && [ "$SKIPPED" -gt 0 ] 2>/dev/null; then
-    MSG=":recycle: Autopilot scan — ${TOTAL} eligible, all ${SKIPPED} already have open issues. <${RUN_LINK}|Details>"
   else
-    local SUFFIX=""
-    if [ "$SKIPPED" -gt 0 ] 2>/dev/null; then
-      SUFFIX=" (${SKIPPED} already existed)"
-    fi
-    MSG=":sunrise: Autopilot scan complete — ${CREATED}/${TOTAL} candidates dispatched${SUFFIX}. <${RUN_LINK}|Details>"
-  fi
-
-  # Build blocks array — add existing issues list if available
-  local EXISTING_BLOCK=""
-  if [ "$SKIPPED" -gt 0 ] 2>/dev/null && [ -f /tmp/existing-issues.txt ]; then
-    local LINKS
-    LINKS=$(_escape_json "$(cat /tmp/existing-issues.txt)")
-    EXISTING_BLOCK=",{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*Existing issues awaiting approval:*\n${LINKS}\"}}"
+    MSG=":sunrise: Autopilot scan complete — ${CREATED}/${TOTAL} candidates dispatched. <${RUN_LINK}|Details>"
   fi
 
   _send_slack "{
     \"blocks\": [
-      {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"${MSG}\"}}${EXISTING_BLOCK},
+      {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"${MSG}\"}},
       {\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"STOA AI Factory | Autopilot Scan | $(date -u +%H:%M) UTC\"}]}
     ]
   }"

@@ -50,6 +50,11 @@ class Topics:
     # Onboarding workflows (CAB-593)
     WORKFLOW_EVENTS = "stoa.workflow.events"
 
+    # CAB-498: Audit, catalog, and error tracking
+    AUDIT_EVENTS = "stoa.audit.events"
+    CATALOG_CHANGES = "stoa.catalog.changes"
+    ERRORS = "stoa.errors"
+
 
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""

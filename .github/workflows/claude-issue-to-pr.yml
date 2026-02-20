@@ -593,9 +593,26 @@ jobs:
           TICKET_ID=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" \
             | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
 
+          SEARCH_TERM="${TICKET_ID:-issue-${ISSUE_NUM}}"
+
           # Search for PRs created by this run (open or merged)
-          PR_INFO=$(gh pr list --state all --search "${TICKET_ID:-issue-${ISSUE_NUM}}" \
-            --json number,url,state --jq '.[0] // empty' 2>/dev/null || echo "")
+          PR_INFO=$(gh pr list --state all --search "${SEARCH_TERM}" \
+            --json number,url,state,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+
+          # Verify: PR branch or title must contain ticket ID or issue ref to prevent false positives
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            MATCH=false
+            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+            if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
+            if [ "$MATCH" = "false" ]; then
+              echo "::warning::PR found but branch/title doesn't contain ${SEARCH_TERM} — false positive"
+              echo "  Branch: $VFY_BRANCH | Title: $VFY_TITLE"
+              PR_INFO=""
+            fi
+          fi
+
           PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
           PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
           PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")

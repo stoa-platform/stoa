@@ -11,6 +11,11 @@ metadata:
     # CAB-1108: iframe embedding handled at service level
     # (Grafana: GF_SECURITY_ALLOW_EMBEDDING, Keycloak: X-Frame-Options config)
     # Note: nginx configuration-snippet is blocked by ingress admission webhook
+    # DDoS mitigation: rate limiting (CAB-DDoS)
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    nginx.ingress.kubernetes.io/limit-whitelist: "10.0.0.0/8,172.16.0.0/12"
 spec:
   ingressClassName: nginx
   tls:

@@ -40,6 +40,7 @@ dependencies = [
     "opentelemetry-instrumentation-httpx>=0.43b0",
     "opentelemetry-instrumentation-sqlalchemy>=0.43b0",
     "aiokafka>=0.10.0",
+    "slowapi>=0.1.9",
     # Vault & Database (CAB-XXX: Secure API Key Management)
     "hvac>=2.1.0",
     "asyncpg>=0.29.0",

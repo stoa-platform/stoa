@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-19 (CAB-1330 P1 DONE — PR #727, MCP hot-reload SSE)
+> Dernière MAJ: 2026-02-20 (CAB-1386 Phase 2+3 DONE — PR #750, alerting + merge button + scan fix)
 
 ## ✅ DONE
 
@@ -18,6 +18,8 @@
 - CAB-1323: Portal Multi-Audience + RBAC (34 pts MEGA) — PRs #697, #714, #719 (3 phases, ~917 LOC, 78 tests)
 - CAB-1314: MCP Skills System MEGA (21 pts) — P1 PR #702, P2 PR #721, P3 PR #710 (3 phases, skills CSS cascade + context injection)
 - CAB-1382: Code Hygiene Sprint (13 pts) — PRs #724, #725, #726 (P1: 38 dead_code removed, P2: 20→0 ESLint warnings + error tracking stub)
+- CAB-1386: AI Factory Observability Phase 1 (13 pts) — PR #747 (Pushgateway integration + 15-panel Grafana dashboard + 4 workflow wiring)
+- CAB-1386: AI Factory Observability Phase 2+3 — PR #750 (Prometheus alerting rules + one-click Merge PR button + afternoon scan fix)
 
 ## 🔴 IN PROGRESS
 

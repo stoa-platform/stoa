@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 559 pts (56 issues) | **Velocity**: 56+ issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 572 pts (57 issues) | **Velocity**: 57+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
@@ -110,6 +110,8 @@
 - [x] CAB-1381: [MEGA] Platform: API Stubs Cleanup — Applications CRUD & Legacy Routes (13 pts) — PR #718
 - [x] CAB-1323: [MEGA] DX: Portal Governance — Multi-Audience + RBAC Fine-Grained (34 pts) — PRs #697, #714, #719 (3 phases)
 - [x] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts) — PR #646
+- [x] CAB-1386: AI Factory Observability Phase 1 — Pushgateway + Grafana Dashboard (13 pts) — PR #747 (Council 8.50/10)
+- [x] CAB-1386: AI Factory Observability Phase 2+3 — Alerting Rules + Merge PR Button + Scan Fix — PR #750
 
 ### In Progress
 

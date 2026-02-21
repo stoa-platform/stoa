@@ -229,10 +229,13 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "#${{ github.event.issue.number }}")
           notify_council "$TICKET" "${{ github.event.issue.title }}" "" "Go" "${{ github.event.issue.html_url }}" "${{ github.event.issue.number }}"
+          push_metrics_council "issue-to-pr" "$TICKET" "0" "go"
 
       - name: Write Job Summary — Council
         if: always() && steps.guard.outputs.skip != 'true'
@@ -580,21 +583,82 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-5' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
 
+      - name: Detect Partial Success
+        id: detect-partial
+        if: always() && steps.verify-council.outputs.validated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          TICKET_ID=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" \
+            | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
+
+          SEARCH_TERM="${TICKET_ID:-issue-${ISSUE_NUM}}"
+
+          # Search for PRs created by this run (open or merged)
+          PR_INFO=$(gh pr list --state all --search "${SEARCH_TERM}" \
+            --json number,url,state,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+
+          # Verify: PR branch or title must contain ticket ID or issue ref to prevent false positives
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            MATCH=false
+            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+            if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
+            if [ "$MATCH" = "false" ]; then
+              echo "::warning::PR found but branch/title doesn't contain ${SEARCH_TERM} — false positive"
+              echo "  Branch: $VFY_BRANCH | Title: $VFY_TITLE"
+              PR_INFO=""
+            fi
+          fi
+
+          PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
+          PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
+          PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")
+
+          if [ -n "$PR_NUM" ]; then
+            echo "pr_found=true" >> "$GITHUB_OUTPUT"
+            echo "pr_num=$PR_NUM" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            echo "pr_state=$PR_STATE" >> "$GITHUB_OUTPUT"
+            echo "PR #${PR_NUM} found (${PR_STATE}) — partial success"
+          else
+            echo "pr_found=false" >> "$GITHUB_OUTPUT"
+            echo "No PR found"
+          fi
+
+          echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
+          echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
+          echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
+
       - name: Slack Implementation Result
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
+          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
           STATUS="${{ steps.implement.outcome || 'skipped' }}"
+          PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
+          MODEL="${{ steps.route.outputs.model || 'sonnet-4-5' }}"
+          MAX_TURNS="${{ steps.route.outputs.turns || '60' }}"
           if [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR" "$DURATION"
             linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR" "$DURATION" || true
+            push_metrics_implement "issue-to-pr" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
+          elif [ "$STATUS" = "failure" ] && [ "${PR_FOUND}" = "true" ]; then
+            notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L1 Issue-to-PR (max_turns)" "$DURATION"
+            push_metrics_implement "issue-to-pr" "$TICKET" "max_turns" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "failure" ]; then
             notify_error "claude-issue-to-pr" "implement" "$TICKET" "" "$DURATION"
+            push_metrics_error "issue-to-pr" "implement" "$TICKET"
           else
             notify_implement "$TICKET" "$STATUS" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR"
           fi

@@ -144,3 +144,49 @@ topics:
     partitions: 3
     key: tenant_id
     description: Gateway error snapshots from webMethods
+
+  # --- Federation (ADR-026) ---
+  stoa.federation.events:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 3
+    key: tenant_id
+    description: Cross-realm federation events
+
+  # --- Tenant provisioning (CAB-1315) ---
+  stoa.tenant.provisioning:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 3
+    key: tenant_id
+    description: Tenant provisioning workflow events
+
+  # --- Onboarding workflows (CAB-593) ---
+  stoa.workflow.events:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 3
+    key: tenant_id
+    description: Onboarding and workflow state changes
+
+  # --- CAB-498: Audit, catalog, and error tracking ---
+  stoa.audit.events:
+    delivery: exactly_once
+    retention_days: 90
+    partitions: 6
+    key: tenant_id
+    description: Detailed audit events for compliance tracking (90d retention)
+
+  stoa.catalog.changes:
+    delivery: at_least_once
+    retention_days: 7
+    partitions: 12
+    key: tenant_id
+    description: API catalog sync events and schema changes (high-volume)
+
+  stoa.errors:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 3
+    key: tenant_id
+    description: Application error tracking and debugging events

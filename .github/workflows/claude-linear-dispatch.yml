@@ -291,13 +291,15 @@ jobs:
             > /dev/null 2>&1 || true
           echo "Posted Council comment on ${TICKET_ID}"
 
-      # Notify Slack — Council report with approve button
+      # Notify Slack + Metrics — Council report with approve button
       - name: Slack Council Report
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET="${{ github.event.client_payload.ticket_id }}"
@@ -315,6 +317,14 @@ jobs:
           fi
 
           notify_council "$TICKET" "$TITLE" "${SCORE:-?}" "Go" "$ISSUE" "$ISSUE_NUM" "$MODE" "$LOC" "$FILES"
+
+          # Push council metrics
+          VERDICT="go"
+          if [ -n "$SCORE" ]; then
+            if echo "$SCORE < 8.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="fix"; fi
+            if echo "$SCORE < 6.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="redo"; fi
+          fi
+          push_metrics_council "linear-dispatch" "$TICKET" "${SCORE:-0}" "$VERDICT"
 
       - name: Write Job Summary — Council
         if: always()
@@ -385,9 +395,51 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model }}, MaxTurns=${{ steps.route.outputs.turns }}, Stage=implement-fast"
 
+      - name: Detect Partial Success
+        id: detect-partial
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TICKET_ID="${{ github.event.client_payload.ticket_id }}"
+
+          # Search for PRs created by this run (open or merged)
+          PR_INFO=$(gh pr list --state all --search "${TICKET_ID}" \
+            --json number,url,state,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+
+          # Verify: PR branch or title must contain ticket ID to prevent false positives
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+              echo "::warning::PR found but branch/title doesn't contain ${TICKET_ID} — false positive"
+              echo "  Branch: $VFY_BRANCH | Title: $VFY_TITLE"
+              PR_INFO=""
+            fi
+          fi
+
+          PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
+          PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
+          PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")
+
+          if [ -n "$PR_NUM" ]; then
+            echo "pr_found=true" >> "$GITHUB_OUTPUT"
+            echo "pr_num=$PR_NUM" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            echo "pr_state=$PR_STATE" >> "$GITHUB_OUTPUT"
+            echo "PR #${PR_NUM} found (${PR_STATE}) — partial success"
+          else
+            echo "pr_found=false" >> "$GITHUB_OUTPUT"
+            echo "No PR found"
+          fi
+
+          echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
+          echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
+          echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
+
       # Close the loop: find PR, close issue, update Linear, notify Slack
       - name: Close the Loop
-        if: steps.claude.outcome == 'success'
+        if: steps.claude.outcome == 'success' || steps.detect-partial.outputs.pr_found == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -396,15 +448,31 @@ jobs:
           ISSUE_NUM="${{ needs.council.outputs.issue_num }}"
           TICKET_ID="${{ github.event.client_payload.ticket_id }}"
 
-          # Find merged PR
+          # Find merged PR — verify branch/title contains ticket ID
           PR_INFO=$(gh pr list --state merged --search "${TICKET_ID}" \
-            --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            --json number,url,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+              echo "::warning::Merged PR found but doesn't match ${TICKET_ID} — false positive (branch=$VFY_BRANCH)"
+              PR_INFO=""
+            fi
+          fi
           PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
           PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
 
           if [ -z "$PR_NUM" ]; then
             PR_INFO=$(gh pr list --state open --search "${TICKET_ID}" \
-              --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+              --json number,url,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+            if [ -n "$PR_INFO" ]; then
+              VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+              VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+              if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+                echo "::warning::Open PR found but doesn't match ${TICKET_ID} — false positive"
+                PR_INFO=""
+              fi
+            fi
             PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
             PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
           fi
@@ -450,11 +518,17 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
+          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET="${{ github.event.client_payload.ticket_id }}"
           STATUS="${{ steps.claude.outcome }}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
+          MODEL="${{ steps.route.outputs.model }}"
+          MAX_TURNS="${{ steps.route.outputs.turns }}"
           # Extract PR stats
           PR_FILES="" PR_LOC=""
           if [ -n "${PR_NUM}" ]; then
@@ -462,13 +536,20 @@ jobs:
             PR_FILES=$(echo "$STAT_LINE" | grep -oE '[0-9]+ files?' | grep -oE '[0-9]+' || echo "")
             PR_LOC=$(echo "$STAT_LINE" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "")
           fi
+          PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
           if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
             notify_implement "$TICKET" "success" "$PR_NUM" "$PR_URL" "" "L3 Ship Fast Path" "$DURATION" "$PR_FILES" "$PR_LOC"
             linear_comment "$TICKET" "success" "$PR_NUM" "$PR_URL" "L3 Ship Fast Path" "$DURATION" "$PR_FILES" "$PR_LOC" "Ship"
+            push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "" "L3 Ship Fast Path" "$DURATION"
+            push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
+          elif [ "$STATUS" = "failure" ] && [ "${PR_FOUND}" = "true" ]; then
+            notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "" "L3 Ship Fast Path (max_turns)" "$DURATION" "$PR_FILES" "$PR_LOC"
+            push_metrics_implement "linear-dispatch" "$TICKET" "max_turns" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
           else
             notify_error "claude-linear-dispatch" "implement-fast" "$TICKET" "" "$DURATION"
+            push_metrics_error "linear-dispatch" "implement-fast" "$TICKET"
           fi
 
       - name: Write Job Summary — Ship Fast Path
@@ -804,10 +885,61 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-5' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
 
+      - name: Detect Partial Success
+        id: detect-partial
+        if: always() && steps.verify.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          TICKET_ID=$(gh issue view "$ISSUE_NUM" --json labels --jq \
+            '[.labels[].name | select(test("^CAB-[0-9]+$"))][0] // empty')
+
+          SEARCH_TERM="${TICKET_ID:-issue-${ISSUE_NUM}}"
+
+          # Search for PRs created by this run (open or merged)
+          PR_INFO=$(gh pr list --state all --search "${SEARCH_TERM}" \
+            --json number,url,state,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+
+          # Verify: PR branch or title must contain ticket ID or issue ref to prevent false positives
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            MATCH=false
+            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+            if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
+            if [ "$MATCH" = "false" ]; then
+              echo "::warning::PR found but branch/title doesn't contain ${SEARCH_TERM} — false positive"
+              echo "  Branch: $VFY_BRANCH | Title: $VFY_TITLE"
+              PR_INFO=""
+            fi
+          fi
+
+          PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
+          PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
+          PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")
+
+          if [ -n "$PR_NUM" ]; then
+            echo "pr_found=true" >> "$GITHUB_OUTPUT"
+            echo "pr_num=$PR_NUM" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            echo "pr_state=$PR_STATE" >> "$GITHUB_OUTPUT"
+            echo "PR #${PR_NUM} found (${PR_STATE}) — partial success"
+          else
+            echo "pr_found=false" >> "$GITHUB_OUTPUT"
+            echo "No PR found"
+          fi
+
+          echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
+          echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
+          echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
+
       # ----- Close the Loop (post-merge feedback) -----
       # After implementation: find merged PR, close GitHub issue, update Linear, notify Slack
       - name: Close the Loop
-        if: steps.claude.outcome == 'success' && steps.verify.outputs.valid == 'true'
+        if: |
+          (steps.claude.outcome == 'success' || steps.detect-partial.outputs.pr_found == 'true') &&
+          steps.verify.outputs.valid == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -820,14 +952,37 @@ jobs:
           TICKET_ID=$(gh issue view "$ISSUE_NUM" --json labels --jq \
             '[.labels[].name | select(test("^CAB-[0-9]+$"))][0] // empty')
 
-          # Find merged PR referencing this issue
+          # Find merged PR referencing this issue — verify branch/title match
           PR_INFO=$(gh pr list --state merged --search "issue-${ISSUE_NUM}" \
-            --json number,title,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            --json number,title,url,headRefName --jq '.[0] // empty' 2>/dev/null || echo "")
+          if [ -n "$PR_INFO" ]; then
+            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+            MATCH=false
+            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+            if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
+            if [ "$MATCH" = "false" ]; then
+              echo "::warning::Merged PR found but doesn't match issue-${ISSUE_NUM} or ${TICKET_ID} — false positive (branch=$VFY_BRANCH)"
+              PR_INFO=""
+            fi
+          fi
 
           if [ -z "$PR_INFO" ]; then
-            # Fallback: search by issue mention in PR body
+            # Fallback: search by issue mention — still verify match
             PR_INFO=$(gh pr list --state merged --search "#${ISSUE_NUM}" \
-              --json number,title,url --jq '.[0] // empty' 2>/dev/null || echo "")
+              --json number,title,url,headRefName --jq '.[0] // empty' 2>/dev/null || echo "")
+            if [ -n "$PR_INFO" ]; then
+              VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
+              VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
+              MATCH=false
+              if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+              if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
+              if echo "$VFY_TITLE" | grep -q "#${ISSUE_NUM}"; then MATCH=true; fi
+              if [ "$MATCH" = "false" ]; then
+                echo "::warning::Fallback merged PR search also false positive — ignoring"
+                PR_INFO=""
+              fi
+            fi
           fi
 
           PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
@@ -843,10 +998,18 @@ jobs:
             # Search open PRs by branch name pattern (feat/issue-NNN-*)
             OPEN_PR=$(gh pr list --state open --head "feat/issue-${ISSUE_NUM}" \
               --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
-            # Fallback: search by issue mention
-            if [ -z "$OPEN_PR" ]; then
-              OPEN_PR=$(gh pr list --state open --search "#${ISSUE_NUM}" \
-                --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            # Fallback: search by ticket ID — verify match
+            if [ -z "$OPEN_PR" ] && [ -n "$TICKET_ID" ]; then
+              OPEN_PR=$(gh pr list --state open --search "${TICKET_ID}" \
+                --json number,url,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
+              if [ -n "$OPEN_PR" ]; then
+                VFY_BRANCH=$(echo "$OPEN_PR" | jq -r '.headRefName // ""' 2>/dev/null)
+                VFY_TITLE=$(echo "$OPEN_PR" | jq -r '.title // ""' 2>/dev/null)
+                if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+                  echo "::warning::Open PR search false positive — ignoring"
+                  OPEN_PR=""
+                fi
+              fi
             fi
             OPEN_NUM=$(echo "$OPEN_PR" | jq -r '.number // empty' 2>/dev/null || echo "")
             if [ -n "$OPEN_NUM" ]; then
@@ -920,18 +1083,24 @@ jobs:
           echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
           echo "SKIP_CLOSE=${SKIP_CLOSE}" >> "$GITHUB_ENV"
 
-      # Notify Slack + Linear + Job Summary
+      # Notify Slack + Metrics + Linear + Job Summary
       - name: Notify Slack — Implementation Result
         if: always() && steps.verify.outputs.valid == 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
+          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           STATUS="${{ steps.claude.outcome || 'skipped' }}"
           TICKET="${TICKET_ID:-}"
           [ -z "$TICKET" ] && TICKET="Issue-${{ github.event.issue.number }}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
+          MODEL="${{ steps.route.outputs.model || 'sonnet-4-5' }}"
+          MAX_TURNS="${{ steps.route.outputs.turns || '60' }}"
           # Extract PR stats
           PR_FILES="" PR_LOC=""
           if [ -n "${PR_NUM}" ]; then
@@ -940,21 +1109,29 @@ jobs:
             PR_LOC=$(echo "$STAT_LINE" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "")
           fi
 
+          PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
           if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
             notify_implement "$TICKET" "success" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION" "$PR_FILES" "$PR_LOC"
             linear_comment "$TICKET" "success" "$PR_NUM" "$PR_URL" "L3 Pipeline" "$DURATION" "$PR_FILES" "$PR_LOC"
+            push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "success" ] && [ "${SKIP_CLOSE}" = "true" ]; then
             notify_implement "$TICKET" "ask" "${PR_NUM:-}" "${PR_URL:-}" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION"
+            push_metrics_implement "linear-dispatch" "$TICKET" "ask" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION"
+            push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
+          elif [ "$STATUS" != "success" ] && [ "${PR_FOUND}" = "true" ]; then
+            notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L3 Pipeline (max_turns)" "$DURATION" "$PR_FILES" "$PR_LOC"
+            push_metrics_implement "linear-dispatch" "$TICKET" "max_turns" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
           elif [ "$STATUS" = "skipped" ]; then
             notify_implement "$TICKET" "skipped" "" "" "${{ github.event.issue.number }}" "L3 Pipeline"
           else
             notify_error "claude-linear-dispatch" "implement" "$TICKET" "" "$DURATION"
+            push_metrics_error "linear-dispatch" "implement" "$TICKET"
           fi
 
           write_job_summary "$TICKET" "$STATUS" "${PR_NUM:-}" \
-            "${{ steps.route.outputs.model || 'sonnet-4-5' }}" "implement" "$DURATION"
+            "$MODEL" "implement" "$DURATION"
 
       # ----- Self-Feeding Loop -----
       # After successful close, trigger next autopilot scan if under daily velocity cap

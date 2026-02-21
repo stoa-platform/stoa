@@ -55,6 +55,7 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "github-actions[bot]"
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
             Do NOT read memory.md, plan.md, or operations.log for session state.
@@ -78,9 +79,12 @@ jobs:
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           notify_scheduled "Daily Triage" "${{ job.status }}"
+          push_metrics_scheduled "scheduled" "daily-triage" "${{ job.status }}"
 
       - name: Write Job Summary
         if: always()
@@ -105,6 +109,7 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "github-actions[bot]"
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
             Do NOT read memory.md, plan.md, or operations.log for session state.
@@ -132,9 +137,12 @@ jobs:
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           notify_scheduled "CI Health Check" "${{ job.status }}"
+          push_metrics_scheduled "scheduled" "ci-health" "${{ job.status }}"
 
       - name: Write Job Summary
         if: always()
@@ -159,6 +167,7 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "github-actions[bot]"
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
             Do NOT read memory.md, plan.md, or operations.log for session state.
@@ -186,9 +195,12 @@ jobs:
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           notify_scheduled "Weekly Audit" "${{ job.status }}"
+          push_metrics_scheduled "scheduled" "weekly-audit" "${{ job.status }}"
 
       - name: Write Job Summary
         if: always()
@@ -331,9 +343,12 @@ jobs:
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           notify_scheduled "Weekly Capacity Check" "${{ job.status }}"
+          push_metrics_scheduled "scheduled" "capacity-check" "${{ job.status }}"
 
       - name: Write Job Summary
         if: always()
@@ -414,9 +429,12 @@ jobs:
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           notify_scheduled "Backlog Stock Check" "${{ job.status }}"
+          push_metrics_scheduled "scheduled" "backlog-stock" "${{ job.status }}"
 
       - name: Write Job Summary
         if: always()

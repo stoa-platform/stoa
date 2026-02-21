@@ -8,6 +8,7 @@ import {
   BarChart3,
   Wrench,
   ExternalLink,
+  Activity,
   Briefcase,
   Server,
   LucideIcon,
@@ -77,6 +78,12 @@ const sections: NavSection[] = [
         href: '/usage',
         icon: BarChart3,
         enabled: config.features.enableSubscriptions,
+        scope: 'stoa:metrics:read',
+      },
+      {
+        name: 'Executions',
+        href: '/executions',
+        icon: Activity,
         scope: 'stoa:metrics:read',
       },
       {

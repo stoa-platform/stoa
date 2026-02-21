@@ -51,6 +51,9 @@ const ConsumerRegistrationPage = lazy(() =>
 const GatewaysPage = lazy(() =>
   import('./pages/gateways').then((m) => ({ default: m.GatewaysPage }))
 );
+const ExecutionHistoryPage = lazy(() =>
+  import('./pages/executions').then((m) => ({ default: m.ExecutionHistoryPage }))
+);
 const UnauthorizedPage = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.UnauthorizedPage }))
 );
@@ -507,6 +510,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:metrics:read">
                   <UsagePage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Execution History — Consumer execution view (CAB-1318) */}
+            <Route
+              path="/executions"
+              element={
+                <ProtectedRoute scope="stoa:metrics:read">
+                  <ExecutionHistoryPage />
                 </ProtectedRoute>
               }
             />

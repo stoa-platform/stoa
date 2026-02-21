@@ -116,6 +116,11 @@ const FederationAccountDetail = lazy(() =>
 const skillsModule = () => import('./pages/Skills');
 const SkillsList = lazy(() => skillsModule().then((m) => ({ default: m.SkillsList })));
 
+// CAB-1318: Execution View
+const ExecutionViewDashboard = lazy(() =>
+  import('./pages/ExecutionView').then((m) => ({ default: m.ExecutionViewDashboard }))
+);
+
 // CAB-1323: Audience Governance page
 const AudienceGovernance = lazy(() =>
   import('./pages/AudienceGovernance').then((m) => ({ default: m.AudienceGovernance }))
@@ -412,6 +417,7 @@ function ProtectedRoutes() {
                 <Route path="/federation/accounts" element={<FederationAccountsList />} />
                 <Route path="/federation/accounts/:id" element={<FederationAccountDetail />} />
                 <Route path="/skills" element={<SkillsList />} />
+                <Route path="/executions" element={<ExecutionViewDashboard />} />
                 <Route path="/audience-governance" element={<AudienceGovernance />} />
               </Routes>
             </Suspense>

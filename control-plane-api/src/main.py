@@ -41,6 +41,7 @@ from .routers import (
     deployments,
     environments,
     events,
+    execution_logs,
     federation,
     gateway,
     gateway_deployments,
@@ -506,6 +507,9 @@ app.include_router(federation.router)
 
 # Skills — CSS cascade context injection for AI agents (CAB-1314)
 app.include_router(skills.router)
+
+# Execution Logs — Consumer execution view + error taxonomy (CAB-1318)
+app.include_router(execution_logs.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

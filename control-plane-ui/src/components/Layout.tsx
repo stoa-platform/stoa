@@ -223,6 +223,12 @@ const navigationSections: NavSection[] = [
         badge: 'STOA',
       },
       {
+        name: 'Executions',
+        href: '/executions',
+        icon: ClipboardList,
+        permission: 'apis:read',
+      },
+      {
         name: 'Shadow Discovery',
         href: '/shadow-discovery',
         icon: Eye,

@@ -1,0 +1,80 @@
+# Allow kubelet health probes (readiness, liveness, startup)
+# Kubelets run on OVH MKS nodes (91.134.x.x) and probe pods on their health ports
+# CAB-1401
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubelet-probes
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    # OVH MKS node IPs (91.134.108.0/24) + internal pod CIDR
+    - from:
+        - ipBlock:
+            cidr: 91.134.108.0/24
+        - ipBlock:
+            cidr: 10.0.0.0/8
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubelet-probes
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 91.134.108.0/24
+        - ipBlock:
+            cidr: 10.0.0.0/8
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubelet-probes
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 91.134.108.0/24
+        - ipBlock:
+            cidr: 10.0.0.0/8
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubelet-probes
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 91.134.108.0/24
+        - ipBlock:
+            cidr: 10.0.0.0/8

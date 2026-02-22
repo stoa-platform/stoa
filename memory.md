@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (CAB-86 TTL Extension — PR #780 merged)
+> Derniere MAJ: 2026-02-22 (CAB-1398 Phase 3 Slack threading — PR #781 merged)
 
 ## ✅ DONE
 
@@ -8,6 +8,7 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1398 Phase 3 Slack Threading + Reactions — PR #781 (`SLACK_THREAD_TS` env var fallback, `_react_slack()`, L1/L3/L3.5 reactions)
 - ✅ CAB-86 TTL Extension — PR #780 (PATCH /v1/subscriptions/{id}/ttl, migration 035, 11 tests, +616 LOC)
 - ✅ AI Factory Slack Bot threading — PR #775 (Bot API dual-path, n8n sequential pipeline, thread_ts propagation)
 - ✅ Promote-to-prod workflow — PR #771 (reusable-promote.yml + promote-to-prod.yml + runbook)
@@ -30,7 +31,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 
 ## 📋 NEXT
 
-CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2)
+CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2) — Phase 3 DONE (PR #781)
 CAB-1132: Business Model Validation — Post Demo (8 pts, P1)
 CAB-1126: Demo Video (8 pts, P2)
 CAB-1125: Video Punchline AI Factory (8 pts, P2)

@@ -95,7 +95,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 68 pts (committed) + 700+ pts backlog | **Done**: 0 pts
+**Scope**: 68 pts (committed) + 700+ pts backlog | **Done**: 5 pts
 **Theme**: Post-Demo + Product Roadmap + Community Content
 
 ### In Progress
@@ -105,10 +105,10 @@
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
 - [~] CAB-86: TTL Extension — Self-Service (5 pts)
+- [~] CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2)
+  - [x] Phase 3: Slack Threading + Reactions — PR #781
 
 ### Todo
-
-- [ ] CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2)
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)

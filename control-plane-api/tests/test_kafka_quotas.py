@@ -1,13 +1,21 @@
 """Tests for Kafka quota management service"""
 
 import pytest
-from httpx import AsyncClient, HTTPStatusError, Response
+from httpx import AsyncClient, HTTPStatusError, Request, Response
 
 from src.services.kafka_quotas import (
     QUOTA_POLICIES,
     KafkaQuotaService,
     TenantTier,
 )
+
+
+_MOCK_ADMIN_URL = "http://mock-redpanda:9644"
+
+
+def _resp(status_code: int, **kwargs) -> Response:
+    """Build an httpx Response with a dummy request so raise_for_status() works."""
+    return Response(status_code, request=Request("POST", _MOCK_ADMIN_URL), **kwargs)
 
 
 @pytest.fixture
@@ -29,7 +37,7 @@ async def test_client_id_generation(quota_service):
 @pytest.mark.asyncio
 async def test_apply_quota_standard_tier(quota_service, monkeypatch):
     """Test applying standard tier quota policy"""
-    mock_response = Response(200, json={"success": True})
+    mock_response = _resp(200, json={"success": True})
 
     async def mock_post(*args, **kwargs):
         # Verify payload structure
@@ -63,7 +71,7 @@ async def test_apply_quota_standard_tier(quota_service, monkeypatch):
 @pytest.mark.asyncio
 async def test_apply_quota_premium_tier(quota_service, monkeypatch):
     """Test applying premium tier quota policy"""
-    mock_response = Response(200, json={"success": True})
+    mock_response = _resp(200, json={"success": True})
 
     async def mock_post(*args, **kwargs):
         payload = kwargs.get("json")
@@ -93,7 +101,7 @@ async def test_apply_quota_premium_tier(quota_service, monkeypatch):
 @pytest.mark.asyncio
 async def test_remove_quota(quota_service, monkeypatch):
     """Test removing quota policy"""
-    mock_response = Response(204)
+    mock_response = _resp(204)
 
     async def mock_delete(*args, **kwargs):
         # Verify params
@@ -131,7 +139,7 @@ async def test_list_quotas(quota_service, monkeypatch):
             ],
         }
     ]
-    mock_response = Response(200, json=mock_quotas)
+    mock_response = _resp(200, json=mock_quotas)
 
     async def mock_get(*args, **kwargs):
         return mock_response
@@ -155,7 +163,7 @@ async def test_list_quotas(quota_service, monkeypatch):
 @pytest.mark.asyncio
 async def test_health_check_success(quota_service, monkeypatch):
     """Test health check when Redpanda is healthy"""
-    mock_response = Response(200)
+    mock_response = _resp(200)
 
     async def mock_get(*args, **kwargs):
         return mock_response
@@ -221,7 +229,7 @@ async def test_noisy_neighbor_simulation(quota_service, monkeypatch):
     This simulates the DoD requirement: "Test: noisy tenant hits quota, gets rejected"
     """
     # Mock a quota rejection response from Redpanda
-    mock_rejection = Response(429, json={"error": "quota_exceeded", "message": "Request rate exceeded"})
+    mock_rejection = _resp(429, json={"error": "quota_exceeded", "message": "Request rate exceeded"})
 
     call_count = 0
 
@@ -230,7 +238,7 @@ async def test_noisy_neighbor_simulation(quota_service, monkeypatch):
         call_count += 1
         if call_count == 1:
             # First call: quota creation succeeds
-            return Response(200, json={"success": True})
+            return _resp(200, json={"success": True})
         else:
             # Subsequent calls: quota violation
             return mock_rejection

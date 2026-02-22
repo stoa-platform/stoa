@@ -22,8 +22,6 @@ vi.mock('@stoa/shared/components/ThemeToggle', () => ({
   ThemeToggle: () => <button>Theme</button>,
 }));
 
-const mockLogout = vi.fn();
-
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => createAuthMock('tenant-admin'),
 }));

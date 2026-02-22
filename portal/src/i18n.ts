@@ -8,7 +8,7 @@ const savedLanguage = localStorage.getItem(LANGUAGE_KEY) || 'en';
 i18n.use(initReactI18next).init({
   lng: savedLanguage,
   fallbackLng: 'en',
-  ns: ['common'],
+  ns: ['common', 'onboarding', 'catalog'],
   defaultNS: 'common',
   interpolation: {
     escapeValue: false,
@@ -28,11 +28,12 @@ async function loadNamespace(lng: string, ns: string): Promise<void> {
   }
 }
 
-// Load initial namespace
-loadNamespace(savedLanguage, 'common');
-if (savedLanguage !== 'en') {
-  loadNamespace('en', 'common');
-}
+// Load initial namespaces
+const EAGER_NAMESPACES = ['common', 'onboarding', 'catalog'];
+EAGER_NAMESPACES.forEach((ns) => {
+  loadNamespace(savedLanguage, ns);
+  if (savedLanguage !== 'en') loadNamespace('en', ns);
+});
 
 export { LANGUAGE_KEY, loadNamespace };
 export default i18n;

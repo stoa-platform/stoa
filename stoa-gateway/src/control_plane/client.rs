@@ -54,7 +54,7 @@ pub struct CreateApiRequest {
     pub endpoint: String,
 
     /// Classification
-    pub classification: String,
+    pub classification: Classification,
 
     /// Applied policies
     pub policies: Vec<String>,
@@ -68,7 +68,7 @@ pub struct CreateApiRequest {
     pub description: Option<String>,
 
     /// Initial state
-    pub state: String,
+    pub state: ApiState,
 
     /// Policy version used for creation
     pub policy_version: String,
@@ -334,11 +334,11 @@ mod tests {
             tenant_id: "acme".to_string(),
             name: "weather".to_string(),
             endpoint: "/v1/weather".to_string(),
-            classification: "H".to_string(),
+            classification: Classification::H,
             policies: vec!["rate-limit".to_string()],
             backend_url: None,
             description: None,
-            state: "pending_sync".to_string(),
+            state: ApiState::PendingSync,
             policy_version: "abc123".to_string(),
             created_by: "user@acme.com".to_string(),
         };
@@ -346,5 +346,26 @@ mod tests {
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("\"tenant_id\":\"acme\""));
         assert!(json.contains("\"classification\":\"H\""));
+        assert!(json.contains("\"state\":\"pending_sync\""));
+    }
+
+    #[test]
+    fn test_create_request_vh_classification() {
+        let request = CreateApiRequest {
+            tenant_id: "acme".to_string(),
+            name: "payments".to_string(),
+            endpoint: "/v1/payments".to_string(),
+            classification: Classification::VH,
+            policies: vec![],
+            backend_url: None,
+            description: None,
+            state: ApiState::PendingReview,
+            policy_version: "abc123".to_string(),
+            created_by: "user@acme.com".to_string(),
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"classification\":\"VH\""));
+        assert!(json.contains("\"state\":\"pending_review\""));
     }
 }

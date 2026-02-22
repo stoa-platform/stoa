@@ -15,6 +15,7 @@ use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
+use crate::guardrails::TokenBudgetTracker;
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
@@ -80,6 +81,9 @@ pub struct AppState {
     pub skill_resolver: Arc<SkillResolver>,
     /// Federation allow-list cache for sub-account routing (CAB-1362)
     pub federation_cache: Arc<FederationCache>,
+    /// Per-tenant token budget tracker (CAB-1337 Phase 2)
+    /// None when token budget tracking is disabled.
+    pub token_budget: Option<Arc<TokenBudgetTracker>>,
 }
 
 impl AppState {
@@ -154,6 +158,7 @@ impl AppState {
             let oidc_config = OidcProviderConfig {
                 issuer_url,
                 audience: client_id.to_string(),
+                internal_base_url: config.keycloak_internal_url.clone(),
                 ..OidcProviderConfig::default()
             };
             let oidc_provider = Arc::new(OidcProvider::new(oidc_config));
@@ -305,6 +310,24 @@ impl AppState {
             tracing::info!("Federation routing disabled (STOA_FEDERATION_ENABLED=false)");
         }
 
+        // Initialize token budget tracker (CAB-1337 Phase 2)
+        let token_budget = if config.token_budget_enabled {
+            let window_secs = config.token_budget_window_hours * 3600;
+            let tracker = Arc::new(TokenBudgetTracker::new(
+                config.token_budget_default_limit,
+                window_secs,
+            ));
+            tracing::info!(
+                default_limit = config.token_budget_default_limit,
+                window_hours = config.token_budget_window_hours,
+                "Token budget tracker initialized"
+            );
+            Some(tracker)
+        } else {
+            tracing::info!("Token budget tracking disabled (STOA_TOKEN_BUDGET_ENABLED=false)");
+            None
+        };
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -347,6 +370,7 @@ impl AppState {
             classification_enforcer,
             skill_resolver,
             federation_cache,
+            token_budget,
         }
     }
 
@@ -366,6 +390,11 @@ impl AppState {
 
         // Start event buffer cleanup (CAB-1179)
         self.event_buffer.clone().start_cleanup_task();
+
+        // Start token budget sync task (CAB-1337 Phase 2)
+        if let Some(ref tracker) = self.token_budget {
+            TokenBudgetTracker::spawn_sync_task(tracker.clone());
+        }
 
         // Start zombie reaper (CAB-362)
         if let Some(ref zd) = self.zombie_detector {
@@ -397,6 +426,15 @@ pub struct UacEnforcer {
     policy_engine: Arc<PolicyEngine>,
 }
 
+/// Caller identity context for UAC policy evaluation.
+#[derive(Debug, Clone)]
+pub struct PolicyCallerCtx {
+    pub user_id: Option<String>,
+    pub user_email: Option<String>,
+    pub scopes: Vec<String>,
+    pub roles: Vec<String>,
+}
+
 impl UacEnforcer {
     /// Create a new UAC enforcer with the given policy engine
     pub fn new(policy_engine: Arc<PolicyEngine>) -> Self {
@@ -413,13 +451,15 @@ impl UacEnforcer {
         // Legacy check with empty context — allows all by default for backwards compat
         // New code should use check_with_context() for proper policy evaluation
         self.check_with_context(
-            None,
-            None,
+            PolicyCallerCtx {
+                user_id: None,
+                user_email: None,
+                scopes: vec!["stoa:read".to_string()],
+                roles: vec![],
+            },
             tenant_id,
             "unknown",
             action,
-            vec!["stoa:read".to_string()], // Default read scope
-            vec![],
         )
     }
 
@@ -427,25 +467,21 @@ impl UacEnforcer {
     ///
     /// This is the primary method for policy evaluation. It builds a PolicyInput
     /// from the provided context and evaluates it against the OPA policy.
-    #[allow(clippy::too_many_arguments)]
     pub fn check_with_context(
         &self,
-        user_id: Option<String>,
-        user_email: Option<String>,
+        caller: PolicyCallerCtx,
         tenant_id: &str,
         tool_name: &str,
         action: Action,
-        scopes: Vec<String>,
-        roles: Vec<String>,
     ) -> Result<(), String> {
         let input = PolicyInput::new(
-            user_id,
-            user_email,
+            caller.user_id,
+            caller.user_email,
             tenant_id.to_string(),
             tool_name.to_string(),
             action,
-            scopes,
-            roles,
+            caller.scopes,
+            caller.roles,
         );
 
         match self.policy_engine.evaluate(&input) {
@@ -493,13 +529,15 @@ mod tests {
     fn disabled_engine_allows_read() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            Some("user-1".into()),
-            None,
+            PolicyCallerCtx {
+                user_id: Some("user-1".into()),
+                user_email: None,
+                scopes: vec!["stoa:read".into()],
+                roles: vec!["viewer".into()],
+            },
             "tenant-1",
             "stoa_catalog",
             Action::Read,
-            vec!["stoa:read".into()],
-            vec!["viewer".into()],
         );
         assert!(result.is_ok());
     }
@@ -508,13 +546,15 @@ mod tests {
     fn disabled_engine_allows_admin() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            Some("admin".into()),
-            Some("admin@test.com".into()),
+            PolicyCallerCtx {
+                user_id: Some("admin".into()),
+                user_email: Some("admin@test.com".into()),
+                scopes: vec!["stoa:admin".into()],
+                roles: vec!["cpi-admin".into()],
+            },
             "tenant-1",
             "stoa_security",
             Action::ManageContracts,
-            vec!["stoa:admin".into()],
-            vec!["cpi-admin".into()],
         );
         assert!(result.is_ok());
     }
@@ -523,13 +563,15 @@ mod tests {
     fn disabled_engine_allows_write() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            None,
-            None,
+            PolicyCallerCtx {
+                user_id: None,
+                user_email: None,
+                scopes: vec![],
+                roles: vec![],
+            },
             "tenant-1",
             "stoa_subscription",
             Action::Create,
-            vec![],
-            vec![],
         );
         assert!(result.is_ok());
     }

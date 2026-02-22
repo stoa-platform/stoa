@@ -29,7 +29,7 @@ use crate::metering::{
 use crate::metrics;
 use crate::optimization::{OptimizationLevel, OptimizationSettings, TokenOptimizer};
 use crate::resilience::CircuitBreaker;
-use crate::state::AppState;
+use crate::state::{AppState, PolicyCallerCtx};
 
 // === Request/Response Types ===
 
@@ -403,10 +403,14 @@ pub async fn mcp_tools_call(
                         &request.name,
                         "Read",
                         EventStatus::NotFound,
-                        start,
-                        0,
-                        request_size,
-                        0,
+                        CallTiming {
+                            start,
+                            t_gateway_ms: 0,
+                        },
+                        EventSizes {
+                            request: request_size,
+                            response: 0,
+                        },
                     );
                     return (
                         StatusCode::NOT_FOUND,
@@ -428,10 +432,14 @@ pub async fn mcp_tools_call(
                     &request.name,
                     "Read",
                     EventStatus::NotFound,
-                    start,
-                    0,
-                    request_size,
-                    0,
+                    CallTiming {
+                        start,
+                        t_gateway_ms: 0,
+                    },
+                    EventSizes {
+                        request: request_size,
+                        response: 0,
+                    },
                 );
                 return (
                     StatusCode::NOT_FOUND,
@@ -474,10 +482,14 @@ pub async fn mcp_tools_call(
                     &request.name,
                     &format!("{:?}", tool.required_action()),
                     EventStatus::PolicyDenied,
-                    start,
-                    0,
-                    request_size,
-                    0,
+                    CallTiming {
+                        start,
+                        t_gateway_ms: 0,
+                    },
+                    EventSizes {
+                        request: request_size,
+                        response: 0,
+                    },
                 );
                 return (
                     StatusCode::FORBIDDEN,
@@ -520,10 +532,14 @@ pub async fn mcp_tools_call(
             &request.name,
             &format!("{:?}", tool.required_action()),
             EventStatus::RateLimited,
-            start,
-            0,
-            request_size,
-            0,
+            CallTiming {
+                start,
+                t_gateway_ms: 0,
+            },
+            EventSizes {
+                request: request_size,
+                response: 0,
+            },
         );
         return (
             StatusCode::TOO_MANY_REQUESTS,
@@ -589,6 +605,43 @@ pub async fn mcp_tools_call(
         }
     };
 
+    // CAB-1337 Phase 2: Token budget pre-execution check
+    if let Some(ref tracker) = state.token_budget {
+        match tracker.check_budget(&auth.tenant_id) {
+            crate::guardrails::BudgetStatus::Exceeded => {
+                metrics::record_token_budget_exceeded(&auth.tenant_id);
+                let remaining_secs = tracker.window_remaining_secs(&auth.tenant_id);
+                warn!(
+                    tenant = %auth.tenant_id,
+                    tool = %request.name,
+                    remaining_secs = remaining_secs,
+                    "Token budget exceeded — request rejected"
+                );
+                return (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(ToolsCallResponse {
+                        content: vec![ToolContent::Text {
+                            text: format!("Token budget exceeded. Resets in {remaining_secs}s."),
+                        }],
+                        is_error: Some(true),
+                    }),
+                )
+                    .into_response();
+            }
+            crate::guardrails::BudgetStatus::Warning { pct } => {
+                warn!(
+                    tenant = %auth.tenant_id,
+                    pct = pct,
+                    "Token budget warning: {}% used", pct
+                );
+            }
+            crate::guardrails::BudgetStatus::OK => {}
+        }
+        let input_tokens = crate::guardrails::estimate_json(&arguments);
+        tracker.record_usage(&auth.tenant_id, input_tokens);
+        metrics::record_token_budget_usage(&auth.tenant_id, "input", input_tokens);
+    }
+
     // Resolve tool-specific skill instructions (CAB-1365)
     let skill_instructions = if state.config.skill_context_enabled {
         let resolved = state.skill_resolver.resolve(
@@ -638,13 +691,15 @@ pub async fn mcp_tools_call(
     let required_action = tool.required_action();
     let t_policy_start = Instant::now();
     if let Err(e) = state.uac_enforcer.check_with_context(
-        ctx.user_id.clone(),
-        ctx.user_email.clone(),
+        PolicyCallerCtx {
+            user_id: ctx.user_id.clone(),
+            user_email: ctx.user_email.clone(),
+            scopes: ctx.scopes.clone(),
+            roles: ctx.roles.clone(),
+        },
         &ctx.tenant_id,
         &request.name,
         required_action,
-        ctx.scopes.clone(),
-        ctx.roles.clone(),
     ) {
         let t_gateway = start.elapsed().as_millis() as u64;
         warn!(
@@ -660,10 +715,14 @@ pub async fn mcp_tools_call(
             &request.name,
             &format!("{:?}", required_action),
             EventStatus::PolicyDenied,
-            start,
-            t_gateway,
-            request_size,
-            0,
+            CallTiming {
+                start,
+                t_gateway_ms: t_gateway,
+            },
+            EventSizes {
+                request: request_size,
+                response: 0,
+            },
         );
         return (
             StatusCode::FORBIDDEN,
@@ -704,10 +763,14 @@ pub async fn mcp_tools_call(
                 &request.name,
                 &format!("{:?}", required_action),
                 EventStatus::Success,
-                start,
-                t_gateway_ms,
-                request_size,
-                cached.result.to_string().len() as u64,
+                CallTiming {
+                    start,
+                    t_gateway_ms,
+                },
+                EventSizes {
+                    request: request_size,
+                    response: cached.result.to_string().len() as u64,
+                },
             );
             let text = serde_json::to_string_pretty(&cached.result)
                 .unwrap_or_else(|_| cached.result.to_string());
@@ -814,6 +877,17 @@ pub async fn mcp_tools_call(
                 .map(|s| s.len() as u64)
                 .unwrap_or(0);
 
+            // CAB-1337 Phase 2: Record output tokens post-execution
+            if let Some(ref tracker) = state.token_budget {
+                let output_tokens = if response_size > 0 {
+                    (response_size / 4).max(1)
+                } else {
+                    0
+                };
+                tracker.record_usage(&auth.tenant_id, output_tokens);
+                metrics::record_token_budget_usage(&auth.tenant_id, "output", output_tokens);
+            }
+
             // Phase 6: Cache result for read-only tools
             if is_read_only {
                 if let Some(ToolContent::Text { ref text }) = content.first() {
@@ -833,10 +907,14 @@ pub async fn mcp_tools_call(
                 &request.name,
                 &format!("{:?}", required_action),
                 EventStatus::Success,
-                start,
-                t_gateway_ms,
-                request_size,
-                response_size,
+                CallTiming {
+                    start,
+                    t_gateway_ms,
+                },
+                EventSizes {
+                    request: request_size,
+                    response: response_size,
+                },
             );
 
             (
@@ -874,10 +952,14 @@ pub async fn mcp_tools_call(
                 &request.name,
                 &format!("{:?}", required_action),
                 EventStatus::Error,
-                start,
-                t_gateway_ms,
-                request_size,
-                0,
+                CallTiming {
+                    start,
+                    t_gateway_ms,
+                },
+                EventSizes {
+                    request: request_size,
+                    response: 0,
+                },
             );
             emit_error_snapshot(
                 &state,
@@ -886,9 +968,11 @@ pub async fn mcp_tools_call(
                 &format!("{:?}", required_action),
                 &e.to_string(),
                 500,
-                start,
-                t_gateway_ms,
-                t_backend_ms,
+                ErrorTiming {
+                    start,
+                    t_gateway_ms,
+                    t_backend_ms,
+                },
             );
 
             with_rate_limit_headers(
@@ -907,22 +991,35 @@ pub async fn mcp_tools_call(
 
 // === Phase 3: Metering Emission ===
 
+struct CallTiming {
+    start: Instant,
+    t_gateway_ms: u64,
+}
+
+struct EventSizes {
+    request: u64,
+    response: u64,
+}
+
+struct ErrorTiming {
+    start: Instant,
+    t_gateway_ms: u64,
+    t_backend_ms: u64,
+}
+
 /// Emit a metering event (non-blocking, fire-and-forget)
-#[allow(clippy::too_many_arguments)]
 fn emit_metering_event(
     state: &AppState,
     auth: &AuthContext,
     tool_name: &str,
     action: &str,
     status: EventStatus,
-    start: Instant,
-    t_gateway_ms: u64,
-    request_size: u64,
-    response_size: u64,
+    timing: CallTiming,
+    sizes: EventSizes,
 ) {
     if let Some(ref producer) = state.metering_producer {
-        let latency_ms = start.elapsed().as_millis() as u64;
-        let t_backend_ms = latency_ms.saturating_sub(t_gateway_ms);
+        let latency_ms = timing.start.elapsed().as_millis() as u64;
+        let t_backend_ms = latency_ms.saturating_sub(timing.t_gateway_ms);
 
         let event = ToolCallEvent::new(
             auth.tenant_id.clone(),
@@ -930,9 +1027,9 @@ fn emit_metering_event(
             action.to_string(),
         )
         .with_user(auth.user_id.clone(), auth.user_email.clone())
-        .with_timing(latency_ms, t_gateway_ms, t_backend_ms)
+        .with_timing(latency_ms, timing.t_gateway_ms, t_backend_ms)
         .with_status(status)
-        .with_sizes(request_size, response_size)
+        .with_sizes(sizes.request, sizes.response)
         .with_auth(auth.scopes.clone(), auth.roles.clone())
         .with_federation(
             auth.sub_account_id.as_deref(),
@@ -944,7 +1041,6 @@ fn emit_metering_event(
 }
 
 /// Emit an error snapshot (non-blocking, fire-and-forget)
-#[allow(clippy::too_many_arguments)]
 fn emit_error_snapshot(
     state: &AppState,
     auth: &AuthContext,
@@ -952,12 +1048,10 @@ fn emit_error_snapshot(
     action: &str,
     error_message: &str,
     response_status: u16,
-    start: Instant,
-    t_gateway_ms: u64,
-    t_backend_ms: u64,
+    timing: ErrorTiming,
 ) {
     if let Some(ref producer) = state.metering_producer {
-        let latency_ms = start.elapsed().as_millis() as u64;
+        let latency_ms = timing.start.elapsed().as_millis() as u64;
 
         let event = ToolCallEvent::new(
             auth.tenant_id.clone(),
@@ -965,7 +1059,7 @@ fn emit_error_snapshot(
             action.to_string(),
         )
         .with_user(auth.user_id.clone(), auth.user_email.clone())
-        .with_timing(latency_ms, t_gateway_ms, t_backend_ms)
+        .with_timing(latency_ms, timing.t_gateway_ms, timing.t_backend_ms)
         .with_status(EventStatus::Error);
 
         let snapshot = ErrorSnapshot::from_event(

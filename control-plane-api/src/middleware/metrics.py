@@ -10,6 +10,7 @@ import re
 import time
 
 from prometheus_client import (
+    REGISTRY,
     Counter,
     Gauge,
     Histogram,
@@ -167,6 +168,6 @@ def get_metrics() -> StarletteResponse:
     when the client accepts it, otherwise falls back to standard Prometheus format.
     """
     return StarletteResponse(
-        content=openmetrics.exposition.generate_latest(),
+        content=openmetrics.exposition.generate_latest(REGISTRY),
         media_type=openmetrics.exposition.CONTENT_TYPE_LATEST,
     )

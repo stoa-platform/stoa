@@ -10,6 +10,9 @@
 #   <=8pts       → Sonnet, 40 turns  (~$12/ticket)
 #   >8pts        → Sonnet, 60 turns  (~$16.50/ticket)
 #
+# MODE adjustment: Ship mode on small tickets (<=3 pts) uses 20 turns
+# instead of 25 — tighter budget for trivial, auto-mergeable changes.
+#
 # Haiku is reserved for council/plan-validate (structured evaluation).
 # Implementation always requires Sonnet — Haiku lacks the capacity to
 # create branches, write code, run tests, and open PRs reliably.
@@ -28,13 +31,21 @@ route_model() {
     ESTIMATE=0
   fi
 
+  local TURNS
   if [ "$ESTIMATE" -le 3 ]; then
-    echo "claude-sonnet-4-5-20250929|25"
+    TURNS=25
   elif [ "$ESTIMATE" -le 8 ]; then
-    echo "claude-sonnet-4-5-20250929|40"
+    TURNS=40
   else
-    echo "claude-sonnet-4-5-20250929|60"
+    TURNS=60
   fi
+
+  # Ship mode: tighter budget on small tickets (faster, cheaper)
+  if [ "$MODE" = "ship" ] && [ "$ESTIMATE" -le 3 ]; then
+    TURNS=20
+  fi
+
+  echo "claude-sonnet-4-5-20250929|${TURNS}"
 }
 
 # Extract estimate from issue body text (searches for "Estimate: X pts" or "X pts" patterns)

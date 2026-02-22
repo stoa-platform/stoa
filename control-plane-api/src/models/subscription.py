@@ -1,4 +1,5 @@
 """Subscription SQLAlchemy model for API subscriptions"""
+
 import enum
 import uuid
 from datetime import datetime
@@ -11,6 +12,7 @@ from src.database import Base
 
 class SubscriptionStatus(enum.StrEnum):
     """Subscription status enum"""
+
     PENDING = "pending"
     ACTIVE = "active"
     SUSPENDED = "suspended"
@@ -20,17 +22,19 @@ class SubscriptionStatus(enum.StrEnum):
 
 class ProvisioningStatus(enum.StrEnum):
     """Gateway provisioning status for webMethods integration (CAB-800)"""
-    NONE = "none"                        # No provisioning needed
-    PENDING = "pending"                  # Awaiting provisioning
-    PROVISIONING = "provisioning"        # In progress
-    READY = "ready"                      # Route active in gateway
-    FAILED = "failed"                    # Provisioning failed
-    DEPROVISIONING = "deprovisioning"    # Removal in progress
-    DEPROVISIONED = "deprovisioned"      # Removed from gateway
+
+    NONE = "none"  # No provisioning needed
+    PENDING = "pending"  # Awaiting provisioning
+    PROVISIONING = "provisioning"  # In progress
+    READY = "ready"  # Route active in gateway
+    FAILED = "failed"  # Provisioning failed
+    DEPROVISIONING = "deprovisioning"  # Removal in progress
+    DEPROVISIONED = "deprovisioned"  # Removed from gateway
 
 
 class Subscription(Base):
     """Subscription model - represents an API subscription with API key"""
+
     __tablename__ = "subscriptions"
 
     # Primary key
@@ -80,9 +84,13 @@ class Subscription(Base):
     expires_at = Column(DateTime, nullable=True)
     revoked_at = Column(DateTime, nullable=True)
 
+    # TTL extension tracking (CAB-86)
+    ttl_extension_count = Column(Integer, nullable=False, default=0, server_default="0")
+    ttl_total_extended_days = Column(Integer, nullable=False, default=0, server_default="0")
+
     # Audit fields
     approved_by = Column(String(255), nullable=True)  # Admin user ID who approved
-    revoked_by = Column(String(255), nullable=True)   # Admin user ID who revoked
+    revoked_by = Column(String(255), nullable=True)  # Admin user ID who revoked
 
     # Gateway provisioning (CAB-800)
     provisioning_status = Column(
@@ -91,16 +99,16 @@ class Subscription(Base):
         default=ProvisioningStatus.NONE,
         server_default="none",
     )
-    gateway_app_id = Column(String(255), nullable=True)    # webMethods application ID
-    provisioning_error = Column(Text, nullable=True)        # Last error message
-    provisioned_at = Column(DateTime, nullable=True)        # When route was created
+    gateway_app_id = Column(String(255), nullable=True)  # webMethods application ID
+    provisioning_error = Column(Text, nullable=True)  # Last error message
+    provisioned_at = Column(DateTime, nullable=True)  # When route was created
 
     # Indexes for common queries
     __table_args__ = (
-        Index('ix_subscriptions_tenant_api', 'tenant_id', 'api_id'),
-        Index('ix_subscriptions_subscriber_status', 'subscriber_id', 'status'),
-        Index('ix_subscriptions_application_api', 'application_id', 'api_id'),
-        Index('ix_subscriptions_provisioning_status', 'provisioning_status'),
+        Index("ix_subscriptions_tenant_api", "tenant_id", "api_id"),
+        Index("ix_subscriptions_subscriber_status", "subscriber_id", "status"),
+        Index("ix_subscriptions_application_api", "application_id", "api_id"),
+        Index("ix_subscriptions_provisioning_status", "provisioning_status"),
     )
 
     def __repr__(self) -> str:

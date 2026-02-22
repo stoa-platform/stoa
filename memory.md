@@ -24,23 +24,18 @@
 - CAB-1375: Grafana UAC Debug Dashboard (8 pts) — PR #763 (12 panels, 4 rows: tool perf, tenant breakdown, rate limits, security)
 - CAB-1373: Federation E2E Tests (5 pts) — PR #764 (15 BDD scenarios: 10 Console + 5 Gateway, @wip)
 - CAB-1386: AI Factory Observability (13 pts) — PRs #747, #750 (state drift fix — already merged)
+- CAB-1330: MCP Hot-Reload (13 pts) — P1 PR #727 (CRD watcher → SSE tools/list_changed). P2 deferred
 
 ## 🔴 IN PROGRESS
 
-CAB-1330: MCP Hot-Reload & CI Security Showcase (13 pts MEGA)
-- ✅ P1: MCP hot-reload — CRD watcher → SSE tools/list_changed (PR #727)
-- [ ] P2: CI Security Showcase — blog post + security badges
-
-CAB-802: Dry Run + Script + Video Backup (3 pts)
+CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
 - ✅ Production validated: 23/23 PASS, GO in 5s
-- [ ] Répétition #1 — timer 5 min
-- [ ] Répétition #2 — avec Cédric comme témoin
-- [ ] Video backup filmée
+- [ ] Répétitions + video backup (human-only)
 
 ## 📋 NEXT
 
-- CAB-1367 P3: Cost Guardrails + Lint Hook (5 pts)
+(rien — Cycle 8 closed, remaining items are human-only)
 
 ## 🚫 BLOCKED
 
@@ -50,4 +45,4 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - Demo MVP: mardi 17 mars 2026
 - docs.gostoa.dev = 37 articles, 0 "Coming Soon"
 - ADR numbering: stoa-docs owns numbers (001-048). Next: **ADR-049**
-- Velocity C8: 690 pts / 71 issues (4 closed this session)
+- Velocity C8: 703 pts / 73 issues (state drift fix: CAB-1330, CAB-1367 already Done on Linear)

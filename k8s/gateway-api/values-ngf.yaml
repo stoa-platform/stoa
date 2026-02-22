@@ -1,0 +1,32 @@
+# NGINX Gateway Fabric — Helm Values
+# Chart: oci://ghcr.io/nginx/charts/nginx-gateway-fabric v2.4.2
+# Cluster: OVH MKS GRA9 (K8s v1.34.2, Kyverno restrict-privileged Enforce)
+
+# Service type: NodePort for Phase 1 (no LB IP allocation).
+# Phase 2 will switch to LoadBalancer when migrating traffic.
+service:
+  type: NodePort
+
+# Kyverno requires explicit securityContext on all containers.
+nginxGateway:
+  securityContext:
+    privileged: false
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+
+nginx:
+  securityContext:
+    privileged: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - NET_BIND_SERVICE
+    seccompProfile:
+      type: RuntimeDefault

@@ -16,6 +16,11 @@
 //! # Guardrails V2 Phase 1 (CAB-1337)
 //! - Content filtering (financial, medical, violence, malware)
 //! - Response-path scanning (wired in Phase 2)
+//!
+//! # Guardrails V2 Phase 2 (CAB-1337)
+//! - Per-tenant token budget tracking (sliding-window, in-memory)
+//! - Pre-execution budget check (429 on exceeded, warn at 80%)
+//! - Post-execution input/output token recording
 
 mod content_filter;
 mod injection;

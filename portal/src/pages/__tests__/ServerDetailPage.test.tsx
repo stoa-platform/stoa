@@ -28,7 +28,6 @@ vi.mock('../../services/mcpServers', async () => {
       subscribeToServer: vi.fn(),
       canUserSeeServer: vi.fn().mockReturnValue(true),
     },
-    MOCK_SERVERS: [],
   };
 });
 

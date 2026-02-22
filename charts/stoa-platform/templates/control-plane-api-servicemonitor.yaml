@@ -1,0 +1,26 @@
+{{- if default false .Values.controlPlaneApi.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: control-plane-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-control-plane-api
+    app.kubernetes.io/component: backend
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: stoa-control-plane-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.controlPlaneApi.serviceMonitor.interval | default "15s" }}
+      scrapeTimeout: {{ .Values.controlPlaneApi.serviceMonitor.scrapeTimeout | default "10s" }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}

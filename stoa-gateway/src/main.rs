@@ -355,6 +355,7 @@ async fn init_k8s_watcher(config: &Config, _state: &AppState) {
                     _state.tool_registry.clone(),
                     _state.skill_resolver.clone(),
                     _state.session_manager.clone(),
+                    _state.guardrail_policy_store.clone(),
                 );
                 tokio::spawn(async move {
                     watcher.start().await;

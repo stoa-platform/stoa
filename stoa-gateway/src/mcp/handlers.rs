@@ -553,14 +553,42 @@ pub async fn mcp_tools_call(
             .into_response();
     }
 
+    // CAB-1337 Phase 3: Tool allowlist check (per-tenant GuardrailPolicy)
+    if !state
+        .guardrail_policy_store
+        .is_tool_allowed(&auth.tenant_id, &request.name)
+    {
+        warn!(
+            tenant = %auth.tenant_id,
+            tool = %request.name,
+            "Tool execution blocked by GuardrailPolicy allowlist"
+        );
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ToolsCallResponse {
+                content: vec![ToolContent::Text {
+                    text: format!(
+                        "Tool '{}' is not permitted for this tenant",
+                        request.name
+                    ),
+                }],
+                is_error: Some(true),
+            }),
+        )
+            .into_response();
+    }
+
     // CAB-707: Guardrails check (PII + prompt injection)
-    // CAB-1337: Extended with content filtering
-    let guardrails_cfg = crate::guardrails::GuardrailsConfig {
+    // CAB-1337: Extended with content filtering + per-tenant policy (Phase 3)
+    let global_guardrails_cfg = crate::guardrails::GuardrailsConfig {
         pii_enabled: state.config.guardrails_pii_enabled,
         pii_redact: state.config.guardrails_pii_redact,
         injection_enabled: state.config.guardrails_injection_enabled,
         content_filter_enabled: state.config.guardrails_content_filter_enabled,
     };
+    let guardrails_cfg = state
+        .guardrail_policy_store
+        .resolve(&auth.tenant_id, &global_guardrails_cfg);
     let arguments = match crate::guardrails::check_request(
         &guardrails_cfg,
         &request.name,

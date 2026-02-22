@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (AI Factory model migration PR #804 merged)
+> Derniere MAJ: 2026-02-22 (CAB-1389 MEGA done — PRs #810, #811, #820; CAB-1388 PR #818; CAB-1413 PR #814)
 
 ## ✅ DONE
 
@@ -8,6 +8,17 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1389 [MEGA] Cross-Component Quality Pass (13 pts) — ALL 3 PHASES DONE
+  - P1: Console Federation & Index Tests (PR #810) — 15 new test files, modals + wrappers
+  - P2: Gateway Feature Wiring (PR #811) — ClassificationType, ApiState, JWT user_id extraction
+  - P3: Gateway Lint Cleanup (PR #820) — builder pattern replaces clippy suppressions
+- ✅ CAB-1388 [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818 (30 test modules, 80% coverage)
+- ✅ CAB-1413 [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
+- ✅ CAB-1337 [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts)
+  - P0: ADR + OPA eval (PR #807 ADR), P1: ContentFilter (PR #809), P2: TokenBudget (PR #816), P3: GuardrailPolicy CRD (PR #825)
+  - P1: BLOCKED/SENSITIVE regex classification + response-path scanning + guardrails/mod.rs
+  - P2: TokenBudgetTracker (sliding-window per-tenant, 429 on exceed, warn at 80%)
+  - P3: GuardrailPolicy CRD + store + K8s watcher + per-tenant resolution + tool allowlist
 - ✅ Gap #5 CP API Prometheus scraping — PRs #788, #793, #799
   - ServiceMonitor (Helm), fix generate_latest(REGISTRY), NetworkPolicies port 8000
   - Prometheus targets: 2/2 health: up ✅

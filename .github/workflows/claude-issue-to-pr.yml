@@ -106,8 +106,7 @@ jobs:
         run: |
           source scripts/ai-ops/model-router.sh
 
-          # Extract estimate from issue body
-          ISSUE_BODY="${{ github.event.issue.body }}"
+          # Extract estimate from issue body (via env var to avoid bash injection from issue content)
           ESTIMATE=$(extract_estimate "$ISSUE_BODY")
 
           # Extract Ship/Show/Ask from Council output
@@ -132,6 +131,7 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
 
       # Sync Council result to Linear (apply council:ticket-* label + comment)
       - name: Sync Council to Linear
@@ -139,11 +139,13 @@ jobs:
         continue-on-error: true
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
 
           # Extract CAB-XXXX from issue title or body
-          TICKET_ID=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" \
+          TICKET_ID=$(echo "$ISSUE_TITLE $ISSUE_BODY" \
             | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
           if [ -z "$TICKET_ID" ]; then
             echo "No CAB-XXXX found in issue — skipping Linear sync"
@@ -233,9 +235,13 @@ jobs:
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_HTML_URL: ${{ github.event.issue.html_url }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "#${{ github.event.issue.number }}")
+          TICKET=$(echo "$ISSUE_TITLE $ISSUE_BODY" | grep -oE 'CAB-[0-9]+' | head -1 || echo "#${ISSUE_NUMBER}")
 
           # Extract score from Council execution output
           SCORE=""
@@ -253,7 +259,7 @@ jobs:
             elif echo "$SCORE < 8.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Fix"; fi
           fi
 
-          COUNCIL_TS=$(notify_council "$TICKET" "${{ github.event.issue.title }}" "${SCORE:-?}" "$VERDICT" "${{ github.event.issue.html_url }}" "${{ github.event.issue.number }}")
+          COUNCIL_TS=$(notify_council "$TICKET" "$ISSUE_TITLE" "${SCORE:-?}" "$VERDICT" "$ISSUE_HTML_URL" "$ISSUE_NUMBER")
           _react_slack "mag" "$COUNCIL_TS"
 
           # Push metrics with actual verdict
@@ -262,10 +268,14 @@ jobs:
 
       - name: Write Job Summary — Council
         if: always() && steps.guard.outputs.skip != 'true'
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COUNCIL_OUTCOME: ${{ steps.council.outcome }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
-          write_job_summary "$TICKET" "${{ steps.council.outcome }}" "" "" "council-s1"
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${ISSUE_NUMBER}")
+          write_job_summary "$TICKET" "$COUNCIL_OUTCOME" "" "" "council-s1"
 
   # ----- Stage 2: Plan Validation (runs on /go approval) -----
   plan-validate:
@@ -409,10 +419,12 @@ jobs:
         continue-on-error: true
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
 
-          TICKET_ID=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" \
+          TICKET_ID=$(echo "$ISSUE_TITLE $ISSUE_BODY" \
             | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
           if [ -z "$TICKET_ID" ]; then exit 0; fi
 
@@ -487,17 +499,25 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_HTML_URL: ${{ github.event.issue.html_url }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PLAN_COUNCIL_OUTCOME: ${{ steps.plan-council.outcome }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          PLAN_TS=$(notify_plan "${{ github.event.issue.number }}" "${{ github.event.issue.title }}" "${{ github.event.issue.html_url }}" "${{ steps.plan-council.outcome }}")
+          PLAN_TS=$(notify_plan "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_HTML_URL" "$PLAN_COUNCIL_OUTCOME")
           _react_slack "white_check_mark" "$PLAN_TS"
 
       - name: Write Job Summary — Plan
         if: always() && steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PLAN_COUNCIL_OUTCOME: ${{ steps.plan-council.outcome }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
-          write_job_summary "$TICKET" "${{ steps.plan-council.outcome }}" "" "" "council-s2"
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${ISSUE_NUMBER}")
+          write_job_summary "$TICKET" "$PLAN_COUNCIL_OUTCOME" "" "" "council-s2"
 
   # ----- Stage 3: Implementation (runs on /go-plan approval) -----
   implement:
@@ -551,9 +571,10 @@ jobs:
       - name: Route Model
         if: steps.verify-council.outputs.validated == 'true'
         id: route
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           source scripts/ai-ops/model-router.sh
-          ISSUE_BODY="${{ github.event.issue.body }}"
           ESTIMATE=$(extract_estimate "$ISSUE_BODY")
           MODE=$(extract_mode "$ISSUE_BODY")
           ROUTE=$(route_model "$ESTIMATE" "$MODE")
@@ -614,9 +635,12 @@ jobs:
         if: always() && steps.verify-council.outputs.validated == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          ISSUE_NUM="${{ github.event.issue.number }}"
-          TICKET_ID=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" \
+          ISSUE_NUM="$ISSUE_NUMBER"
+          TICKET_ID=$(echo "$ISSUE_TITLE $ISSUE_BODY" \
             | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
 
           SEARCH_TERM="${TICKET_ID:-issue-${ISSUE_NUM}}"
@@ -669,21 +693,26 @@ jobs:
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
           N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          IMPLEMENT_OUTCOME: ${{ steps.implement.outcome || 'skipped' }}
+          ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-5' }}
+          ROUTE_TURNS: ${{ steps.route.outputs.turns || '60' }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
-          STATUS="${{ steps.implement.outcome || 'skipped' }}"
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${ISSUE_NUMBER}")
+          STATUS="$IMPLEMENT_OUTCOME"
           PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
-          MODEL="${{ steps.route.outputs.model || 'sonnet-4-5' }}"
-          MAX_TURNS="${{ steps.route.outputs.turns || '60' }}"
+          MODEL="$ROUTE_MODEL"
+          MAX_TURNS="$ROUTE_TURNS"
           if [ "$STATUS" = "success" ]; then
-            IMPL_TS=$(notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR" "$DURATION")
+            IMPL_TS=$(notify_implement "$TICKET" "success" "" "" "$ISSUE_NUMBER" "L1 Issue-to-PR" "$DURATION")
             linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR" "$DURATION" || true
             push_metrics_implement "issue-to-pr" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
             _react_slack "tada" "$IMPL_TS"
           elif [ "$STATUS" = "failure" ] && [ "${PR_FOUND}" = "true" ]; then
-            IMPL_TS=$(notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L1 Issue-to-PR (max_turns)" "$DURATION")
+            IMPL_TS=$(notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "$ISSUE_NUMBER" "L1 Issue-to-PR (max_turns)" "$DURATION")
             push_metrics_implement "issue-to-pr" "$TICKET" "max_turns" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
             _react_slack "rocket" "$IMPL_TS"
           elif [ "$STATUS" = "failure" ]; then
@@ -691,14 +720,19 @@ jobs:
             push_metrics_error "issue-to-pr" "implement" "$TICKET"
             _react_slack "x" "$IMPL_TS"
           else
-            notify_implement "$TICKET" "$STATUS" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR"
+            notify_implement "$TICKET" "$STATUS" "" "" "$ISSUE_NUMBER" "L1 Issue-to-PR"
           fi
 
       - name: Write Job Summary — Implement
         if: always()
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          IMPLEMENT_OUTCOME: ${{ steps.implement.outcome || 'skipped' }}
+          ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-5' }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${{ github.event.issue.number }}")
-          write_job_summary "$TICKET" "${{ steps.implement.outcome || 'skipped' }}" "" \
-            "${{ steps.route.outputs.model || 'sonnet-4-5' }}" "L1-implement" \
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${ISSUE_NUMBER}")
+          write_job_summary "$TICKET" "$IMPLEMENT_OUTCOME" "" \
+            "$ROUTE_MODEL" "L1-implement" \
             "$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))"

@@ -19,9 +19,9 @@ globs: ".claude/**"
 
 | Task | Model | Rationale |
 |------|-------|-----------|
-| Codebase search, exploration | haiku | Fast, cheap |
-| Subagent work (tests, reviews, docs) | sonnet | Quality/cost balance |
-| Architecture, security decisions | opus | Critical reasoning |
+| Codebase search, exploration | `claude-haiku-4-5-20251001` | Fast, cheap |
+| Subagent work (tests, reviews, docs) | `claude-sonnet-4-6` | Quality/cost balance |
+| Architecture, security decisions | `claude-opus-4-6` | Critical reasoning |
 
 **Rules**: Never opus for subagents. Max 3-4 subagents active. Prefer haiku for `Explore`.
 

@@ -14225,6 +14225,73 @@
         "title": "SyncTypeEnum",
         "type": "string"
       },
+      "TTLExtendRequest": {
+        "description": "Schema for requesting a TTL extension on a subscription.",
+        "example": {
+          "extend_days": 7,
+          "reason": "Need more time to complete integration testing"
+        },
+        "properties": {
+          "extend_days": {
+            "description": "Days to extend (7 or 14)",
+            "enum": [
+              7,
+              14
+            ],
+            "title": "Extend Days",
+            "type": "integer"
+          },
+          "reason": {
+            "description": "Reason for extension",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "extend_days",
+          "reason"
+        ],
+        "title": "TTLExtendRequest",
+        "type": "object"
+      },
+      "TTLExtendResponse": {
+        "description": "Schema for TTL extension response.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "new_expires_at": {
+            "format": "date-time",
+            "title": "New Expires At",
+            "type": "string"
+          },
+          "remaining_extensions": {
+            "title": "Remaining Extensions",
+            "type": "integer"
+          },
+          "ttl_extension_count": {
+            "title": "Ttl Extension Count",
+            "type": "integer"
+          },
+          "ttl_total_extended_days": {
+            "title": "Ttl Total Extended Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "new_expires_at",
+          "ttl_extension_count",
+          "ttl_total_extended_days",
+          "remaining_extensions"
+        ],
+        "title": "TTLExtendResponse",
+        "type": "object"
+      },
       "TaxonomyItem": {
         "description": "Single error category aggregate.",
         "properties": {
@@ -29238,6 +29305,65 @@
           }
         ],
         "summary": "Suspend Subscription",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/v1/subscriptions/{subscription_id}/ttl": {
+      "patch": {
+        "description": "Extend the TTL of an active subscription.\n\nSubscription owners can extend their expiry by 7 or 14 days.\nLimited to 2 extensions and 60 total extended days.\nTenant admins and cpi-admins can extend any subscription in their scope.",
+        "operationId": "extend_subscription_ttl_v1_subscriptions__subscription_id__ttl_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TTLExtendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TTLExtendResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Extend Subscription Ttl",
         "tags": [
           "Subscriptions"
         ]

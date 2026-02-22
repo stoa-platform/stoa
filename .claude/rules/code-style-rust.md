@@ -59,6 +59,45 @@ cargo clippy           # Lint
 cargo fmt --check      # Format check
 ```
 
+## Toolchain Pinning (fmt consistency)
+
+`cargo fmt` output can differ across toolchain versions. `stoa-gateway/rust-toolchain.toml`
+locks the channel so local dev and CI use the same toolchain.
+
+```toml
+# stoa-gateway/rust-toolchain.toml
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+```
+
+**Never run `cargo fmt` with a different toolchain than the pin file specifies.**
+
+### Recovery when `cargo fmt --check` fails in CI but passes locally
+
+```bash
+# 1. Ensure you are using the pinned toolchain
+cat stoa-gateway/rust-toolchain.toml  # shows channel = "stable"
+rustup update stable                  # sync local stable to latest
+
+# 2. Re-run format
+cd stoa-gateway && cargo fmt
+
+# 3. Commit the diff
+git add -p && git commit -m "style(gateway): apply cargo fmt with pinned toolchain"
+```
+
+### Recovery when clippy fails in CI but not locally
+
+Always run with the exact CI flags — not just `cargo clippy`:
+
+```bash
+cd stoa-gateway
+RUSTFLAGS=-Dwarnings cargo clippy --all-targets --all-features -- -D warnings
+```
+
+This catches warnings that bare `cargo clippy` may suppress.
+
 ## Conventions
 - Framework: Tokio + axum
 - Error handling: anyhow for app, thiserror for libraries

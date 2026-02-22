@@ -34,3 +34,36 @@ globs: ".github/**,*.md"
 - **Security pipeline**: SAST, dependency audit, gitleaks, SBOM, container scan, DCO check
 - **Dependabot**: weekly (Monday), max 5 PRs/ecosystem, prefix `chore(deps)`
 - **3 required checks** (all PRs): License Compliance, SBOM Generation, Verify Signed Commits
+
+## Release Please
+
+Release Please automates changelogs and version bumps by parsing conventional commits.
+It runs on every push to main.
+
+### Config files (DO NOT manually edit without care)
+- `.release-please-manifest.json` — current version per component
+- `release-please-config.json` — strategy per component (node, python, rust)
+
+### Common failure causes
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Fails every push | Commits not parseable as conventional | Check `git log --oneline -10` — ensure `type(scope): subject` format |
+| 403 error | Workflow lacks `contents: write` or `pull-requests: write` | Check workflow permissions block |
+| Exits non-zero, no PR created | Stale Release Please PR already open | Close the stale RP PR, push an empty commit to re-trigger |
+| Version not bumped after `feat:` commit | Commit was a squash merge with non-conventional PR title | Ensure PR title follows `type(scope): subject` format |
+| `The release is already up-to-date` | No releasable commits since last release | Normal — not an error, but reported as failure if exit code != 0 |
+
+### Verify Release Please health
+```bash
+gh run list --workflow=release-please.yml --limit 10
+gh run view <run-id> --log | grep -E "error|Error|fail"
+```
+
+### Token requirement
+The workflow requires either `RELEASE_PLEASE_TOKEN` (PAT with repo scope) or these workflow-level permissions:
+```yaml
+permissions:
+  contents: write
+  pull-requests: write
+```

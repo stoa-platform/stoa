@@ -50,6 +50,8 @@ spec:
               value: "json"
             - name: STOA_KEYCLOAK_URL
               value: "https://auth.gostoa.dev"
+            - name: STOA_KEYCLOAK_INTERNAL_URL
+              value: "http://keycloak.stoa-system.svc.cluster.local"
             - name: STOA_KEYCLOAK_REALM
               value: "stoa"
             - name: STOA_KEYCLOAK_CLIENT_ID

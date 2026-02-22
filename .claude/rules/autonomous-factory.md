@@ -257,14 +257,52 @@ All notifications from a pipeline run are threaded under the initial message usi
 
 | Pipeline | Threading Source | Reaction Sequence |
 |----------|-----------------|-------------------|
-| L3 (council → implement-fast) | n8n `slack_thread_ts` or captured from Council ts | :mag: → :hammer_and_wrench: → :tada: / :x: |
-| L3 (plan-validate, implement) | Each captures its own ts (separate workflow runs) | :white_check_mark: (plan), :hammer_and_wrench: → :tada: / :x: (impl) |
+| L3 (council → implement-fast) | n8n `slack_thread_ts` or captured from Council ts | :mag: → :hammer_and_wrench: → :rocket: → :tada: / :x: |
+| L3 (plan-validate, implement) | Each captures its own ts (separate workflow runs) | :white_check_mark: (plan), :hammer_and_wrench: → :rocket: → :tada: / :x: (impl) |
 | L1 (council, plan, implement) | Each captures its own ts (separate workflow runs) | :mag: (council), :white_check_mark: (plan), :tada: / :x: (impl) |
 | L3.5 (scan) | Each council + scan summary captures own ts | :mag: (per candidate), :satellite_antenna: (summary) |
 
 **Env var fallback**: `_send_slack()` resolves thread_ts as `$2` (explicit) > `$SLACK_THREAD_TS` (env) > empty (no threading). Setting `SLACK_THREAD_TS` in the env automatically threads all `notify_*` calls without changing their signatures.
 
 **Reactions**: `_react_slack EMOJI TS` adds an emoji reaction via `reactions.add` API. No-op if `SLACK_BOT_TOKEN` or `SLACK_CHANNEL_ID` is unset. Non-blocking — failures are logged as warnings.
+
+### Progress Streaming Milestones
+
+Implementation jobs post thread-reply milestones via `_reply_slack()`:
+
+| Milestone | When | Message |
+|-----------|------|---------|
+| Implementation Starting | After Record Start Time, before Claude action | `:hammer_and_wrench: Implementation started — {model} / {turns} turns` |
+| PR Created | After Detect Partial Success, before Close the Loop | `:rocket: PR #{num} created — CI running` |
+
+Both milestones use `continue-on-error: true` and are non-blocking. Thread parent is `SLACK_THREAD_TS` (from n8n dispatch or captured from previous step).
+
+## Slack `/stoa` Slash Command
+
+n8n workflow (`scripts/ai-ops/n8n-stoa-slash-command.json`) handles `/stoa` commands from Slack:
+
+| Command | Tier | Action |
+|---------|------|--------|
+| `/stoa help` | all | Ephemeral help text (available commands + access level) |
+| `/stoa status` | all | Fetch 5 recent GHA workflow runs, format, send via `response_url` |
+| `/stoa scan` | admin | Trigger `claude-autopilot-scan.yml` via `workflow_dispatch` |
+| `/stoa implement CAB-XXXX` | admin | Validate ticket format, trigger `repository_dispatch linear-ticket-started` |
+
+**Setup** (manual): Slack App → Slash Commands → `/stoa` → Request URL: `https://hlfh.app.n8n.cloud/webhook/stoa-slash-command`
+
+**Pattern**: Immediate 200 ACK (Slack requires <3s) → deferred response via `response_url` POST.
+
+### Access Control Tiers
+
+3-tier access system in `n8n-slack-interactive.json` and `n8n-stoa-slash-command.json`:
+
+| Tier | Env Variable | Permissions |
+|------|-------------|-------------|
+| `admin` | `SLACK_ADMIN_USERS` | All actions (scan, implement, approve, merge) |
+| `allowed` | `SLACK_ALLOWED_USERS` | Approve + merge only |
+| `readonly` | (everyone else) | 403 forbidden |
+
+**Backward compatible**: Empty `SLACK_ADMIN_USERS` = all allowed users are admins (existing behavior preserved).
 
 ## GitHub Labels for Automation
 
@@ -341,15 +379,17 @@ The `repository_dispatch` `client_payload` includes phase-aware fields:
 
 | Guard | Value | Why |
 |-------|-------|-----|
-| Model routing | `model-router.sh` — Haiku/Sonnet tiers by estimate | ~60% savings on small tickets |
+| Model routing | `model-router.sh` — Sonnet, MODE-aware turns | Ship ≤3pt → 20 turns vs 25 |
 | Ship fast-path | Skip S2 for ≤5pt Ship tickets | ~$3 + 5min saved per ticket |
 | Velocity cap | `AUTOPILOT_DAILY_MAX` (default 5) | Daily budget ceiling |
-| Max turns per agent | 15/30/60 (tiered by estimate) | Prevent runaway costs |
-| Default model | Sonnet (code gen), Haiku (Ship ≤3pt) | Right model per task |
+| Velocity tracking | `AUTOPILOT_TODAY_COUNT` incremented by scan + dispatch | Accurate daily count |
+| Max turns per agent | 20/25/40/60 (tiered by estimate + MODE) | Prevent runaway costs |
+| Default model | Sonnet (all code gen) | Haiku dropped (PR #737) |
 | Council threshold | 8.0 (all levels) | Harmonized — no per-level exceptions |
 | Max parallel agents | 3 | Cost caps at ~3x single agent |
 | Timeout per job | 15-60 min | Hard stop on runaway jobs |
 | Skip Council S2 for | Ship-mode ≤5 pts | Avoid unnecessary plan validation |
+| Precise ticket matching | Word-boundary regex `(^|[^0-9])ID([^0-9]|$)` | Prevents CAB-1 matching CAB-123 |
 | Schedule frequency | Daily/weekly (not hourly) | Control API usage |
 | Kill-switch model | `CLAUDE_DEFAULT_MODEL` repo var | Revert all tiers to Sonnet |
 

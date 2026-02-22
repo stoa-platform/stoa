@@ -389,6 +389,18 @@ jobs:
       - name: Record Start Time
         run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
 
+      - name: Notify Slack — Implementation Starting
+        continue-on-error: true
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_THREAD_TS: ${{ needs.council.outputs.slack_thread_ts }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          MODEL="${{ steps.route.outputs.model }}"
+          TURNS="${{ steps.route.outputs.turns }}"
+          _reply_slack "$SLACK_THREAD_TS" "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\":hammer_and_wrench: Implementation started — ${MODEL##*-} / ${TURNS} turns (Ship fast-path)\"}}]}"
+
       - name: Run Implementation (Ship Fast Path)
         id: claude
         continue-on-error: true
@@ -465,6 +477,18 @@ jobs:
           echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
           echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
           echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
+
+      - name: Notify Slack — PR Created
+        if: steps.detect-partial.outputs.pr_found == 'true'
+        continue-on-error: true
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_THREAD_TS: ${{ needs.council.outputs.slack_thread_ts }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          PR_NUM="${{ steps.detect-partial.outputs.pr_num }}"
+          _reply_slack "$SLACK_THREAD_TS" "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\":rocket: PR #${PR_NUM} created — CI running\"}}]}"
 
       # Close the loop: find PR, close issue, update Linear, notify Slack
       - name: Close the Loop
@@ -884,6 +908,19 @@ jobs:
         if: steps.verify.outputs.valid == 'true'
         run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
 
+      - name: Notify Slack — Implementation Starting
+        if: steps.verify.outputs.valid == 'true'
+        continue-on-error: true
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_THREAD_TS: ${{ env.SLACK_THREAD_TS }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          MODEL="${{ steps.route.outputs.model }}"
+          TURNS="${{ steps.route.outputs.turns }}"
+          _reply_slack "$SLACK_THREAD_TS" "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\":hammer_and_wrench: Implementation started — ${MODEL##*-} / ${TURNS} turns\"}}]}"
+
       - name: Run Implementation
         if: steps.verify.outputs.valid == 'true'
         continue-on-error: true
@@ -974,6 +1011,18 @@ jobs:
           echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
           echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
           echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
+
+      - name: Notify Slack — PR Created
+        if: steps.detect-partial.outputs.pr_found == 'true' && steps.verify.outputs.valid == 'true'
+        continue-on-error: true
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_THREAD_TS: ${{ env.SLACK_THREAD_TS }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          PR_NUM="${{ steps.detect-partial.outputs.pr_num }}"
+          _reply_slack "$SLACK_THREAD_TS" "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\":rocket: PR #${PR_NUM} created — CI running\"}}]}"
 
       # ----- Close the Loop (post-merge feedback) -----
       # After implementation: find merged PR, close GitHub issue, update Linear, notify Slack

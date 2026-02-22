@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (/sync-plan full — C9 drift: +2 new done, cleanup 4 canceled/dupes)
+> Last sync: 2026-02-23 (MEGA batch: 16 MEGAs promoted to Todo, Council scores applied, 3 orphan Done items added)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,8 +101,8 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~283 pts (committed) | **Done**: 191 pts (68%) | **Velocity**: 14 issues closed
-**Theme**: Post-Demo + Product Roadmap + Community Content
+**Scope**: ~661 pts (committed) | **Done**: 238 pts (36%) | **Velocity**: 17 issues closed
+**Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
 
@@ -110,93 +110,94 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (14)
+
+### Done (17)
+
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
-- [x] CAB-1388: [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818
-- [x] CAB-1389: [MEGA] Cross-Component Quality Pass (13 pts) — PRs #810, #811, #820
-- [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
-- [x] CAB-86: TTL Extension — Self-Service (5 pts) — PR #780
+- [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
+  - P1: spec coverage matrix (docs/mcp-spec-coverage.md)
+  - P2: 4 missing methods (prompts/list, prompts/get, logging/setLevel, resources/read) + send_to_session
+  - P3: 16 new conformance tests — 31/31 contract tests pass
 - [x] CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2) — PRs #768, #775, #781, #792, #795
   - [x] Phase 1: Dispatch Fixes — PR #768
   - [x] Phase 2: Slack Bot API dual-path — PR #775
   - [x] Phase 3: Slack Threading + Reactions — PR #781
   - [x] Phase 4: /stoa slash command + gap fixes — PRs #792, #795
-- [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
-  - P1: spec coverage matrix (docs/mcp-spec-coverage.md)
-  - P2: 4 missing methods (prompts/list, prompts/get, logging/setLevel, resources/read) + send_to_session
-  - P3: 16 new conformance tests — 31/31 contract tests pass
+- [x] CAB-1388: [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818
 - [x] CAB-1390: [MEGA] Portal Component Test Coverage & Feature Fixes (21 pts) — PRs #833, #836, #838
   - P1: Critical components — Onboarding, Contracts, Apps test files (PR #833)
   - P2: Dashboard + Usage + Layout — 15 test files, 1094 LOC (PR #836)
   - P3: APICard + bugfixes + certificateValidator fix (PR #838)
-- [x] CAB-1352: [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already in stoa-docs
-- [x] CAB-1414: [docs] SaaS Playbook Parts 1-2 + Buying Guide (5 pts) — stoa-docs PR #75
-- [x] CAB-1415: [docs] SaaS Playbook Parts 3-5 (5 pts) — stoa-docs PR #76
-- [x] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts) — stoa-docs PR #77
-- [x] CAB-1411: [docs] stoa.yaml spec v1.0 reference + stoactl CLI guide (5 pts) — sub of CAB-374
-- [x] CAB-1412: [stoactl] Audit + complete CLI commands: deploy/rollback/logs/list (13 pts) — sub of CAB-374
-
-### Todo
-- [ ] CAB-1356: [cli] stoactl Deploy Commands — deploy, rollback, logs (5 pts, P1)
-- [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
-- [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
-- [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
-- [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
-- [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
-- [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
-- [ ] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts, P2)
-- [ ] CAB-285: Chat Agent UI Component (8 pts, P2)
-- [ ] CAB-286: Chat Agent Backend API (8 pts, P2)
-- [ ] CAB-287: Chat Agent Tool Injection (5 pts, P2)
-- [ ] CAB-288: Chat Agent Token Metering (5 pts, P2)
-- [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
-- [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
-
-### Backlog — New MEGAs
-
-**Gateway** (76 pts):
-- [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
-- CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts)
-- CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts)
-
-**Platform** (144 pts):
-- CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (34 pts)
-- CAB-1342: [MEGA] Helm Auto-Sync Secrets (21 pts)
-- CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (34 pts)
-- CAB-1334: [MEGA] SaaS Multi-Tier Billing — Stripe (34 pts)
-- CAB-1324: [MEGA] Runtime Data Governance (21 pts)
-
-**DX** (76 pts):
-- [x] CAB-1390: [MEGA] Portal Component Test Coverage & Feature Fixes (21 pts) — PRs #833, #836, #838
-- CAB-1338: [MEGA] Portal i18n (21 pts)
-- CAB-1322: [MEGA] Full UX Audit — Apple-Style (34 pts)
-
-**Observability** (42 pts):
-- CAB-1331: [MEGA] UAC-Driven Observability (21 pts)
-- CAB-1316: [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts)
-
-**Community** (124 pts):
-- [x] CAB-1394: [MEGA] SaaS Playbook Series (13 pts) — stoa-docs PRs #75, #76, #77
-- CAB-1393: [MEGA] Developer Onboarding Content (21 pts)
-- CAB-1392: [MEGA] Security & MCP Deep-Dive Content (21 pts)
-- [x] CAB-1391: [MEGA] Migration Guide Expansion — Axway, WSO2, Layer7 (13 pts) — stoa-docs PR #68 + stoa-web PR #10
-- CAB-1329: [MEGA] Demo Content Library — 8 Themes (34 pts)
-- CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts)
-
-**Other**:
-- CAB-1319: [MEGA] MCP Developer Self-Service (21 pts)
-- CAB-1320: [MEGA] Repo Consolidation (21 pts)
-- CAB-1123: Prompt Cache for HEGEMON (21 pts)
-- CAB-374: [MEGA] Vercel-Style DX (34 pts)
-
-### Backlog — Legacy (parked)
-
-- [x] CAB-1301: [MEGA] Gateway API + NetworkPolicy Foundation (21 pts, rescoped) — ALL 3 PHASES DONE
+- [x] CAB-1301: [MEGA] Gateway API + NetworkPolicy Foundation (21 pts) — PRs #785, #791, #797
   - [x] CAB-1399 [infra] Gateway API CRDs + NGINX Gateway Fabric (8 pts) — PR #785
   - [x] CAB-1400 [infra] Ingress → HTTPRoute Migration (8 pts) — PR #791
   - [x] CAB-1401 [infra] Default-Deny NetworkPolicy (5 pts) — PR #797
+- [x] CAB-1394: [MEGA] SaaS Playbook Series (13 pts) — stoa-docs PRs #75, #76, #77
+- [x] CAB-1391: [MEGA] Migration Guide Expansion — Axway, WSO2, Layer7 (13 pts) — stoa-docs PR #68 + stoa-web PR #10
+- [x] CAB-1389: [MEGA] Cross-Component Quality Pass (13 pts) — PRs #810, #811, #820
+- [x] CAB-1412: [stoactl] Audit + complete CLI commands: deploy/rollback/logs/list (13 pts) — sub of CAB-374
+- [x] CAB-86: TTL Extension — Self-Service (5 pts) — PR #780
+- [x] CAB-1414: [docs] SaaS Playbook Parts 1-2 + Buying Guide (5 pts) — stoa-docs PR #75
+- [x] CAB-1415: [docs] SaaS Playbook Parts 3-5 (5 pts) — stoa-docs PR #76
+- [x] CAB-1411: [docs] stoa.yaml spec v1.0 reference + stoactl CLI guide (5 pts) — sub of CAB-374
+- [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
+- [x] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts) — stoa-docs PR #77
+- [x] CAB-1352: [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already in stoa-docs
+
+### Todo
+
+**P1** (29 pts):
+- [ ] CAB-374: [MEGA] Vercel-Style DX (21 pts, P1) — Council validated ✅
+- [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
+
+**P2** (92 pts):
+- [ ] CAB-1123: Prompt Cache for HEGEMON (21 pts, P2) — Council 8.50 Go ✅
+- [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
+- [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
+- [ ] CAB-285: Chat Agent UI Component (8 pts, P2)
+- [ ] CAB-286: Chat Agent Backend API (8 pts, P2)
+- [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
+- [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
+- [ ] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts, P2)
+- [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
+- [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
+- [ ] CAB-287: Chat Agent Tool Injection (5 pts, P2)
+- [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
+
+**P3 — MEGAs** (299 pts):
+
+*Council Go (>= 8.0):*
+- [ ] CAB-1331: [MEGA] UAC-Driven Observability (21 pts, P3) — Council 8.50 ✅
+- [ ] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts, P3) — Council 8.25 ✅
+- [ ] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts, P3) — Council 8.00 ✅
+- [ ] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — Council 8.00 ✅
+
+*Council Fix (6.0–7.9, adjustments applied on Linear):*
+- [ ] CAB-1319: [MEGA] MCP Developer Self-Service (21 pts, P3) — Council 7.50 ⚠️
+- [ ] CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts, P3) — Council 7.50 ⚠️
+- [ ] CAB-1316: [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts, P3) — Council 7.50 ⚠️
+- [ ] CAB-1342: [MEGA] Helm Auto-Sync Secrets (21 pts, P3) — Council 7.25 ⚠️
+- [ ] CAB-1329: [MEGA] Demo Content Library — 8 Themes (21 pts, P3) — Council 7.25 ⚠️
+- [ ] CAB-1334: [MEGA] SaaS Multi-Tier Billing — Stripe (21 pts, P3) — Council 6.75 ⚠️
+- [ ] CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts, P3) — Council 6.75 ⚠️
+- [ ] CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (21 pts, P3) — Council 6.25 ⚠️
+- [ ] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts, P3) — Council 6.00 ⚠️
+
+*Not Council-evaluated:*
+- [ ] CAB-1303: [MEGA] Multi-Environment STAGING (21 pts, P3)
+- [ ] CAB-288: Chat Agent Token Metering (5 pts, P3)
+
+### Backlog (not committed, no checkbox)
+
+- CAB-1324: [MEGA] Runtime Data Governance (21 pts)
+- CAB-1393: [MEGA] Developer Onboarding Content (21 pts)
+- CAB-1392: [MEGA] Security & MCP Deep-Dive Content (21 pts)
+- CAB-1320: [MEGA] Repo Consolidation (21 pts)
+- CAB-1356: [cli] stoactl Deploy Commands (5 pts)
+
+### Backlog — Legacy (parked)
+
 - CAB-1402: [infra] Cilium CNI Foundation — Deferred (13 pts, blocked: MKS Standard GA)
-- CAB-1303: [MEGA] Multi-Environment STAGING (21 pts)
 - CAB-1307: [MEGA] Ticketing ITSM (34 pts)
 - CAB-1308: [MEGA] Resource Lifecycle Management (34 pts)
 - CAB-1309: [MEGA] Resource Lifecycle Advanced (34 pts)

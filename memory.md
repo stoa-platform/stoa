@@ -8,6 +8,9 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ Gap #5 CP API Prometheus scraping — PRs #788, #793, #799
+  - ServiceMonitor (Helm), fix generate_latest(REGISTRY), NetworkPolicies port 8000
+  - Prometheus targets: 2/2 health: up ✅
 - ✅ CAB-1301 [MEGA] Gateway API + NetworkPolicy (21 pts) — ALL 3 PHASES DONE
   - P1: CRDs + NGF (PR #785), P2: HTTPRoutes + DNS cutover (PR #791), P3: NetworkPolicies (PR #797)
   - New LB: 92.222.226.6, 30 NetworkPolicies, 9 HTTPRoutes, 8 DNS records updated

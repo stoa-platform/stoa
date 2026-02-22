@@ -57,7 +57,9 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => createAuthMock('cpi-admin'),
 }));
 
-vi.mock('../../i18n', () => ({}));
+vi.mock('../../i18n', () => ({
+  loadNamespace: vi.fn(),
+}));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (k: string) => k,

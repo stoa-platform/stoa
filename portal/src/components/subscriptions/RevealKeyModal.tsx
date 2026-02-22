@@ -5,7 +5,7 @@
  * If TOTP is required, prompts for 2FA code.
  * Shows the key with a countdown timer for security.
  *
- * Reference: CAB-XXX - Secure API Key Management with Vault & 2FA
+ * Secure API key reveal with countdown timer and optional 2FA confirmation.
  */
 
 import { useState, useEffect, useCallback } from 'react';

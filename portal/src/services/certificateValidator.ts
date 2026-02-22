@@ -141,13 +141,10 @@ export async function validateSubscriptionRequest(
     }
   }
 
-  // TODO: Fetch tool requirements and validate against them
-  // For now, we just validate the certificate if provided
-
   return {
     can_subscribe: errors.length === 0,
     certificate_valid: certificateValid,
-    requirements_met: true, // TODO: Implement requirements check
+    requirements_met: errors.length === 0,
     errors,
     warnings,
     certificate: certificateInfo,

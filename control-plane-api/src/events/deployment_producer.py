@@ -89,6 +89,45 @@ async def emit_deployment_failed(deployment: "Deployment") -> str:
         return ""
 
 
+async def emit_deployment_log(
+    deployment_id: str,
+    tenant_id: str,
+    seq: int,
+    level: str,
+    message: str,
+    step: str | None = None,
+) -> str:
+    """Emit a deployment log entry for real-time SSE streaming."""
+    from .event_bus import event_bus
+
+    payload = {
+        "deployment_id": deployment_id,
+        "tenant_id": tenant_id,
+        "seq": seq,
+        "level": level,
+        "step": step,
+        "message": message,
+    }
+    # Fan-out to connected SSE clients
+    await event_bus.publish(
+        tenant_id=tenant_id,
+        event_type="deploy-progress",
+        data=payload,
+    )
+    # Also publish to Kafka for persistence / downstream consumers
+    try:
+        return await kafka_service.publish(
+            topic=Topics.DEPLOYMENT_LOGS,
+            event_type="deployment.log",
+            tenant_id=tenant_id,
+            payload=payload,
+            user_id=_SYSTEM_USER,
+        )
+    except Exception as exc:
+        logger.warning("Failed to emit deployment.log for %s: %s", deployment_id, exc)
+        return ""
+
+
 async def emit_deployment_rolledback(deployment: "Deployment") -> str:
     """Emit deployment.rolledback when a rollback deployment completes."""
     payload = {

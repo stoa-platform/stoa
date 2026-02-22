@@ -9,6 +9,8 @@ from ..database import get_db
 from ..schemas.deployment import (
     DeploymentCreate,
     DeploymentListResponse,
+    DeploymentLogListResponse,
+    DeploymentLogResponse,
     DeploymentResponse,
     DeploymentStatusUpdate,
     EnvironmentEnum,
@@ -146,20 +148,32 @@ async def update_deployment_status(
     return DeploymentResponse.model_validate(deployment)
 
 
-@router.get("/{deployment_id}/logs")
+@router.get("/{deployment_id}/logs", response_model=DeploymentLogListResponse)
 @require_tenant_access
 async def get_deployment_logs(
     tenant_id: str,
     deployment_id: UUID,
+    after_seq: int = 0,
+    limit: int = 200,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get deployment logs"""
+    """Get deployment logs with optional cursor-based pagination.
+
+    Query params:
+        after_seq: Return logs with seq > this value (for polling).
+        limit: Max entries to return (default 200).
+    """
     service = DeploymentService(db)
     deployment = await service.get_deployment(tenant_id, deployment_id)
     if not deployment:
         raise HTTPException(status_code=404, detail="Deployment not found")
-    return {"deployment_id": str(deployment_id), "logs": []}
+    logs = await service.get_logs(deployment_id, tenant_id, after_seq=after_seq, limit=limit)
+    return DeploymentLogListResponse(
+        deployment_id=deployment_id,
+        logs=[DeploymentLogResponse.model_validate(log) for log in logs],
+        total=len(logs),
+    )
 
 
 @router.get("/environments/{environment}/status", response_model=EnvironmentStatusResponse)

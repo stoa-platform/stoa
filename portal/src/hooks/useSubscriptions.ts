@@ -267,7 +267,7 @@ export function useMyAPISubscriptions() {
 
 /**
  * Hook to get subscriptions for an application
- * Uses server-side filtering via application_id parameter (CAB-XXX)
+ * Uses server-side filtering via application_id parameter
  * Falls back to client-side filtering if backend doesn't fully support it
  */
 export function useApplicationSubscriptions(applicationId: string | undefined) {

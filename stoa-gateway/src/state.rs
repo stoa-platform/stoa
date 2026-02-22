@@ -158,6 +158,7 @@ impl AppState {
             let oidc_config = OidcProviderConfig {
                 issuer_url,
                 audience: client_id.to_string(),
+                internal_base_url: config.keycloak_internal_url.clone(),
                 ..OidcProviderConfig::default()
             };
             let oidc_provider = Arc::new(OidcProvider::new(oidc_config));

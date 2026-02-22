@@ -28,6 +28,7 @@ permissions:
   contents: read
   issues: write
   id-token: write
+  actions: write
 
 jobs:
   scan:
@@ -323,6 +324,32 @@ jobs:
           echo "SCAN_SKIPPED=${SKIPPED}" >> "$GITHUB_ENV"
           # Write existing issue links to a file (multiline strings don't work in GITHUB_ENV)
           printf '%b' "$EXISTING_LINKS" > /tmp/existing-issues.txt
+
+      # Increment velocity counter so daily cap tracks scan-created issues
+      - name: Increment Velocity Counter
+        if: steps.council.outcome == 'success' && inputs.dry_run != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CREATED="${SCAN_CREATED:-0}"
+          if [ "$CREATED" -eq 0 ]; then
+            echo "No issues created — skipping counter increment"
+            exit 0
+          fi
+
+          TODAY=$(date -u +%Y-%m-%d)
+          COUNTER="${{ vars.AUTOPILOT_TODAY_COUNT }}"
+          COUNT_DATE=$(echo "$COUNTER" | cut -d: -f1 2>/dev/null || echo "")
+          COUNT_VAL=$(echo "$COUNTER" | cut -d: -f2 2>/dev/null || echo "0")
+          if [ "$COUNT_DATE" != "$TODAY" ]; then COUNT_VAL=0; fi
+
+          NEW_COUNT=$((COUNT_VAL + CREATED))
+          gh api repos/stoa-platform/stoa/actions/variables/AUTOPILOT_TODAY_COUNT \
+            -X PATCH -f value="${TODAY}:${NEW_COUNT}" 2>/dev/null || \
+          gh api repos/stoa-platform/stoa/actions/variables \
+            -X POST -f name=AUTOPILOT_TODAY_COUNT -f value="${TODAY}:${NEW_COUNT}" 2>/dev/null || true
+          echo "Velocity counter: ${COUNT_VAL} → ${NEW_COUNT} (+${CREATED} from scan)"
 
       # Summary Slack notification + Metrics + Job Summary
       - name: Slack Summary

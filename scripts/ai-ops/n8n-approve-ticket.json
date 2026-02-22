@@ -60,7 +60,8 @@
       "name": "Validate HMAC",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 300]
+      "position": [600, 300],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -154,6 +155,13 @@
         [
           {
             "node": "Post /go Comment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
             "type": "main",
             "index": 0
           }

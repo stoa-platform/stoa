@@ -341,11 +341,14 @@ The `repository_dispatch` `client_payload` includes phase-aware fields:
 
 | Guard | Value | Why |
 |-------|-------|-----|
-| Model routing | `model-router.sh` — Haiku/Sonnet tiers by estimate | ~60% savings on small tickets |
+| Model routing | `model-router.sh` — Sonnet tiers by estimate, MODE-aware | ~60% savings on small tickets |
 | Ship fast-path | Skip S2 for ≤5pt Ship tickets | ~$3 + 5min saved per ticket |
+| Ship turn budget | Ship ≤3pt → 20 turns (vs 25 default) | Tighter budget for trivial changes |
 | Velocity cap | `AUTOPILOT_DAILY_MAX` (default 5) | Daily budget ceiling |
-| Max turns per agent | 15/30/60 (tiered by estimate) | Prevent runaway costs |
-| Default model | Sonnet (code gen), Haiku (Ship ≤3pt) | Right model per task |
+| Velocity tracking | Autopilot scan increments `AUTOPILOT_TODAY_COUNT` after creating issues | Prevents exceeding daily cap |
+| Precise matching | Ticket ID regex with word boundaries | Prevents CAB-1 matching CAB-123 |
+| Max turns per agent | 20/25/40/60 (tiered by estimate + mode) | Prevent runaway costs |
+| Default model | Sonnet (code gen), Haiku (council scan) | Right model per task |
 | Council threshold | 8.0 (all levels) | Harmonized — no per-level exceptions |
 | Max parallel agents | 3 | Cost caps at ~3x single agent |
 | Timeout per job | 15-60 min | Hard stop on runaway jobs |

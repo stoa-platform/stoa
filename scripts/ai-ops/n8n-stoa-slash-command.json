@@ -1,0 +1,552 @@
+{
+  "name": "STOA AI Factory — /stoa Slash Command",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stoa-slash-command",
+        "responseMode": "lastNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "slash-webhook",
+      "name": "Slash Command Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "stoa-slash-command"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate Slack signature + parse /stoa command + check access tier\nconst crypto = require('crypto');\n\nconst headers = $input.first().json.headers;\nconst rawBody = $input.first().json.body;\nconst signature = headers['x-slack-signature'];\nconst timestamp = headers['x-slack-request-timestamp'];\n\n// --- Signature validation ---\nconst signingSecret = $vars?.SLACK_SIGNING_SECRET || $env?.SLACK_SIGNING_SECRET;\nif (!signingSecret) {\n  throw new Error('SLACK_SIGNING_SECRET not configured');\n}\n\nconst now = Math.floor(Date.now() / 1000);\nif (Math.abs(now - parseInt(timestamp, 10)) > 300) {\n  throw new Error('Request timestamp too old — possible replay attack');\n}\n\nconst sigBasestring = `v0:${timestamp}:${rawBody}`;\nconst expected = 'v0=' + crypto.createHmac('sha256', signingSecret)\n  .update(sigBasestring)\n  .digest('hex');\n\nif (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {\n  throw new Error('Invalid Slack signature');\n}\n\n// --- Parse command ---\nconst params = new URLSearchParams(rawBody);\nconst text = (params.get('text') || '').trim();\nconst userId = params.get('user_id') || '';\nconst userName = params.get('user_name') || '';\nconst responseUrl = params.get('response_url') || '';\n\nconst parts = text.split(/\\s+/);\nconst command = (parts[0] || 'help').toLowerCase();\nconst arg = parts.slice(1).join(' ');\n\n// --- Access tier ---\nconst adminUsers = ($vars?.SLACK_ADMIN_USERS || $env?.SLACK_ADMIN_USERS || '')\n  .split(',').map(s => s.trim()).filter(Boolean);\nconst allowedUsers = ($vars?.SLACK_ALLOWED_USERS || $env?.SLACK_ALLOWED_USERS || '')\n  .split(',').map(s => s.trim()).filter(Boolean);\n\nlet tier = 'readonly';\nif (adminUsers.length > 0 && adminUsers.includes(userId)) {\n  tier = 'admin';\n} else if (adminUsers.length === 0 && allowedUsers.length > 0 && allowedUsers.includes(userId)) {\n  tier = 'admin';\n} else if (allowedUsers.includes(userId)) {\n  tier = 'allowed';\n}\nif (tier === 'readonly') {\n  if (allowedUsers.length > 0) {\n    throw new Error(`User ${userId} not authorized`);\n  }\n  tier = 'admin';\n}\n\nreturn [{ json: { command, arg, userId, userName, responseUrl, tier } }];"
+      },
+      "id": "validate-and-parse",
+      "name": "Validate & Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputLabel": "Help"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputLabel": "Status"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "scan",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputLabel": "Scan"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "implement",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputLabel": "Implement"
+            }
+          ],
+          "fallbackOutput": {
+            "fallbackOutputLabel": "Unknown"
+          }
+        }
+      },
+      "id": "route-command",
+      "name": "Route Command",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": \":factory: */stoa* — AI Factory Commands\\n\\n`/stoa help` — Show this help\\n`/stoa status` — Recent workflow runs\\n`/stoa scan` — Trigger backlog scan (admin)\\n`/stoa implement CAB-XXXX` — Dispatch ticket (admin)\\n\\nYour tier: *{{ $json.tier }}*\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "help-response",
+      "name": "Help Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [850, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": \":hourglass_flowing_sand: Fetching status...\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "status-ack",
+      "name": "Status ACK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [850, 250]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/stoa-platform/stoa/actions/runs?per_page=5&status=completed",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-runs",
+      "name": "Fetch GHA Runs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 250],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-pat",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const runs = $input.first().json.workflow_runs || [];\nconst lines = runs.map(r => {\n  const emoji = r.conclusion === 'success' ? ':white_check_mark:' : ':x:';\n  const date = new Date(r.updated_at).toISOString().slice(0, 16).replace('T', ' ');\n  return `${emoji} *${r.name}* — ${r.conclusion} (${date})`;\n});\n\nconst text = lines.length > 0\n  ? `:satellite_antenna: *Recent Workflow Runs*\\n${lines.join('\\n')}`\n  : ':satellite_antenna: No recent workflow runs found.';\n\nconst responseUrl = $('Validate & Parse').first().json.responseUrl;\n\nreturn [{ json: { text, responseUrl } }];"
+      },
+      "id": "format-status",
+      "name": "Format Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"response_type\": \"ephemeral\", \"text\": {{ JSON.stringify($json.text) }} }",
+        "options": {}
+      },
+      "id": "send-status",
+      "name": "Send Status Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1450, 250]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Admin-only check for scan\nif ($input.first().json.tier !== 'admin') {\n  throw new Error('Scan requires admin tier');\n}\nreturn [$input.first()];"
+      },
+      "id": "scan-admin-check",
+      "name": "Scan Admin Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/stoa-platform/stoa/actions/workflows/claude-autopilot-scan.yml/dispatches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"ref\": \"main\", \"inputs\": { \"max_tickets\": \"3\" } }",
+        "options": {}
+      },
+      "id": "trigger-scan",
+      "name": "Trigger Scan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-pat",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const responseUrl = $('Validate & Parse').first().json.responseUrl;\nreturn [{ json: { responseUrl, text: ':satellite_antenna: Backlog scan triggered. Results will appear in #ai-factory.' } }];"
+      },
+      "id": "scan-confirm",
+      "name": "Scan Confirm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"response_type\": \"ephemeral\", \"text\": {{ JSON.stringify($json.text) }} }",
+        "options": {}
+      },
+      "id": "send-scan-response",
+      "name": "Send Scan Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Admin-only check + validate ticket format\nif ($input.first().json.tier !== 'admin') {\n  throw new Error('Implement requires admin tier');\n}\nconst arg = $input.first().json.arg || '';\nconst match = arg.match(/^(CAB-\\d+)$/i);\nif (!match) {\n  throw new Error(`Invalid ticket format: \"${arg}\". Expected: CAB-XXXX`);\n}\nconst ticketId = match[1].toUpperCase();\nreturn [{ json: { ...$input.first().json, ticketId } }];"
+      },
+      "id": "implement-validate",
+      "name": "Implement Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/stoa-platform/stoa/dispatches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"event_type\": \"linear-ticket-started\", \"client_payload\": { \"ticket_id\": \"{{ $json.ticketId }}\", \"ticket_title\": \"Dispatched via /stoa\", \"ticket_description\": \"Triggered from Slack by {{ $json.userName }}\", \"priority\": 2, \"estimate\": 5 } }",
+        "options": {}
+      },
+      "id": "dispatch-implement",
+      "name": "Dispatch Implement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 550],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-pat",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticketId = $input.first().json.ticketId || $('Implement Validate').first().json.ticketId;\nconst responseUrl = $('Validate & Parse').first().json.responseUrl;\nreturn [{ json: { responseUrl, text: `:rocket: L3 pipeline dispatched for *${ticketId}*. Council will validate in #ai-factory.` } }];"
+      },
+      "id": "implement-confirm",
+      "name": "Implement Confirm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"response_type\": \"ephemeral\", \"text\": {{ JSON.stringify($json.text) }} }",
+        "options": {}
+      },
+      "id": "send-implement-response",
+      "name": "Send Implement Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1450, 550]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": \"Unknown command. Try `/stoa help`.\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "unknown-response",
+      "name": "Unknown Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [850, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"error\": \"Unauthorized — invalid signature or insufficient permissions\" }",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "error-response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [400, 500]
+    }
+  ],
+  "connections": {
+    "Slash Command Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Parse": {
+      "main": [
+        [
+          {
+            "node": "Route Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Command": {
+      "main": [
+        [
+          {
+            "node": "Help Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status ACK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scan Admin Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Implement Validate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unknown Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status ACK": {
+      "main": [
+        [
+          {
+            "node": "Fetch GHA Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch GHA Runs": {
+      "main": [
+        [
+          {
+            "node": "Format Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Status": {
+      "main": [
+        [
+          {
+            "node": "Send Status Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan Admin Check": {
+      "main": [
+        [
+          {
+            "node": "Trigger Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Scan": {
+      "main": [
+        [
+          {
+            "node": "Scan Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan Confirm": {
+      "main": [
+        [
+          {
+            "node": "Send Scan Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Implement Validate": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Implement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Implement": {
+      "main": [
+        [
+          {
+            "node": "Implement Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Implement Confirm": {
+      "main": [
+        [
+          {
+            "node": "Send Implement Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ai-factory"
+    }
+  ],
+  "meta": {
+    "notes": "STOA AI Factory — /stoa Slash Command Handler.\n\nHandles /stoa commands from Slack:\n  - help: show available commands + user tier\n  - status: fetch 5 recent GHA workflow runs\n  - scan: trigger claude-autopilot-scan.yml (admin only)\n  - implement CAB-XXXX: dispatch L3 pipeline via repository_dispatch (admin only)\n\nPattern: immediate 200 ACK (Slack <3s requirement) → deferred response via response_url POST.\n\nAccess control tiers (same as n8n-slack-interactive.json):\n  - admin (SLACK_ADMIN_USERS): all commands\n  - allowed (SLACK_ALLOWED_USERS): help + status only\n  - readonly: 403\n  - Backward compatible: empty SLACK_ADMIN_USERS = all allowed users are admins\n\nRequired n8n variables:\n  - SLACK_SIGNING_SECRET: Slack app signing secret\n  - SLACK_ALLOWED_USERS: Comma-separated Slack user IDs (optional)\n  - SLACK_ADMIN_USERS: Comma-separated Slack user IDs for admin tier (optional)\n\nRequired credentials:\n  - GitHub PAT (httpHeaderAuth, id: github-pat)\n\nSlack App setup:\n  Slash Commands → /stoa → Request URL: https://hlfh.app.n8n.cloud/webhook/stoa-slash-command"
+  }
+}

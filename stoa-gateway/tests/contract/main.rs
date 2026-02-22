@@ -10,5 +10,6 @@ mod common;
 mod discovery;
 mod errors;
 mod health;
+mod mcp_compliance;
 mod oauth;
 mod tools;

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (CAB-1400 HTTPRoute Migration — PR #791 merged)
+> Derniere MAJ: 2026-02-22 (CAB-1301 MEGA complete — all 3 phases done)
 
 ## ✅ DONE
 
@@ -8,9 +8,9 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
-- ✅ CAB-1400 HTTPRoute Migration — PR #791 (9 routes on new LB 92.222.226.6, all validated, DNS cutover pending)
-- ✅ CAB-1399 Gateway API Foundation — PR #785 (CRDs v1.4.1, NGF v2.4.2, GatewayClass accepted, dual-stack validated)
-- ✅ CAB-1301 rescoped: Cilium (34 pts) → Gateway API + NetworkPolicy (21 pts) + Cilium deferred (13 pts)
+- ✅ CAB-1301 [MEGA] Gateway API + NetworkPolicy (21 pts) — ALL 3 PHASES DONE
+  - P1: CRDs + NGF (PR #785), P2: HTTPRoutes + DNS cutover (PR #791), P3: NetworkPolicies (PR #797)
+  - New LB: 92.222.226.6, 30 NetworkPolicies, 9 HTTPRoutes, 8 DNS records updated
 - ✅ CAB-1398 Phase 3 Slack Threading + Reactions — PR #781 (`SLACK_THREAD_TS` env var fallback, `_react_slack()`, L1/L3/L3.5 reactions)
 - ✅ CAB-86 TTL Extension — PR #780 (PATCH /v1/subscriptions/{id}/ttl, migration 035, 11 tests, +616 LOC)
 - ✅ AI Factory Slack Bot threading — PR #775 (Bot API dual-path, n8n sequential pipeline, thread_ts propagation)

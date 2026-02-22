@@ -17,6 +17,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
 from .config import settings
+from .consumers.deployment_consumer import deployment_consumer
 from .features.error_snapshots import add_error_snapshot_middleware, connect_error_snapshots
 from .logging_config import configure_logging, get_logger
 from .middleware.http_logging import HTTPLoggingMiddleware
@@ -102,6 +103,7 @@ configure_logging()
 logger = get_logger(__name__)
 
 # Flag to control worker startup (can be disabled for dev/testing)
+ENABLE_DEPLOYMENT_NOTIFIER = os.getenv("ENABLE_DEPLOYMENT_NOTIFIER", "true").lower() == "true"
 ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
 ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
 ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
@@ -166,6 +168,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Failed to connect error snapshots", error=str(e))
 
+    # Start deployment event consumer → Slack notifications (CAB-1413)
+    deployment_consumer_task = None
+    if ENABLE_DEPLOYMENT_NOTIFIER:
+        try:
+            deployment_consumer_task = asyncio.create_task(deployment_consumer.start())
+            logger.info("Deployment notification consumer started")
+        except Exception as e:
+            logger.warning("Failed to start deployment notification consumer", error=str(e))
+
     # Start error snapshot consumer for gateway snapshots (CAB-485)
     snapshot_consumer_task = None
     if ENABLE_SNAPSHOT_CONSUMER:
@@ -197,6 +208,13 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down...")
+
+    # Stop deployment notification consumer
+    if ENABLE_DEPLOYMENT_NOTIFIER and deployment_consumer_task:
+        await deployment_consumer.stop()
+        deployment_consumer_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await deployment_consumer_task
 
     # Stop error snapshot consumer
     if ENABLE_SNAPSHOT_CONSUMER and snapshot_consumer_task:

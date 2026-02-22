@@ -536,6 +536,94 @@ impl CrdWatcher {
             }
         }
     }
+
+    // ========================================================================
+    // GuardrailPolicy CRD watchers (CAB-1337 Phase 3)
+    // ========================================================================
+
+    /// Watch GuardrailPolicy CRD events and populate the policy store.
+    async fn watch_guardrail_policies(
+        &self,
+        watcher: impl futures::Stream<Item = Result<Event<GuardrailPolicy>, watcher::Error>>,
+    ) -> Result<(), watcher::Error> {
+        tokio::pin!(watcher);
+
+        while let Some(event) = watcher.next().await {
+            match event {
+                Ok(Event::Apply(policy)) => {
+                    self.handle_guardrail_policy_apply(&policy);
+                }
+                Ok(Event::Delete(policy)) => {
+                    self.handle_guardrail_policy_delete(&policy);
+                }
+                Ok(Event::Init) => {
+                    debug!("GuardrailPolicy watcher initialized");
+                }
+                Ok(Event::InitApply(policy)) => {
+                    self.handle_guardrail_policy_apply(&policy);
+                }
+                Ok(Event::InitDone) => {
+                    info!(
+                        count = self.guardrail_policy_store.count(),
+                        "GuardrailPolicy watcher initial sync complete"
+                    );
+                }
+                Err(e) => {
+                    warn!(error = %e, "GuardrailPolicy watcher error");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle GuardrailPolicy CRD apply — upsert into policy store.
+    fn handle_guardrail_policy_apply(&self, crd: &GuardrailPolicy) {
+        // Namespace = tenant_id (K8s namespace isolation model)
+        let tenant_id = crd.metadata.namespace.as_deref().unwrap_or("default");
+        let name = crd.metadata.name.as_deref().unwrap_or("unknown");
+
+        let policy = TenantGuardrailPolicy {
+            pii_enabled: crd.spec.pii_enabled,
+            pii_redact: crd.spec.pii_redact,
+            injection_enabled: crd.spec.injection_enabled,
+            content_filter_enabled: crd.spec.content_filter_enabled,
+            token_budget_limit: crd.spec.token_budget_limit,
+            extra_blocked_patterns: crd.spec.extra_blocked_patterns.clone(),
+            allowed_tools: crd.spec.allowed_tools.clone(),
+        };
+
+        self.guardrail_policy_store
+            .upsert(tenant_id.to_string(), policy);
+
+        info!(
+            tenant = %tenant_id,
+            policy = %name,
+            "GuardrailPolicy applied"
+        );
+    }
+
+    /// Handle GuardrailPolicy CRD delete — remove from policy store.
+    fn handle_guardrail_policy_delete(&self, crd: &GuardrailPolicy) {
+        let tenant_id = crd.metadata.namespace.as_deref().unwrap_or("default");
+        let name = crd.metadata.name.as_deref().unwrap_or("unknown");
+
+        let removed = self.guardrail_policy_store.remove(tenant_id);
+
+        if removed {
+            info!(
+                tenant = %tenant_id,
+                policy = %name,
+                "GuardrailPolicy deleted — tenant reverted to global defaults"
+            );
+        } else {
+            debug!(
+                tenant = %tenant_id,
+                policy = %name,
+                "GuardrailPolicy delete: no policy found for tenant"
+            );
+        }
+    }
 }
 
 /// Convert CRD annotations to MCP ToolAnnotations

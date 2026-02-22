@@ -15,7 +15,7 @@ use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
-use crate::guardrails::TokenBudgetTracker;
+use crate::guardrails::{GuardrailPolicyStore, TokenBudgetTracker};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
@@ -84,6 +84,9 @@ pub struct AppState {
     /// Per-tenant token budget tracker (CAB-1337 Phase 2)
     /// None when token budget tracking is disabled.
     pub token_budget: Option<Arc<TokenBudgetTracker>>,
+    /// Per-tenant guardrail policy store (CAB-1337 Phase 3)
+    /// Populated by K8s CRD watcher; empty store = all tenants use global defaults.
+    pub guardrail_policy_store: Arc<GuardrailPolicyStore>,
 }
 
 impl AppState {
@@ -371,6 +374,7 @@ impl AppState {
             skill_resolver,
             federation_cache,
             token_budget,
+            guardrail_policy_store: Arc::new(GuardrailPolicyStore::new()),
         }
     }
 

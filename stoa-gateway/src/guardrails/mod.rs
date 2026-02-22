@@ -25,11 +25,13 @@
 mod content_filter;
 mod injection;
 mod pii;
+pub mod policy;
 pub mod token_budget;
 
 pub use content_filter::{ContentFilter, ContentFilterOutcome};
 pub use injection::InjectionScanner;
 pub use pii::PiiScanner;
+pub use policy::{GuardrailPolicyStore, TenantGuardrailPolicy};
 pub use token_budget::{estimate_json, estimate_tokens, BudgetStatus, TokenBudgetTracker};
 
 use serde_json::Value;

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (CAB-1389 MEGA done — PRs #810, #811, #820; CAB-1388 PR #818; CAB-1413 PR #814)
+> Derniere MAJ: 2026-02-22 (CAB-1333 PR #831; CAB-1389 done — PRs #810, #811, #820; fix Dockerfile Rust 1.93 PR #830; CAB-1388 PR #818)
 
 ## ✅ DONE
 
@@ -8,10 +8,15 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1333 [MEGA] MCP Protocol Full Compliance (34 pts) — PR #831
+  - P1: spec coverage matrix (docs/mcp-spec-coverage.md)
+  - P2: 4 missing methods (prompts/list, prompts/get, logging/setLevel, resources/read) + send_to_session
+  - P3: 16 new conformance tests — 31/31 contract tests pass
 - ✅ CAB-1389 [MEGA] Cross-Component Quality Pass (13 pts) — ALL 3 PHASES DONE
   - P1: Console Federation & Index Tests (PR #810) — 15 new test files, modals + wrappers
   - P2: Gateway Feature Wiring (PR #811) — ClassificationType, ApiState, JWT user_id extraction
   - P3: Gateway Lint Cleanup (PR #820) — builder pattern replaces clippy suppressions
+- ✅ fix(gateway): Dockerfile rust:1.88→1.93 (floor_char_boundary stable in 1.93) — PR #830
 - ✅ CAB-1388 [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818 (30 test modules, 80% coverage)
 - ✅ CAB-1413 [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
 - ✅ CAB-1337 [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts)

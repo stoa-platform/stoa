@@ -83,7 +83,7 @@ jobs:
 
             IMPORTANT: Do NOT implement anything yet. Only validate the ticket pertinence.
           # Model tier: sonnet (Council gate — structured rubric evaluation, Sonnet sufficient)
-          claude_args: "--model claude-sonnet-4-6 --max-turns 5 --allowedTools Read,Glob,Grep"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 5 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Log token usage
         if: always() && steps.guard.outputs.skip != 'true'

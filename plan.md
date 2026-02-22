@@ -165,7 +165,7 @@
   - **Phase 1** (parallel) [owner: —]
     - [x] CAB-1399 [infra] Gateway API CRDs + NGINX Gateway Fabric (8 pts) — PR #785
   - **Phase 2** (after Phase 1) [owner: —]
-    - [ ] CAB-1400 [infra] Ingress → HTTPRoute Migration — 9 resources (8 pts)
+    - [x] CAB-1400 [infra] Ingress → HTTPRoute Migration — 9 resources (8 pts) — PR #791
   - **Phase 3** (after Phase 2) [owner: —]
     - [ ] CAB-1401 [infra] Default-Deny NetworkPolicy per Namespace (5 pts)
 - CAB-1402: [infra] Cilium CNI Foundation — Deferred (13 pts, blocked: MKS Standard GA)

@@ -1,0 +1,114 @@
+# Gateway — 8 HTTPS listeners for all *.gostoa.dev services
+# Phase 2 of CAB-1301: accepts HTTPRoutes from all namespaces.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: stoa
+  namespace: nginx-gateway
+spec:
+  gatewayClassName: nginx
+  listeners:
+    # --- HTTP catch-all (redirect to HTTPS handled by NGF) ---
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    # --- HTTPS listeners (one per host) ---
+    - name: https-argocd
+      hostname: argocd.gostoa.dev
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: argocd-server-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-console
+      hostname: console.gostoa.dev
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: control-plane-ui-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-pushgateway
+      hostname: pushgateway.gostoa.dev
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: pushgateway-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-opensearch
+      hostname: opensearch.gostoa.dev
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: opensearch-dashboards-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-auth
+      hostname: auth.gostoa.dev
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: keycloak-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-api
+      hostname: api.gostoa.dev
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: control-plane-api-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-mcp
+      hostname: mcp.gostoa.dev
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: stoa-gateway-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-portal
+      hostname: portal.gostoa.dev
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: stoa-portal-tls
+      allowedRoutes:
+        namespaces:
+          from: All

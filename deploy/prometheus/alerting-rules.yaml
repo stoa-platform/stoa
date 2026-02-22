@@ -14,67 +14,10 @@ metadata:
 spec:
   groups:
     # ============================================
-    # MCP Gateway Alerts
-    # ============================================
-    - name: stoa.mcp-gateway.rules
-      rules:
-        - alert: MCPGatewayHighErrorRate
-          expr: |
-            (
-              sum(rate(stoa_mcp_tool_invocations_total{status="error"}[5m]))
-              / sum(rate(stoa_mcp_tool_invocations_total[5m]))
-            ) > 0.05
-          for: 5m
-          labels:
-            severity: warning
-            component: mcp-gateway
-          annotations:
-            summary: "MCP Gateway high error rate"
-            description: "MCP Gateway error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-errors.md"
-
-        - alert: MCPGatewayHighLatency
-          expr: |
-            histogram_quantile(0.95,
-              sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)
-            ) > 2
-          for: 5m
-          labels:
-            severity: warning
-            component: mcp-gateway
-          annotations:
-            summary: "MCP Gateway high latency"
-            description: "MCP Gateway P95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-latency.md"
-
-        - alert: MCPGatewayDown
-          expr: |
-            up{job="mcp-gateway"} == 0
-          for: 1m
-          labels:
-            severity: critical
-            component: mcp-gateway
-          annotations:
-            summary: "MCP Gateway is down"
-            description: "MCP Gateway has been down for more than 1 minute"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-down.md"
-
-        - alert: MCPGatewayToolInvocationErrors
-          expr: |
-            sum by (tool, tenant_id) (
-              rate(stoa_mcp_tool_invocations_total{status="error"}[5m])
-            ) > 0.1
-          for: 5m
-          labels:
-            severity: warning
-            component: mcp-gateway
-          annotations:
-            summary: "Tool invocation errors for {{ $labels.tool }}"
-            description: "Tool {{ $labels.tool }} in tenant {{ $labels.tenant_id }} has error rate {{ $value | humanize }}/s"
-
-    # ============================================
     # STOA Gateway (Rust) Alerts
     # ============================================
+    # NOTE: Old stoa.mcp-gateway.rules removed — Python MCP Gateway decommissioned Feb 2026.
+    # All alerts now use Rust metric names (stoa_mcp_tools_calls_total, stoa_mcp_tool_duration_seconds).
     - name: stoa.stoa-gateway.rules
       rules:
         - alert: StoaGatewayHighErrorRate

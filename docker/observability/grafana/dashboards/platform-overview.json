@@ -99,7 +99,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_control_plane_http_requests_total[5m])) + sum(rate(stoa_mcp_gateway_http_requests_total[5m]))",
+          "expr": "sum(rate(stoa_control_plane_http_requests_total[5m])) + sum(rate(stoa_http_requests_total[5m]))",
           "legendFormat": "Total RPS",
           "range": true,
           "refId": "A"
@@ -174,7 +174,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(stoa_control_plane_http_requests_total{status_code=~\"5..\"}[5m])) + sum(rate(stoa_mcp_gateway_http_requests_total{status_code=~\"5..\"}[5m]))) / (sum(rate(stoa_control_plane_http_requests_total[5m])) + sum(rate(stoa_mcp_gateway_http_requests_total[5m]))) * 100",
+          "expr": "(sum(rate(stoa_control_plane_http_requests_total{status=~\"5..\"}[5m])) + sum(rate(stoa_http_requests_total{status=~\"5..\"}[5m]))) / (sum(rate(stoa_control_plane_http_requests_total[5m])) + sum(rate(stoa_http_requests_total[5m]))) * 100",
           "legendFormat": "Error Rate",
           "range": true,
           "refId": "A"
@@ -540,7 +540,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_control_plane_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(stoa_control_plane_http_requests_total[5m])) * 100",
+          "expr": "sum(rate(stoa_control_plane_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(stoa_control_plane_http_requests_total[5m])) * 100",
           "legendFormat": "Error Rate",
           "range": true,
           "refId": "A"
@@ -682,7 +682,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total[5m]))",
+          "expr": "sum(rate(stoa_http_requests_total[5m]))",
           "legendFormat": "RPS",
           "range": true,
           "refId": "A"
@@ -751,7 +751,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(stoa_mcp_gateway_http_requests_total[5m])) * 100",
+          "expr": "sum(rate(stoa_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(stoa_http_requests_total[5m])) * 100",
           "legendFormat": "Error Rate",
           "range": true,
           "refId": "A"
@@ -867,7 +867,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total[5m]))",
+          "expr": "sum(rate(stoa_http_requests_total[5m]))",
           "legendFormat": "MCP Gateway",
           "range": true,
           "refId": "B"
@@ -965,7 +965,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_control_plane_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(stoa_control_plane_http_requests_total[5m])) * 100",
+          "expr": "sum(rate(stoa_control_plane_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(stoa_control_plane_http_requests_total[5m])) * 100",
           "legendFormat": "Control-Plane API",
           "range": true,
           "refId": "A"
@@ -976,7 +976,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(stoa_mcp_gateway_http_requests_total[5m])) * 100",
+          "expr": "sum(rate(stoa_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(stoa_http_requests_total[5m])) * 100",
           "legendFormat": "MCP Gateway",
           "range": true,
           "refId": "B"
@@ -1100,7 +1100,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "MCP Gateway",
           "range": true,
           "refId": "B"
@@ -1203,7 +1203,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(stoa_mcp_gateway_http_requests_in_progress)",
+          "expr": "sum(stoa_mcp_sse_connections_active)",
           "legendFormat": "MCP Gateway",
           "range": true,
           "refId": "B"

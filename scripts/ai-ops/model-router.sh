@@ -45,7 +45,7 @@ route_model() {
     TURNS=20
   fi
 
-  echo "claude-sonnet-4-5-20250929|${TURNS}"
+  echo "claude-sonnet-4-6|${TURNS}"
 }
 
 # Extract estimate from issue body text (searches for "Estimate: X pts" or "X pts" patterns)

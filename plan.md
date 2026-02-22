@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-22
+> Last sync: 2026-02-22 (/sync-plan)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -91,11 +91,17 @@
 - [x] CAB-1173: MCP Guide Zero-kubectl (3 pts) — stoa-docs PR #46
 - [x] +6 community infra sub-tickets (Discussions, Sponsors, Good First Issues, etc.)
 
+**Gap Fixes** (9 pts):
+- [x] CAB-1409: feat(uac): wire deploy_contract() in enable-binding (4 pts) — PR #802
+- [x] CAB-1408: fix(observability): ServiceMonitor CP API Prometheus scraping (2 pts) — PR #799
+- [x] CAB-1407: fix(observability): metric name drift SLO rules (2 pts)
+- [x] CAB-1406: fix(portal): MCP Servers path mismatch (1 pt)
+
 ---
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 68 pts (committed) + 700+ pts backlog | **Done**: 31 pts
+**Scope**: 76 pts (committed) | **Done**: 31 pts
 **Theme**: Post-Demo + Product Roadmap + Community Content
 
 ### In Progress
@@ -104,7 +110,7 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (3)
+### Done (2)
 - [x] CAB-86: TTL Extension — Self-Service (5 pts) — PR #780
 - [x] CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2) — PRs #768, #775, #781, #792, #795
   - [x] Phase 1: Dispatch Fixes — PR #768
@@ -119,6 +125,7 @@
 - [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
+- [ ] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts, P2)
 
 ### Backlog — New MEGAs
 

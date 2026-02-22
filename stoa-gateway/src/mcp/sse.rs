@@ -339,6 +339,10 @@ pub async fn handle_sse_post(
         "tools/list" => handle_tools_list(&state, &request, &ctx).await,
         "tools/call" => handle_tools_call(&state, &request, &ctx, &session_id).await,
         "resources/list" => handle_resources_list(&state, &request).await,
+        "resources/read" => handle_resources_read(&state, &request).await,
+        "prompts/list" => handle_prompts_list(&request),
+        "prompts/get" => handle_prompts_get(&request),
+        "logging/setLevel" => handle_logging_set_level(&state, &request, &session_id).await,
         "notifications/initialized" => {
             // Client notification, no response needed
             debug!("Client initialized notification received");
@@ -585,6 +589,10 @@ async fn process_single_request(
         "tools/list" => handle_tools_list(state, &request, &ctx).await,
         "tools/call" => handle_tools_call(state, &request, &ctx, &session_id).await,
         "resources/list" => handle_resources_list(state, &request).await,
+        "resources/read" => handle_resources_read(state, &request).await,
+        "prompts/list" => handle_prompts_list(&request),
+        "prompts/get" => handle_prompts_get(&request),
+        "logging/setLevel" => handle_logging_set_level(state, &request, &session_id).await,
         "notifications/initialized" => {
             // No response for notifications
             JsonRpcResponse::success(None, json!(null))
@@ -845,6 +853,150 @@ async fn handle_resources_list(state: &AppState, request: &JsonRpcRequest) -> Js
         .collect();
     let result = json!({ "resources": resources });
     JsonRpcResponse::success(request.id.clone(), result)
+}
+
+/// `prompts/list` — return list of server-defined prompt templates (MCP 2025-03-26)
+///
+/// Currently returns an empty list — STOA has no built-in prompts.
+/// Extensible: add prompts to the registry to expose them here.
+fn handle_prompts_list(request: &JsonRpcRequest) -> JsonRpcResponse {
+    JsonRpcResponse::success(
+        request.id.clone(),
+        json!({
+            "prompts": []
+        }),
+    )
+}
+
+/// `prompts/get` — retrieve a specific prompt template by name (MCP 2025-03-26)
+///
+/// Returns PromptNotFound (-32002) since STOA has no built-in prompts yet.
+fn handle_prompts_get(request: &JsonRpcRequest) -> JsonRpcResponse {
+    let name = request
+        .params
+        .as_ref()
+        .and_then(|p| p.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("<unknown>");
+
+    JsonRpcResponse::error(
+        request.id.clone(),
+        -32002,
+        format!("Prompt '{}' not found", name),
+    )
+}
+
+/// `logging/setLevel` — set the minimum log level for server→client notifications (MCP 2025-03-26)
+///
+/// Stores the level in session metadata. The gateway will push `notifications/message`
+/// events at or above this level to the connected SSE client.
+///
+/// Valid levels (MCP spec): debug, info, notice, warning, error, critical, alert, emergency
+async fn handle_logging_set_level(
+    state: &AppState,
+    request: &JsonRpcRequest,
+    session_id: &str,
+) -> JsonRpcResponse {
+    let level = match request
+        .params
+        .as_ref()
+        .and_then(|p| p.get("level"))
+        .and_then(|v| v.as_str())
+    {
+        Some(l) => l,
+        None => {
+            return JsonRpcResponse::error(
+                request.id.clone(),
+                INVALID_PARAMS,
+                "Missing 'level' param",
+            );
+        }
+    };
+
+    const VALID_LEVELS: &[&str] = &[
+        "debug", "info", "notice", "warning", "error", "critical", "alert", "emergency",
+    ];
+
+    if !VALID_LEVELS.contains(&level) {
+        return JsonRpcResponse::error(
+            request.id.clone(),
+            INVALID_PARAMS,
+            format!(
+                "Invalid log level '{}'. Valid: {}",
+                level,
+                VALID_LEVELS.join(", ")
+            ),
+        );
+    }
+
+    state
+        .session_manager
+        .update_metadata(session_id, "logging_level".to_string(), level.to_string())
+        .await;
+
+    debug!(session_id = %session_id, level = %level, "Client set logging level");
+
+    JsonRpcResponse::success(request.id.clone(), json!({}))
+}
+
+/// `resources/read` — read a resource by URI (MCP 2025-03-26)
+///
+/// Supports `stoa://tools/{name}` URIs, returning the full tool schema as JSON.
+/// Returns ResourceNotFound (-32002) for unknown tools or unsupported URI schemes.
+async fn handle_resources_read(state: &AppState, request: &JsonRpcRequest) -> JsonRpcResponse {
+    let uri = match request
+        .params
+        .as_ref()
+        .and_then(|p| p.get("uri"))
+        .and_then(|v| v.as_str())
+    {
+        Some(u) => u.to_string(),
+        None => {
+            return JsonRpcResponse::error(
+                request.id.clone(),
+                INVALID_PARAMS,
+                "Missing 'uri' param",
+            );
+        }
+    };
+
+    // Only stoa://tools/{name} URIs are supported
+    let tool_name = match uri.strip_prefix("stoa://tools/") {
+        Some(n) => n.to_string(),
+        None => {
+            return JsonRpcResponse::error(
+                request.id.clone(),
+                INVALID_PARAMS,
+                format!(
+                    "Unsupported URI scheme: '{}'. Expected stoa://tools/{{name}}",
+                    uri
+                ),
+            );
+        }
+    };
+
+    // Look up tool in registry
+    let tools = state.tool_registry.list(None);
+    let found = tools.iter().find(|t| t.name == tool_name);
+
+    match found {
+        Some(tool) => {
+            let tool_json = serde_json::to_string_pretty(tool).unwrap_or_default();
+            let result = json!({
+                "contents": [{
+                    "uri": uri,
+                    "mimeType": "application/json",
+                    "text": tool_json
+                }]
+            });
+            JsonRpcResponse::success(request.id.clone(), result)
+        }
+        None => JsonRpcResponse::error(
+            request.id.clone(),
+            -32002,
+            format!("Resource '{}' not found", uri),
+        ),
+    }
 }
 
 // ============================================

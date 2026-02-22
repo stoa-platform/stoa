@@ -71,6 +71,7 @@ spec:
                         "name": "stoa-k8s",
                         "target": "http://stoa-gateway.stoa-system.svc:8080",
                         "mcp_base": "http://stoa-gateway.stoa-system.svc:8080/mcp",
+                        "mcp_protocol": "stoa",
                         "health": "http://stoa-gateway.stoa-system.svc:8080/health"
                       },
                       {
@@ -78,6 +79,13 @@ spec:
                         "target": "http://kong-arena.stoa-system.svc:8000",
                         "mcp_base": null,
                         "health": "http://kong-arena.stoa-system.svc:8001/status"
+                      },
+                      {
+                        "name": "gravitee-k8s",
+                        "target": "http://gravitee-arena-gw.stoa-system.svc:8082",
+                        "mcp_base": "http://gravitee-arena-gw.stoa-system.svc:8082/mcp",
+                        "mcp_protocol": "streamable-http",
+                        "health": "http://gravitee-arena-gw.stoa-system.svc:18082/_node/health"
                       }
                     ]
               resources:

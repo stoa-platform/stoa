@@ -76,7 +76,7 @@ spec:
     spec:
       containers:
         - name: mgmt-api
-          image: graviteeio/apim-management-api:4.6
+          image: graviteeio/apim-management-api:4.8
           ports:
             - containerPort: 8083
           env:
@@ -145,7 +145,7 @@ spec:
     spec:
       containers:
         - name: gateway
-          image: graviteeio/apim-gateway:4.6
+          image: graviteeio/apim-gateway:4.8
           ports:
             - containerPort: 8082
               name: proxy
@@ -368,6 +368,95 @@ spec:
                 echo "SUCCESS: echo route is working"
               else
                 echo "WARNING: echo route returned HTTP $HTTP_CODE (may need more time to sync)"
+              fi
+
+              # --- MCP API (Streamable HTTP entrypoint, Gravitee 4.8+) ---
+              MCP_EXISTING=$(curl -sf "${MGMT}/apis?q=mcp-arena" -H "Authorization: ${AUTH}" \
+                | sed -n 's/.*"id":"\([^"]*\)".*"name":"mcp-arena".*/\1/p' \
+                || echo "")
+
+              if [ -n "$MCP_EXISTING" ]; then
+                echo "MCP API already exists: $MCP_EXISTING"
+              else
+                echo "Creating V4 MCP API with Streamable HTTP entrypoint..."
+                MCP_RESPONSE=$(curl -sf -X POST "${MGMT}/apis" \
+                  -H "Authorization: ${AUTH}" \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                    "name": "mcp-arena",
+                    "apiVersion": "1.0",
+                    "description": "MCP Streamable HTTP for Arena enterprise benchmarks",
+                    "definitionVersion": "V4",
+                    "type": "PROXY",
+                    "listeners": [
+                      {
+                        "type": "HTTP",
+                        "paths": [{"path": "/mcp"}],
+                        "entrypoints": [{"type": "http-proxy"}]
+                      }
+                    ],
+                    "endpointGroups": [
+                      {
+                        "name": "default",
+                        "type": "http-proxy",
+                        "endpoints": [
+                          {
+                            "name": "echo-backend",
+                            "type": "http-proxy",
+                            "configuration": {"target": "http://echo-backend.stoa-system.svc:8888"}
+                          }
+                        ]
+                      }
+                    ]
+                  }')
+                MCP_EXISTING=$(echo "$MCP_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+                echo "MCP API created: $MCP_EXISTING"
+
+                echo "Creating KEY_LESS plan for MCP API..."
+                MCP_PLAN=$(curl -sf -X POST "${MGMT}/apis/${MCP_EXISTING}/plans" \
+                  -H "Authorization: ${AUTH}" \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                    "name": "keyless-mcp",
+                    "description": "Open access for Arena MCP benchmarks",
+                    "definitionVersion": "V4",
+                    "mode": "STANDARD",
+                    "security": {"type": "KEY_LESS"},
+                    "characteristics": [],
+                    "status": "PUBLISHED"
+                  }')
+                MCP_PLAN_ID=$(echo "$MCP_PLAN" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+                echo "MCP Plan created: $MCP_PLAN_ID"
+
+                echo "Publishing MCP plan..."
+                curl -sf -X POST "${MGMT}/apis/${MCP_EXISTING}/plans/${MCP_PLAN_ID}/_publish" \
+                  -H "Authorization: ${AUTH}" > /dev/null 2>&1 || true
+
+                echo "Deploying MCP API..."
+                curl -sf -X POST "${MGMT}/apis/${MCP_EXISTING}/deployments" \
+                  -H "Authorization: ${AUTH}" \
+                  -H "Content-Type: application/json" \
+                  -d '{"deploymentLabel":"arena-mcp"}' > /dev/null 2>&1
+
+                echo "Starting MCP API..."
+                curl -sf -X POST "${MGMT}/apis/${MCP_EXISTING}/_start" \
+                  -H "Authorization: ${AUTH}" > /dev/null 2>&1 || true
+
+                echo "MCP API deployed and started"
+              fi
+
+              # Verify MCP route
+              echo "Verifying MCP route..."
+              sleep 3
+              MCP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+                -H "Content-Type: application/json" \
+                -d '{"jsonrpc":"2.0","method":"initialize","id":1}' \
+                http://gravitee-arena-gw.stoa-system.svc:8082/mcp)
+              echo "Gravitee MCP endpoint: HTTP $MCP_CODE"
+              if [ "$MCP_CODE" = "200" ]; then
+                echo "SUCCESS: MCP route is working"
+              else
+                echo "WARNING: MCP route returned HTTP $MCP_CODE (may need more time to sync)"
               fi
           securityContext:
             privileged: false

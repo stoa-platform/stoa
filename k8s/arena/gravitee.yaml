@@ -242,6 +242,7 @@ spec:
             privileged: false
             allowPrivilegeEscalation: false
             runAsNonRoot: true
+            runAsUser: 100
             capabilities:
               drop:
                 - ALL
@@ -266,6 +267,7 @@ spec:
             privileged: false
             allowPrivilegeEscalation: false
             runAsNonRoot: true
+            runAsUser: 100
             capabilities:
               drop:
                 - ALL
@@ -462,6 +464,7 @@ spec:
             privileged: false
             allowPrivilegeEscalation: false
             runAsNonRoot: true
+            runAsUser: 100
             capabilities:
               drop:
                 - ALL

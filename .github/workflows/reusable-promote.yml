@@ -1,0 +1,206 @@
+# =============================================================================
+# Reusable Promote — Deploy an existing dev image to prod
+# =============================================================================
+# Promotes a dev-tagged GHCR image to a prod cluster. Declares `environment:`
+# to access environment-scoped secrets (KUBECONFIG_B64). GitHub batches
+# approval for the same environment within a workflow run — reviewer approves
+# once (on the gate job), and all promote jobs proceed without re-prompting.
+#
+# Pattern: verify image exists → staging pre-flight → kubectl deploy → rollback on failure
+# =============================================================================
+
+name: Reusable Promote to Prod
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'K8s deployment name (e.g., control-plane-api, stoa-portal)'
+        required: true
+        type: string
+      image-name:
+        description: 'GHCR image name (e.g., control-plane-api, portal)'
+        required: true
+        type: string
+      sha:
+        description: 'Git SHA of the image to promote'
+        required: true
+        type: string
+      source-env:
+        description: 'Source environment tag prefix'
+        required: false
+        type: string
+        default: 'dev'
+      environment:
+        description: 'Target environment (for secrets access)'
+        required: false
+        type: string
+        default: 'prod'
+      namespace:
+        description: 'Kubernetes namespace'
+        required: false
+        type: string
+        default: 'stoa-system'
+    outputs:
+      previous-image:
+        description: 'Previous deployment image (for rollback reference)'
+        value: ${{ jobs.promote.outputs.previous_image }}
+
+env:
+  IMAGE_TAG: ghcr.io/stoa-platform/${{ inputs.image-name }}:${{ inputs.source-env }}-${{ inputs.sha }}
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.component }} to prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      previous_image: ${{ steps.save-state.outputs.previous_image }}
+
+    steps:
+      - name: Verify image exists in GHCR
+        run: |
+          echo "Checking image: ${{ env.IMAGE_TAG }}"
+          if ! docker manifest inspect "${{ env.IMAGE_TAG }}" > /dev/null 2>&1; then
+            echo "::error::Image ${{ env.IMAGE_TAG }} not found in GHCR"
+            exit 1
+          fi
+          echo "Image verified"
+
+      - name: Staging health pre-flight
+        run: |
+          set -euo pipefail
+          PASS=0; FAIL=0
+
+          check() {
+            local name="$1" url="$2"
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 "$url") || status="000"
+            if [ "$status" = "200" ]; then
+              echo "  $name: $status"
+              PASS=$((PASS+1))
+            else
+              echo "  $name: $status (expected 200)"
+              FAIL=$((FAIL+1))
+            fi
+          }
+
+          echo "Staging health pre-flight (all 5 endpoints must be healthy)"
+          echo "---"
+          check "API Health"      "https://staging-api.gostoa.dev/health"
+          check "Gateway Health"  "https://staging-mcp.gostoa.dev/health/ready"
+          check "Portal"          "https://staging-portal.gostoa.dev"
+          check "Console"         "https://staging-console.gostoa.dev"
+          check "Keycloak OIDC"   "https://staging-auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
+          echo "---"
+          echo "Results: $PASS passed, $FAIL failed"
+          if [ "$FAIL" -gt 0 ]; then
+            echo "::error::Staging is unhealthy — aborting promotion"
+            exit 1
+          fi
+
+      - name: Configure kubeconfig (prod)
+        id: kubeconfig
+        run: |
+          if [ -n "${{ secrets.KUBECONFIG_B64 }}" ]; then
+            mkdir -p ~/.kube
+            echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "CLUSTER_READY=true" >> $GITHUB_OUTPUT
+          else
+            echo "CLUSTER_READY=false" >> $GITHUB_OUTPUT
+            echo "::error::KUBECONFIG_B64 secret not set for prod environment"
+            exit 1
+          fi
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+
+      - name: Save current deployment state for rollback
+        id: save-state
+        run: |
+          PREV_IMAGE=$(kubectl get deployment/${{ inputs.component }} -n ${{ inputs.namespace }} \
+            -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+          echo "previous_image=$PREV_IMAGE" >> $GITHUB_OUTPUT
+          echo "Previous image: $PREV_IMAGE"
+
+      - name: Deploy to prod
+        run: |
+          echo "Promoting ${{ inputs.component }} with image: ${{ env.IMAGE_TAG }}"
+          kubectl set image deployment/${{ inputs.component }} \
+            ${{ inputs.component }}=${{ env.IMAGE_TAG }} \
+            -n ${{ inputs.namespace }}
+          kubectl rollout restart deployment/${{ inputs.component }} -n ${{ inputs.namespace }}
+          if ! kubectl rollout status deployment/${{ inputs.component }} \
+            -n ${{ inputs.namespace }} --timeout=300s; then
+            echo "::error::Rollout failed, triggering rollback"
+            kubectl rollout undo deployment/${{ inputs.component }} -n ${{ inputs.namespace }}
+            exit 1
+          fi
+
+      - name: Diagnose failure
+        if: failure() && steps.kubeconfig.outputs.CLUSTER_READY == 'true'
+        run: |
+          echo "=== Deployment Description ==="
+          kubectl describe deployment/${{ inputs.component }} -n ${{ inputs.namespace }} || true
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n ${{ inputs.namespace }} -l app=${{ inputs.component }} -o wide || \
+            kubectl get pods -n ${{ inputs.namespace }} -l app.kubernetes.io/name=${{ inputs.component }} -o wide || true
+          echo ""
+          echo "=== Container Logs (last 50 lines) ==="
+          POD=$(kubectl get pods -n ${{ inputs.namespace }} -l app=${{ inputs.component }} \
+            --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null) || true
+          if [ -n "$POD" ]; then
+            kubectl logs "$POD" -n ${{ inputs.namespace }} --tail=50 2>&1 || true
+            echo ""
+            echo "=== Previous Container Logs ==="
+            kubectl logs "$POD" -n ${{ inputs.namespace }} --previous --tail=30 2>&1 || true
+          fi
+          echo ""
+          echo "=== Recent Events (last 10 min) ==="
+          kubectl get events -n ${{ inputs.namespace }} --sort-by='.lastTimestamp' | tail -30 || true
+
+      - name: Post-deploy prod health check
+        run: |
+          sleep 15
+          echo "Post-deploy prod health checks"
+          echo "---"
+          PASS=0; FAIL=0
+          check() {
+            local name="$1" url="$2"
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 3 --retry-delay 5 "$url") || status="000"
+            if [ "$status" = "200" ]; then
+              echo "  $name: $status"
+              PASS=$((PASS+1))
+            else
+              echo "  $name: $status (expected 200)"
+              FAIL=$((FAIL+1))
+            fi
+          }
+          check "API Health"      "https://api.gostoa.dev/health"
+          check "Gateway Health"  "https://mcp.gostoa.dev/health/ready"
+          check "Portal"          "https://portal.gostoa.dev"
+          check "Console"         "https://console.gostoa.dev"
+          check "Keycloak OIDC"   "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
+          echo "---"
+          echo "Results: $PASS passed, $FAIL failed"
+          if [ "$FAIL" -gt 0 ]; then
+            echo "::warning::Some prod endpoints unhealthy after deploy — check manually"
+          fi
+
+      - name: Promote Summary
+        if: always()
+        run: |
+          echo "### ${{ inputs.component }} Promotion to Prod" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | ${{ inputs.component }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ env.IMAGE_TAG }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Previous | \`${{ steps.save-state.outputs.previous_image }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA | \`${{ inputs.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY

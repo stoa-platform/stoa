@@ -1,11 +1,14 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-22 (Cycle 8 close-out: CAB-1151, CAB-1375, CAB-1373, CAB-1386 DONE)
+> Dernière MAJ: 2026-02-22 (Portal mock data fix — PR #771 merged + CD verified)
 
 ## ✅ DONE
 
 > Full history: 548+ pts across 59+ issues. See Linear for complete audit trail.
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
+
+### Cycle 9 (Feb 22+)
+- ✅ Portal mock data fix — PR #771 (removed MOCK_SERVERS fallback from MCP pages, -189 LOC)
 
 ### Cycle 8 (Feb 16-22) — Recent
 - CAB-1306: Portal Self-Service V2 (13 pts) — PRs #636, #638, #669 (3 phases)
@@ -46,3 +49,4 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - docs.gostoa.dev = 37 articles, 0 "Coming Soon"
 - ADR numbering: stoa-docs owns numbers (001-048). Next: **ADR-049**
 - Velocity C8: 703 pts / 73 issues (state drift fix: CAB-1330, CAB-1367 already Done on Linear)
+- Portal MCP pages: MOCK_SERVERS removed (PR #771) — pages now use real API only

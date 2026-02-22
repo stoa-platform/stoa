@@ -376,12 +376,6 @@ pub struct Config {
     pub federation_cache_max_entries: u64,
 }
 
-fn default_token_budget_limit() -> u64 {
-    500_000
-}
-fn default_token_budget_window_hours() -> u64 {
-    1
-}
 fn default_port() -> u16 {
     8080
 }

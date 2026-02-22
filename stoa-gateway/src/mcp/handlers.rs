@@ -403,8 +403,14 @@ pub async fn mcp_tools_call(
                         &request.name,
                         "Read",
                         EventStatus::NotFound,
-                        CallTiming { start, t_gateway_ms: 0 },
-                        EventSizes { request: request_size, response: 0 },
+                        CallTiming {
+                            start,
+                            t_gateway_ms: 0,
+                        },
+                        EventSizes {
+                            request: request_size,
+                            response: 0,
+                        },
                     );
                     return (
                         StatusCode::NOT_FOUND,
@@ -426,8 +432,14 @@ pub async fn mcp_tools_call(
                     &request.name,
                     "Read",
                     EventStatus::NotFound,
-                    CallTiming { start, t_gateway_ms: 0 },
-                    EventSizes { request: request_size, response: 0 },
+                    CallTiming {
+                        start,
+                        t_gateway_ms: 0,
+                    },
+                    EventSizes {
+                        request: request_size,
+                        response: 0,
+                    },
                 );
                 return (
                     StatusCode::NOT_FOUND,
@@ -470,8 +482,14 @@ pub async fn mcp_tools_call(
                     &request.name,
                     &format!("{:?}", tool.required_action()),
                     EventStatus::PolicyDenied,
-                    CallTiming { start, t_gateway_ms: 0 },
-                    EventSizes { request: request_size, response: 0 },
+                    CallTiming {
+                        start,
+                        t_gateway_ms: 0,
+                    },
+                    EventSizes {
+                        request: request_size,
+                        response: 0,
+                    },
                 );
                 return (
                     StatusCode::FORBIDDEN,
@@ -514,8 +532,14 @@ pub async fn mcp_tools_call(
             &request.name,
             &format!("{:?}", tool.required_action()),
             EventStatus::RateLimited,
-            CallTiming { start, t_gateway_ms: 0 },
-            EventSizes { request: request_size, response: 0 },
+            CallTiming {
+                start,
+                t_gateway_ms: 0,
+            },
+            EventSizes {
+                request: request_size,
+                response: 0,
+            },
         );
         return (
             StatusCode::TOO_MANY_REQUESTS,
@@ -691,8 +715,14 @@ pub async fn mcp_tools_call(
             &request.name,
             &format!("{:?}", required_action),
             EventStatus::PolicyDenied,
-            CallTiming { start, t_gateway_ms: t_gateway },
-            EventSizes { request: request_size, response: 0 },
+            CallTiming {
+                start,
+                t_gateway_ms: t_gateway,
+            },
+            EventSizes {
+                request: request_size,
+                response: 0,
+            },
         );
         return (
             StatusCode::FORBIDDEN,
@@ -733,8 +763,14 @@ pub async fn mcp_tools_call(
                 &request.name,
                 &format!("{:?}", required_action),
                 EventStatus::Success,
-                CallTiming { start, t_gateway_ms },
-                EventSizes { request: request_size, response: cached.result.to_string().len() as u64 },
+                CallTiming {
+                    start,
+                    t_gateway_ms,
+                },
+                EventSizes {
+                    request: request_size,
+                    response: cached.result.to_string().len() as u64,
+                },
             );
             let text = serde_json::to_string_pretty(&cached.result)
                 .unwrap_or_else(|_| cached.result.to_string());
@@ -871,8 +907,14 @@ pub async fn mcp_tools_call(
                 &request.name,
                 &format!("{:?}", required_action),
                 EventStatus::Success,
-                CallTiming { start, t_gateway_ms },
-                EventSizes { request: request_size, response: response_size },
+                CallTiming {
+                    start,
+                    t_gateway_ms,
+                },
+                EventSizes {
+                    request: request_size,
+                    response: response_size,
+                },
             );
 
             (
@@ -910,8 +952,14 @@ pub async fn mcp_tools_call(
                 &request.name,
                 &format!("{:?}", required_action),
                 EventStatus::Error,
-                CallTiming { start, t_gateway_ms },
-                EventSizes { request: request_size, response: 0 },
+                CallTiming {
+                    start,
+                    t_gateway_ms,
+                },
+                EventSizes {
+                    request: request_size,
+                    response: 0,
+                },
             );
             emit_error_snapshot(
                 &state,
@@ -920,7 +968,11 @@ pub async fn mcp_tools_call(
                 &format!("{:?}", required_action),
                 &e.to_string(),
                 500,
-                ErrorTiming { start, t_gateway_ms, t_backend_ms },
+                ErrorTiming {
+                    start,
+                    t_gateway_ms,
+                    t_backend_ms,
+                },
             );
 
             with_rate_limit_headers(

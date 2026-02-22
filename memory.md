@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (Model Policy: Opus default for local impl — PR #846)
+> Derniere MAJ: 2026-02-23 (Council batch: 15 MEGAs validated, 16 promoted to C9 Todo)
 
 ## ✅ DONE
 
@@ -78,6 +78,13 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
 - ✅ Production validated: 23/23 PASS, GO in 5s
 - [ ] Repetitions + video backup (human-only)
+
+Council Batch — 15 MEGAs validated, 16 promoted to C9 Todo (2026-02-23)
+- Go (6): CAB-374, CAB-1331 (8.50), CAB-1123 (8.50), CAB-1336 (8.25), CAB-1345 (8.00), CAB-1338 (8.00)
+- Fix (9): CAB-1319 (7.50), CAB-1322 (7.50), CAB-1316 (7.50), CAB-1342 (7.25), CAB-1329 (7.25), CAB-1334 (6.75), CAB-1327 (6.75), CAB-1347 (6.25), CAB-1348 (6.00)
+- Labels applied on Linear: `council:ticket-go` / `council:ticket-fix`
+- Fix adjustments applied to all 9 Fix ticket descriptions on Linear
+- C9 scope: ~661 pts (108% of 564 target capacity — slightly overloaded)
 
 ## 📋 NEXT
 

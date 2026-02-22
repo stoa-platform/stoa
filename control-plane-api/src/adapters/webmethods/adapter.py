@@ -299,3 +299,6 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             )
             response.raise_for_status()
             return response.content
+
+    async def deploy_contract(self, contract_spec: dict, auth_token: str | None = None) -> AdapterResult:
+        return AdapterResult(success=False, error="Not supported by webMethods adapter")

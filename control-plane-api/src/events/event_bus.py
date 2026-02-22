@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Subscriber:
     """A connected SSE client."""
+
     id: str = field(default_factory=lambda: str(uuid4())[:8])
     tenant_id: str = "*"
     event_types: list[str] | None = None

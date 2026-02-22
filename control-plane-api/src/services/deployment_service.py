@@ -77,7 +77,9 @@ class DeploymentService:
         await _webhook_started(self.db, deployment)
         await emit_deployment_started(deployment)
         await self.add_log(
-            deployment.id, tenant_id, f"Deployment queued for {api_name} v{version}",
+            deployment.id,
+            tenant_id,
+            f"Deployment queued for {api_name} v{version}",
             step="init",
         )
         return deployment
@@ -162,7 +164,8 @@ class DeploymentService:
         deployment = await self.repo.update(deployment)
         if status == DeploymentStatus.IN_PROGRESS.value:
             await self.add_log(
-                deployment_id, tenant_id,
+                deployment_id,
+                tenant_id,
                 f"Deployment in progress (attempt {deployment.attempt_count})",
                 step="sync",
             )
@@ -172,7 +175,9 @@ class DeploymentService:
             await emit_deployment_succeeded(self.db, deployment)
             await emit_deployment_completed(deployment)
             await self.add_log(
-                deployment_id, tenant_id, "Deployment completed successfully",
+                deployment_id,
+                tenant_id,
+                "Deployment completed successfully",
                 step="done",
             )
         elif status == DeploymentStatus.FAILED.value:
@@ -181,9 +186,11 @@ class DeploymentService:
             await _webhook_failed(self.db, deployment)
             await emit_deployment_failed(deployment)
             await self.add_log(
-                deployment_id, tenant_id,
+                deployment_id,
+                tenant_id,
                 f"Deployment failed: {error_message or 'unknown error'}",
-                level="error", step="done",
+                level="error",
+                step="done",
             )
         elif status == DeploymentStatus.ROLLED_BACK.value:
             from src.services.webhook_service import emit_deployment_rolled_back
@@ -191,8 +198,11 @@ class DeploymentService:
             await emit_deployment_rolled_back(self.db, deployment)
             await emit_deployment_rolledback(deployment)
             await self.add_log(
-                deployment_id, tenant_id, "Deployment rolled back",
-                level="warn", step="rollback",
+                deployment_id,
+                tenant_id,
+                "Deployment rolled back",
+                level="warn",
+                step="rollback",
             )
         return deployment
 
@@ -265,5 +275,8 @@ class DeploymentService:
         limit: int = 200,
     ) -> list[DeploymentLog]:
         return await self.log_repo.list_by_deployment(
-            deployment_id, tenant_id, after_seq=after_seq, limit=limit,
+            deployment_id,
+            tenant_id,
+            after_seq=after_seq,
+            limit=limit,
         )

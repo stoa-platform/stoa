@@ -1,4 +1,5 @@
 """Deployments router — API deployment management (CAB-1353)"""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -39,12 +40,18 @@ async def list_deployments(
     service = DeploymentService(db)
     env_val = environment.value if environment else None
     items, total = await service.list_deployments(
-        tenant_id, api_id=api_id, environment=env_val,
-        status=status, page=page, page_size=page_size,
+        tenant_id,
+        api_id=api_id,
+        environment=env_val,
+        status=status,
+        page=page,
+        page_size=page_size,
     )
     return DeploymentListResponse(
         items=[DeploymentResponse.model_validate(d) for d in items],
-        total=total, page=page, page_size=page_size,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -91,9 +98,13 @@ async def create_deployment(
 
     service = DeploymentService(db)
     deployment = await service.create_deployment(
-        tenant_id=tenant_id, api_id=request.api_id, api_name=api_name,
-        environment=request.environment.value, version=version,
-        deployed_by=user.username, user_id=user.id,
+        tenant_id=tenant_id,
+        api_id=request.api_id,
+        api_name=api_name,
+        environment=request.environment.value,
+        version=version,
+        deployed_by=user.username,
+        user_id=user.id,
         gateway_id=request.gateway_id,
     )
     await db.commit()
@@ -114,9 +125,11 @@ async def rollback_deployment(
     service = DeploymentService(db)
     try:
         rollback = await service.rollback_deployment(
-            tenant_id=tenant_id, deployment_id=deployment_id,
+            tenant_id=tenant_id,
+            deployment_id=deployment_id,
             target_version=request.target_version,
-            deployed_by=user.username, user_id=user.id,
+            deployed_by=user.username,
+            user_id=user.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -137,9 +150,12 @@ async def update_deployment_status(
     service = DeploymentService(db)
     try:
         deployment = await service.update_status(
-            tenant_id=tenant_id, deployment_id=deployment_id,
-            status=request.status.value, error_message=request.error_message,
-            spec_hash=request.spec_hash, commit_sha=request.commit_sha,
+            tenant_id=tenant_id,
+            deployment_id=deployment_id,
+            status=request.status.value,
+            error_message=request.error_message,
+            spec_hash=request.spec_hash,
+            commit_sha=request.commit_sha,
             metadata=request.metadata,
         )
     except ValueError as e:
@@ -187,13 +203,20 @@ async def get_environment_status(
     """Get status of all APIs deployed in an environment"""
     service = DeploymentService(db)
     deployments, healthy = await service.get_environment_status(
-        tenant_id, environment.value,
+        tenant_id,
+        environment.value,
     )
     return EnvironmentStatusResponse(
-        environment=environment.value, healthy=healthy,
+        environment=environment.value,
+        healthy=healthy,
         deployments=[
-            {"api_id": d.api_id, "api_name": d.api_name, "version": d.version,
-             "status": d.status, "deployed_at": d.completed_at or d.created_at}
+            {
+                "api_id": d.api_id,
+                "api_name": d.api_name,
+                "version": d.version,
+                "status": d.status,
+                "deployed_at": d.completed_at or d.created_at,
+            }
             for d in deployments
         ],
     )

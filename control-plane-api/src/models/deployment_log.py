@@ -1,4 +1,5 @@
 """Deployment log model — stores log entries per deployment (CAB-1420)."""
+
 import enum
 import uuid
 from datetime import datetime
@@ -11,6 +12,7 @@ from src.database import Base
 
 class LogLevel(enum.StrEnum):
     """Log severity level."""
+
     INFO = "info"
     WARN = "warn"
     ERROR = "error"
@@ -19,6 +21,7 @@ class LogLevel(enum.StrEnum):
 
 class DeploymentLog(Base):
     """A single log entry within a deployment lifecycle."""
+
     __tablename__ = "deployment_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -35,9 +38,7 @@ class DeploymentLog(Base):
     message = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
-    __table_args__ = (
-        Index("ix_deployment_logs_deploy_seq", "deployment_id", "seq"),
-    )
+    __table_args__ = (Index("ix_deployment_logs_deploy_seq", "deployment_id", "seq"),)
 
     def __repr__(self) -> str:
         return f"<DeploymentLog {self.id} deploy={self.deployment_id} seq={self.seq}>"

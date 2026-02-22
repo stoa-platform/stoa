@@ -1,4 +1,5 @@
 """Deployment log repository — data access layer (CAB-1420)."""
+
 import logging
 from uuid import UUID
 
@@ -41,7 +42,6 @@ class DeploymentLogRepository:
 
     async def next_seq(self, deployment_id: UUID) -> int:
         result = await self.db.execute(
-            select(func.coalesce(func.max(DeploymentLog.seq), 0))
-            .where(DeploymentLog.deployment_id == deployment_id)
+            select(func.coalesce(func.max(DeploymentLog.seq), 0)).where(DeploymentLog.deployment_id == deployment_id)
         )
         return (result.scalar() or 0) + 1

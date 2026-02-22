@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "STOA Token Optimization Engine — CAB-881 — Token consumption monitoring and optimization tracking",
+  "description": "STOA Token Optimization Engine — CAB-881 — PLACEHOLDER: Token metrics (stoa_mcp_gateway_tokens_*, payload_bytes_*) not yet implemented in Rust gateway. Panels will show 'No data' until these metrics are added to stoa-gateway/src/metrics.rs.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,

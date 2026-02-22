@@ -7,44 +7,63 @@
 # =============================================================================
 
 stoa_metrics:
-  # MCP Gateway Metrics
-  mcp_gateway:
+  # STOA Gateway (Rust) Metrics — source: stoa-gateway/src/metrics.rs
+  # NOTE: Python MCP Gateway decommissioned Feb 2026. Old stoa_mcp_gateway_* prefix replaced.
+  stoa_gateway:
     http_requests_total:
-      name: stoa_mcp_gateway_http_requests_total
-      labels: [method, status_code, endpoint, pod, namespace]
+      name: stoa_http_requests_total
+      labels: [method, status, path, pod, namespace]
       type: counter
-      description: Total HTTP requests to MCP Gateway
-
-    http_requests_in_progress:
-      name: stoa_mcp_gateway_http_requests_in_progress
-      labels: [method, pod, namespace]
-      type: gauge
-      description: Current in-flight requests
+      description: Total HTTP requests to STOA Gateway
 
     http_request_duration_seconds:
-      name: stoa_mcp_gateway_http_request_duration_seconds
-      labels: [method, endpoint, pod, namespace]
+      name: stoa_http_request_duration_seconds
+      labels: [method, path, pod, namespace]
       type: histogram
-      buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+      buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
       description: Request latency histogram
 
-    auth_token_validation_duration_seconds:
-      name: stoa_mcp_gateway_auth_token_validation_duration_seconds
-      labels: [pod, namespace]
+    mcp_tools_calls_total:
+      name: stoa_mcp_tools_calls_total
+      labels: [tool, tenant, status, pod, namespace]
+      type: counter
+      description: Total MCP tool invocations
+
+    mcp_tool_duration_seconds:
+      name: stoa_mcp_tool_duration_seconds
+      labels: [tool, tenant, status, pod, namespace]
       type: histogram
-      description: Token validation latency
+      description: MCP tool invocation latency
 
-    mcp_tools_registered:
-      name: stoa_mcp_gateway_mcp_tools_registered
+    mcp_sse_connections_active:
+      name: stoa_mcp_sse_connections_active
       labels: [pod, namespace]
       type: gauge
-      description: Number of registered MCP tools
+      description: Active SSE connections
 
-    service_info:
-      name: stoa_mcp_gateway_service_info
-      labels: [version, pod, namespace]
+    mcp_sessions_active:
+      name: stoa_mcp_sessions_active
+      labels: [pod, namespace]
       type: gauge
-      description: Service version information
+      description: Active MCP sessions
+
+    rate_limit_hits_total:
+      name: stoa_rate_limit_hits_total
+      labels: [tenant, pod, namespace]
+      type: counter
+      description: Rate limit rejections
+
+    mtls_validations_total:
+      name: stoa_mtls_validations_total
+      labels: [result, tenant, pod, namespace]
+      type: counter
+      description: mTLS certificate validation results
+
+    upstream_latency_seconds:
+      name: stoa_upstream_latency_seconds
+      labels: [upstream, pod, namespace]
+      type: histogram
+      description: Backend upstream response latency
 
   # Control Plane API Metrics
   control_plane_api:
@@ -174,35 +193,33 @@ container_metrics:
 # =============================================================================
 
 dashboard_queries:
-  # MCP Gateway Dashboard
-  mcp_gateway:
+  # STOA Gateway Dashboard (Rust) — source: stoa-gateway/src/metrics.rs
+  # NOTE: Python MCP Gateway decommissioned Feb 2026. Old stoa_mcp_gateway_* prefix replaced.
+  stoa_gateway:
     requests_per_second: |
-      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system"}[5m])) by (status_code)
+      sum(rate(stoa_http_requests_total{namespace="stoa-system"}[5m])) by (status)
 
     request_latency_p50: |
-      histogram_quantile(0.50, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+      histogram_quantile(0.50, sum(rate(stoa_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
 
     request_latency_p95: |
-      histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+      histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
 
     request_latency_p99: |
-      histogram_quantile(0.99, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+      histogram_quantile(0.99, sum(rate(stoa_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
 
     error_rate: |
-      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system", status_code=~"5.."}[5m]))
+      sum(rate(stoa_http_requests_total{namespace="stoa-system", status=~"5.."}[5m]))
       /
-      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system"}[5m])) * 100
+      sum(rate(stoa_http_requests_total{namespace="stoa-system"}[5m])) * 100
 
     success_rate: |
-      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system", status_code=~"2.."}[5m]))
+      sum(rate(stoa_http_requests_total{namespace="stoa-system", status=~"2.."}[5m]))
       /
-      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system"}[5m])) * 100
+      sum(rate(stoa_http_requests_total{namespace="stoa-system"}[5m])) * 100
 
-    tools_registered: |
-      max(stoa_mcp_gateway_mcp_tools_registered{namespace="stoa-system"})
-
-    auth_latency_p95: |
-      histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_auth_token_validation_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+    # NOTE: tools_registered and auth_latency_p95 removed — no Rust equivalent yet
+    # Re-add when stoa-gateway emits stoa_mcp_tools_registered and stoa_auth_*
 
   # Control Plane API Dashboard
   control_plane_api:
@@ -246,25 +263,25 @@ dashboard_queries:
 # =============================================================================
 
 alert_rules:
-  - alert: MCPGatewayHighErrorRate
+  - alert: STOAGatewayHighErrorRate
     expr: |
-      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system", status_code=~"5.."}[5m]))
+      sum(rate(stoa_http_requests_total{namespace="stoa-system", status=~"5.."}[5m]))
       /
-      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system"}[5m])) > 0.05
+      sum(rate(stoa_http_requests_total{namespace="stoa-system"}[5m])) > 0.05
     for: 5m
     labels:
       severity: warning
     annotations:
-      summary: MCP Gateway error rate above 5%
+      summary: STOA Gateway error rate above 5%
 
-  - alert: MCPGatewayHighLatency
+  - alert: STOAGatewayHighLatency
     expr: |
-      histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le)) > 2
+      histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le)) > 2
     for: 5m
     labels:
       severity: warning
     annotations:
-      summary: MCP Gateway P95 latency above 2s
+      summary: STOA Gateway P95 latency above 2s
 
   - alert: ControlPlaneAPIHighErrorRate
     expr: |

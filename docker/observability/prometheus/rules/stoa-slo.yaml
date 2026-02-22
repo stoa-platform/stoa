@@ -4,8 +4,10 @@
 # Recording Rules:
 # 1. Availability SLO (99.9%)
 # 2. Latency SLO (P95 < 500ms)
-# 3. APDEX Score
-# 4. Error Budget
+# 3. Error Budget
+#
+# Metric source: stoa-gateway (Rust) — see stoa-gateway/src/metrics.rs
+# Migration note: APDEX + token/billing rules removed (no Rust equivalent yet)
 #
 # Usage:
 #   kubectl apply -f docker/observability/prometheus/rules/stoa-slo.yaml
@@ -32,20 +34,20 @@ spec:
         # Overall API availability (success rate)
         - record: slo:api_availability:ratio
           expr: |
-            sum(rate(stoa_mcp_gateway_http_requests_total{status_code!~"5.."}[5m]))
-            / sum(rate(stoa_mcp_gateway_http_requests_total[5m]))
+            sum(rate(stoa_http_requests_total{status!~"5.."}[5m]))
+            / sum(rate(stoa_http_requests_total[5m]))
 
         # Per-tenant availability
         - record: slo:api_availability_by_tenant:ratio
           expr: |
-            sum by (tenant_id) (rate(stoa_mcp_gateway_http_requests_total{status_code!~"5.."}[5m]))
-            / sum by (tenant_id) (rate(stoa_mcp_gateway_http_requests_total[5m]))
+            sum by (tenant) (rate(stoa_http_requests_total{status!~"5.."}[5m]))
+            / sum by (tenant) (rate(stoa_http_requests_total[5m]))
 
         # 30-day availability (for SLO compliance)
         - record: slo:api_availability_30d:ratio
           expr: |
-            sum(increase(stoa_mcp_gateway_http_requests_total{status_code!~"5.."}[30d]))
-            / sum(increase(stoa_mcp_gateway_http_requests_total[30d]))
+            sum(increase(stoa_http_requests_total{status!~"5.."}[30d]))
+            / sum(increase(stoa_http_requests_total[30d]))
 
     # ==========================================================================
     # Latency SLO Recording Rules
@@ -57,70 +59,35 @@ spec:
         - record: slo:api_latency_p50:seconds
           expr: |
             histogram_quantile(0.50,
-              sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)
+              sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le)
             )
 
         # P95 Latency (SLO target: < 500ms)
         - record: slo:api_latency_p95:seconds
           expr: |
             histogram_quantile(0.95,
-              sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)
+              sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le)
             )
 
         # P99 Latency
         - record: slo:api_latency_p99:seconds
           expr: |
             histogram_quantile(0.99,
-              sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)
+              sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le)
             )
 
         # Per-tenant P95 latency
         - record: slo:api_latency_p95_by_tenant:seconds
           expr: |
             histogram_quantile(0.95,
-              sum by (tenant_id, le) (rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m]))
+              sum by (tenant, le) (rate(stoa_http_request_duration_seconds_bucket[5m]))
             )
 
         # Tool invocation latency P95
         - record: slo:tool_latency_p95:seconds
           expr: |
             histogram_quantile(0.95,
-              sum by (tool_name, le) (rate(stoa_mcp_gateway_mcp_tool_invocation_duration_seconds_bucket[5m]))
-            )
-
-    # ==========================================================================
-    # APDEX Score Recording Rules
-    # ==========================================================================
-    - name: stoa-slo-apdex
-      interval: 1m
-      rules:
-        # Overall APDEX score
-        # APDEX = (Satisfied + Tolerating/2) / Total
-        - record: slo:apdex:score
-          expr: |
-            (
-              sum(rate(stoa_mcp_gateway_apdex_satisfied_total[5m]))
-              + sum(rate(stoa_mcp_gateway_apdex_tolerating_total[5m])) / 2
-            )
-            /
-            (
-              sum(rate(stoa_mcp_gateway_apdex_satisfied_total[5m]))
-              + sum(rate(stoa_mcp_gateway_apdex_tolerating_total[5m]))
-              + sum(rate(stoa_mcp_gateway_apdex_frustrated_total[5m]))
-            )
-
-        # Per-tenant APDEX score
-        - record: slo:apdex_by_tenant:score
-          expr: |
-            (
-              sum by (tenant_id) (rate(stoa_mcp_gateway_apdex_satisfied_total[5m]))
-              + sum by (tenant_id) (rate(stoa_mcp_gateway_apdex_tolerating_total[5m])) / 2
-            )
-            /
-            (
-              sum by (tenant_id) (rate(stoa_mcp_gateway_apdex_satisfied_total[5m]))
-              + sum by (tenant_id) (rate(stoa_mcp_gateway_apdex_tolerating_total[5m]))
-              + sum by (tenant_id) (rate(stoa_mcp_gateway_apdex_frustrated_total[5m]))
+              sum by (tool, le) (rate(stoa_mcp_tool_duration_seconds_bucket[5m]))
             )
 
     # ==========================================================================
@@ -134,17 +101,17 @@ spec:
         - record: slo:error_budget:remaining_ratio
           expr: |
             1 - (
-              sum(increase(stoa_mcp_gateway_http_requests_total{status_code=~"5.."}[30d]))
+              sum(increase(stoa_http_requests_total{status=~"5.."}[30d]))
               /
-              (sum(increase(stoa_mcp_gateway_http_requests_total[30d])) * 0.001)
+              (sum(increase(stoa_http_requests_total[30d])) * 0.001)
             )
 
         # Error budget burn rate (1 = normal, >1 = burning faster than allowed)
         - record: slo:error_budget:burn_rate_1h
           expr: |
             (
-              sum(rate(stoa_mcp_gateway_http_requests_total{status_code=~"5.."}[1h]))
-              / sum(rate(stoa_mcp_gateway_http_requests_total[1h]))
+              sum(rate(stoa_http_requests_total{status=~"5.."}[1h]))
+              / sum(rate(stoa_http_requests_total[1h]))
             )
             / 0.001  # SLO target error rate
 
@@ -152,8 +119,8 @@ spec:
         - record: slo:error_budget:burn_rate_6h
           expr: |
             (
-              sum(rate(stoa_mcp_gateway_http_requests_total{status_code=~"5.."}[6h]))
-              / sum(rate(stoa_mcp_gateway_http_requests_total[6h]))
+              sum(rate(stoa_http_requests_total{status=~"5.."}[6h]))
+              / sum(rate(stoa_http_requests_total[6h]))
             )
             / 0.001
 
@@ -166,27 +133,20 @@ spec:
         # Total active tenants (had requests in last 24h)
         - record: business:active_tenants:count
           expr: |
-            count(sum by (tenant_id) (increase(stoa_mcp_gateway_http_requests_total[24h])) > 0)
+            count(sum by (tenant) (increase(stoa_http_requests_total[24h])) > 0)
 
         # Total API calls per hour
         - record: business:api_calls:hourly_rate
           expr: |
-            sum(rate(stoa_mcp_gateway_http_requests_total[1h])) * 3600
-
-        # Token consumption rate
-        - record: business:tokens_consumed:hourly_rate
-          expr: |
-            sum(rate(stoa_mcp_gateway_tokens_consumed_total[1h])) * 3600
+            sum(rate(stoa_http_requests_total[1h])) * 3600
 
         # Top tools by usage (1h rate)
         - record: business:tool_usage:1h_rate
           expr: |
-            sum by (tool_name) (rate(stoa_mcp_gateway_mcp_tool_invocations_total[1h])) * 3600
+            sum by (tool) (rate(stoa_mcp_tools_calls_total[1h])) * 3600
 
-        # Billable requests per tenant (daily)
-        - record: business:billable_requests_by_tenant:daily
-          expr: |
-            sum by (tenant_id) (increase(stoa_mcp_gateway_billable_requests_total[24h]))
+        # NOTE: tokens_consumed and billable_requests metrics not yet
+        # implemented in Rust gateway. Re-add when stoa-gateway emits them.
 
     # ==========================================================================
     # SLO Compliance Indicators
@@ -195,6 +155,7 @@ spec:
       interval: 1m
       rules:
         # Overall SLO compliance (1 = compliant, 0 = non-compliant)
+        # NOTE: APDEX removed (no Rust equivalent). Using 2-metric compliance.
         - record: slo:compliance:overall
           expr: |
             (
@@ -203,10 +164,7 @@ spec:
               +
               # Latency P95 < 500ms
               (slo:api_latency_p95:seconds < 0.5) * 1
-              +
-              # APDEX >= 0.85
-              (slo:apdex:score >= 0.85) * 1
-            ) / 3
+            ) / 2
 
         # SLO status per metric (for dashboard indicators)
         - record: slo:status:availability
@@ -216,7 +174,3 @@ spec:
         - record: slo:status:latency
           expr: |
             (slo:api_latency_p95:seconds < 0.5) * 1 + (slo:api_latency_p95:seconds >= 0.5) * 0
-
-        - record: slo:status:apdex
-          expr: |
-            (slo:apdex:score >= 0.85) * 1 + (slo:apdex:score < 0.85) * 0

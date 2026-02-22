@@ -82,3 +82,21 @@ class EnvironmentStatusResponse(BaseModel):
     environment: str
     healthy: bool
     deployments: list[EnvironmentDeployment]
+
+
+class DeploymentLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    deployment_id: UUID
+    seq: int
+    level: str
+    step: str | None = None
+    message: str
+    created_at: datetime
+
+
+class DeploymentLogListResponse(BaseModel):
+    deployment_id: UUID
+    logs: list[DeploymentLogResponse]
+    total: int

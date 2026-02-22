@@ -234,8 +234,28 @@ jobs:
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "#${{ github.event.issue.number }}")
-          notify_council "$TICKET" "${{ github.event.issue.title }}" "" "Go" "${{ github.event.issue.html_url }}" "${{ github.event.issue.number }}"
-          push_metrics_council "issue-to-pr" "$TICKET" "0" "go"
+
+          # Extract score from Council execution output
+          SCORE=""
+          EXEC_FILE="${{ steps.council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          if [ -f "$EXEC_FILE" ]; then
+            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
+              | grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
+          fi
+
+          # Compute verdict from score (don't hardcode "Go")
+          VERDICT="Go"
+          if [ -n "$SCORE" ]; then
+            if echo "$SCORE < 6.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Redo"
+            elif echo "$SCORE < 8.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Fix"; fi
+          fi
+
+          notify_council "$TICKET" "${{ github.event.issue.title }}" "${SCORE:-?}" "$VERDICT" "${{ github.event.issue.html_url }}" "${{ github.event.issue.number }}"
+
+          # Push metrics with actual verdict
+          METRIC_VERDICT=$(echo "$VERDICT" | tr '[:upper:]' '[:lower:]')
+          push_metrics_council "issue-to-pr" "$TICKET" "${SCORE:-0}" "$METRIC_VERDICT"
 
       - name: Write Job Summary — Council
         if: always() && steps.guard.outputs.skip != 'true'

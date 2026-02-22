@@ -1,0 +1,39 @@
+# HTTPRoutes for monitoring namespace (2 services)
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  parentRefs:
+    - name: stoa
+      namespace: nginx-gateway
+  hostnames:
+    - console.gostoa.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /grafana
+      backendRefs:
+        - name: prometheus-grafana
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pushgateway
+  namespace: monitoring
+  labels:
+    app: pushgateway
+spec:
+  parentRefs:
+    - name: stoa
+      namespace: nginx-gateway
+  hostnames:
+    - pushgateway.gostoa.dev
+  rules:
+    - backendRefs:
+        - name: pushgateway
+          port: 9091

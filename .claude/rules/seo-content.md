@@ -114,9 +114,9 @@ Every article belongs to a content pillar. Hubs are comprehensive articles; spok
 | Spoke | `datapower-tibco-migration-guide` | Published |
 | Spoke | `apigee-alternative-open-source` | Published |
 | Spoke | `stoa-vs-kong-api-gateway` | Published |
-| Spoke | Axway migration guide | TODO |
-| Spoke | WSO2 migration guide | TODO |
-| Spoke | Layer7 / CA API Gateway migration | TODO |
+| Spoke | `axway-api-gateway-migration-open-source` | Published |
+| Spoke | `wso2-api-manager-open-source-alternative` | Published |
+| Spoke | `layer7-ca-api-gateway-migration-stoa` | Published (PR #68) |
 
 ### Pillar 2: MCP & AI Agents
 

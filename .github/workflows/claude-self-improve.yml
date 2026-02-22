@@ -85,7 +85,7 @@ jobs:
           python3 scripts/ai-ops/batch-processor.py \
             --prompt-file /tmp/prompt.txt \
             --context-file /tmp/context.txt \
-            --model claude-sonnet-4-5-20250929 \
+            --model claude-sonnet-4-6 \
             --max-tokens 4096 \
             --max-wait 1200 \
             --output /tmp/result.json

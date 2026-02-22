@@ -54,6 +54,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
   GW_NAME=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].name")
   GW_TARGET=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].target // .[$gw_idx].health")
   GW_MCP=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].mcp_base // empty")
+  GW_MCP_PROTO=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].mcp_protocol // \"stoa\"")
   GW_HEADERS=$(echo "$GATEWAYS" | jq -c ".[$gw_idx].proxy_headers // {}")
 
   log_json "\"Benchmarking gateway: ${GW_NAME} (mcp_base: ${GW_MCP:-none})\""
@@ -67,6 +68,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
       --env SCENARIO=ent_warmup \
       --env TARGET_URL="$GW_TARGET" \
       --env MCP_BASE="$GW_MCP" \
+      --env MCP_PROTOCOL="$GW_MCP_PROTO" \
       --env HEADERS="$GW_HEADERS" \
       --env ARENA_JWT="$ARENA_JWT" \
       --env TIMEOUT="$TIMEOUT" \
@@ -81,6 +83,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
         --env SCENARIO="$scenario" \
         --env TARGET_URL="$GW_TARGET" \
         --env MCP_BASE="$GW_MCP" \
+        --env MCP_PROTOCOL="$GW_MCP_PROTO" \
         --env HEADERS="$GW_HEADERS" \
         --env ARENA_JWT="$ARENA_JWT" \
         --env TIMEOUT="$TIMEOUT" \

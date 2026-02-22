@@ -229,17 +229,29 @@ Layer 1 — Enterprise AI Readiness (NEW)
 
 ```yaml
 # GATEWAYS JSON — mcp_base: null means "no MCP support, score 0"
+# mcp_protocol: "stoa" (REST paths) or "streamable-http" (JSON-RPC 2.0 on single endpoint)
 [
-  {"name":"stoa-k8s", "target":"http://stoa-gateway:8080", "mcp_base":"http://stoa-gateway:8080/mcp"},
-  {"name":"kong-k8s",  "target":"http://kong-arena:8000",  "mcp_base":null}
+  {"name":"stoa-k8s", "target":"http://stoa-gateway:8080", "mcp_base":"http://stoa-gateway:8080/mcp", "mcp_protocol":"stoa"},
+  {"name":"kong-k8s",  "target":"http://kong-arena:8000",  "mcp_base":null},
+  {"name":"gravitee-k8s", "target":"http://gravitee-arena-gw:8082", "mcp_base":"http://gravitee-arena-gw:8082/mcp", "mcp_protocol":"streamable-http"}
 ]
 ```
+
+### MCP Protocol Variants
+
+| Gateway | MCP Protocol | Endpoint Pattern | License |
+|---------|-------------|-----------------|---------|
+| STOA | Custom REST (`mcp_protocol: "stoa"`) | `GET /mcp/capabilities`, `POST /mcp/tools/list`, `POST /mcp/tools/call` | Apache 2.0 |
+| Gravitee 4.8 | Streamable HTTP (`mcp_protocol: "streamable-http"`) | `POST /mcp` with JSON-RPC 2.0 | Apache 2.0 |
+| Kong OSS | None (`mcp_base: null`) | N/A — `ai-mcp-proxy` plugin is Enterprise-only | Apache 2.0 (OSS) |
+
+The benchmark script (`benchmark-enterprise.js`) uses `MCP_PROTOCOL` env var to switch between request formats.
 
 ### Open Participation
 
 Any gateway can participate in Layer 1:
-1. Implement MCP endpoints: `/mcp/capabilities`, `/mcp/tools/list`, `/mcp/tools/call`
-2. Add gateway entry to GATEWAYS JSON with `mcp_base` pointing to MCP root
+1. Implement MCP endpoints (either REST or Streamable HTTP)
+2. Add gateway entry to GATEWAYS JSON with `mcp_base` + `mcp_protocol`
 3. Deploy and run: `kubectl create job --from=cronjob/gateway-arena-enterprise arena-ent-test -n stoa-system`
 
 The benchmark is fair: same k6 scenarios, same scoring formula, same CI95 methodology.

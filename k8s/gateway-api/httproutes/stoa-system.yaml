@@ -1,0 +1,95 @@
+# HTTPRoutes for stoa-system namespace (5 services)
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: control-plane-ui
+  namespace: stoa-system
+  labels:
+    app: control-plane-ui
+spec:
+  parentRefs:
+    - name: stoa
+      namespace: nginx-gateway
+  hostnames:
+    - console.gostoa.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: control-plane-ui
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: keycloak
+  namespace: stoa-system
+  labels:
+    app: keycloak
+spec:
+  parentRefs:
+    - name: stoa
+      namespace: nginx-gateway
+  hostnames:
+    - auth.gostoa.dev
+  rules:
+    - backendRefs:
+        - name: keycloak
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: stoa-control-plane-api
+  namespace: stoa-system
+  labels:
+    app: stoa-control-plane-api
+spec:
+  parentRefs:
+    - name: stoa
+      namespace: nginx-gateway
+  hostnames:
+    - api.gostoa.dev
+  rules:
+    - backendRefs:
+        - name: stoa-control-plane-api
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: stoa-gateway
+  namespace: stoa-system
+  labels:
+    app: stoa-gateway
+spec:
+  parentRefs:
+    - name: stoa
+      namespace: nginx-gateway
+  hostnames:
+    - mcp.gostoa.dev
+  rules:
+    - backendRefs:
+        - name: stoa-gateway
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: stoa-portal
+  namespace: stoa-system
+  labels:
+    app: stoa-portal
+spec:
+  parentRefs:
+    - name: stoa
+      namespace: nginx-gateway
+  hostnames:
+    - portal.gostoa.dev
+  rules:
+    - backendRefs:
+        - name: stoa-portal
+          port: 80

@@ -134,6 +134,20 @@ jobs:
           head -15 council-body.md
           echo "=== ($(wc -l < council-body.md | tr -d ' ') lines total) ==="
 
+      # Validate that extraction produced usable content (Gap 4 fix)
+      - name: Validate Council Extraction
+        if: steps.council.outcome == 'success'
+        run: |
+          if [ ! -s council-body.md ]; then
+            echo "::error::Council ran but produced no parseable report"
+            echo "EXTRACTION_FAILED=true" >> "$GITHUB_ENV"
+          else
+            # Check if the report contains a score (minimum viable extraction)
+            if ! grep -qE 'Score:?\s*[0-9]+\.?[0-9]*/10' council-body.md; then
+              echo "::warning::Council report extracted but no score found — fallback verdict will be used"
+            fi
+          fi
+
       # Check if a GitHub issue already exists for this ticket (dedup guard)
       - name: Check Existing Issue
         id: dedup
@@ -316,7 +330,14 @@ jobs:
             FILES=$(grep -oE '[0-9]+ files?' council-body.md | head -1 | grep -oE '[0-9]+' | head -1 || echo "")
           fi
 
-          notify_council "$TICKET" "$TITLE" "${SCORE:-?}" "Go" "$ISSUE" "$ISSUE_NUM" "$MODE" "$LOC" "$FILES"
+          # Compute verdict from score (don't hardcode "Go")
+          VERDICT="Go"
+          if [ -n "$SCORE" ]; then
+            if echo "$SCORE < 6.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Redo"
+            elif echo "$SCORE < 8.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Fix"; fi
+          fi
+
+          notify_council "$TICKET" "$TITLE" "${SCORE:-?}" "$VERDICT" "$ISSUE" "$ISSUE_NUM" "$MODE" "$LOC" "$FILES"
 
           # Push council metrics
           VERDICT="go"

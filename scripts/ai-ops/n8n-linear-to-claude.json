@@ -35,16 +35,6 @@
               }
             },
             {
-              "id": "filter-autopilot-label",
-              "leftValue": "={{ $json.body.data.labels.some(l => l.name === \"autopilot\") }}",
-              "rightValue": "=true",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            },
-            {
               "id": "filter-state-changed",
               "leftValue": "={{ $json.body.updatedFrom?.stateId ?? '' }}",
               "rightValue": "",
@@ -80,7 +70,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"event_type\": \"linear-ticket-started\",\n  \"client_payload\": {\n    \"ticket_id\": \"{{ $json.body.data.identifier }}\",\n    \"ticket_title\": \"{{ $json.body.data.title }}\",\n    \"ticket_description\": \"{{ $json.body.data.description }}\",\n    \"ticket_priority\": \"{{ $json.body.data.priorityLabel }}\",\n    \"ticket_estimate\": \"{{ $json.body.data.estimate }}\"\n  }\n}"
+        "jsonBody": "={\n  \"event_type\": \"linear-ticket-started\",\n  \"client_payload\": {\n    \"ticket_id\": \"{{ $json.body.data.identifier }}\",\n    \"ticket_title\": \"{{ $json.body.data.title }}\",\n    \"ticket_description\": \"{{ $json.body.data.description }}\",\n    \"ticket_priority\": \"{{ $json.body.data.priorityLabel }}\",\n    \"ticket_estimate\": \"{{ $json.body.data.estimate }}\",\n    \"mega_id\": \"{{ $json.body.data.parent?.identifier ?? '' }}\",\n    \"phase_hint\": \"{{ $json.body.data.sortOrder ?? '' }}\",\n    \"component\": \"{{ ($json.body.data.labels?.nodes ?? []).find(l => ['api','gateway','ui','portal','e2e'].includes(l.name))?.name ?? '' }}\"\n  }\n}"
       },
       "id": "dispatch-github",
       "name": "Dispatch GitHub Actions",

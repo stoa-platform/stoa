@@ -126,7 +126,7 @@ jobs:
 
             Report: total/passed/failed runs, auto-fixed (PR#), needs human, flaky checks.
           # Model tier: sonnet (CI health, may create fix PRs)
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 15 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
 
       - name: Log token usage
         if: always()
@@ -184,7 +184,7 @@ jobs:
 
             Create issue "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
           # Model tier: sonnet (audit, may create upgrade PRs)
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 20 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 20 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
 
       - name: Log token usage
         if: always()

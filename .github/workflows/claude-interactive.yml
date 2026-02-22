@@ -43,7 +43,7 @@ jobs:
             Do NOT read memory.md, plan.md, or operations.log for session state.
             Focus exclusively on the user's request.
           # Model tier: sonnet (interactive, full tool access)
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 15 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       - name: Log token usage
         if: always()

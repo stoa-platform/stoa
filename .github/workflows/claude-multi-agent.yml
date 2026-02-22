@@ -78,7 +78,7 @@ jobs:
 
             Comment "/go-batch" to start parallel execution.
           # Model tier: sonnet (Council gate — structured rubric, Sonnet sufficient. Bash removed for security)
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 5 --allowedTools Read,Glob,Grep"
 
       - name: Log token usage
         if: always()
@@ -228,7 +228,7 @@ jobs:
             Do NOT modify shared files (memory.md, plan.md, CLAUDE.md).
             Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
           # Model tier: sonnet (code generation, full tool access)
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       - name: Log token usage
         if: always()

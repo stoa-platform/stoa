@@ -65,6 +65,34 @@ kubectl describe deployment/<name> -n stoa-system | grep Image
 kubectl get applications -n argocd
 ```
 
+### Component → CD verification map
+
+| Component | CI Workflow | ArgoCD App | Deploy Method | AWX? |
+|-----------|-----------|------------|---------------|------|
+| control-plane-api | `control-plane-api-ci` | `control-plane-api` | `kubectl set image` | No |
+| control-plane-ui | `control-plane-ui-ci` | `control-plane-ui` | `kubectl apply` + `set image` | No |
+| portal | `stoa-portal-ci` | `stoa-portal` | `kubectl apply` + `set image` | No |
+| stoa-gateway | `stoa-gateway-ci` | `stoa-gateway` | `kubectl rollout restart` | No |
+| mcp-gateway | `mcp-gateway-ci` | `mcp-gateway` | `kubectl set image` | No |
+| keycloak | N/A | N/A | AWX job template | Yes |
+| apigateway (wM) | N/A | N/A | AWX job template | Yes |
+
+#### AWX verification (when applicable)
+```bash
+# Check AWX job status (keycloak, apigateway changes)
+kubectl exec -n stoa-system deploy/awx-web -- awx-manage list_instances
+# Or via AWX API:
+curl -s -u admin:$AWX_PASS https://awx.gostoa.dev/api/v2/jobs/?order_by=-finished&page_size=3
+```
+
+#### Known ArgoCD issues to watch for
+| Symptom | Cause | Quick fix |
+|---------|-------|-----------|
+| `OutOfSync` + `spec.selector: immutable` | Helm chart selector != live deployment | Delete deployment, let ArgoCD recreate |
+| `Degraded` + ingress conflict | Two apps claim same host | Disable ingress on the wrong app |
+| `OutOfSync` + Kyverno blocked | Missing `privileged: false` | Add to values.yaml securityContext |
+| `Unknown` + Healthy | App source unreachable or auto-sync off | Check repo access, manual sync |
+
 ## Python Thresholds
 
 | Component | Coverage | Line Length | Ruff Rules | Notes |

@@ -307,7 +307,9 @@ jobs:
             # Extract mode and LOC from council candidate JSON
             C_MODE=$(echo "$ticket" | jq -r '.ship_show_ask // empty' 2>/dev/null || echo "")
             C_LOC=$(echo "$ticket" | jq -r '.estimated_points // empty' 2>/dev/null || echo "")
-            notify_council "$TICKET_ID" "$TITLE" "$SCORE" "Go" "$ISSUE_URL" "$ISSUE_NUM" "$C_MODE" "$C_LOC" ""
+            # Use verdict from Council JSON (already filtered to Go/>=8.0 by the jq select above)
+            C_VERDICT=$(echo "$ticket" | jq -r '.verdict // "Go"' 2>/dev/null || echo "Go")
+            notify_council "$TICKET_ID" "$TITLE" "$SCORE" "$C_VERDICT" "$ISSUE_URL" "$ISSUE_NUM" "$C_MODE" "$C_LOC" ""
 
             CREATED=$((CREATED + 1))
           done < <(echo "$CANDIDATES" | jq -c '.[] | select(.verdict == "Go" and .score >= 8.0)')

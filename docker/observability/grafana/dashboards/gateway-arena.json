@@ -622,6 +622,50 @@
       ],
       "title": "Stddev Trend",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 52},
+      "id": 200,
+      "panels": [],
+      "title": "Enterprise AI Readiness (Layer 1)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Enterprise AI Readiness Index from Layer 1 benchmark. Click to view the full Enterprise dashboard.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 20},
+              {"color": "yellow", "value": 50},
+              {"color": "green", "value": 80}
+            ]
+          },
+          "links": [{"title": "View Enterprise AI Readiness Dashboard", "url": "/d/gateway-arena-enterprise/gateway-arena-enterprise-ai-readiness?${__url_time_range}&${__all_variables}"}],
+          "min": 0,
+          "max": 100,
+          "unit": "none",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 53},
+      "id": 201,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Enterprise Readiness Index — View Full Dashboard →",
+      "type": "stat"
     }
   ],
   "refresh": "5m",

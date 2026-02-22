@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 76 pts (committed) | **Done**: 31 pts
+**Scope**: 118 pts (committed) | **Done**: 31 pts
 **Theme**: Post-Demo + Product Roadmap + Community Content
 
 ### In Progress
@@ -126,6 +126,12 @@
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 - [ ] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts, P2)
+- [ ] CAB-285: Chat Agent UI Component (8 pts, P2)
+- [ ] CAB-286: Chat Agent Backend API (8 pts, P2)
+- [ ] CAB-287: Chat Agent Tool Injection (5 pts, P2)
+- [ ] CAB-288: Chat Agent Token Metering (5 pts, P2)
+- [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
+- [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
 
 ### Backlog — New MEGAs
 
@@ -162,8 +168,6 @@
 - CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts)
 
 **Other**:
-- CAB-1384: Landing i18n FR+EN (8 pts)
-- CAB-1383: Docs i18n FR+EN (8 pts)
 - CAB-1319: [MEGA] MCP Developer Self-Service (21 pts)
 - CAB-1320: [MEGA] Repo Consolidation (21 pts)
 - CAB-1312: [MEGA] GTM Docs + Community Channels (21 pts)

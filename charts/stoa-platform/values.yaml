@@ -348,6 +348,18 @@ prometheus:
         cpu: 100m
         memory: 64Mi
 
+# ==============================================================================
+# Control Plane API Monitoring (Gap #5 — 2026-02-22)
+# ==============================================================================
+# The control-plane-api exposes /metrics via prometheus_client (OpenMetrics).
+# This ServiceMonitor enables Prometheus autodiscovery (kube-prometheus-stack).
+# Deployed as a standalone k8s manifest — Service: stoa-control-plane-api
+controlPlaneApi:
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    scrapeTimeout: 10s
+
 alertmanager:
   enabled: false
   image:

@@ -163,7 +163,7 @@
 
 - CAB-1301: [MEGA] Gateway API + NetworkPolicy Foundation (21 pts, rescoped) — 3 phases
   - **Phase 1** (parallel) [owner: —]
-    - [~] CAB-1399 [infra] Gateway API CRDs + NGINX Gateway Fabric (8 pts)
+    - [x] CAB-1399 [infra] Gateway API CRDs + NGINX Gateway Fabric (8 pts) — PR #785
   - **Phase 2** (after Phase 1) [owner: —]
     - [ ] CAB-1400 [infra] Ingress → HTTPRoute Migration — 9 resources (8 pts)
   - **Phase 3** (after Phase 2) [owner: —]

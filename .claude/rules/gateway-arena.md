@@ -162,6 +162,10 @@ docker buildx build --platform linux/amd64 -t ghcr.io/stoa-platform/arena-bench:
 | Kong 502 on echo | Kong container can't reach host localhost | Connect echo to Kong Docker network: `docker network connect kong_default echo-local` |
 | Gravitee "no published plan" | Plan created in STAGING status | Explicitly publish: `POST /apis/{id}/plans/{planId}/_publish` |
 | Gravitee 404 | API not started or not deployed | Lifecycle: create → plan → publish plan → deploy → start |
+| Gravitee 4.8 CrashLoopBackOff | 4.8 loads MCP entrypoint plugin, needs more memory/startup time | Increase limits to 1Gi memory, 1 CPU; liveness initialDelay to 120s |
+| Gravitee 4.8 `/_node/health` 404 | Health endpoint changed in 4.8 | Use `tcpSocket` probes instead of `httpGet` on `/_node/health` |
+| Gravitee 4.8 init Job ID extraction empty | Mgmt API returns pretty-printed JSON (spaces around `:`) | Pipe through `tr -d ' \n'` before `sed` to compact JSON |
+| `curlimages/curl` CreateContainerConfigError | Image uses non-numeric user `curl_user`, K8s can't verify `runAsNonRoot` | Add `runAsUser: 100` to container securityContext |
 | Staging ServiceMonitor not discovered | Wrong Prometheus selector labels | Staging uses `release: prometheus` (not `kube-prometheus-stack`) |
 
 ## Layer 1: Enterprise AI Readiness
@@ -178,7 +182,7 @@ Layer 0 — Proxy Baseline (existing, unchanged)
   Schedule: every 30 min (CronJob: gateway-arena)
 
 Layer 1 — Enterprise AI Readiness (NEW)
-  Score: STOA ~95 | Kong ~5 | Gravitee ~5
+  Score: Gravitee ~91 | STOA ~78 | Kong ~10
   Measures: 8 enterprise dimensions
   Schedule: hourly (CronJob: gateway-arena-enterprise)
 ```

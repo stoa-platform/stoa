@@ -8,6 +8,8 @@
  *   TARGET_URL    — Gateway base URL (e.g., http://stoa-gateway.stoa-system.svc:8080)
  *   MCP_BASE      — MCP endpoint base (e.g., http://stoa-gateway.stoa-system.svc:8080/mcp)
  *                    If empty/null, MCP scenarios score 0 (gateway doesn't support MCP)
+ *   MCP_PROTOCOL  — "stoa" (REST: GET /capabilities, POST /tools/list) or
+ *                    "streamable-http" (JSON-RPC 2.0 on single POST endpoint). Default: "stoa"
  *   SCENARIO      — One of: ent_warmup, ent_mcp_discovery, ent_mcp_toolcall,
  *                   ent_auth_chain, ent_policy_eval, ent_guardrails,
  *                   ent_quota_burst, ent_resilience, ent_governance
@@ -22,6 +24,7 @@ import { check, group } from 'k6';
 
 const TARGET_URL = __ENV.TARGET_URL || 'http://localhost:8080';
 const MCP_BASE = __ENV.MCP_BASE || '';
+const MCP_PROTOCOL = __ENV.MCP_PROTOCOL || 'stoa'; // "stoa" (REST) or "streamable-http" (JSON-RPC 2.0)
 const SCENARIO = __ENV.SCENARIO || 'ent_mcp_discovery';
 const ARENA_JWT = __ENV.ARENA_JWT || '';
 const HEADERS = __ENV.HEADERS ? JSON.parse(__ENV.HEADERS) : {};
@@ -34,6 +37,50 @@ function authHeaders() {
     h['Authorization'] = `Bearer ${ARENA_JWT}`;
   }
   return h;
+}
+
+// Protocol-aware MCP request helper
+// STOA uses REST paths (/capabilities, /tools/list, /tools/call)
+// Streamable HTTP uses single endpoint with JSON-RPC 2.0 (POST /mcp)
+function mcpRequest(method, params, tags) {
+  if (!MCP_BASE) return null;
+  const hdrs = Object.assign({ 'Content-Type': 'application/json' }, authHeaders());
+
+  if (MCP_PROTOCOL === 'streamable-http') {
+    const body = { jsonrpc: '2.0', method: method, id: 1 };
+    if (params) body.params = params;
+    return http.post(MCP_BASE, JSON.stringify(body), {
+      headers: hdrs,
+      timeout: TIMEOUT,
+      tags: tags,
+    });
+  }
+
+  // STOA REST protocol — map JSON-RPC methods to REST paths
+  const pathMap = {
+    'initialize': '/capabilities',
+    'tools/list': '/tools/list',
+    'tools/call': '/tools/call',
+  };
+  const path = pathMap[method] || `/${method}`;
+  const url = `${MCP_BASE}${path}`;
+
+  if (method === 'initialize') {
+    // Discovery is a GET in STOA REST
+    return http.get(url, {
+      headers: HEADERS,
+      timeout: TIMEOUT,
+      tags: tags,
+    });
+  }
+
+  const body = { jsonrpc: '2.0', method: method, id: 1 };
+  if (params) body.params = params;
+  return http.post(url, JSON.stringify(body), {
+    headers: hdrs,
+    timeout: TIMEOUT,
+    tags: tags,
+  });
 }
 
 // Scenario definitions
@@ -116,12 +163,8 @@ export const options = {
 // --- Scenario Handlers ---
 
 function runMcpDiscovery() {
-  if (!MCP_BASE) return;
-  const res = http.get(`${MCP_BASE}/capabilities`, {
-    headers: HEADERS,
-    timeout: TIMEOUT,
-    tags: { scenario: 'ent_mcp_discovery' },
-  });
+  const res = mcpRequest('initialize', null, { scenario: 'ent_mcp_discovery' });
+  if (!res) return;
   check(res, {
     'mcp_discovery_status_2xx': (r) => r.status >= 200 && r.status < 300,
     'mcp_discovery_valid_json': (r) => {
@@ -130,24 +173,18 @@ function runMcpDiscovery() {
     'mcp_discovery_has_capabilities': (r) => {
       try {
         const body = JSON.parse(r.body);
-        return body.capabilities !== undefined || body.tools !== undefined;
+        // STOA REST: body.capabilities or body.tools
+        // Streamable HTTP: body.result.capabilities
+        return body.capabilities !== undefined || body.tools !== undefined ||
+          (body.result && body.result.capabilities !== undefined);
       } catch (_e) { return false; }
     },
   });
 }
 
 function runMcpToolcall() {
-  if (!MCP_BASE) return;
-  const payload = JSON.stringify({
-    jsonrpc: '2.0',
-    method: 'tools/list',
-    id: 1,
-  });
-  const res = http.post(`${MCP_BASE}/tools/list`, payload, {
-    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-    timeout: TIMEOUT,
-    tags: { scenario: 'ent_mcp_toolcall' },
-  });
+  const res = mcpRequest('tools/list', null, { scenario: 'ent_mcp_toolcall' });
+  if (!res) return;
   check(res, {
     'mcp_toolcall_status_2xx': (r) => r.status >= 200 && r.status < 300,
     'mcp_toolcall_valid_json': (r) => {
@@ -158,17 +195,8 @@ function runMcpToolcall() {
 }
 
 function runAuthChain() {
-  if (!MCP_BASE) return;
-  const payload = JSON.stringify({
-    jsonrpc: '2.0',
-    method: 'tools/list',
-    id: 1,
-  });
-  const res = http.post(`${MCP_BASE}/tools/list`, payload, {
-    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-    timeout: TIMEOUT,
-    tags: { scenario: 'ent_auth_chain' },
-  });
+  const res = mcpRequest('tools/list', null, { scenario: 'ent_auth_chain' });
+  if (!res) return;
   check(res, {
     'auth_chain_not_500': (r) => r.status < 500,
     'auth_chain_auth_processed': (r) => {
@@ -182,12 +210,8 @@ function runAuthChain() {
 
 function runPolicyEval() {
   // Test OPA policy evaluation overhead by hitting MCP endpoint
-  if (!MCP_BASE) return;
-  const res = http.get(`${MCP_BASE}/capabilities`, {
-    headers: authHeaders(),
-    timeout: TIMEOUT,
-    tags: { scenario: 'ent_policy_eval' },
-  });
+  const res = mcpRequest('initialize', null, { scenario: 'ent_policy_eval' });
+  if (!res) return;
   check(res, {
     'policy_eval_not_500': (r) => r.status < 500,
     'policy_eval_p95_under_200ms': (r) => r.timings.duration < 200,
@@ -195,24 +219,15 @@ function runPolicyEval() {
 }
 
 function runGuardrails() {
-  if (!MCP_BASE) return;
   // Send a tool call with PII in the payload — expect blocking or redaction
-  const payload = JSON.stringify({
-    jsonrpc: '2.0',
-    method: 'tools/call',
-    params: {
-      name: 'arena-test-tool',
-      arguments: {
-        query: 'My SSN is 123-45-6789 and my email is test@example.com',
-      },
+  const params = {
+    name: 'arena-test-tool',
+    arguments: {
+      query: 'My SSN is 123-45-6789 and my email is test@example.com',
     },
-    id: 1,
-  });
-  const res = http.post(`${MCP_BASE}/tools/call`, payload, {
-    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-    timeout: TIMEOUT,
-    tags: { scenario: 'ent_guardrails' },
-  });
+  };
+  const res = mcpRequest('tools/call', params, { scenario: 'ent_guardrails' });
+  if (!res) return;
   check(res, {
     'guardrails_not_500': (r) => r.status < 500,
     'guardrails_pii_handled': (r) => {
@@ -226,12 +241,15 @@ function runGuardrails() {
 
 function runQuotaBurst() {
   // Rapid-fire requests to trigger rate limiting (429)
-  const url = MCP_BASE ? `${MCP_BASE}/capabilities` : `${TARGET_URL}/health`;
-  const res = http.get(url, {
-    headers: authHeaders(),
-    timeout: TIMEOUT,
-    tags: { scenario: 'ent_quota_burst' },
-  });
+  // For gateways with MCP, hit the discovery endpoint; otherwise hit health
+  const res = MCP_BASE
+    ? mcpRequest('initialize', null, { scenario: 'ent_quota_burst' })
+    : http.get(`${TARGET_URL}/health`, {
+        headers: authHeaders(),
+        timeout: TIMEOUT,
+        tags: { scenario: 'ent_quota_burst' },
+      });
+  if (!res) return;
   check(res, {
     'quota_burst_not_500': (r) => r.status < 500,
     'quota_burst_valid_response': (r) => {
@@ -242,22 +260,13 @@ function runQuotaBurst() {
 }
 
 function runResilience() {
-  if (!MCP_BASE) return;
-  // Bad tool call — non-existent tool, malformed JSON-RPC
-  const payload = JSON.stringify({
-    jsonrpc: '2.0',
-    method: 'tools/call',
-    params: {
-      name: 'nonexistent-tool-arena-benchmark',
-      arguments: { invalid: true },
-    },
-    id: 999,
-  });
-  const res = http.post(`${MCP_BASE}/tools/call`, payload, {
-    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-    timeout: TIMEOUT,
-    tags: { scenario: 'ent_resilience' },
-  });
+  // Bad tool call — non-existent tool, malformed arguments
+  const params = {
+    name: 'nonexistent-tool-arena-benchmark',
+    arguments: { invalid: true },
+  };
+  const res = mcpRequest('tools/call', params, { scenario: 'ent_resilience' });
+  if (!res) return;
   check(res, {
     'resilience_not_500': (r) => r.status < 500,
     'resilience_graceful_error': (r) => {
@@ -293,7 +302,7 @@ export default function () {
   switch (SCENARIO) {
     case 'ent_warmup':
       if (MCP_BASE) {
-        http.get(`${MCP_BASE}/capabilities`, { headers: HEADERS, timeout: TIMEOUT });
+        mcpRequest('initialize', null, { scenario: 'ent_warmup' });
       } else {
         http.get(`${TARGET_URL}/health`, { headers: HEADERS, timeout: TIMEOUT });
       }

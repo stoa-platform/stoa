@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-22 (/sync-plan)
+> Last sync: 2026-02-22 (/sync-plan full)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 118 pts (committed) | **Done**: 31 pts
+**Scope**: ~202 pts (committed) | **Done**: 102 pts (50%) | **Velocity**: 6 issues closed
 **Theme**: Post-Demo + Product Roadmap + Community Content
 
 ### In Progress
@@ -110,7 +110,11 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (2)
+### Done (6)
+- [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
+- [x] CAB-1388: [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818
+- [x] CAB-1389: [MEGA] Cross-Component Quality Pass (13 pts) — PRs #810, #811, #820
+- [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
 - [x] CAB-86: TTL Extension — Self-Service (5 pts) — PR #780
 - [x] CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2) — PRs #768, #775, #781, #792, #795
   - [x] Phase 1: Dispatch Fixes — PR #768
@@ -132,18 +136,18 @@
 - [ ] CAB-288: Chat Agent Token Metering (5 pts, P2)
 - [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
 - [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
+- [ ] CAB-1414: [docs] SaaS Playbook Parts 1-2 + Buying Guide (5 pts, P3)
+- [ ] CAB-1415: [docs] SaaS Playbook Parts 3-5 (5 pts, P3)
+- [ ] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts, P3)
 
 ### Backlog — New MEGAs
 
-**Gateway** (110 pts):
-- CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets (34 pts)
+**Gateway** (76 pts):
 - CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts)
 - CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts)
 - CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts)
 
-**Platform** (178 pts):
-- CAB-1388: [MEGA] API Test Hardening Round 2 (21 pts)
-- CAB-1389: [MEGA] Cross-Component Quality Pass (13 pts)
+**Platform** (144 pts):
 - CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (34 pts)
 - CAB-1342: [MEGA] Helm Auto-Sync Secrets (21 pts)
 - CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (34 pts)

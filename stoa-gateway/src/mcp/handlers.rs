@@ -567,10 +567,7 @@ pub async fn mcp_tools_call(
             StatusCode::FORBIDDEN,
             Json(ToolsCallResponse {
                 content: vec![ToolContent::Text {
-                    text: format!(
-                        "Tool '{}' is not permitted for this tenant",
-                        request.name
-                    ),
+                    text: format!("Tool '{}' is not permitted for this tenant", request.name),
                 }],
                 is_error: Some(true),
             }),

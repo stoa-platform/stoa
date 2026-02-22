@@ -1,15 +1,12 @@
 """Tests for deployment log streaming (CAB-1420)."""
-import asyncio
+
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
-
-import pytest
 
 from src.events.event_bus import EventBus, Subscriber
 from src.models.deployment_log import DeploymentLog, LogLevel
 from src.repositories.deployment_log import DeploymentLogRepository
 from src.services.deployment_service import DeploymentService
-
 
 # --- Helpers ---
 
@@ -33,7 +30,7 @@ def _mock_log(**kwargs):
     log.level = kwargs.get("level", LogLevel.INFO.value)
     log.step = kwargs.get("step", "init")
     log.message = kwargs.get("message", "Deployment queued")
-    log.created_at = kwargs.get("created_at", None)
+    log.created_at = kwargs.get("created_at")
     return log
 
 
@@ -175,7 +172,7 @@ class TestEventBus:
         bus = EventBus()
         sub = bus.subscribe(tenant_id="acme")
         # Fill the queue
-        for i in range(256):
+        for _i in range(256):
             sub.queue.put_nowait({"event": "filler", "data": {}})
 
         count = await bus.publish("acme", "deploy-progress", {"msg": "overflow"})
@@ -235,8 +232,10 @@ class TestDeploymentServiceAddLog:
         logs = [_mock_log(seq=1), _mock_log(seq=2)]
 
         with patch.object(
-            DeploymentLogRepository, "list_by_deployment",
-            new_callable=AsyncMock, return_value=logs,
+            DeploymentLogRepository,
+            "list_by_deployment",
+            new_callable=AsyncMock,
+            return_value=logs,
         ):
             service = DeploymentService(db)
             result = await service.get_logs(deploy_id, "acme")
@@ -258,9 +257,7 @@ class TestDeploymentLogsRouter:
         log1.id = uuid4()
         log1.created_at = "2026-02-23T10:00:00"
 
-        with (
-            patch("src.routers.deployments.DeploymentService") as MockSvc,
-        ):
+        with (patch("src.routers.deployments.DeploymentService") as MockSvc,):
             instance = MockSvc.return_value
             instance.get_deployment = AsyncMock(return_value=mock_deployment)
             instance.get_logs = AsyncMock(return_value=[log1])
@@ -303,9 +300,7 @@ class TestDeploymentLogsRouter:
             from starlette.testclient import TestClient
 
             with TestClient(app_with_tenant_admin) as client:
-                response = client.get(
-                    f"/v1/tenants/acme/deployments/{deploy_id}/logs?after_seq=5&limit=10"
-                )
+                response = client.get(f"/v1/tenants/acme/deployments/{deploy_id}/logs?after_seq=5&limit=10")
 
         assert response.status_code == 200
         instance.get_logs.assert_awaited_once()

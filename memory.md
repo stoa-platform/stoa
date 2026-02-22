@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (CAB-1394 done — stoa-docs PR #77, stoa-web PR #12)
+> Derniere MAJ: 2026-02-22 (Model Policy: Opus default for local impl — PR #846)
 
 ## ✅ DONE
 
@@ -13,6 +13,13 @@
   - P2: Parts 3-5 (stoa-docs PR #76) — 3 articles, production checklist
   - P3: Build vs Buy + series polish (stoa-docs PR #77, stoa-web PR #12) — cross-links + llms.txt
   - 7 articles total, complete series nav in each, llms.txt updated
+- ✅ CAB-1352 [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already existed in stoa-docs
+- ✅ fix(docs): Vercel build fix — remove nested ajv overrides from stoa-docs (PR #78)
+- ✅ chore: Model Policy update — Opus default for local impl, Sonnet for CI/subagents (PR #846)
+  - Data-driven: 44% Sonnet sessions >1h (some 4.5h), same tasks <15min with Opus at lower total cost
+  - Local: Opus (impl) / Sonnet (subagents, mechanical) / Haiku (Explore, scan)
+  - CI: unchanged (Sonnet — lighter context, no looping)
+- ✅ chore: 7 Dependabot PRs merged (#624, #623, #613, #609, #607, #603, #602) + 17 stale PRs closed
 - ✅ fix(ci): Dependency Scan 3 failures → green — PR #843
   - CVE-2024-23342 (ecdsa Minerva): --ignore-vuln on pip-audit (cp-api + mcp-gateway)
   - mcp-gateway archived path fix (archive/mcp-gateway/ fallback)
@@ -89,7 +96,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - Demo MVP: mardi 17 mars 2026
 - docs.gostoa.dev = 40 articles (Layer7 + webMethods guides live, all 8 migration spokes published)
 - llms.txt + llms-full.txt: full migration guides + AI Factory sections live
-- ADR numbering: stoa-docs owns numbers (001-048). Next: **ADR-049**
+- ADR numbering: stoa-docs owns numbers (001-050). Next: **ADR-051**
 - Velocity C8: 905 pts / 88 issues / 129 pts/day (final)
 - Velocity C7: 505 pts / 44 issues / 72 pts/day
 - Rolling avg: 107.5 pts/day (C7+C8)

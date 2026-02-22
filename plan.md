@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-22 (/sync-plan full — C9 drift: +2 done, +2 todo, +3 backlog)
+> Last sync: 2026-02-23 (/sync-plan full — C9 drift: +2 new done, cleanup 4 canceled/dupes)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~202 pts (committed) | **Done**: 157 pts (78%) | **Velocity**: 8 issues closed
+**Scope**: ~283 pts (committed) | **Done**: 191 pts (68%) | **Velocity**: 14 issues closed
 **Theme**: Post-Demo + Product Roadmap + Community Content
 
 ### In Progress
@@ -110,7 +110,7 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (8)
+### Done (14)
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1388: [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818
 - [x] CAB-1389: [MEGA] Cross-Component Quality Pass (13 pts) — PRs #810, #811, #820
@@ -129,10 +129,15 @@
   - P1: Critical components — Onboarding, Contracts, Apps test files (PR #833)
   - P2: Dashboard + Usage + Layout — 15 test files, 1094 LOC (PR #836)
   - P3: APICard + bugfixes + certificateValidator fix (PR #838)
+- [x] CAB-1352: [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already in stoa-docs
+- [x] CAB-1414: [docs] SaaS Playbook Parts 1-2 + Buying Guide (5 pts) — stoa-docs PR #75
+- [x] CAB-1415: [docs] SaaS Playbook Parts 3-5 (5 pts) — stoa-docs PR #76
+- [x] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts) — stoa-docs PR #77
+- [x] CAB-1411: [docs] stoa.yaml spec v1.0 reference + stoactl CLI guide (5 pts) — sub of CAB-374
+- [x] CAB-1412: [stoactl] Audit + complete CLI commands: deploy/rollback/logs/list (13 pts) — sub of CAB-374
 
 ### Todo
 - [ ] CAB-1356: [cli] stoactl Deploy Commands — deploy, rollback, logs (5 pts, P1)
-- [ ] CAB-1352: [docs] ADR-044: stoa.yaml Declarative API Spec (3 pts, P1)
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
@@ -146,9 +151,6 @@
 - [ ] CAB-288: Chat Agent Token Metering (5 pts, P2)
 - [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
 - [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
-- [ ] CAB-1414: [docs] SaaS Playbook Parts 1-2 + Buying Guide (5 pts, P3)
-- [ ] CAB-1415: [docs] SaaS Playbook Parts 3-5 (5 pts, P3)
-- [ ] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts, P3)
 
 ### Backlog — New MEGAs
 
@@ -169,13 +171,12 @@
 - CAB-1338: [MEGA] Portal i18n (21 pts)
 - CAB-1322: [MEGA] Full UX Audit — Apple-Style (34 pts)
 
-**Observability** (55 pts):
+**Observability** (42 pts):
 - CAB-1331: [MEGA] UAC-Driven Observability (21 pts)
-- CAB-892: [Feature] UAC-Driven Observability Debug (13 pts, P2)
 - CAB-1316: [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts)
 
 **Community** (124 pts):
-- CAB-1394: [MEGA] SaaS Playbook Series (13 pts)
+- [x] CAB-1394: [MEGA] SaaS Playbook Series (13 pts) — stoa-docs PRs #75, #76, #77
 - CAB-1393: [MEGA] Developer Onboarding Content (21 pts)
 - CAB-1392: [MEGA] Security & MCP Deep-Dive Content (21 pts)
 - [x] CAB-1391: [MEGA] Migration Guide Expansion — Axway, WSO2, Layer7 (13 pts) — stoa-docs PR #68 + stoa-web PR #10
@@ -183,11 +184,8 @@
 - CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts)
 
 **Other**:
-- CAB-889: [Strategy] MCP Server as a Service — Enterprise Non-Tech Segment (13 pts, P2)
-- CAB-890: [Feature] Shadow Learning Mode — Auto-Generate API Contracts (13 pts, P2)
 - CAB-1319: [MEGA] MCP Developer Self-Service (21 pts)
 - CAB-1320: [MEGA] Repo Consolidation (21 pts)
-- CAB-1312: [MEGA] GTM Docs + Community Channels (21 pts)
 - CAB-1123: Prompt Cache for HEGEMON (21 pts)
 - CAB-374: [MEGA] Vercel-Style DX (34 pts)
 

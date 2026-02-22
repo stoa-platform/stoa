@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (AI Factory Slack Bot threading — PR #775 merged)
+> Derniere MAJ: 2026-02-22 (CAB-86 TTL Extension — PR #780 merged)
 
 ## ✅ DONE
 
@@ -8,6 +8,7 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-86 TTL Extension — PR #780 (PATCH /v1/subscriptions/{id}/ttl, migration 035, 11 tests, +616 LOC)
 - ✅ AI Factory Slack Bot threading — PR #775 (Bot API dual-path, n8n sequential pipeline, thread_ts propagation)
 - ✅ Promote-to-prod workflow — PR #771 (reusable-promote.yml + promote-to-prod.yml + runbook)
 - ✅ Portal mock data fix — PR #771 (removed MOCK_SERVERS fallback from MCP pages, -189 LOC)
@@ -26,8 +27,6 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
 - ✅ Production validated: 23/23 PASS, GO in 5s
 - [ ] Repetitions + video backup (human-only)
-
-CAB-86: TTL Extension — Self-Service (5 pts)
 
 ## 📋 NEXT
 

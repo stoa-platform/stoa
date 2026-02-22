@@ -36,6 +36,7 @@ jobs:
       fast_path: ${{ steps.check-fast.outputs.fast_path }}
       issue_num: ${{ steps.create-issue.outputs.issue_num || steps.dedup.outputs.issue_num }}
       issue_url: ${{ steps.create-issue.outputs.issue_url || steps.dedup.outputs.issue_url }}
+      slack_thread_ts: ${{ steps.slack-council.outputs.thread_ts }}
     steps:
       - uses: actions/checkout@v4
 
@@ -307,9 +308,13 @@ jobs:
 
       # Notify Slack + Metrics — Council report with approve button
       - name: Slack Council Report
+        id: slack-council
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_THREAD_TS: ${{ github.event.client_payload.slack_thread_ts }}
           N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
@@ -337,7 +342,10 @@ jobs:
             elif echo "$SCORE < 8.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Fix"; fi
           fi
 
-          notify_council "$TICKET" "$TITLE" "${SCORE:-?}" "$VERDICT" "$ISSUE" "$ISSUE_NUM" "$MODE" "$LOC" "$FILES"
+          # Capture ts for threading downstream jobs
+          COUNCIL_TS=$(notify_council "$TICKET" "$TITLE" "${SCORE:-?}" "$VERDICT" "$ISSUE" "$ISSUE_NUM" "$MODE" "$LOC" "$FILES")
+          _react_slack "mag" "$COUNCIL_TS"
+          echo "thread_ts=${COUNCIL_TS}" >> "$GITHUB_OUTPUT"
 
           # Push council metrics
           VERDICT="go"
@@ -538,6 +546,9 @@ jobs:
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_THREAD_TS: ${{ needs.council.outputs.slack_thread_ts }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
@@ -550,6 +561,8 @@ jobs:
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
           MODEL="${{ steps.route.outputs.model }}"
           MAX_TURNS="${{ steps.route.outputs.turns }}"
+          # React: implementation started
+          _react_slack "hammer_and_wrench" "$SLACK_THREAD_TS"
           # Extract PR stats
           PR_FILES="" PR_LOC=""
           if [ -n "${PR_NUM}" ]; then
@@ -562,15 +575,19 @@ jobs:
             notify_implement "$TICKET" "success" "$PR_NUM" "$PR_URL" "" "L3 Ship Fast Path" "$DURATION" "$PR_FILES" "$PR_LOC"
             linear_comment "$TICKET" "success" "$PR_NUM" "$PR_URL" "L3 Ship Fast Path" "$DURATION" "$PR_FILES" "$PR_LOC" "Ship"
             push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
+            _react_slack "tada" "$SLACK_THREAD_TS"
           elif [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "" "L3 Ship Fast Path" "$DURATION"
             push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
+            _react_slack "rocket" "$SLACK_THREAD_TS"
           elif [ "$STATUS" = "failure" ] && [ "${PR_FOUND}" = "true" ]; then
             notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "" "L3 Ship Fast Path (max_turns)" "$DURATION" "$PR_FILES" "$PR_LOC"
             push_metrics_implement "linear-dispatch" "$TICKET" "max_turns" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
+            _react_slack "rocket" "$SLACK_THREAD_TS"
           else
             notify_error "claude-linear-dispatch" "implement-fast" "$TICKET" "" "$DURATION"
             push_metrics_error "linear-dispatch" "implement-fast" "$TICKET"
+            _react_slack "x" "$SLACK_THREAD_TS"
           fi
 
       - name: Write Job Summary — Ship Fast Path
@@ -790,12 +807,15 @@ jobs:
         if: always() && steps.verify.outputs.valid == 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          notify_plan "${{ github.event.issue.number }}" \
+          PLAN_TS=$(notify_plan "${{ github.event.issue.number }}" \
             "${{ github.event.issue.title }}" \
             "${{ github.event.issue.html_url }}" \
-            "${{ steps.plan-council.outcome }}"
+            "${{ steps.plan-council.outcome }}")
+          _react_slack "white_check_mark" "$PLAN_TS"
 
   # ----- Stage 3: Implementation (triggered by /go-plan on council-review issues) -----
   implement:
@@ -1109,6 +1129,8 @@ jobs:
         if: always() && steps.verify.outputs.valid == 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
@@ -1130,25 +1152,32 @@ jobs:
             PR_LOC=$(echo "$STAT_LINE" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "")
           fi
 
+          _react_slack "hammer_and_wrench" "$SLACK_THREAD_TS"
+
           PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
           if [ "$STATUS" = "success" ] && [ -n "${PR_NUM}" ]; then
             notify_implement "$TICKET" "success" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION" "$PR_FILES" "$PR_LOC"
             linear_comment "$TICKET" "success" "$PR_NUM" "$PR_URL" "L3 Pipeline" "$DURATION" "$PR_FILES" "$PR_LOC"
             push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
+            _react_slack "tada" "$SLACK_THREAD_TS"
           elif [ "$STATUS" = "success" ] && [ "${SKIP_CLOSE}" = "true" ]; then
             notify_implement "$TICKET" "ask" "${PR_NUM:-}" "${PR_URL:-}" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION"
             push_metrics_implement "linear-dispatch" "$TICKET" "ask" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
+            _react_slack "rocket" "$SLACK_THREAD_TS"
           elif [ "$STATUS" = "success" ]; then
             notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L3 Pipeline" "$DURATION"
             push_metrics_implement "linear-dispatch" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
+            _react_slack "rocket" "$SLACK_THREAD_TS"
           elif [ "$STATUS" != "success" ] && [ "${PR_FOUND}" = "true" ]; then
             notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L3 Pipeline (max_turns)" "$DURATION" "$PR_FILES" "$PR_LOC"
             push_metrics_implement "linear-dispatch" "$TICKET" "max_turns" "$DURATION" "$PR_FILES" "$PR_LOC" "$MODEL" "$MAX_TURNS"
+            _react_slack "rocket" "$SLACK_THREAD_TS"
           elif [ "$STATUS" = "skipped" ]; then
             notify_implement "$TICKET" "skipped" "" "" "${{ github.event.issue.number }}" "L3 Pipeline"
           else
             notify_error "claude-linear-dispatch" "implement" "$TICKET" "" "$DURATION"
             push_metrics_error "linear-dispatch" "implement" "$TICKET"
+            _react_slack "x" "$SLACK_THREAD_TS"
           fi
 
           write_job_summary "$TICKET" "$STATUS" "${PR_NUM:-}" \

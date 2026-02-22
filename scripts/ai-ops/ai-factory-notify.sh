@@ -124,7 +124,7 @@ _send_slack() {
   # $2 = optional thread_ts (only effective with Bot API path)
   # stdout: message timestamp (ts) when Bot API is used (empty for webhook)
   local PAYLOAD="$1"
-  local THREAD_TS="${2:-}"
+  local THREAD_TS="${2:-${SLACK_THREAD_TS:-}}"
 
   # Bot API path — chat.postMessage with threading support
   if [ -n "${SLACK_BOT_TOKEN:-}" ] && [ -n "${SLACK_CHANNEL_ID:-}" ]; then
@@ -245,6 +245,32 @@ _reply_slack() {
   fi
 
   _send_slack_bot "$PAYLOAD" "$PARENT_TS"
+}
+
+_react_slack() {
+  # Internal: add an emoji reaction to a Slack message via reactions.add.
+  # No-op if Bot API not configured or ts is empty (graceful degradation).
+  # $1 = emoji name (without colons, e.g., "rocket")
+  # $2 = message timestamp (ts) to react to
+  local EMOJI="${1:-}"
+  local MESSAGE_TS="${2:-}"
+
+  # No-op guards
+  if [ -z "$EMOJI" ] || [ -z "$MESSAGE_TS" ]; then
+    return 0
+  fi
+  if [ -z "${SLACK_BOT_TOKEN:-}" ] || [ -z "${SLACK_CHANNEL_ID:-}" ]; then
+    return 0
+  fi
+
+  curl -sf -X POST "https://slack.com/api/reactions.add" \
+    -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d "{\"channel\":\"$SLACK_CHANNEL_ID\",\"name\":\"$EMOJI\",\"timestamp\":\"$MESSAGE_TS\"}" \
+    > /dev/null 2>&1 || {
+    echo "::warning::Slack reaction failed (non-blocking)" >&2
+  }
+  return 0
 }
 
 _push_metrics() {

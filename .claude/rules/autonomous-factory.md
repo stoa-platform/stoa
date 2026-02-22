@@ -214,6 +214,7 @@ All AI Factory notifications use `scripts/ai-ops/ai-factory-notify.sh` — a cen
 | `notify_plan` | `TICKET TITLE SCORE VERDICT ISSUE_URL [ISSUE_NUM]` | Plan validation (Stage 2) |
 | `linear_comment` | `TICKET STATUS [PR_NUM] [PR_URL] [PIPELINE] [DURATION_SECS] [FILES] [LOC] [MODE]` | Rich markdown report on Linear |
 | `write_job_summary` | `TICKET STATUS [PR_NUM] [MODEL] [PIPELINE] [DURATION_SECS] [ERROR_EXCERPT]` | GHA audit trail |
+| `_react_slack` | `EMOJI MESSAGE_TS` | Add emoji reaction to a Slack message (internal, no-op if Bot API unconfigured) |
 
 All optional `[params]` degrade gracefully — omit or pass empty string. Duration in seconds (formatted by `_format_duration`). Linear links are deterministic URLs (no API call).
 
@@ -222,6 +223,9 @@ All optional `[params]` degrade gracefully — omit or pass empty string. Durati
 | Variable | Source | Used By |
 |----------|--------|---------|
 | `SLACK_WEBHOOK` | `secrets.SLACK_WEBHOOK_URL` | All `notify_*` functions |
+| `SLACK_BOT_TOKEN` | `secrets.SLACK_BOT_TOKEN` | `_send_slack_bot()`, `_react_slack()` |
+| `SLACK_CHANNEL_ID` | `secrets.SLACK_CHANNEL_ID` | `_send_slack_bot()`, `_react_slack()` |
+| `SLACK_THREAD_TS` | Env var (captured or from n8n payload) | `_send_slack()` — threads all notifications under this ts |
 | `LINEAR_API_KEY` | `secrets.LINEAR_API_KEY` | `linear_comment()` only |
 | `N8N_WEBHOOK` | `vars.N8N_APPROVE_WEBHOOK_URL` | `notify_council` approve button |
 | `HMAC_SECRET` | `secrets.APPROVE_HMAC_SECRET` | `notify_council` approve button |
@@ -246,6 +250,21 @@ Then computes duration in the notification step: `DURATION=$(( $(date +%s) - ${I
 - Implementation failures use `notify_error` (Vercel-style) instead of `notify_implement` for richer diagnostics
 - PR stats (`FILES`, `LOC`) extracted via `gh pr diff "$PR_NUM" --stat | tail -1`
 - Deprecated scripts: `slack-notify.sh`, `council-slack-report.sh`, `daily-digest.sh` (use library instead)
+
+### Threading & Reactions (Phase 3)
+
+All notifications from a pipeline run are threaded under the initial message using `SLACK_THREAD_TS`:
+
+| Pipeline | Threading Source | Reaction Sequence |
+|----------|-----------------|-------------------|
+| L3 (council → implement-fast) | n8n `slack_thread_ts` or captured from Council ts | :mag: → :hammer_and_wrench: → :tada: / :x: |
+| L3 (plan-validate, implement) | Each captures its own ts (separate workflow runs) | :white_check_mark: (plan), :hammer_and_wrench: → :tada: / :x: (impl) |
+| L1 (council, plan, implement) | Each captures its own ts (separate workflow runs) | :mag: (council), :white_check_mark: (plan), :tada: / :x: (impl) |
+| L3.5 (scan) | Each council + scan summary captures own ts | :mag: (per candidate), :satellite_antenna: (summary) |
+
+**Env var fallback**: `_send_slack()` resolves thread_ts as `$2` (explicit) > `$SLACK_THREAD_TS` (env) > empty (no threading). Setting `SLACK_THREAD_TS` in the env automatically threads all `notify_*` calls without changing their signatures.
+
+**Reactions**: `_react_slack EMOJI TS` adds an emoji reaction via `reactions.add` API. No-op if `SLACK_BOT_TOKEN` or `SLACK_CHANNEL_ID` is unset. Non-blocking — failures are logged as warnings.
 
 ## GitHub Labels for Automation
 

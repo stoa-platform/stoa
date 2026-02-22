@@ -27,40 +27,6 @@ vi.mock('../../services/mcpServers', async () => {
       getMyServerSubscriptions: vi.fn(),
       canUserSeeServer: (actual as Record<string, unknown>).canUserSeeServer,
     },
-    MOCK_SERVERS: [
-      {
-        id: 'server-platform',
-        name: 'stoa-platform',
-        displayName: 'STOA Platform Tools',
-        description: 'Core STOA administration tools',
-        icon: 'settings',
-        category: 'platform',
-        visibility: { roles: ['cpi-admin', 'tenant-admin', 'devops'], public: false },
-        tools: [
-          {
-            id: 'tool-1',
-            name: 'list-apis',
-            displayName: 'List APIs',
-            description: 'List all APIs',
-            enabled: true,
-            requires_approval: false,
-          },
-          {
-            id: 'tool-2',
-            name: 'create-api',
-            displayName: 'Create API',
-            description: 'Register API',
-            enabled: true,
-            requires_approval: true,
-          },
-        ],
-        status: 'active',
-        version: '1.0.0',
-        documentation_url: 'https://docs.gostoa.dev/tools',
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-02-01T00:00:00Z',
-      },
-    ],
   };
 });
 
@@ -183,10 +149,6 @@ describe('MCPServersPage', () => {
   it('shows error state with "Try Again" button', async () => {
     mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
     mockGetVisibleServers.mockRejectedValue(new Error('Network error'));
-    // Make the fallback also throw to trigger error state
-    mockFilterServersByRole.mockImplementation(() => {
-      throw new Error('Network error');
-    });
 
     renderWithProviders(<MCPServersPage />);
 
@@ -338,8 +300,10 @@ describe('MCPServersPage', () => {
     const user = userEvent.setup();
     mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
     const servers = createMockServers();
-    mockGetVisibleServers.mockResolvedValue(servers);
-    mockFilterServersByRole.mockReturnValue(servers);
+    // First call resolves (initial load), second call never resolves (refresh stays loading)
+    mockGetVisibleServers
+      .mockResolvedValueOnce(servers)
+      .mockImplementation(() => new Promise(() => {}));
 
     renderWithProviders(<MCPServersPage />);
 
@@ -351,7 +315,9 @@ describe('MCPServersPage', () => {
     await user.click(refreshButton);
 
     // Should trigger loading state
-    expect(screen.getByTestId('server-skeleton-grid')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('server-skeleton-grid')).toBeInTheDocument();
+    });
   });
 
   it('filters servers by search query', async () => {

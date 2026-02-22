@@ -24,7 +24,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { mcpServersService, MOCK_SERVERS } from '../../services/mcpServers';
+import { mcpServersService } from '../../services/mcpServers';
 import { ServerCardSkeletonGrid } from '../../components/skeletons';
 import type { MCPServer, MCPServerSubscription } from '../../types';
 
@@ -61,6 +61,7 @@ export function MCPServersPage() {
   const [subscriptions, setSubscriptions] = useState<MCPServerSubscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Check if user has admin/devops role
   const isAdminUser = useMemo(() => {
@@ -79,18 +80,10 @@ export function MCPServersPage() {
       setError(null);
 
       try {
-        // Try to fetch from API, fallback to mock data
-        let fetchedServers: MCPServer[];
-        try {
-          fetchedServers = await mcpServersService.getVisibleServers(user);
-        } catch {
-          // Use mock data filtered by user roles
-          fetchedServers = mcpServersService.filterServersByRole(MOCK_SERVERS, user);
-        }
-
+        const fetchedServers = await mcpServersService.getVisibleServers(user);
         setServers(fetchedServers);
 
-        // Try to fetch subscriptions
+        // Try to fetch subscriptions (non-blocking)
         try {
           const subs = await mcpServersService.getMyServerSubscriptions();
           setSubscriptions(subs);
@@ -105,7 +98,7 @@ export function MCPServersPage() {
     }
 
     loadServers();
-  }, [isAuthenticated, accessToken, user]);
+  }, [isAuthenticated, accessToken, user, refreshKey]);
 
   // Filter servers by category and search
   const filteredServers = useMemo(() => {
@@ -158,14 +151,7 @@ export function MCPServersPage() {
   };
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    // Re-trigger the effect
-    setServers([]);
-    setTimeout(() => {
-      const filtered = mcpServersService.filterServersByRole(MOCK_SERVERS, user);
-      setServers(filtered);
-      setIsLoading(false);
-    }, 500);
+    setRefreshKey((k) => k + 1);
   };
 
   return (

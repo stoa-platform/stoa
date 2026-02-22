@@ -1,0 +1,130 @@
+# =============================================================================
+# Promote to Prod — Centralized promotion workflow
+# =============================================================================
+# Validates staging health, gates on GitHub Environment approval (single gate),
+# then deploys to prod using the same dev-tagged image.
+#
+# Usage:
+#   gh workflow run promote-to-prod.yml \
+#     --field component=all \
+#     --field sha=$(git rev-parse HEAD) \
+#     --field confirm=yes
+#
+# Prerequisites:
+#   - GitHub Environment "prod" with required reviewers
+#   - KUBECONFIG_B64 secret scoped to prod environment (OVH kubeconfig)
+# =============================================================================
+
+name: Promote to Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: 'Component to promote'
+        required: true
+        type: choice
+        options:
+          - all
+          - control-plane-api
+          - control-plane-ui
+          - portal
+          - stoa-gateway
+      sha:
+        description: 'Git SHA to promote (image must exist as dev-<sha>)'
+        required: true
+        type: string
+      confirm:
+        description: 'Type "yes" to confirm promotion'
+        required: true
+        type: string
+
+concurrency:
+  group: promote-to-prod
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Safety checks
+        run: |
+          if [ "${{ inputs.confirm }}" != "yes" ]; then
+            echo "::error::Confirmation required — set confirm to 'yes'"
+            exit 1
+          fi
+          if [ -z "${{ inputs.sha }}" ]; then
+            echo "::error::SHA is required"
+            exit 1
+          fi
+          echo "Promoting component=${{ inputs.component }} sha=${{ inputs.sha }}"
+
+  gate:
+    name: Production approval gate
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: prod
+      url: https://console.gostoa.dev
+    steps:
+      - name: Approved
+        run: echo "Production deployment approved"
+
+  promote-api:
+    name: Promote API
+    needs: gate
+    if: inputs.component == 'all' || inputs.component == 'control-plane-api'
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      component: control-plane-api
+      image-name: control-plane-api
+      sha: ${{ inputs.sha }}
+    secrets: inherit
+
+  promote-ui:
+    name: Promote Console
+    needs: gate
+    if: inputs.component == 'all' || inputs.component == 'control-plane-ui'
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      component: control-plane-ui
+      image-name: control-plane-ui
+      sha: ${{ inputs.sha }}
+    secrets: inherit
+
+  promote-portal:
+    name: Promote Portal
+    needs: gate
+    if: inputs.component == 'all' || inputs.component == 'portal'
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      component: stoa-portal
+      image-name: portal
+      sha: ${{ inputs.sha }}
+    secrets: inherit
+
+  promote-gw:
+    name: Promote Gateway
+    needs: gate
+    if: inputs.component == 'all' || inputs.component == 'stoa-gateway'
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      component: stoa-gateway
+      image-name: stoa-gateway
+      sha: ${{ inputs.sha }}
+    secrets: inherit
+
+  notify:
+    name: Notify
+    needs: [promote-api, promote-ui, promote-portal, promote-gw]
+    if: always()
+    uses: ./.github/workflows/reusable-notify.yml
+    with:
+      component: ${{ inputs.component }}
+      environment: prod
+      ci-result: 'success'
+      deploy-result: ${{ contains(needs.*.result, 'failure') && 'failure' || 'success' }}
+    secrets: inherit

@@ -18,7 +18,7 @@ structlog==24.1.0
 # Database
 sqlalchemy[asyncio]==2.0.46
 asyncpg==0.31.0
-alembic==1.13.1
+alembic==1.18.4
 psycopg2-binary==2.9.11
 # Certificate validation (CAB-313)
 cryptography>=42.0.0

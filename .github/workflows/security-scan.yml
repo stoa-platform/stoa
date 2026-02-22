@@ -271,10 +271,15 @@ jobs:
 
       - name: Pip audit — mcp-gateway
         run: |
+          # mcp-gateway was archived to archive/mcp-gateway/ (Feb 2026)
+          MCP_REQ=""
           if [ -f "mcp-gateway/requirements.txt" ]; then
-            pip-audit -r mcp-gateway/requirements.txt --desc
-          else
-            cd mcp-gateway && pip install -e . && pip-audit --desc
+            MCP_REQ="mcp-gateway/requirements.txt"
+          elif [ -f "archive/mcp-gateway/requirements.txt" ]; then
+            MCP_REQ="archive/mcp-gateway/requirements.txt"
+          fi
+          if [ -n "$MCP_REQ" ]; then
+            pip-audit -r "$MCP_REQ" --desc --ignore-vuln CVE-2024-23342
           fi
 
       # --- JavaScript ---

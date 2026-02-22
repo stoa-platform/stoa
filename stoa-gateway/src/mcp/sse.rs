@@ -914,7 +914,14 @@ async fn handle_logging_set_level(
     };
 
     const VALID_LEVELS: &[&str] = &[
-        "debug", "info", "notice", "warning", "error", "critical", "alert", "emergency",
+        "debug",
+        "info",
+        "notice",
+        "warning",
+        "error",
+        "critical",
+        "alert",
+        "emergency",
     ];
 
     if !VALID_LEVELS.contains(&level) {

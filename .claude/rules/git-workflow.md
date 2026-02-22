@@ -29,15 +29,7 @@ When the user validates a plan ("Go") or asks to implement a feature/fix, Claude
 
 ## Ship / Show / Ask
 
-Decide the PR mode **before starting work**:
-
-| Mode | When | Review | Examples |
-|------|------|--------|----------|
-| **Ship** | Zero-risk, reversible | None — merge immediately | Typo fix, docs update, dependency bump, `.claude/` config |
-| **Show** | Low-risk, good for team awareness | Async — merge then review | Refactor, test addition, style fix, non-breaking enhancement |
-| **Ask** | Needs review before merge | Blocking — wait for human | New feature, security change, breaking API, infra/k8s, DB migration |
-
-Claude defaults to **Ship** unless the change matches **Ask** criteria. User can override: "make this an Ask PR" or "just ship it".
+See `workflow-essentials.md` for the full 12-type decision matrix. Claude defaults to **Ship** unless the change matches **Ask** criteria. User can override: "make this an Ask PR" or "just ship it".
 
 ### Ship mode (autonomous)
 ```

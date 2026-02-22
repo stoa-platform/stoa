@@ -94,17 +94,7 @@ git commit -m "test(api): add consumer unit tests (CAB-XXXX)"
 - All commits squashed on merge — commit often, don't overthink messages
 
 ### 3. Local Quality Gate
-Run checks BEFORE pushing (see `ci-quality-gates.md` for exact commands):
-```bash
-# Python
-ruff check . && black --check . && pytest tests/ --cov=src --cov-fail-under=<threshold> -q
-
-# TypeScript
-npm run lint && npm run format:check && npx tsc -p tsconfig.app.json --noEmit
-
-# Rust
-cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test --all-features
-```
+Run checks BEFORE pushing (see `ci-quality-gates.md` for exact commands).
 
 ### 4. Push + PR
 ```bash
@@ -138,21 +128,7 @@ If CI fails: fix → commit → push. Same branch, same PR. Never create a new P
 
 ### 6. Merge
 
-**Pre-merge checkpoint** (Level 3 traceability):
-Write checkpoint file to `~/.claude/projects/.../memory/checkpoints/<timestamp>-<task>.json`:
-```json
-{
-  "task": "<TASK>",
-  "timestamp": "<ISO-8601>",
-  "branch": "<BRANCH>",
-  "git_sha": "<HEAD_SHA>",
-  "pr_number": "<NUMBER>",
-  "steps_completed": ["branch", "code", "quality-gate", "pr", "ci"],
-  "steps_remaining": ["merge", "verify-cd", "cleanup"],
-  "context": {"component": "<NAME>", "files_modified": ["..."]}
-}
-```
-Log: `CHECKPOINT | task=<TASK> file=<CHECKPOINT_FILE>`
+Create checkpoint per `crash-recovery.md` schema, then log: `CHECKPOINT | task=<TASK> file=<CHECKPOINT_FILE>`
 
 ```bash
 gh pr merge <number> --squash --delete-branch
@@ -207,33 +183,7 @@ If any step fails, report the error and propose a fix.
 
 After CD verified, log: `STEP-DONE | step=cd-verified task=<TASK> component=<NAME>`
 
-#### Component → CD verification map
-
-| Component | CI Workflow | ArgoCD App | Deploy Method | AWX? |
-|-----------|-----------|------------|---------------|------|
-| control-plane-api | `control-plane-api-ci` | `control-plane-api` | `kubectl set image` | No |
-| control-plane-ui | `control-plane-ui-ci` | `control-plane-ui` | `kubectl apply` + `set image` | No |
-| portal | `stoa-portal-ci` | `stoa-portal` | `kubectl apply` + `set image` | No |
-| stoa-gateway | `stoa-gateway-ci` | `stoa-gateway` | `kubectl rollout restart` | No |
-| mcp-gateway | `mcp-gateway-ci` | `mcp-gateway` | `kubectl set image` | No |
-| keycloak | N/A | N/A | AWX job template | Yes |
-| apigateway (wM) | N/A | N/A | AWX job template | Yes |
-
-#### AWX verification (when applicable)
-```bash
-# Check AWX job status (keycloak, apigateway changes)
-kubectl exec -n stoa-system deploy/awx-web -- awx-manage list_instances
-# Or via AWX API:
-curl -s -u admin:$AWX_PASS https://awx.gostoa.dev/api/v2/jobs/?order_by=-finished&page_size=3
-```
-
-#### Known ArgoCD issues to watch for
-| Symptom | Cause | Quick fix |
-|---------|-------|-----------|
-| `OutOfSync` + `spec.selector: immutable` | Helm chart selector != live deployment | Delete deployment, let ArgoCD recreate |
-| `Degraded` + ingress conflict | Two apps claim same host | Disable ingress on the wrong app |
-| `OutOfSync` + Kyverno blocked | Missing `privileged: false` | Add to values.yaml securityContext |
-| `Unknown` + Healthy | App source unreachable or auto-sync off | Check repo access, manual sync |
+See `ci-quality-gates.md` — "Component → CD verification map" for the full table (CI workflows, ArgoCD apps, deploy methods, AWX, known ArgoCD issues).
 
 ### 8. Cleanup
 ```bash
@@ -267,12 +217,7 @@ This prevents "monster PRs" that are impossible to review and frequently conflic
 
 ## Branch Naming
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| Feature | `feat/CAB-XXXX-description` | `feat/CAB-1121-consumer-model` |
-| Bug fix | `fix/CAB-XXXX-description` | `fix/CAB-1044-search-escape` |
-| Chore | `chore/CAB-XXXX-description` | `chore/CAB-1112-kyverno-enforce` |
-| Hotfix | `hotfix/description` | `hotfix/cors-production` |
+See `git-conventions.md` — Branch Naming section.
 
 ## What Claude NEVER Does
 

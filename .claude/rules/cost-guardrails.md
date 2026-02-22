@@ -1,5 +1,6 @@
 ---
 description: AI Factory token budget and cost controls
+globs: ".claude/**"
 ---
 
 # Cost Guardrails

@@ -14,21 +14,23 @@ use kube::{
 };
 use tracing::{debug, error, info, warn};
 
-use super::crds::{Skill, Tool, ToolAnnotationsCrd, ToolSet};
+use super::crds::{GuardrailPolicy, Skill, Tool, ToolAnnotationsCrd, ToolSet};
 use crate::events::notifications::format_tools_list_changed;
 use crate::federation::upstream::{TransportType, UpstreamMcpClient, UpstreamMcpConfig};
 use crate::federation::FederatedTool;
+use crate::guardrails::policy::{GuardrailPolicyStore, TenantGuardrailPolicy};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::dynamic_tool::{schema_from_value, DynamicTool};
 use crate::mcp::tools::{ToolAnnotations, ToolRegistry};
 use crate::skills::resolver::{SkillResolver, SkillScope, StoredSkill};
 
-/// CRD Watcher for dynamic tool + skill registration
+/// CRD Watcher for dynamic tool + skill + guardrail policy registration
 pub struct CrdWatcher {
     client: Client,
     tool_registry: Arc<ToolRegistry>,
     skill_resolver: Arc<SkillResolver>,
     session_manager: Arc<SessionManager>,
+    guardrail_policy_store: Arc<GuardrailPolicyStore>,
 }
 
 impl CrdWatcher {
@@ -38,12 +40,14 @@ impl CrdWatcher {
         tool_registry: Arc<ToolRegistry>,
         skill_resolver: Arc<SkillResolver>,
         session_manager: Arc<SessionManager>,
+        guardrail_policy_store: Arc<GuardrailPolicyStore>,
     ) -> Self {
         Self {
             client,
             tool_registry,
             skill_resolver,
             session_manager,
+            guardrail_policy_store,
         }
     }
 
@@ -63,6 +67,10 @@ impl CrdWatcher {
         let skills: Api<Skill> = Api::all(self.client.clone());
         let skill_watcher = watcher(skills, watcher::Config::default());
 
+        // Watch GuardrailPolicy CRDs (CAB-1337 Phase 3)
+        let guardrail_policies: Api<GuardrailPolicy> = Api::all(self.client.clone());
+        let guardrail_policy_watcher = watcher(guardrail_policies, watcher::Config::default());
+
         // Process events concurrently
         tokio::select! {
             result = self.watch_tools(tool_watcher) => {
@@ -78,6 +86,11 @@ impl CrdWatcher {
             result = self.watch_skills(skill_watcher) => {
                 if let Err(e) = result {
                     error!(error = %e, "Skill watcher failed");
+                }
+            }
+            result = self.watch_guardrail_policies(guardrail_policy_watcher) => {
+                if let Err(e) = result {
+                    error!(error = %e, "GuardrailPolicy watcher failed");
                 }
             }
         }

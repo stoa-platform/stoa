@@ -340,6 +340,93 @@ pub struct SkillStatus {
 }
 
 // =============================================================================
+// GuardrailPolicy CRD (CAB-1337 Phase 3)
+// =============================================================================
+
+/// Tenant-scoped guardrail policy configuration.
+///
+/// Overrides the global guardrails config on a per-tenant basis.
+/// Namespace = tenant_id (same convention as Tool/ToolSet).
+///
+/// # Example YAML
+///
+/// ```yaml
+/// apiVersion: gostoa.dev/v1alpha1
+/// kind: GuardrailPolicy
+/// metadata:
+///   name: acme-guardrails
+///   namespace: tenant-acme
+/// spec:
+///   piiEnabled: true
+///   piiRedact: true
+///   injectionEnabled: true
+///   contentFilterEnabled: true
+///   tokenBudgetLimit: 100000
+///   allowedTools:
+///     - catalog
+///     - search
+/// ```
+#[derive(CustomResource, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[kube(
+    group = "gostoa.dev",
+    version = "v1alpha1",
+    kind = "GuardrailPolicy",
+    namespaced,
+    status = "GuardrailPolicyStatus",
+    printcolumn = r#"{"name":"PII","type":"boolean","jsonPath":".spec.piiEnabled"}"#,
+    printcolumn = r#"{"name":"Injection","type":"boolean","jsonPath":".spec.injectionEnabled"}"#,
+    printcolumn = r#"{"name":"TokenLimit","type":"integer","jsonPath":".spec.tokenBudgetLimit"}"#,
+    printcolumn = r#"{"name":"Active","type":"boolean","jsonPath":".status.active"}"#
+)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardrailPolicySpec {
+    /// Enable PII scanning for this tenant (None = inherit global)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pii_enabled: Option<bool>,
+
+    /// PII redact mode: true = redact and continue, false = reject request (None = inherit)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pii_redact: Option<bool>,
+
+    /// Enable prompt injection scanning for this tenant (None = inherit global)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub injection_enabled: Option<bool>,
+
+    /// Enable content filtering for this tenant (None = inherit global)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_filter_enabled: Option<bool>,
+
+    /// Per-tenant token budget limit in tokens/window (0 = inherit global default)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_budget_limit: Option<u64>,
+
+    /// Additional regex patterns blocked for this tenant (on top of global rules)
+    #[serde(default)]
+    pub extra_blocked_patterns: Vec<String>,
+
+    /// Restrict tool execution to this list (None = all tools allowed)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_tools: Option<Vec<String>>,
+}
+
+/// GuardrailPolicy status (updated by watcher)
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardrailPolicyStatus {
+    /// Whether this policy is active in the gateway
+    #[serde(default)]
+    pub active: bool,
+
+    /// Timestamp when the policy was last applied
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_applied: Option<String>,
+
+    /// Error message if policy application failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -448,5 +535,43 @@ mod tests {
         assert_eq!(spec.priority, 50);
         assert!(spec.enabled);
         assert!(spec.description.is_none());
+    }
+
+    #[test]
+    fn test_guardrail_policy_spec_serialization() {
+        let spec = GuardrailPolicySpec {
+            pii_enabled: Some(true),
+            pii_redact: Some(false),
+            injection_enabled: Some(true),
+            content_filter_enabled: Some(true),
+            token_budget_limit: Some(100_000),
+            extra_blocked_patterns: vec!["confidential".to_string()],
+            allowed_tools: Some(vec!["catalog".to_string(), "search".to_string()]),
+        };
+
+        let json = serde_json::to_value(&spec).unwrap();
+        assert_eq!(json["piiEnabled"], true);
+        assert_eq!(json["piiRedact"], false);
+        assert_eq!(json["tokenBudgetLimit"], 100_000u64);
+        assert_eq!(json["allowedTools"].as_array().unwrap().len(), 2);
+        assert_eq!(json["extraBlockedPatterns"][0], "confidential");
+    }
+
+    #[test]
+    fn test_guardrail_policy_spec_minimal() {
+        let json_str = r#"{}"#;
+        let spec: GuardrailPolicySpec = serde_json::from_str(json_str).unwrap();
+        assert!(spec.pii_enabled.is_none());
+        assert!(spec.injection_enabled.is_none());
+        assert!(spec.allowed_tools.is_none());
+        assert!(spec.extra_blocked_patterns.is_empty());
+    }
+
+    #[test]
+    fn test_guardrail_policy_status_default() {
+        let status = GuardrailPolicyStatus::default();
+        assert!(!status.active);
+        assert!(status.last_applied.is_none());
+        assert!(status.error.is_none());
     }
 }

@@ -49,6 +49,14 @@ pub struct Config {
     #[serde(default)]
     pub keycloak_admin_password: Option<String>,
 
+    /// Internal base URL for Keycloak backend calls (bypasses hairpin NAT on OVH MKS).
+    /// When set, OIDC discovery and JWKS fetches use this URL instead of keycloak_url.
+    /// JWT issuer validation still uses keycloak_url (external canonical URL).
+    /// Env: STOA_KEYCLOAK_INTERNAL_URL
+    /// Example: http://keycloak.stoa-system.svc.cluster.local
+    #[serde(default)]
+    pub keycloak_internal_url: Option<String>,
+
     // === Gateway ===
     /// Public-facing URL of this gateway (for OAuth discovery endpoints).
     /// Env: STOA_GATEWAY_EXTERNAL_URL. Default: http://localhost:8080
@@ -657,6 +665,7 @@ impl Default for Config {
             keycloak_client_id: None,
             keycloak_client_secret: None,
             keycloak_admin_password: None,
+            keycloak_internal_url: None,
             gateway_external_url: default_gateway_external_url(),
             control_plane_url: None,
             control_plane_api_key: None,

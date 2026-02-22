@@ -185,7 +185,8 @@ impl Jwk {
 /// OIDC Provider configuration.
 #[derive(Debug, Clone)]
 pub struct OidcProviderConfig {
-    /// Issuer URL (e.g., https://auth.gostoa.dev/realms/stoa)
+    /// Issuer URL (e.g., https://auth.gostoa.dev/realms/stoa).
+    /// Used for JWT `iss` claim validation — must match what Keycloak puts in tokens.
     pub issuer_url: String,
 
     /// Expected audience (client ID)
@@ -196,6 +197,13 @@ pub struct OidcProviderConfig {
 
     /// HTTP timeout for discovery
     pub http_timeout: Duration,
+
+    /// Internal base URL for OIDC discovery and JWKS fetches (optional).
+    /// When set, backend HTTP calls use this base URL instead of the issuer_url host.
+    /// This bypasses hairpin NAT on OVH MKS where pods cannot reach the cluster LB.
+    /// Example: "http://keycloak.stoa-system.svc.cluster.local"
+    /// JWT issuer validation still uses issuer_url (external canonical URL).
+    pub internal_base_url: Option<String>,
 }
 
 impl Default for OidcProviderConfig {
@@ -205,8 +213,24 @@ impl Default for OidcProviderConfig {
             audience: "stoa-mcp".to_string(),
             jwks_cache_ttl: Duration::from_secs(300), // 5 minutes
             http_timeout: Duration::from_secs(10),
+            internal_base_url: None,
         }
     }
+}
+
+/// Rewrite the scheme+host of `url` to use `base`, preserving the path.
+///
+/// Example:
+///   rewrite_base("https://auth.gostoa.dev/realms/stoa/...", "http://keycloak.stoa-system.svc.cluster.local")
+///   → "http://keycloak.stoa-system.svc.cluster.local/realms/stoa/..."
+fn rewrite_base(url: &str, base: &str) -> String {
+    let without_scheme = url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    let path = without_scheme
+        .find('/')
+        .map_or("", |i| &without_scheme[i..]);
+    format!("{}{}", base.trim_end_matches('/'), path)
 }
 
 /// OIDC Provider with caching.
@@ -263,10 +287,15 @@ impl OidcProvider {
             return Ok(config);
         }
 
-        // Fetch from discovery endpoint
+        // Fetch from discovery endpoint.
+        // Use internal URL when configured (hairpin NAT bypass on OVH MKS).
+        let fetch_base = match &self.config.internal_base_url {
+            Some(internal) => rewrite_base(&self.config.issuer_url, internal),
+            None => self.config.issuer_url.clone(),
+        };
         let discovery_url = format!(
             "{}/.well-known/openid-configuration",
-            self.config.issuer_url.trim_end_matches('/')
+            fetch_base.trim_end_matches('/')
         );
 
         info!(url = %discovery_url, "Fetching OIDC configuration");
@@ -315,10 +344,16 @@ impl OidcProvider {
     pub async fn get_jwks(&self) -> Result<Arc<Jwks>, OidcError> {
         // First, get the OIDC config to find JWKS URI
         let oidc_config = self.get_config().await?;
-        let jwks_uri = &oidc_config.jwks_uri;
+        // Rewrite JWKS URI host to internal URL when configured.
+        // The discovery doc from internal Keycloak returns the external host in jwks_uri;
+        // we must rewrite it or the fetch will hit the unreachable external LB.
+        let jwks_uri = match &self.config.internal_base_url {
+            Some(internal) => rewrite_base(&oidc_config.jwks_uri, internal),
+            None => oidc_config.jwks_uri.clone(),
+        };
 
         // Try cache first
-        if let Some(jwks) = self.jwks_cache.get(jwks_uri).await {
+        if let Some(jwks) = self.jwks_cache.get(&jwks_uri).await {
             debug!("JWKS cache hit");
             return Ok(jwks);
         }
@@ -327,7 +362,7 @@ impl OidcProvider {
 
         let response = self
             .client
-            .get(jwks_uri)
+            .get(&jwks_uri)
             .send()
             .await
             .map_err(|e| OidcError::JwksFetchError(e.to_string()))?;

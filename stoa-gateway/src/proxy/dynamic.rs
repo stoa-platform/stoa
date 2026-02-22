@@ -115,10 +115,8 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     if let (Some(classification), Some(ref enforcer)) =
         (route.classification, &state.classification_enforcer)
     {
-        let ctx = crate::uac::enforcer::EnforcementContext::new(
-            &route.tenant_id,
-            "anonymous", // TODO: extract from JWT when wired
-        );
+        let user_id = extract_user_id(request.extensions());
+        let ctx = crate::uac::enforcer::EnforcementContext::new(&route.tenant_id, &user_id);
         let decision = enforcer.enforce(classification, &route.methods, &ctx);
         if decision.is_allowed() {
             debug!(
@@ -543,6 +541,17 @@ fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuild
     builder.header("traceparent", traceparent)
 }
 
+/// Extract the authenticated user's ID from request extensions.
+///
+/// Returns the `user_id` from the JWT-populated `AuthenticatedUser` extension,
+/// or `"anonymous"` when no authenticated user is present (CAB-1389).
+fn extract_user_id(extensions: &axum::http::Extensions) -> String {
+    extensions
+        .get::<crate::auth::middleware::AuthenticatedUser>()
+        .map(|u| u.user_id.clone())
+        .unwrap_or_else(|| "anonymous".to_string())
+}
+
 /// Encode bytes as lowercase hex directly into an existing String.
 /// Zero extra allocation — writes into the caller's buffer.
 fn hex_encode_into(bytes: &[u8], buf: &mut String) {
@@ -620,6 +629,56 @@ mod tests {
         assert_eq!(parts[1].len(), 32, "trace-id should be 32 hex chars");
         assert_eq!(parts[2].len(), 16, "span-id should be 16 hex chars");
         assert_eq!(parts[3], "01", "flags should be 01 (sampled)");
+    }
+
+    #[test]
+    fn test_extract_user_id_anonymous_fallback() {
+        let extensions = axum::http::Extensions::new();
+        let user_id = extract_user_id(&extensions);
+        assert_eq!(user_id, "anonymous");
+    }
+
+    #[test]
+    fn test_extract_user_id_from_authenticated_user() {
+        use crate::auth::claims::Claims;
+        use crate::auth::middleware::AuthenticatedUser;
+
+        let user = AuthenticatedUser {
+            user_id: "user-abc-123".to_string(),
+            username: Some("alice".to_string()),
+            email: None,
+            tenant_id: Some("acme".to_string()),
+            claims: Claims {
+                sub: "user-abc-123".to_string(),
+                exp: 9999999999,
+                iat: 0,
+                iss: "https://auth.example.com".to_string(),
+                aud: Default::default(),
+                azp: None,
+                preferred_username: Some("alice".to_string()),
+                email: None,
+                email_verified: None,
+                name: None,
+                given_name: None,
+                family_name: None,
+                tenant: None,
+                realm_access: None,
+                resource_access: None,
+                sid: None,
+                typ: None,
+                scope: None,
+                cnf: None,
+                sub_account_id: None,
+                master_account_id: None,
+            },
+            raw_token: "test.jwt.token".to_string(),
+        };
+
+        let mut extensions = axum::http::Extensions::new();
+        extensions.insert(user);
+
+        let user_id = extract_user_id(&extensions);
+        assert_eq!(user_id, "user-abc-123");
     }
 
     #[test]

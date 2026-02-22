@@ -207,123 +207,6 @@ async function getServersByCategory(user: User | null): Promise<{
   };
 }
 
-// Mock data for development (to be replaced by real API calls)
-export const MOCK_SERVERS: MCPServer[] = [
-  {
-    id: 'stoa-platform',
-    name: 'stoa-platform',
-    displayName: 'STOA Platform Tools',
-    description:
-      'Administrative tools for managing the STOA platform: tenants, users, deployments, and configurations.',
-    icon: 'settings',
-    category: 'platform',
-    visibility: {
-      roles: ['cpi-admin', 'tenant-admin', 'devops'],
-      public: false,
-    },
-    tools: [
-      {
-        id: 'tenant-create',
-        name: 'tenant-create',
-        displayName: 'Create Tenant',
-        description: 'Create a new tenant organization',
-        enabled: true,
-        requires_approval: true,
-      },
-      {
-        id: 'api-deploy',
-        name: 'api-deploy',
-        displayName: 'Deploy API',
-        description: 'Deploy an API to an environment',
-        enabled: true,
-        requires_approval: false,
-      },
-      {
-        id: 'user-invite',
-        name: 'user-invite',
-        displayName: 'Invite User',
-        description: 'Invite a user to a tenant',
-        enabled: true,
-        requires_approval: false,
-      },
-    ],
-    status: 'active',
-    version: '1.0.0',
-    documentation_url: 'https://docs.gostoa.dev/platform-tools',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2026-01-10T00:00:00Z',
-  },
-  {
-    id: 'crm-apis',
-    name: 'crm-apis',
-    displayName: 'CRM Integration',
-    description:
-      'Customer Relationship Management APIs for customer data, leads, and opportunities.',
-    icon: 'users',
-    category: 'tenant',
-    tenant_id: 'acme-corp',
-    visibility: {
-      public: true,
-    },
-    tools: [
-      {
-        id: 'customer-search',
-        name: 'customer-search',
-        displayName: 'Search Customers',
-        description: 'Search and retrieve customer records',
-        enabled: true,
-        requires_approval: false,
-      },
-      {
-        id: 'lead-create',
-        name: 'lead-create',
-        displayName: 'Create Lead',
-        description: 'Create a new sales lead',
-        enabled: true,
-        requires_approval: false,
-      },
-    ],
-    status: 'active',
-    version: '2.1.0',
-    created_at: '2024-06-01T00:00:00Z',
-    updated_at: '2026-01-08T00:00:00Z',
-  },
-  {
-    id: 'billing-services',
-    name: 'billing-services',
-    displayName: 'Billing & Invoicing',
-    description: 'Generate invoices, process payments, and manage billing cycles.',
-    icon: 'credit-card',
-    category: 'tenant',
-    tenant_id: 'acme-corp',
-    visibility: {
-      public: true,
-    },
-    tools: [
-      {
-        id: 'invoice-generate',
-        name: 'invoice-generate',
-        displayName: 'Generate Invoice',
-        description: 'Generate a new invoice for a customer',
-        enabled: true,
-        requires_approval: false,
-      },
-      {
-        id: 'payment-status',
-        name: 'payment-status',
-        displayName: 'Check Payment Status',
-        description: 'Check the status of a payment',
-        enabled: true,
-        requires_approval: false,
-      },
-    ],
-    status: 'active',
-    version: '1.5.0',
-    created_at: '2024-03-15T00:00:00Z',
-    updated_at: '2026-01-05T00:00:00Z',
-  },
-];
-
 export const mcpServersService = {
   getServers,
   getVisibleServers,
@@ -338,8 +221,6 @@ export const mcpServersService = {
   // Utilities
   canUserSeeServer,
   filterServersByRole,
-  // Mock data for development
-  MOCK_SERVERS,
 };
 
 export default mcpServersService;

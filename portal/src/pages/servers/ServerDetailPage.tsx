@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
-import { mcpServersService, MOCK_SERVERS } from '../../services/mcpServers';
+import { mcpServersService } from '../../services/mcpServers';
 import type { MCPServer, MCPServerSubscription } from '../../types';
 
 export function ServerDetailPage() {
@@ -55,13 +55,7 @@ export function ServerDetailPage() {
       setError(null);
 
       try {
-        // Try API, fallback to mock
-        let fetchedServer: MCPServer | undefined;
-        try {
-          fetchedServer = await mcpServersService.getServer(serverId!);
-        } catch {
-          fetchedServer = MOCK_SERVERS.find((s) => s.id === serverId);
-        }
+        const fetchedServer = await mcpServersService.getServer(serverId!);
 
         if (!fetchedServer) {
           setError('Server not found');

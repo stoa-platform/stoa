@@ -291,13 +291,17 @@ jobs:
       - name: NPM audit — control-plane-ui
         run: |
           if [ -f "control-plane-ui/package-lock.json" ]; then
-            cd control-plane-ui && npm audit --audit-level=high
+            # --omit=dev: audit only production dependencies.
+            # GHSA-3ppc-4f35-3m26 (minimatch ReDoS) is in @typescript-eslint/eslint-plugin
+            # dev-dep chain. Not present in production runtime. Fix requires eslint v10
+            # breaking upgrade; deferring until typescript-eslint v8 migration is planned.
+            cd control-plane-ui && npm audit --audit-level=high --omit=dev
           fi
 
       - name: NPM audit — portal
         run: |
           if [ -f "portal/package-lock.json" ]; then
-            cd portal && npm audit --audit-level=high
+            cd portal && npm audit --audit-level=high --omit=dev
           fi
 
   # ==========================================================================

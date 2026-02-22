@@ -227,6 +227,8 @@ jobs:
         if: always() && steps.guard.outputs.skip != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
@@ -251,7 +253,8 @@ jobs:
             elif echo "$SCORE < 8.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Fix"; fi
           fi
 
-          notify_council "$TICKET" "${{ github.event.issue.title }}" "${SCORE:-?}" "$VERDICT" "${{ github.event.issue.html_url }}" "${{ github.event.issue.number }}"
+          COUNCIL_TS=$(notify_council "$TICKET" "${{ github.event.issue.title }}" "${SCORE:-?}" "$VERDICT" "${{ github.event.issue.html_url }}" "${{ github.event.issue.number }}")
+          _react_slack "mag" "$COUNCIL_TS"
 
           # Push metrics with actual verdict
           METRIC_VERDICT=$(echo "$VERDICT" | tr '[:upper:]' '[:lower:]')
@@ -482,9 +485,12 @@ jobs:
         if: always() && steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          notify_plan "${{ github.event.issue.number }}" "${{ github.event.issue.title }}" "${{ github.event.issue.html_url }}" "${{ steps.plan-council.outcome }}"
+          PLAN_TS=$(notify_plan "${{ github.event.issue.number }}" "${{ github.event.issue.title }}" "${{ github.event.issue.html_url }}" "${{ steps.plan-council.outcome }}")
+          _react_slack "white_check_mark" "$PLAN_TS"
 
       - name: Write Job Summary — Plan
         if: always() && steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
@@ -656,6 +662,8 @@ jobs:
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
@@ -670,15 +678,18 @@ jobs:
           MODEL="${{ steps.route.outputs.model || 'sonnet-4-5' }}"
           MAX_TURNS="${{ steps.route.outputs.turns || '60' }}"
           if [ "$STATUS" = "success" ]; then
-            notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR" "$DURATION"
+            IMPL_TS=$(notify_implement "$TICKET" "success" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR" "$DURATION")
             linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR" "$DURATION" || true
             push_metrics_implement "issue-to-pr" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
+            _react_slack "tada" "$IMPL_TS"
           elif [ "$STATUS" = "failure" ] && [ "${PR_FOUND}" = "true" ]; then
-            notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L1 Issue-to-PR (max_turns)" "$DURATION"
+            IMPL_TS=$(notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ github.event.issue.number }}" "L1 Issue-to-PR (max_turns)" "$DURATION")
             push_metrics_implement "issue-to-pr" "$TICKET" "max_turns" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
+            _react_slack "rocket" "$IMPL_TS"
           elif [ "$STATUS" = "failure" ]; then
-            notify_error "claude-issue-to-pr" "implement" "$TICKET" "" "$DURATION"
+            IMPL_TS=$(notify_error "claude-issue-to-pr" "implement" "$TICKET" "" "$DURATION")
             push_metrics_error "issue-to-pr" "implement" "$TICKET"
+            _react_slack "x" "$IMPL_TS"
           else
             notify_implement "$TICKET" "$STATUS" "" "" "${{ github.event.issue.number }}" "L1 Issue-to-PR"
           fi

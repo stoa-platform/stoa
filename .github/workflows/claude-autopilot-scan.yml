@@ -195,6 +195,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
         run: |
@@ -309,7 +311,8 @@ jobs:
             C_LOC=$(echo "$ticket" | jq -r '.estimated_points // empty' 2>/dev/null || echo "")
             # Use verdict from Council JSON (already filtered to Go/>=8.0 by the jq select above)
             C_VERDICT=$(echo "$ticket" | jq -r '.verdict // "Go"' 2>/dev/null || echo "Go")
-            notify_council "$TICKET_ID" "$TITLE" "$SCORE" "$C_VERDICT" "$ISSUE_URL" "$ISSUE_NUM" "$C_MODE" "$C_LOC" ""
+            COUNCIL_TS=$(notify_council "$TICKET_ID" "$TITLE" "$SCORE" "$C_VERDICT" "$ISSUE_URL" "$ISSUE_NUM" "$C_MODE" "$C_LOC" "")
+            _react_slack "mag" "$COUNCIL_TS"
 
             CREATED=$((CREATED + 1))
           done < <(echo "$CANDIDATES" | jq -c '.[] | select(.verdict == "Go" and .score >= 8.0)')
@@ -326,6 +329,8 @@ jobs:
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
@@ -341,17 +346,19 @@ jobs:
 
           DURATION=$(( $(date +%s) - ${SCAN_START:-$(date +%s)} ))
           if [ "$CAPPED" = "true" ]; then
-            notify_scan "0" "0" "true"
+            SCAN_TS=$(notify_scan "0" "0" "true")
           elif [ "$TOTAL" = "0" ]; then
-            notify_scan "0" "0"
+            SCAN_TS=$(notify_scan "0" "0")
           elif [ "$COUNCIL_OK" != "success" ]; then
-            notify_error "claude-autopilot-scan" "council" "" "" "$DURATION"
+            SCAN_TS=$(notify_error "claude-autopilot-scan" "council" "" "" "$DURATION")
             push_metrics_error "autopilot-scan" "council"
+            _react_slack "x" "$SCAN_TS"
           elif [ "$DRY" = "true" ]; then
-            notify_scan "$TOTAL" "0"
+            SCAN_TS=$(notify_scan "$TOTAL" "0")
           else
-            notify_scan "$TOTAL" "$CREATED" "" "$SKIPPED"
+            SCAN_TS=$(notify_scan "$TOTAL" "$CREATED" "" "$SKIPPED")
           fi
+          _react_slack "satellite_antenna" "$SCAN_TS"
 
           # Push scan metrics (velocity, candidates, dispatched)
           TODAY_COUNT="${{ vars.AUTOPILOT_TODAY_COUNT }}"

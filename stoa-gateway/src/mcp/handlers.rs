@@ -538,10 +538,12 @@ pub async fn mcp_tools_call(
     }
 
     // CAB-707: Guardrails check (PII + prompt injection)
+    // CAB-1337: Extended with content filtering
     let guardrails_cfg = crate::guardrails::GuardrailsConfig {
         pii_enabled: state.config.guardrails_pii_enabled,
         pii_redact: state.config.guardrails_pii_redact,
         injection_enabled: state.config.guardrails_injection_enabled,
+        content_filter_enabled: state.config.guardrails_content_filter_enabled,
     };
     let arguments = match crate::guardrails::check_request(
         &guardrails_cfg,
@@ -554,9 +556,22 @@ pub async fn mcp_tools_call(
             warn!(tool = %request.name, "PII detected and redacted in arguments");
             redacted
         }
+        crate::guardrails::GuardrailsOutcome::Sensitive { rule, category } => {
+            metrics::record_guardrails_content_filter("sensitive", category);
+            warn!(tool = %request.name, rule = %rule, category = %category, "Content filter: sensitive content detected, request allowed");
+            request.arguments.clone()
+        }
         crate::guardrails::GuardrailsOutcome::Blocked(reason) => {
             if reason.contains("injection") {
                 metrics::record_guardrails_injection(&request.name);
+            } else if reason.contains("content filter") {
+                // Extract category from reason string "Content blocked by content filter [rule: X, category: Y]"
+                let category = reason
+                    .split("category: ")
+                    .nth(1)
+                    .and_then(|s| s.strip_suffix(']'))
+                    .unwrap_or("unknown");
+                metrics::record_guardrails_content_filter("blocked", category);
             } else {
                 metrics::record_guardrails_pii("blocked");
             }
@@ -573,6 +588,43 @@ pub async fn mcp_tools_call(
                 .into_response();
         }
     };
+
+    // CAB-1337 Phase 2: Token budget pre-execution check
+    if let Some(ref tracker) = state.token_budget {
+        match tracker.check_budget(&auth.tenant_id) {
+            crate::guardrails::BudgetStatus::Exceeded => {
+                metrics::record_token_budget_exceeded(&auth.tenant_id);
+                let remaining_secs = tracker.window_remaining_secs(&auth.tenant_id);
+                warn!(
+                    tenant = %auth.tenant_id,
+                    tool = %request.name,
+                    remaining_secs = remaining_secs,
+                    "Token budget exceeded — request rejected"
+                );
+                return (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(ToolsCallResponse {
+                        content: vec![ToolContent::Text {
+                            text: format!("Token budget exceeded. Resets in {remaining_secs}s."),
+                        }],
+                        is_error: Some(true),
+                    }),
+                )
+                    .into_response();
+            }
+            crate::guardrails::BudgetStatus::Warning { pct } => {
+                warn!(
+                    tenant = %auth.tenant_id,
+                    pct = pct,
+                    "Token budget warning: {}% used", pct
+                );
+            }
+            crate::guardrails::BudgetStatus::OK => {}
+        }
+        let input_tokens = crate::guardrails::estimate_json(&arguments);
+        tracker.record_usage(&auth.tenant_id, input_tokens);
+        metrics::record_token_budget_usage(&auth.tenant_id, "input", input_tokens);
+    }
 
     // Resolve tool-specific skill instructions (CAB-1365)
     let skill_instructions = if state.config.skill_context_enabled {
@@ -798,6 +850,17 @@ pub async fn mcp_tools_call(
             let response_size = serde_json::to_string(&content)
                 .map(|s| s.len() as u64)
                 .unwrap_or(0);
+
+            // CAB-1337 Phase 2: Record output tokens post-execution
+            if let Some(ref tracker) = state.token_budget {
+                let output_tokens = if response_size > 0 {
+                    (response_size / 4).max(1)
+                } else {
+                    0
+                };
+                tracker.record_usage(&auth.tenant_id, output_tokens);
+                metrics::record_token_budget_usage(&auth.tenant_id, "output", output_tokens);
+            }
 
             // Phase 6: Cache result for read-only tools
             if is_read_only {

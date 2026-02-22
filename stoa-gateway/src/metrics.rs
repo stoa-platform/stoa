@@ -187,6 +187,39 @@ pub static GUARDRAILS_INJECTION_BLOCKED: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_guardrails_injection_blocked_total metric")
 });
 
+/// Counter of content filter events (CAB-1337 Phase 1).
+/// Labels: action=blocked|sensitive, category=financial|medical|violence|malware
+pub static GUARDRAILS_CONTENT_FILTERED: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_guardrails_content_filtered_total",
+        "Total content filter events by action and category",
+        &["action", "category"]
+    )
+    .expect("Failed to create stoa_guardrails_content_filtered_total metric")
+});
+
+// === Token Budget Metrics (CAB-1337 Phase 2) ===
+
+/// Total tokens processed per tenant and direction.
+pub static TOKEN_BUDGET_TOKENS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_token_budget_tokens_total",
+        "Total tokens processed per tenant and direction",
+        &["tenant", "direction"]
+    )
+    .expect("Failed to create stoa_token_budget_tokens_total metric")
+});
+
+/// Token budget exceeded events per tenant.
+pub static TOKEN_BUDGET_EXCEEDED_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_token_budget_exceeded_total",
+        "Total token budget exceeded events per tenant",
+        &["tenant"]
+    )
+    .expect("Failed to create stoa_token_budget_exceeded_total metric")
+});
+
 // === Fallback Metrics (CAB-708) ===
 
 /// Counter of fallback chain attempts (primary tool failed, trying fallbacks).
@@ -314,6 +347,29 @@ pub fn record_guardrails_injection(tool: &str) {
         .inc();
 }
 
+/// Record a content filter event (CAB-1337 Phase 1).
+/// action: "blocked" | "sensitive"
+/// category: "financial" | "medical" | "violence" | "malware"
+pub fn record_guardrails_content_filter(action: &str, category: &str) {
+    GUARDRAILS_CONTENT_FILTERED
+        .with_label_values(&[action, category])
+        .inc();
+}
+
+/// Record token consumption for a tenant.
+pub fn record_token_budget_usage(tenant: &str, direction: &str, tokens: u64) {
+    TOKEN_BUDGET_TOKENS_TOTAL
+        .with_label_values(&[tenant, direction])
+        .inc_by(tokens as f64);
+}
+
+/// Record a token budget exceeded event.
+pub fn record_token_budget_exceeded(tenant: &str) {
+    TOKEN_BUDGET_EXCEEDED_TOTAL
+        .with_label_values(&[tenant])
+        .inc();
+}
+
 // === Fallback metrics helpers ===
 
 /// Record a fallback chain attempt for a tool.
@@ -419,6 +475,9 @@ pub fn init_all_metrics() {
     Lazy::force(&QUOTA_REMAINING);
     Lazy::force(&GUARDRAILS_PII_DETECTED);
     Lazy::force(&GUARDRAILS_INJECTION_BLOCKED);
+    Lazy::force(&GUARDRAILS_CONTENT_FILTERED);
+    Lazy::force(&TOKEN_BUDGET_TOKENS_TOTAL);
+    Lazy::force(&TOKEN_BUDGET_EXCEEDED_TOTAL);
     Lazy::force(&FALLBACK_ATTEMPTS);
     Lazy::force(&FALLBACK_EXHAUSTED);
     Lazy::force(&UPSTREAM_LATENCY);
@@ -569,6 +628,17 @@ mod tests {
         record_federation_request("sub-acct-1", "master-acct-1", "success");
         record_federation_request("sub-acct-1", "master-acct-1", "denied");
         record_federation_request("sub-acct-2", "master-acct-1", "rate_limited");
+    }
+
+    #[test]
+    fn test_record_token_budget_usage() {
+        record_token_budget_usage("tenant-budget-test", "input", 100);
+        record_token_budget_usage("tenant-budget-test", "output", 50);
+    }
+
+    #[test]
+    fn test_record_token_budget_exceeded() {
+        record_token_budget_exceeded("tenant-exceeded-test");
     }
 
     #[test]

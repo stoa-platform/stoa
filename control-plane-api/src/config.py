@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     KEYCLOAK_ADMIN_CLIENT_ID: str = "admin-cli"
     KEYCLOAK_ADMIN_CLIENT_SECRET: str = ""
 
+    # Slack Notifications (CAB-1413 — deployment event fanout)
+    SLACK_WEBHOOK_URL: str = ""       # Incoming webhook URL (fallback)
+    SLACK_BOT_TOKEN: str = ""         # Bot API token (preferred, supports threading)
+    SLACK_CHANNEL_ID: str = ""        # Target channel ID for Bot API
+
     # GitLab Integration
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: str = ""

@@ -266,6 +266,11 @@ pub struct Config {
     #[serde(default)]
     pub guardrails_injection_enabled: bool,
 
+    /// Enable content filtering for tool call arguments and responses (CAB-1337)
+    /// Env: STOA_GUARDRAILS_CONTENT_FILTER_ENABLED
+    #[serde(default)]
+    pub guardrails_content_filter_enabled: bool,
+
     // === Fallback Chain (CAB-708) ===
     /// Enable fallback chain for tool execution
     /// Env: STOA_FALLBACK_ENABLED
@@ -672,6 +677,7 @@ impl Default for Config {
             guardrails_pii_enabled: false,
             guardrails_pii_redact: default_guardrails_pii_redact(),
             guardrails_injection_enabled: false,
+            guardrails_content_filter_enabled: false,
             fallback_enabled: false,
             fallback_chains: None,
             fallback_timeout_ms: default_fallback_timeout_ms(),
@@ -876,6 +882,7 @@ mod tests {
         assert!(!config.guardrails_pii_enabled);
         assert!(config.guardrails_pii_redact); // redact by default when enabled
         assert!(!config.guardrails_injection_enabled);
+        assert!(!config.guardrails_content_filter_enabled);
     }
 
     #[test]

@@ -187,6 +187,17 @@ pub static GUARDRAILS_INJECTION_BLOCKED: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_guardrails_injection_blocked_total metric")
 });
 
+/// Counter of content filter events (CAB-1337 Phase 1).
+/// Labels: action=blocked|sensitive, category=financial|medical|violence|malware
+pub static GUARDRAILS_CONTENT_FILTERED: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_guardrails_content_filtered_total",
+        "Total content filter events by action and category",
+        &["action", "category"]
+    )
+    .expect("Failed to create stoa_guardrails_content_filtered_total metric")
+});
+
 // === Fallback Metrics (CAB-708) ===
 
 /// Counter of fallback chain attempts (primary tool failed, trying fallbacks).
@@ -311,6 +322,15 @@ pub fn record_guardrails_pii(action: &str) {
 pub fn record_guardrails_injection(tool: &str) {
     GUARDRAILS_INJECTION_BLOCKED
         .with_label_values(&[tool])
+        .inc();
+}
+
+/// Record a content filter event (CAB-1337 Phase 1).
+/// action: "blocked" | "sensitive"
+/// category: "financial" | "medical" | "violence" | "malware"
+pub fn record_guardrails_content_filter(action: &str, category: &str) {
+    GUARDRAILS_CONTENT_FILTERED
+        .with_label_values(&[action, category])
         .inc();
 }
 

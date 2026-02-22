@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (state drift fix: CAB-1398 + CAB-86 marked Done)
+> Derniere MAJ: 2026-02-22 (AI Factory model migration PR #804 merged)
 
 ## ✅ DONE
 
@@ -11,7 +11,8 @@
 - ✅ Gap #5 CP API Prometheus scraping — PRs #788, #793, #799
   - ServiceMonitor (Helm), fix generate_latest(REGISTRY), NetworkPolicies port 8000
   - Prometheus targets: 2/2 health: up ✅
-- ✅ CAB-1391 [MEGA] Migration Guide Expansion (13 pts) — stoa-docs PR #68 (Layer7 guide + hub), stoa-web PR #10 (llms.txt)
+- ✅ AI Factory model migration — PR #804 (7 workflows + model-router.sh → claude-sonnet-4-6)
+- ✅ CAB-1391 [MEGA] Migration Guide Expansion (13 pts) — stoa-docs PR #68 ✅ merged, stoa-web PR #10 ✅ merged
 - ✅ CAB-1301 [MEGA] Gateway API + NetworkPolicy (21 pts) — ALL 3 PHASES DONE
   - P1: CRDs + NGF (PR #785), P2: HTTPRoutes + DNS cutover (PR #791), P3: NetworkPolicies (PR #797)
   - New LB: 92.222.226.6, 30 NetworkPolicies, 9 HTTPRoutes, 8 DNS records updated
@@ -52,7 +53,8 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
-- docs.gostoa.dev = 38 articles, 0 "Coming Soon"
+- docs.gostoa.dev = 40 articles (Layer7 + webMethods guides live, all 8 migration spokes published)
+- llms.txt + llms-full.txt: full migration guides + AI Factory sections live
 - ADR numbering: stoa-docs owns numbers (001-048). Next: **ADR-049**
 - Velocity C8: 905 pts / 88 issues / 129 pts/day (final)
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

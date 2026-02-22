@@ -261,7 +261,12 @@ jobs:
       - name: Pip audit — control-plane-api
         run: |
           if [ -f "control-plane-api/requirements.txt" ]; then
-            pip-audit -r control-plane-api/requirements.txt --desc
+            # CVE-2024-23342: ecdsa Minerva timing attack — transitive dep of python-jose.
+            # python-jose[cryptography] uses the 'cryptography' backend for all signing ops;
+            # ecdsa is never exercised. Upstream (python-ecdsa) won't fix: side-channel
+            # attacks are out of scope for that project. No replacement version available.
+            pip-audit -r control-plane-api/requirements.txt --desc \
+              --ignore-vuln CVE-2024-23342
           fi
 
       - name: Pip audit — mcp-gateway

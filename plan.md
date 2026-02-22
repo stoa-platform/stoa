@@ -172,7 +172,13 @@
 - CAB-1320: [MEGA] Repo Consolidation (21 pts)
 - CAB-1312: [MEGA] GTM Docs + Community Channels (21 pts)
 - CAB-1123: Prompt Cache for HEGEMON (21 pts)
-- CAB-374: [MEGA] Vercel-Style DX (34 pts)
+- [~] CAB-374: [MEGA] Vercel-Style DX (34 pts) — Council 8.25/10 ✅ — 2 phases
+  - **Phase 1** (parallel) [owner: —]
+    - [ ] CAB-1410 [cp-api] stoa.yaml spec + deployment lifecycle API (13 pts)
+    - [ ] CAB-1411 [docs] stoa.yaml spec v1.0 reference + CLI guide (5 pts)
+  - **Phase 2** (after Phase 1) [owner: —]
+    - [ ] CAB-1412 [stoactl] Audit + complete CLI commands (13 pts)
+    - [ ] CAB-1413 [cp-api] Notification Service — Kafka → Slack (3 pts)
 
 ### Backlog — Legacy (parked)
 

@@ -25,8 +25,8 @@
 //! ```
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use parking_lot::RwLock;
@@ -95,7 +95,11 @@ impl TenantBudget {
         let ws = self.window_start.load(Ordering::Relaxed);
         if now >= ws + window_secs {
             // Claim the reset via CAS — first writer wins, others see updated window_start
-            if self.window_start.compare_exchange(ws, now, Ordering::SeqCst, Ordering::Relaxed).is_ok() {
+            if self
+                .window_start
+                .compare_exchange(ws, now, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
+            {
                 self.tokens_used.store(0, Ordering::SeqCst);
             }
         }
@@ -195,8 +199,7 @@ impl TokenBudgetTracker {
     /// for persisting budget state arrives in Phase 3 (CAB-1337-P3).
     pub fn spawn_sync_task(tracker: Arc<Self>) {
         tokio::spawn(async move {
-            let mut interval =
-                tokio::time::interval(tokio::time::Duration::from_secs(30));
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
             loop {
                 interval.tick().await;
                 let count = tracker.tenants.read().len();
@@ -340,7 +343,10 @@ mod tests {
     fn test_tracker_record_and_check_warning() {
         let t = TokenBudgetTracker::new(1000, 3600);
         t.record_usage("tenant-b", 850);
-        assert_eq!(t.check_budget("tenant-b"), BudgetStatus::Warning { pct: 85 });
+        assert_eq!(
+            t.check_budget("tenant-b"),
+            BudgetStatus::Warning { pct: 85 }
+        );
     }
 
     #[test]
@@ -355,7 +361,10 @@ mod tests {
         let t = TokenBudgetTracker::new(1000, 3600);
         t.record_usage("tenant-x", 900);
         t.record_usage("tenant-y", 10);
-        assert_eq!(t.check_budget("tenant-x"), BudgetStatus::Warning { pct: 90 });
+        assert_eq!(
+            t.check_budget("tenant-x"),
+            BudgetStatus::Warning { pct: 90 }
+        );
         assert_eq!(t.check_budget("tenant-y"), BudgetStatus::OK);
     }
 
@@ -379,7 +388,10 @@ mod tests {
         t.record_usage("t", 10);
         let remaining = t.window_remaining_secs("t");
         // Just started, should be close to 3600
-        assert!(remaining > 3590, "expected > 3590s remaining, got {remaining}");
+        assert!(
+            remaining > 3590,
+            "expected > 3590s remaining, got {remaining}"
+        );
     }
 
     #[test]
@@ -387,10 +399,10 @@ mod tests {
         // Set window_start to far in the past so the next record triggers a reset
         let t = TokenBudgetTracker::new(1000, 60);
         t.record_usage("tenant-reset", 500); // initial record
-        // Manually expire the window
+                                             // Manually expire the window
         let budget = t.get_or_create("tenant-reset");
         budget.window_start.store(0, Ordering::SeqCst); // epoch 0 → expired
-        // Next record should reset counter
+                                                        // Next record should reset counter
         t.record_usage("tenant-reset", 10);
         assert_eq!(t.check_budget("tenant-reset"), BudgetStatus::OK);
     }

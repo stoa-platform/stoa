@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (CAB-1333 PR #831; CAB-1389 done — PRs #810, #811, #820; fix Dockerfile Rust 1.93 PR #830; CAB-1388 PR #818)
+> Derniere MAJ: 2026-02-22 (CAB-1390 done — PRs #833, #836, #838; CAB-1333 PR #831; CAB-1389 done — PRs #810, #811, #820; fix Dockerfile Rust 1.93 PR #830; CAB-1388 PR #818)
 
 ## ✅ DONE
 
@@ -8,6 +8,10 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1390 [MEGA] Portal Component Test Coverage & Feature Fixes (21 pts) — ALL 3 PHASES DONE
+  - P1: Critical components (PR #833) — Onboarding, Contracts, Apps test files
+  - P2: Dashboard + Usage + Layout (PR #836) — 15 test files, 1094 LOC
+  - P3: APICard + bugfixes + placeholder cleanup (PR #838) — certificateValidator fix
 - ✅ CAB-1333 [MEGA] MCP Protocol Full Compliance (34 pts) — PR #831
   - P1: spec coverage matrix (docs/mcp-spec-coverage.md)
   - P2: 4 missing methods (prompts/list, prompts/get, logging/setLevel, resources/read) + send_to_session

@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-22 (/sync-plan full)
+> Last sync: 2026-02-22 (/sync-plan full — C9 drift: +2 done, +2 todo, +3 backlog)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~202 pts (committed) | **Done**: 102 pts (50%) | **Velocity**: 6 issues closed
+**Scope**: ~202 pts (committed) | **Done**: 157 pts (78%) | **Velocity**: 8 issues closed
 **Theme**: Post-Demo + Product Roadmap + Community Content
 
 ### In Progress
@@ -110,7 +110,7 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (6)
+### Done (8)
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1388: [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818
 - [x] CAB-1389: [MEGA] Cross-Component Quality Pass (13 pts) — PRs #810, #811, #820
@@ -121,8 +121,18 @@
   - [x] Phase 2: Slack Bot API dual-path — PR #775
   - [x] Phase 3: Slack Threading + Reactions — PR #781
   - [x] Phase 4: /stoa slash command + gap fixes — PRs #792, #795
+- [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
+  - P1: spec coverage matrix (docs/mcp-spec-coverage.md)
+  - P2: 4 missing methods (prompts/list, prompts/get, logging/setLevel, resources/read) + send_to_session
+  - P3: 16 new conformance tests — 31/31 contract tests pass
+- [x] CAB-1390: [MEGA] Portal Component Test Coverage & Feature Fixes (21 pts) — PRs #833, #836, #838
+  - P1: Critical components — Onboarding, Contracts, Apps test files (PR #833)
+  - P2: Dashboard + Usage + Layout — 15 test files, 1094 LOC (PR #836)
+  - P3: APICard + bugfixes + certificateValidator fix (PR #838)
 
 ### Todo
+- [ ] CAB-1356: [cli] stoactl Deploy Commands — deploy, rollback, logs (5 pts, P1)
+- [ ] CAB-1352: [docs] ADR-044: stoa.yaml Declarative API Spec (3 pts, P1)
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
@@ -143,7 +153,7 @@
 ### Backlog — New MEGAs
 
 **Gateway** (76 pts):
-- CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts)
+- [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
 - CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts)
 - CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts)
 
@@ -155,12 +165,13 @@
 - CAB-1324: [MEGA] Runtime Data Governance (21 pts)
 
 **DX** (76 pts):
-- CAB-1390: [MEGA] Portal Component Test Coverage (21 pts)
+- [x] CAB-1390: [MEGA] Portal Component Test Coverage & Feature Fixes (21 pts) — PRs #833, #836, #838
 - CAB-1338: [MEGA] Portal i18n (21 pts)
 - CAB-1322: [MEGA] Full UX Audit — Apple-Style (34 pts)
 
-**Observability** (42 pts):
+**Observability** (55 pts):
 - CAB-1331: [MEGA] UAC-Driven Observability (21 pts)
+- CAB-892: [Feature] UAC-Driven Observability Debug (13 pts, P2)
 - CAB-1316: [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts)
 
 **Community** (124 pts):
@@ -172,6 +183,8 @@
 - CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts)
 
 **Other**:
+- CAB-889: [Strategy] MCP Server as a Service — Enterprise Non-Tech Segment (13 pts, P2)
+- CAB-890: [Feature] Shadow Learning Mode — Auto-Generate API Contracts (13 pts, P2)
 - CAB-1319: [MEGA] MCP Developer Self-Service (21 pts)
 - CAB-1320: [MEGA] Repo Consolidation (21 pts)
 - CAB-1312: [MEGA] GTM Docs + Community Channels (21 pts)

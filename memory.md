@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (fix gateway OIDC port — PR #840 merged, pods 1/1 Running)
+> Derniere MAJ: 2026-02-22 (CAB-1394 done — stoa-docs PR #77, stoa-web PR #12)
 
 ## ✅ DONE
 
@@ -8,6 +8,15 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1394 [MEGA] Community: SaaS Playbook Series (13 pts) — ALL 3 PHASES DONE
+  - P1: Parts 1-2 + SMB Buying Guide (stoa-docs PR #75) — 3 articles, 4000+ words
+  - P2: Parts 3-5 (stoa-docs PR #76) — 3 articles, production checklist
+  - P3: Build vs Buy + series polish (stoa-docs PR #77, stoa-web PR #12) — cross-links + llms.txt
+  - 7 articles total, complete series nav in each, llms.txt updated
+- ✅ fix(ci): Dependency Scan 3 failures → green — PR #843
+  - CVE-2024-23342 (ecdsa Minerva): --ignore-vuln on pip-audit (cp-api + mcp-gateway)
+  - mcp-gateway archived path fix (archive/mcp-gateway/ fallback)
+  - GHSA-3ppc-4f35-3m26 (minimatch ReDoS in @typescript-eslint): --omit=dev on npm audit
 - ✅ fix(gateway): OIDC port + startup probe — PR #840 → pods finally 1/1 Running (3-session fix chain: #819 code → #835 apply-manifest → #840 port:8080 + probe)
 - ✅ CAB-1390 [MEGA] Portal Component Test Coverage & Feature Fixes (21 pts) — ALL 3 PHASES DONE
   - P1: Critical components (PR #833) — Onboarding, Contracts, Apps test files

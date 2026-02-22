@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TOTAL=9
+TOTAL=10
 
 echo "=== Gateway Arena Deploy (3 K8s gateways, co-located) ==="
 
@@ -68,20 +68,24 @@ kubectl apply -f "$SCRIPT_DIR/pushgateway.yaml"
 kubectl apply -f "$SCRIPT_DIR/pushgateway-ingress.yaml"
 
 # 7. ConfigMap from k6 arena scripts
-echo "[7/$TOTAL] Creating ConfigMap from k6 arena scripts..."
+echo "[7/$TOTAL] Creating ConfigMap from k6 arena scripts (baseline + enterprise)..."
 kubectl create configmap gateway-arena-scripts \
   --from-file="$REPO_ROOT/scripts/traffic/arena/benchmark.js" \
   --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena.sh" \
   --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena.py" \
+  --from-file="$REPO_ROOT/scripts/traffic/arena/benchmark-enterprise.js" \
+  --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena-enterprise.sh" \
+  --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena-enterprise.py" \
   -n stoa-system \
   --dry-run=client -o yaml | kubectl apply -f -
 # Clean up old ConfigMap if it exists
 kubectl delete configmap gateway-arena-script -n stoa-system --ignore-not-found
 
-# 8. ServiceMonitor + CronJob
-echo "[8/$TOTAL] Applying ServiceMonitor + CronJob..."
+# 8. ServiceMonitor + CronJobs (baseline + enterprise)
+echo "[8/$TOTAL] Applying ServiceMonitor + CronJobs..."
 kubectl apply -f "$SCRIPT_DIR/pushgateway-servicemonitor.yaml"
 kubectl apply -f "$SCRIPT_DIR/cronjob-prod.yaml"
+kubectl apply -f "$SCRIPT_DIR/cronjob-enterprise.yaml"
 
 # 9. Smoke test — trigger one-off run
 JOB_NAME="arena-smoke-$(date +%s)"
@@ -105,11 +109,18 @@ if kubectl wait --for=condition=complete "job/$JOB_NAME" -n stoa-system --timeou
   echo "CronJob:"
   kubectl get cronjob -n stoa-system gateway-arena
   echo ""
+  # 10. Enterprise smoke test
+  echo "[10/$TOTAL] Triggering enterprise smoke test..."
+  ENT_JOB_NAME="arena-ent-smoke-$(date +%s)"
+  kubectl create job --from=cronjob/gateway-arena-enterprise "$ENT_JOB_NAME" -n stoa-system
+  echo "  Enterprise job created: $ENT_JOB_NAME (runs in background)"
+  echo ""
   echo "Deploy complete. Next steps:"
-  echo "  1. Verify 3 K8s gateway scores: curl http://pushgateway.monitoring.svc:9091/metrics | grep gateway_arena_score"
-  echo "  2. Deploy VPS sidecars: ./deploy/vps/bench/deploy.sh"
-  echo "  3. Check Grafana dashboard for leaderboard"
-  echo "  3. Clean up smoke job: kubectl delete job $JOB_NAME -n stoa-system"
+  echo "  1. Verify baseline scores: kubectl exec -n monitoring deploy/pushgateway -- wget -qO- localhost:9091/metrics | grep gateway_arena_score"
+  echo "  2. Verify enterprise scores: kubectl exec -n monitoring deploy/pushgateway -- wget -qO- localhost:9091/metrics | grep enterprise"
+  echo "  3. Deploy VPS sidecars: ./deploy/vps/bench/deploy.sh"
+  echo "  4. Check Grafana dashboards for leaderboard"
+  echo "  5. Clean up: kubectl delete job $JOB_NAME $ENT_JOB_NAME -n stoa-system"
 else
   echo "Job did not complete in 10m. Check logs:"
   echo "  kubectl logs -n stoa-system job/$JOB_NAME"

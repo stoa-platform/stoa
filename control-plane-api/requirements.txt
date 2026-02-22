@@ -1,5 +1,5 @@
 fastapi==0.128.6
-uvicorn[standard]==0.40.0
+uvicorn[standard]==0.41.0
 python-keycloak==3.9.0
 pydantic[email]==2.12.5
 pydantic-settings==2.13.1

@@ -164,15 +164,96 @@ docker buildx build --platform linux/amd64 -t ghcr.io/stoa-platform/arena-bench:
 | Gravitee 404 | API not started or not deployed | Lifecycle: create → plan → publish plan → deploy → start |
 | Staging ServiceMonitor not discovered | Wrong Prometheus selector labels | Staging uses `release: prometheus` (not `kube-prometheus-stack`) |
 
+## Layer 1: Enterprise AI Readiness
+
+Separate benchmark measuring 8 enterprise dimensions that define AI-native gateway capabilities.
+Gateways without MCP score **0** (not N/A). The spec is open — any gateway can implement and re-run.
+
+### Architecture
+
+```
+Layer 0 — Proxy Baseline (existing, unchanged)
+  Score: Kong ~87 | STOA ~73
+  Measures: raw throughput, burst, ramp-up
+  Schedule: every 30 min (CronJob: gateway-arena)
+
+Layer 1 — Enterprise AI Readiness (NEW)
+  Score: STOA ~95 | Kong ~5 | Gravitee ~5
+  Measures: 8 enterprise dimensions
+  Schedule: hourly (CronJob: gateway-arena-enterprise)
+```
+
+### 8 Enterprise Dimensions
+
+| # | Dimension | Weight | Scenario | Endpoint | Cap |
+|---|-----------|--------|----------|----------|-----|
+| 1 | MCP Discovery | 0.15 | `ent_mcp_discovery` | `GET /mcp/capabilities` | 500ms |
+| 2 | MCP Tool Execution | 0.20 | `ent_mcp_toolcall` | `POST /mcp/tools/list` (JSON-RPC) | 500ms |
+| 3 | Auth Chain | 0.15 | `ent_auth_chain` | JWT + tool call | 1s |
+| 4 | Policy Engine | 0.15 | `ent_policy_eval` | OPA evaluation overhead | 200ms |
+| 5 | AI Guardrails | 0.10 | `ent_guardrails` | PII in payload blocked/redacted | 1s |
+| 6 | Rate Limiting | 0.10 | `ent_quota_burst` | 429 enforcement | 1s |
+| 7 | Resilience | 0.10 | `ent_resilience` | Bad tool call → 4xx (not 500) | 1s |
+| 8 | Agent Governance | 0.05 | `ent_governance` | Session/governance endpoints | 2s |
+
+**Composite**: `Enterprise Readiness Index = sum(weight_i * dimension_i)`
+
+**Dimension score**: `0.6 * availability_score + 0.4 * latency_score`
+- `availability_score = passes / (passes + fails) * 100`
+- `latency_score = max(0, 100 * (1 - p95 / cap))`
+
+### Enterprise Key Files
+
+| File | Purpose |
+|------|---------|
+| `scripts/traffic/arena/benchmark-enterprise.js` | k6 enterprise scenarios (8 dimensions) |
+| `scripts/traffic/arena/run-arena-enterprise.sh` | Shell orchestrator (gateway × run × scenario) |
+| `scripts/traffic/arena/run-arena-enterprise.py` | Python scorer (per-dimension, composite, CI95) |
+| `k8s/arena/cronjob-enterprise.yaml` | Enterprise CronJob (hourly) |
+| `k8s/arena/deploy-enterprise.sh` | Standalone deploy for enterprise CronJob |
+| `docker/observability/grafana/dashboards/gateway-arena-enterprise.json` | Enterprise Grafana dashboard |
+
+### Enterprise Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `gateway_arena_enterprise_score` | gauge | Composite Enterprise Readiness Index (0-100) |
+| `gateway_arena_enterprise_dimension` | gauge | Per-dimension score (0-100) |
+| `gateway_arena_enterprise_score_ci_lower` | gauge | CI95 lower bound |
+| `gateway_arena_enterprise_score_ci_upper` | gauge | CI95 upper bound |
+| `gateway_arena_enterprise_score_stddev` | gauge | Run-to-run standard deviation |
+| `gateway_arena_enterprise_runs` | gauge | Number of valid enterprise runs |
+| `gateway_arena_enterprise_latency_p95` | gauge | P95 latency per dimension |
+
+### Enterprise CronJob Config
+
+```yaml
+# GATEWAYS JSON — mcp_base: null means "no MCP support, score 0"
+[
+  {"name":"stoa-k8s", "target":"http://stoa-gateway:8080", "mcp_base":"http://stoa-gateway:8080/mcp"},
+  {"name":"kong-k8s",  "target":"http://kong-arena:8000",  "mcp_base":null}
+]
+```
+
+### Open Participation
+
+Any gateway can participate in Layer 1:
+1. Implement MCP endpoints: `/mcp/capabilities`, `/mcp/tools/list`, `/mcp/tools/call`
+2. Add gateway entry to GATEWAYS JSON with `mcp_base` pointing to MCP root
+3. Deploy and run: `kubectl create job --from=cronjob/gateway-arena-enterprise arena-ent-test -n stoa-system`
+
+The benchmark is fair: same k6 scenarios, same scoring formula, same CI95 methodology.
+
 ## Manual Run
 
 ```bash
-# Trigger a one-off benchmark
+# Layer 0 (baseline) — one-off benchmark
 kubectl create job --from=cronjob/gateway-arena arena-manual -n stoa-system
-
-# Watch logs
 kubectl logs -n stoa-system -l job-name=arena-manual --follow
-
-# Cleanup
 kubectl delete job arena-manual -n stoa-system
+
+# Layer 1 (enterprise) — one-off benchmark
+kubectl create job --from=cronjob/gateway-arena-enterprise arena-ent-manual -n stoa-system
+kubectl logs -n stoa-system -l job-name=arena-ent-manual --follow
+kubectl delete job arena-ent-manual -n stoa-system
 ```

@@ -1,0 +1,109 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gateway-arena-enterprise
+  namespace: stoa-system
+  labels:
+    app: gateway-arena-enterprise
+    environment: production
+    layer: enterprise
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3000
+      template:
+        metadata:
+          labels:
+            app: gateway-arena-enterprise
+        spec:
+          imagePullSecrets:
+            - name: ghcr-pull-secret
+          restartPolicy: Never
+          affinity:
+            podAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchLabels:
+                        app: stoa-gateway
+                    topologyKey: kubernetes.io/hostname
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 12345
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: arena-enterprise
+              image: ghcr.io/stoa-platform/arena-bench:0.1.0
+              command:
+                - bash
+                - /scripts/run-arena-enterprise.sh
+              env:
+                - name: PUSHGATEWAY_URL
+                  value: "http://pushgateway.monitoring.svc:9091"
+                - name: RUNS
+                  value: "3"
+                - name: DISCARD_FIRST
+                  value: "1"
+                - name: TIMEOUT
+                  value: "10"
+                - name: SCRIPT_PATH
+                  value: "/scripts/benchmark-enterprise.js"
+                - name: ARENA_JWT
+                  valueFrom:
+                    secretKeyRef:
+                      name: arena-enterprise-jwt
+                      key: token
+                      optional: true
+                  # GATEWAYS: mcp_base is null for gateways without MCP support
+                  # Those gateways score 0 on MCP dimensions (not N/A)
+                  # target: base URL for warmup + non-MCP scenarios
+                - name: GATEWAYS
+                  value: |
+                    [
+                      {
+                        "name": "stoa-k8s",
+                        "target": "http://stoa-gateway.stoa-system.svc:8080",
+                        "mcp_base": "http://stoa-gateway.stoa-system.svc:8080/mcp",
+                        "health": "http://stoa-gateway.stoa-system.svc:8080/health"
+                      },
+                      {
+                        "name": "kong-k8s",
+                        "target": "http://kong-arena.stoa-system.svc:8000",
+                        "mcp_base": null,
+                        "health": "http://kong-arena.stoa-system.svc:8001/status"
+                      }
+                    ]
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: gateway-arena-scripts
+                defaultMode: 0755
+            - name: tmp
+              emptyDir: {}

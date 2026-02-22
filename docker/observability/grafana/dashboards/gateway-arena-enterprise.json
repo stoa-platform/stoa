@@ -1,0 +1,454 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Gateway Arena — Enterprise AI Readiness Index (Layer 1). Measures MCP support, auth chains, guardrails, governance, and resilience.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "bolt",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Layer 0: Proxy Baseline",
+      "type": "link",
+      "url": "/d/gateway-arena/gateway-arena?${__url_time_range}&${__all_variables}"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "panels": [],
+      "title": "Enterprise AI Readiness Index",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Composite Enterprise AI Readiness Index (0-100). Weighted sum of 8 enterprise dimensions. Gateways without MCP score 0.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 20},
+              {"color": "yellow", "value": 50},
+              {"color": "green", "value": 80}
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "none",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 1},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Enterprise Readiness Index",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Run-to-run standard deviation. Lower = more reproducible.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 2},
+              {"color": "red", "value": 5}
+            ]
+          },
+          "min": 0,
+          "unit": "none",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 4, "x": 8, "y": 1},
+      "id": 2,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_score_stddev{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Stddev",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Side-by-side: Layer 0 (proxy throughput) vs Layer 1 (enterprise AI readiness). Different scoring axes — a high Layer 0 score with low Layer 1 means the gateway is fast but not AI-ready.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "Score",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*Layer 0.*"},
+            "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*Layer 1.*"},
+            "properties": [{"id": "color", "value": {"fixedColor": "purple", "mode": "fixed"}}]
+          }
+        ]
+      },
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 1},
+      "id": 3,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single", "sort": "none"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} Layer 0 (Proxy)",
+          "refId": "A"
+        },
+        {
+          "expr": "gateway_arena_enterprise_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} Layer 1 (Enterprise)",
+          "refId": "B"
+        }
+      ],
+      "title": "Layer 0 (Proxy) vs Layer 1 (Enterprise)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 7},
+      "id": 101,
+      "panels": [],
+      "title": "Dimension Breakdown (8 Enterprise Dimensions)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Per-dimension scores for each gateway. 0 = not implemented (gateway can implement MCP and re-run). Color: red < 20, yellow < 50, green >= 80.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {"align": "auto", "cellOptions": {"type": "color-background"}, "inspect": false},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 20},
+              {"color": "yellow", "value": 50},
+              {"color": "green", "value": 80}
+            ]
+          },
+          "unit": "none",
+          "decimals": 1,
+          "min": 0,
+          "max": 100
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "dimension"},
+            "properties": [
+              {"id": "custom.cellOptions", "value": {"type": "auto"}},
+              {"id": "custom.width", "value": 180}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 8},
+      "id": 10,
+      "options": {"showHeader": true, "sortBy": [{"desc": true, "displayName": "dimension"}]},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Dimension Scores (per gateway)",
+      "transformations": [
+        {"id": "groupBy", "options": {"fields": {"dimension": {"aggregations": [], "operation": "groupby"}, "gateway": {"aggregations": [], "operation": "groupby"}, "Value": {"aggregations": ["lastNotNull"], "operation": "aggregate"}}}},
+        {"id": "organize", "options": {"excludeByName": {"Time": true, "__name__": true, "instance": true, "job": true}, "indexByName": {}, "renameByName": {"Value (lastNotNull)": "Score"}}},
+        {"id": "sortBy", "options": {"fields": {}, "sort": [{"field": "dimension"}]}}
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
+      "id": 102,
+      "panels": [],
+      "title": "MCP Availability & Latency",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "MCP Discovery dimension score. Measures whether GET /mcp/capabilities returns valid JSON with capability listing.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 80}
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 19},
+      "id": 20,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"mcp_discovery\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "MCP Discovery",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "MCP Tool Execution dimension. Measures POST /mcp/tools/list JSON-RPC performance (p95 < 500ms).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 80}
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 19},
+      "id": 21,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"mcp_toolcall\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "MCP Tool Execution",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "P95 latency per enterprise dimension (seconds). Lower is better.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "Latency (s)",
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "min": 0,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 19},
+      "id": 22,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single", "sort": "none"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_latency_p95{gateway=~\"$gateway\",dimension=~\"$dimension\"}",
+          "legendFormat": "{{gateway}} — {{dimension}}",
+          "refId": "A"
+        }
+      ],
+      "title": "P95 Latency by Dimension",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24},
+      "id": 103,
+      "panels": [],
+      "title": "Score Trend",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Enterprise Readiness Index over time with CI95 confidence band.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "Enterprise Score",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*CI.*"},
+            "properties": [
+              {"id": "custom.lineWidth", "value": 0},
+              {"id": "custom.fillOpacity", "value": 20},
+              {"id": "custom.fillBelowTo", "value": "ci_lower"}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 25},
+      "id": 30,
+      "options": {"legend": {"calcs": ["lastNotNull", "min", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        },
+        {
+          "expr": "gateway_arena_enterprise_score_ci_upper{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} CI95 Upper",
+          "refId": "B"
+        },
+        {
+          "expr": "gateway_arena_enterprise_score_ci_lower{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} CI95 Lower",
+          "refId": "C"
+        }
+      ],
+      "title": "Enterprise Readiness Index — Trend",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": ["stoa", "arena", "enterprise", "benchmark"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "Prometheus", "value": "prometheus"},
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {"selected": true, "text": ["All"], "value": ["$__all"]},
+        "datasource": {"type": "prometheus", "uid": "${datasource}"},
+        "definition": "label_values(gateway_arena_enterprise_score, gateway)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "gateway",
+        "query": {"query": "label_values(gateway_arena_enterprise_score, gateway)", "refId": "StandardVariableQuery"},
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {"selected": true, "text": ["All"], "value": ["$__all"]},
+        "datasource": {"type": "prometheus", "uid": "${datasource}"},
+        "definition": "label_values(gateway_arena_enterprise_dimension, dimension)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "dimension",
+        "query": {"query": "label_values(gateway_arena_enterprise_dimension, dimension)", "refId": "StandardVariableQuery"},
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-24h", "to": "now"},
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Gateway Arena — Enterprise AI Readiness",
+  "uid": "gateway-arena-enterprise",
+  "version": 1
+}

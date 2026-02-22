@@ -271,6 +271,22 @@ pub struct Config {
     #[serde(default)]
     pub guardrails_content_filter_enabled: bool,
 
+    // === Token Budget (CAB-1337 Phase 2) ===
+    /// Enable per-tenant token budget tracking
+    /// Env: STOA_TOKEN_BUDGET_ENABLED
+    #[serde(default)]
+    pub token_budget_enabled: bool,
+
+    /// Default token budget per tenant per window (in tokens, ~4 chars each)
+    /// Env: STOA_TOKEN_BUDGET_DEFAULT_LIMIT
+    #[serde(default = "default_token_budget_limit")]
+    pub token_budget_default_limit: u64,
+
+    /// Sliding window duration in hours
+    /// Env: STOA_TOKEN_BUDGET_WINDOW_HOURS
+    #[serde(default = "default_token_budget_window_hours")]
+    pub token_budget_window_hours: u64,
+
     // === Fallback Chain (CAB-708) ===
     /// Enable fallback chain for tool execution
     /// Env: STOA_FALLBACK_ENABLED
@@ -569,6 +585,14 @@ fn default_guardrails_pii_redact() -> bool {
     true // Redact by default (safer than rejecting)
 }
 
+fn default_token_budget_limit() -> u64 {
+    500_000 // 500K tokens per window (~2M chars)
+}
+
+fn default_token_budget_window_hours() -> u64 {
+    1 // 1-hour sliding window
+}
+
 fn default_fallback_timeout_ms() -> u64 {
     5000
 }
@@ -678,6 +702,9 @@ impl Default for Config {
             guardrails_pii_redact: default_guardrails_pii_redact(),
             guardrails_injection_enabled: false,
             guardrails_content_filter_enabled: false,
+            token_budget_enabled: false,
+            token_budget_default_limit: default_token_budget_limit(),
+            token_budget_window_hours: default_token_budget_window_hours(),
             fallback_enabled: false,
             fallback_chains: None,
             fallback_timeout_ms: default_fallback_timeout_ms(),
@@ -883,6 +910,14 @@ mod tests {
         assert!(config.guardrails_pii_redact); // redact by default when enabled
         assert!(!config.guardrails_injection_enabled);
         assert!(!config.guardrails_content_filter_enabled);
+    }
+
+    #[test]
+    fn test_default_token_budget_settings() {
+        let config = Config::default();
+        assert!(!config.token_budget_enabled);
+        assert_eq!(config.token_budget_default_limit, 500_000);
+        assert_eq!(config.token_budget_window_hours, 1);
     }
 
     #[test]

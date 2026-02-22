@@ -1,10 +1,10 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-22 (Cycle 8 close-out: CAB-1151, CAB-1375, CAB-1373, CAB-1386 DONE)
+> Dernière MAJ: 2026-02-22 (C8 closed 971 pts, C9 loaded 776 pts via /fill-cycle — 34 items promoted)
 
 ## ✅ DONE
 
-> Full history: 548+ pts across 59+ issues. See Linear for complete audit trail.
+> Full history: 971+ pts across 81+ issues (C8 alone). See Linear for complete audit trail.
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 8 (Feb 16-22) — Recent
@@ -18,12 +18,8 @@
 - CAB-1323: Portal Multi-Audience + RBAC (34 pts MEGA) — PRs #697, #714, #719 (3 phases, ~917 LOC, 78 tests)
 - CAB-1314: MCP Skills System MEGA (21 pts) — P1 PR #702, P2 PR #721, P3 PR #710 (3 phases, skills CSS cascade + context injection)
 - CAB-1382: Code Hygiene Sprint (13 pts) — PRs #724, #725, #726 (P1: 38 dead_code removed, P2: 20→0 ESLint warnings + error tracking stub)
-- CAB-1325: DX Self-Onboarding Zero-Touch Trial (21 pts MEGA) — PR #732 (3 phases: onboarding flow + trial API key + sandbox tools + funnel analytics)
-- CAB-1318: Consumer Execution View — Error Taxonomy Dashboard (13 pts) — PR #762
-- CAB-1151: Dress Rehearsal PROD (3 pts) — PROD GO (all pods healthy, ArgoCD synced, health endpoints 200)
-- CAB-1375: Grafana UAC Debug Dashboard (8 pts) — PR #763 (12 panels, 4 rows: tool perf, tenant breakdown, rate limits, security)
-- CAB-1373: Federation E2E Tests (5 pts) — PR #764 (15 BDD scenarios: 10 Console + 5 Gateway, @wip)
-- CAB-1386: AI Factory Observability (13 pts) — PRs #747, #750 (state drift fix — already merged)
+- CAB-1386: AI Factory Observability Phase 1 (13 pts) — PR #747 (Pushgateway integration + 15-panel Grafana dashboard + 4 workflow wiring)
+- CAB-1386: AI Factory Observability Phase 2+3 — PR #750 (Prometheus alerting rules + one-click Merge PR button + afternoon scan fix)
 
 ## 🔴 IN PROGRESS
 
@@ -34,12 +30,13 @@ CAB-1330: MCP Hot-Reload & CI Security Showcase (13 pts MEGA)
 CAB-802: Dry Run + Script + Video Backup (3 pts)
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
 - ✅ Production validated: 23/23 PASS, GO in 5s
-- [ ] Répétition #1 — timer 5 min
-- [ ] Répétition #2 — avec Cédric comme témoin
+- [ ] Répétition #1 (mercredi 19) — timer 5 min
+- [ ] Répétition #2 (vendredi 21) — avec Cédric comme témoin
 - [ ] Video backup filmée
 
 ## 📋 NEXT
 
+- CAB-1151: Dress Rehearsal (3 pts, P0)
 - CAB-1367 P3: Cost Guardrails + Lint Hook (5 pts)
 
 ## 🚫 BLOCKED
@@ -47,7 +44,10 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 (rien)
 
 ## 📝 NOTES
-- Demo MVP: mardi 17 mars 2026
-- docs.gostoa.dev = 37 articles, 0 "Coming Soon"
+- Demo MVP: mardi 24 février 2026
+- docs.gostoa.dev = 38 articles, 0 "Coming Soon"
 - ADR numbering: stoa-docs owns numbers (001-048). Next: **ADR-049**
-- Velocity C8: 690 pts / 71 issues (4 closed this session)
+- Velocity C8: 971 pts / 81 issues (138.7 pts/day) — CLOSED
+- Velocity C7: 505 pts / 44 issues (72.1 pts/day)
+- Rolling avg: 105.4 pts/day
+- C9 scope: 776 pts / 48 items (target 590 pts, 132% loaded — aggressive sprint)

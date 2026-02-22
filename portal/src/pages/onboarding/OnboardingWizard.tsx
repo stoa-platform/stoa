@@ -4,8 +4,9 @@
  * 4-step wizard: Choose use case -> Create app -> Subscribe -> First call
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { StepIndicator } from '../../components/onboarding/StepIndicator';
 import { ChooseUseCase } from '../../components/onboarding/steps/ChooseUseCase';
 import { CreateApp } from '../../components/onboarding/steps/CreateApp';
@@ -13,9 +14,21 @@ import { SubscribeAPI } from '../../components/onboarding/steps/SubscribeAPI';
 import { FirstCall } from '../../components/onboarding/steps/FirstCall';
 import type { UseCase } from '../../components/onboarding/steps/ChooseUseCase';
 import type { Application, API } from '../../types';
+import { config } from '../../config';
+import { loadNamespace } from '../../i18n';
 
 export function OnboardingWizardPage() {
   const navigate = useNavigate();
+  const { i18n: i18nInstance } = useTranslation('onboarding');
+  const i18nEnabled = config.features.enableI18n;
+
+  useEffect(() => {
+    if (i18nEnabled) {
+      const lng = i18nInstance.language;
+      loadNamespace(lng, 'onboarding');
+      if (lng !== 'en') loadNamespace('en', 'onboarding');
+    }
+  }, [i18nEnabled, i18nInstance.language]);
   const [step, setStep] = useState(0);
   const [useCase, setUseCase] = useState<UseCase>('rest-api');
   const [createdApp, setCreatedApp] = useState<Application | null>(null);

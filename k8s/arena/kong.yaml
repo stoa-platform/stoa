@@ -40,7 +40,7 @@ spec:
     spec:
       containers:
         - name: kong
-          image: kong:3.9-ubuntu
+          image: kong:3.9.1-ubuntu
           ports:
             - containerPort: 8000
               name: proxy

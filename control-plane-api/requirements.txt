@@ -11,7 +11,7 @@ kafka-python==2.3.0
 python-snappy==0.7.3
 python-gitlab==4.4.0
 pyyaml==6.0.3
-sse-starlette==1.8.2
+sse-starlette==3.2.0
 aiocache==0.12.3
 prometheus-client==0.24.1
 structlog==24.1.0

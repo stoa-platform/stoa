@@ -379,17 +379,18 @@ The `repository_dispatch` `client_payload` includes phase-aware fields:
 
 | Guard | Value | Why |
 |-------|-------|-----|
-| Model routing | `model-router.sh` — Sonnet, MODE-aware turns | Ship ≤3pt → 20 turns vs 25 |
+| Model routing | `model-router.sh` — Sonnet tiers by estimate, MODE-aware | ~60% savings on small tickets |
 | Ship fast-path | Skip S2 for ≤5pt Ship tickets | ~$3 + 5min saved per ticket |
+| Ship turn budget | Ship ≤3pt → 20 turns (vs 25 default) | Tighter budget for trivial changes |
 | Velocity cap | `AUTOPILOT_DAILY_MAX` (default 5) | Daily budget ceiling |
-| Velocity tracking | `AUTOPILOT_TODAY_COUNT` incremented by scan + dispatch | Accurate daily count |
-| Max turns per agent | 20/25/40/60 (tiered by estimate + MODE) | Prevent runaway costs |
-| Default model | Sonnet (all code gen) | Haiku dropped (PR #737) |
+| Velocity tracking | Autopilot scan increments `AUTOPILOT_TODAY_COUNT` after creating issues | Prevents exceeding daily cap |
+| Precise matching | Ticket ID regex with word boundaries | Prevents CAB-1 matching CAB-123 |
+| Max turns per agent | 20/25/40/60 (tiered by estimate + mode) | Prevent runaway costs |
+| Default model | Sonnet (code gen), Haiku (council scan) | Right model per task |
 | Council threshold | 8.0 (all levels) | Harmonized — no per-level exceptions |
 | Max parallel agents | 3 | Cost caps at ~3x single agent |
 | Timeout per job | 15-60 min | Hard stop on runaway jobs |
 | Skip Council S2 for | Ship-mode ≤5 pts | Avoid unnecessary plan validation |
-| Precise ticket matching | Word-boundary regex `(^|[^0-9])ID([^0-9]|$)` | Prevents CAB-1 matching CAB-123 |
 | Schedule frequency | Daily/weekly (not hourly) | Control API usage |
 | Kill-switch model | `CLAUDE_DEFAULT_MODEL` repo var | Revert all tiers to Sonnet |
 

@@ -452,7 +452,7 @@ jobs:
           if [ -n "$PR_INFO" ]; then
             VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
             VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
-            if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+            if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qiE "(^|[^0-9])${TICKET_ID}([^0-9]|$)"; then
               echo "::warning::PR found but branch/title doesn't contain ${TICKET_ID} — false positive"
               echo "  Branch: $VFY_BRANCH | Title: $VFY_TITLE"
               PR_INFO=""
@@ -507,7 +507,7 @@ jobs:
           if [ -n "$PR_INFO" ]; then
             VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
             VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
-            if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+            if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qiE "(^|[^0-9])${TICKET_ID}([^0-9]|$)"; then
               echo "::warning::Merged PR found but doesn't match ${TICKET_ID} — false positive (branch=$VFY_BRANCH)"
               PR_INFO=""
             fi
@@ -521,7 +521,7 @@ jobs:
             if [ -n "$PR_INFO" ]; then
               VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
               VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
-              if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+              if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qiE "(^|[^0-9])${TICKET_ID}([^0-9]|$)"; then
                 echo "::warning::Open PR found but doesn't match ${TICKET_ID} — false positive"
                 PR_INFO=""
               fi
@@ -984,7 +984,7 @@ jobs:
             VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
             VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
             MATCH=false
-            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qiE "(^|[^0-9])${TICKET_ID}([^0-9]|$)"; then MATCH=true; fi
             if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
             if [ "$MATCH" = "false" ]; then
               echo "::warning::PR found but branch/title doesn't contain ${SEARCH_TERM} — false positive"
@@ -1049,7 +1049,7 @@ jobs:
             VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
             VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
             MATCH=false
-            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qiE "(^|[^0-9])${TICKET_ID}([^0-9]|$)"; then MATCH=true; fi
             if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
             if [ "$MATCH" = "false" ]; then
               echo "::warning::Merged PR found but doesn't match issue-${ISSUE_NUM} or ${TICKET_ID} — false positive (branch=$VFY_BRANCH)"
@@ -1065,7 +1065,7 @@ jobs:
               VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
               VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
               MATCH=false
-              if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
+              if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qiE "(^|[^0-9])${TICKET_ID}([^0-9]|$)"; then MATCH=true; fi
               if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
               if echo "$VFY_TITLE" | grep -q "#${ISSUE_NUM}"; then MATCH=true; fi
               if [ "$MATCH" = "false" ]; then
@@ -1095,7 +1095,7 @@ jobs:
               if [ -n "$OPEN_PR" ]; then
                 VFY_BRANCH=$(echo "$OPEN_PR" | jq -r '.headRefName // ""' 2>/dev/null)
                 VFY_TITLE=$(echo "$OPEN_PR" | jq -r '.title // ""' 2>/dev/null)
-                if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then
+                if ! echo "$VFY_BRANCH $VFY_TITLE" | grep -qiE "(^|[^0-9])${TICKET_ID}([^0-9]|$)"; then
                   echo "::warning::Open PR search false positive — ignoring"
                   OPEN_PR=""
                 fi

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (Portal mock data fix — PR #771 merged + CD verified)
+> Derniere MAJ: 2026-02-22 (AI Factory Slack Bot threading — PR #775 merged)
 
 ## ✅ DONE
 
@@ -8,6 +8,8 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ AI Factory Slack Bot threading — PR #775 (Bot API dual-path, n8n sequential pipeline, thread_ts propagation)
+- ✅ Promote-to-prod workflow — PR #771 (reusable-promote.yml + promote-to-prod.yml + runbook)
 - ✅ Portal mock data fix — PR #771 (removed MOCK_SERVERS fallback from MCP pages, -189 LOC)
 
 ### Cycle 8 (Feb 16-22) — CLOSED (905 pts, 88 issues, 129 pts/day)

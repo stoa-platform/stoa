@@ -236,3 +236,7 @@ class ApigeeGatewayAdapter(GatewayAdapterInterface):
     async def export_archive(self, auth_token: str | None = None) -> bytes:
         """Not supported."""
         return b""
+
+    async def deploy_contract(self, contract_spec: dict, auth_token: str | None = None) -> AdapterResult:
+        """Not supported."""
+        return AdapterResult(success=False, error="Not supported by Apigee adapter")

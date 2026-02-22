@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (CAB-1301 MEGA complete — all 3 phases done)
+> Derniere MAJ: 2026-02-22 (state drift fix: CAB-1398 + CAB-86 marked Done)
 
 ## ✅ DONE
 
@@ -11,10 +11,12 @@
 - ✅ Gap #5 CP API Prometheus scraping — PRs #788, #793, #799
   - ServiceMonitor (Helm), fix generate_latest(REGISTRY), NetworkPolicies port 8000
   - Prometheus targets: 2/2 health: up ✅
+- ✅ CAB-1391 [MEGA] Migration Guide Expansion (13 pts) — stoa-docs PR #68 (Layer7 guide + hub), stoa-web PR #10 (llms.txt)
 - ✅ CAB-1301 [MEGA] Gateway API + NetworkPolicy (21 pts) — ALL 3 PHASES DONE
   - P1: CRDs + NGF (PR #785), P2: HTTPRoutes + DNS cutover (PR #791), P3: NetworkPolicies (PR #797)
   - New LB: 92.222.226.6, 30 NetworkPolicies, 9 HTTPRoutes, 8 DNS records updated
-- ✅ CAB-1398 Phase 3 Slack Threading + Reactions — PR #781 (`SLACK_THREAD_TS` env var fallback, `_react_slack()`, L1/L3/L3.5 reactions)
+- ✅ CAB-1398 [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts) — ALL 4 PHASES DONE
+  - P1: Dispatch fixes (PR #768), P2: Bot API dual-path (PR #775), P3: Threading+Reactions (PR #781), P4: /stoa+gaps (PRs #792, #795)
 - ✅ CAB-86 TTL Extension — PR #780 (PATCH /v1/subscriptions/{id}/ttl, migration 035, 11 tests, +616 LOC)
 - ✅ AI Factory Slack Bot threading — PR #775 (Bot API dual-path, n8n sequential pipeline, thread_ts propagation)
 - ✅ Promote-to-prod workflow — PR #771 (reusable-promote.yml + promote-to-prod.yml + runbook)
@@ -37,7 +39,6 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 
 ## 📋 NEXT
 
-CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2) — Phase 3 DONE (PR #781)
 CAB-1132: Business Model Validation — Post Demo (8 pts, P1)
 CAB-1126: Demo Video (8 pts, P2)
 CAB-1125: Video Punchline AI Factory (8 pts, P2)

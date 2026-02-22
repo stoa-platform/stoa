@@ -88,26 +88,24 @@ spec:
               value: mongodb
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
+              cpu: 200m
               memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
           readinessProbe:
-            httpGet:
-              path: /_node/health
+            tcpSocket:
               port: 8083
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /_node/health
+            tcpSocket:
               port: 8083
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 30
             timeoutSeconds: 5
 ---
@@ -160,26 +158,24 @@ spec:
               value: mongodb://gravitee-arena-mongo.stoa-system.svc:27017/gravitee
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
+              cpu: 200m
               memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
           readinessProbe:
-            httpGet:
-              path: /_node/health
-              port: 18082
-            initialDelaySeconds: 30
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /_node/health
-              port: 18082
-            initialDelaySeconds: 60
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 120
             periodSeconds: 30
             timeoutSeconds: 5
 ---
@@ -213,7 +209,7 @@ metadata:
     app: gravitee-arena-init
 spec:
   backoffLimit: 3
-  activeDeadlineSeconds: 300
+  activeDeadlineSeconds: 600
   template:
     metadata:
       labels:
@@ -229,8 +225,9 @@ spec:
             - |
               echo "Waiting for Gravitee Management API..."
               for i in $(seq 1 60); do
-                if curl -sf http://gravitee-arena-mgmt.stoa-system.svc:8083/_node/health > /dev/null 2>&1; then
-                  echo "Management API is ready"
+                CODE=$(curl -s -o /dev/null -w '%{http_code}' http://gravitee-arena-mgmt.stoa-system.svc:8083/management/ 2>/dev/null || echo "000")
+                if [ "$CODE" != "000" ] && [ "$CODE" != "" ]; then
+                  echo "Management API is ready (HTTP $CODE)"
                   exit 0
                 fi
                 echo "  attempt $i/60 — not ready yet"
@@ -254,8 +251,9 @@ spec:
             - |
               echo "Waiting for Gravitee Gateway..."
               for i in $(seq 1 60); do
-                if curl -sf http://gravitee-arena-gw.stoa-system.svc:18082/_node/health > /dev/null 2>&1; then
-                  echo "Gateway is ready"
+                CODE=$(curl -s -o /dev/null -w '%{http_code}' http://gravitee-arena-gw.stoa-system.svc:8082/ 2>/dev/null || echo "000")
+                if [ "$CODE" != "000" ] && [ "$CODE" != "" ]; then
+                  echo "Gateway is ready (HTTP $CODE)"
                   exit 0
                 fi
                 echo "  attempt $i/60 — not ready yet"
@@ -282,8 +280,12 @@ spec:
               MGMT="http://gravitee-arena-mgmt.stoa-system.svc:8083/management/v2/environments/DEFAULT"
               AUTH="Basic YWRtaW46YWRtaW4="
 
-              # Check if echo API already exists
+              # Helper: extract first "id" from JSON (handles pretty-printed 4.8 output)
+              extract_id() { tr -d ' \n' | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'; }
+
+              # Check if echo API already exists (compact JSON for sed)
               EXISTING=$(curl -sf "${MGMT}/apis?q=echo-arena" -H "Authorization: ${AUTH}" \
+                | tr -d ' \n' \
                 | sed -n 's/.*"id":"\([^"]*\)".*"name":"echo-arena".*/\1/p' \
                 || echo "")
 
@@ -321,7 +323,7 @@ spec:
                       }
                     ]
                   }')
-                EXISTING=$(echo "$API_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+                EXISTING=$(echo "$API_RESPONSE" | extract_id)
                 echo "API created: $EXISTING"
 
                 # Create KEY_LESS plan
@@ -338,7 +340,7 @@ spec:
                     "characteristics": [],
                     "status": "PUBLISHED"
                   }')
-                PLAN_ID=$(echo "$PLAN_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+                PLAN_ID=$(echo "$PLAN_RESPONSE" | extract_id)
                 echo "Plan created: $PLAN_ID"
 
                 # Publish plan (Gravitee 4.6 may create in STAGING even with status=PUBLISHED)
@@ -374,6 +376,7 @@ spec:
 
               # --- MCP API (Streamable HTTP entrypoint, Gravitee 4.8+) ---
               MCP_EXISTING=$(curl -sf "${MGMT}/apis?q=mcp-arena" -H "Authorization: ${AUTH}" \
+                | tr -d ' \n' \
                 | sed -n 's/.*"id":"\([^"]*\)".*"name":"mcp-arena".*/\1/p' \
                 || echo "")
 
@@ -411,7 +414,7 @@ spec:
                       }
                     ]
                   }')
-                MCP_EXISTING=$(echo "$MCP_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+                MCP_EXISTING=$(echo "$MCP_RESPONSE" | extract_id)
                 echo "MCP API created: $MCP_EXISTING"
 
                 echo "Creating KEY_LESS plan for MCP API..."
@@ -427,7 +430,7 @@ spec:
                     "characteristics": [],
                     "status": "PUBLISHED"
                   }')
-                MCP_PLAN_ID=$(echo "$MCP_PLAN" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+                MCP_PLAN_ID=$(echo "$MCP_PLAN" | extract_id)
                 echo "MCP Plan created: $MCP_PLAN_ID"
 
                 echo "Publishing MCP plan..."

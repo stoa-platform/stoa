@@ -86,9 +86,9 @@ spec:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 3
+            initialDelaySeconds: 5
             periodSeconds: 3
-            failureThreshold: 10  # 3s * 10 = 30s max startup time
+            failureThreshold: 16  # 5s + 16*3s = 53s max — covers 30s CP reg timeout + 10s catalog + buffer
           livenessProbe:
             httpGet:
               path: /health

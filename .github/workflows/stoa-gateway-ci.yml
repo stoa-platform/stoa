@@ -135,7 +135,7 @@ jobs:
       - name: Restart deployment (pull new image from GHCR)
         run: |
           kubectl rollout restart deployment/stoa-gateway -n stoa-system
-          kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=300s
+          kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=600s
 
   # === Smoke Test: health checks after deploy (Tier 1) ===
   # Full E2E with personas runs nightly (e2e-nightly.yml)

@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 580 pts (57 issues) | **Velocity**: 57+ issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 622 pts (63 issues) | **Velocity**: 63+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
@@ -111,6 +111,11 @@
 - [x] CAB-1323: [MEGA] DX: Portal Governance — Multi-Audience + RBAC Fine-Grained (34 pts) — PRs #697, #714, #719 (3 phases)
 - [x] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts) — PR #646
 - [x] CAB-1325: [MEGA] DX: Self-Onboarding Zero-Touch Trial — 3 phases, 21 pts — PR #732 (Council 8.50/10)
+- [x] CAB-1318: [MEGA] DX: Consumer Execution View — Error Taxonomy Dashboard (13 pts) — PR #762
+- [x] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts) — PROD GO
+- [x] CAB-1375: Grafana UAC Debug Dashboard (8 pts) — PR #763
+- [x] CAB-1373: [E2E] Federation Flow Integration Tests (5 pts) — PR #764
+- [x] CAB-1386: AI Factory Observability (13 pts) — PRs #747, #750
 
 ### In Progress
 
@@ -124,7 +129,6 @@
 
 ### Todo
 
-- [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
 - [ ] CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
 - [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2) — DEFERRED (archived)
 ### Backlog — DX Remediation (from CAB-1035 friction analysis) ✅ ALL DONE
@@ -248,7 +252,7 @@
 | Lun-Mer 16-19 | Staging freerun V1++ | CAB-1149 |
 | Jeu-Sam 20-22 | Off — narrative prep + rehearsals | CAB-802 |
 | Dim 22 fev | Dress rehearsal | CAB-1151 |
-| Mar 24 fev | DEMO DAY | 5 min live + "ESB is Dead" |
+| Mar 17 mars | DEMO DAY | 5 min live + "ESB is Dead" |
 
 ## KPIs Demo
 

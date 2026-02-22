@@ -347,6 +347,123 @@ class TestContractsRouter:
         assert response.status_code == 409
         assert "already enabled" in response.json()["detail"]
 
+    def test_enable_binding_dispatches_to_stoa_gateway(
+        self, app_with_tenant_admin, mock_db_session, sample_contract_data
+    ):
+        """enable_binding calls deploy_contract on online STOA gateways (CAB-Gap1)."""
+        mock_contract = self._create_mock_contract(sample_contract_data)
+        mock_binding = self._create_mock_binding(
+            sample_contract_data["id"],
+            ProtocolType.MCP,
+            enabled=False,
+        )
+
+        mock_contract_result = MagicMock()
+        mock_contract_result.scalar_one_or_none.return_value = mock_contract
+
+        mock_binding_result = MagicMock()
+        mock_binding_result.scalar_one_or_none.return_value = mock_binding
+
+        mock_gw = MagicMock()
+        mock_gw.name = "stoa-k8s"
+        mock_gw.gateway_type.value = "stoa"
+        mock_gw.base_url = "http://stoa-gateway:8080"
+        mock_gw.auth_config = {}
+        mock_gw_result = MagicMock()
+        mock_gw_result.scalars.return_value.all.return_value = [mock_gw]
+
+        call_count = [0]
+
+        async def mock_execute(query):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return mock_contract_result
+            elif call_count[0] == 2:
+                return mock_binding_result
+            else:
+                return mock_gw_result
+
+        mock_db_session.execute = AsyncMock(side_effect=mock_execute)
+
+        mock_adapter = MagicMock()
+        mock_adapter.connect = AsyncMock()
+        mock_dispatch_result = MagicMock()
+        mock_dispatch_result.success = True
+        mock_adapter.deploy_contract = AsyncMock(return_value=mock_dispatch_result)
+
+        with patch("src.routers.contracts.AdapterRegistry") as mock_registry:
+            mock_registry.create.return_value = mock_adapter
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    f"/v1/contracts/{sample_contract_data['id']}/bindings",
+                    json={"protocol": "mcp"},
+                )
+
+        assert response.status_code == 200
+        mock_adapter.deploy_contract.assert_called_once()
+        call_args = mock_adapter.deploy_contract.call_args[0][0]
+        assert call_args["name"] == sample_contract_data["name"]
+        assert call_args["endpoints"] == []
+
+    def test_enable_binding_gateway_down_graceful_degradation(
+        self, app_with_tenant_admin, mock_db_session, sample_contract_data
+    ):
+        """Gateway dispatch failure does not block 200 — generation_error is set (CAB-Gap1)."""
+        mock_contract = self._create_mock_contract(sample_contract_data)
+        mock_binding = self._create_mock_binding(
+            sample_contract_data["id"],
+            ProtocolType.MCP,
+            enabled=False,
+        )
+
+        mock_contract_result = MagicMock()
+        mock_contract_result.scalar_one_or_none.return_value = mock_contract
+
+        mock_binding_result = MagicMock()
+        mock_binding_result.scalar_one_or_none.return_value = mock_binding
+
+        mock_gw = MagicMock()
+        mock_gw.name = "stoa-k8s"
+        mock_gw.gateway_type.value = "stoa"
+        mock_gw.base_url = "http://stoa-gateway:8080"
+        mock_gw.auth_config = {}
+        mock_gw_result = MagicMock()
+        mock_gw_result.scalars.return_value.all.return_value = [mock_gw]
+
+        call_count = [0]
+
+        async def mock_execute(query):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return mock_contract_result
+            elif call_count[0] == 2:
+                return mock_binding_result
+            else:
+                return mock_gw_result
+
+        mock_db_session.execute = AsyncMock(side_effect=mock_execute)
+
+        mock_adapter = MagicMock()
+        mock_adapter.connect = AsyncMock()
+        mock_fail_result = MagicMock()
+        mock_fail_result.success = False
+        mock_fail_result.error = "connection refused"
+        mock_adapter.deploy_contract = AsyncMock(return_value=mock_fail_result)
+
+        with patch("src.routers.contracts.AdapterRegistry") as mock_registry:
+            mock_registry.create.return_value = mock_adapter
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    f"/v1/contracts/{sample_contract_data['id']}/bindings",
+                    json={"protocol": "mcp"},
+                )
+
+        # Binding is still returned successfully — dispatch failure is non-blocking
+        assert response.status_code == 200
+        assert response.json()["status"] == "active"
+        # generation_error was set on the binding object
+        assert mock_binding.generation_error == "stoa-k8s: connection refused"
+
     # ============== Disable Binding Tests ==============
 
     def test_disable_binding_success(

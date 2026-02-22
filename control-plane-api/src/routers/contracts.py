@@ -9,14 +9,16 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.adapters.registry import AdapterRegistry
 from src.auth.dependencies import User, get_current_user
 from src.config import settings
 from src.database import get_db
 from src.logging_config import get_logger
 from src.models.contract import Contract, ProtocolBinding, ProtocolType
+from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
 from src.schemas.contract import (
     BindingsListResponse,
     ContractCreate,
@@ -514,6 +516,60 @@ async def enable_binding(
     binding.generation_error = None
 
     await db.flush()
+
+    # --- Best-effort UAC gateway dispatch ---
+    # Deploy the contract to all online STOA gateways.  Failures are non-blocking:
+    # the binding is already committed to the DB; generation_error stores the reason.
+    _stoa_types = [
+        GatewayType.STOA,
+        GatewayType.STOA_EDGE_MCP,
+        GatewayType.STOA_SIDECAR,
+        GatewayType.STOA_PROXY,
+        GatewayType.STOA_SHADOW,
+    ]
+    gw_result = await db.execute(
+        select(GatewayInstance).where(
+            and_(
+                GatewayInstance.gateway_type.in_(_stoa_types),
+                GatewayInstance.status == GatewayInstanceStatus.ONLINE,
+                or_(
+                    GatewayInstance.tenant_id == contract.tenant_id,
+                    GatewayInstance.tenant_id.is_(None),
+                ),
+            )
+        )
+    )
+    gateways = gw_result.scalars().all()
+
+    contract_spec = {
+        "name": contract.name,
+        "version": contract.version,
+        "tenant_id": str(contract.tenant_id),
+        "endpoints": [],
+    }
+
+    dispatch_errors: list[str] = []
+    for gw in gateways:
+        try:
+            adapter = AdapterRegistry.create(
+                gw.gateway_type.value,
+                config={"base_url": gw.base_url, "auth_config": gw.auth_config},
+            )
+            await adapter.connect()
+            result = await adapter.deploy_contract(contract_spec)
+            if not result.success:
+                dispatch_errors.append(f"{gw.name}: {result.error}")
+        except Exception as exc:
+            dispatch_errors.append(f"{gw.name}: {exc}")
+
+    if dispatch_errors:
+        binding.generation_error = "; ".join(dispatch_errors)
+        logger.warning(
+            "UAC gateway dispatch partial failure",
+            contract_id=str(contract_id),
+            errors=dispatch_errors,
+        )
+    # --- end gateway dispatch ---
 
     logger.info(
         "Protocol binding enabled",

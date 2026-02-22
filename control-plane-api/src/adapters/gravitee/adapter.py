@@ -402,6 +402,9 @@ class GraviteeGatewayAdapter(GatewayAdapterInterface):
     async def export_archive(self, auth_token: str | None = None) -> bytes:
         return b""
 
+    async def deploy_contract(self, contract_spec: dict, auth_token: str | None = None) -> AdapterResult:
+        return AdapterResult(success=False, error=_NOT_SUPPORTED)
+
     # --- Internal helpers ---
 
     def _auth_headers(self) -> dict:

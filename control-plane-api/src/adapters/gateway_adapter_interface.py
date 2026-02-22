@@ -180,3 +180,16 @@ class GatewayAdapterInterface(ABC):
     ) -> bytes:
         """Export full gateway state as a portable archive (ZIP)."""
         ...
+
+    # --- UAC Contract Deployment ---
+
+    async def deploy_contract(
+        self, contract_spec: dict, auth_token: str | None = None
+    ) -> AdapterResult:
+        """Deploy a UAC contract to the gateway.
+
+        Optional method — adapters that do not support UAC contracts return a
+        non-fatal AdapterResult(success=False).  Only STOA-type adapters provide
+        a real implementation.
+        """
+        return AdapterResult(success=False, error="deploy_contract not supported by this adapter")

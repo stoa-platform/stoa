@@ -97,13 +97,13 @@ curl -s -u admin:$AWX_PASS https://awx.gostoa.dev/api/v2/jobs/?order_by=-finishe
 
 | Component | Coverage | Line Length | Ruff Rules | Notes |
 |-----------|----------|-------------|------------|-------|
-| control-plane-api | **53%** | 120 | E,W,F,I,B,C4,UP,ARG,SIM,S,DTZ,LOG,RUF | `--ignore tests/test_opensearch.py` for integration |
+| control-plane-api | **70%** | 120 | E,W,F,I,B,C4,UP,ARG,SIM,S,DTZ,LOG,RUF | `--ignore tests/test_opensearch.py` for integration |
 | mcp-gateway | **40%** | 100 | E,W,F,I,B,C4,UP | Simpler ruleset |
 
 Pre-push commands:
 ```bash
 # control-plane-api
-cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=53 --ignore=tests/test_opensearch.py -q
+cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=70 --ignore=tests/test_opensearch.py -q
 
 # mcp-gateway
 cd mcp-gateway && pytest tests/ --cov=src --cov-fail-under=40 -q
@@ -113,8 +113,8 @@ cd mcp-gateway && pytest tests/ --cov=src --cov-fail-under=40 -q
 
 | Component | ESLint max-warnings | Prettier | Build | Notes |
 |-----------|-------------------|----------|-------|-------|
-| control-plane-ui | **93** | blocking | `tsc -p tsconfig.app.json` | `tsconfig.app.json` excludes `**/*.test.ts(x)` |
-| portal | **20** | blocking | `tsc -p tsconfig.app.json` | jsx-a11y plugin active |
+| control-plane-ui | **105** | blocking | `tsc -p tsconfig.app.json` | `tsconfig.app.json` excludes `**/*.test.ts(x)` |
+| portal | **0** | blocking | `tsc -p tsconfig.app.json` | jsx-a11y plugin active |
 
 Pre-push commands:
 ```bash

@@ -116,6 +116,33 @@ impl SessionManager {
         }
     }
 
+    /// Send an SSE event to a specific session.
+    ///
+    /// Returns `true` if the event was delivered, `false` if the session has no
+    /// registered channel or the channel is full / closed.
+    pub fn send_to_session(&self, session_id: &str, event_type: &str, data: &str) -> bool {
+        let channels = self.channels.read();
+        if let Some(tx) = channels.get(session_id) {
+            let evt = Event::default().event(event_type).data(data);
+            match tx.try_send(evt) {
+                Ok(()) => return true,
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    warn!(
+                        session_id = %session_id,
+                        "send_to_session: channel full, event dropped"
+                    );
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    debug!(
+                        session_id = %session_id,
+                        "send_to_session: channel closed (client disconnected)"
+                    );
+                }
+            }
+        }
+        false
+    }
+
     /// Broadcast an SSE event to all sessions belonging to a tenant.
     /// Uses try_send() for non-blocking delivery — slow consumers get events dropped.
     /// Returns the number of sessions that received the event.

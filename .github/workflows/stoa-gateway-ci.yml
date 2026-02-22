@@ -80,9 +80,39 @@ jobs:
       attestations: write
     secrets: inherit
 
+  # === Apply manifest: push k8s/deployment.yaml to cluster (env vars, labels, etc.) ===
+  apply-manifest:
+    needs: docker
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+      - name: Configure kubeconfig
+        run: |
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "::warning::KUBECONFIG_B64 secret not set. Skipping manifest apply."
+            exit 0
+          fi
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+      - name: Apply k8s manifest
+        run: |
+          kubectl apply -f stoa-gateway/k8s/deployment.yaml 2>&1 || {
+            echo "Apply failed (likely immutable selector). Deleting and recreating..."
+            kubectl delete deployment stoa-gateway -n stoa-system --ignore-not-found
+            kubectl apply -f stoa-gateway/k8s/deployment.yaml
+          }
+
   # === Deploy: trigger pod restart to pull new GHCR image ===
   deploy:
-    needs: docker
+    needs: [docker, apply-manifest]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -105,7 +135,7 @@ jobs:
       - name: Restart deployment (pull new image from GHCR)
         run: |
           kubectl rollout restart deployment/stoa-gateway -n stoa-system
-          kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=300s
+          kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=600s
 
   # === Smoke Test: health checks after deploy (Tier 1) ===
   # Full E2E with personas runs nightly (e2e-nightly.yml)

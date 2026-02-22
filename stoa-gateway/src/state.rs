@@ -15,6 +15,7 @@ use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
+use crate::guardrails::TokenBudgetTracker;
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
@@ -80,6 +81,9 @@ pub struct AppState {
     pub skill_resolver: Arc<SkillResolver>,
     /// Federation allow-list cache for sub-account routing (CAB-1362)
     pub federation_cache: Arc<FederationCache>,
+    /// Per-tenant token budget tracker (CAB-1337 Phase 2)
+    /// None when token budget tracking is disabled.
+    pub token_budget: Option<Arc<TokenBudgetTracker>>,
 }
 
 impl AppState {
@@ -305,6 +309,24 @@ impl AppState {
             tracing::info!("Federation routing disabled (STOA_FEDERATION_ENABLED=false)");
         }
 
+        // Initialize token budget tracker (CAB-1337 Phase 2)
+        let token_budget = if config.token_budget_enabled {
+            let window_secs = config.token_budget_window_hours * 3600;
+            let tracker = Arc::new(TokenBudgetTracker::new(
+                config.token_budget_default_limit,
+                window_secs,
+            ));
+            tracing::info!(
+                default_limit = config.token_budget_default_limit,
+                window_hours = config.token_budget_window_hours,
+                "Token budget tracker initialized"
+            );
+            Some(tracker)
+        } else {
+            tracing::info!("Token budget tracking disabled (STOA_TOKEN_BUDGET_ENABLED=false)");
+            None
+        };
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -347,6 +369,7 @@ impl AppState {
             classification_enforcer,
             skill_resolver,
             federation_cache,
+            token_budget,
         }
     }
 
@@ -366,6 +389,11 @@ impl AppState {
 
         // Start event buffer cleanup (CAB-1179)
         self.event_buffer.clone().start_cleanup_task();
+
+        // Start token budget sync task (CAB-1337 Phase 2)
+        if let Some(ref tracker) = self.token_budget {
+            TokenBudgetTracker::spawn_sync_task(tracker.clone());
+        }
 
         // Start zombie reaper (CAB-362)
         if let Some(ref zd) = self.zombie_detector {

@@ -1,0 +1,233 @@
+{
+  "$defs": {
+    "AuthType": {
+      "enum": [
+        "jwt",
+        "api_key",
+        "mtls",
+        "oauth2",
+        "none"
+      ],
+      "title": "AuthType",
+      "type": "string"
+    },
+    "HttpMethod": {
+      "enum": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "title": "HttpMethod",
+      "type": "string"
+    },
+    "StoaAuth": {
+      "description": "Authentication configuration.",
+      "properties": {
+        "type": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/AuthType"
+            }
+          ],
+          "default": "jwt"
+        },
+        "issuer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "OIDC issuer URL (for jwt/oauth2)",
+          "title": "Issuer"
+        },
+        "header": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Header name (for api_key auth)",
+          "title": "Header"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "title": "StoaAuth",
+      "type": "object"
+    },
+    "StoaEndpoint": {
+      "description": "Single endpoint definition in stoa.yaml.",
+      "properties": {
+        "path": {
+          "description": "URL path (e.g. /pets or /pets/{id})",
+          "title": "Path",
+          "type": "string"
+        },
+        "method": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/HttpMethod"
+            }
+          ],
+          "default": "GET"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human-readable description",
+          "title": "Description"
+        },
+        "tags": {
+          "description": "Endpoint-level tags",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "StoaEndpoint",
+      "type": "object"
+    },
+    "StoaRateLimit": {
+      "description": "Rate limiting configuration.",
+      "properties": {
+        "requests_per_minute": {
+          "default": 60,
+          "description": "Max requests per minute",
+          "exclusiveMinimum": 0,
+          "title": "Requests Per Minute",
+          "type": "integer"
+        },
+        "burst": {
+          "default": 10,
+          "description": "Burst allowance above rpm",
+          "exclusiveMinimum": 0,
+          "title": "Burst",
+          "type": "integer"
+        }
+      },
+      "title": "StoaRateLimit",
+      "type": "object"
+    }
+  },
+  "description": "STOA declarative API deployment specification",
+  "examples": [
+    {
+      "auth": {
+        "issuer": "https://auth.example.com",
+        "type": "jwt"
+      },
+      "endpoints": [
+        {
+          "description": "List all pets",
+          "method": "GET",
+          "path": "/pets"
+        },
+        {
+          "description": "Get a pet",
+          "method": "GET",
+          "path": "/pets/{id}"
+        }
+      ],
+      "name": "petstore",
+      "rate_limit": {
+        "burst": 20,
+        "requests_per_minute": 100
+      },
+      "tags": [
+        "payments",
+        "internal"
+      ],
+      "version": "1.2.0"
+    }
+  ],
+  "properties": {
+    "name": {
+      "description": "API identifier (slug)",
+      "maxLength": 255,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "version": {
+      "default": "1.0.0",
+      "description": "Semantic version (e.g. 1.2.0)",
+      "maxLength": 100,
+      "minLength": 1,
+      "pattern": "^\\d+\\.\\d+\\.\\d+.*$",
+      "title": "Version",
+      "type": "string"
+    },
+    "endpoints": {
+      "description": "API endpoint definitions",
+      "items": {
+        "$ref": "#/$defs/StoaEndpoint"
+      },
+      "title": "Endpoints",
+      "type": "array"
+    },
+    "rate_limit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StoaRateLimit"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Rate limiting config"
+    },
+    "auth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StoaAuth"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Authentication config"
+    },
+    "tags": {
+      "description": "API-level tags for routing and filtering",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "stoa.yaml",
+  "type": "object"
+}

@@ -24,7 +24,7 @@ use crate::mcp::session::Session;
 use crate::mcp::tools::ToolContext;
 use crate::metrics;
 use crate::optimization::{OptimizationSettings, TokenOptimizer};
-use crate::state::AppState;
+use crate::state::{AppState, PolicyCallerCtx};
 
 // ============================================
 // JSON-RPC Types
@@ -757,13 +757,15 @@ async fn handle_tools_call(
     };
 
     if let Err(e) = state.uac_enforcer.check_with_context(
-        ctx.user_id.clone(),
-        ctx.user_email.clone(),
+        PolicyCallerCtx {
+            user_id: ctx.user_id.clone(),
+            user_email: ctx.user_email.clone(),
+            scopes: effective_scopes.clone(),
+            roles: ctx.roles.clone(),
+        },
         &ctx.tenant_id,
         tool_name,
         required_action,
-        effective_scopes.clone(),
-        ctx.roles.clone(),
     ) {
         warn!(
             tool = %tool_name,

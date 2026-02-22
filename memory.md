@@ -1,11 +1,14 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (/sync-plan full sync — C8 closed, C9 opened)
+> Derniere MAJ: 2026-02-22 (Portal mock data fix — PR #771 merged + CD verified)
 
 ## ✅ DONE
 
 > Full history: 905+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
+
+### Cycle 9 (Feb 22+)
+- ✅ Portal mock data fix — PR #771 (removed MOCK_SERVERS fallback from MCP pages, -189 LOC)
 
 ### Cycle 8 (Feb 16-22) — CLOSED (905 pts, 88 issues, 129 pts/day)
 
@@ -45,3 +48,4 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - Velocity C8: 905 pts / 88 issues / 129 pts/day (final)
 - Velocity C7: 505 pts / 44 issues / 72 pts/day
 - Rolling avg: 107.5 pts/day (C7+C8)
+- Portal MCP pages: MOCK_SERVERS removed (PR #771) — pages now use real API only

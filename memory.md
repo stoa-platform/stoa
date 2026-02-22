@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-20 (CAB-1386 Phase 2+3 DONE — PR #750, alerting + merge button + scan fix)
+> Dernière MAJ: 2026-02-19 (CAB-1325 DONE — PR #732, Self-Onboarding MEGA complete)
 
 ## ✅ DONE
 
@@ -18,8 +18,7 @@
 - CAB-1323: Portal Multi-Audience + RBAC (34 pts MEGA) — PRs #697, #714, #719 (3 phases, ~917 LOC, 78 tests)
 - CAB-1314: MCP Skills System MEGA (21 pts) — P1 PR #702, P2 PR #721, P3 PR #710 (3 phases, skills CSS cascade + context injection)
 - CAB-1382: Code Hygiene Sprint (13 pts) — PRs #724, #725, #726 (P1: 38 dead_code removed, P2: 20→0 ESLint warnings + error tracking stub)
-- CAB-1386: AI Factory Observability Phase 1 (13 pts) — PR #747 (Pushgateway integration + 15-panel Grafana dashboard + 4 workflow wiring)
-- CAB-1386: AI Factory Observability Phase 2+3 — PR #750 (Prometheus alerting rules + one-click Merge PR button + afternoon scan fix)
+- CAB-1325: DX Self-Onboarding Zero-Touch Trial (21 pts MEGA) — PR #732 (3 phases: onboarding flow + trial API key + sandbox tools + funnel analytics)
 
 ## 🔴 IN PROGRESS
 
@@ -47,4 +46,4 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - Demo MVP: mardi 24 février 2026
 - docs.gostoa.dev = 37 articles, 0 "Coming Soon"
 - ADR numbering: stoa-docs owns numbers (001-048). Next: **ADR-049**
-- Velocity C8: 629 pts / 66 issues
+- Velocity C8: 650 pts / 67 issues

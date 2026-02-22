@@ -95,7 +95,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 68 pts (committed) + 700+ pts backlog | **Done**: 5 pts
+**Scope**: 68 pts (committed) + 700+ pts backlog | **Done**: 31 pts
 **Theme**: Post-Demo + Product Roadmap + Community Content
 
 ### In Progress
@@ -104,9 +104,13 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-- [~] CAB-86: TTL Extension — Self-Service (5 pts)
-- [~] CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2)
+### Done (3)
+- [x] CAB-86: TTL Extension — Self-Service (5 pts) — PR #780
+- [x] CAB-1398: [MEGA] AI Factory Slack Upgrade + Dispatch Gap Fixes (26 pts, P2) — PRs #768, #775, #781, #792, #795
+  - [x] Phase 1: Dispatch Fixes — PR #768
+  - [x] Phase 2: Slack Bot API dual-path — PR #775
   - [x] Phase 3: Slack Threading + Reactions — PR #781
+  - [x] Phase 4: /stoa slash command + gap fixes — PRs #792, #795
 
 ### Todo
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
@@ -146,7 +150,7 @@
 - CAB-1394: [MEGA] SaaS Playbook Series (13 pts)
 - CAB-1393: [MEGA] Developer Onboarding Content (21 pts)
 - CAB-1392: [MEGA] Security & MCP Deep-Dive Content (21 pts)
-- CAB-1391: [MEGA] Migration Guide Expansion — Axway + WSO2 (13 pts)
+- [x] CAB-1391: [MEGA] Migration Guide Expansion — Axway, WSO2, Layer7 (13 pts) — stoa-docs PR #68 + stoa-web PR #10
 - CAB-1329: [MEGA] Demo Content Library — 8 Themes (34 pts)
 - CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts)
 

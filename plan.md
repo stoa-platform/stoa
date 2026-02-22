@@ -161,13 +161,10 @@
 
 ### Backlog — Legacy (parked)
 
-- CAB-1301: [MEGA] Gateway API + NetworkPolicy Foundation (21 pts, rescoped) — 3 phases
-  - **Phase 1** (parallel) [owner: —]
-    - [x] CAB-1399 [infra] Gateway API CRDs + NGINX Gateway Fabric (8 pts) — PR #785
-  - **Phase 2** (after Phase 1) [owner: —]
-    - [x] CAB-1400 [infra] Ingress → HTTPRoute Migration — 9 resources (8 pts) — PR #791
-  - **Phase 3** (after Phase 2) [owner: —]
-    - [ ] CAB-1401 [infra] Default-Deny NetworkPolicy per Namespace (5 pts)
+- [x] CAB-1301: [MEGA] Gateway API + NetworkPolicy Foundation (21 pts, rescoped) — ALL 3 PHASES DONE
+  - [x] CAB-1399 [infra] Gateway API CRDs + NGINX Gateway Fabric (8 pts) — PR #785
+  - [x] CAB-1400 [infra] Ingress → HTTPRoute Migration (8 pts) — PR #791
+  - [x] CAB-1401 [infra] Default-Deny NetworkPolicy (5 pts) — PR #797
 - CAB-1402: [infra] Cilium CNI Foundation — Deferred (13 pts, blocked: MKS Standard GA)
 - CAB-1303: [MEGA] Multi-Environment STAGING (21 pts)
 - CAB-1307: [MEGA] Ticketing ITSM (34 pts)

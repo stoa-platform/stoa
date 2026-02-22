@@ -51,7 +51,7 @@ spec:
             - name: STOA_KEYCLOAK_URL
               value: "https://auth.gostoa.dev"
             - name: STOA_KEYCLOAK_INTERNAL_URL
-              value: "http://keycloak.stoa-system.svc.cluster.local"
+              value: "http://keycloak.stoa-system.svc.cluster.local:8080"
             - name: STOA_KEYCLOAK_REALM
               value: "stoa"
             - name: STOA_KEYCLOAK_CLIENT_ID
@@ -86,9 +86,9 @@ spec:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 3
+            initialDelaySeconds: 5
             periodSeconds: 3
-            failureThreshold: 10  # 3s * 10 = 30s max startup time
+            failureThreshold: 35  # 5s + 35*3s = 110s max — covers worst-case: 2×30s tool discovery + 10s api-bridge + 9s prewarm
           livenessProbe:
             httpGet:
               path: /health

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-22 (CAB-1389 MEGA done — PRs #810, #811, #820; CAB-1388 PR #818; CAB-1413 PR #814)
+> Derniere MAJ: 2026-02-22 (CAB-1394 done — stoa-docs PR #77, stoa-web PR #12)
 
 ## ✅ DONE
 
@@ -8,10 +8,33 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1394 [MEGA] Community: SaaS Playbook Series (13 pts) — ALL 3 PHASES DONE
+  - P1: Parts 1-2 + SMB Buying Guide (stoa-docs PR #75) — 3 articles, 4000+ words
+  - P2: Parts 3-5 (stoa-docs PR #76) — 3 articles, production checklist
+  - P3: Build vs Buy + series polish (stoa-docs PR #77, stoa-web PR #12) — cross-links + llms.txt
+  - 7 articles total, complete series nav in each, llms.txt updated
+- ✅ fix(ci): Dependency Scan 3 failures → green — PR #843
+  - CVE-2024-23342 (ecdsa Minerva): --ignore-vuln on pip-audit (cp-api + mcp-gateway)
+  - mcp-gateway archived path fix (archive/mcp-gateway/ fallback)
+  - GHSA-3ppc-4f35-3m26 (minimatch ReDoS in @typescript-eslint): --omit=dev on npm audit
+- ✅ fix(gateway): OIDC port + startup probe — PR #840 → pods finally 1/1 Running (3-session fix chain: #819 code → #835 apply-manifest → #840 port:8080 + probe)
+- ✅ CAB-1390 [MEGA] Portal Component Test Coverage & Feature Fixes (21 pts) — ALL 3 PHASES DONE
+  - P1: Critical components (PR #833) — Onboarding, Contracts, Apps test files
+  - P2: Dashboard + Usage + Layout (PR #836) — 15 test files, 1094 LOC
+  - P3: APICard + bugfixes + placeholder cleanup (PR #838) — certificateValidator fix
+- ✅ CAB-1333 [MEGA] MCP Protocol Full Compliance (34 pts) — PR #831
+  - P1: spec coverage matrix (docs/mcp-spec-coverage.md)
+  - P2: 4 missing methods (prompts/list, prompts/get, logging/setLevel, resources/read) + send_to_session
+  - P3: 16 new conformance tests — 31/31 contract tests pass
 - ✅ CAB-1389 [MEGA] Cross-Component Quality Pass (13 pts) — ALL 3 PHASES DONE
   - P1: Console Federation & Index Tests (PR #810) — 15 new test files, modals + wrappers
   - P2: Gateway Feature Wiring (PR #811) — ClassificationType, ApiState, JWT user_id extraction
   - P3: Gateway Lint Cleanup (PR #820) — builder pattern replaces clippy suppressions
+- ✅ fix(gateway): Dockerfile rust:1.88→1.93 (floor_char_boundary stable in 1.93) — PR #830
+- ✅ fix(gateway): startup probe 33s→53s (PR #834 in stoa, stoa-infra commit a20eb47)
+- ✅ fix(gateway): STOA_KEYCLOAK_INTERNAL_URL hairpin NAT bypass — stoa-infra commits 04efdb6+dca8f67
+  - ArgoCD uses stoa-infra/charts/stoa-gateway, NOT stoa/stoa-gateway/k8s/deployment.yaml
+  - Both pods 1/1 Running, 0 restarts (RS 54c5c6c949)
 - ✅ CAB-1388 [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818 (30 test modules, 80% coverage)
 - ✅ CAB-1413 [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
 - ✅ CAB-1337 [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts)

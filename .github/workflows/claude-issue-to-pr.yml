@@ -83,7 +83,7 @@ jobs:
 
             IMPORTANT: Do NOT implement anything yet. Only validate the ticket pertinence.
           # Model tier: sonnet (Council gate — structured rubric evaluation, Sonnet sufficient)
-          claude_args: "--model claude-sonnet-4-6 --max-turns 5 --allowedTools Read,Glob,Grep"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 5 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Log token usage
         if: always() && steps.guard.outputs.skip != 'true'
@@ -241,7 +241,8 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE $ISSUE_BODY" | grep -oE 'CAB-[0-9]+' | head -1 || echo "#${ISSUE_NUMBER}")
+          TICKET=$(echo "$ISSUE_TITLE $ISSUE_BODY" | grep -oE 'CAB-[0-9]+' | head -1)
+          TICKET="${TICKET:-#${ISSUE_NUMBER}}"
 
           # Extract score from Council execution output
           SCORE=""
@@ -274,7 +275,8 @@ jobs:
           COUNCIL_OUTCOME: ${{ steps.council.outcome }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${ISSUE_NUMBER}")
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
+          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
           write_job_summary "$TICKET" "$COUNCIL_OUTCOME" "" "" "council-s1"
 
   # ----- Stage 2: Plan Validation (runs on /go approval) -----
@@ -398,7 +400,7 @@ jobs:
 
             IMPORTANT: Do NOT implement anything. Only write the plan and validate it.
           # Model tier: sonnet (Stage 2 Council — plan validation, Sonnet sufficient)
-          claude_args: "--model claude-sonnet-4-6 --max-turns 10 --allowedTools Read,Glob,Grep"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Log token usage
         if: always()
@@ -516,7 +518,8 @@ jobs:
           PLAN_COUNCIL_OUTCOME: ${{ steps.plan-council.outcome }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${ISSUE_NUMBER}")
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
+          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
           write_job_summary "$TICKET" "$PLAN_COUNCIL_OUTCOME" "" "" "council-s2"
 
   # ----- Stage 3: Implementation (runs on /go-plan approval) -----
@@ -700,7 +703,8 @@ jobs:
           ROUTE_TURNS: ${{ steps.route.outputs.turns || '60' }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${ISSUE_NUMBER}")
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
+          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
           STATUS="$IMPLEMENT_OUTCOME"
           PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
@@ -732,7 +736,8 @@ jobs:
           ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-5' }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1 || echo "issue-${ISSUE_NUMBER}")
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
+          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
           write_job_summary "$TICKET" "$IMPLEMENT_OUTCOME" "" \
             "$ROUTE_MODEL" "L1-implement" \
             "$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))"

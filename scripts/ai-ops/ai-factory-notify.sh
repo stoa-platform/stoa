@@ -12,6 +12,24 @@
 #   notify_plan       — Stage 2 plan validation result
 #   linear_comment    — Rich completion report posted to Linear ticket
 #   write_job_summary — Structured markdown table in $GITHUB_STEP_SUMMARY
+#
+# Environment variables (all optional — graceful degradation):
+#   SLACK_WEBHOOK           Incoming webhook URL (legacy, push-only)
+#   SLACK_BOT_TOKEN         Bot API token (xoxb-...) — enables threading + updates
+#   SLACK_CHANNEL_ID        Target channel for chat.postMessage (required with BOT_TOKEN)
+#   SLACK_SIGNING_SECRET    Interactive payload HMAC validation (n8n only)
+#   LINEAR_API_KEY          Linear API key for linear_comment()
+#   N8N_WEBHOOK             n8n approve-ticket relay URL
+#   N8N_MERGE_WEBHOOK       n8n merge-pr relay URL
+#   HMAC_SECRET             HMAC secret for approve/merge button URLs
+#   PUSHGATEWAY_URL         Prometheus Pushgateway URL for metrics push
+#   PUSHGATEWAY_AUTH        Basic auth for Pushgateway (user:pass)
+#
+# Bot API path (SLACK_BOT_TOKEN + SLACK_CHANNEL_ID):
+#   When both are set, notifications use chat.postMessage instead of webhooks.
+#   This enables message threading, in-place updates, and interactive buttons.
+#   Required bot scopes: chat:write, reactions:write, channels:read
+#   Fallback: if BOT_TOKEN is unset, all functions use SLACK_WEBHOOK (no threading).
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -99,10 +117,24 @@ _extract_error() {
 }
 
 _send_slack() {
-  # Internal: send Block Kit payload to Slack. Graceful degradation if webhook unset.
+  # Internal: send Block Kit payload to Slack via Bot API or webhook fallback.
+  # When SLACK_BOT_TOKEN + SLACK_CHANNEL_ID are set, uses chat.postMessage (enables
+  # threading + updates). Otherwise falls back to SLACK_WEBHOOK (legacy, push-only).
+  # $1 = JSON payload (with "blocks" key)
+  # $2 = optional thread_ts (only effective with Bot API path)
+  # stdout: message timestamp (ts) when Bot API is used (empty for webhook)
   local PAYLOAD="$1"
+  local THREAD_TS="${2:-}"
+
+  # Bot API path — chat.postMessage with threading support
+  if [ -n "${SLACK_BOT_TOKEN:-}" ] && [ -n "${SLACK_CHANNEL_ID:-}" ]; then
+    _send_slack_bot "$PAYLOAD" "$THREAD_TS"
+    return $?
+  fi
+
+  # Webhook fallback (existing behavior — no threading, no updates)
   if [ -z "${SLACK_WEBHOOK:-}" ]; then
-    echo "::notice::Slack webhook not configured — skipping notification"
+    echo "::notice::Slack not configured — skipping notification"
     return 0
   fi
   curl -sf -X POST "$SLACK_WEBHOOK" \
@@ -111,6 +143,108 @@ _send_slack() {
     echo "::warning::Slack notification failed (non-blocking)"
     return 0
   }
+}
+
+_send_slack_bot() {
+  # Internal: send Block Kit payload via Slack chat.postMessage (Bot API).
+  # $1 = JSON payload (with "blocks" key)
+  # $2 = optional thread_ts for threading
+  # stdout: message timestamp (ts) for threading/updates
+  # Requires: SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, jq
+  local PAYLOAD="$1"
+  local THREAD_TS="${2:-}"
+
+  # Guard: jq required for JSON manipulation
+  if ! command -v jq &>/dev/null; then
+    echo "::warning::jq not available — falling back to webhook" >&2
+    if [ -n "${SLACK_WEBHOOK:-}" ]; then
+      curl -sf -X POST "$SLACK_WEBHOOK" \
+        -H 'Content-Type: application/json' \
+        -d "$PAYLOAD" > /dev/null 2>&1 || true
+    fi
+    return 0
+  fi
+
+  # Build chat.postMessage payload: inject channel (and thread_ts if provided)
+  local BOT_PAYLOAD
+  BOT_PAYLOAD=$(echo "$PAYLOAD" | jq --arg ch "$SLACK_CHANNEL_ID" --arg ts "$THREAD_TS" \
+    '. + {channel: $ch} | if $ts != "" then . + {thread_ts: $ts} else . end' 2>/dev/null)
+
+  if [ -z "$BOT_PAYLOAD" ]; then
+    echo "::warning::Failed to build Bot API payload — falling back to webhook" >&2
+    if [ -n "${SLACK_WEBHOOK:-}" ]; then
+      curl -sf -X POST "$SLACK_WEBHOOK" \
+        -H 'Content-Type: application/json' \
+        -d "$PAYLOAD" > /dev/null 2>&1 || true
+    fi
+    return 0
+  fi
+
+  # Send via Bot API
+  local RESPONSE
+  RESPONSE=$(curl -sf -X POST "https://slack.com/api/chat.postMessage" \
+    -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d "$BOT_PAYLOAD" 2>/dev/null) || {
+    echo "::warning::Slack Bot API call failed (non-blocking)" >&2
+    return 0
+  }
+
+  # Extract and return message timestamp for threading/updates
+  local TS
+  TS=$(echo "$RESPONSE" | jq -r '.ts // empty' 2>/dev/null)
+  if [ -n "$TS" ]; then
+    echo "$TS"
+  fi
+  return 0
+}
+
+_update_slack() {
+  # Internal: update an existing Slack message via chat.update (Bot API).
+  # No-op if ts is empty or Bot API not configured (graceful degradation).
+  # $1 = message timestamp (ts) of the message to update
+  # $2 = new JSON payload (with "blocks" key)
+  local TS="${1:-}"
+  local PAYLOAD="${2:-}"
+
+  # No-op guards
+  if [ -z "$TS" ] || [ -z "${SLACK_BOT_TOKEN:-}" ] || [ -z "${SLACK_CHANNEL_ID:-}" ]; then
+    return 0
+  fi
+  if ! command -v jq &>/dev/null; then
+    echo "::warning::jq not available — skipping message update" >&2
+    return 0
+  fi
+
+  local UPDATE_PAYLOAD
+  UPDATE_PAYLOAD=$(echo "$PAYLOAD" | jq --arg ch "$SLACK_CHANNEL_ID" --arg ts "$TS" \
+    '. + {channel: $ch, ts: $ts}' 2>/dev/null)
+
+  curl -sf -X POST "https://slack.com/api/chat.update" \
+    -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d "$UPDATE_PAYLOAD" > /dev/null 2>&1 || {
+    echo "::warning::Slack message update failed (non-blocking)" >&2
+  }
+  return 0
+}
+
+_reply_slack() {
+  # Internal: reply in a Slack thread via chat.postMessage with thread_ts.
+  # Wrapper around _send_slack_bot(). Falls back to top-level if parent_ts empty.
+  # $1 = parent message timestamp (ts)
+  # $2 = JSON payload (with "blocks" key)
+  # stdout: reply message timestamp (ts)
+  local PARENT_TS="${1:-}"
+  local PAYLOAD="${2:-}"
+
+  if [ -z "$PARENT_TS" ]; then
+    # No parent thread — send as top-level message
+    _send_slack "$PAYLOAD"
+    return $?
+  fi
+
+  _send_slack_bot "$PAYLOAD" "$PARENT_TS"
 }
 
 _push_metrics() {

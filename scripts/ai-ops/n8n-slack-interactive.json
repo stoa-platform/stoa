@@ -1,0 +1,369 @@
+{
+  "name": "STOA AI Factory — Slack Interactive Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-interactive",
+        "responseMode": "lastNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "interactive-webhook",
+      "name": "Slack Interactive Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "slack-interactive"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate Slack request signature (X-Slack-Signature)\n// HMAC pattern adapted from n8n-approve-ticket.json\nconst crypto = require('crypto');\n\nconst signature = $input.first().json.headers['x-slack-signature'];\nconst timestamp = $input.first().json.headers['x-slack-request-timestamp'];\nconst rawBody = $input.first().json.body;\n\n// n8n cloud: use $vars. Self-hosted: use $env.\nconst signingSecret = $vars?.SLACK_SIGNING_SECRET || $env?.SLACK_SIGNING_SECRET;\n\nif (!signingSecret) {\n  throw new Error('SLACK_SIGNING_SECRET not configured — add it in n8n Settings > Variables');\n}\n\n// Replay attack protection: reject if timestamp > 5 minutes old\nconst now = Math.floor(Date.now() / 1000);\nif (Math.abs(now - parseInt(timestamp, 10)) > 300) {\n  throw new Error('Request timestamp too old — possible replay attack');\n}\n\n// Compute expected signature: v0=HMAC-SHA256(secret, v0:timestamp:body)\nconst sigBasestring = `v0:${timestamp}:${rawBody}`;\nconst expected = 'v0=' + crypto.createHmac('sha256', signingSecret)\n  .update(sigBasestring)\n  .digest('hex');\n\nif (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {\n  throw new Error('Invalid Slack signature');\n}\n\n// Parse the interactive payload\nconst payload = JSON.parse(decodeURIComponent(rawBody.replace('payload=', '')));\nconst action = payload.actions?.[0] || {};\nconst actionId = action.action_id || '';\nconst userId = payload.user?.id || '';\n\nreturn [{\n  json: {\n    actionId,\n    actionValue: action.value || '',\n    userId,\n    userName: payload.user?.name || '',\n    triggerId: payload.trigger_id || '',\n    responseUrl: payload.response_url || '',\n    valid: true\n  }\n}];"
+      },
+      "id": "validate-signature",
+      "name": "Validate Slack Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if the Slack user is in the allowlist\n// n8n cloud: use $vars. Self-hosted: use $env.\nconst allowedUsers = ($vars?.SLACK_ALLOWED_USERS || $env?.SLACK_ALLOWED_USERS || '')\n  .split(',')\n  .map(s => s.trim())\n  .filter(Boolean);\n\nconst userId = $input.first().json.userId;\n\nif (allowedUsers.length > 0 && !allowedUsers.includes(userId)) {\n  throw new Error(`User ${userId} not in SLACK_ALLOWED_USERS allowlist`);\n}\n\n// Pass through\nreturn [$input.first()];"
+      },
+      "id": "check-allowlist",
+      "name": "Check User Allowlist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.actionId }}",
+                    "rightValue": "approve_ticket:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputLabel": "Approve Ticket"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.actionId }}",
+                    "rightValue": "approve_plan:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputLabel": "Approve Plan"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.actionId }}",
+                    "rightValue": "merge_pr:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputLabel": "Merge PR"
+            }
+          ],
+          "fallbackOutput": {
+            "fallbackOutputLabel": "Unknown Action"
+          }
+        }
+      },
+      "id": "route-action",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/stoa-platform/stoa/issues/{{ $json.actionValue }}/comments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"body\": \"/go\" }"
+      },
+      "id": "post-go-comment",
+      "name": "Post /go Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 150],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-pat",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/stoa-platform/stoa/issues/{{ $json.actionValue }}/comments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"body\": \"/go-plan\" }"
+      },
+      "id": "post-go-plan-comment",
+      "name": "Post /go-plan Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-pat",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/stoa-platform/stoa/pulls/{{ $json.actionValue }}/merge",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"merge_method\": \"squash\" }"
+      },
+      "id": "merge-pr",
+      "name": "Merge PR (Squash)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 450],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-pat",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": \"Action processed.\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": \"Unknown action — ignored.\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "unknown-action-response",
+      "name": "Unknown Action Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"error\": \"Unauthorized — invalid signature or user not allowed\" }",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "error-response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [400, 500]
+    }
+  ],
+  "connections": {
+    "Slack Interactive Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Slack Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Slack Signature": {
+      "main": [
+        [
+          {
+            "node": "Check User Allowlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check User Allowlist": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "Post /go Comment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post /go-plan Comment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge PR (Squash)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unknown Action Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post /go Comment": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post /go-plan Comment": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge PR (Squash)": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ai-factory"
+    }
+  ],
+  "meta": {
+    "notes": "Slack Interactive Handler for STOA AI Factory.\n\nHandles button clicks from Block Kit messages (approve ticket, approve plan, merge PR).\nValidates Slack request signature (HMAC-SHA256) — pattern adapted from n8n-approve-ticket.json.\n\nRequired n8n variables:\n  - SLACK_SIGNING_SECRET: Slack app signing secret\n  - SLACK_ALLOWED_USERS: Comma-separated Slack user IDs (optional — empty = allow all)\n\nRequired credentials:\n  - GitHub PAT (httpHeaderAuth, id: github-pat)\n\nAction routing:\n  - approve_ticket:<issue_num> → POST /go comment on GitHub issue\n  - approve_plan:<issue_num>   → POST /go-plan comment on GitHub issue\n  - merge_pr:<pr_num>          → PUT merge (squash) on GitHub PR\n  - unknown                    → 200 OK (ignore)"
+  }
+}

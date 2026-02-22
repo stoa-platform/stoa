@@ -56,6 +56,45 @@
     {
       "parameters": {
         "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"{{ $vars.SLACK_CHANNEL_ID }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \":rocket: Linear → Claude: {{ $('Filter: In Progress Only').first().json.body.data.identifier }}\",\n        \"emoji\": true\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*{{ $('Filter: In Progress Only').first().json.body.data.title }}*\\nTicket moved to In Progress. Council validation + autonomous implementation triggered.\\n\\n:hourglass: Waiting for Council report...\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "slack-notify-start",
+      "name": "Slack: Pipeline Started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [600, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract message timestamp from Slack chat.postMessage response.\n// The ts is used for threading: all subsequent pipeline notifications\n// (Council, implement, done) reply under this initial message.\nconst response = $input.first().json;\nconst ts = response?.ts ?? '';\nconst ok = response?.ok ?? false;\n\nif (!ok) {\n  // Slack call failed (token missing, channel wrong, etc.)\n  // Non-blocking: dispatch proceeds without thread_ts\n  console.log('Slack Bot API response not ok — threading disabled for this run');\n}\n\nreturn [{ json: { ts, ok } }];"
+      },
+      "id": "store-message-ts",
+      "name": "Store Message TS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
         "url": "https://api.github.com/repos/stoa-platform/stoa/dispatches",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
@@ -70,33 +109,19 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"event_type\": \"linear-ticket-started\",\n  \"client_payload\": {\n    \"ticket_id\": \"{{ $json.body.data.identifier }}\",\n    \"ticket_title\": \"{{ $json.body.data.title }}\",\n    \"ticket_description\": \"{{ $json.body.data.description }}\",\n    \"ticket_priority\": \"{{ $json.body.data.priorityLabel }}\",\n    \"ticket_estimate\": \"{{ $json.body.data.estimate }}\",\n    \"mega_id\": \"{{ $json.body.data.parent?.identifier ?? '' }}\",\n    \"phase_hint\": \"{{ $json.body.data.sortOrder ?? '' }}\",\n    \"component\": \"{{ ($json.body.data.labels?.nodes ?? []).find(l => ['api','gateway','ui','portal','e2e'].includes(l.name))?.name ?? '' }}\"\n  }\n}"
+        "jsonBody": "={\n  \"event_type\": \"linear-ticket-started\",\n  \"client_payload\": {\n    \"ticket_id\": \"{{ $('Filter: In Progress Only').first().json.body.data.identifier }}\",\n    \"ticket_title\": \"{{ $('Filter: In Progress Only').first().json.body.data.title }}\",\n    \"ticket_description\": \"{{ $('Filter: In Progress Only').first().json.body.data.description }}\",\n    \"ticket_priority\": \"{{ $('Filter: In Progress Only').first().json.body.data.priorityLabel }}\",\n    \"ticket_estimate\": \"{{ $('Filter: In Progress Only').first().json.body.data.estimate }}\",\n    \"mega_id\": \"{{ $('Filter: In Progress Only').first().json.body.data.parent?.identifier ?? '' }}\",\n    \"phase_hint\": \"{{ $('Filter: In Progress Only').first().json.body.data.sortOrder ?? '' }}\",\n    \"component\": \"{{ ($('Filter: In Progress Only').first().json.body.data.labels?.nodes ?? []).find(l => ['api','gateway','ui','portal','e2e'].includes(l.name))?.name ?? '' }}\",\n    \"slack_thread_ts\": \"{{ $('Store Message TS').first().json.ts ?? '' }}\"\n  }\n}"
       },
       "id": "dispatch-github",
       "name": "Dispatch GitHub Actions",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [600, 300],
+      "position": [1000, 300],
       "credentials": {
         "httpHeaderAuth": {
           "id": "github-pat",
           "name": "GitHub PAT"
         }
       }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.SLACK_WEBHOOK }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \":rocket: Linear → Claude: {{ $json.body.data.identifier }}\",\n        \"emoji\": true\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*{{ $json.body.data.title }}*\\nTicket moved to In Progress. Council validation + autonomous implementation triggered.\\n\\n:hourglass: Waiting for Council report...\"\n      }\n    }\n  ]\n}"
-      },
-      "id": "slack-notify-start",
-      "name": "Slack: Pipeline Started",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [600, 500]
     }
   ],
   "connections": {
@@ -115,12 +140,29 @@
       "main": [
         [
           {
-            "node": "Dispatch GitHub Actions",
+            "node": "Slack: Pipeline Started",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Slack: Pipeline Started": {
+      "main": [
+        [
           {
-            "node": "Slack: Pipeline Started",
+            "node": "Store Message TS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Message TS": {
+      "main": [
+        [
+          {
+            "node": "Dispatch GitHub Actions",
             "type": "main",
             "index": 0
           }

@@ -538,10 +538,12 @@ pub async fn mcp_tools_call(
     }
 
     // CAB-707: Guardrails check (PII + prompt injection)
+    // CAB-1337: Extended with content filtering
     let guardrails_cfg = crate::guardrails::GuardrailsConfig {
         pii_enabled: state.config.guardrails_pii_enabled,
         pii_redact: state.config.guardrails_pii_redact,
         injection_enabled: state.config.guardrails_injection_enabled,
+        content_filter_enabled: state.config.guardrails_content_filter_enabled,
     };
     let arguments = match crate::guardrails::check_request(
         &guardrails_cfg,
@@ -554,9 +556,22 @@ pub async fn mcp_tools_call(
             warn!(tool = %request.name, "PII detected and redacted in arguments");
             redacted
         }
+        crate::guardrails::GuardrailsOutcome::Sensitive { rule, category } => {
+            metrics::record_guardrails_content_filter("sensitive", category);
+            warn!(tool = %request.name, rule = %rule, category = %category, "Content filter: sensitive content detected, request allowed");
+            request.arguments.clone()
+        }
         crate::guardrails::GuardrailsOutcome::Blocked(reason) => {
             if reason.contains("injection") {
                 metrics::record_guardrails_injection(&request.name);
+            } else if reason.contains("content filter") {
+                // Extract category from reason string "Content blocked by content filter [rule: X, category: Y]"
+                let category = reason
+                    .split("category: ")
+                    .nth(1)
+                    .and_then(|s| s.strip_suffix(']'))
+                    .unwrap_or("unknown");
+                metrics::record_guardrails_content_filter("blocked", category);
             } else {
                 metrics::record_guardrails_pii("blocked");
             }

@@ -25,9 +25,12 @@ from ..schemas.subscription import (
     SubscriptionRevoke,
     SubscriptionStatusEnum,
     SubscriptionWithRotationInfo,
+    TTLExtendRequest,
+    TTLExtendResponse,
 )
 from ..services.api_key import APIKeyService
 from ..services.email import email_service
+from ..services.kafka_service import Topics, kafka_service
 from ..services.provisioning_service import deprovision_on_revocation, provision_on_approval
 from ..services.webhook_service import (
     emit_subscription_approved,
@@ -385,6 +388,108 @@ async def get_subscription_rotation_info(
     response.has_active_grace_period = has_active_grace_period
 
     return response
+
+
+# ============== TTL Extension Endpoint (CAB-86) ==============
+
+
+MAX_TTL_EXTENSIONS = 2
+MAX_TTL_TOTAL_DAYS = 60
+
+
+@router.patch("/{subscription_id}/ttl", response_model=TTLExtendResponse)
+async def extend_subscription_ttl(
+    subscription_id: UUID,
+    request: TTLExtendRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Extend the TTL of an active subscription.
+
+    Subscription owners can extend their expiry by 7 or 14 days.
+    Limited to 2 extensions and 60 total extended days.
+    Tenant admins and cpi-admins can extend any subscription in their scope.
+    """
+    repo = SubscriptionRepository(db)
+    subscription = await repo.get_by_id(subscription_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    # Tenant access check
+    if not _has_tenant_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Ownership check: subscriber OR admin roles
+    is_owner = subscription.subscriber_id == user.id
+    is_admin = "cpi-admin" in user.roles or "tenant-admin" in user.roles
+    if not is_owner and not is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Must be active
+    if subscription.status != SubscriptionStatus.ACTIVE:
+        raise HTTPException(status_code=409, detail="Only active subscriptions can be extended")
+
+    # Must have an expiry date
+    if subscription.expires_at is None:
+        raise HTTPException(status_code=409, detail="Subscription has no expiry date")
+
+    # Extension count limit
+    if subscription.ttl_extension_count >= MAX_TTL_EXTENSIONS:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Maximum extensions reached ({MAX_TTL_EXTENSIONS})",
+        )
+
+    # Total days limit
+    if subscription.ttl_total_extended_days + request.extend_days > MAX_TTL_TOTAL_DAYS:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Would exceed {MAX_TTL_TOTAL_DAYS}-day maximum total extension",
+        )
+
+    # Apply extension
+    from datetime import timedelta
+
+    subscription.expires_at = subscription.expires_at + timedelta(days=request.extend_days)
+    subscription.ttl_extension_count += 1
+    subscription.ttl_total_extended_days += request.extend_days
+
+    await db.flush()
+
+    logger.info(
+        f"TTL extended for subscription {subscription_id} by {request.extend_days}d "
+        f"(count={subscription.ttl_extension_count}, total={subscription.ttl_total_extended_days}d) "
+        f"by {user.email}, reason: {request.reason}"
+    )
+
+    # Kafka event
+    try:
+        await kafka_service.publish(
+            topic=Topics.RESOURCE_LIFECYCLE,
+            event_type="resource-ttl-extended",
+            tenant_id=subscription.tenant_id,
+            payload={
+                "subscription_id": str(subscription.id),
+                "extend_days": request.extend_days,
+                "reason": request.reason,
+                "new_expires_at": subscription.expires_at.isoformat(),
+                "ttl_extension_count": subscription.ttl_extension_count,
+                "ttl_total_extended_days": subscription.ttl_total_extended_days,
+            },
+            user_id=user.id,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to emit resource-ttl-extended Kafka event: {e}")
+
+    return TTLExtendResponse(
+        id=subscription.id,
+        new_expires_at=subscription.expires_at,
+        ttl_extension_count=subscription.ttl_extension_count,
+        ttl_total_extended_days=subscription.ttl_total_extended_days,
+        remaining_extensions=MAX_TTL_EXTENSIONS - subscription.ttl_extension_count,
+    )
 
 
 # ============== Admin Endpoints (Control Plane) ==============

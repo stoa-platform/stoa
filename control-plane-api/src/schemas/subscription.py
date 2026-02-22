@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -193,5 +194,31 @@ class SubscriptionWithRotationInfo(SubscriptionResponse):
     has_active_grace_period: bool = Field(
         default=False, description="True if old key is still valid during grace period"
     )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============== TTL Extension Schemas (CAB-86) ==============
+
+
+class TTLExtendRequest(BaseModel):
+    """Schema for requesting a TTL extension on a subscription."""
+
+    extend_days: Literal[7, 14] = Field(..., description="Days to extend (7 or 14)")
+    reason: str = Field(..., min_length=1, max_length=500, description="Reason for extension")
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"extend_days": 7, "reason": "Need more time to complete integration testing"}}
+    )
+
+
+class TTLExtendResponse(BaseModel):
+    """Schema for TTL extension response."""
+
+    id: UUID
+    new_expires_at: datetime
+    ttl_extension_count: int
+    ttl_total_extended_days: int
+    remaining_extensions: int
 
     model_config = ConfigDict(from_attributes=True)

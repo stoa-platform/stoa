@@ -425,6 +425,15 @@ pub struct UacEnforcer {
     policy_engine: Arc<PolicyEngine>,
 }
 
+/// Caller identity context for UAC policy evaluation.
+#[derive(Debug, Clone)]
+pub struct PolicyCallerCtx {
+    pub user_id: Option<String>,
+    pub user_email: Option<String>,
+    pub scopes: Vec<String>,
+    pub roles: Vec<String>,
+}
+
 impl UacEnforcer {
     /// Create a new UAC enforcer with the given policy engine
     pub fn new(policy_engine: Arc<PolicyEngine>) -> Self {
@@ -441,13 +450,15 @@ impl UacEnforcer {
         // Legacy check with empty context — allows all by default for backwards compat
         // New code should use check_with_context() for proper policy evaluation
         self.check_with_context(
-            None,
-            None,
+            PolicyCallerCtx {
+                user_id: None,
+                user_email: None,
+                scopes: vec!["stoa:read".to_string()],
+                roles: vec![],
+            },
             tenant_id,
             "unknown",
             action,
-            vec!["stoa:read".to_string()], // Default read scope
-            vec![],
         )
     }
 
@@ -455,25 +466,21 @@ impl UacEnforcer {
     ///
     /// This is the primary method for policy evaluation. It builds a PolicyInput
     /// from the provided context and evaluates it against the OPA policy.
-    #[allow(clippy::too_many_arguments)]
     pub fn check_with_context(
         &self,
-        user_id: Option<String>,
-        user_email: Option<String>,
+        caller: PolicyCallerCtx,
         tenant_id: &str,
         tool_name: &str,
         action: Action,
-        scopes: Vec<String>,
-        roles: Vec<String>,
     ) -> Result<(), String> {
         let input = PolicyInput::new(
-            user_id,
-            user_email,
+            caller.user_id,
+            caller.user_email,
             tenant_id.to_string(),
             tool_name.to_string(),
             action,
-            scopes,
-            roles,
+            caller.scopes,
+            caller.roles,
         );
 
         match self.policy_engine.evaluate(&input) {
@@ -521,13 +528,15 @@ mod tests {
     fn disabled_engine_allows_read() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            Some("user-1".into()),
-            None,
+            PolicyCallerCtx {
+                user_id: Some("user-1".into()),
+                user_email: None,
+                scopes: vec!["stoa:read".into()],
+                roles: vec!["viewer".into()],
+            },
             "tenant-1",
             "stoa_catalog",
             Action::Read,
-            vec!["stoa:read".into()],
-            vec!["viewer".into()],
         );
         assert!(result.is_ok());
     }
@@ -536,13 +545,15 @@ mod tests {
     fn disabled_engine_allows_admin() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            Some("admin".into()),
-            Some("admin@test.com".into()),
+            PolicyCallerCtx {
+                user_id: Some("admin".into()),
+                user_email: Some("admin@test.com".into()),
+                scopes: vec!["stoa:admin".into()],
+                roles: vec!["cpi-admin".into()],
+            },
             "tenant-1",
             "stoa_security",
             Action::ManageContracts,
-            vec!["stoa:admin".into()],
-            vec!["cpi-admin".into()],
         );
         assert!(result.is_ok());
     }
@@ -551,13 +562,15 @@ mod tests {
     fn disabled_engine_allows_write() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            None,
-            None,
+            PolicyCallerCtx {
+                user_id: None,
+                user_email: None,
+                scopes: vec![],
+                roles: vec![],
+            },
             "tenant-1",
             "stoa_subscription",
             Action::Create,
-            vec![],
-            vec![],
         );
         assert!(result.is_ok());
     }

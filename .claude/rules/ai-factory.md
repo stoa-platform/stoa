@@ -33,28 +33,10 @@ Full reference: `.claude/rules/mcp-integrations.md`
 
 **Rule**: MCP for **state changes**, local files for **context**. Batch reads, minimize writes.
 
-## Cost Awareness — CI Model Routing (Active)
+## Cost Awareness
 
-### CI Workflow Tiers
-
-| Tier | Model | $/MTok (in/out) | Invocations | Use Case |
-|------|-------|-----------------|-------------|----------|
-| 1 | haiku-4-5 | $1/$5 | 6 | Triage, digest, capacity, backlog, review, scan |
-| 2 | sonnet-4-5 | $3/$15 | 7 | Code gen, CI health, audit, interactive, implement, self-improve |
-| 3 | opus-4-6 | $5/$25 | 3 | Council gate (issue-to-pr, linear-dispatch, multi-agent) |
-
-Kill-switch: set repo variable `CLAUDE_DEFAULT_MODEL=claude-sonnet-4-5-20250929` to revert all tiers to Sonnet.
-
-### Local / Subagent Tiers
-
-| Task Type | Model | Rationale |
-|-----------|-------|-----------|
-| Code exploration, search, analysis | **haiku** | Fast, cheap, sufficient for grep/glob |
-| Subagent work (tests, reviews, docs) | **sonnet** | Good balance of quality and cost |
-| Architecture decisions, security review | **opus** | Critical decisions need best reasoning |
-| Plan review, implementation | **opus** (inline) | Main conversation, full context needed |
-
-**Rules**: Never opus for subagents. Prefer haiku for `Explore`. Max **3-4 subagents active**.
+CI model routing: see `autonomous-factory.md` — "H24 Scaling" section.
+Local/subagent model selection: see `cost-guardrails.md`.
 
 ## Plan Structure Standard
 

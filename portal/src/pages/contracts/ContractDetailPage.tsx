@@ -150,7 +150,9 @@ const ErrorState: React.FC<{ message: string }> = ({ message }) => (
 const NotFoundState: React.FC = () => (
   <div className="text-center py-24">
     <FileCode2 className="h-12 w-12 text-neutral-300 mx-auto mb-4" />
-    <h2 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">Contract not found</h2>
+    <h2 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">
+      Contract not found
+    </h2>
     <p className="text-neutral-500 dark:text-neutral-400 mb-6">
       The contract you're looking for doesn't exist or you don't have access to it.
     </p>
@@ -276,7 +278,9 @@ export const ContractDetailPage: React.FC = () => {
 
         {/* Quick access to endpoints */}
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Quick Access</h2>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
+            Quick Access
+          </h2>
           {enabledBindings.length > 0 ? (
             <div className="space-y-3">
               {enabledBindings.map((binding) => (
@@ -294,7 +298,9 @@ export const ContractDetailPage: React.FC = () => {
       {/* Contract source (optional) */}
       {contract.openapi_spec_url && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">OpenAPI Spec</h2>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
+            OpenAPI Spec
+          </h2>
           <a
             href={contract.openapi_spec_url}
             target="_blank"

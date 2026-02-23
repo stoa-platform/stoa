@@ -33,7 +33,9 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">{t('createApp.title')}</h2>
+        <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">
+          {t('createApp.title')}
+        </h2>
         <p className="mt-2 text-neutral-500 dark:text-neutral-400">{t('createApp.subtitle')}</p>
       </div>
 

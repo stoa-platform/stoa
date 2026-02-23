@@ -161,7 +161,9 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
           </div>
 
           {/* Size */}
-          <div className="text-sm text-neutral-500 dark:text-neutral-400">{formatBytes(bodySize)}</div>
+          <div className="text-sm text-neutral-500 dark:text-neutral-400">
+            {formatBytes(bodySize)}
+          </div>
         </div>
 
         {/* Copy Button */}

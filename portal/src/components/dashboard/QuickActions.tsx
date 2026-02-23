@@ -122,7 +122,9 @@ export function QuickActions() {
                     {title}
                     {action.external && <ExternalLink className="h-3 w-3 text-neutral-400" />}
                   </h3>
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">{description}</p>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    {description}
+                  </p>
                 </div>
                 <ArrowRight className="h-5 w-5 text-neutral-400 dark:text-neutral-500 group-hover:text-primary-500 group-hover:translate-x-1 transition-all flex-shrink-0" />
               </div>

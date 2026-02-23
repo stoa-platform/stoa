@@ -45,7 +45,9 @@ export function ErrorFallback({
       <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">{title}</h2>
 
       {/* Description */}
-      <p className="text-neutral-600 dark:text-neutral-400 text-center mb-6 max-w-md">{description}</p>
+      <p className="text-neutral-600 dark:text-neutral-400 text-center mb-6 max-w-md">
+        {description}
+      </p>
 
       {/* Error details (development only or for debugging) */}
       {error && (

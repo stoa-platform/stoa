@@ -77,7 +77,9 @@ export function OnboardingFunnel() {
                 <span className="text-neutral-500 dark:text-neutral-400">
                   {stage.count}
                   {rate !== null && (
-                    <span className="ml-1 text-xs text-neutral-400 dark:text-neutral-500">({rate}%)</span>
+                    <span className="ml-1 text-xs text-neutral-400 dark:text-neutral-500">
+                      ({rate}%)
+                    </span>
                   )}
                 </span>
               </div>

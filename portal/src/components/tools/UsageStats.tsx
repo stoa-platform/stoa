@@ -57,7 +57,9 @@ function StatCard({ icon: Icon, iconColor, label, value, subtext, trend }: StatC
       <div className="mt-3">
         <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">{label}</p>
-        {subtext && <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">{subtext}</p>}
+        {subtext && (
+          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">{subtext}</p>
+        )}
       </div>
     </div>
   );
@@ -122,7 +124,9 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
       {!hasStats ? (
         <div className="text-center py-8">
           <Activity className="h-12 w-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
-          <p className="text-neutral-500 dark:text-neutral-400 text-sm">No usage data available yet</p>
+          <p className="text-neutral-500 dark:text-neutral-400 text-sm">
+            No usage data available yet
+          </p>
           <p className="text-neutral-400 dark:text-neutral-500 text-xs mt-1">
             Statistics will appear once you start using this tool
           </p>

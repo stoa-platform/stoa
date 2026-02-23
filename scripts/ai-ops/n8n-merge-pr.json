@@ -12,7 +12,10 @@
       "name": "Merge Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "merge-pr"
     },
     {
@@ -50,22 +53,59 @@
       "name": "Validate Parameters",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
-      "position": [400, 300]
+      "position": [
+        400,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst pr = $input.first().json.query.pr;\nconst token = $input.first().json.query.token;\n\nconst secret = $env.APPROVE_HMAC_SECRET;\n\nif (!secret) {\n  throw new Error('APPROVE_HMAC_SECRET not configured — set it as Docker env var');\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(pr).digest('hex');\n\nif (token !== expected) {\n  throw new Error('Invalid HMAC token');\n}\n\nreturn [{ json: { pr, token, valid: true } }];"
+        "jsCode": "const crypto = require('crypto');\n\nconst pr = $input.first().json.query.pr;\nconst token = $input.first().json.query.token;\n\nconst secret = $env.APPROVE_HMAC_SECRET;\n\nif (!secret) {\n  return [{ json: { valid: false, error: 'APPROVE_HMAC_SECRET not configured' } }];\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(pr).digest('hex');\n\nif (token !== expected) {\n  return [{ json: { valid: false, error: 'Invalid HMAC token' } }];\n}\n\nreturn [{ json: { pr, token, valid: true } }];"
       },
       "id": "validate-hmac",
       "name": "Validate HMAC",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 300]
+      "position": [
+        600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-hmac-result",
+      "name": "HMAC Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        800,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/pulls/{{ $json.pr }}",
+        "url": "=https://api.github.com/repos/stoa-platform/stoa/pulls/{{ $('Validate HMAC').first().json.pr }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -82,7 +122,10 @@
       "name": "Fetch PR",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [800, 300],
+      "position": [
+        1000,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "github-pat",
@@ -113,7 +156,10 @@
       "name": "Merge PR",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1000, 300],
+      "position": [
+        1200,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "github-pat",
@@ -142,7 +188,10 @@
       "name": "Delete Branch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1200, 300],
+      "position": [
+        1400,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "github-pat",
@@ -160,7 +209,10 @@
       "name": "Redirect to PR",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1400, 300]
+      "position": [
+        1600,
+        300
+      ]
     },
     {
       "parameters": {
@@ -174,7 +226,10 @@
       "name": "Error Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [600, 500]
+      "position": [
+        800,
+        500
+      ]
     }
   ],
   "connections": {
@@ -211,7 +266,25 @@
       "main": [
         [
           {
+            "node": "HMAC Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HMAC Valid?": {
+      "main": [
+        [
+          {
             "node": "Fetch PR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
             "type": "main",
             "index": 0
           }

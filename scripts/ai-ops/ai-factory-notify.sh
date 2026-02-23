@@ -284,15 +284,25 @@ _push_metrics() {
     return 0
   fi
   local PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/ai_factory/${JOB_PATH}"
-  local CURL_AUTH=""
-  if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
-    CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
-  fi
   local HTTP_CODE
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-    --data-binary "$METRICS_TEXT" \
-    -H "Content-Type: text/plain" \
-    $CURL_AUTH "$PUSH_URL" 2>/dev/null)
+  if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary "$METRICS_TEXT" \
+      -H "Content-Type: text/plain" \
+      -u "${PUSHGATEWAY_AUTH}" "$PUSH_URL" 2>/dev/null)
+  else
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary "$METRICS_TEXT" \
+      -H "Content-Type: text/plain" \
+      "$PUSH_URL" 2>/dev/null)
+  fi
+  # Retry without auth if server rejects Basic Auth (IP-whitelisted setup)
+  if [ "${HTTP_CODE:-000}" = "400" ] && [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary "$METRICS_TEXT" \
+      -H "Content-Type: text/plain" \
+      "$PUSH_URL" 2>/dev/null)
+  fi
   [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
   if [ "$HTTP_CODE" -ge 300 ] || [ "$HTTP_CODE" = "000" ]; then
     echo "::warning::Pushgateway returned HTTP ${HTTP_CODE} (non-blocking)"
@@ -576,14 +586,14 @@ notify_pr_hygiene() {
 # Push PR hygiene gauge metrics to Pushgateway.
 push_metrics_pr_hygiene() {
   local TOTAL="${1:-0}" STALE="${2:-0}" ABANDONED="${3:-0}" DRAFT="${4:-0}"
-
-  _push_metrics "workflow/scheduled/stage/pr-hygiene" "$(cat <<PROM
-ai_factory_pr_hygiene{type="total"} ${TOTAL}
-ai_factory_pr_hygiene{type="stale"} ${STALE}
-ai_factory_pr_hygiene{type="abandoned"} ${ABANDONED}
-ai_factory_pr_hygiene{type="draft"} ${DRAFT}
-PROM
-)"
+  local METRICS=""
+  METRICS+="# HELP ai_factory_pr_hygiene PR hygiene gauge by type\n"
+  METRICS+="# TYPE ai_factory_pr_hygiene gauge\n"
+  METRICS+="ai_factory_pr_hygiene{type=\"total\"} ${TOTAL}\n"
+  METRICS+="ai_factory_pr_hygiene{type=\"stale\"} ${STALE}\n"
+  METRICS+="ai_factory_pr_hygiene{type=\"abandoned\"} ${ABANDONED}\n"
+  METRICS+="ai_factory_pr_hygiene{type=\"draft\"} ${DRAFT}\n"
+  _push_metrics "workflow/scheduled/stage/pr-hygiene" "$(printf '%b' "$METRICS")"
 }
 
 # notify_plan ISSUE_NUM ISSUE_TITLE ISSUE_URL STATUS

@@ -149,7 +149,7 @@ jobs:
 
   # === Staging: deploy same dev image to staging cluster ===
   deploy-staging:
-    needs: smoke-test
+    needs: [smoke-test, docker]
     if: github.event_name == 'push' && needs.smoke-test.result == 'success'
     uses: ./.github/workflows/reusable-k8s-deploy.yml
     with:

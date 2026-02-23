@@ -1,4 +1,5 @@
 """Tests for DeploymentService (CAB-1291)"""
+
 import uuid
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -40,6 +41,7 @@ def mock_db():
 def service(mock_db):
     svc = DeploymentService(mock_db)
     svc.repo = AsyncMock()
+    svc.add_log = AsyncMock()
     return svc
 
 
@@ -62,9 +64,13 @@ class TestCreateDeployment:
             patch("src.services.webhook_service.emit_deployment_started", new_callable=AsyncMock) as mock_webhook,
         ):
             result = await service.create_deployment(
-                tenant_id="acme", api_id="api-1", api_name="Weather API",
-                environment="staging", version="1.0.0",
-                deployed_by="alice", user_id="user-1",
+                tenant_id="acme",
+                api_id="api-1",
+                api_name="Weather API",
+                environment="staging",
+                version="1.0.0",
+                deployed_by="alice",
+                user_id="user-1",
             )
 
         assert result == created
@@ -83,9 +89,14 @@ class TestCreateDeployment:
             patch("src.services.webhook_service.emit_deployment_started", new_callable=AsyncMock),
         ):
             result = await service.create_deployment(
-                tenant_id="acme", api_id="api-1", api_name="Test",
-                environment="dev", version="2.0.0",
-                deployed_by="bob", user_id="user-2", gateway_id="gw-1",
+                tenant_id="acme",
+                api_id="api-1",
+                api_name="Test",
+                environment="dev",
+                version="2.0.0",
+                deployed_by="bob",
+                user_id="user-2",
+                gateway_id="gw-1",
             )
 
         # Verify the Deployment object passed to repo.create has gateway_id
@@ -103,8 +114,11 @@ class TestRollbackDeployment:
 
         with patch("src.services.deployment_service.kafka_service", _mock_kafka()) as mock_kafka:
             result = await service.rollback_deployment(
-                tenant_id="acme", deployment_id=original.id,
-                target_version="1.0.0", deployed_by="alice", user_id="user-1",
+                tenant_id="acme",
+                deployment_id=original.id,
+                target_version="1.0.0",
+                deployed_by="alice",
+                user_id="user-1",
             )
 
         assert result == rollback
@@ -121,8 +135,11 @@ class TestRollbackDeployment:
 
         with patch("src.services.deployment_service.kafka_service", _mock_kafka()):
             result = await service.rollback_deployment(
-                tenant_id="acme", deployment_id=original.id,
-                target_version=None, deployed_by="alice", user_id="user-1",
+                tenant_id="acme",
+                deployment_id=original.id,
+                target_version=None,
+                deployed_by="alice",
+                user_id="user-1",
             )
 
         # Should use prev_success.version
@@ -138,8 +155,11 @@ class TestRollbackDeployment:
 
         with patch("src.services.deployment_service.kafka_service", _mock_kafka()):
             result = await service.rollback_deployment(
-                tenant_id="acme", deployment_id=original.id,
-                target_version=None, deployed_by="alice", user_id="user-1",
+                tenant_id="acme",
+                deployment_id=original.id,
+                target_version=None,
+                deployed_by="alice",
+                user_id="user-1",
             )
 
         call_args = service.repo.create.call_args[0][0]
@@ -151,8 +171,11 @@ class TestRollbackDeployment:
 
         with pytest.raises(ValueError, match="not found"):
             await service.rollback_deployment(
-                tenant_id="acme", deployment_id=uuid.uuid4(),
-                target_version="1.0.0", deployed_by="alice", user_id="user-1",
+                tenant_id="acme",
+                deployment_id=uuid.uuid4(),
+                target_version="1.0.0",
+                deployed_by="alice",
+                user_id="user-1",
             )
 
 
@@ -165,7 +188,8 @@ class TestUpdateStatus:
 
         with patch("src.services.webhook_service.emit_deployment_succeeded", new_callable=AsyncMock) as mock_webhook:
             result = await service.update_status(
-                tenant_id="acme", deployment_id=deployment.id,
+                tenant_id="acme",
+                deployment_id=deployment.id,
                 status=DeploymentStatus.SUCCESS.value,
             )
 
@@ -181,7 +205,8 @@ class TestUpdateStatus:
 
         with patch("src.services.webhook_service.emit_deployment_failed", new_callable=AsyncMock) as mock_webhook:
             result = await service.update_status(
-                tenant_id="acme", deployment_id=deployment.id,
+                tenant_id="acme",
+                deployment_id=deployment.id,
                 status=DeploymentStatus.FAILED.value,
                 error_message="Pod CrashLoopBackOff",
             )
@@ -199,7 +224,8 @@ class TestUpdateStatus:
 
         with patch("src.services.webhook_service.emit_deployment_rolled_back", new_callable=AsyncMock) as mock_webhook:
             result = await service.update_status(
-                tenant_id="acme", deployment_id=deployment.id,
+                tenant_id="acme",
+                deployment_id=deployment.id,
                 status=DeploymentStatus.ROLLED_BACK.value,
             )
 
@@ -213,7 +239,8 @@ class TestUpdateStatus:
         service.repo.update.return_value = deployment
 
         await service.update_status(
-            tenant_id="acme", deployment_id=deployment.id,
+            tenant_id="acme",
+            deployment_id=deployment.id,
             status=DeploymentStatus.IN_PROGRESS.value,
         )
 
@@ -226,9 +253,11 @@ class TestUpdateStatus:
         service.repo.update.return_value = deployment
 
         await service.update_status(
-            tenant_id="acme", deployment_id=deployment.id,
+            tenant_id="acme",
+            deployment_id=deployment.id,
             status=DeploymentStatus.IN_PROGRESS.value,
-            spec_hash="abc123", commit_sha="def456",
+            spec_hash="abc123",
+            commit_sha="def456",
         )
 
         assert deployment.spec_hash == "abc123"
@@ -240,7 +269,8 @@ class TestUpdateStatus:
 
         with pytest.raises(ValueError, match="not found"):
             await service.update_status(
-                tenant_id="acme", deployment_id=uuid.uuid4(),
+                tenant_id="acme",
+                deployment_id=uuid.uuid4(),
                 status=DeploymentStatus.SUCCESS.value,
             )
 
@@ -255,7 +285,12 @@ class TestListAndGet:
 
         assert total == 2
         service.repo.list_by_tenant.assert_called_once_with(
-            "acme", api_id=None, environment=None, status=None, page=1, page_size=50,
+            "acme",
+            api_id=None,
+            environment=None,
+            status=None,
+            page=1,
+            page_size=50,
         )
 
     @pytest.mark.asyncio
@@ -263,11 +298,21 @@ class TestListAndGet:
         service.repo.list_by_tenant.return_value = ([], 0)
 
         await service.list_deployments(
-            "acme", api_id="api-1", environment="prod", status="success", page=2, page_size=10,
+            "acme",
+            api_id="api-1",
+            environment="prod",
+            status="success",
+            page=2,
+            page_size=10,
         )
 
         service.repo.list_by_tenant.assert_called_once_with(
-            "acme", api_id="api-1", environment="prod", status="success", page=2, page_size=10,
+            "acme",
+            api_id="api-1",
+            environment="prod",
+            status="success",
+            page=2,
+            page_size=10,
         )
 
     @pytest.mark.asyncio

@@ -3335,6 +3335,85 @@
         "title": "DeploymentListResponse",
         "type": "object"
       },
+      "DeploymentLogListResponse": {
+        "properties": {
+          "deployment_id": {
+            "format": "uuid",
+            "title": "Deployment Id",
+            "type": "string"
+          },
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/DeploymentLogResponse"
+            },
+            "title": "Logs",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deployment_id",
+          "logs",
+          "total"
+        ],
+        "title": "DeploymentLogListResponse",
+        "type": "object"
+      },
+      "DeploymentLogResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deployment_id": {
+            "format": "uuid",
+            "title": "Deployment Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "id",
+          "deployment_id",
+          "seq",
+          "level",
+          "message",
+          "created_at"
+        ],
+        "title": "DeploymentLogResponse",
+        "type": "object"
+      },
       "DeploymentResponse": {
         "properties": {
           "api_id": {
@@ -31057,7 +31136,7 @@
     },
     "/v1/tenants/{tenant_id}/deployments/{deployment_id}/logs": {
       "get": {
-        "description": "Get deployment logs",
+        "description": "Get deployment logs with optional cursor-based pagination.\n\nQuery params:\n    after_seq: Return logs with seq > this value (for polling).\n    limit: Max entries to return (default 200).",
         "operationId": "get_deployment_logs_v1_tenants__tenant_id__deployments__deployment_id__logs_get",
         "parameters": [
           {
@@ -31078,13 +31157,35 @@
               "title": "Deployment Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "after_seq",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "After Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "title": "Limit",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentLogListResponse"
+                }
               }
             },
             "description": "Successful Response"

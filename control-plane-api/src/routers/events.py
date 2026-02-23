@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from ..auth import User, get_current_user, require_tenant_access
+from ..events.event_bus import event_bus
 from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
@@ -51,30 +52,26 @@ async def event_generator(
     request: Request, tenant_id: str, user: User, event_types: list[str] | None = None
 ) -> AsyncGenerator[dict, None]:
     """
-    Generate SSE events from Kafka consumer.
+    Generate SSE events via in-memory EventBus fan-out (CAB-1420).
 
-    This generator:
-    1. Creates a Kafka consumer for the user's tenant
-    2. Filters events by tenant_id and event_types
-    3. Yields events as SSE messages
-    4. Handles client disconnection gracefully
-
-    Kafka SSE consumer deferred — requires shared consumer with fan-out (see CAB-1176).
-    Currently sends heartbeats only to keep the connection alive.
+    Events are published to the bus by Kafka consumers and service-layer
+    code (e.g. deployment log entries). Each SSE client gets its own
+    subscriber queue with tenant + event-type filtering.
     """
+    sub = event_bus.subscribe(tenant_id=tenant_id, event_types=event_types)
     try:
-        while True:
+        async for event in event_bus.listen(sub):
             if await request.is_disconnected():
                 break
-
-            # Heartbeat to keep connection alive
-            yield {"event": "heartbeat", "data": json.dumps({"status": "connected"})}
-
-            await asyncio.sleep(30)  # Heartbeat every 30 seconds
-
+            data = event.get("data", {})
+            yield {
+                "event": event.get("event", "message"),
+                "data": json.dumps(data) if isinstance(data, dict) else data,
+            }
     except asyncio.CancelledError:
-        # Client disconnected
         pass
+    finally:
+        event_bus.unsubscribe(sub)
 
 
 @router.get("/stream/global")

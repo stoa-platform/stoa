@@ -44,6 +44,9 @@ class Topics:
     METERING_EVENTS = "stoa.metering.events"
     FEDERATION_EVENTS = "stoa.federation.events"
 
+    # Deploy log streaming (CAB-1420)
+    DEPLOYMENT_LOGS = "stoa.deployment.logs"
+
     # Tenant provisioning (CAB-1315)
     TENANT_PROVISIONING = "stoa.tenant.provisioning"
 

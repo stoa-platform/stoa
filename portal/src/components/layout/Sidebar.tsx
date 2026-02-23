@@ -68,6 +68,12 @@ const sections: NavSection[] = [
         permission: 'apps:read',
       },
       {
+        name: 'My MCP Servers',
+        href: '/my-servers',
+        icon: Server,
+        scope: 'stoa:catalog:read',
+      },
+      {
         name: 'Register Consumer',
         href: '/consumers/register',
         icon: UserPlus,
@@ -197,7 +203,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     >
                       <item.icon className="h-5 w-5" aria-hidden="true" />
                       {item.name}
-                      <ExternalLink className="h-3 w-3 ml-auto text-neutral-400" aria-hidden="true" />
+                      <ExternalLink
+                        className="h-3 w-3 ml-auto text-neutral-400"
+                        aria-hidden="true"
+                      />
                     </a>
                   ) : (
                     <NavLink

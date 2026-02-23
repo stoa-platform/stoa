@@ -18,7 +18,10 @@ from starlette.responses import Response
 
 from .config import settings
 from .consumers.deployment_consumer import deployment_consumer
-from .features.error_snapshots import add_error_snapshot_middleware, connect_error_snapshots
+from .features.error_snapshots import (
+    add_error_snapshot_middleware,
+    connect_error_snapshots,
+)
 from .logging_config import configure_logging, get_logger
 from .middleware.http_logging import HTTPLoggingMiddleware
 
@@ -96,9 +99,16 @@ from .routers.mcp_admin import (
 )
 from .routers.portal import internal_router as portal_internal_router
 from .routers.tenant_mcp_servers import router as tenant_mcp_servers_router
-from .services import argocd_service, git_service, kafka_service, keycloak_service, metrics_service
+from .services import (
+    argocd_service,
+    git_service,
+    kafka_service,
+    keycloak_service,
+    metrics_service,
+)
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
+from .workers.chat_metering_consumer import chat_metering_consumer
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.gateway_health_worker import gateway_health_worker
 from .workers.sync_engine import sync_engine
@@ -112,12 +122,17 @@ ENABLE_DEPLOYMENT_NOTIFIER = os.getenv("ENABLE_DEPLOYMENT_NOTIFIER", "true").low
 ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
 ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
 ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
+ENABLE_CHAT_METERING_CONSUMER = os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true").lower() == "true"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Starting STOA Control-Plane API", version=settings.VERSION, environment=settings.ENVIRONMENT)
+    logger.info(
+        "Starting STOA Control-Plane API",
+        version=settings.VERSION,
+        environment=settings.ENVIRONMENT,
+    )
 
     # Initialize services
     try:
@@ -209,6 +224,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start gateway health worker", error=str(e))
 
+    # Start chat metering consumer (CAB-288)
+    chat_metering_task = None
+    if ENABLE_CHAT_METERING_CONSUMER:
+        try:
+            chat_metering_task = asyncio.create_task(chat_metering_consumer.start())
+            logger.info("Chat metering consumer started")
+        except Exception as e:
+            logger.warning("Failed to start chat metering consumer", error=str(e))
+
     yield
 
     # Shutdown
@@ -241,6 +265,13 @@ async def lifespan(app: FastAPI):
         gateway_health_task.cancel()
         with suppress(asyncio.CancelledError):
             await gateway_health_task
+
+    # Stop chat metering consumer (CAB-288)
+    if ENABLE_CHAT_METERING_CONSUMER and chat_metering_task:
+        await chat_metering_consumer.stop()
+        chat_metering_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await chat_metering_task
 
     await kafka_service.disconnect()
     await git_service.disconnect()
@@ -318,38 +349,107 @@ app = FastAPI(
     openapi_tags=[
         {"name": "Tenants", "description": "Tenant management operations"},
         {"name": "APIs", "description": "API lifecycle management"},
-        {"name": "Applications", "description": "Application and subscription management"},
+        {
+            "name": "Applications",
+            "description": "Application and subscription management",
+        },
         {"name": "Deployments", "description": "Deployment operations and status"},
         {"name": "Git", "description": "GitLab integration (commits, MRs, files)"},
         {"name": "Events", "description": "Real-time event streaming (SSE)"},
         {"name": "Webhooks", "description": "GitLab webhook handlers for GitOps"},
         {"name": "Traces", "description": "Pipeline monitoring and tracing"},
-        {"name": "Gateway", "description": "webMethods Gateway administration via OIDC proxy"},
-        {"name": "Subscriptions", "description": "API subscription and API key management"},
-        {"name": "Tenant Webhooks", "description": "Webhook notifications for subscription events (CAB-315)"},
-        {"name": "certificates", "description": "Certificate validation for mTLS subscriptions (CAB-313)"},
-        {"name": "Search", "description": "Full-text search across tools and APIs (CAB-307)"},
+        {
+            "name": "Gateway",
+            "description": "webMethods Gateway administration via OIDC proxy",
+        },
+        {
+            "name": "Subscriptions",
+            "description": "API subscription and API key management",
+        },
+        {
+            "name": "Tenant Webhooks",
+            "description": "Webhook notifications for subscription events (CAB-315)",
+        },
+        {
+            "name": "certificates",
+            "description": "Certificate validation for mTLS subscriptions (CAB-313)",
+        },
+        {
+            "name": "Search",
+            "description": "Full-text search across tools and APIs (CAB-307)",
+        },
         {"name": "Usage", "description": "Usage dashboard for API consumers (CAB-280)"},
-        {"name": "Dashboard", "description": "Home dashboard stats and activity (CAB-299)"},
-        {"name": "Service Accounts", "description": "OAuth2 Service Accounts for MCP access (CAB-296)"},
-        {"name": "Contracts", "description": "Universal API Contracts with multi-protocol bindings (UAC)"},
+        {
+            "name": "Dashboard",
+            "description": "Home dashboard stats and activity (CAB-299)",
+        },
+        {
+            "name": "Service Accounts",
+            "description": "OAuth2 Service Accounts for MCP access (CAB-296)",
+        },
+        {
+            "name": "Contracts",
+            "description": "Universal API Contracts with multi-protocol bindings (UAC)",
+        },
         {"name": "MCP Servers", "description": "Browse and discover MCP servers"},
-        {"name": "MCP Subscriptions", "description": "Subscribe to MCP servers and manage API keys"},
-        {"name": "MCP Validation", "description": "API key validation for MCP Gateway (internal)"},
-        {"name": "MCP Admin - Subscriptions", "description": "Admin approval workflow for MCP subscriptions"},
+        {
+            "name": "MCP Subscriptions",
+            "description": "Subscribe to MCP servers and manage API keys",
+        },
+        {
+            "name": "MCP Validation",
+            "description": "API key validation for MCP Gateway (internal)",
+        },
+        {
+            "name": "MCP Admin - Subscriptions",
+            "description": "Admin approval workflow for MCP subscriptions",
+        },
         {"name": "MCP Admin - Servers", "description": "MCP server management (admin)"},
-        {"name": "Portal", "description": "Developer Portal API catalog and MCP server browsing"},
+        {
+            "name": "Portal",
+            "description": "Developer Portal API catalog and MCP server browsing",
+        },
         {"name": "MCP GitOps", "description": "GitOps synchronization for MCP servers"},
-        {"name": "MCP Tools", "description": "MCP tools discovery and invocation (proxy to MCP Gateway)"},
-        {"name": "Platform", "description": "Platform status and GitOps observability (CAB-654)"},
-        {"name": "Gateways", "description": "Gateway instance management (multi-gateway orchestration)"},
-        {"name": "Gateway Deployments", "description": "API deployment to gateways (sync engine)"},
-        {"name": "Gateway Policies", "description": "Gateway-agnostic policy management"},
-        {"name": "Gateway Observability", "description": "Multi-gateway health and sync metrics"},
-        {"name": "Gateway Internal", "description": "Internal gateway auto-registration (ADR-028)"},
-        {"name": "Consumers", "description": "Consumer onboarding and lifecycle management (CAB-1121)"},
-        {"name": "Plans", "description": "Subscription plan management with quotas (CAB-1121)"},
-        {"name": "Quotas", "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)"},
+        {
+            "name": "MCP Tools",
+            "description": "MCP tools discovery and invocation (proxy to MCP Gateway)",
+        },
+        {
+            "name": "Platform",
+            "description": "Platform status and GitOps observability (CAB-654)",
+        },
+        {
+            "name": "Gateways",
+            "description": "Gateway instance management (multi-gateway orchestration)",
+        },
+        {
+            "name": "Gateway Deployments",
+            "description": "API deployment to gateways (sync engine)",
+        },
+        {
+            "name": "Gateway Policies",
+            "description": "Gateway-agnostic policy management",
+        },
+        {
+            "name": "Gateway Observability",
+            "description": "Multi-gateway health and sync metrics",
+        },
+        {
+            "name": "Gateway Internal",
+            "description": "Internal gateway auto-registration (ADR-028)",
+        },
+        {
+            "name": "Consumers",
+            "description": "Consumer onboarding and lifecycle management (CAB-1121)",
+        },
+        {
+            "name": "Plans",
+            "description": "Subscription plan management with quotas (CAB-1121)",
+        },
+        {
+            "name": "Quotas",
+            "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)",
+        },
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -379,14 +479,18 @@ async def integrity_error_handler(request: Request, exc: sqlalchemy.exc.Integrit
     detail = str(exc.orig) if exc.orig else str(exc)
     logger.warning("Database integrity error", path=str(request.url.path), detail=detail)
     return JSONResponse(
-        status_code=409, content={"detail": "Conflict: a resource with this identifier already exists."}
+        status_code=409,
+        content={"detail": "Conflict: a resource with this identifier already exists."},
     )
 
 
 @app.exception_handler(sqlalchemy.exc.OperationalError)
 async def operational_error_handler(request: Request, exc: sqlalchemy.exc.OperationalError) -> JSONResponse:
     logger.error("Database operational error", path=str(request.url.path), error=str(exc))
-    return JSONResponse(status_code=503, content={"detail": "Database service unavailable. Please retry later."})
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database service unavailable. Please retry later."},
+    )
 
 
 @app.exception_handler(httpx.HTTPError)
@@ -397,7 +501,12 @@ async def httpx_error_handler(request: Request, exc: httpx.HTTPError) -> JSONRes
 
 @app.exception_handler(Exception)
 async def catch_all_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Unhandled exception", path=str(request.url.path), error_type=type(exc).__name__, error=str(exc))
+    logger.error(
+        "Unhandled exception",
+        path=str(request.url.path),
+        error_type=type(exc).__name__,
+        error=str(exc),
+    )
     return JSONResponse(status_code=500, content={"detail": "Internal server error."})
 
 

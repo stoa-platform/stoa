@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { onCLS, onLCP, onINP } from 'web-vitals';
 import App from './App';
 import { config } from './config';
+// Initialize i18n before rendering — must be imported before App
+import './i18n/i18n';
 import './index.css';
 
 // Log Core Web Vitals in dev mode

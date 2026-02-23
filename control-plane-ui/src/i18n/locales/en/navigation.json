@@ -1,0 +1,67 @@
+{
+  "sections": {
+    "overview": "Overview",
+    "catalog": "Catalog",
+    "saas": "SaaS",
+    "gateway": "Gateway",
+    "insights": "Insights",
+    "governance": "Governance"
+  },
+  "items": {
+    "dashboard": "Dashboard",
+    "operations": "Operations",
+    "myUsage": "My Usage",
+    "business": "Business",
+    "tenants": "Tenants",
+    "apis": "APIs",
+    "aiTools": "AI Tools",
+    "externalMcpServers": "External MCP Servers",
+    "applications": "Applications",
+    "consumers": "Consumers",
+    "backendApis": "Backend APIs",
+    "apiKeys": "API Keys",
+    "status": "Status",
+    "registry": "Registry",
+    "modes": "Modes",
+    "deployments": "Deployments",
+    "drift": "Drift",
+    "metrics": "Metrics",
+    "federation": "Federation",
+    "skills": "Skills",
+    "observability": "Observability",
+    "identity": "Identity",
+    "logs": "Logs",
+    "apiMonitoring": "API Monitoring",
+    "errorSnapshots": "Error Snapshots",
+    "executions": "Executions",
+    "shadowDiscovery": "Shadow Discovery",
+    "tokenOptimizer": "Token Optimizer",
+    "policies": "Policies",
+    "auditLog": "Audit Log",
+    "workflows": "Workflows",
+    "audience": "Audience"
+  },
+  "header": {
+    "searchPlaceholder": "Search...",
+    "searchShortcut": "⌘K",
+    "controlPlane": "Control Plane"
+  },
+  "breadcrumbs": {
+    "home": "Home"
+  },
+  "commandPalette": {
+    "navigate": "Navigate to {{name}}",
+    "createNewApi": "Create New API",
+    "createNewApiDesc": "Add a new API definition",
+    "createNewTenant": "Create New Tenant",
+    "createNewTenantDesc": "Add a new tenant",
+    "logoutDesc": "Sign out of your account",
+    "toggleThemeLight": "Switch to Light Mode",
+    "toggleThemeDark": "Switch to Dark Mode",
+    "currentlyIn": "Currently in {{theme}} mode",
+    "navigation": "Navigation",
+    "actions": "Actions",
+    "account": "Account",
+    "settings": "Settings"
+  }
+}

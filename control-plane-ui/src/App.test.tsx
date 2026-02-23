@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+// Initialize i18n singleton so useTranslation resolves correctly in tests
+import './i18n/i18n';
 
 // Module-level mock so we can override per-test
 const mockUseAuth = vi.fn(() => ({

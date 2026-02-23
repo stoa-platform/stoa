@@ -1,0 +1,174 @@
+{
+  "dashboard": {
+    "title": "Tableau de bord",
+    "welcome": "Bienvenue sur STOA Control Plane",
+    "hello": "Bonjour, {{name}} !",
+    "quickActions": "Actions rapides",
+    "quickLinks": "Liens rapides",
+    "gettingStarted": "Pour commencer",
+    "cards": {
+      "apis": {
+        "title": "APIs",
+        "description": "Gérer les définitions et déploiements d'API"
+      },
+      "aiTools": {
+        "title": "Outils IA",
+        "description": "Parcourir le catalogue d'outils MCP"
+      },
+      "applications": {
+        "title": "Applications",
+        "description": "Gérer les applications consommatrices"
+      },
+      "deployments": {
+        "title": "Déploiements",
+        "description": "Voir l'historique des déploiements"
+      }
+    },
+    "gettingStartedSteps": {
+      "step1": "Accédez aux APIs et créez une nouvelle API",
+      "step2": "Importez votre spécification OpenAPI/Swagger ou créez manuellement",
+      "step3": "Déployez dans l'environnement DEV pour tester",
+      "step4": "Surveillez les déploiements dans la page Déploiements"
+    }
+  },
+  "login": {
+    "title": "STOA Control Plane",
+    "subtitle": "Gestion d'API multi-tenant",
+    "loginButton": "Se connecter avec Keycloak",
+    "loading": "Chargement..."
+  },
+  "apis": {
+    "title": "APIs",
+    "createApi": "Créer une API",
+    "editApi": "Modifier l'API",
+    "deleteApi": "Supprimer l'API",
+    "noApis": "Aucune API pour l'instant",
+    "importSpec": "Importer une spécification",
+    "deployTo": "Déployer vers"
+  },
+  "tenants": {
+    "title": "Tenants",
+    "createTenant": "Créer un tenant",
+    "editTenant": "Modifier le tenant",
+    "deleteTenant": "Supprimer le tenant",
+    "noTenants": "Aucun tenant pour l'instant",
+    "activeTenant": "Tenant actif",
+    "selectTenant": "Sélectionner un tenant"
+  },
+  "deployments": {
+    "title": "Déploiements",
+    "deploy": "Déployer",
+    "redeploy": "Redéployer",
+    "rollback": "Restaurer",
+    "noDeployments": "Aucun déploiement pour l'instant",
+    "deploymentHistory": "Historique des déploiements",
+    "deploymentStatus": "Statut du déploiement",
+    "environment": "Environnement"
+  },
+  "applications": {
+    "title": "Applications",
+    "createApplication": "Créer une application",
+    "editApplication": "Modifier l'application",
+    "deleteApplication": "Supprimer l'application",
+    "noApplications": "Aucune application pour l'instant",
+    "subscriptions": "Abonnements",
+    "apiKey": "Clé API"
+  },
+  "consumers": {
+    "title": "Consommateurs",
+    "createConsumer": "Créer un consommateur",
+    "editConsumer": "Modifier le consommateur",
+    "deleteConsumer": "Supprimer le consommateur",
+    "noConsumers": "Aucun consommateur pour l'instant"
+  },
+  "gateways": {
+    "title": "Passerelles",
+    "status": "Statut de la passerelle",
+    "registry": "Registre des passerelles",
+    "modes": "Modes de passerelle",
+    "type": "Type de passerelle",
+    "noGateways": "Aucune passerelle configurée",
+    "health": "Santé",
+    "latency": "Latence"
+  },
+  "aiTools": {
+    "title": "Outils IA",
+    "catalog": "Catalogue d'outils",
+    "subscriptions": "Mes abonnements",
+    "usage": "Tableau de bord d'utilisation",
+    "noTools": "Aucun outil disponible",
+    "subscribe": "S'abonner",
+    "unsubscribe": "Se désabonner"
+  },
+  "monitoring": {
+    "title": "Surveillance API",
+    "requests": "Requêtes",
+    "errors": "Erreurs",
+    "latency": "Latence",
+    "availability": "Disponibilité"
+  },
+  "policies": {
+    "title": "Politiques",
+    "createPolicy": "Créer une politique",
+    "noPolicy": "Aucune politique définie",
+    "rateLimiting": "Limitation de débit",
+    "cors": "CORS",
+    "authentication": "Authentification"
+  },
+  "auditLog": {
+    "title": "Journal d'audit",
+    "action": "Action",
+    "actor": "Acteur",
+    "resource": "Ressource",
+    "timestamp": "Horodatage",
+    "noEntries": "Aucune entrée d'audit"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "general": "Général",
+    "security": "Sécurité",
+    "notifications": "Notifications"
+  },
+  "observability": {
+    "title": "Observabilité",
+    "metrics": "Métriques",
+    "traces": "Traces",
+    "noMetrics": "Aucune métrique disponible"
+  },
+  "driftDetection": {
+    "title": "Détection de dérive",
+    "noDrift": "Aucune dérive détectée",
+    "driftDetected": "Dérive détectée",
+    "lastChecked": "Dernière vérification"
+  },
+  "skills": {
+    "title": "Compétences",
+    "noSkills": "Aucune compétence configurée"
+  },
+  "federation": {
+    "title": "Fédération",
+    "accounts": "Comptes de fédération",
+    "noAccounts": "Aucun compte de fédération"
+  },
+  "workflows": {
+    "title": "Flux de travail",
+    "createWorkflow": "Créer un flux de travail",
+    "noWorkflows": "Aucun flux de travail défini",
+    "instances": "Instances"
+  },
+  "executionView": {
+    "title": "Exécutions",
+    "noExecutions": "Aucune exécution pour l'instant"
+  },
+  "platformStatus": {
+    "title": "Statut de la plateforme",
+    "allSystems": "Tous les systèmes opérationnels",
+    "issues": "Problèmes système détectés"
+  },
+  "error": {
+    "pageNotFound": "Page introuvable",
+    "pageNotFoundMessage": "La page que vous recherchez n'existe pas.",
+    "serviceUnavailable": "Service indisponible",
+    "serviceUnavailableMessage": "Le service est temporairement indisponible. Veuillez réessayer ultérieurement."
+  }
+}

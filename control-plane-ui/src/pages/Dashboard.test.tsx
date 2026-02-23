@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createAuthMock } from '../test/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import type { PersonaRole } from '../test/helpers';
+// Initialize i18n singleton so useTranslation resolves correctly in tests
+import '../i18n/i18n';
 
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(),

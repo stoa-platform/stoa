@@ -1,0 +1,174 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome to STOA Control Plane",
+    "hello": "Hello, {{name}}!",
+    "quickActions": "Quick Actions",
+    "quickLinks": "Quick Links",
+    "gettingStarted": "Getting Started",
+    "cards": {
+      "apis": {
+        "title": "APIs",
+        "description": "Manage API definitions and deployments"
+      },
+      "aiTools": {
+        "title": "AI Tools",
+        "description": "Browse MCP tools catalog"
+      },
+      "applications": {
+        "title": "Applications",
+        "description": "Manage consumer applications"
+      },
+      "deployments": {
+        "title": "Deployments",
+        "description": "View deployment history"
+      }
+    },
+    "gettingStartedSteps": {
+      "step1": "Go to APIs and create a new API",
+      "step2": "Import your OpenAPI/Swagger specification or create manually",
+      "step3": "Deploy to DEV environment to test",
+      "step4": "Monitor deployments in the Deployments page"
+    }
+  },
+  "login": {
+    "title": "STOA Control Plane",
+    "subtitle": "Multi-tenant API Management",
+    "loginButton": "Login with Keycloak",
+    "loading": "Loading..."
+  },
+  "apis": {
+    "title": "APIs",
+    "createApi": "Create API",
+    "editApi": "Edit API",
+    "deleteApi": "Delete API",
+    "noApis": "No APIs yet",
+    "importSpec": "Import Specification",
+    "deployTo": "Deploy to"
+  },
+  "tenants": {
+    "title": "Tenants",
+    "createTenant": "Create Tenant",
+    "editTenant": "Edit Tenant",
+    "deleteTenant": "Delete Tenant",
+    "noTenants": "No tenants yet",
+    "activeTenant": "Active Tenant",
+    "selectTenant": "Select Tenant"
+  },
+  "deployments": {
+    "title": "Deployments",
+    "deploy": "Deploy",
+    "redeploy": "Redeploy",
+    "rollback": "Rollback",
+    "noDeployments": "No deployments yet",
+    "deploymentHistory": "Deployment History",
+    "deploymentStatus": "Deployment Status",
+    "environment": "Environment"
+  },
+  "applications": {
+    "title": "Applications",
+    "createApplication": "Create Application",
+    "editApplication": "Edit Application",
+    "deleteApplication": "Delete Application",
+    "noApplications": "No applications yet",
+    "subscriptions": "Subscriptions",
+    "apiKey": "API Key"
+  },
+  "consumers": {
+    "title": "Consumers",
+    "createConsumer": "Create Consumer",
+    "editConsumer": "Edit Consumer",
+    "deleteConsumer": "Delete Consumer",
+    "noConsumers": "No consumers yet"
+  },
+  "gateways": {
+    "title": "Gateways",
+    "status": "Gateway Status",
+    "registry": "Gateway Registry",
+    "modes": "Gateway Modes",
+    "type": "Gateway Type",
+    "noGateways": "No gateways configured",
+    "health": "Health",
+    "latency": "Latency"
+  },
+  "aiTools": {
+    "title": "AI Tools",
+    "catalog": "Tool Catalog",
+    "subscriptions": "My Subscriptions",
+    "usage": "Usage Dashboard",
+    "noTools": "No tools available",
+    "subscribe": "Subscribe",
+    "unsubscribe": "Unsubscribe"
+  },
+  "monitoring": {
+    "title": "API Monitoring",
+    "requests": "Requests",
+    "errors": "Errors",
+    "latency": "Latency",
+    "availability": "Availability"
+  },
+  "policies": {
+    "title": "Policies",
+    "createPolicy": "Create Policy",
+    "noPolicy": "No policies defined",
+    "rateLimiting": "Rate Limiting",
+    "cors": "CORS",
+    "authentication": "Authentication"
+  },
+  "auditLog": {
+    "title": "Audit Log",
+    "action": "Action",
+    "actor": "Actor",
+    "resource": "Resource",
+    "timestamp": "Timestamp",
+    "noEntries": "No audit entries"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "security": "Security",
+    "notifications": "Notifications"
+  },
+  "observability": {
+    "title": "Observability",
+    "metrics": "Metrics",
+    "traces": "Traces",
+    "noMetrics": "No metrics available"
+  },
+  "driftDetection": {
+    "title": "Drift Detection",
+    "noDrift": "No drift detected",
+    "driftDetected": "Drift detected",
+    "lastChecked": "Last checked"
+  },
+  "skills": {
+    "title": "Skills",
+    "noSkills": "No skills configured"
+  },
+  "federation": {
+    "title": "Federation",
+    "accounts": "Federation Accounts",
+    "noAccounts": "No federation accounts"
+  },
+  "workflows": {
+    "title": "Workflows",
+    "createWorkflow": "Create Workflow",
+    "noWorkflows": "No workflows defined",
+    "instances": "Instances"
+  },
+  "executionView": {
+    "title": "Executions",
+    "noExecutions": "No executions yet"
+  },
+  "platformStatus": {
+    "title": "Platform Status",
+    "allSystems": "All systems operational",
+    "issues": "System issues detected"
+  },
+  "error": {
+    "pageNotFound": "Page Not Found",
+    "pageNotFoundMessage": "The page you are looking for does not exist.",
+    "serviceUnavailable": "Service Unavailable",
+    "serviceUnavailableMessage": "The service is temporarily unavailable. Please try again later."
+  }
+}

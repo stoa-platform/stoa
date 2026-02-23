@@ -1,0 +1,67 @@
+{
+  "sections": {
+    "overview": "Vue d'ensemble",
+    "catalog": "Catalogue",
+    "saas": "SaaS",
+    "gateway": "Passerelle",
+    "insights": "Analyses",
+    "governance": "Gouvernance"
+  },
+  "items": {
+    "dashboard": "Tableau de bord",
+    "operations": "Opérations",
+    "myUsage": "Mon utilisation",
+    "business": "Activité",
+    "tenants": "Tenants",
+    "apis": "APIs",
+    "aiTools": "Outils IA",
+    "externalMcpServers": "Serveurs MCP externes",
+    "applications": "Applications",
+    "consumers": "Consommateurs",
+    "backendApis": "APIs backend",
+    "apiKeys": "Clés API",
+    "status": "Statut",
+    "registry": "Registre",
+    "modes": "Modes",
+    "deployments": "Déploiements",
+    "drift": "Dérive",
+    "metrics": "Métriques",
+    "federation": "Fédération",
+    "skills": "Compétences",
+    "observability": "Observabilité",
+    "identity": "Identité",
+    "logs": "Journaux",
+    "apiMonitoring": "Surveillance API",
+    "errorSnapshots": "Instantanés d'erreurs",
+    "executions": "Exécutions",
+    "shadowDiscovery": "Découverte fantôme",
+    "tokenOptimizer": "Optimiseur de jetons",
+    "policies": "Politiques",
+    "auditLog": "Journal d'audit",
+    "workflows": "Flux de travail",
+    "audience": "Audience"
+  },
+  "header": {
+    "searchPlaceholder": "Rechercher...",
+    "searchShortcut": "⌘K",
+    "controlPlane": "Plan de contrôle"
+  },
+  "breadcrumbs": {
+    "home": "Accueil"
+  },
+  "commandPalette": {
+    "navigate": "Naviguer vers {{name}}",
+    "createNewApi": "Créer une nouvelle API",
+    "createNewApiDesc": "Ajouter une nouvelle définition d'API",
+    "createNewTenant": "Créer un nouveau tenant",
+    "createNewTenantDesc": "Ajouter un nouveau tenant",
+    "logoutDesc": "Se déconnecter de votre compte",
+    "toggleThemeLight": "Passer en mode clair",
+    "toggleThemeDark": "Passer en mode sombre",
+    "currentlyIn": "Actuellement en mode {{theme}}",
+    "navigation": "Navigation",
+    "actions": "Actions",
+    "account": "Compte",
+    "settings": "Paramètres"
+  }
+}

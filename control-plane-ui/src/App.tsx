@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { EnvironmentProvider } from './contexts/EnvironmentContext';
 import { Layout } from './components/Layout';
@@ -133,12 +134,13 @@ function PageLoader() {
 
 function Dashboard() {
   const { user } = useAuth();
+  const { t } = useTranslation('pages');
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <p className="text-gray-500 dark:text-neutral-400 mt-2">Welcome to STOA Control Plane</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('dashboard.title')}</h1>
+        <p className="text-gray-500 dark:text-neutral-400 mt-2">{t('dashboard.welcome')}</p>
       </div>
 
       {/* Welcome Card */}
@@ -161,7 +163,7 @@ function Dashboard() {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Hello, {user?.name || 'User'}!
+              {t('dashboard.hello', { name: user?.name ?? 'User' })}
             </h2>
             <p className="text-sm text-gray-500 dark:text-neutral-400">{user?.email}</p>
           </div>
@@ -171,8 +173,8 @@ function Dashboard() {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <QuickActionCard
-          title="APIs"
-          description="Manage API definitions and deployments"
+          title={t('dashboard.cards.apis.title')}
+          description={t('dashboard.cards.apis.description')}
           href="/apis"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,8 +189,8 @@ function Dashboard() {
           color="blue"
         />
         <QuickActionCard
-          title="AI Tools"
-          description="Browse MCP tools catalog"
+          title={t('dashboard.cards.aiTools.title')}
+          description={t('dashboard.cards.aiTools.description')}
           href="/ai-tools"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,8 +211,8 @@ function Dashboard() {
           color="orange"
         />
         <QuickActionCard
-          title="Applications"
-          description="Manage consumer applications"
+          title={t('dashboard.cards.applications.title')}
+          description={t('dashboard.cards.applications.description')}
           href="/applications"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -225,8 +227,8 @@ function Dashboard() {
           color="purple"
         />
         <QuickActionCard
-          title="Deployments"
-          description="View deployment history"
+          title={t('dashboard.cards.deployments.title')}
+          description={t('dashboard.cards.deployments.description')}
           href="/deployments"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -248,7 +250,9 @@ function Dashboard() {
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Links</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            {t('dashboard.quickLinks')}
+          </h3>
           <ul className="space-y-3">
             {quickLinks.map((link) => (
               <li key={link.name}>
@@ -275,36 +279,24 @@ function Dashboard() {
 
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Getting Started
+            {t('dashboard.gettingStarted')}
           </h3>
           <ol className="space-y-3 text-sm text-gray-600 dark:text-neutral-400">
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">1.</span>
-              <span>
-                Go to{' '}
-                <a href="/apis" className="text-blue-600 hover:underline">
-                  APIs
-                </a>{' '}
-                and create a new API
-              </span>
+              <span>{t('dashboard.gettingStartedSteps.step1')}</span>
             </li>
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">2.</span>
-              <span>Import your OpenAPI/Swagger specification or create manually</span>
+              <span>{t('dashboard.gettingStartedSteps.step2')}</span>
             </li>
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">3.</span>
-              <span>Deploy to DEV environment to test</span>
+              <span>{t('dashboard.gettingStartedSteps.step3')}</span>
             </li>
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">4.</span>
-              <span>
-                Monitor deployments in the{' '}
-                <a href="/deployments" className="text-blue-600 hover:underline">
-                  Deployments
-                </a>{' '}
-                page
-              </span>
+              <span>{t('dashboard.gettingStartedSteps.step4')}</span>
             </li>
           </ol>
         </div>
@@ -430,6 +422,7 @@ function ProtectedRoutes() {
 
 function Login() {
   const { login, isLoading } = useAuth();
+  const { t } = useTranslation('pages');
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-500 to-purple-600">
@@ -450,8 +443,8 @@ function Login() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">STOA Control Plane</h1>
-          <p className="text-gray-500 mt-1">Multi-tenant API Management</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('login.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('login.subtitle')}</p>
         </div>
         <button
           onClick={login}
@@ -461,7 +454,7 @@ function Login() {
           {isLoading ? (
             <>
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              Loading...
+              {t('login.loading')}
             </>
           ) : (
             <>
@@ -473,7 +466,7 @@ function Login() {
                   d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
                 />
               </svg>
-              Login with Keycloak
+              {t('login.loginButton')}
             </>
           )}
         </button>

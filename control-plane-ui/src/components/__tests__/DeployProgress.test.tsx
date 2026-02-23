@@ -13,9 +13,7 @@ describe('DeployProgress', () => {
   });
 
   it('marks steps before current as done and current as active', () => {
-    const { container } = render(
-      <DeployProgress currentStep="sync" status="in_progress" />
-    );
+    const { container } = render(<DeployProgress currentStep="sync" status="in_progress" />);
 
     // "Validating" (init) is before sync → done (green)
     const labels = container.querySelectorAll('span');
@@ -33,9 +31,7 @@ describe('DeployProgress', () => {
   });
 
   it('marks all steps as done on success', () => {
-    const { container } = render(
-      <DeployProgress currentStep="complete" status="success" />
-    );
+    const { container } = render(<DeployProgress currentStep="complete" status="success" />);
 
     const labels = container.querySelectorAll('span');
     const allGreen = Array.from(labels).every((el) => el.className.includes('text-green-600'));
@@ -43,9 +39,7 @@ describe('DeployProgress', () => {
   });
 
   it('marks failed step with red styling on failure', () => {
-    const { container } = render(
-      <DeployProgress currentStep="health-check" status="failed" />
-    );
+    const { container } = render(<DeployProgress currentStep="health-check" status="failed" />);
 
     const labels = container.querySelectorAll('span');
     // init and sync before health-check → done (green)
@@ -65,9 +59,7 @@ describe('DeployProgress', () => {
   });
 
   it('renders 3 connector lines between 4 steps', () => {
-    const { container } = render(
-      <DeployProgress currentStep={null} status={null} />
-    );
+    const { container } = render(<DeployProgress currentStep={null} status={null} />);
 
     // Connector lines have h-0.5 class
     const connectors = container.querySelectorAll('.h-0\\.5');

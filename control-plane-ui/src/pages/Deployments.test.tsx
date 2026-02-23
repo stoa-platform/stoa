@@ -525,9 +525,7 @@ describe('DeploymentHistoryTab — expandable rows', () => {
 
   it('shows expanded detail with spec hash', async () => {
     mockListDeployments.mockResolvedValue({
-      items: [
-        mockDeployment({ id: 'deploy-1', status: 'success', spec_hash: 'abc123def456789' }),
-      ],
+      items: [mockDeployment({ id: 'deploy-1', status: 'success', spec_hash: 'abc123def456789' })],
       total: 1,
       page: 1,
       page_size: 20,

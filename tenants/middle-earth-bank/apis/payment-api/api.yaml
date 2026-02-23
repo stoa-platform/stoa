@@ -1,0 +1,28 @@
+id: payment-api
+name: payment-api
+display_name: "Payment Processing API"
+version: "3.0.0"
+description: |
+  Payment initiation and processing for the Bank of Gondor.
+
+  Fonctionnalites:
+  - SEPA Credit Transfers
+  - Instant Payments (SEPA Instant)
+  - Payment status tracking
+  - Beneficiary management
+
+  Supports PSD2 Payment Initiation Service (PIS) with SCA.
+backend_url: https://httpbin.org/anything
+status: active
+category: Payments
+tags:
+  - portal:published
+  - banking
+  - payments
+  - rest
+  - sepa
+  - psd2
+  - sca
+deployments:
+  dev: true
+  staging: false

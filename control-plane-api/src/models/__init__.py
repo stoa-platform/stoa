@@ -6,6 +6,8 @@ from .catalog import (
     SyncStatus,
     SyncType,
 )
+from .chat import ChatConversation, ChatMessage
+from .chat_token_usage import ChatTokenUsage
 from .consumer import Consumer, ConsumerStatus
 from .deployment import Deployment, DeploymentStatus, Environment
 from .execution_log import ErrorCategory, ExecutionLog, ExecutionStatus
@@ -60,7 +62,12 @@ from .skill import Skill, SkillScope
 from .subscription import Subscription, SubscriptionStatus
 from .tenant import Tenant, TenantProvisioningStatus, TenantStatus
 from .traces import PipelineTrace, TraceStatus, TraceStep, trace_store
-from .webhook import TenantWebhook, WebhookDelivery, WebhookDeliveryStatus, WebhookEventType
+from .webhook import (
+    TenantWebhook,
+    WebhookDelivery,
+    WebhookDeliveryStatus,
+    WebhookEventType,
+)
 from .workflow import (
     Sector,
     StepAction,

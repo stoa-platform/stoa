@@ -16,7 +16,9 @@ from sqlalchemy import distinct, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..config import settings
 from ..models.chat import ChatConversation, ChatMessage
+from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
 from ..services.chat_provider import AnthropicProvider, ChatProviderProtocol
 from ..services.chat_tools import CHAT_TOOLS, execute_tool
 from ..services.encryption_service import decrypt_auth_config, encrypt_auth_config
@@ -151,7 +153,8 @@ class ChatService:
 
         msg_q = (
             select(
-                func.count(ChatMessage.id), func.coalesce(func.sum(func.cast(ChatMessage.token_count, func.text())), 0)
+                func.count(ChatMessage.id),
+                func.coalesce(func.sum(func.cast(ChatMessage.token_count, func.text())), 0),
             )
             .join(ChatConversation, ChatMessage.conversation_id == ChatConversation.id)
             .where(
@@ -175,7 +178,8 @@ class ChatService:
 
         msg_q = (
             select(
-                func.count(ChatMessage.id), func.coalesce(func.sum(func.cast(ChatMessage.token_count, func.text())), 0)
+                func.count(ChatMessage.id),
+                func.coalesce(func.sum(func.cast(ChatMessage.token_count, func.text())), 0),
             )
             .join(ChatConversation, ChatMessage.conversation_id == ChatConversation.id)
             .where(ChatConversation.tenant_id == tenant_id)
@@ -213,6 +217,22 @@ class ChatService:
             yield {"event": "error", "data": {"error": "Conversation not found"}}
             return
 
+        # Budget enforcement (CAB-288) — check before streaming
+        budget = settings.CHAT_TOKEN_BUDGET_DAILY
+        if budget > 0:
+            repo = ChatTokenUsageRepository(self.session)
+            daily_usage = await repo.get_daily_user_usage(tenant_id, user_id)
+            if daily_usage >= budget:
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error": "Daily token budget exceeded",
+                        "tokens_used": daily_usage,
+                        "budget": budget,
+                    },
+                }
+                return
+
         # Persist the user message
         user_msg = ChatMessage(
             conversation_id=conv.id,
@@ -227,7 +247,10 @@ class ChatService:
 
         provider = _PROVIDERS.get(conv.provider)
         if provider is None:
-            yield {"event": "error", "data": {"error": f"Unknown provider: {conv.provider}"}}
+            yield {
+                "event": "error",
+                "data": {"error": f"Unknown provider: {conv.provider}"},
+            }
             return
 
         # Agentic loop: call LLM, execute tools if requested, repeat

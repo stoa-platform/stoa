@@ -123,6 +123,51 @@ class ChatTenantUsageResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Token metering schemas (CAB-288)
+# ---------------------------------------------------------------------------
+
+
+class TokenBudgetStatusResponse(BaseModel):
+    """Budget enforcement status for a user."""
+
+    user_tokens_today: int
+    tenant_tokens_today: int
+    daily_budget: int
+    remaining: int
+    budget_exceeded: bool
+    usage_percent: float
+
+
+class TopUserUsage(BaseModel):
+    """Top user token usage entry."""
+
+    user_id: str
+    tokens: int
+
+
+class DailyBreakdown(BaseModel):
+    """Daily token usage breakdown entry."""
+
+    date: str
+    tokens: int
+    requests: int
+
+
+class TokenUsageStatsResponse(BaseModel):
+    """Aggregated token usage statistics."""
+
+    tenant_id: str
+    period_days: int
+    total_tokens: int
+    total_input_tokens: int
+    total_output_tokens: int
+    total_requests: int
+    today_tokens: int
+    top_users: list[TopUserUsage]
+    daily_breakdown: list[DailyBreakdown]
+
+
 class SSEMessageStart(BaseModel):
     """SSE: message_start — emitted once at the start of assistant reply."""
 

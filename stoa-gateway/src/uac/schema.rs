@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::classifications::Classification;
+use super::llm::LlmConfig;
 
 // =============================================================================
 // Contract Status
@@ -100,6 +101,10 @@ pub struct UacContractSpec {
     /// SHA-256 hash of the source spec for drift detection
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_hash: Option<String>,
+    /// Optional LLM backend configuration (CAB-709).
+    /// When present, `expand_endpoints()` generates synthetic REST/MCP endpoints.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub llm_config: Option<LlmConfig>,
 }
 
 impl UacContractSpec {
@@ -124,6 +129,7 @@ impl UacContractSpec {
             status: ContractStatus::Draft,
             source_spec_url: None,
             spec_hash: None,
+            llm_config: None,
         }
     }
 
@@ -152,8 +158,16 @@ impl UacContractSpec {
         if self.tenant_id.is_empty() {
             errors.push("tenant_id must not be empty".to_string());
         }
-        if self.endpoints.is_empty() && self.status == ContractStatus::Published {
+        if self.endpoints.is_empty()
+            && self.llm_config.is_none()
+            && self.status == ContractStatus::Published
+        {
             errors.push("published contract must have at least one endpoint".to_string());
+        }
+
+        // Validate LLM config if present
+        if let Some(ref llm) = self.llm_config {
+            errors.extend(llm.validate());
         }
 
         // Validate each endpoint
@@ -340,5 +354,83 @@ mod tests {
         assert!(json.get("operation_id").is_none());
         assert!(json.get("input_schema").is_none());
         assert!(json.get("output_schema").is_none());
+    }
+
+    // === LLM Config integration tests (CAB-709) ===
+
+    #[test]
+    fn test_published_contract_with_llm_config_valid() {
+        use crate::uac::llm::{LlmCapability, LlmCapabilityType, LlmConfig, LlmProvider};
+
+        let mut spec = UacContractSpec::new("ai-service", "acme");
+        spec.status = ContractStatus::Published;
+        // No explicit endpoints, but has llm_config
+        spec.llm_config = Some(LlmConfig {
+            capabilities: vec![LlmCapability {
+                capability: LlmCapabilityType::Summarize,
+                providers: vec![LlmProvider {
+                    name: "anthropic".to_string(),
+                    model: "claude-sonnet-4-5-20250929".to_string(),
+                    backend_url: "https://api.anthropic.com/v1".to_string(),
+                    priority: 1,
+                }],
+            }],
+            default_timeout_ms: Some(30000),
+        });
+
+        let errors = spec.validate();
+        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
+    }
+
+    #[test]
+    fn test_llm_validation_errors_propagate() {
+        use crate::uac::llm::{LlmCapability, LlmCapabilityType, LlmConfig, LlmProvider};
+
+        let mut spec = UacContractSpec::new("ai-service", "acme");
+        spec.llm_config = Some(LlmConfig {
+            capabilities: vec![LlmCapability {
+                capability: LlmCapabilityType::Chat,
+                providers: vec![LlmProvider {
+                    name: "test".to_string(),
+                    model: String::new(),       // invalid
+                    backend_url: String::new(), // invalid
+                    priority: 0,
+                }],
+            }],
+            default_timeout_ms: None,
+        });
+
+        let errors = spec.validate();
+        assert!(errors
+            .iter()
+            .any(|e| e.contains("backend_url must not be empty")));
+        assert!(errors.iter().any(|e| e.contains("model must not be empty")));
+    }
+
+    #[test]
+    fn test_serde_roundtrip_with_llm_config() {
+        use crate::uac::llm::{LlmCapability, LlmCapabilityType, LlmConfig, LlmProvider};
+
+        let mut spec = sample_contract();
+        spec.llm_config = Some(LlmConfig {
+            capabilities: vec![LlmCapability {
+                capability: LlmCapabilityType::Embed,
+                providers: vec![LlmProvider {
+                    name: "openai".to_string(),
+                    model: "text-embedding-3-small".to_string(),
+                    backend_url: "https://api.openai.com/v1".to_string(),
+                    priority: 1,
+                }],
+            }],
+            default_timeout_ms: None,
+        });
+
+        let json = serde_json::to_string(&spec).expect("serialize");
+        let deserialized: UacContractSpec = serde_json::from_str(&json).expect("deserialize");
+
+        assert!(deserialized.llm_config.is_some());
+        let llm = deserialized.llm_config.as_ref().expect("llm_config");
+        assert_eq!(llm.capabilities.len(), 1);
+        assert_eq!(llm.capabilities[0].capability, LlmCapabilityType::Embed);
     }
 }

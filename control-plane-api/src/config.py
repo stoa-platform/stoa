@@ -133,6 +133,16 @@ class Settings(BaseSettings):
     # Chat Agent — Anthropic integration (CAB-286)
     CHAT_ENABLED: bool = False
 
+    # Docs Search — Semantic / Embedding (CAB-1327 Phase 2)
+    EMBEDDING_PROVIDER: str = "openai"  # openai | none
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_API_KEY: str = ""  # via Infisical
+    EMBEDDING_DIMENSIONS: int = 1536
+    EMBEDDING_API_URL: str = "https://api.openai.com/v1/embeddings"
+    DOCS_REINDEX_ENABLED: bool = False  # Admin-only reindex endpoint
+    OPENSEARCH_URL: str = "http://opensearch.stoa-system.svc.cluster.local:9200"
+    OPENSEARCH_DOCS_INDEX: str = "docs-embeddings"
+
     # Chat Token Budget (CAB-288) — 0 = unlimited
     CHAT_TOKEN_BUDGET_DAILY: int = 0
 

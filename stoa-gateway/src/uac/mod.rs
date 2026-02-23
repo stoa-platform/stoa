@@ -6,12 +6,14 @@ pub mod binders;
 pub mod cache;
 pub mod classifications;
 pub mod enforcer;
+pub mod llm;
 pub mod registry;
 pub mod safe_mode;
 pub mod schema;
 
 pub use classifications::Classification;
 pub use enforcer::ClassificationEnforcer;
+pub use llm::{LlmCapabilityType, LlmConfig, LlmProvider};
 pub use registry::ContractRegistry;
 pub use schema::{ContractStatus, UacContractSpec, UacEndpoint};
 

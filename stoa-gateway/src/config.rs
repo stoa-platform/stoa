@@ -412,6 +412,17 @@ pub struct Config {
     /// Env: STOA_PROMPT_CACHE_WATCH_DIR
     #[serde(default)]
     pub prompt_cache_watch_dir: Option<String>,
+
+    // === LLM Contracts (CAB-709) ===
+    /// Enable LLM contract endpoint expansion (default: false)
+    /// Env: STOA_LLM_ENABLED
+    #[serde(default)]
+    pub llm_enabled: bool,
+
+    /// Default timeout in milliseconds for LLM backend calls
+    /// Env: STOA_LLM_DEFAULT_TIMEOUT_MS
+    #[serde(default = "default_llm_timeout_ms")]
+    pub llm_default_timeout_ms: u64,
 }
 
 fn default_port() -> u16 {
@@ -699,6 +710,10 @@ fn default_prompt_cache_ttl_secs() -> u64 {
     3600
 }
 
+fn default_llm_timeout_ms() -> u64 {
+    30_000
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -782,6 +797,8 @@ impl Default for Config {
             prompt_cache_max_entries: default_prompt_cache_max_entries(),
             prompt_cache_ttl_secs: default_prompt_cache_ttl_secs(),
             prompt_cache_watch_dir: None,
+            llm_enabled: false,
+            llm_default_timeout_ms: default_llm_timeout_ms(),
         }
     }
 }

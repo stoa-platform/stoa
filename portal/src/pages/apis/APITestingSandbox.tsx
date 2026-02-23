@@ -337,7 +337,9 @@ export function APITestingSandbox() {
 
           {/* Response Viewer */}
           <div>
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Response</h2>
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
+              Response
+            </h2>
             <ResponseViewer response={response} isLoading={isRequestLoading} />
           </div>
         </div>

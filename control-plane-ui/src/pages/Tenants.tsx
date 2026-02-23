@@ -42,10 +42,12 @@ export function Tenants() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('tenants.title')}</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">{t('tenants.subtitle')}</p>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+            {t('tenants.title')}
+          </h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">{t('tenants.subtitle')}</p>
         </div>
-        <div className="text-sm text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-700 px-3 py-2 rounded-lg">
+        <div className="text-sm text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700 px-3 py-2 rounded-lg">
           {t('tenants.managedViaGitops')}
         </div>
       </div>
@@ -79,10 +81,10 @@ export function Tenants() {
             >
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
                     {tenant.display_name || tenant.name}
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono">
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 font-mono">
                     {tenant.name}
                   </p>
                 </div>
@@ -93,21 +95,21 @@ export function Tenants() {
                 </span>
               </div>
 
-              <div className="space-y-2 text-sm text-gray-600 dark:text-neutral-300">
+              <div className="space-y-2 text-sm text-neutral-600 dark:text-neutral-300">
                 <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">
+                  <span className="text-neutral-500 dark:text-neutral-400">
                     {t('tenants.tenantId')}
                   </span>
                   <span className="font-mono text-xs">{tenant.id}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">
+                  <span className="text-neutral-500 dark:text-neutral-400">
                     {t('tenants.created')}
                   </span>
                   <span>{new Date(tenant.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">
+                  <span className="text-neutral-500 dark:text-neutral-400">
                     {t('common.lastUpdated')}
                   </span>
                   <span>{new Date(tenant.updated_at).toLocaleDateString()}</span>

@@ -74,7 +74,7 @@ function ToolBlock({ tool }: { tool: ChatToolUse }) {
         Tool: {tool.tool_name}
       </button>
       {expanded && truncated && (
-        <pre className="mt-1 whitespace-pre-wrap text-gray-600 dark:text-neutral-400 overflow-hidden max-h-32">
+        <pre className="mt-1 whitespace-pre-wrap text-neutral-600 dark:text-neutral-400 overflow-hidden max-h-32">
           {truncated}
         </pre>
       )}
@@ -177,7 +177,7 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
       {/* Chat Panel */}
       {isOpen && (
         <div
-          className="w-80 bg-white dark:bg-neutral-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-neutral-700 flex flex-col overflow-hidden"
+          className="w-80 bg-white dark:bg-neutral-800 rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-700 flex flex-col overflow-hidden"
           style={{ height: '420px' }}
           role="dialog"
           aria-label="AI assistant chat"
@@ -210,7 +210,7 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
                   className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
                     message.role === 'assistant'
                       ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
-                      : 'bg-gray-200 dark:bg-neutral-600 text-gray-600 dark:text-neutral-300'
+                      : 'bg-neutral-200 dark:bg-neutral-600 text-neutral-600 dark:text-neutral-300'
                   }`}
                   aria-hidden="true"
                 >
@@ -229,7 +229,7 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
                     className={`rounded-2xl px-3 py-2 text-sm ${
                       message.role === 'user'
                         ? 'bg-blue-600 text-white rounded-tr-sm'
-                        : 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-100 rounded-tl-sm'
+                        : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-100 rounded-tl-sm'
                     }`}
                   >
                     {message.content}
@@ -237,7 +237,7 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
                       <ToolBlock key={tool.tool_use_id} tool={tool} />
                     ))}
                   </div>
-                  <span className="text-xs text-gray-400 dark:text-neutral-500 mt-1">
+                  <span className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
                     {formatTime(message.timestamp)}
                   </span>
                 </div>
@@ -250,11 +250,11 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
                 <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="bg-gray-100 dark:bg-neutral-700 rounded-2xl rounded-tl-sm px-3 py-2">
+                <div className="bg-neutral-100 dark:bg-neutral-700 rounded-2xl rounded-tl-sm px-3 py-2">
                   <div className="flex gap-1 items-center h-5" aria-label="Assistant is typing">
-                    <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-neutral-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-neutral-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-neutral-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                    <span className="w-1.5 h-1.5 bg-neutral-400 dark:bg-neutral-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                    <span className="w-1.5 h-1.5 bg-neutral-400 dark:bg-neutral-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                    <span className="w-1.5 h-1.5 bg-neutral-400 dark:bg-neutral-400 rounded-full animate-bounce [animation-delay:300ms]" />
                   </div>
                 </div>
               </div>
@@ -265,7 +265,7 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
           </div>
 
           {/* Input */}
-          <div className="px-3 py-3 border-t border-gray-200 dark:border-neutral-700">
+          <div className="px-3 py-3 border-t border-neutral-200 dark:border-neutral-700">
             <div className="flex gap-2 items-end">
               <textarea
                 ref={inputRef}
@@ -275,7 +275,7 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
                 placeholder="Ask STOA anything..."
                 disabled={isLoading}
                 rows={1}
-                className="flex-1 resize-none rounded-xl border border-gray-200 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-900 text-sm text-gray-800 dark:text-neutral-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                className="flex-1 resize-none rounded-xl border border-neutral-200 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900 text-sm text-neutral-800 dark:text-neutral-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
                 style={{ maxHeight: '80px' }}
                 aria-label="Message input"
               />
@@ -288,7 +288,7 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
                 <Send className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-xs text-gray-400 dark:text-neutral-500 mt-1.5 text-center">
+            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1.5 text-center">
               Press Enter to send, Shift+Enter for new line
             </p>
           </div>

@@ -48,7 +48,9 @@ export const UACTooltip: React.FC<UACTooltipProps> = ({ bindings, docsUrl = '/do
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">🔗</span>
-        <span className="font-semibold text-neutral-900 dark:text-white">Universal API Contract</span>
+        <span className="font-semibold text-neutral-900 dark:text-white">
+          Universal API Contract
+        </span>
       </div>
 
       {/* Description */}

@@ -1,0 +1,83 @@
+# =============================================================================
+# GitHub Actions: Cross-Environment Drift Detection
+# =============================================================================
+# Compares staging vs prod for image tags, replica counts, pod health,
+# endpoint availability, and TLS certificate expiry.
+#
+# Schedule: Monday 08:00 UTC + manual dispatch
+# =============================================================================
+
+name: Environment Drift Check
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Monday 08:00 UTC
+
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  drift-check:
+    name: Staging vs Prod Drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+
+      - name: Configure kubeconfigs
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64_STAGING }}" | base64 -d > ~/.kube/config-staging
+          echo "${{ secrets.KUBECONFIG_B64_PROD }}" | base64 -d > ~/.kube/config-prod
+          chmod 600 ~/.kube/config-staging ~/.kube/config-prod
+
+      - name: Run drift check
+        id: drift
+        continue-on-error: true
+        env:
+          KUBECONFIG_STAGING: /home/runner/.kube/config-staging
+          KUBECONFIG_PROD: /home/runner/.kube/config-prod
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          chmod +x scripts/ops/env-drift-check.sh
+          scripts/ops/env-drift-check.sh --push-metrics 2>&1 | tee /tmp/drift-report.txt
+
+      - name: Generate JSON report
+        if: always()
+        env:
+          KUBECONFIG_STAGING: /home/runner/.kube/config-staging
+          KUBECONFIG_PROD: /home/runner/.kube/config-prod
+        run: |
+          scripts/ops/env-drift-check.sh --json > /tmp/drift-report.json 2>/dev/null || true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "### Environment Drift Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.drift.outcome }}" = "success" ]; then
+            echo "> **Status**: All clear — no drift detected" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "> **Status**: Drift detected — review report below" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/drift-report.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Report unavailable" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: drift-report
+          path: /tmp/drift-report.json
+          retention-days: 30

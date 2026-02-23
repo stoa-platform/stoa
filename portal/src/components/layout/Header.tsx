@@ -45,7 +45,9 @@ export function Header({ onMenuClick }: HeaderProps) {
             <StoaLogo size="sm" />
             <div className="hidden sm:block">
               <h1 className="text-lg font-semibold text-neutral-900 dark:text-white">STOA</h1>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 -mt-1">Developer Portal</p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 -mt-1">
+                Developer Portal
+              </p>
             </div>
           </Link>
         </div>
@@ -107,7 +109,9 @@ export function Header({ onMenuClick }: HeaderProps) {
             {userMenuOpen && (
               <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-700">
                 <div className="px-4 py-3 border-b border-neutral-100 dark:border-neutral-700">
-                  <p className="text-sm font-medium text-neutral-900 dark:text-white">{user?.name}</p>
+                  <p className="text-sm font-medium text-neutral-900 dark:text-white">
+                    {user?.name}
+                  </p>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
                     {user?.email}
                   </p>

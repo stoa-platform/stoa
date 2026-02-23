@@ -31,7 +31,7 @@ export function IdentityEmbed() {
     'cpi-admin': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     'tenant-admin': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
     devops: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    viewer: 'bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300',
+    viewer: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300',
   };
 
   return (
@@ -43,10 +43,10 @@ export function IdentityEmbed() {
             <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
               Identity Management
             </h1>
-            <p className="text-gray-500 dark:text-neutral-400 mt-0.5">
+            <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">
               Your profile, roles, and security settings
             </p>
           </div>
@@ -61,16 +61,18 @@ export function IdentityEmbed() {
       </div>
 
       {/* Profile Card */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-gray-200 dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700 p-6">
         <div className="flex items-start gap-6">
           <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center flex-shrink-0">
             <User className="h-8 w-8 text-purple-600 dark:text-purple-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
               {user?.name || 'Unknown User'}
             </h2>
-            <p className="text-gray-500 dark:text-neutral-400 mt-1">{user?.email || 'No email'}</p>
+            <p className="text-neutral-500 dark:text-neutral-400 mt-1">
+              {user?.email || 'No email'}
+            </p>
             <div className="flex flex-wrap gap-2 mt-3">
               {user?.roles?.map((role) => (
                 <span
@@ -87,33 +89,39 @@ export function IdentityEmbed() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Account Details */}
-        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-gray-200 dark:border-neutral-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Key className="h-5 w-5 text-gray-400" />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700 p-6">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
+            <Key className="h-5 w-5 text-neutral-400" />
             Account Details
           </h3>
           <dl className="space-y-4">
             <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">User ID</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white font-mono">
+              <dt className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                User ID
+              </dt>
+              <dd className="mt-1 text-sm text-neutral-900 dark:text-white font-mono">
                 {user?.id || '—'}
               </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">Email</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">{user?.email || '—'}</dd>
+              <dt className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Email</dt>
+              <dd className="mt-1 text-sm text-neutral-900 dark:text-white">
+                {user?.email || '—'}
+              </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+              <dt className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
                 Authentication Provider
               </dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+              <dd className="mt-1 text-sm text-neutral-900 dark:text-white">
                 Keycloak OIDC ({config.keycloak.realm} realm)
               </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">Client ID</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white font-mono">
+              <dt className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                Client ID
+              </dt>
+              <dd className="mt-1 text-sm text-neutral-900 dark:text-white font-mono">
                 {config.keycloak.clientId}
               </dd>
             </div>
@@ -121,23 +129,23 @@ export function IdentityEmbed() {
         </div>
 
         {/* Organization */}
-        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-gray-200 dark:border-neutral-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-gray-400" />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700 p-6">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-neutral-400" />
             Organization
           </h3>
           <dl className="space-y-4">
             <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">Tenant</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+              <dt className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Tenant</dt>
+              <dd className="mt-1 text-sm text-neutral-900 dark:text-white">
                 {user?.tenant_id || '—'}
               </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+              <dt className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
                 Access Level
               </dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+              <dd className="mt-1 text-sm text-neutral-900 dark:text-white">
                 {hasRole('cpi-admin')
                   ? 'Full Platform Access'
                   : hasRole('tenant-admin')
@@ -148,10 +156,10 @@ export function IdentityEmbed() {
               </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+              <dt className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
                 Permissions
               </dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+              <dd className="mt-1 text-sm text-neutral-900 dark:text-white">
                 {user?.permissions?.length || 0} active permissions
               </dd>
             </div>
@@ -160,9 +168,9 @@ export function IdentityEmbed() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-gray-200 dark:border-neutral-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <Clock className="h-5 w-5 text-gray-400" />
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700 p-6">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
+          <Clock className="h-5 w-5 text-neutral-400" />
           Security Actions
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -174,12 +182,16 @@ export function IdentityEmbed() {
                 'noopener,noreferrer'
               )
             }
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
+            className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-left"
           >
             <Key className="h-5 w-5 text-purple-500 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Change Password</p>
-              <p className="text-xs text-gray-500 dark:text-neutral-400">Update your credentials</p>
+              <p className="text-sm font-medium text-neutral-900 dark:text-white">
+                Change Password
+              </p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Update your credentials
+              </p>
             </div>
           </button>
           <button
@@ -190,26 +202,28 @@ export function IdentityEmbed() {
                 'noopener,noreferrer'
               )
             }
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
+            className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-left"
           >
             <Shield className="h-5 w-5 text-blue-500 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Active Sessions</p>
-              <p className="text-xs text-gray-500 dark:text-neutral-400">
+              <p className="text-sm font-medium text-neutral-900 dark:text-white">
+                Active Sessions
+              </p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 View and manage sessions
               </p>
             </div>
           </button>
           <button
             onClick={handleOpenKeycloak}
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
+            className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-left"
           >
             <ExternalLink className="h-5 w-5 text-green-500 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
+              <p className="text-sm font-medium text-neutral-900 dark:text-white">
                 Full Account Console
               </p>
-              <p className="text-xs text-gray-500 dark:text-neutral-400">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 Open Keycloak management
               </p>
             </div>

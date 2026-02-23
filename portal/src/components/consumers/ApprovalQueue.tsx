@@ -79,7 +79,9 @@ export function ApprovalQueue() {
     return (
       <div className="text-center py-12">
         <Inbox className="h-12 w-12 mx-auto text-neutral-300 dark:text-neutral-600 mb-3" />
-        <h3 className="text-lg font-medium text-neutral-900 dark:text-white">No pending requests</h3>
+        <h3 className="text-lg font-medium text-neutral-900 dark:text-white">
+          No pending requests
+        </h3>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
           All subscription requests have been processed.
         </p>

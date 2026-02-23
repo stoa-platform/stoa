@@ -189,7 +189,9 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           onChange={(e) => handleChange(e.target.value)}
           placeholder={property.default?.toString() || `Enter ${name}...`}
           className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            error ? 'border-red-300 dark:border-red-700' : 'border-neutral-300 dark:border-neutral-600'
+            error
+              ? 'border-red-300 dark:border-red-700'
+              : 'border-neutral-300 dark:border-neutral-600'
           }`}
         />
         {showDescription && property.description && (
@@ -219,7 +221,9 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           max={property.maximum}
           step={property.type === 'integer' ? 1 : 'any'}
           className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            error ? 'border-red-300 dark:border-red-700' : 'border-neutral-300 dark:border-neutral-600'
+            error
+              ? 'border-red-300 dark:border-red-700'
+              : 'border-neutral-300 dark:border-neutral-600'
           }`}
         />
         {property.description && (
@@ -364,7 +368,9 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
         onChange={(e) => handleChange(e.target.value)}
         placeholder={`Enter ${name}...`}
         className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-          error ? 'border-red-300 dark:border-red-700' : 'border-neutral-300 dark:border-neutral-600'
+          error
+            ? 'border-red-300 dark:border-red-700'
+            : 'border-neutral-300 dark:border-neutral-600'
         }`}
       />
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -494,7 +500,9 @@ export function TryItForm({
         <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Try It</h2>
         <div className="text-center py-8">
           <AlertCircle className="h-12 w-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
-          <p className="text-neutral-500 dark:text-neutral-400 text-sm">No input schema available</p>
+          <p className="text-neutral-500 dark:text-neutral-400 text-sm">
+            No input schema available
+          </p>
           <p className="text-neutral-400 dark:text-neutral-500 text-xs mt-1">
             This tool doesn't define input parameters
           </p>

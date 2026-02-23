@@ -19,7 +19,7 @@ export function ApiKeyRevealDialog({ apiKey, name, onClose }: ApiKeyRevealDialog
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
           API Key for {name}
         </h3>
 
@@ -30,11 +30,11 @@ export function ApiKeyRevealDialog({ apiKey, name, onClose }: ApiKeyRevealDialog
           </p>
         </div>
 
-        <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-neutral-700 rounded-lg font-mono text-sm break-all">
-          <span className="flex-1 text-gray-900 dark:text-white">{apiKey}</span>
+        <div className="flex items-center gap-2 p-3 bg-neutral-100 dark:bg-neutral-700 rounded-lg font-mono text-sm break-all">
+          <span className="flex-1 text-neutral-900 dark:text-white">{apiKey}</span>
           <button
             onClick={handleCopy}
-            className="shrink-0 p-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-300 rounded"
+            className="shrink-0 p-1.5 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 rounded"
             title="Copy to clipboard"
           >
             {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}

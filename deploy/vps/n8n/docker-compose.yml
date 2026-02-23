@@ -60,6 +60,14 @@ services:
       # Execution settings (no limits — whole point of self-hosting)
       EXECUTIONS_DATA_PRUNE: "true"
       EXECUTIONS_DATA_MAX_AGE: "168"
+      # Workflow secrets (replaces n8n Variables — Enterprise-only feature)
+      # These are read by workflows via $env.VARIABLE_NAME
+      APPROVE_HMAC_SECRET: ${APPROVE_HMAC_SECRET:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_CHANNEL_ID: ${SLACK_CHANNEL_ID:-}
+      SLACK_ALLOWED_USERS: ${SLACK_ALLOWED_USERS:-}
+      SLACK_ADMIN_USERS: ${SLACK_ADMIN_USERS:-}
     security_opt:
       - no-new-privileges:true
 

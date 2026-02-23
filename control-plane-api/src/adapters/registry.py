@@ -87,5 +87,9 @@ def _register_builtin_adapters() -> None:
 
     AdapterRegistry.register("aws_apigateway", AwsApiGatewayAdapter)
 
+    from .azure import AzureApimAdapter
+
+    AdapterRegistry.register("azure_apim", AzureApimAdapter)
+
 
 _register_builtin_adapters()

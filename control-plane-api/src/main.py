@@ -37,6 +37,7 @@ from .routers import (
     business,
     catalog_admin,
     certificates,
+    chat,
     consumers,
     contracts,
     deployments,
@@ -531,6 +532,10 @@ app.include_router(execution_logs.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)
+
+# Chat Agent — Anthropic integration (CAB-286)
+if settings.CHAT_ENABLED:
+    app.include_router(chat.router)
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)

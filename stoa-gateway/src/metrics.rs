@@ -299,6 +299,52 @@ pub fn track_sse_disconnect(tenant: &str, duration_secs: f64) {
         .observe(duration_secs);
 }
 
+// === WebSocket Metrics (CAB-1345) ===
+
+pub static MCP_WS_CONNECTIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "stoa_mcp_ws_connections_active",
+        "Number of active WebSocket connections"
+    )
+    .expect("Failed to create stoa_mcp_ws_connections_active metric")
+});
+
+pub static MCP_WS_CONNECTION_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_mcp_ws_connection_duration_seconds",
+        "Duration of WebSocket connections",
+        &["tenant"],
+        vec![1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0]
+    )
+    .expect("Failed to create stoa_mcp_ws_connection_duration_seconds metric")
+});
+
+pub static MCP_WS_MESSAGES_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_mcp_ws_messages_total",
+        "Total WebSocket messages",
+        &["direction", "method"]
+    )
+    .expect("Failed to create stoa_mcp_ws_messages_total metric")
+});
+
+pub fn track_ws_connect() {
+    MCP_WS_CONNECTIONS_ACTIVE.inc();
+}
+
+pub fn track_ws_disconnect(tenant: &str, duration_secs: f64) {
+    MCP_WS_CONNECTIONS_ACTIVE.dec();
+    MCP_WS_CONNECTION_DURATION
+        .with_label_values(&[tenant])
+        .observe(duration_secs);
+}
+
+pub fn track_ws_message(direction: &str, method: &str) {
+    MCP_WS_MESSAGES_TOTAL
+        .with_label_values(&[direction, method])
+        .inc();
+}
+
 /// Update session count gauge
 pub fn update_session_count(count: usize) {
     MCP_SESSIONS_ACTIVE.set(count as f64);

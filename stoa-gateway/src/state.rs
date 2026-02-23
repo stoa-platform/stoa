@@ -16,6 +16,7 @@ use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::guardrails::{GuardrailPolicyStore, TokenBudgetTracker};
+use crate::mcp::pending_requests::PendingRequestTracker;
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
@@ -41,6 +42,8 @@ pub struct AppState {
     pub start_time: Instant,
     pub tool_registry: Arc<ToolRegistry>,
     pub session_manager: Arc<SessionManager>,
+    /// Tracks pending server-initiated requests (sampling, roots/list) across WS sessions.
+    pub pending_requests: Arc<PendingRequestTracker>,
     pub rate_limiter: Arc<RateLimiter>,
     pub api_key_validator: Arc<ApiKeyValidator>,
     pub uac_enforcer: Arc<UacEnforcer>,
@@ -373,6 +376,7 @@ impl AppState {
             start_time,
             tool_registry,
             session_manager,
+            pending_requests: Arc::new(PendingRequestTracker::new()),
             rate_limiter,
             api_key_validator,
             uac_enforcer,

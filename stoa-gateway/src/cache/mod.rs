@@ -15,7 +15,10 @@
 //! Note: Infrastructure prepared for tool response caching.
 //! Actual integration in SSE handler is a Phase 7 enhancement.
 
+pub mod prompt;
 mod semantic;
+pub mod watcher;
 
+pub use prompt::{PromptCache, PromptCacheConfig, PromptCacheStats};
 pub use semantic::SemanticCacheStats;
 pub use semantic::{SemanticCache, SemanticCacheConfig};

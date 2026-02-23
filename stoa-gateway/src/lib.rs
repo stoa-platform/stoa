@@ -120,6 +120,15 @@ pub fn build_router(state: AppState) -> Router {
             "/federation/cache/:sub_account_id",
             delete(admin::federation_cache_invalidate),
         )
+        // CAB-1123: Prompt cache admin
+        .route("/prompt-cache/stats", get(admin::prompt_cache_stats))
+        .route("/prompt-cache/load", post(admin::prompt_cache_load))
+        .route("/prompt-cache/get/:key", get(admin::prompt_cache_get))
+        .route(
+            "/prompt-cache/invalidate",
+            post(admin::prompt_cache_invalidate),
+        )
+        .route("/prompt-cache/patterns", get(admin::prompt_cache_patterns))
         // CAB-1365/1366: Skills admin
         .route("/skills/status", get(admin::skills_status))
         .route("/skills/resolve", get(admin::skills_resolve))

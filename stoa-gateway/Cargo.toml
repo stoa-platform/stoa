@@ -52,6 +52,7 @@ ipnet = "2"                                  # CIDR matching for trusted proxies
 
 # === Guardrails: PII + Injection Detection (CAB-707) ===
 regex = "1"
+notify = "7"
 
 # === Phase 2 OPA: Embedded Policy Engine (CAB-1094) ===
 regorus = "0.9"                              # Pure Rust OPA evaluator (no sidecar)

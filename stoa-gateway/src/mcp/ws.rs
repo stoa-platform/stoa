@@ -5,6 +5,11 @@
 //!
 //! Auth: Bearer token from `Authorization` header (non-browser) or
 //! `Sec-WebSocket-Protocol: mcp-auth.<token>` subprotocol (browser).
+//!
+//! Phase 2 additions (CAB-1345):
+//! - Detect inbound responses to server-initiated requests
+//! - `request_sampling()`, `request_roots_list()`, `notify_tools_changed()`
+//! - PendingRequestTracker cleanup on disconnect
 
 use axum::{
     extract::{
@@ -15,10 +20,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde_json::Value;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
+use crate::mcp::pending_requests::{PendingRequestTracker, ServerRequestResult};
 use crate::mcp::session::Session;
 use crate::mcp::sse::{
     extract_bearer_token, process_single_request, JsonRpcRequest, JsonRpcResponse, SseQueryParams,
@@ -160,6 +167,7 @@ async fn handle_ws_connection(mut socket: WebSocket, state: AppState, headers: H
 
     // Cleanup
     let duration = start.elapsed().as_secs_f64();
+    state.pending_requests.remove_session(&session_id);
     state.session_manager.unregister_ws_channel(&session_id);
     state.session_manager.remove(&session_id).await;
     metrics::track_ws_disconnect(&tenant_id, duration);
@@ -170,7 +178,75 @@ async fn handle_ws_connection(mut socket: WebSocket, state: AppState, headers: H
     );
 }
 
-/// Handle a single inbound text message (JSON-RPC request or batch).
+// ---------------------------------------------------------------------------
+// Response Detection (CAB-1345 Phase 2)
+// ---------------------------------------------------------------------------
+
+/// Check if an inbound JSON object is a response to a server-initiated request.
+///
+/// JSON-RPC responses have `id` + (`result` or `error`) but NO `method` field.
+/// Server-initiated request IDs use the `srv-N` prefix.
+fn is_server_request_response(value: &Value) -> bool {
+    let obj = match value.as_object() {
+        Some(o) => o,
+        None => return false,
+    };
+    // Must have id, no method, and either result or error
+    obj.contains_key("id")
+        && !obj.contains_key("method")
+        && (obj.contains_key("result") || obj.contains_key("error"))
+}
+
+/// Try to resolve an inbound response against the pending request tracker.
+///
+/// Returns `true` if the message was a response and was handled.
+fn try_resolve_response(value: &Value, tracker: &PendingRequestTracker, session_id: &str) -> bool {
+    let obj = match value.as_object() {
+        Some(o) => o,
+        None => return false,
+    };
+
+    let request_id = match obj.get("id").and_then(|v| v.as_str()) {
+        Some(id) => id.to_string(),
+        None => {
+            // id might be a number
+            match obj.get("id").and_then(|v| v.as_u64()) {
+                Some(n) => n.to_string(),
+                None => return false,
+            }
+        }
+    };
+
+    resolve_with_id(obj, tracker, session_id, &request_id)
+}
+
+fn resolve_with_id(
+    obj: &serde_json::Map<String, Value>,
+    tracker: &PendingRequestTracker,
+    session_id: &str,
+    request_id: &str,
+) -> bool {
+    let result = if let Some(result_val) = obj.get("result") {
+        ServerRequestResult::Success(result_val.clone())
+    } else if let Some(error_val) = obj.get("error") {
+        let code = error_val
+            .get("code")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(-32000);
+        let message = error_val
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown error")
+            .to_string();
+        ServerRequestResult::Error { code, message }
+    } else {
+        return false;
+    };
+
+    tracker.resolve(session_id, request_id, result)
+}
+
+/// Handle a single inbound text message (JSON-RPC request, response, or batch).
 async fn handle_ws_text_message(
     text: &str,
     state: &AppState,
@@ -193,6 +269,14 @@ async fn handle_ws_text_message(
             Some(serde_json::to_string(&response).unwrap_or_default())
         }
         Ok(value) => {
+            // Check if this is a response to a server-initiated request
+            if is_server_request_response(&value)
+                && try_resolve_response(&value, &state.pending_requests, session_id)
+            {
+                metrics::track_ws_message("inbound", "server_request_response");
+                return None; // Response handled, no reply needed
+            }
+
             // Single request
             match serde_json::from_value::<JsonRpcRequest>(value) {
                 Ok(req) => {
@@ -305,6 +389,87 @@ fn build_headers_from_token(token: &str) -> HeaderMap {
     headers
 }
 
+// ---------------------------------------------------------------------------
+// Server-Initiated Request Helpers (CAB-1345 Phase 2)
+// ---------------------------------------------------------------------------
+
+/// Send a `sampling/createMessage` request to the client and await the response.
+///
+/// Used for server-initiated LLM sampling via the MCP bidirectional protocol.
+/// The client's LLM generates the response — 60s timeout accounts for inference time.
+pub async fn request_sampling(
+    tracker: &Arc<PendingRequestTracker>,
+    session_manager: &crate::mcp::session::SessionManager,
+    session_id: &str,
+    params: Value,
+) -> ServerRequestResult {
+    let ws_send = |sid: &str, msg: &str| -> bool { session_manager.send_to_session_ws(sid, msg) };
+    tracker
+        .send_request(
+            session_id,
+            "sampling/createMessage",
+            Some(params),
+            &ws_send,
+            Duration::from_secs(60),
+        )
+        .await
+}
+
+/// Send a `roots/list` request to the client and await the response.
+///
+/// Asks the client for its filesystem roots (workspace directories, project roots).
+/// 10s timeout — this should be a fast local operation.
+pub async fn request_roots_list(
+    tracker: &Arc<PendingRequestTracker>,
+    session_manager: &crate::mcp::session::SessionManager,
+    session_id: &str,
+) -> ServerRequestResult {
+    let ws_send = |sid: &str, msg: &str| -> bool { session_manager.send_to_session_ws(sid, msg) };
+    tracker
+        .send_request(
+            session_id,
+            "roots/list",
+            None,
+            &ws_send,
+            Duration::from_secs(10),
+        )
+        .await
+}
+
+/// Send a `notifications/tools/listChanged` notification to the client.
+///
+/// Fire-and-forget: tells the client that the server's tool list has changed
+/// so it should re-fetch `tools/list`. No response expected.
+pub fn notify_tools_changed(
+    session_manager: &crate::mcp::session::SessionManager,
+    session_id: &str,
+) {
+    let notification = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/tools/listChanged",
+    });
+    let text = serde_json::to_string(&notification).unwrap_or_default();
+    if !session_manager.send_to_session_ws(session_id, &text) {
+        warn!(
+            session_id = %session_id,
+            "Failed to send tools/listChanged notification"
+        );
+    }
+}
+
+/// Broadcast a `notifications/tools/listChanged` notification to all sessions of a tenant.
+pub fn broadcast_tools_changed(
+    session_manager: &crate::mcp::session::SessionManager,
+    tenant_id: &str,
+) {
+    let notification = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/tools/listChanged",
+    });
+    let text = serde_json::to_string(&notification).unwrap_or_default();
+    session_manager.broadcast_to_tenant_ws(tenant_id, &text);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,5 +566,129 @@ mod tests {
         // the feature flag concept is correct
         let config = crate::config::Config::default();
         assert!(!config.websocket_enabled);
+    }
+
+    // --- Phase 2 tests: response detection ---
+
+    #[test]
+    fn test_is_server_request_response_success() {
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "srv-1",
+            "result": {"content": "hello"}
+        });
+        assert!(is_server_request_response(&value));
+    }
+
+    #[test]
+    fn test_is_server_request_response_error() {
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "srv-1",
+            "error": {"code": -32601, "message": "Method not found"}
+        });
+        assert!(is_server_request_response(&value));
+    }
+
+    #[test]
+    fn test_is_server_request_response_not_a_response() {
+        // Has method → it's a request, not a response
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list"
+        });
+        assert!(!is_server_request_response(&value));
+    }
+
+    #[test]
+    fn test_is_server_request_response_notification() {
+        // No id, no result/error → notification
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "notifications/tools/listChanged"
+        });
+        assert!(!is_server_request_response(&value));
+    }
+
+    #[test]
+    fn test_try_resolve_response_success() {
+        let tracker = PendingRequestTracker::new();
+        let mut rx = tracker.register("ws-session-1", "srv-1");
+
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "srv-1",
+            "result": {"content": [{"type": "text", "text": "Hello!"}]}
+        });
+
+        assert!(try_resolve_response(&value, &tracker, "ws-session-1"));
+
+        let result = rx.try_recv().expect("should have result");
+        match result {
+            ServerRequestResult::Success(v) => {
+                assert_eq!(v["content"][0]["text"], "Hello!");
+            }
+            _ => panic!("expected Success"),
+        }
+    }
+
+    #[test]
+    fn test_try_resolve_response_error() {
+        let tracker = PendingRequestTracker::new();
+        let mut rx = tracker.register("ws-session-1", "srv-2");
+
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "srv-2",
+            "error": {"code": -32601, "message": "Method not found"}
+        });
+
+        assert!(try_resolve_response(&value, &tracker, "ws-session-1"));
+
+        let result = rx.try_recv().expect("should have result");
+        match result {
+            ServerRequestResult::Error { code, message } => {
+                assert_eq!(code, -32601);
+                assert_eq!(message, "Method not found");
+            }
+            _ => panic!("expected Error"),
+        }
+    }
+
+    #[test]
+    fn test_try_resolve_response_unknown_id() {
+        let tracker = PendingRequestTracker::new();
+
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "srv-999",
+            "result": {}
+        });
+
+        // No pending request for srv-999
+        assert!(!try_resolve_response(&value, &tracker, "ws-session-1"));
+    }
+
+    #[test]
+    fn test_try_resolve_response_numeric_id() {
+        let tracker = PendingRequestTracker::new();
+        let mut rx = tracker.register("ws-session-1", "42");
+
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 42,
+            "result": {"ok": true}
+        });
+
+        assert!(try_resolve_response(&value, &tracker, "ws-session-1"));
+
+        let result = rx.try_recv().expect("should have result");
+        match result {
+            ServerRequestResult::Success(v) => {
+                assert_eq!(v["ok"], true);
+            }
+            _ => panic!("expected Success"),
+        }
     }
 }

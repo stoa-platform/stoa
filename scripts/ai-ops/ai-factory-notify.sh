@@ -288,13 +288,13 @@ _push_metrics() {
   local PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/ai_factory/${JOB_PATH}"
   local HTTP_CODE
   if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      --data-binary "$METRICS_TEXT" \
+    HTTP_CODE=$(printf '%s\n' "$METRICS_TEXT" | curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary @- \
       -H "Content-Type: text/plain" \
       -u "${PUSHGATEWAY_AUTH}" "$PUSH_URL" 2>/dev/null)
   else
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      --data-binary "$METRICS_TEXT" \
+    HTTP_CODE=$(printf '%s\n' "$METRICS_TEXT" | curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary @- \
       -H "Content-Type: text/plain" \
       "$PUSH_URL" 2>/dev/null)
   fi
@@ -847,7 +847,7 @@ push_metrics_cost() {
     done
   fi
 
-  _push_metrics "cost-tracker/${DATE}" "$(printf '%b' "$METRICS")"
+  _push_metrics "cost_tracker/${DATE}" "$(printf '%b' "$METRICS")"
 }
 
 # notify_cost_report DATE TOKENS_TODAY COST_TODAY COST_7D_AVG SESSIONS MESSAGES PRS_MERGED MODEL_MIX TREND

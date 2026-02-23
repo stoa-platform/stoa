@@ -2,18 +2,25 @@
 
 Public, read-only endpoint that searches STOA documentation (docs, blog, ADRs, guides).
 Uses httpx to call Algolia REST API directly (avoids pydantic version conflict with SDK).
+
+Phase 2 adds semantic search (OpenAI embeddings + OpenSearch k-NN) and hybrid mode (RRF fusion).
 """
 
 import asyncio
 import re
 import time
+from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..config import settings
 from ..logging_config import get_logger
+from ..services.docs_embedding_service import (
+    DocsEmbeddingService,
+    get_docs_embedding_service,
+)
 
 logger = get_logger(__name__)
 
@@ -36,6 +43,15 @@ class DocsSearchResponse(BaseModel):
     total: int
     results: list[DocsSearchResult]
     took_ms: float = 0.0
+    mode: str = "keyword"
+
+
+class ReindexResponse(BaseModel):
+    total_entries: int = 0
+    total_chunks: int = 0
+    indexed: int = 0
+    errors: int = 0
+    error_details: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +328,24 @@ def get_docs_search_service() -> DocsSearchService:
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _categorize_url(url: str) -> str | None:
+    """Extract category from a docs URL path."""
+    if "/blog/" in url:
+        return "blog"
+    if "/adr/" in url:
+        return "adr"
+    if "/guides/" in url:
+        return "guide"
+    if "/docs/" in url:
+        return "docs"
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -322,11 +356,75 @@ router = APIRouter(prefix="/v1/docs", tags=["Docs Search"])
 async def search_docs(
     q: str = Query(..., min_length=1, max_length=200, description="Search query"),
     limit: int = Query(5, ge=1, le=20, description="Max results"),
+    mode: Literal["keyword", "semantic", "hybrid"] = Query(
+        "keyword", description="Search mode: keyword (Algolia), semantic (k-NN), hybrid (RRF fusion)"
+    ),
     service: DocsSearchService = Depends(get_docs_search_service),
+    embed_svc: DocsEmbeddingService = Depends(get_docs_embedding_service),
 ) -> DocsSearchResponse:
     """Search STOA documentation, guides, ADRs, and blog posts.
 
     Public endpoint — no authentication required.
-    Combines Algolia full-text search with llms-full.txt boosting.
+
+    Modes:
+    - **keyword** (default): Algolia full-text + llms-full.txt boost
+    - **semantic**: OpenAI embedding + OpenSearch k-NN vector search
+    - **hybrid**: Reciprocal Rank Fusion of keyword + semantic results
     """
-    return await service.search(query=q, limit=limit)
+    t0 = time.monotonic()
+
+    if mode == "semantic":
+        raw_results = await embed_svc.search_semantic(q, limit=limit)
+        results = [
+            DocsSearchResult(
+                title=r["title"],
+                url=r["url"],
+                snippet=r.get("content", "")[:200],
+                score=r.get("score", 0.0),
+                category=_categorize_url(r["url"]),
+            )
+            for r in raw_results
+        ]
+        took_ms = round((time.monotonic() - t0) * 1000, 1)
+        return DocsSearchResponse(query=q, total=len(results), results=results, took_ms=took_ms, mode="semantic")
+
+    if mode == "hybrid":
+        raw_results = await embed_svc.search_hybrid(q, limit=limit)
+        results = [
+            DocsSearchResult(
+                title=r["title"],
+                url=r["url"],
+                snippet=r.get("snippet", "")[:200],
+                score=r.get("score", 0.0),
+                category=_categorize_url(r["url"]),
+            )
+            for r in raw_results
+        ]
+        took_ms = round((time.monotonic() - t0) * 1000, 1)
+        return DocsSearchResponse(query=q, total=len(results), results=results, took_ms=took_ms, mode="hybrid")
+
+    # Default: keyword mode (Algolia + llms boost)
+    response = await service.search(query=q, limit=limit)
+    response.mode = "keyword"
+    return response
+
+
+@router.post("/admin/reindex", response_model=ReindexResponse)
+async def reindex_docs(
+    embed_svc: DocsEmbeddingService = Depends(get_docs_embedding_service),
+) -> ReindexResponse:
+    """Trigger full re-embed pipeline: fetch llms-full.txt, chunk, embed, index to OpenSearch.
+
+    Admin endpoint, gated by DOCS_REINDEX_ENABLED config flag.
+    """
+    if not settings.DOCS_REINDEX_ENABLED:
+        raise HTTPException(status_code=403, detail="Reindex is disabled (set DOCS_REINDEX_ENABLED=true)")
+
+    result = await embed_svc.reindex()
+    return ReindexResponse(
+        total_entries=result.total_entries,
+        total_chunks=result.total_chunks,
+        indexed=result.indexed,
+        errors=result.errors,
+        error_details=result.error_details,
+    )

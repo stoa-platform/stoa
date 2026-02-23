@@ -182,6 +182,24 @@ export interface DeploymentListResponse {
   page_size: number;
 }
 
+export type DeployLogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+export interface DeploymentLog {
+  id: string;
+  deployment_id: string;
+  tenant_id: string;
+  seq: number;
+  level: DeployLogLevel;
+  step?: string;
+  message: string;
+  created_at: string;
+}
+
+export interface DeploymentLogListResponse {
+  items: DeploymentLog[];
+  total: number;
+}
+
 export interface EnvironmentStatusDeployment {
   api_id: string;
   api_name: string;

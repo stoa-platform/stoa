@@ -75,7 +75,7 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
 
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
         Register Gateway Instance
       </h2>
 
@@ -89,7 +89,7 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -99,16 +99,16 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
               onChange={handleChange}
               required
               placeholder="webmethods-prod"
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <p className="text-xs text-gray-400 dark:text-neutral-500 mt-1">
+            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
               Unique identifier (lowercase, hyphens)
             </p>
           </div>
 
           {/* Display Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Display Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -118,20 +118,20 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
               onChange={handleChange}
               required
               placeholder="webMethods Production"
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           {/* Gateway Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Gateway Type <span className="text-red-500">*</span>
             </label>
             <select
               name="gateway_type"
               value={form.gateway_type}
               onChange={handleChange}
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {gatewayTypes.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -143,14 +143,14 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
 
           {/* Environment */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Environment <span className="text-red-500">*</span>
             </label>
             <select
               name="environment"
               value={form.environment}
               onChange={handleChange}
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {environments.map((env) => (
                 <option key={env} value={env}>
@@ -162,7 +162,7 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
 
           {/* Base URL */}
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Admin API URL <span className="text-red-500">*</span>
             </label>
             <input
@@ -172,13 +172,13 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
               onChange={handleChange}
               required
               placeholder="https://gateway-admin.example.com"
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           {/* Tenant (optional) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Tenant ID
             </label>
             <input
@@ -187,13 +187,13 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
               value={form.tenant_id}
               onChange={handleChange}
               placeholder="Leave empty for platform-wide"
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           {/* Capabilities */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Capabilities
             </label>
             <input
@@ -202,9 +202,11 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
               value={form.capabilities}
               onChange={handleChange}
               placeholder="rest, oidc, rate_limiting"
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <p className="text-xs text-gray-400 dark:text-neutral-500 mt-1">Comma-separated list</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
+              Comma-separated list
+            </p>
           </div>
         </div>
 
@@ -220,7 +222,7 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
           <button
             type="button"
             onClick={onCancel}
-            className="border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-sm"
+            className="border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-4 py-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-sm"
           >
             Cancel
           </button>

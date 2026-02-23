@@ -140,8 +140,10 @@ function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('dashboard.title')}</h1>
-        <p className="text-gray-500 dark:text-neutral-400 mt-2">{t('dashboard.welcome')}</p>
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+          {t('dashboard.title')}
+        </h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-2">{t('dashboard.welcome')}</p>
       </div>
 
       {/* Welcome Card */}
@@ -163,10 +165,10 @@ function Dashboard() {
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
               {t('dashboard.hello', { name: user?.name || 'User' })}
             </h2>
-            <p className="text-sm text-gray-500 dark:text-neutral-400">{user?.email}</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{user?.email}</p>
           </div>
         </div>
       </div>
@@ -251,7 +253,7 @@ function Dashboard() {
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
             {t('dashboard.quickLinks')}
           </h3>
           <ul className="space-y-3">
@@ -279,10 +281,10 @@ function Dashboard() {
         </div>
 
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
             {t('dashboard.gettingStarted')}
           </h3>
-          <ol className="space-y-3 text-sm text-gray-600 dark:text-neutral-400">
+          <ol className="space-y-3 text-sm text-neutral-600 dark:text-neutral-400">
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">1.</span>
               <span>
@@ -458,8 +460,8 @@ function Login() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('login.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('login.subtitle')}</p>
+          <h1 className="text-2xl font-bold text-neutral-900">{t('login.title')}</h1>
+          <p className="text-neutral-500 mt-1">{t('login.subtitle')}</p>
         </div>
         <button
           onClick={login}

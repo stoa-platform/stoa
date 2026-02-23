@@ -15,7 +15,7 @@ const statusConfig: Record<SaasApiKeyStatus, { color: string; label: string }> =
     label: 'Active',
   },
   revoked: {
-    color: 'bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300',
+    color: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300',
     label: 'Revoked',
   },
   expired: {
@@ -110,13 +110,16 @@ export function SaasApiKeysList() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-8 w-48 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
-          <div className="h-10 w-32 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-8 w-48 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-10 w-32 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
           <div className="p-6 space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-gray-100 dark:bg-neutral-700 rounded animate-pulse" />
+              <div
+                key={i}
+                className="h-12 bg-neutral-100 dark:bg-neutral-700 rounded animate-pulse"
+              />
             ))}
           </div>
         </div>
@@ -129,8 +132,8 @@ export function SaasApiKeysList() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">API Keys</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">API Keys</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Create scoped API keys to access backend APIs through the gateway
           </p>
         </div>
@@ -170,29 +173,29 @@ export function SaasApiKeysList() {
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+              <tr className="border-b dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Key
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Name
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Allowed APIs
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   RPM
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Status
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Expires
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Last Used
                 </th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Actions
                 </th>
               </tr>
@@ -201,21 +204,21 @@ export function SaasApiKeysList() {
               {keys.map((key) => {
                 const status = statusConfig[key.status];
                 return (
-                  <tr key={key.id} className="hover:bg-gray-50 dark:hover:bg-neutral-750">
-                    <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-neutral-300">
+                  <tr key={key.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-750">
+                    <td className="px-4 py-3 text-sm font-mono text-neutral-600 dark:text-neutral-300">
                       {key.key_prefix}...
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 dark:text-white text-sm">
+                      <div className="font-medium text-neutral-900 dark:text-white text-sm">
                         {key.name}
                       </div>
                       {key.description && (
-                        <div className="text-xs text-gray-500 dark:text-neutral-400 truncate max-w-xs">
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-xs">
                           {key.description}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       {key.allowed_backend_api_ids.length === 0 ? (
                         '-'
                       ) : (
@@ -229,7 +232,7 @@ export function SaasApiKeysList() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       {key.rate_limit_rpm ?? '-'}
                     </td>
                     <td className="px-4 py-3">
@@ -239,10 +242,10 @@ export function SaasApiKeysList() {
                         {status.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       {formatDate(key.expires_at)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       {formatDate(key.last_used_at)}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -267,27 +270,29 @@ export function SaasApiKeysList() {
       {revealedKey && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">API Key Created</h2>
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              API Key Created
+            </h2>
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 px-4 py-3 rounded-lg text-sm">
               Copy this key now. It will not be shown again.
             </div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 bg-gray-100 dark:bg-neutral-700 px-4 py-3 rounded-lg text-sm font-mono text-gray-900 dark:text-white break-all select-all">
+              <code className="flex-1 bg-neutral-100 dark:bg-neutral-700 px-4 py-3 rounded-lg text-sm font-mono text-neutral-900 dark:text-white break-all select-all">
                 {revealedKey.key}
               </code>
               <button
                 onClick={handleCopyKey}
-                className="flex-shrink-0 p-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700"
+                className="flex-shrink-0 p-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700"
                 title="Copy to clipboard"
               >
                 {copied ? (
                   <Check className="h-5 w-5 text-green-500" />
                 ) : (
-                  <Copy className="h-5 w-5 text-gray-500 dark:text-neutral-400" />
+                  <Copy className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
                 )}
               </button>
             </div>
-            <div className="text-sm text-gray-500 dark:text-neutral-400">
+            <div className="text-sm text-neutral-500 dark:text-neutral-400">
               <strong>Name:</strong> {revealedKey.name}
               <br />
               <strong>Prefix:</strong> {revealedKey.key_prefix}

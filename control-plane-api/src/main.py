@@ -37,6 +37,7 @@ from .routers import (
     business,
     catalog_admin,
     certificates,
+    chat,
     consumers,
     contracts,
     deployments,
@@ -345,6 +346,7 @@ app = FastAPI(
         {"name": "Consumers", "description": "Consumer onboarding and lifecycle management (CAB-1121)"},
         {"name": "Plans", "description": "Subscription plan management with quotas (CAB-1121)"},
         {"name": "Quotas", "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)"},
+        {"name": "Chat", "description": "Chat Agent conversations and AI messaging (CAB-286)"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -534,6 +536,10 @@ app.include_router(self_service.router)
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)
+
+# Chat Agent — Anthropic integration (CAB-286)
+if settings.CHAT_ENABLED:
+    app.include_router(chat.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

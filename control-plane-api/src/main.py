@@ -43,6 +43,7 @@ from .routers import (
     credential_mappings,
     deployments,
     diagnostics,
+    docs_search,
     environments,
     events,
     execution_logs,
@@ -544,6 +545,10 @@ app.include_router(diagnostics.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)
+
+# Docs Search — Algolia + llms.txt (CAB-1327)
+if settings.DOCS_SEARCH_ENABLED:
+    app.include_router(docs_search.router)
 
 # Chat Agent — Anthropic integration (CAB-286)
 if settings.CHAT_ENABLED:

@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~502 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 132 pts (26%) | **Velocity**: 13 issues done
+**Scope**: ~502 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 312 pts (62%) | **Velocity**: 20 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -110,16 +110,12 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-- [~] CAB-1331: [MEGA] UAC-Driven Observability (21 pts, P3) — Council 8.50 ✅
-  - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
-  - [x] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — PR #870
-  - [ ] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts)
 - [~] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — Council 8.00 ✅
   - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts)
-  - [~] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts)
+  - [x] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts)
   - [ ] CAB-1431 [cp-ui] CI missing translation keys check (5 pts)
 
-### Done (19)
+### Done (20)
 
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
@@ -161,6 +157,10 @@
   - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
   - [x] CAB-1428 [cp-api] Azure APIM adapter (8 pts) — PR #873
 - [x] CAB-285: Chat Agent UI Component (8 pts) — PR #877
+- [x] CAB-1331: [MEGA] UAC-Driven Observability (21 pts) — PRs #870, #884
+  - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
+  - [x] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — PR #870
+  - [x] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts) — PR #884
 
 ### Todo
 

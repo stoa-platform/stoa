@@ -4,7 +4,7 @@
 
 ## ✅ DONE
 
-> Full history: 905+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
+> Full history: 1305+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
@@ -68,7 +68,7 @@
 - ✅ Promote-to-prod workflow — PR #771 (reusable-promote.yml + promote-to-prod.yml + runbook)
 - ✅ Portal mock data fix — PR #771 (removed MOCK_SERVERS fallback from MCP pages, -189 LOC)
 
-### Cycle 8 (Feb 16-22) — CLOSED (905 pts, 88 issues, 129 pts/day)
+### Cycle 8 (Feb 16-22) — CLOSED (1305 pts, 88 issues, 186 pts/day)
 
 Top MEGAs: CAB-1299 UAC (34 pts), CAB-1313 Federation (34 pts), CAB-1289 GW Tests (34 pts),
 CAB-1378 Test Blitz (34 pts), CAB-1323 Portal RBAC (34 pts), CAB-1188 SaaS MVP (34 pts),
@@ -88,7 +88,7 @@ Council Batch — 15 MEGAs validated, 16 promoted to C9 Todo (2026-02-23)
 - Fix (9): CAB-1319 (7.50), CAB-1322 (7.50), CAB-1316 (7.50), CAB-1342 (7.25), CAB-1329 (7.25), CAB-1334 (6.75), CAB-1327 (6.75), CAB-1347 (6.25), CAB-1348 (6.00)
 - Labels applied on Linear: `council:ticket-go` / `council:ticket-fix`
 - Fix adjustments applied to all 9 Fix ticket descriptions on Linear
-- C9 scope: ~661 pts (108% of 564 target capacity — slightly overloaded)
+- C9 scope: ~735 pts (101% of 724 target capacity — at target)
 
 ## 📋 NEXT
 
@@ -108,7 +108,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - docs.gostoa.dev = 40 articles (Layer7 + webMethods guides live, all 8 migration spokes published)
 - llms.txt + llms-full.txt: full migration guides + AI Factory sections live
 - ADR numbering: stoa-docs owns numbers (001-050). Next: **ADR-051**
-- Velocity C8: 905 pts / 88 issues / 129 pts/day (final)
+- Velocity C8: 1305 pts / 88 issues / 186 pts/day (final)
 - Velocity C7: 505 pts / 44 issues / 72 pts/day
-- Rolling avg: 107.5 pts/day (C7+C8)
+- Rolling avg: 129.3 pts/day (C7+C8)
 - Portal MCP pages: MOCK_SERVERS removed (PR #771) — pages now use real API only

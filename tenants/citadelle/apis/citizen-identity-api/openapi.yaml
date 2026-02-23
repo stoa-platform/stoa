@@ -1,0 +1,122 @@
+openapi: "3.0.3"
+info:
+  title: Service d'Identite Citoyenne
+  version: "1.2.0"
+  description: |
+    API de verification d'identite pour les services citoyens.
+    Conforme aux exigences d'interoperabilite du RGI.
+  contact:
+    name: Direction du Numerique
+    email: dnum@citadelle.gouv.demo
+servers:
+  - url: https://httpbin.org/anything
+    description: Mock backend
+paths:
+  /citizens/{citizenId}:
+    get:
+      summary: Consulter le profil d'un citoyen
+      operationId: getCitizen
+      parameters:
+        - name: citizenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Profil citoyen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Citizen"
+        "404":
+          description: Citoyen non trouve
+  /citizens/verify:
+    post:
+      summary: Verifier l'identite d'un citoyen
+      operationId: verifyCitizen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nationalId
+                - dateOfBirth
+              properties:
+                nationalId:
+                  type: string
+                  description: Numero national d'identite
+                dateOfBirth:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: Resultat de la verification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified:
+                    type: boolean
+                  confidence:
+                    type: number
+                    format: float
+                  timestamp:
+                    type: string
+                    format: date-time
+  /citizens/{citizenId}/documents:
+    get:
+      summary: Lister les pieces justificatives
+      operationId: listCitizenDocuments
+      parameters:
+        - name: citizenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Liste des documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentRef"
+components:
+  schemas:
+    Citizen:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        verified:
+          type: boolean
+    DocumentRef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [identity_card, passport, proof_of_address]
+        status:
+          type: string
+          enum: [pending, verified, rejected]
+        uploadedAt:
+          type: string
+          format: date-time

@@ -1,0 +1,153 @@
+openapi: "3.0.3"
+info:
+  title: Plateforme d'Interoperabilite
+  version: "1.0.0"
+  description: |
+    API d'echange de donnees inter-ministeres.
+    Conforme au Cadre Commun d'Interoperabilite (CCI).
+  contact:
+    name: Direction du Numerique
+    email: dnum@citadelle.gouv.demo
+servers:
+  - url: https://httpbin.org/anything
+    description: Mock backend
+paths:
+  /exchange:
+    post:
+      summary: Envoyer un echange de donnees
+      operationId: submitExchange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sourceMinistry
+                - targetMinistry
+                - schemaId
+                - payload
+              properties:
+                sourceMinistry:
+                  type: string
+                  description: Code du ministere emetteur
+                targetMinistry:
+                  type: string
+                  description: Code du ministere destinataire
+                schemaId:
+                  type: string
+                  description: Identifiant du schema de donnees
+                payload:
+                  type: object
+                  description: Donnees conformes au schema
+                priority:
+                  type: string
+                  enum: [normal, urgent]
+                  default: normal
+      responses:
+        "202":
+          description: Echange accepte
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeReceipt"
+  /exchange/{exchangeId}:
+    get:
+      summary: Consulter le statut d'un echange
+      operationId: getExchangeStatus
+      parameters:
+        - name: exchangeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Statut de l'echange
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeReceipt"
+  /schemas:
+    get:
+      summary: Lister les schemas de donnees disponibles
+      operationId: listSchemas
+      parameters:
+        - name: ministry
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filtrer par ministere
+      responses:
+        "200":
+          description: Liste des schemas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DataSchema"
+  /schemas/{schemaId}:
+    get:
+      summary: Consulter un schema de donnees
+      operationId: getSchema
+      parameters:
+        - name: schemaId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detail du schema
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSchema"
+components:
+  schemas:
+    ExchangeReceipt:
+      type: object
+      properties:
+        exchangeId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [accepted, routing, delivered, failed]
+        sourceMinistry:
+          type: string
+        targetMinistry:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+    DataSchema:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        ministry:
+          type: string
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+              required:
+                type: boolean

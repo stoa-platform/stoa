@@ -1,0 +1,50 @@
+apiVersion: stoa.io/v1
+kind: Tenant
+metadata:
+  name: middle-earth-bank
+  displayName: "Bank of Gondor — Digital Financial Services"
+  description: "Fantasy bank demonstrating financial API governance with DORA/NIS2 compliance posture"
+  labels:
+    tier: enterprise
+    visibility: public
+    managed-by: gitops
+    sector: financial-services
+
+spec:
+  portalVisibility: public
+
+  visibility:
+    allowedRoles:
+      - cpi-admin
+      - tenant-admin
+      - devops
+      - viewer
+    denyRoles: []
+
+  defaultPolicies:
+    - name: rate-limit-strict
+      config:
+        requestsPerMinute: 30
+        burstLimit: 5
+    - name: require-api-key
+      description: "Mandatory API key for all financial endpoints"
+    - name: cors-strict
+      description: "Strict CORS for banking applications"
+
+  settings:
+    max_apis: 30
+    max_applications: 10
+    environments:
+      - dev
+      - staging
+
+  tags:
+    - financial-services
+    - dora
+    - nis2
+    - banking
+    - regulated
+
+  contact:
+    team: "Gondor IT Department"
+    email: "it@gondor-bank.demo"

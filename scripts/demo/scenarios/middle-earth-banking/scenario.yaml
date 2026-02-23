@@ -1,0 +1,65 @@
+name: middle-earth-banking
+display_name: "Bank of Gondor — Digital Financial Services"
+description: "Financial services demo with NIS2/DORA compliance posture"
+theme: financial-services
+
+compliance:
+  frameworks:
+    - DORA
+    - NIS2
+  disclaimer: |
+    This demo illustrates technical capabilities relevant to DORA and NIS2
+    compliance posture, including audit logging, access control, and incident
+    response readiness. STOA Platform does not provide financial regulatory
+    advice. Organizations must engage qualified compliance officers and auditors
+    for official DORA/NIS2 assessment.
+
+tenant:
+  id: middle-earth-bank
+  ref: tenants/middle-earth-bank/tenant.yaml
+
+personas:
+  - username: gandalf
+    email: gandalf@gondor-bank.demo
+    first_name: Gandalf
+    last_name: the White
+    role: tenant-admin
+    password: Gandalf2026!
+    description: "CISO / Risk Manager"
+  - username: aragorn
+    email: aragorn@gondor-bank.demo
+    first_name: Aragorn
+    last_name: Elessar
+    role: devops
+    password: Aragorn2026!
+    description: "Trading Desk Developer"
+  - username: elrond
+    email: elrond@gondor-bank.demo
+    first_name: Elrond
+    last_name: Half-elven
+    role: viewer
+    password: Elrond2026!
+    description: "Bank CTO / Architecture Review"
+
+plans:
+  - slug: regulated
+    display_name: "Regulated Plan"
+    rate_limit_per_minute: 30
+    requires_approval: true
+  - slug: partner
+    display_name: "Partner Plan"
+    rate_limit_per_minute: 120
+    requires_approval: true
+
+applications:
+  - name: "Gondor Trading Platform"
+    plan: regulated
+    apis:
+      - account-api
+      - payment-api
+      - risk-assessment-api
+  - name: "Rohan Partner Integration"
+    plan: partner
+    apis:
+      - account-api
+      - payment-api

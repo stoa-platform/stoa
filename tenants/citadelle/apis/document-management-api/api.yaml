@@ -1,0 +1,28 @@
+id: document-management-api
+name: document-management-api
+display_name: "Gestion Electronique de Documents"
+version: "2.0.0"
+description: |
+  API de gestion electronique de documents (GED) securisee.
+
+  Fonctionnalites:
+  - Depot de documents avec controle d'integrite
+  - Suivi du cycle de vie documentaire
+  - Signature electronique (eIDAS)
+  - Archivage a valeur probante
+
+  Supporte les formats NF Z42-013 pour l'archivage electronique.
+backend_url: https://httpbin.org/anything
+status: active
+category: Document Management
+tags:
+  - portal:published
+  - public-sector
+  - documents
+  - rest
+  - rgs
+  - eidas
+  - archivage
+deployments:
+  dev: true
+  staging: false

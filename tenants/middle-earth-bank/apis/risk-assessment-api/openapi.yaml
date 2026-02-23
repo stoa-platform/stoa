@@ -1,0 +1,189 @@
+openapi: "3.0.3"
+info:
+  title: Risk Assessment API
+  version: "1.5.0"
+  description: |
+    Credit scoring and risk assessment for the Bank of Gondor.
+    Supports DORA ICT risk management framework requirements.
+  contact:
+    name: Gondor IT Department
+    email: it@gondor-bank.demo
+servers:
+  - url: https://httpbin.org/anything
+    description: Mock backend
+paths:
+  /assess:
+    post:
+      summary: Request a risk assessment
+      operationId: requestAssessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assessmentType
+                - subjectId
+              properties:
+                assessmentType:
+                  type: string
+                  enum: [credit, transaction, ict_risk]
+                subjectId:
+                  type: string
+                  format: uuid
+                  description: Account ID or entity ID
+                transactionAmount:
+                  type: number
+                  format: double
+                  description: Required for transaction assessments
+                context:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Additional context for the assessment
+      responses:
+        "201":
+          description: Assessment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assessment"
+  /assess/{assessmentId}:
+    get:
+      summary: Get assessment result
+      operationId: getAssessment
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Assessment result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assessment"
+  /reports/{reportId}:
+    get:
+      summary: Get risk report
+      operationId: getRiskReport
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Risk report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskReport"
+  /reports:
+    get:
+      summary: List risk reports
+      operationId: listRiskReports
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [credit, transaction, ict_risk, regulatory]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: List of risk reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiskReport"
+components:
+  schemas:
+    Assessment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assessmentType:
+          type: string
+          enum: [credit, transaction, ict_risk]
+        subjectId:
+          type: string
+          format: uuid
+        score:
+          type: number
+          format: float
+          description: Risk score (0-100, lower is better)
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        factors:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              impact:
+                type: string
+                enum: [positive, negative, neutral]
+              weight:
+                type: number
+                format: float
+        createdAt:
+          type: string
+          format: date-time
+    RiskReport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [credit, transaction, ict_risk, regulatory]
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        summary:
+          type: string
+        totalAssessments:
+          type: integer
+        riskDistribution:
+          type: object
+          properties:
+            low:
+              type: integer
+            medium:
+              type: integer
+            high:
+              type: integer
+            critical:
+              type: integer
+        generatedAt:
+          type: string
+          format: date-time

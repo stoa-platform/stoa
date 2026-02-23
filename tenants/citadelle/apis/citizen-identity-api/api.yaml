@@ -1,0 +1,27 @@
+id: citizen-identity-api
+name: citizen-identity-api
+display_name: "Service d'Identite Citoyenne"
+version: "1.2.0"
+description: |
+  API de verification d'identite pour les services citoyens.
+
+  Fonctionnalites:
+  - Verification d'identite (FranceConnect-style)
+  - Consultation de profil citoyen
+  - Validation de pieces justificatives
+  - Historique des verifications
+
+  Conforme aux exigences d'interoperabilite du RGI.
+backend_url: https://httpbin.org/anything
+status: active
+category: Identity
+tags:
+  - portal:published
+  - public-sector
+  - identity
+  - rest
+  - rgs
+  - franceconnect
+deployments:
+  dev: true
+  staging: false

@@ -1,0 +1,28 @@
+id: account-api
+name: account-api
+display_name: "Account Management API"
+version: "2.1.0"
+description: |
+  Account management API for the Bank of Gondor.
+
+  Fonctionnalites:
+  - Account creation with KYC verification
+  - Account details and balance inquiry
+  - Account holder management
+  - AML screening integration
+
+  Supports PSD2 Account Information Service (AIS) patterns.
+backend_url: https://httpbin.org/anything
+status: active
+category: Banking
+tags:
+  - portal:published
+  - banking
+  - accounts
+  - rest
+  - kyc
+  - aml
+  - psd2
+deployments:
+  dev: true
+  staging: false

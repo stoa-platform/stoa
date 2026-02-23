@@ -1,0 +1,149 @@
+openapi: "3.0.3"
+info:
+  title: Account Management API
+  version: "2.1.0"
+  description: |
+    Account management for the Bank of Gondor.
+    Supports PSD2 Account Information Service (AIS) patterns.
+  contact:
+    name: Gondor IT Department
+    email: it@gondor-bank.demo
+servers:
+  - url: https://httpbin.org/anything
+    description: Mock backend
+paths:
+  /accounts:
+    post:
+      summary: Create a new account
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - holderName
+                - accountType
+                - currency
+              properties:
+                holderName:
+                  type: string
+                accountType:
+                  type: string
+                  enum: [current, savings, trading]
+                currency:
+                  type: string
+                  enum: [EUR, GBP, USD]
+                  default: EUR
+                kycReference:
+                  type: string
+                  description: Reference to completed KYC verification
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+    get:
+      summary: List accounts
+      operationId: listAccounts
+      parameters:
+        - name: holderName
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, frozen, closed]
+      responses:
+        "200":
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+  /accounts/{accountId}:
+    get:
+      summary: Get account details
+      operationId: getAccount
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          description: Account not found
+  /accounts/{accountId}/balance:
+    get:
+      summary: Get account balance
+      operationId: getAccountBalance
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Account balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accountId:
+                    type: string
+                    format: uuid
+                  available:
+                    type: number
+                    format: double
+                  pending:
+                    type: number
+                    format: double
+                  currency:
+                    type: string
+                  asOf:
+                    type: string
+                    format: date-time
+components:
+  schemas:
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        iban:
+          type: string
+        holderName:
+          type: string
+        accountType:
+          type: string
+          enum: [current, savings, trading]
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [active, frozen, closed]
+        kycStatus:
+          type: string
+          enum: [pending, verified, rejected]
+        createdAt:
+          type: string
+          format: date-time

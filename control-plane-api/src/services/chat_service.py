@@ -61,6 +61,7 @@ class ChatService:
             provider=provider,
             model=model,
             system_prompt=system_prompt,
+            status="active",
         )
         self.session.add(conv)
         await self.session.flush()

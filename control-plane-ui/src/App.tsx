@@ -128,6 +128,11 @@ const AudienceGovernance = lazy(() =>
   import('./pages/AudienceGovernance').then((m) => ({ default: m.AudienceGovernance }))
 );
 
+// CAB-1316: Platform Diagnostics page
+const DiagnosticsPage = lazy(() =>
+  import('./pages/DiagnosticsPage').then((m) => ({ default: m.DiagnosticsPage }))
+);
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -424,6 +429,7 @@ function ProtectedRoutes() {
                 <Route path="/skills" element={<SkillsList />} />
                 <Route path="/executions" element={<ExecutionViewDashboard />} />
                 <Route path="/audience-governance" element={<AudienceGovernance />} />
+                <Route path="/diagnostics" element={<DiagnosticsPage />} />
               </Routes>
             </Suspense>
           )}

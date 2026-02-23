@@ -39,7 +39,8 @@
     "auditLog": "Audit Log",
     "workflows": "Workflows",
     "audienceGovernance": "Audience Governance",
-    "audience": "Audience"
+    "audience": "Audience",
+    "diagnostics": "Diagnostics"
   },
   "layout": {
     "controlPlane": "Control Plane",
@@ -260,5 +261,9 @@
     "oidcProxy": "OIDC Proxy",
     "direct": "Direct",
     "mode": "mode"
+  },
+  "diagnostics": {
+    "title": "Platform Diagnostics",
+    "description": "Automated root cause analysis and connectivity testing"
   }
 }

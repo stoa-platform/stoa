@@ -51,6 +51,7 @@ import {
   KeyRound,
   Share2,
   Sparkles,
+  Stethoscope,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -246,6 +247,12 @@ const navigationSections: NavSection[] = [
         name: 'nav.tokenOptimizer',
         href: '/token-optimizer',
         icon: Coins,
+        permission: 'apis:read',
+      },
+      {
+        name: 'nav.diagnostics',
+        href: '/diagnostics',
+        icon: Stethoscope,
         permission: 'apis:read',
       },
     ],

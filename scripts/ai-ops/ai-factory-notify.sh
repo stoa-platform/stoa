@@ -576,14 +576,14 @@ notify_pr_hygiene() {
 # Push PR hygiene gauge metrics to Pushgateway.
 push_metrics_pr_hygiene() {
   local TOTAL="${1:-0}" STALE="${2:-0}" ABANDONED="${3:-0}" DRAFT="${4:-0}"
-
-  _push_metrics "workflow/scheduled/stage/pr-hygiene" "$(cat <<PROM
-ai_factory_pr_hygiene{type="total"} ${TOTAL}
-ai_factory_pr_hygiene{type="stale"} ${STALE}
-ai_factory_pr_hygiene{type="abandoned"} ${ABANDONED}
-ai_factory_pr_hygiene{type="draft"} ${DRAFT}
-PROM
-)"
+  local METRICS=""
+  METRICS+="# HELP ai_factory_pr_hygiene PR hygiene gauge by type\n"
+  METRICS+="# TYPE ai_factory_pr_hygiene gauge\n"
+  METRICS+="ai_factory_pr_hygiene{type=\"total\"} ${TOTAL}\n"
+  METRICS+="ai_factory_pr_hygiene{type=\"stale\"} ${STALE}\n"
+  METRICS+="ai_factory_pr_hygiene{type=\"abandoned\"} ${ABANDONED}\n"
+  METRICS+="ai_factory_pr_hygiene{type=\"draft\"} ${DRAFT}\n"
+  _push_metrics "workflow/scheduled/stage/pr-hygiene" "$(printf '%b' "$METRICS")"
 }
 
 # notify_plan ISSUE_NUM ISSUE_TITLE ISSUE_URL STATUS

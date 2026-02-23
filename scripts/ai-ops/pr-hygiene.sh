@@ -81,13 +81,13 @@ echo "$PRS" | jq -c '.[]' | while IFS= read -r pr; do
 
   if [ "$AGE_SECS" -ge "$ABANDON_SECS" ]; then
     has_label "$LABELS" "abandoned" || add_label "$NUM" "abandoned"
-    has_label "$LABELS" "stale" && remove_label "$NUM" "stale"
+    has_label "$LABELS" "stale" && remove_label "$NUM" "stale" || true
   elif [ "$AGE_SECS" -ge "$WARN_SECS" ]; then
     has_label "$LABELS" "stale" || add_label "$NUM" "stale"
-    has_label "$LABELS" "abandoned" && remove_label "$NUM" "abandoned"
+    has_label "$LABELS" "abandoned" && remove_label "$NUM" "abandoned" || true
   else
-    has_label "$LABELS" "stale" && remove_label "$NUM" "stale"
-    has_label "$LABELS" "abandoned" && remove_label "$NUM" "abandoned"
+    has_label "$LABELS" "stale" && remove_label "$NUM" "stale" || true
+    has_label "$LABELS" "abandoned" && remove_label "$NUM" "abandoned" || true
   fi
 done
 

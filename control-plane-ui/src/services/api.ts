@@ -767,6 +767,19 @@ class ApiService {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/workflows/templates/seed`);
     return data;
   }
+
+  // Chat Token Metering (CAB-288)
+  async getChatBudgetStatus(tenantId: string): Promise<TokenBudgetStatus> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/budget`);
+    return data;
+  }
+
+  async getChatUsageStats(tenantId: string, days = 30): Promise<TokenUsageStats> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/metering`, {
+      params: { days },
+    });
+    return data;
+  }
 }
 
 // Operations metrics types (CAB-Observability)
@@ -792,6 +805,28 @@ export interface TopAPI {
   tool_name: string;
   display_name: string;
   calls: number;
+}
+
+// Chat Token Metering types (CAB-288)
+export interface TokenBudgetStatus {
+  user_tokens_today: number;
+  tenant_tokens_today: number;
+  daily_budget: number;
+  remaining: number;
+  budget_exceeded: boolean;
+  usage_percent: number;
+}
+
+export interface TokenUsageStats {
+  tenant_id: string;
+  period_days: number;
+  total_tokens: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_requests: number;
+  today_tokens: number;
+  top_users: { user_id: string; tokens: number }[];
+  daily_breakdown: { date: string; tokens: number }[];
 }
 
 // Platform Status types (CAB-654)

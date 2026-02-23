@@ -6,6 +6,7 @@
 // Types and functions prepared for future integration
 #![allow(dead_code)]
 
+pub mod deploy;
 mod spans;
 
 pub use spans::{ToolSpan, ToolSpanGuard};

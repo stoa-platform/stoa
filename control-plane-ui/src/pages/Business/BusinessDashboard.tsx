@@ -104,10 +104,10 @@ function KPICard({
           </div>
         )}
       </div>
-      <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{label}</p>
+      <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
+      <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">{label}</p>
       {trendLabel && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{trendLabel}</p>
+        <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{trendLabel}</p>
       )}
     </div>
   );
@@ -122,7 +122,7 @@ function ApdexGauge({ score }: { score: number }) {
       <div className="relative w-40 h-20 overflow-hidden">
         {/* Background arc */}
         <div
-          className="absolute w-40 h-40 rounded-full border-8 border-gray-200 dark:border-neutral-700"
+          className="absolute w-40 h-40 rounded-full border-8 border-neutral-200 dark:border-neutral-700"
           style={{ clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 50%)' }}
         />
         {/* Colored arc */}
@@ -142,7 +142,7 @@ function ApdexGauge({ score }: { score: number }) {
         </div>
       </div>
       <p className={`text-sm font-medium ${color} mt-2`}>{getApdexLabel(score)}</p>
-      <p className="text-xs text-gray-400 dark:text-gray-500">APDEX Score</p>
+      <p className="text-xs text-neutral-400 dark:text-neutral-500">APDEX Score</p>
     </div>
   );
 }
@@ -152,16 +152,16 @@ function ModeAdoptionBar({ modes }: { modes: GatewayModeAdoption[] }) {
     'edge-mcp': 'bg-blue-500',
     sidecar: 'bg-green-500',
     proxy: 'bg-purple-500',
-    shadow: 'bg-gray-500',
+    shadow: 'bg-neutral-500',
   };
 
   return (
     <div>
-      <div className="flex h-4 rounded-full overflow-hidden bg-gray-200 dark:bg-neutral-700">
+      <div className="flex h-4 rounded-full overflow-hidden bg-neutral-200 dark:bg-neutral-700">
         {modes.map((mode) => (
           <div
             key={mode.mode}
-            className={`${colors[mode.mode as keyof typeof colors] || 'bg-gray-400'} transition-all duration-500`}
+            className={`${colors[mode.mode as keyof typeof colors] || 'bg-neutral-400'} transition-all duration-500`}
             style={{ width: `${mode.percentage}%` }}
             title={`${mode.displayName}: ${mode.percentage}%`}
           />
@@ -171,9 +171,9 @@ function ModeAdoptionBar({ modes }: { modes: GatewayModeAdoption[] }) {
         {modes.map((mode) => (
           <div key={mode.mode} className="flex items-center gap-2">
             <div
-              className={`w-3 h-3 rounded-full ${colors[mode.mode as keyof typeof colors] || 'bg-gray-400'}`}
+              className={`w-3 h-3 rounded-full ${colors[mode.mode as keyof typeof colors] || 'bg-neutral-400'}`}
             />
-            <span className="text-sm text-gray-600 dark:text-gray-300">
+            <span className="text-sm text-neutral-600 dark:text-neutral-300">
               {mode.displayName}: <span className="font-medium">{mode.percentage}%</span>
             </span>
           </div>
@@ -189,14 +189,14 @@ function TopAPIItem({ api, rank, maxCalls }: { api: TopAPI; rank: number; maxCal
 
   return (
     <div className="flex items-center gap-4 py-3">
-      <span className="w-6 text-lg font-bold text-gray-400 dark:text-gray-500">#{rank}</span>
+      <span className="w-6 text-lg font-bold text-neutral-400 dark:text-neutral-500">#{rank}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+          <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
             {api.displayName}
           </span>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 dark:text-gray-300">
+            <span className="text-sm text-neutral-600 dark:text-neutral-300">
               {formatNumber(api.calls)} calls
             </span>
             <span
@@ -212,13 +212,15 @@ function TopAPIItem({ api, rank, maxCalls }: { api: TopAPI; rank: number; maxCal
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex-1 bg-gray-200 dark:bg-neutral-700 rounded-full h-1.5">
+          <div className="flex-1 bg-neutral-200 dark:bg-neutral-700 rounded-full h-1.5">
             <div
               className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
               style={{ width: `${barWidth}%` }}
             />
           </div>
-          <span className="text-xs text-gray-400 dark:text-gray-500">{api.tenants} tenants</span>
+          <span className="text-xs text-neutral-400 dark:text-neutral-500">
+            {api.tenants} tenants
+          </span>
         </div>
       </div>
     </div>
@@ -342,7 +344,7 @@ export function BusinessDashboard() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <p className="text-gray-500 dark:text-gray-400">
+          <p className="text-neutral-500 dark:text-neutral-400">
             You don't have permission to view business analytics.
           </p>
         </div>
@@ -355,8 +357,10 @@ export function BusinessDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Business Analytics</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+            Business Analytics
+          </h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Platform adoption, usage trends, and business metrics
           </p>
         </div>
@@ -372,7 +376,7 @@ export function BusinessDashboard() {
           <button
             onClick={loadData}
             disabled={loading}
-            className="flex items-center gap-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+            className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -446,21 +450,21 @@ export function BusinessDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* APDEX Score */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase mb-6">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-6">
                 User Satisfaction
               </h2>
               <div className="flex items-center justify-around">
                 <ApdexGauge score={metrics.apdexScore} />
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">DAU/MAU Ratio</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">DAU/MAU Ratio</p>
+                    <p className="text-2xl font-bold text-neutral-900 dark:text-white">
                       {(metrics.dauMau * 100).toFixed(0)}%
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Avg Session</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">Avg Session</p>
+                    <p className="text-2xl font-bold text-neutral-900 dark:text-white">
                       {Math.floor(metrics.avgSessionDuration / 60)}m
                     </p>
                   </div>
@@ -471,7 +475,7 @@ export function BusinessDashboard() {
             {/* Gateway Mode Adoption */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                   Gateway Mode Adoption
                 </h2>
                 <a
@@ -483,10 +487,10 @@ export function BusinessDashboard() {
                 </a>
               </div>
               <ModeAdoptionBar modes={modeAdoption} />
-              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-neutral-700">
+              <div className="mt-6 pt-4 border-t border-neutral-100 dark:border-neutral-700">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">Total Gateways</span>
-                  <span className="font-semibold text-gray-900 dark:text-white">
+                  <span className="text-neutral-500 dark:text-neutral-400">Total Gateways</span>
+                  <span className="font-semibold text-neutral-900 dark:text-white">
                     {modeAdoption.reduce((sum, m) => sum + m.count, 0)}
                   </span>
                 </div>
@@ -497,7 +501,7 @@ export function BusinessDashboard() {
           {/* Top APIs */}
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                 Top APIs by Usage (This Month)
               </h2>
               <a
@@ -509,12 +513,12 @@ export function BusinessDashboard() {
               </a>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
-              <div className="divide-y divide-gray-100 dark:divide-neutral-700">
+              <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
                 {topAPIs.slice(0, 4).map((api, idx) => (
                   <TopAPIItem key={api.name} api={api} rank={idx + 1} maxCalls={maxAPICalls} />
                 ))}
               </div>
-              <div className="divide-y divide-gray-100 dark:divide-neutral-700">
+              <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
                 {topAPIs.slice(4, 8).map((api, idx) => (
                   <TopAPIItem key={api.name} api={api} rank={idx + 5} maxCalls={maxAPICalls} />
                 ))}
@@ -529,8 +533,8 @@ export function BusinessDashboard() {
                 <TrendingUp className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white">Growth Insights</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                <h3 className="font-semibold text-neutral-900 dark:text-white">Growth Insights</h3>
+                <p className="text-sm text-neutral-600 dark:text-neutral-300 mt-1">
                   Platform usage is up <span className="font-semibold text-green-600">18.2%</span>{' '}
                   this month. The <span className="font-semibold">Code Assistant</span> tool saw the
                   highest growth at <span className="font-semibold text-green-600">156%</span>,
@@ -549,7 +553,7 @@ export function BusinessDashboard() {
         </>
       ) : (
         <div className="text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">No business data available.</p>
+          <p className="text-neutral-500 dark:text-neutral-400">No business data available.</p>
         </div>
       )}
     </div>

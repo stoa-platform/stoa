@@ -10,7 +10,7 @@ describe('SyncStatusBadge', () => {
     { status: 'synced', label: 'Synced', colorClass: 'bg-green-100' },
     { status: 'drifted', label: 'Drifted', colorClass: 'bg-orange-100' },
     { status: 'error', label: 'Error', colorClass: 'bg-red-100' },
-    { status: 'deleting', label: 'Deleting', colorClass: 'bg-gray-100' },
+    { status: 'deleting', label: 'Deleting', colorClass: 'bg-neutral-100' },
   ];
 
   it.each(statuses)('renders "$label" for status "$status"', ({ status, label }) => {

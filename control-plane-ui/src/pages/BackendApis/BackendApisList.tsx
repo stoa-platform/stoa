@@ -11,7 +11,7 @@ import type { BackendApi, BackendApiStatus } from '../../types';
 
 const statusConfig: Record<BackendApiStatus, { color: string; label: string }> = {
   draft: {
-    color: 'bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300',
+    color: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300',
     label: 'Draft',
   },
   active: {
@@ -122,13 +122,16 @@ export function BackendApisList() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-8 w-48 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
-          <div className="h-10 w-32 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-8 w-48 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-10 w-32 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
           <div className="p-6 space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-gray-100 dark:bg-neutral-700 rounded animate-pulse" />
+              <div
+                key={i}
+                className="h-12 bg-neutral-100 dark:bg-neutral-700 rounded animate-pulse"
+              />
             ))}
           </div>
         </div>
@@ -141,8 +144,8 @@ export function BackendApisList() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Backend APIs</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Backend APIs</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Register backend APIs to expose them as MCP tools through the gateway
           </p>
         </div>
@@ -167,7 +170,7 @@ export function BackendApisList() {
       {/* Filters */}
       <div className="flex gap-4">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
           <input
             type="text"
             placeholder="Search APIs..."
@@ -176,7 +179,7 @@ export function BackendApisList() {
               setSearchTerm(e.target.value);
               setPage(1);
             }}
-            className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <select
@@ -185,7 +188,7 @@ export function BackendApisList() {
             setStatusFilter(e.target.value);
             setPage(1);
           }}
-          className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
+          className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
         >
           <option value="all">All statuses</option>
           <option value="draft">Draft</option>
@@ -220,23 +223,23 @@ export function BackendApisList() {
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+              <tr className="border-b dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Name
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Backend URL
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Auth
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Status
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Tools
                 </th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Actions
                 </th>
               </tr>
@@ -245,19 +248,19 @@ export function BackendApisList() {
               {paginatedApis.map((api) => {
                 const status = statusConfig[api.status];
                 return (
-                  <tr key={api.id} className="hover:bg-gray-50 dark:hover:bg-neutral-750">
+                  <tr key={api.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-750">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 dark:text-white">
+                      <div className="font-medium text-neutral-900 dark:text-white">
                         {api.display_name || api.name}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-neutral-400 font-mono">
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
                         {api.name}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300 font-mono truncate max-w-xs">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300 font-mono truncate max-w-xs">
                       {api.backend_url}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       {authTypeLabels[api.auth_type] || api.auth_type}
                     </td>
                     <td className="px-4 py-3">
@@ -267,7 +270,7 @@ export function BackendApisList() {
                         {status.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       {api.tool_count}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -275,7 +278,7 @@ export function BackendApisList() {
                         {hasPermission('apis:update') && api.status !== 'draft' && (
                           <button
                             onClick={() => handleToggleStatus(api)}
-                            className="text-xs px-2 py-1 border border-gray-300 dark:border-neutral-600 rounded hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-neutral-300"
+                            className="text-xs px-2 py-1 border border-neutral-300 dark:border-neutral-600 rounded hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-neutral-300"
                           >
                             {api.status === 'active' ? 'Disable' : 'Enable'}
                           </button>
@@ -299,7 +302,7 @@ export function BackendApisList() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-between items-center px-4 py-3 border-t dark:border-neutral-700">
-              <span className="text-sm text-gray-500 dark:text-neutral-400">
+              <span className="text-sm text-neutral-500 dark:text-neutral-400">
                 {filteredApis.length} results
               </span>
               <div className="flex gap-2">
@@ -310,7 +313,7 @@ export function BackendApisList() {
                 >
                   Previous
                 </button>
-                <span className="px-3 py-1 text-sm text-gray-500 dark:text-neutral-400">
+                <span className="px-3 py-1 text-sm text-neutral-500 dark:text-neutral-400">
                   {page} / {totalPages}
                 </span>
                 <button

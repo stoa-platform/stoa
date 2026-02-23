@@ -40,11 +40,13 @@ export function ExecutionDetailModal({ execution, onClose }: ExecutionDetailModa
         className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Execution Detail</h2>
+        <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-700">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            Execution Detail
+          </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+            className="text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
             aria-label="Close"
           >
             &times;
@@ -73,7 +75,7 @@ export function ExecutionDetailModal({ execution, onClose }: ExecutionDetailModa
 
           {execution.error_message && (
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Error Message
               </p>
               <pre className="text-sm bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 p-3 rounded-md overflow-x-auto">
@@ -84,10 +86,10 @@ export function ExecutionDetailModal({ execution, onClose }: ExecutionDetailModa
 
           {execution.request_headers && (
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Request Headers
               </p>
-              <pre className="text-xs bg-gray-50 dark:bg-neutral-900 text-gray-700 dark:text-neutral-300 p-3 rounded-md overflow-x-auto">
+              <pre className="text-xs bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 p-3 rounded-md overflow-x-auto">
                 {JSON.stringify(execution.request_headers, null, 2)}
               </pre>
             </div>
@@ -95,10 +97,10 @@ export function ExecutionDetailModal({ execution, onClose }: ExecutionDetailModa
 
           {execution.response_summary && (
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Response Summary
               </p>
-              <pre className="text-xs bg-gray-50 dark:bg-neutral-900 text-gray-700 dark:text-neutral-300 p-3 rounded-md overflow-x-auto">
+              <pre className="text-xs bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 p-3 rounded-md overflow-x-auto">
                 {JSON.stringify(execution.response_summary, null, 2)}
               </pre>
             </div>
@@ -112,8 +114,8 @@ export function ExecutionDetailModal({ execution, onClose }: ExecutionDetailModa
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <p className="text-xs text-gray-500 dark:text-neutral-400">{label}</p>
-      <p className="text-sm font-medium text-gray-900 dark:text-white">{value || '—'}</p>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p>
+      <p className="text-sm font-medium text-neutral-900 dark:text-white">{value || '—'}</p>
     </div>
   );
 }

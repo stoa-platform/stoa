@@ -61,10 +61,10 @@ export function CreateKeyModal({ tenantId, onClose, onCreated }: CreateKeyModalP
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Create API Key</h2>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Create API Key</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300"
+            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
           </button>
@@ -80,14 +80,14 @@ export function CreateKeyModal({ tenantId, onClose, onCreated }: CreateKeyModalP
 
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
               placeholder="my-api-key"
               required
             />
@@ -95,59 +95,59 @@ export function CreateKeyModal({ tenantId, onClose, onCreated }: CreateKeyModalP
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Description
             </label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
               placeholder="Key for production use"
             />
           </div>
 
           {/* Allowed Backend APIs */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Allowed Backend APIs
             </label>
             {activeApis.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-neutral-400">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 No active backend APIs available. Register and activate an API first.
               </p>
             ) : (
-              <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-neutral-600 rounded-lg p-3">
+              <div className="space-y-2 max-h-40 overflow-y-auto border border-neutral-200 dark:border-neutral-600 rounded-lg p-3">
                 {activeApis.map((api) => (
                   <label key={api.id} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selectedApiIds.includes(api.id)}
                       onChange={() => toggleApi(api.id)}
-                      className="rounded border-gray-300 dark:border-neutral-600"
+                      className="rounded border-neutral-300 dark:border-neutral-600"
                     />
-                    <span className="text-sm text-gray-700 dark:text-neutral-300">
+                    <span className="text-sm text-neutral-700 dark:text-neutral-300">
                       {api.display_name || api.name}
                     </span>
                   </label>
                 ))}
               </div>
             )}
-            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
               Leave empty to allow access to all APIs.
             </p>
           </div>
 
           {/* Rate Limit */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Rate Limit (requests/min)
             </label>
             <input
               type="number"
               value={rateLimitRpm}
               onChange={(e) => setRateLimitRpm(e.target.value)}
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
               placeholder="No limit"
               min="1"
             />
@@ -155,28 +155,28 @@ export function CreateKeyModal({ tenantId, onClose, onCreated }: CreateKeyModalP
 
           {/* Expires At */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Expiration Date
             </label>
             <input
               type="date"
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
-              className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
               min={new Date().toISOString().split('T')[0]}
             />
-            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
               Leave empty for no expiration.
             </p>
           </div>
         </form>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-white dark:hover:bg-neutral-700 dark:text-neutral-300"
+            className="px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-white dark:hover:bg-neutral-700 dark:text-neutral-300"
           >
             Cancel
           </button>

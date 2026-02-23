@@ -88,19 +88,23 @@ function StatCard({
         <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
       </div>
       <div className="flex-1">
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{label}</p>
+        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
+          {label}
+        </p>
         <div className="flex items-baseline gap-1">
-          <p className={`text-2xl font-bold ${colorClass || 'text-gray-900 dark:text-white'}`}>
+          <p className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}>
             {value}
           </p>
-          {unit && <span className="text-sm text-gray-500 dark:text-gray-400">{unit}</span>}
+          {unit && <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>}
           {TrendIcon && (
             <TrendIcon
               className={`h-4 w-4 ml-1 ${trend === 'up' ? 'text-red-500' : 'text-green-500'}`}
             />
           )}
         </div>
-        {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{subtitle}</p>}
+        {subtitle && (
+          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
+        )}
       </div>
     </div>
   );
@@ -125,11 +129,11 @@ function DeploymentItem({ deployment }: { deployment: RecentDeployment }) {
         />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+        <p className="text-sm font-medium text-neutral-900 dark:text-white truncate">
           {deployment.name}{' '}
-          <span className="text-gray-500 dark:text-gray-400">v{deployment.version}</span>
+          <span className="text-neutral-500 dark:text-neutral-400">v{deployment.version}</span>
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{deployment.timestamp}</p>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">{deployment.timestamp}</p>
       </div>
     </div>
   );
@@ -241,19 +245,21 @@ export function OperationsDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Operations Dashboard</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+            Operations Dashboard
+          </h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Platform health, performance metrics, and incident overview
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400 dark:text-gray-500">
+          <span className="text-xs text-neutral-400 dark:text-neutral-500">
             Last refresh: {lastRefresh.toLocaleTimeString('fr-FR')}
           </span>
           <button
             onClick={loadData}
             disabled={loading}
-            className="flex items-center gap-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+            className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -347,7 +353,7 @@ export function OperationsDashboard() {
           {gatewayMetrics && (
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                   Gateway Health
                 </h2>
                 <a
@@ -360,32 +366,32 @@ export function OperationsDashboard() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <p className="text-2xl font-bold text-neutral-900 dark:text-white">
                     {gatewayMetrics.health.total_gateways}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Total</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-green-600">
                     {gatewayMetrics.health.online}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Online</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Online</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-yellow-600">
                     {gatewayMetrics.health.degraded}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Degraded</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Degraded</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-red-600">{gatewayMetrics.health.offline}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Offline</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Offline</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-600 dark:text-gray-400">
+                  <p className="text-2xl font-bold text-neutral-600 dark:text-neutral-400">
                     {gatewayMetrics.health.maintenance}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Maintenance</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Maintenance</p>
                 </div>
               </div>
             </div>
@@ -396,7 +402,7 @@ export function OperationsDashboard() {
             {/* Recent Deployments */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                   Recent Deployments
                 </h2>
                 <a
@@ -408,13 +414,13 @@ export function OperationsDashboard() {
                 </a>
               </div>
               {recentDeployments.length > 0 ? (
-                <div className="divide-y divide-gray-100 dark:divide-neutral-700">
+                <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
                   {recentDeployments.map((deployment) => (
                     <DeploymentItem key={deployment.id} deployment={deployment} />
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-8">
                   No recent deployments
                 </p>
               )}
@@ -423,7 +429,7 @@ export function OperationsDashboard() {
             {/* Active Incidents / Alerts */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                   Active Incidents
                 </h2>
                 <button
@@ -440,7 +446,7 @@ export function OperationsDashboard() {
                     <CheckCircle className="h-6 w-6 text-green-600" />
                   </div>
                   <p className="text-sm font-medium text-green-600">All Systems Operational</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                     No active incidents at this time
                   </p>
                 </div>
@@ -465,62 +471,62 @@ export function OperationsDashboard() {
 
           {/* Quick Links to Observability Tools */}
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase mb-4">
+            <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
               Observability Tools
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <button
                 onClick={() => navigate(observabilityPath(grafanaUrl))}
-                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
+                className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-left"
               >
                 <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
                   <Activity className="h-5 w-5 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Grafana</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Dashboards</p>
+                  <p className="text-sm font-medium text-neutral-900 dark:text-white">Grafana</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Dashboards</p>
                 </div>
-                <ExternalLink className="h-4 w-4 text-gray-400 ml-auto" />
+                <ExternalLink className="h-4 w-4 text-neutral-400 ml-auto" />
               </button>
               <button
                 onClick={() => navigate(observabilityPath(prometheusUrl))}
-                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
+                className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-left"
               >
                 <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
                   <TrendingUp className="h-5 w-5 text-red-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Prometheus</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Metrics</p>
+                  <p className="text-sm font-medium text-neutral-900 dark:text-white">Prometheus</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Metrics</p>
                 </div>
-                <ExternalLink className="h-4 w-4 text-gray-400 ml-auto" />
+                <ExternalLink className="h-4 w-4 text-neutral-400 ml-auto" />
               </button>
               <a
                 href="/monitoring"
-                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
               >
                 <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                   <Zap className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-sm font-medium text-neutral-900 dark:text-white">
                     API Monitoring
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Tracing</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Tracing</p>
                 </div>
               </a>
               <a
                 href="/errors"
-                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
               >
                 <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                   <AlertTriangle className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-sm font-medium text-neutral-900 dark:text-white">
                     Error Snapshots
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Debugging</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Debugging</p>
                 </div>
               </a>
             </div>

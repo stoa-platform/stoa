@@ -13,16 +13,16 @@ export function ToolSchemaViewer({ schema, title = 'Input Schema' }: ToolSchemaV
 
   if (Object.keys(properties).length === 0) {
     return (
-      <div className="text-sm text-gray-500 dark:text-neutral-400 italic">
+      <div className="text-sm text-neutral-500 dark:text-neutral-400 italic">
         This tool has no input parameters.
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700">
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
-        <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-300">{title}</h4>
+    <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700">
+      <div className="px-4 py-3 border-b border-neutral-200 dark:border-neutral-700">
+        <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{title}</h4>
       </div>
       <div className="p-4 space-y-2">
         {Object.entries(properties).map(([name, prop]) => (
@@ -69,25 +69,27 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
   return (
     <div className="text-sm" style={{ marginLeft: depth * 16 }}>
       <div
-        className={`flex items-start gap-2 py-1.5 ${hasNestedProperties || hasItems ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-800 rounded' : ''}`}
+        className={`flex items-start gap-2 py-1.5 ${hasNestedProperties || hasItems ? 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded' : ''}`}
         onClick={() => (hasNestedProperties || hasItems) && setIsExpanded(!isExpanded)}
       >
         {/* Expand/Collapse Icon */}
         {hasNestedProperties || hasItems ? (
           isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+            <ChevronDown className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+            <ChevronRight className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
           )
         ) : (
-          <Circle className="h-2 w-2 text-gray-300 dark:text-neutral-600 mt-1.5 ml-1 mr-1 flex-shrink-0" />
+          <Circle className="h-2 w-2 text-neutral-300 dark:text-neutral-600 mt-1.5 ml-1 mr-1 flex-shrink-0" />
         )}
 
         {/* Property Name */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-mono font-medium text-gray-900 dark:text-white">{name}</span>
-            <span className={`font-mono text-xs ${typeColors[property.type] || 'text-gray-500'}`}>
+            <span className="font-mono font-medium text-neutral-900 dark:text-white">{name}</span>
+            <span
+              className={`font-mono text-xs ${typeColors[property.type] || 'text-neutral-500'}`}
+            >
               {formatType(property)}
             </span>
             {isRequired && (
@@ -97,18 +99,18 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
               </span>
             )}
             {property.enum && (
-              <span className="text-xs text-gray-400 dark:text-neutral-500">
+              <span className="text-xs text-neutral-400 dark:text-neutral-500">
                 enum: [{property.enum.join(', ')}]
               </span>
             )}
             {property.default !== undefined && (
-              <span className="text-xs text-gray-400 dark:text-neutral-500">
+              <span className="text-xs text-neutral-400 dark:text-neutral-500">
                 default: {JSON.stringify(property.default)}
               </span>
             )}
           </div>
           {property.description && (
-            <p className="text-gray-500 dark:text-neutral-400 text-xs mt-0.5">
+            <p className="text-neutral-500 dark:text-neutral-400 text-xs mt-0.5">
               {property.description}
             </p>
           )}
@@ -117,7 +119,7 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
 
       {/* Nested Properties */}
       {isExpanded && hasNestedProperties && (
-        <div className="mt-1 pl-2 border-l border-gray-200 dark:border-neutral-700 ml-2">
+        <div className="mt-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 ml-2">
           {Object.entries(property.properties!).map(([nestedName, nestedProp]) => (
             <PropertyRow
               key={nestedName}
@@ -132,8 +134,8 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
 
       {/* Array Items */}
       {isExpanded && hasItems && property.items?.properties && (
-        <div className="mt-1 pl-2 border-l border-gray-200 dark:border-neutral-700 ml-2">
-          <div className="text-xs text-gray-400 dark:text-neutral-500 mb-1">Array items:</div>
+        <div className="mt-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 ml-2">
+          <div className="text-xs text-neutral-400 dark:text-neutral-500 mb-1">Array items:</div>
           {Object.entries(property.items.properties).map(([itemName, itemProp]) => (
             <PropertyRow
               key={itemName}
@@ -155,7 +157,7 @@ interface SchemaJsonViewerProps {
 
 export function SchemaJsonViewer({ schema }: SchemaJsonViewerProps) {
   return (
-    <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-xs">
+    <pre className="bg-neutral-900 text-neutral-100 rounded-lg p-4 overflow-x-auto text-xs">
       <code>{JSON.stringify(schema, null, 2)}</code>
     </pre>
   );

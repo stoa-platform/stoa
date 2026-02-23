@@ -199,10 +199,10 @@ export function FederationAccountDetail() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-64 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+        <div className="h-8 w-64 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6 space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-6 bg-gray-100 dark:bg-neutral-700 rounded animate-pulse" />
+            <div key={i} className="h-6 bg-neutral-100 dark:bg-neutral-700 rounded animate-pulse" />
           ))}
         </div>
       </div>
@@ -214,7 +214,7 @@ export function FederationAccountDetail() {
       <div className="space-y-6">
         <button
           onClick={() => navigate('/federation/accounts')}
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+          className="flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Federation
         </button>
@@ -232,7 +232,7 @@ export function FederationAccountDetail() {
       {/* Back link */}
       <button
         onClick={() => navigate('/federation/accounts')}
-        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+        className="flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Federation
       </button>
@@ -241,7 +241,7 @@ export function FederationAccountDetail() {
       <div className="flex justify-between items-start">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{account.name}</h1>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">{account.name}</h1>
             <span
               className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${status.color}`}
             >
@@ -249,7 +249,7 @@ export function FederationAccountDetail() {
             </span>
           </div>
           {account.description && (
-            <p className="text-gray-500 dark:text-neutral-400 mt-1">{account.description}</p>
+            <p className="text-neutral-500 dark:text-neutral-400 mt-1">{account.description}</p>
           )}
         </div>
         {isAdmin && account.status !== 'revoked' && (
@@ -282,37 +282,37 @@ export function FederationAccountDetail() {
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <div className="text-xs text-gray-500 dark:text-neutral-400 uppercase font-medium">
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 uppercase font-medium">
               Sub-accounts
             </div>
-            <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-gray-900 dark:text-white">
-              <Users className="h-4 w-4 text-gray-400" />
+            <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-neutral-900 dark:text-white">
+              <Users className="h-4 w-4 text-neutral-400" />
               {account.sub_account_count} / {account.max_sub_accounts}
             </div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 dark:text-neutral-400 uppercase font-medium">
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 uppercase font-medium">
               Created
             </div>
-            <div className="mt-1 flex items-center gap-1 text-sm text-gray-900 dark:text-white">
-              <Clock className="h-4 w-4 text-gray-400" />
+            <div className="mt-1 flex items-center gap-1 text-sm text-neutral-900 dark:text-white">
+              <Clock className="h-4 w-4 text-neutral-400" />
               {formatDate(account.created_at)}
             </div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 dark:text-neutral-400 uppercase font-medium">
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 uppercase font-medium">
               Updated
             </div>
-            <div className="mt-1 text-sm text-gray-900 dark:text-white">
+            <div className="mt-1 text-sm text-neutral-900 dark:text-white">
               {formatDate(account.updated_at)}
             </div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 dark:text-neutral-400 uppercase font-medium">
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 uppercase font-medium">
               Requests ({usageDays}d)
             </div>
-            <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-gray-900 dark:text-white">
-              <BarChart3 className="h-4 w-4 text-gray-400" />
+            <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-neutral-900 dark:text-white">
+              <BarChart3 className="h-4 w-4 text-neutral-400" />
               {usageData ? usageData.total_requests.toLocaleString() : '-'}
             </div>
           </div>
@@ -323,14 +323,14 @@ export function FederationAccountDetail() {
       {usageData && usageData.sub_accounts.length > 0 && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
           <div className="px-4 py-3 border-b dark:border-neutral-700 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
               Usage Breakdown (last {usageData.period_days} days)
             </h2>
             <select
               value={usageDays}
               onChange={(e) => setUsageDays(Number(e.target.value) as 7 | 30 | 90)}
               aria-label="Usage period"
-              className="text-xs border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="text-xs border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value={7}>7 days</option>
               <option value={30}>30 days</option>
@@ -339,20 +339,20 @@ export function FederationAccountDetail() {
           </div>
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 dark:bg-neutral-800 border-b dark:border-neutral-700">
-                <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+              <tr className="bg-neutral-50 dark:bg-neutral-800 border-b dark:border-neutral-700">
+                <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Sub-account
                 </th>
-                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-right px-4 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Requests
                 </th>
-                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-right px-4 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Tokens
                 </th>
-                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-right px-4 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Avg Latency
                 </th>
-                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-right px-4 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Errors
                 </th>
               </tr>
@@ -360,16 +360,16 @@ export function FederationAccountDetail() {
             <tbody className="divide-y dark:divide-neutral-700">
               {usageData.sub_accounts.map((stat) => (
                 <tr key={stat.sub_account_id}>
-                  <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
+                  <td className="px-4 py-2 text-sm text-neutral-900 dark:text-white">
                     {stat.sub_account_name}
                   </td>
-                  <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-neutral-300">
+                  <td className="px-4 py-2 text-sm text-right text-neutral-600 dark:text-neutral-300">
                     {stat.total_requests.toLocaleString()}
                   </td>
-                  <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-neutral-300">
+                  <td className="px-4 py-2 text-sm text-right text-neutral-600 dark:text-neutral-300">
                     {stat.total_tokens.toLocaleString()}
                   </td>
-                  <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-neutral-300">
+                  <td className="px-4 py-2 text-sm text-right text-neutral-600 dark:text-neutral-300">
                     {stat.avg_latency_ms}ms
                   </td>
                   <td className="px-4 py-2 text-sm text-right">
@@ -377,7 +377,7 @@ export function FederationAccountDetail() {
                       className={
                         stat.error_count > 0
                           ? 'text-red-600 dark:text-red-400 font-medium'
-                          : 'text-gray-600 dark:text-neutral-300'
+                          : 'text-neutral-600 dark:text-neutral-300'
                       }
                     >
                       {stat.error_count}
@@ -393,7 +393,7 @@ export function FederationAccountDetail() {
       {/* Sub-accounts section */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Sub-accounts</h2>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Sub-accounts</h2>
           {isAdmin && account.status === 'active' && (
             <button
               onClick={() => setShowSubAccountModal(true)}
@@ -425,23 +425,23 @@ export function FederationAccountDetail() {
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
             <table className="w-full">
               <thead>
-                <tr className="border-b dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <tr className="border-b dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Name
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Status
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     API Key
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Tools
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Last Used
                   </th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Actions
                   </th>
                 </tr>
@@ -450,13 +450,13 @@ export function FederationAccountDetail() {
                 {subAccounts.map((sub) => {
                   const subStatus = statusConfig[sub.status];
                   return (
-                    <tr key={sub.id} className="hover:bg-gray-50 dark:hover:bg-neutral-750">
+                    <tr key={sub.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-750">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900 dark:text-white text-sm">
+                        <div className="font-medium text-neutral-900 dark:text-white text-sm">
                           {sub.name}
                         </div>
                         {sub.description && (
-                          <div className="text-xs text-gray-500 dark:text-neutral-400 truncate max-w-xs">
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-xs">
                             {sub.description}
                           </div>
                         )}
@@ -468,10 +468,10 @@ export function FederationAccountDetail() {
                           {subStatus.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-neutral-300">
+                      <td className="px-4 py-3 text-sm font-mono text-neutral-600 dark:text-neutral-300">
                         {sub.api_key_prefix}...
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                      <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                         {isAdmin ? (
                           <button
                             onClick={() => setToolEditSub({ id: sub.id, name: sub.name })}
@@ -488,7 +488,7 @@ export function FederationAccountDetail() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                      <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                         {formatDate(sub.last_used_at)}
                       </td>
                       <td className="px-4 py-3 text-right">

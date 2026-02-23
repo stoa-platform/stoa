@@ -11,7 +11,7 @@ const certStatusStyles: Record<CertificateStatus, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   rotating: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   revoked: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  expired: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400',
+  expired: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-400',
 };
 
 interface Props {
@@ -127,18 +127,18 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex justify-between items-start p-6 border-b border-gray-200 dark:border-neutral-700">
+          <div className="flex justify-between items-start p-6 border-b border-neutral-200 dark:border-neutral-700">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
                 {consumer.name}
               </h2>
-              <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 font-mono">
                 {consumer.external_id}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300"
+              className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -155,18 +155,18 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
           <div className="p-6 space-y-6">
             {/* Consumer Info */}
             <section className="space-y-2">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+              <h3 className="text-sm font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                 Consumer
               </h3>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <dt className="text-gray-500 dark:text-neutral-400">Email</dt>
-                <dd className="text-gray-900 dark:text-white">{consumer.email}</dd>
-                <dt className="text-gray-500 dark:text-neutral-400">Company</dt>
-                <dd className="text-gray-900 dark:text-white">{consumer.company || '—'}</dd>
-                <dt className="text-gray-500 dark:text-neutral-400">Status</dt>
-                <dd className="text-gray-900 dark:text-white capitalize">{consumer.status}</dd>
-                <dt className="text-gray-500 dark:text-neutral-400">Created</dt>
-                <dd className="text-gray-900 dark:text-white">
+                <dt className="text-neutral-500 dark:text-neutral-400">Email</dt>
+                <dd className="text-neutral-900 dark:text-white">{consumer.email}</dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">Company</dt>
+                <dd className="text-neutral-900 dark:text-white">{consumer.company || '—'}</dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">Status</dt>
+                <dd className="text-neutral-900 dark:text-white capitalize">{consumer.status}</dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">Created</dt>
+                <dd className="text-neutral-900 dark:text-white">
                   {new Date(consumer.created_at).toLocaleDateString()}
                 </dd>
               </dl>
@@ -174,19 +174,19 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
 
             {/* Certificate Info */}
             <section className="space-y-2">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+              <h3 className="text-sm font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                 Certificate
               </h3>
               {hasCert ? (
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <dt className="text-gray-500 dark:text-neutral-400">Health</dt>
+                  <dt className="text-neutral-500 dark:text-neutral-400">Health</dt>
                   <dd>
                     <CertificateHealthBadge
                       status={certStatus}
                       notAfter={consumer.certificate_not_after}
                     />
                   </dd>
-                  <dt className="text-gray-500 dark:text-neutral-400">Status</dt>
+                  <dt className="text-neutral-500 dark:text-neutral-400">Status</dt>
                   <dd>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${certStatus ? certStatusStyles[certStatus] : ''}`}
@@ -194,44 +194,46 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                       {certStatus || 'unknown'}
                     </span>
                   </dd>
-                  <dt className="text-gray-500 dark:text-neutral-400">Fingerprint</dt>
-                  <dd className="text-gray-900 dark:text-white font-mono text-xs break-all">
+                  <dt className="text-neutral-500 dark:text-neutral-400">Fingerprint</dt>
+                  <dd className="text-neutral-900 dark:text-white font-mono text-xs break-all">
                     {consumer.certificate_fingerprint}
                   </dd>
                   {consumer.certificate_subject_dn && (
                     <>
-                      <dt className="text-gray-500 dark:text-neutral-400">Subject</dt>
-                      <dd className="text-gray-900 dark:text-white text-xs break-all">
+                      <dt className="text-neutral-500 dark:text-neutral-400">Subject</dt>
+                      <dd className="text-neutral-900 dark:text-white text-xs break-all">
                         {consumer.certificate_subject_dn}
                       </dd>
                     </>
                   )}
                   {consumer.certificate_not_before && (
                     <>
-                      <dt className="text-gray-500 dark:text-neutral-400">Valid from</dt>
-                      <dd className="text-gray-900 dark:text-white">
+                      <dt className="text-neutral-500 dark:text-neutral-400">Valid from</dt>
+                      <dd className="text-neutral-900 dark:text-white">
                         {new Date(consumer.certificate_not_before).toLocaleDateString()}
                       </dd>
                     </>
                   )}
                   {consumer.certificate_not_after && (
                     <>
-                      <dt className="text-gray-500 dark:text-neutral-400">Valid until</dt>
-                      <dd className="text-gray-900 dark:text-white">
+                      <dt className="text-neutral-500 dark:text-neutral-400">Valid until</dt>
+                      <dd className="text-neutral-900 dark:text-white">
                         {new Date(consumer.certificate_not_after).toLocaleDateString()}
                       </dd>
                     </>
                   )}
                   {(consumer.rotation_count ?? 0) > 0 && (
                     <>
-                      <dt className="text-gray-500 dark:text-neutral-400">Rotations</dt>
-                      <dd className="text-gray-900 dark:text-white">{consumer.rotation_count}</dd>
+                      <dt className="text-neutral-500 dark:text-neutral-400">Rotations</dt>
+                      <dd className="text-neutral-900 dark:text-white">
+                        {consumer.rotation_count}
+                      </dd>
                     </>
                   )}
                   {consumer.last_rotated_at && (
                     <>
-                      <dt className="text-gray-500 dark:text-neutral-400">Last rotated</dt>
-                      <dd className="text-gray-900 dark:text-white">
+                      <dt className="text-neutral-500 dark:text-neutral-400">Last rotated</dt>
+                      <dd className="text-neutral-900 dark:text-white">
                         {new Date(consumer.last_rotated_at).toLocaleDateString()}
                       </dd>
                     </>
@@ -239,7 +241,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                 </dl>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-500 dark:text-neutral-400 italic">
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 italic">
                     No certificate bound to this consumer.
                   </p>
                   {canEdit && (
@@ -266,12 +268,12 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
 
             {/* Bind Certificate Form (CAB-872) */}
             {showBindForm && (
-              <section className="space-y-3 border-t border-gray-200 dark:border-neutral-700 pt-4">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+              <section className="space-y-3 border-t border-neutral-200 dark:border-neutral-700 pt-4">
+                <h3 className="text-sm font-medium text-neutral-900 dark:text-white">
                   {hasCert ? 'Replace Certificate' : 'Bind Certificate'}
                 </h3>
                 <div>
-                  <label className="block text-sm text-gray-600 dark:text-neutral-400 mb-1">
+                  <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
                     PEM Certificate
                   </label>
                   <textarea
@@ -279,7 +281,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                     onChange={(e) => setPemValue(e.target.value)}
                     placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
                     rows={5}
-                    className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
                   />
                   <input
                     ref={fileInputRef}
@@ -308,7 +310,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                       setShowBindForm(false);
                       setPemValue('');
                     }}
-                    className="px-4 py-2 border border-gray-300 dark:border-neutral-600 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-white"
+                    className="px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-sm rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-white"
                   >
                     Cancel
                   </button>
@@ -318,12 +320,12 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
 
             {/* Rotate Form */}
             {showRotateForm && (
-              <section className="space-y-3 border-t border-gray-200 dark:border-neutral-700 pt-4">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+              <section className="space-y-3 border-t border-neutral-200 dark:border-neutral-700 pt-4">
+                <h3 className="text-sm font-medium text-neutral-900 dark:text-white">
                   Rotate Certificate
                 </h3>
                 <div>
-                  <label className="block text-sm text-gray-600 dark:text-neutral-400 mb-1">
+                  <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
                     New PEM Certificate
                   </label>
                   <textarea
@@ -331,7 +333,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                     onChange={(e) => setPemValue(e.target.value)}
                     placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
                     rows={5}
-                    className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
                   />
                   <input
                     ref={fileInputRef}
@@ -348,7 +350,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                   </button>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 dark:text-neutral-400 mb-1">
+                  <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
                     Grace period (hours)
                   </label>
                   <input
@@ -357,9 +359,9 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                     onChange={(e) => setGracePeriod(Number(e.target.value))}
                     min={1}
                     max={720}
-                    className="w-24 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    className="w-24 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
                   />
-                  <span className="ml-2 text-xs text-gray-500 dark:text-neutral-400">
+                  <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
                     Old cert stays valid during this period
                   </span>
                 </div>
@@ -376,7 +378,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                       setShowRotateForm(false);
                       setPemValue('');
                     }}
-                    className="px-4 py-2 border border-gray-300 dark:border-neutral-600 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-white"
+                    className="px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-sm rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-white"
                   >
                     Cancel
                   </button>
@@ -387,7 +389,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
 
           {/* Footer Actions */}
           {canEdit && hasCert && certStatus !== 'revoked' && !showRotateForm && (
-            <div className="p-6 border-t border-gray-200 dark:border-neutral-700 flex gap-3">
+            <div className="p-6 border-t border-neutral-200 dark:border-neutral-700 flex gap-3">
               <button
                 onClick={() => setShowRotateForm(true)}
                 className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"

@@ -78,8 +78,10 @@ export function AudienceGovernance() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Audience Governance</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+            Audience Governance
+          </h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Manage API audience visibility levels
           </p>
         </div>
@@ -91,7 +93,7 @@ export function AudienceGovernance() {
           <select
             value={tenantFilter}
             onChange={(e) => setTenantFilter(e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+            className="rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-white"
           >
             <option value="">Select tenant...</option>
             {tenants.map((t: Tenant) => (
@@ -102,20 +104,20 @@ export function AudienceGovernance() {
           </select>
         )}
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
             type="text"
             placeholder="Search APIs..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-white placeholder-gray-400"
+            className="w-full pl-10 pr-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white placeholder-neutral-400"
           />
         </div>
       </div>
 
       {/* No tenant selected */}
       {!activeTenantId && (
-        <div className="text-center py-12 text-gray-500 dark:text-neutral-400">
+        <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
           <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p>Select a tenant to view API audience settings.</p>
         </div>
@@ -123,53 +125,57 @@ export function AudienceGovernance() {
 
       {/* Loading */}
       {isLoading && activeTenantId && (
-        <div className="text-center py-12 text-gray-500 dark:text-neutral-400">Loading APIs...</div>
+        <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
+          Loading APIs...
+        </div>
       )}
 
       {/* API Table */}
       {activeTenantId && !isLoading && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-            <thead className="bg-gray-50 dark:bg-neutral-900/50">
+          <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+            <thead className="bg-neutral-50 dark:bg-neutral-900/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   API
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Version
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Audience
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
+            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {filteredApis.length === 0 ? (
                 <tr>
                   <td
                     colSpan={4}
-                    className="px-6 py-8 text-center text-gray-500 dark:text-neutral-400"
+                    className="px-6 py-8 text-center text-neutral-500 dark:text-neutral-400"
                   >
                     No APIs found.
                   </td>
                 </tr>
               ) : (
                 filteredApis.map((api: API) => (
-                  <tr key={api.id} className="hover:bg-gray-50 dark:hover:bg-neutral-700/30">
+                  <tr key={api.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-700/30">
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      <div className="text-sm font-medium text-neutral-900 dark:text-white">
                         {api.display_name}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-neutral-400">{api.name}</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                        {api.name}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-neutral-400">
+                    <td className="px-6 py-4 text-sm text-neutral-500 dark:text-neutral-400">
                       {api.version}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300">
                         {api.status}
                       </span>
                     </td>
@@ -182,7 +188,7 @@ export function AudienceGovernance() {
                           }
                           onBlur={() => setEditingApi(null)}
                           autoFocus
-                          className="rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-xs text-gray-900 dark:text-white"
+                          className="rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-xs text-neutral-900 dark:text-white"
                         >
                           {AUDIENCE_OPTIONS.map((opt) => (
                             <option key={opt} value={opt}>

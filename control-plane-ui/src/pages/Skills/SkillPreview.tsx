@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { skillsService, type ResolvedSkill } from '../../services/skillsApi';
 
 const scopeColors: Record<string, string> = {
-  global: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+  global: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-900/30 dark:text-neutral-400',
   tenant: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   tool: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
   user: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
@@ -42,7 +42,7 @@ export function SkillPreview() {
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-750"
+        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-750"
       >
         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         Resolution Preview
@@ -50,14 +50,14 @@ export function SkillPreview() {
 
       {expanded && (
         <div className="px-4 pb-4 space-y-4 border-t dark:border-neutral-700">
-          <p className="text-xs text-gray-500 dark:text-neutral-400 pt-3">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 pt-3">
             Test the CSS cascade resolution for a given context. Skills are resolved by specificity
             (global &lt; tenant &lt; tool &lt; user), then by priority within the same scope.
           </p>
 
           <div className="flex items-end gap-3">
             <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-600 dark:text-neutral-400 mb-1">
+              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
                 Tool Name
               </label>
               <input
@@ -65,11 +65,11 @@ export function SkillPreview() {
                 value={toolRef}
                 onChange={(e) => setToolRef(e.target.value)}
                 placeholder="e.g. code-review"
-                className="w-full px-3 py-1.5 text-sm border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-1.5 text-sm border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
             </div>
             <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-600 dark:text-neutral-400 mb-1">
+              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
                 User Ref
               </label>
               <input
@@ -77,7 +77,7 @@ export function SkillPreview() {
                 value={userRef}
                 onChange={(e) => setUserRef(e.target.value)}
                 placeholder="e.g. alice"
-                className="w-full px-3 py-1.5 text-sm border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-1.5 text-sm border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
             </div>
             <button
@@ -95,16 +95,16 @@ export function SkillPreview() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b dark:border-neutral-700">
-                    <th className="text-left py-2 text-xs font-medium text-gray-500 dark:text-neutral-400">
+                    <th className="text-left py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
                       Name
                     </th>
-                    <th className="text-left py-2 text-xs font-medium text-gray-500 dark:text-neutral-400">
+                    <th className="text-left py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
                       Scope
                     </th>
-                    <th className="text-left py-2 text-xs font-medium text-gray-500 dark:text-neutral-400">
+                    <th className="text-left py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
                       Specificity
                     </th>
-                    <th className="text-left py-2 text-xs font-medium text-gray-500 dark:text-neutral-400">
+                    <th className="text-left py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
                       Priority
                     </th>
                   </tr>
@@ -112,7 +112,7 @@ export function SkillPreview() {
                 <tbody className="divide-y dark:divide-neutral-700">
                   {resolved.map((skill, i) => (
                     <tr key={i}>
-                      <td className="py-2 text-gray-900 dark:text-white">{skill.name}</td>
+                      <td className="py-2 text-neutral-900 dark:text-white">{skill.name}</td>
                       <td className="py-2">
                         <span
                           className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${scopeColors[skill.scope] || scopeColors.global}`}
@@ -120,10 +120,10 @@ export function SkillPreview() {
                           {skill.scope}
                         </span>
                       </td>
-                      <td className="py-2 font-mono text-gray-600 dark:text-neutral-300">
+                      <td className="py-2 font-mono text-neutral-600 dark:text-neutral-300">
                         {skill.specificity}
                       </td>
-                      <td className="py-2 font-mono text-gray-600 dark:text-neutral-300">
+                      <td className="py-2 font-mono text-neutral-600 dark:text-neutral-300">
                         {skill.priority}
                       </td>
                     </tr>
@@ -133,10 +133,10 @@ export function SkillPreview() {
 
               {mergedInstructions && (
                 <div>
-                  <h4 className="text-xs font-medium text-gray-500 dark:text-neutral-400 mb-1">
+                  <h4 className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1">
                     Merged Instructions
                   </h4>
-                  <pre className="text-xs bg-gray-50 dark:bg-neutral-900 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap text-gray-800 dark:text-neutral-200 max-h-48 overflow-y-auto">
+                  <pre className="text-xs bg-neutral-50 dark:bg-neutral-900 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap text-neutral-800 dark:text-neutral-200 max-h-48 overflow-y-auto">
                     {mergedInstructions}
                   </pre>
                 </div>
@@ -145,7 +145,7 @@ export function SkillPreview() {
           )}
 
           {resolved && resolved.length === 0 && (
-            <p className="text-sm text-gray-500 dark:text-neutral-400 italic">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 italic">
               No skills matched the given context.
             </p>
           )}

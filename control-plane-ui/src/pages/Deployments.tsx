@@ -43,6 +43,7 @@ import {
   ScrollText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { Button } from '@stoa/shared/components/Button';
 
 // =============================================================================
 // TAB COMPONENTS
@@ -79,7 +80,7 @@ const tabs: Tab[] = [
 
 const statusConfig: Record<TraceStatus, { icon: typeof CheckCircle2; color: string; bg: string }> =
   {
-    pending: { icon: Clock, color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-gray-800' },
+    pending: { icon: Clock, color: 'text-neutral-500', bg: 'bg-neutral-100 dark:bg-neutral-800' },
     in_progress: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
     success: {
       icon: CheckCircle2,
@@ -133,15 +134,15 @@ function StatsCard({
   color: string;
 }) {
   return (
-    <div className="rounded-lg bg-white dark:bg-neutral-800 p-6 shadow-sm border border-gray-100 dark:border-neutral-700">
+    <div className="rounded-lg bg-white dark:bg-neutral-800 p-6 shadow-sm border border-neutral-100 dark:border-neutral-700">
       <div className="flex items-center gap-4">
         <div className={clsx('rounded-lg p-3', color)}>
           <Icon className="h-6 w-6 text-white" />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-neutral-400">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 dark:text-neutral-500">{subtitle}</p>}
+          <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{title}</p>
+          <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
+          {subtitle && <p className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
         </div>
       </div>
     </div>
@@ -160,7 +161,7 @@ function StepTimeline({ steps }: { steps: TraceStep[] }) {
         return (
           <div key={index} className="relative">
             {index < steps.length - 1 && (
-              <div className="absolute left-4 top-8 h-full w-0.5 bg-gray-200 dark:bg-neutral-600" />
+              <div className="absolute left-4 top-8 h-full w-0.5 bg-neutral-200 dark:bg-neutral-600" />
             )}
             <div className={clsx('flex items-start gap-3 rounded-lg p-3', cfg.bg)}>
               <div className={clsx('rounded-full p-1', cfg.bg)}>
@@ -174,21 +175,21 @@ function StepTimeline({ steps }: { steps: TraceStep[] }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <StepTypeIcon className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
-                  <span className="font-medium text-gray-900 dark:text-white">
+                  <StepTypeIcon className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                  <span className="font-medium text-neutral-900 dark:text-white">
                     {stepInfo.label}
                   </span>
                   {step.duration_ms && (
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-neutral-500">
                       ({formatDuration(step.duration_ms)})
                     </span>
                   )}
                 </div>
                 {step.details && (
-                  <div className="mt-2 text-xs text-gray-600 dark:text-neutral-300 font-mono bg-white/50 dark:bg-neutral-800/50 rounded p-2">
+                  <div className="mt-2 text-xs text-neutral-600 dark:text-neutral-300 font-mono bg-white/50 dark:bg-neutral-800/50 rounded p-2">
                     {Object.entries(step.details).map(([key, value]) => (
                       <div key={key} className="flex gap-2">
-                        <span className="text-gray-400 dark:text-neutral-500">{key}:</span>
+                        <span className="text-neutral-400 dark:text-neutral-500">{key}:</span>
                         <span className="truncate">
                           {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                         </span>
@@ -203,7 +204,7 @@ function StepTimeline({ steps }: { steps: TraceStep[] }) {
                 )}
               </div>
               {step.started_at && (
-                <div className="text-xs text-gray-400 text-right">
+                <div className="text-xs text-neutral-400 text-right">
                   {formatTime(step.started_at)}
                 </div>
               )}
@@ -240,12 +241,12 @@ function TraceRow({
   }, [isExpanded, trace.id, details]);
 
   return (
-    <div className="border-b border-gray-100 dark:border-neutral-700 last:border-0">
+    <div className="border-b border-neutral-100 dark:border-neutral-700 last:border-0">
       <div
-        className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer"
+        className="flex items-center gap-4 p-4 hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
         onClick={onToggle}
       >
-        <button className="text-gray-400 dark:text-neutral-500">
+        <button className="text-neutral-400 dark:text-neutral-500">
           {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
         </button>
         <div className={clsx('rounded-full p-1.5', cfg.bg)}>
@@ -255,50 +256,52 @@ function TraceRow({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
-            <span className="font-medium text-gray-900 dark:text-white">{trace.trigger_type}</span>
+            <GitBranch className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+            <span className="font-medium text-neutral-900 dark:text-white">
+              {trace.trigger_type}
+            </span>
             {trace.api_name && (
               <>
-                <span className="text-gray-400 dark:text-neutral-500">→</span>
+                <span className="text-neutral-400 dark:text-neutral-500">→</span>
                 <span className="text-blue-600">{trace.api_name}</span>
               </>
             )}
           </div>
           {trace.git_commit_message && (
-            <p className="text-sm text-gray-500 dark:text-neutral-400 truncate mt-1">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 truncate mt-1">
               {trace.git_commit_message}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-neutral-400">
+        <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
           <User className="h-4 w-4" />
           <span>{trace.git_author || 'unknown'}</span>
         </div>
         {trace.git_commit_sha && (
-          <div className="flex items-center gap-1 text-sm text-gray-400 dark:text-neutral-500 font-mono">
+          <div className="flex items-center gap-1 text-sm text-neutral-400 dark:text-neutral-500 font-mono">
             <GitCommit className="h-4 w-4" />
             <span>{trace.git_commit_sha}</span>
           </div>
         )}
-        <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-neutral-400 w-20 justify-end">
+        <div className="flex items-center gap-1 text-sm text-neutral-500 dark:text-neutral-400 w-20 justify-end">
           <Clock className="h-4 w-4" />
           <span>{formatDuration(trace.total_duration_ms)}</span>
         </div>
         <div className="flex items-center gap-1 text-sm w-16">
           <span className="text-green-600">{trace.steps_completed}</span>
-          <span className="text-gray-400 dark:text-neutral-500">/</span>
-          <span className="text-gray-600 dark:text-neutral-300">{trace.steps_count}</span>
+          <span className="text-neutral-400 dark:text-neutral-500">/</span>
+          <span className="text-neutral-600 dark:text-neutral-300">{trace.steps_count}</span>
           {trace.steps_failed > 0 && (
             <span className="text-red-500 ml-1">({trace.steps_failed})</span>
           )}
         </div>
-        <div className="text-sm text-gray-400 dark:text-neutral-500 w-24 text-right">
+        <div className="text-sm text-neutral-400 dark:text-neutral-500 w-24 text-right">
           {formatTime(trace.created_at)}
         </div>
       </div>
 
       {isExpanded && (
-        <div className="bg-gray-50 dark:bg-neutral-800 p-4 border-t border-gray-100 dark:border-neutral-700">
+        <div className="bg-neutral-50 dark:bg-neutral-800 p-4 border-t border-neutral-100 dark:border-neutral-700">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -306,37 +309,37 @@ function TraceRow({
           ) : details ? (
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-4">
-                <h4 className="font-medium text-gray-900 dark:text-white">Git Information</h4>
+                <h4 className="font-medium text-neutral-900 dark:text-white">Git Information</h4>
                 <div className="bg-white dark:bg-neutral-700 rounded-lg p-4 space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-neutral-400">Project:</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Project:</span>
                     <span className="font-mono dark:text-neutral-200">
                       {details.git_project || '-'}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-neutral-400">Branch:</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Branch:</span>
                     <span className="font-mono dark:text-neutral-200">
                       {details.git_branch || '-'}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-neutral-400">Author:</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Author:</span>
                     <span>
                       {details.git_author}{' '}
                       {details.git_author_email && `<${details.git_author_email}>`}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-neutral-400">Commit:</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Commit:</span>
                     <span className="font-mono dark:text-neutral-200">
                       {details.git_commit_sha || '-'}
                     </span>
                   </div>
                   {details.git_files_changed && details.git_files_changed.length > 0 && (
                     <div>
-                      <span className="text-gray-500 dark:text-neutral-400">Files changed:</span>
-                      <ul className="mt-1 text-xs font-mono text-gray-600 dark:text-neutral-300 max-h-32 overflow-auto">
+                      <span className="text-neutral-500 dark:text-neutral-400">Files changed:</span>
+                      <ul className="mt-1 text-xs font-mono text-neutral-600 dark:text-neutral-300 max-h-32 overflow-auto">
                         {details.git_files_changed.map((file, i) => (
                           <li key={i} className="truncate">
                             {file}
@@ -356,12 +359,12 @@ function TraceRow({
                 )}
               </div>
               <div className="space-y-4">
-                <h4 className="font-medium text-gray-900 dark:text-white">Pipeline Steps</h4>
+                <h4 className="font-medium text-neutral-900 dark:text-white">Pipeline Steps</h4>
                 <StepTimeline steps={details.steps} />
               </div>
             </div>
           ) : (
-            <p className="text-center text-gray-500 dark:text-neutral-400 py-4">
+            <p className="text-center text-neutral-500 dark:text-neutral-400 py-4">
               Failed to load details
             </p>
           )}
@@ -414,26 +417,22 @@ function PipelineTracesTab() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-gray-500 dark:text-neutral-400">
+        <p className="text-neutral-500 dark:text-neutral-400">
           End-to-end tracing of GitLab → Kafka → AWX pipeline
         </p>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
+          <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
             <input
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-neutral-300"
             />
             Auto-refresh (5s)
           </label>
-          <button
-            onClick={loadData}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-          >
-            <RefreshCw className="h-4 w-4" />
+          <Button onClick={loadData} icon={<RefreshCw className="h-4 w-4" />}>
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -467,13 +466,15 @@ function PipelineTracesTab() {
         </div>
       )}
 
-      <div className="rounded-lg bg-white dark:bg-neutral-800 shadow-sm border border-gray-100 dark:border-neutral-700">
-        <div className="border-b border-gray-100 dark:border-neutral-700 px-4 py-3">
-          <h2 className="font-medium text-gray-900 dark:text-white">Recent Pipeline Executions</h2>
+      <div className="rounded-lg bg-white dark:bg-neutral-800 shadow-sm border border-neutral-100 dark:border-neutral-700">
+        <div className="border-b border-neutral-100 dark:border-neutral-700 px-4 py-3">
+          <h2 className="font-medium text-neutral-900 dark:text-white">
+            Recent Pipeline Executions
+          </h2>
         </div>
         {traces.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-neutral-400">
-            <Activity className="h-12 w-12 mb-4 text-gray-300 dark:text-neutral-600" />
+          <div className="flex flex-col items-center justify-center py-12 text-neutral-500 dark:text-neutral-400">
+            <Activity className="h-12 w-12 mb-4 text-neutral-300 dark:text-neutral-600" />
             <p>No pipeline traces yet</p>
             <p className="text-sm">Push to GitLab to trigger a pipeline</p>
           </div>
@@ -654,7 +655,7 @@ function DeploymentHistoryTab() {
     in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     success: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    rolled_back: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+    rolled_back: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300',
   };
 
   const envColors: Record<string, string> = {
@@ -668,10 +669,10 @@ function DeploymentHistoryTab() {
   if (loading && tenants.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 p-4">
-          <div className="h-10 w-48 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-4">
+          <div className="h-10 w-48 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
         </div>
-        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 overflow-hidden">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 overflow-hidden">
           <TableSkeleton rows={5} columns={7} />
         </div>
       </div>
@@ -681,10 +682,10 @@ function DeploymentHistoryTab() {
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 p-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-4">
         <div className="flex flex-wrap gap-4 items-end">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Tenant
             </label>
             <select
@@ -694,7 +695,7 @@ function DeploymentHistoryTab() {
                 setSelectedApi('');
                 setPage(1);
               }}
-              className="w-48 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-48 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {tenants.map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>
@@ -704,7 +705,7 @@ function DeploymentHistoryTab() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               API
             </label>
             <select
@@ -713,7 +714,7 @@ function DeploymentHistoryTab() {
                 setSelectedApi(e.target.value);
                 setPage(1);
               }}
-              className="w-48 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-48 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All APIs</option>
               {apis.map((api) => (
@@ -724,7 +725,7 @@ function DeploymentHistoryTab() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Environment
             </label>
             <select
@@ -733,7 +734,7 @@ function DeploymentHistoryTab() {
                 setSelectedEnv(e.target.value);
                 setPage(1);
               }}
-              className="w-40 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-40 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All</option>
               <option value="dev">Dev</option>
@@ -742,7 +743,7 @@ function DeploymentHistoryTab() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Status
             </label>
             <select
@@ -751,7 +752,7 @@ function DeploymentHistoryTab() {
                 setSelectedStatus(e.target.value);
                 setPage(1);
               }}
-              className="w-40 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-40 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All</option>
               <option value="pending">Pending</option>
@@ -781,15 +782,15 @@ function DeploymentHistoryTab() {
       )}
 
       {/* Deployments List */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 overflow-hidden">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 overflow-hidden">
         {loading ? (
           <TableSkeleton rows={5} columns={7} />
         ) : deployments.length === 0 ? (
           <EmptyState variant="deployments" description="Deploy an API to see it here." />
         ) : (
-          <div className="divide-y divide-gray-200 dark:divide-neutral-700">
+          <div className="divide-y divide-neutral-200 dark:divide-neutral-700">
             {/* Table header */}
-            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1.5fr_1fr_1fr] gap-2 px-6 py-3 bg-gray-50 dark:bg-neutral-700 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1.5fr_1fr_1fr] gap-2 px-6 py-3 bg-neutral-50 dark:bg-neutral-700 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
               <span>API</span>
               <span>Environment</span>
               <span>Version</span>
@@ -810,12 +811,12 @@ function DeploymentHistoryTab() {
                       'grid grid-cols-[2fr_1fr_1fr_1fr_1.5fr_1fr_1fr] gap-2 px-6 py-4 items-center cursor-pointer transition-colors',
                       isExpanded
                         ? 'bg-blue-50 dark:bg-blue-900/10'
-                        : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
+                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-700'
                     )}
                     onClick={() => handleExpand(deployment.id)}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <button className="text-gray-400 dark:text-neutral-500 shrink-0">
+                      <button className="text-neutral-400 dark:text-neutral-500 shrink-0">
                         {isExpanded ? (
                           <ChevronDown className="h-4 w-4" />
                         ) : (
@@ -823,11 +824,11 @@ function DeploymentHistoryTab() {
                         )}
                       </button>
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        <div className="text-sm font-medium text-neutral-900 dark:text-white truncate">
                           {deployment.api_name}
                         </div>
                         {deployment.commit_sha && (
-                          <div className="text-xs text-gray-400 dark:text-neutral-500 font-mono">
+                          <div className="text-xs text-neutral-400 dark:text-neutral-500 font-mono">
                             {deployment.commit_sha.slice(0, 7)}
                           </div>
                         )}
@@ -840,12 +841,12 @@ function DeploymentHistoryTab() {
                     </div>
                     <div>
                       <span
-                        className={`px-2 py-1 text-xs font-medium rounded ${envColors[deployment.environment] || 'bg-gray-100 text-gray-700'}`}
+                        className={`px-2 py-1 text-xs font-medium rounded ${envColors[deployment.environment] || 'bg-neutral-100 text-neutral-700'}`}
                       >
                         {deployment.environment.toUpperCase()}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-neutral-400">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400">
                       v{deployment.version}
                       {deployment.rollback_of && (
                         <div className="text-xs text-orange-500 dark:text-orange-400">
@@ -866,10 +867,10 @@ function DeploymentHistoryTab() {
                         {liveStatus.replace('_', ' ')}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-neutral-400">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400">
                       {new Date(deployment.created_at).toLocaleString()}
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-neutral-400 truncate">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400 truncate">
                       {deployment.deployed_by}
                     </div>
                     <div className="text-sm" onClick={(e) => e.stopPropagation()}>
@@ -888,11 +889,11 @@ function DeploymentHistoryTab() {
 
                   {/* Expanded detail: live logs + progress */}
                   {isExpanded && (
-                    <div className="bg-gray-50 dark:bg-neutral-800/50 border-t border-gray-100 dark:border-neutral-700 px-6 py-4 space-y-4">
+                    <div className="bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-100 dark:border-neutral-700 px-6 py-4 space-y-4">
                       {/* Progress indicator for active deployments */}
                       {(liveStatus === 'in_progress' || deployState) && (
                         <div className="flex items-center gap-4">
-                          <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                          <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                             Progress
                           </span>
                           <DeployProgress
@@ -906,7 +907,7 @@ function DeploymentHistoryTab() {
                       <div className="grid grid-cols-3 gap-4 text-sm">
                         {deployment.rollback_of && (
                           <div>
-                            <span className="text-gray-500 dark:text-neutral-400">
+                            <span className="text-neutral-500 dark:text-neutral-400">
                               Rollback of:
                             </span>{' '}
                             <span className="text-orange-600 dark:text-orange-400">
@@ -916,8 +917,10 @@ function DeploymentHistoryTab() {
                         )}
                         {deployment.spec_hash && (
                           <div>
-                            <span className="text-gray-500 dark:text-neutral-400">Spec hash:</span>{' '}
-                            <span className="font-mono text-gray-700 dark:text-neutral-300">
+                            <span className="text-neutral-500 dark:text-neutral-400">
+                              Spec hash:
+                            </span>{' '}
+                            <span className="font-mono text-neutral-700 dark:text-neutral-300">
                               {deployment.spec_hash.slice(0, 12)}
                             </span>
                           </div>
@@ -932,8 +935,8 @@ function DeploymentHistoryTab() {
                       {/* Live log viewer */}
                       <div>
                         <div className="flex items-center gap-2 mb-2">
-                          <ScrollText className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-                          <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                          <ScrollText className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+                          <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                             Deploy Logs
                           </span>
                           {liveStatus === 'in_progress' && (
@@ -960,28 +963,30 @@ function DeploymentHistoryTab() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
             Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalCount)} of{' '}
             {totalCount}
           </p>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-white"
             >
               Previous
-            </button>
-            <span className="px-3 py-1.5 text-sm text-gray-700 dark:text-neutral-300">
+            </Button>
+            <span className="px-3 py-1.5 text-sm text-neutral-700 dark:text-neutral-300">
               {page} / {totalPages}
             </span>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-white"
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -999,35 +1004,35 @@ function GitLabConfigTab() {
   return (
     <div className="space-y-6">
       {/* GitOps Overview */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-6">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
           GitOps Integration
         </h3>
-        <p className="text-gray-600 dark:text-neutral-400 mb-4">
+        <p className="text-neutral-600 dark:text-neutral-400 mb-4">
           API definitions are managed through Git. When you commit changes to the repository,
           webhooks automatically trigger the deployment pipeline.
         </p>
-        <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg p-4 font-mono text-sm">
-          <div className="text-gray-500 dark:text-neutral-400 mb-2"># Pipeline flow</div>
+        <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4 font-mono text-sm">
+          <div className="text-neutral-500 dark:text-neutral-400 mb-2"># Pipeline flow</div>
           <div className="text-blue-600">GitLab Push</div>
-          <div className="text-gray-400 ml-4">↓ webhook</div>
+          <div className="text-neutral-400 ml-4">↓ webhook</div>
           <div className="text-green-600 ml-4">Control-Plane-API</div>
-          <div className="text-gray-400 ml-8">↓ publish event</div>
+          <div className="text-neutral-400 ml-8">↓ publish event</div>
           <div className="text-purple-600 ml-8">Kafka (deploy-requests)</div>
-          <div className="text-gray-400 ml-12">↓ consume</div>
+          <div className="text-neutral-400 ml-12">↓ consume</div>
           <div className="text-orange-600 ml-12">AWX Job Template</div>
-          <div className="text-gray-400 ml-16">↓ deploy</div>
+          <div className="text-neutral-400 ml-16">↓ deploy</div>
           <div className="text-green-600 ml-16">webMethods Gateway</div>
         </div>
       </div>
 
       {/* Repository Structure */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-6">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
           Repository Structure
         </h3>
-        <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg p-4 font-mono text-sm">
-          <pre className="text-gray-700 dark:text-neutral-300">{`stoa-api-definitions/
+        <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4 font-mono text-sm">
+          <pre className="text-neutral-700 dark:text-neutral-300">{`stoa-api-definitions/
 ├── tenants/
 │   ├── tenant-acme/
 │   │   ├── apis/
@@ -1051,8 +1056,8 @@ function GitLabConfigTab() {
       </div>
 
       {/* External Links */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-6">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
           External Resources
         </h3>
         <div className="flex flex-wrap gap-4">
@@ -1080,15 +1085,15 @@ function GitLabConfigTab() {
       </div>
 
       {/* Webhook Status */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-6">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
           Webhook Configuration
         </h3>
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">GitLab Webhook</p>
-              <p className="text-sm text-gray-500 dark:text-neutral-400">
+              <p className="font-medium text-neutral-900 dark:text-white">GitLab Webhook</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 Receives push and merge request events
               </p>
             </div>
@@ -1097,10 +1102,10 @@ function GitLabConfigTab() {
               Active
             </span>
           </div>
-          <div className="text-sm text-gray-500 dark:text-neutral-400">
+          <div className="text-sm text-neutral-500 dark:text-neutral-400">
             <p>
               <strong>Endpoint:</strong>{' '}
-              <code className="bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded">
+              <code className="bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 rounded">
                 {config.api.baseUrl}/webhooks/gitlab
               </code>
             </p>
@@ -1125,14 +1130,14 @@ export function Deployments() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Deployments</h1>
-        <p className="text-gray-500 dark:text-neutral-400 mt-1">
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Deployments</h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-1">
           GitOps pipeline monitoring and deployment history
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-neutral-700">
+      <div className="border-b border-neutral-200 dark:border-neutral-700">
         <nav className="flex gap-8">
           {tabs.map((tab) => (
             <button
@@ -1142,7 +1147,7 @@ export function Deployments() {
                 'flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors',
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:border-gray-300 dark:hover:border-neutral-500'
+                  : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:border-neutral-300 dark:hover:border-neutral-500'
               )}
             >
               <tab.icon className="h-5 w-5" />

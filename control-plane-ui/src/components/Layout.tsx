@@ -503,7 +503,7 @@ export function Layout({ children }: LayoutProps) {
   }, [navigationCommands, navigate, logout, setCommandItems, resolvedTheme, toggleTheme, t]);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-neutral-900 transition-colors">
+    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-900 transition-colors">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -515,26 +515,26 @@ export function Layout({ children }: LayoutProps) {
       {/* Sidebar */}
       <div
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-100 dark:bg-neutral-950 border-r border-gray-200 dark:border-neutral-800 transition-transform duration-300 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-neutral-100 dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-800 transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Sidebar header */}
-        <div className="flex h-16 items-center justify-between border-b border-gray-200 dark:border-neutral-800 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-neutral-200 dark:border-neutral-800 px-4">
           <div className="flex items-center gap-2">
             <StoaLogo size="sm" />
             <div>
-              <h1 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
+              <h1 className="text-lg font-bold text-neutral-900 dark:text-white leading-tight">
                 STOA
               </h1>
-              <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 tracking-wider uppercase">
+              <p className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400 tracking-wider uppercase">
                 {t('layout.controlPlane')}
               </p>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white lg:hidden"
+            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
@@ -556,10 +556,10 @@ export function Layout({ children }: LayoutProps) {
                   <button
                     onClick={() => toggleSection(section.title)}
                     className={clsx(
-                      'flex items-center w-full px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors rounded hover:bg-gray-200/50 dark:hover:bg-neutral-800/50',
+                      'flex items-center w-full px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors rounded hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50',
                       section.accent
                         ? 'text-primary-600 dark:text-primary-400'
-                        : 'text-gray-500 dark:text-gray-500'
+                        : 'text-neutral-500 dark:text-neutral-500'
                     )}
                   >
                     <ChevronDown
@@ -593,7 +593,7 @@ export function Layout({ children }: LayoutProps) {
                                   'flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                                   isActive
                                     ? 'bg-primary-600 text-white'
-                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white'
+                                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
                                 )}
                               >
                                 <item.icon className="h-4 w-4 flex-shrink-0" />
@@ -604,7 +604,7 @@ export function Layout({ children }: LayoutProps) {
                                   </span>
                                 )}
                                 {!item.badge && item.shortcut && (
-                                  <span className="ml-auto text-xs text-gray-500 hidden xl:block">
+                                  <span className="ml-auto text-xs text-neutral-500 hidden xl:block">
                                     g{item.shortcut[1]}
                                   </span>
                                 )}
@@ -622,10 +622,10 @@ export function Layout({ children }: LayoutProps) {
         </nav>
 
         {/* Mobile-only: Env & Tenant selectors */}
-        <div className="lg:hidden border-t border-gray-200 dark:border-neutral-800 px-3 py-3 space-y-2">
+        <div className="lg:hidden border-t border-neutral-200 dark:border-neutral-800 px-3 py-3 space-y-2">
           {/* Environment selector */}
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500 mb-1 px-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1 px-1">
               {t('layout.environment')}
             </p>
             {environments.map((env) => (
@@ -639,7 +639,7 @@ export function Layout({ children }: LayoutProps) {
                   'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   activeEnvironment === env.name
                     ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800'
                 )}
               >
                 <span
@@ -664,7 +664,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Tenant selector */}
           {tenants && tenants.length > 0 && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500 mb-1 px-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1 px-1">
                 {t('layout.tenant')}
               </p>
               {tenants.map((tenant) => {
@@ -681,10 +681,10 @@ export function Layout({ children }: LayoutProps) {
                       'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                       isSelected
                         ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800'
+                        : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800'
                     )}
                   >
-                    <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <Building2 className="h-4 w-4 flex-shrink-0 text-neutral-400" />
                     <span className="flex-1 text-left truncate">
                       {tenant.display_name || tenant.name}
                     </span>
@@ -697,7 +697,7 @@ export function Layout({ children }: LayoutProps) {
         </div>
 
         {/* User section */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-neutral-800 p-4">
+        <div className="absolute bottom-0 left-0 right-0 border-t border-neutral-200 dark:border-neutral-800 p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600 flex-shrink-0">
               <User className="h-5 w-5 text-white" />
@@ -705,24 +705,24 @@ export function Layout({ children }: LayoutProps) {
             <div className="flex-1 min-w-0">
               {user ? (
                 <>
-                  <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="truncate text-sm font-medium text-neutral-900 dark:text-white">
                     {user.name}
                   </p>
-                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                  <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
                     {user.roles.join(', ')}
                   </p>
                 </>
               ) : (
                 <>
-                  <div className="h-4 w-24 bg-gray-300 dark:bg-gray-700 rounded animate-pulse" />
-                  <div className="h-3 w-16 bg-gray-300 dark:bg-gray-700 rounded animate-pulse mt-1" />
+                  <div className="h-4 w-24 bg-neutral-300 dark:bg-neutral-700 rounded animate-pulse" />
+                  <div className="h-3 w-16 bg-neutral-300 dark:bg-neutral-700 rounded animate-pulse mt-1" />
                 </>
               )}
             </div>
             {user && (
               <button
                 onClick={logout}
-                className="rounded-lg p-2 text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white flex-shrink-0"
+                className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white flex-shrink-0"
                 title={t('common.logout')}
               >
                 <LogOut className="h-5 w-5" />
@@ -739,7 +739,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Mobile menu button */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 lg:hidden"
+            className="rounded-lg p-2.5 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -753,18 +753,18 @@ export function Layout({ children }: LayoutProps) {
           />
 
           {/* Mobile: Just show current page name */}
-          <span className="flex-1 font-medium text-gray-900 dark:text-white truncate sm:hidden">
+          <span className="flex-1 font-medium text-neutral-900 dark:text-white truncate sm:hidden">
             {breadcrumbItems[breadcrumbItems.length - 1]?.label || 'Dashboard'}
           </span>
 
           {/* Command Palette trigger */}
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="hidden sm:flex items-center gap-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600 transition-colors"
+            className="hidden sm:flex items-center gap-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-1.5 text-sm text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-colors"
           >
             <Search className="h-4 w-4" />
             <span className="hidden md:inline">{t('common.search')}</span>
-            <kbd className="hidden md:flex items-center gap-0.5 rounded bg-white dark:bg-neutral-700 px-1.5 py-0.5 text-xs font-medium border border-gray-200 dark:border-neutral-600">
+            <kbd className="hidden md:flex items-center gap-0.5 rounded bg-white dark:bg-neutral-700 px-1.5 py-0.5 text-xs font-medium border border-neutral-200 dark:border-neutral-600">
               <span className="text-xs">⌘</span>K
             </kbd>
           </button>
@@ -772,7 +772,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Mobile search button */}
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="rounded-lg p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 sm:hidden"
+            className="rounded-lg p-2 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 sm:hidden"
           >
             <Search className="h-5 w-5" />
           </button>
@@ -809,7 +809,7 @@ export function Layout({ children }: LayoutProps) {
               />
             </button>
             {envDropdownOpen && (
-              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-lg z-50 py-1">
+              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-lg z-50 py-1">
                 {environments.map((env) => (
                   <button
                     key={env.name}
@@ -818,7 +818,7 @@ export function Layout({ children }: LayoutProps) {
                       'w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
                       activeEnvironment === env.name
                         ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                        : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                     )}
                   >
                     <span
@@ -831,7 +831,7 @@ export function Layout({ children }: LayoutProps) {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate font-medium">{env.label}</p>
-                      <p className="truncate text-xs text-gray-500 dark:text-neutral-400">
+                      <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
                         {env.mode === 'read-only' ? t('common.readOnly') : t('common.fullAccess')}
                       </p>
                     </div>
@@ -869,7 +869,7 @@ export function Layout({ children }: LayoutProps) {
                 />
               </button>
               {tenantDropdownOpen && tenants && tenants.length > 0 && (
-                <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-lg z-50 py-1 max-h-64 overflow-y-auto">
+                <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-lg z-50 py-1 max-h-64 overflow-y-auto">
                   {tenants.map((tenant) => {
                     const selectedId = activeTenantId || user?.tenant_id;
                     const isSelected = selectedId === tenant.id || selectedId === tenant.name;
@@ -881,15 +881,15 @@ export function Layout({ children }: LayoutProps) {
                           'w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
                           isSelected
                             ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                            : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                            : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                         )}
                       >
-                        <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                        <Building2 className="h-4 w-4 flex-shrink-0 text-neutral-400" />
                         <div className="flex-1 min-w-0">
                           <p className="truncate font-medium">
                             {tenant.display_name || tenant.name}
                           </p>
-                          <p className="truncate text-xs text-gray-500 dark:text-neutral-400">
+                          <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
                             {tenant.name}
                           </p>
                         </div>

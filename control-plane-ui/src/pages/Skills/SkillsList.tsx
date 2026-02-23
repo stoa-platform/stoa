@@ -11,7 +11,7 @@ import { SkillPreview } from './SkillPreview';
 
 const scopeConfig: Record<string, { color: string; label: string; specificity: number }> = {
   global: {
-    color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+    color: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-900/30 dark:text-neutral-400',
     label: 'Global',
     specificity: 0,
   },
@@ -97,13 +97,16 @@ export function SkillsList() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-8 w-64 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
-          <div className="h-10 w-36 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-8 w-64 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-10 w-36 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
           <div className="p-6 space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-gray-100 dark:bg-neutral-700 rounded animate-pulse" />
+              <div
+                key={i}
+                className="h-12 bg-neutral-100 dark:bg-neutral-700 rounded animate-pulse"
+              />
             ))}
           </div>
         </div>
@@ -116,8 +119,8 @@ export function SkillsList() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Skills</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Skills</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Manage agent skill instructions using the CSS cascade model
           </p>
         </div>
@@ -144,7 +147,7 @@ export function SkillsList() {
       )}
 
       {/* Cascade legend */}
-      <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-neutral-400">
+      <div className="flex items-center gap-3 text-xs text-neutral-500 dark:text-neutral-400">
         <span className="font-medium">Cascade order:</span>
         {['global', 'tenant', 'tool', 'user'].map((scope) => {
           const cfg = scopeConfig[scope];
@@ -181,24 +184,24 @@ export function SkillsList() {
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+              <tr className="border-b dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Name
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Scope
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Priority
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Tenant
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Status
                 </th>
                 {isAdmin && (
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Actions
                   </th>
                 )}
@@ -208,15 +211,15 @@ export function SkillsList() {
               {items.map((skill) => {
                 const scope = scopeConfig[skill.scope] || scopeConfig.global;
                 return (
-                  <tr key={skill.key} className="hover:bg-gray-50 dark:hover:bg-neutral-750">
+                  <tr key={skill.key} className="hover:bg-neutral-50 dark:hover:bg-neutral-750">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" />
                         <div>
-                          <div className="font-medium text-gray-900 dark:text-white text-sm">
+                          <div className="font-medium text-neutral-900 dark:text-white text-sm">
                             {skill.name}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-neutral-400 font-mono truncate max-w-xs">
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono truncate max-w-xs">
                             {skill.key}
                           </div>
                         </div>
@@ -229,10 +232,10 @@ export function SkillsList() {
                         {scope.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300 font-mono">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300 font-mono">
                       {skill.priority}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       {skill.tenant_id}
                     </td>
                     <td className="px-4 py-3">
@@ -240,7 +243,7 @@ export function SkillsList() {
                         className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
                           skill.enabled
                             ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400'
+                            : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-900/30 dark:text-neutral-400'
                         }`}
                       >
                         {skill.enabled ? 'Enabled' : 'Disabled'}

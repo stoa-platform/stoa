@@ -47,8 +47,8 @@ const triggerConfig: Record<string, { label: string; color: string; bg: string }
   },
   manual: {
     label: 'Manual',
-    color: 'text-gray-600 dark:text-neutral-400',
-    bg: 'bg-gray-100 dark:bg-neutral-700',
+    color: 'text-neutral-600 dark:text-neutral-400',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
   },
 };
 
@@ -73,8 +73,8 @@ const resolutionConfig: Record<
   },
   ignored: {
     label: 'Ignored',
-    color: 'text-gray-600 dark:text-neutral-400',
-    bg: 'bg-gray-100 dark:bg-neutral-700',
+    color: 'text-neutral-600 dark:text-neutral-400',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
   },
 };
 
@@ -115,9 +115,9 @@ function StatsCard({
           <Icon className="h-6 w-6 text-white" />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-neutral-400">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 dark:text-neutral-500">{subtitle}</p>}
+          <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{title}</p>
+          <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
+          {subtitle && <p className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
         </div>
       </div>
     </div>
@@ -200,7 +200,7 @@ function ReplayCommand({ snapshotId }: { snapshotId: string }) {
       </button>
 
       {visible && command && (
-        <div className="mt-2 bg-gray-900 rounded-lg p-4 relative">
+        <div className="mt-2 bg-neutral-900 rounded-lg p-4 relative">
           {warning && (
             <div className="mb-2 text-xs text-yellow-400 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
@@ -209,7 +209,7 @@ function ReplayCommand({ snapshotId }: { snapshotId: string }) {
           )}
           <button
             onClick={copyToClipboard}
-            className="absolute top-2 right-2 text-gray-400 hover:text-white"
+            className="absolute top-2 right-2 text-neutral-400 hover:text-white"
           >
             {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
           </button>
@@ -250,14 +250,14 @@ function SnapshotRow({
   }, [isExpanded, snapshot.id, details]);
 
   return (
-    <div className="border-b border-gray-100 dark:border-neutral-700 last:border-0">
+    <div className="border-b border-neutral-100 dark:border-neutral-700 last:border-0">
       {/* Summary row */}
       <div
-        className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer"
+        className="flex items-center gap-4 p-4 hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
         onClick={onToggle}
       >
         {/* Expand icon */}
-        <button className="text-gray-400">
+        <button className="text-neutral-400">
           {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
         </button>
 
@@ -286,11 +286,11 @@ function SnapshotRow({
 
         {/* Method + Path */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-900 dark:text-white truncate">
+          <p className="text-sm text-neutral-900 dark:text-white truncate">
             <span className="font-mono font-medium">{snapshot.method}</span>{' '}
-            <span className="text-gray-600 dark:text-neutral-400">{snapshot.path}</span>
+            <span className="text-neutral-600 dark:text-neutral-400">{snapshot.path}</span>
           </p>
-          <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-neutral-400">
+          <div className="flex items-center gap-2 mt-1 text-xs text-neutral-500 dark:text-neutral-400">
             <span className="flex items-center gap-1">
               <Server className="h-3 w-3" />
               {snapshot.source}
@@ -311,14 +311,14 @@ function SnapshotRow({
         />
 
         {/* Timestamp */}
-        <span className="text-xs text-gray-400 dark:text-neutral-500 w-24 text-right">
+        <span className="text-xs text-neutral-400 dark:text-neutral-500 w-24 text-right">
           {formatDateTime(snapshot.timestamp)}
         </span>
       </div>
 
       {/* Expanded details */}
       {isExpanded && (
-        <div className="bg-gray-50 dark:bg-neutral-900 p-4 border-t border-gray-100 dark:border-neutral-700">
+        <div className="bg-neutral-50 dark:bg-neutral-900 p-4 border-t border-neutral-100 dark:border-neutral-700">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -326,8 +326,8 @@ function SnapshotRow({
           ) : details ? (
             <div className="space-y-4">
               {/* Resolution actions */}
-              <div className="flex items-center gap-2 pb-4 border-b border-gray-200 dark:border-neutral-700">
-                <span className="text-sm text-gray-600 dark:text-neutral-400">Set status:</span>
+              <div className="flex items-center gap-2 pb-4 border-b border-neutral-200 dark:border-neutral-700">
+                <span className="text-sm text-neutral-600 dark:text-neutral-400">Set status:</span>
                 {(
                   [
                     'unresolved',
@@ -343,7 +343,7 @@ function SnapshotRow({
                       'px-3 py-1 rounded-full text-xs font-medium transition-colors',
                       details.resolution_status === s
                         ? `${resolutionConfig[s].bg} ${resolutionConfig[s].color}`
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-600'
+                        : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-600'
                     )}
                   >
                     {resolutionConfig[s].label}
@@ -354,14 +354,14 @@ function SnapshotRow({
               <div className="grid grid-cols-3 gap-6">
                 {/* Left: Request Info */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900 dark:text-white">Request</h4>
+                  <h4 className="font-medium text-neutral-900 dark:text-white">Request</h4>
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Method:</span>
+                      <span className="text-neutral-500 dark:text-neutral-400">Method:</span>
                       <span className="font-mono">{details.request.method}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Path:</span>
+                      <span className="text-neutral-500 dark:text-neutral-400">Path:</span>
                       <span
                         className="font-mono text-xs truncate max-w-48"
                         title={details.request.path}
@@ -370,24 +370,24 @@ function SnapshotRow({
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Status:</span>
+                      <span className="text-neutral-500 dark:text-neutral-400">Status:</span>
                       <span className="font-mono">{details.response.status}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Duration:</span>
+                      <span className="text-neutral-500 dark:text-neutral-400">Duration:</span>
                       <span className="font-mono">
                         {formatDuration(details.response.duration_ms)}
                       </span>
                     </div>
                     {details.trace_id && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Trace ID:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Trace ID:</span>
                         <span className="font-mono text-xs">{details.trace_id}</span>
                       </div>
                     )}
                     {details.request.client_ip && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Client IP:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Client IP:</span>
                         <span className="font-mono text-xs">{details.request.client_ip}</span>
                       </div>
                     )}
@@ -412,15 +412,15 @@ function SnapshotRow({
 
                 {/* Middle: Routing & Backend */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900 dark:text-white">Routing</h4>
+                  <h4 className="font-medium text-neutral-900 dark:text-white">Routing</h4>
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Source:</span>
+                      <span className="text-neutral-500 dark:text-neutral-400">Source:</span>
                       <span>{details.source}</span>
                     </div>
                     {details.routing.api_name && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">API:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">API:</span>
                         <span>
                           {details.routing.api_name}
                           {details.routing.api_version && ` v${details.routing.api_version}`}
@@ -429,7 +429,7 @@ function SnapshotRow({
                     )}
                     {details.routing.backend_url && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Backend:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Backend:</span>
                         <span
                           className="text-xs truncate max-w-40"
                           title={details.routing.backend_url}
@@ -443,11 +443,11 @@ function SnapshotRow({
                   {/* Backend state */}
                   {details.backend_state.health !== 'unknown' && (
                     <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
-                      <h5 className="font-medium text-gray-700 dark:text-neutral-300">
+                      <h5 className="font-medium text-neutral-700 dark:text-neutral-300">
                         Backend Health
                       </h5>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Health:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Health:</span>
                         <span
                           className={clsx(
                             'font-medium',
@@ -463,13 +463,17 @@ function SnapshotRow({
                       </div>
                       {details.backend_state.error_rate_1m != null && (
                         <div className="flex justify-between">
-                          <span className="text-gray-500 dark:text-neutral-400">Error Rate:</span>
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            Error Rate:
+                          </span>
                           <span>{(details.backend_state.error_rate_1m * 100).toFixed(1)}%</span>
                         </div>
                       )}
                       {details.backend_state.p99_latency_ms != null && (
                         <div className="flex justify-between">
-                          <span className="text-gray-500 dark:text-neutral-400">P99 Latency:</span>
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            P99 Latency:
+                          </span>
                           <span>{formatDuration(details.backend_state.p99_latency_ms)}</span>
                         </div>
                       )}
@@ -479,11 +483,11 @@ function SnapshotRow({
 
                 {/* Right: Environment */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900 dark:text-white">Environment</h4>
+                  <h4 className="font-medium text-neutral-900 dark:text-white">Environment</h4>
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
                     {details.environment.pod && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Pod:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Pod:</span>
                         <span className="text-xs font-mono truncate max-w-40">
                           {details.environment.pod}
                         </span>
@@ -491,18 +495,18 @@ function SnapshotRow({
                     )}
                     {details.environment.node && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Node:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Node:</span>
                         <span className="text-xs">{details.environment.node}</span>
                       </div>
                     )}
                     {details.environment.namespace && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Namespace:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Namespace:</span>
                         <span>{details.environment.namespace}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Trigger:</span>
+                      <span className="text-neutral-500 dark:text-neutral-400">Trigger:</span>
                       <span>{details.trigger}</span>
                     </div>
                   </div>
@@ -521,7 +525,7 @@ function SnapshotRow({
               <ReplayCommand snapshotId={snapshot.id} />
             </div>
           ) : (
-            <p className="text-center text-gray-500 dark:text-neutral-400 py-4">
+            <p className="text-center text-neutral-500 dark:text-neutral-400 py-4">
               Failed to load details
             </p>
           )}
@@ -613,18 +617,18 @@ export function ErrorSnapshots() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Error Snapshots</h1>
-          <p className="text-gray-500 dark:text-neutral-400">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Error Snapshots</h1>
+          <p className="text-neutral-500 dark:text-neutral-400">
             Time-travel debugging for gateway errors
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
+          <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
             <input
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-neutral-300"
             />
             Auto-refresh (10s)
           </label>
@@ -677,13 +681,13 @@ export function ErrorSnapshots() {
         <div className="flex flex-wrap gap-4">
           {/* Search */}
           <form onSubmit={handleSearch} className="relative flex-1 min-w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
             <input
               type="text"
               placeholder="Search by path..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </form>
 
@@ -696,7 +700,7 @@ export function ErrorSnapshots() {
                 trigger: (e.target.value as SnapshotTrigger) || undefined,
               }))
             }
-            className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
+            className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
             <option value="">All Triggers</option>
             {availableFilters?.triggers.map((t) => (
@@ -715,7 +719,7 @@ export function ErrorSnapshots() {
                 source: e.target.value || undefined,
               }))
             }
-            className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
+            className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
             <option value="">All Gateways</option>
             {availableFilters?.sources.map((s) => (
@@ -734,7 +738,7 @@ export function ErrorSnapshots() {
                 resolution_status: (e.target.value as SnapshotResolutionStatus) || undefined,
               }))
             }
-            className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
+            className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
             <option value="">All Statuses</option>
             {availableFilters?.resolution_statuses.map((s) => (
@@ -748,16 +752,18 @@ export function ErrorSnapshots() {
 
       {/* Snapshots Table */}
       <div className="rounded-lg bg-white dark:bg-neutral-800 shadow-sm">
-        <div className="border-b border-gray-100 dark:border-neutral-700 px-4 py-3 flex justify-between items-center">
-          <h2 className="font-medium text-gray-900 dark:text-white">Error Snapshots ({total})</h2>
-          <div className="text-sm text-gray-500 dark:text-neutral-400">
+        <div className="border-b border-neutral-100 dark:border-neutral-700 px-4 py-3 flex justify-between items-center">
+          <h2 className="font-medium text-neutral-900 dark:text-white">
+            Error Snapshots ({total})
+          </h2>
+          <div className="text-sm text-neutral-500 dark:text-neutral-400">
             Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
           </div>
         </div>
 
         {snapshots.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-neutral-400">
-            <AlertTriangle className="h-12 w-12 mb-4 text-gray-300 dark:text-neutral-600" />
+          <div className="flex flex-col items-center justify-center py-12 text-neutral-500 dark:text-neutral-400">
+            <AlertTriangle className="h-12 w-12 mb-4 text-neutral-300 dark:text-neutral-600" />
             <p>No error snapshots found</p>
             <p className="text-sm">Errors will appear here when they occur</p>
           </div>
@@ -777,21 +783,21 @@ export function ErrorSnapshots() {
 
         {/* Pagination */}
         {total > pageSize && (
-          <div className="flex justify-between items-center px-4 py-3 border-t border-gray-100 dark:border-neutral-700">
+          <div className="flex justify-between items-center px-4 py-3 border-t border-neutral-100 dark:border-neutral-700">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
-            <span className="text-sm text-gray-500 dark:text-neutral-400">
+            <span className="text-sm text-neutral-500 dark:text-neutral-400">
               Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total}
             </span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={!hasNext}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>

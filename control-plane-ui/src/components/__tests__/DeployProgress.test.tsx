@@ -27,7 +27,7 @@ describe('DeployProgress', () => {
 
     // "Health Check" is after → pending (gray)
     const healthLabel = Array.from(labels).find((el) => el.textContent === 'Health Check');
-    expect(healthLabel?.className).toContain('text-gray-400');
+    expect(healthLabel?.className).toContain('text-neutral-400');
   });
 
   it('marks all steps as done on success', () => {
@@ -55,7 +55,7 @@ describe('DeployProgress', () => {
 
     // complete is after → pending
     const completeLabel = Array.from(labels).find((el) => el.textContent === 'Complete');
-    expect(completeLabel?.className).toContain('text-gray-400');
+    expect(completeLabel?.className).toContain('text-neutral-400');
   });
 
   it('renders 3 connector lines between 4 steps', () => {

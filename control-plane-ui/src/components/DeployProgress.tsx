@@ -52,7 +52,7 @@ export function DeployProgress({ currentStep, status }: DeployProgressProps) {
                   stepStatus === 'done' && 'bg-green-100 dark:bg-green-900/30',
                   stepStatus === 'active' && 'bg-blue-100 dark:bg-blue-900/30',
                   stepStatus === 'failed' && 'bg-red-100 dark:bg-red-900/30',
-                  stepStatus === 'pending' && 'bg-gray-100 dark:bg-neutral-700'
+                  stepStatus === 'pending' && 'bg-neutral-100 dark:bg-neutral-700'
                 )}
               >
                 {stepStatus === 'done' && (
@@ -65,7 +65,7 @@ export function DeployProgress({ currentStep, status }: DeployProgressProps) {
                   <Circle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 )}
                 {stepStatus === 'pending' && (
-                  <Circle className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
+                  <Circle className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
                 )}
               </div>
               <span
@@ -74,7 +74,7 @@ export function DeployProgress({ currentStep, status }: DeployProgressProps) {
                   stepStatus === 'done' && 'text-green-600 dark:text-green-400',
                   stepStatus === 'active' && 'text-blue-600 dark:text-blue-400 font-medium',
                   stepStatus === 'failed' && 'text-red-600 dark:text-red-400',
-                  stepStatus === 'pending' && 'text-gray-400 dark:text-neutral-500'
+                  stepStatus === 'pending' && 'text-neutral-400 dark:text-neutral-500'
                 )}
               >
                 {step.label}
@@ -86,7 +86,7 @@ export function DeployProgress({ currentStep, status }: DeployProgressProps) {
                   'w-8 h-0.5 mx-1 mb-4',
                   stepStatus === 'done'
                     ? 'bg-green-300 dark:bg-green-700'
-                    : 'bg-gray-200 dark:bg-neutral-600'
+                    : 'bg-neutral-200 dark:bg-neutral-600'
                 )}
               />
             )}

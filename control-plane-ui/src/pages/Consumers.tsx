@@ -12,6 +12,7 @@ import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { ConsumerDetailModal } from '../components/ConsumerDetailModal';
 import { CertificateHealthBadge } from '../components/CertificateHealthBadge';
+import { Button } from '@stoa/shared/components/Button';
 
 const PAGE_SIZE = 20;
 
@@ -251,8 +252,8 @@ export function Consumers() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Consumers</h1>
-        <p className="text-gray-500 dark:text-neutral-400 mt-1">
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Consumers</h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-1">
           API consumers with mTLS certificate bindings
         </p>
       </div>
@@ -262,13 +263,13 @@ export function Consumers() {
         <div className="flex flex-wrap gap-4 items-end">
           {/* Tenant Selector */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Tenant
             </label>
             <select
               value={activeTenant}
               onChange={(e) => handleTenantChange(e.target.value)}
-              className="w-48 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-48 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {tenants.map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>
@@ -280,7 +281,7 @@ export function Consumers() {
 
           {/* Search */}
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Search
             </label>
             <div className="relative">
@@ -289,10 +290,10 @@ export function Consumers() {
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Search by ID, name, email, company..."
-                className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 pl-10 bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 pl-10 bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <svg
-                className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                className="absolute left-3 top-2.5 h-5 w-5 text-neutral-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -307,7 +308,7 @@ export function Consumers() {
               {searchQuery && (
                 <button
                   onClick={() => handleSearchChange('')}
-                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-600"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -324,13 +325,13 @@ export function Consumers() {
 
           {/* Status Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Status
             </label>
             <select
               value={statusFilter}
               onChange={(e) => handleStatusChange(e.target.value)}
-              className="w-36 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-36 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Status</option>
               <option value="active">Active</option>
@@ -341,7 +342,7 @@ export function Consumers() {
 
           {/* Certificate Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Certificate
             </label>
             <select
@@ -350,7 +351,7 @@ export function Consumers() {
                 setCertFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-40 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-40 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Certs</option>
               <option value="expiring">Expiring Soon</option>
@@ -359,7 +360,7 @@ export function Consumers() {
           </div>
 
           {/* Results count */}
-          <div className="text-sm text-gray-500 dark:text-neutral-400 self-end pb-2">
+          <div className="text-sm text-neutral-500 dark:text-neutral-400 self-end pb-2">
             {filteredConsumers.length} of {consumers.length} consumers
           </div>
         </div>
@@ -370,19 +371,12 @@ export function Consumers() {
             <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
               {selectedIds.size} selected
             </span>
-            <button
-              onClick={handleBulkRevoke}
-              disabled={bulkRevoking}
-              className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50"
-            >
+            <Button variant="danger" size="sm" onClick={handleBulkRevoke} loading={bulkRevoking}>
               {bulkRevoking ? 'Revoking...' : `Revoke Selected (${selectedIds.size})`}
-            </button>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
-            >
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
               Clear selection
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -419,8 +413,8 @@ export function Consumers() {
       {/* Desktop Table */}
       {!isMobile && paginatedConsumers.length > 0 && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-            <thead className="bg-gray-50 dark:bg-neutral-900">
+          <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+            <thead className="bg-neutral-50 dark:bg-neutral-900">
               <tr>
                 {canEdit && (
                   <th className="px-3 py-3 w-10">
@@ -431,39 +425,39 @@ export function Consumers() {
                         selectedIds.size === paginatedConsumers.length
                       }
                       onChange={toggleAll}
-                      className="rounded border-gray-300 dark:border-neutral-600"
+                      className="rounded border-neutral-300 dark:border-neutral-600"
                     />
                   </th>
                 )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   External ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Email
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Company
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Certificate
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
+            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {paginatedConsumers.map((consumer) => (
                 <tr
                   key={consumer.id}
                   onClick={() => setSelectedConsumer(consumer)}
-                  className="hover:bg-gray-50 dark:hover:bg-neutral-700/50 transition-colors cursor-pointer"
+                  className="hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors cursor-pointer"
                 >
                   {canEdit && (
                     <td className="px-3 py-4 w-10" onClick={(e) => e.stopPropagation()}>
@@ -471,20 +465,20 @@ export function Consumers() {
                         type="checkbox"
                         checked={selectedIds.has(consumer.id)}
                         onChange={() => toggleSelection(consumer.id)}
-                        className="rounded border-gray-300 dark:border-neutral-600"
+                        className="rounded border-neutral-300 dark:border-neutral-600"
                       />
                     </td>
                   )}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-white">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-neutral-900 dark:text-white">
                     {consumer.external_id}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 dark:text-white">
                     {consumer.name}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-neutral-400">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 dark:text-neutral-400">
                     {consumer.email}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-neutral-400">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 dark:text-neutral-400">
                     {consumer.company || '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -501,12 +495,12 @@ export function Consumers() {
                           status={consumer.certificate_status as CertificateStatus}
                           notAfter={consumer.certificate_not_after}
                         />
-                        <span className="font-mono text-xs text-gray-400 dark:text-neutral-500">
+                        <span className="font-mono text-xs text-neutral-400 dark:text-neutral-500">
                           {consumer.certificate_fingerprint.substring(0, 12)}...
                         </span>
                       </div>
                     ) : (
-                      <span className="text-gray-400 dark:text-neutral-500">—</span>
+                      <span className="text-neutral-400 dark:text-neutral-500">—</span>
                     )}
                   </td>
                   <td
@@ -561,8 +555,8 @@ export function Consumers() {
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">{consumer.name}</p>
-                  <p className="text-sm font-mono text-gray-500 dark:text-neutral-400">
+                  <p className="font-medium text-neutral-900 dark:text-white">{consumer.name}</p>
+                  <p className="text-sm font-mono text-neutral-500 dark:text-neutral-400">
                     {consumer.external_id}
                   </p>
                 </div>
@@ -572,9 +566,9 @@ export function Consumers() {
                   {consumer.status}
                 </span>
               </div>
-              <p className="text-sm text-gray-500 dark:text-neutral-400">{consumer.email}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">{consumer.email}</p>
               {consumer.company && (
-                <p className="text-sm text-gray-500 dark:text-neutral-400">{consumer.company}</p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">{consumer.company}</p>
               )}
               {consumer.certificate_fingerprint && (
                 <div className="flex items-center gap-2">
@@ -582,13 +576,13 @@ export function Consumers() {
                     status={consumer.certificate_status as CertificateStatus}
                     notAfter={consumer.certificate_not_after}
                   />
-                  <span className="text-xs font-mono text-gray-400 dark:text-neutral-500 truncate">
+                  <span className="text-xs font-mono text-neutral-400 dark:text-neutral-500 truncate">
                     {consumer.certificate_fingerprint.substring(0, 20)}...
                   </span>
                 </div>
               )}
               <div
-                className="flex gap-2 pt-2 border-t border-gray-100 dark:border-neutral-700"
+                className="flex gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-700"
                 onClick={(e) => e.stopPropagation()}
               >
                 {canEdit && consumer.status === 'active' && (
@@ -624,21 +618,21 @@ export function Consumers() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
             Page {currentPage} of {totalPages}
           </p>
           <div className="flex gap-2">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-white"
+              className="px-3 py-1 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-white"
             >
               Previous
             </button>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-white"
+              className="px-3 py-1 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-white"
             >
               Next
             </button>

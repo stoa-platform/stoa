@@ -51,10 +51,10 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
             {isEdit ? 'Edit Skill' : 'Add Skill'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -62,7 +62,7 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           {/* Key */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Key
             </label>
             <input
@@ -72,16 +72,16 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               placeholder="namespace/skill-name"
               required
               disabled={isEdit}
-              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white disabled:opacity-50"
+              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white disabled:opacity-50"
             />
-            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
               Unique identifier (namespace/name format from K8s CRD)
             </p>
           </div>
 
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Name
             </label>
             <input
@@ -90,13 +90,13 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               onChange={(e) => setName(e.target.value)}
               placeholder="Human-readable name"
               required
-              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
             />
           </div>
 
           {/* Tenant ID */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Tenant ID
             </label>
             <input
@@ -105,20 +105,20 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               onChange={(e) => setTenantId(e.target.value)}
               placeholder="tenant-id"
               required
-              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
             />
           </div>
 
           {/* Scope + Priority row */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Scope
               </label>
               <select
                 value={scope}
                 onChange={(e) => setScope(e.target.value)}
-                className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               >
                 {SCOPES.map((s) => (
                   <option key={s} value={s}>
@@ -128,7 +128,7 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Priority (0-100)
               </label>
               <input
@@ -137,7 +137,7 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
                 max={100}
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
             </div>
           </div>
@@ -145,7 +145,7 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
           {/* Conditional refs */}
           {scope === 'tool' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Tool Reference
               </label>
               <input
@@ -153,13 +153,13 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
                 value={toolRef}
                 onChange={(e) => setToolRef(e.target.value)}
                 placeholder="code-review"
-                className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
             </div>
           )}
           {scope === 'user' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 User Reference
               </label>
               <input
@@ -167,14 +167,14 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
                 value={userRef}
                 onChange={(e) => setUserRef(e.target.value)}
                 placeholder="alice"
-                className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
             </div>
           )}
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Description
             </label>
             <input
@@ -182,13 +182,13 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
-              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
             />
           </div>
 
           {/* Instructions */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Instructions
             </label>
             <textarea
@@ -196,7 +196,7 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               onChange={(e) => setInstructions(e.target.value)}
               placeholder="System prompt instructions injected into agent context..."
               rows={4}
-              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white font-mono text-sm"
+              className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white font-mono text-sm"
             />
           </div>
 
@@ -206,9 +206,9 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               type="checkbox"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+              className="h-4 w-4 rounded border-neutral-300 text-blue-600"
             />
-            <span className="text-sm text-gray-700 dark:text-neutral-300">Enabled</span>
+            <span className="text-sm text-neutral-700 dark:text-neutral-300">Enabled</span>
           </label>
 
           {/* Actions */}
@@ -216,7 +216,7 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-700 dark:text-neutral-300 border dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700"
+              className="px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 border dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700"
             >
               Cancel
             </button>

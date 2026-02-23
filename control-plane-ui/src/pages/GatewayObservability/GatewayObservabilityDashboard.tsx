@@ -29,15 +29,17 @@ const overallStatusConfig: Record<string, { label: string; color: string; bg: st
   },
   unknown: {
     label: 'UNKNOWN',
-    color: 'text-gray-700 dark:text-neutral-400',
-    bg: 'bg-gray-100 dark:bg-neutral-700',
+    color: 'text-neutral-700 dark:text-neutral-400',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
   },
 };
 
 function StatCard({ label, count, color }: { label: string; count: number; color: string }) {
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-3">
-      <p className="text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">{label}</p>
+      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
+        {label}
+      </p>
       <p className={`text-2xl font-bold ${color}`}>{count}</p>
     </div>
   );
@@ -50,10 +52,10 @@ function ProgressBar({ label, percentage }: { label: string; percentage: number 
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-3">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">{label}</p>
-        <p className="text-sm font-bold text-gray-900 dark:text-white">{percentage}%</p>
+        <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{label}</p>
+        <p className="text-sm font-bold text-neutral-900 dark:text-white">{percentage}%</p>
       </div>
-      <div className="w-full bg-gray-200 dark:bg-neutral-700 rounded-full h-2.5">
+      <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2.5">
         <div
           className={`h-2.5 rounded-full ${barColor}`}
           style={{ width: `${Math.min(percentage, 100)}%` }}
@@ -81,8 +83,8 @@ function APDEXGauge({ score }: { score: number }) {
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4">
       <div className="flex items-center gap-2 mb-2">
-        <Gauge className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-        <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">APDEX Score</p>
+        <Gauge className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+        <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">APDEX Score</p>
       </div>
       <div className="flex items-end gap-3">
         <span className={`text-3xl font-bold ${colorConfig.text}`}>{score.toFixed(2)}</span>
@@ -92,13 +94,13 @@ function APDEXGauge({ score }: { score: number }) {
           {colorConfig.label}
         </span>
       </div>
-      <div className="w-full bg-gray-200 dark:bg-neutral-700 rounded-full h-2 mt-3">
+      <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2 mt-3">
         <div
           className={`h-2 rounded-full ${colorConfig.bg} transition-all duration-500`}
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <p className="text-xs text-gray-500 dark:text-neutral-400 mt-2">
+      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
         Target: 0.94 (Excellent) | T=500ms
       </p>
     </div>
@@ -154,10 +156,10 @@ export function GatewayObservabilityDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
             Gateway Observability
           </h1>
-          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Health and sync metrics across all gateway instances
           </p>
         </div>
@@ -173,7 +175,7 @@ export function GatewayObservabilityDashboard() {
           </button>
           <button
             onClick={loadData}
-            className="flex items-center gap-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-neutral-700"
+            className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -196,9 +198,9 @@ export function GatewayObservabilityDashboard() {
 
       {loading ? (
         <div className="space-y-6">
-          <div className="h-8 w-32 bg-gray-200 dark:bg-neutral-700 rounded-full animate-pulse" />
+          <div className="h-8 w-32 bg-neutral-200 dark:bg-neutral-700 rounded-full animate-pulse" />
           <div>
-            <div className="h-4 w-32 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse mb-3" />
+            <div className="h-4 w-32 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse mb-3" />
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {[1, 2, 3, 4, 5].map((i) => (
                 <CardSkeleton key={i} className="h-20" />
@@ -206,7 +208,7 @@ export function GatewayObservabilityDashboard() {
             </div>
           </div>
           <div>
-            <div className="h-4 w-24 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse mb-3" />
+            <div className="h-4 w-24 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse mb-3" />
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {[1, 2, 3].map((i) => (
                 <CardSkeleton key={i} className="h-16" />
@@ -227,14 +229,14 @@ export function GatewayObservabilityDashboard() {
 
           {/* Gateway Health Cards */}
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-neutral-300 uppercase mb-3">
+            <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-3">
               Gateway Health
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <StatCard
                 label="Total"
                 count={metrics.health.total_gateways}
-                color="text-gray-900 dark:text-white"
+                color="text-neutral-900 dark:text-white"
               />
               <StatCard label="Online" count={metrics.health.online} color="text-green-600" />
               <StatCard label="Degraded" count={metrics.health.degraded} color="text-yellow-600" />
@@ -242,21 +244,21 @@ export function GatewayObservabilityDashboard() {
               <StatCard
                 label="Maintenance"
                 count={metrics.health.maintenance}
-                color="text-gray-600 dark:text-neutral-400"
+                color="text-neutral-600 dark:text-neutral-400"
               />
             </div>
           </div>
 
           {/* Sync Status Cards */}
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-neutral-300 uppercase mb-3">
+            <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-3">
               Deployment Sync Status
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
               <StatCard
                 label="Total"
                 count={metrics.sync.total_deployments}
-                color="text-gray-900 dark:text-white"
+                color="text-neutral-900 dark:text-white"
               />
               <StatCard label="Synced" count={metrics.sync.synced} color="text-green-600" />
               <StatCard label="Pending" count={metrics.sync.pending} color="text-yellow-600" />
@@ -266,7 +268,7 @@ export function GatewayObservabilityDashboard() {
               <StatCard
                 label="Deleting"
                 count={metrics.sync.deleting ?? 0}
-                color="text-gray-600 dark:text-neutral-400"
+                color="text-neutral-600 dark:text-neutral-400"
               />
             </div>
           </div>

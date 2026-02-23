@@ -77,14 +77,14 @@ export function ToolDetail() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-4 bg-neutral-200 rounded animate-pulse" />
+          <div className="h-4 w-24 bg-neutral-200 rounded animate-pulse" />
         </div>
         <div className="flex items-center gap-6">
-          <div className="h-16 w-16 bg-gray-200 rounded-lg animate-pulse" />
+          <div className="h-16 w-16 bg-neutral-200 rounded-lg animate-pulse" />
           <div className="space-y-2 flex-1">
-            <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-96 bg-gray-200 rounded animate-pulse" />
+            <div className="h-8 w-64 bg-neutral-200 rounded animate-pulse" />
+            <div className="h-4 w-96 bg-neutral-200 rounded animate-pulse" />
           </div>
         </div>
         <CardSkeleton className="h-64" />
@@ -97,7 +97,7 @@ export function ToolDetail() {
       <div className="space-y-6">
         <button
           onClick={() => navigate('/ai-tools')}
-          className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
+          className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to catalog
@@ -117,16 +117,16 @@ export function ToolDetail() {
       <nav className="flex items-center gap-2 text-sm">
         <Link
           to="/ai-tools"
-          className="text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300"
+          className="text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300"
         >
           AI Tools
         </Link>
-        <span className="text-gray-300 dark:text-neutral-600">/</span>
-        <span className="text-gray-900 dark:text-white font-medium">{tool.name}</span>
+        <span className="text-neutral-300 dark:text-neutral-600">/</span>
+        <span className="text-neutral-900 dark:text-white font-medium">{tool.name}</span>
       </nav>
 
       {/* Header */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-4">
             <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
@@ -134,17 +134,20 @@ export function ToolDetail() {
             </div>
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{tool.name}</h1>
+                <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">{tool.name}</h1>
                 <span
                   className={`px-2.5 py-0.5 rounded border text-sm font-medium ${
-                    methodColors[tool.method] || 'bg-gray-100 text-gray-800 border-gray-200'
+                    methodColors[tool.method] ||
+                    'bg-neutral-100 text-neutral-800 border-neutral-200'
                   }`}
                 >
                   {tool.method}
                 </span>
-                <span className="text-sm text-gray-500 dark:text-neutral-400">v{tool.version}</span>
+                <span className="text-sm text-neutral-500 dark:text-neutral-400">
+                  v{tool.version}
+                </span>
               </div>
-              <p className="text-gray-600 dark:text-neutral-400 max-w-2xl">{tool.description}</p>
+              <p className="text-neutral-600 dark:text-neutral-400 max-w-2xl">{tool.description}</p>
 
               {/* Metadata */}
               <div className="flex flex-wrap items-center gap-4 mt-4">
@@ -153,7 +156,7 @@ export function ToolDetail() {
                     {tool.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 rounded text-xs"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 rounded text-xs"
                       >
                         <Tag className="h-3 w-3" />
                         {tag}
@@ -162,12 +165,12 @@ export function ToolDetail() {
                   </div>
                 )}
                 {tool.tenantId && (
-                  <span className="text-xs text-gray-400 dark:text-neutral-500">
+                  <span className="text-xs text-neutral-400 dark:text-neutral-500">
                     Tenant: {tool.tenantId}
                   </span>
                 )}
                 {tool.endpoint && (
-                  <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-neutral-500">
+                  <span className="flex items-center gap-1 text-xs text-neutral-400 dark:text-neutral-500">
                     <ExternalLink className="h-3 w-3" />
                     API-backed
                   </span>
@@ -179,7 +182,7 @@ export function ToolDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-neutral-700">
+      <div className="border-b border-neutral-200 dark:border-neutral-700">
         <nav className="flex gap-6">
           {tabs.map((tab) => (
             <button
@@ -188,7 +191,7 @@ export function ToolDetail() {
               className={`flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? 'text-blue-600 border-blue-600'
-                  : 'text-gray-500 dark:text-neutral-400 border-transparent hover:text-gray-700 dark:hover:text-neutral-300 hover:border-gray-300 dark:hover:border-neutral-500'
+                  : 'text-neutral-500 dark:text-neutral-400 border-transparent hover:text-neutral-700 dark:hover:text-neutral-300 hover:border-neutral-300 dark:hover:border-neutral-500'
               }`}
             >
               {tab.icon}
@@ -199,27 +202,29 @@ export function ToolDetail() {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">
                 Description
               </h3>
-              <p className="text-gray-600 dark:text-neutral-400">{tool.description}</p>
+              <p className="text-neutral-600 dark:text-neutral-400">{tool.description}</p>
             </div>
 
             <div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Parameters</h3>
+              <h3 className="text-lg font-medium text-neutral-900 dark:text-white mb-3">
+                Parameters
+              </h3>
               <ToolSchemaViewer schema={tool.inputSchema} title="Input Parameters" />
             </div>
 
             {tool.endpoint && (
               <div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                <h3 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">
                   Backend Endpoint
                 </h3>
-                <code className="block px-4 py-3 bg-gray-100 dark:bg-neutral-900 rounded-lg text-sm font-mono text-gray-800 dark:text-neutral-300">
+                <code className="block px-4 py-3 bg-neutral-100 dark:bg-neutral-900 rounded-lg text-sm font-mono text-neutral-800 dark:text-neutral-300">
                   {tool.method} {tool.endpoint}
                 </code>
               </div>
@@ -230,12 +235,12 @@ export function ToolDetail() {
         {activeTab === 'schema' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">JSON Schema</h3>
+              <h3 className="text-lg font-medium text-neutral-900 dark:text-white">JSON Schema</h3>
               <button
                 onClick={() =>
                   navigator.clipboard.writeText(JSON.stringify(tool.inputSchema, null, 2))
                 }
-                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
               >
                 <Code className="h-4 w-4" />
                 Copy JSON
@@ -252,32 +257,32 @@ export function ToolDetail() {
             {usage ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="p-4 bg-gray-50 dark:bg-neutral-700 rounded-lg">
-                    <div className="text-sm text-gray-500 dark:text-neutral-400 mb-1">
+                  <div className="p-4 bg-neutral-50 dark:bg-neutral-700 rounded-lg">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">
                       Total Calls
                     </div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-neutral-900 dark:text-white">
                       {usage.totalCalls.toLocaleString()}
                     </div>
                   </div>
-                  <div className="p-4 bg-gray-50 dark:bg-neutral-700 rounded-lg">
-                    <div className="text-sm text-gray-500 dark:text-neutral-400 mb-1">
+                  <div className="p-4 bg-neutral-50 dark:bg-neutral-700 rounded-lg">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">
                       Success Rate
                     </div>
                     <div className="text-2xl font-bold text-green-600">
                       {(usage.successRate * 100).toFixed(1)}%
                     </div>
                   </div>
-                  <div className="p-4 bg-gray-50 dark:bg-neutral-700 rounded-lg">
-                    <div className="text-sm text-gray-500 dark:text-neutral-400 mb-1">
+                  <div className="p-4 bg-neutral-50 dark:bg-neutral-700 rounded-lg">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">
                       Avg Latency
                     </div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-neutral-900 dark:text-white">
                       {usage.avgLatencyMs.toFixed(0)}ms
                     </div>
                   </div>
-                  <div className="p-4 bg-gray-50 dark:bg-neutral-700 rounded-lg">
-                    <div className="text-sm text-gray-500 dark:text-neutral-400 mb-1">
+                  <div className="p-4 bg-neutral-50 dark:bg-neutral-700 rounded-lg">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">
                       Cost Units
                     </div>
                     <div className="text-2xl font-bold text-purple-600">
@@ -286,13 +291,13 @@ export function ToolDetail() {
                   </div>
                 </div>
 
-                <div className="text-sm text-gray-500 dark:text-neutral-400">
+                <div className="text-sm text-neutral-500 dark:text-neutral-400">
                   Usage data for the last {usage.period} ({usage.startDate} - {usage.endDate})
                 </div>
               </>
             ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-neutral-400">
-                <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300 dark:text-neutral-600" />
+              <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
+                <Clock className="h-12 w-12 mx-auto mb-4 text-neutral-300 dark:text-neutral-600" />
                 <p>No usage data available yet.</p>
                 <p className="text-sm mt-1">Start using this tool to see usage statistics.</p>
               </div>

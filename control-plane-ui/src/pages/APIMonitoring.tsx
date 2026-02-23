@@ -104,7 +104,7 @@ function getStatusCodeColor(code: number): string {
   if (code >= 400 && code < 500)
     return 'text-orange-600 bg-orange-50 dark:bg-orange-900/20 dark:text-orange-400';
   if (code >= 500) return 'text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400';
-  return 'text-gray-600 bg-gray-50 dark:bg-neutral-700 dark:text-neutral-400';
+  return 'text-neutral-600 bg-neutral-50 dark:bg-neutral-700 dark:text-neutral-400';
 }
 
 // =============================================================================
@@ -127,16 +127,18 @@ function StatsCard({
   trend?: { value: number; positive: boolean };
 }) {
   return (
-    <div className="rounded-lg bg-white dark:bg-neutral-800 p-6 shadow-sm border border-gray-100 dark:border-neutral-700">
+    <div className="rounded-lg bg-white dark:bg-neutral-800 p-6 shadow-sm border border-neutral-100 dark:border-neutral-700">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className={clsx('rounded-lg p-3', color)}>
             <Icon className="h-6 w-6 text-white" />
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-500 dark:text-neutral-400">{title}</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-            {subtitle && <p className="text-xs text-gray-400 dark:text-neutral-500">{subtitle}</p>}
+            <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{title}</p>
+            <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
+            {subtitle && (
+              <p className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>
+            )}
           </div>
         </div>
         {trend && (
@@ -162,7 +164,7 @@ function StatsCard({
 function TransactionFlow({ spans }: { spans: TransactionSpan[] }) {
   if (!spans || spans.length === 0) {
     return (
-      <div className="text-sm text-gray-500 dark:text-neutral-400 italic">
+      <div className="text-sm text-neutral-500 dark:text-neutral-400 italic">
         No span data available
       </div>
     );
@@ -192,19 +194,19 @@ function TransactionFlow({ spans }: { spans: TransactionSpan[] }) {
                     ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
                     : span.status === 'timeout'
                       ? 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20'
-                      : 'border-gray-200 bg-gray-50 dark:border-neutral-700 dark:bg-neutral-800'
+                      : 'border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800'
               )}
             >
               <Icon className={clsx('h-4 w-4', config.color)} />
               <div className="text-xs">
-                <div className="font-medium text-gray-900 dark:text-white">{span.service}</div>
-                <div className="text-gray-500 dark:text-neutral-400">
+                <div className="font-medium text-neutral-900 dark:text-white">{span.service}</div>
+                <div className="text-neutral-500 dark:text-neutral-400">
                   {formatDuration(span.duration_ms)}
                 </div>
               </div>
             </div>
             {index < spans.length - 1 && (
-              <ArrowRight className="h-4 w-4 text-gray-400 mx-1 flex-shrink-0" />
+              <ArrowRight className="h-4 w-4 text-neutral-400 mx-1 flex-shrink-0" />
             )}
           </div>
         );
@@ -232,7 +234,7 @@ function TransactionRow({
   return (
     <tr
       className={clsx(
-        'hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer transition-colors',
+        'hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer transition-colors',
         isExpanded && 'bg-blue-50 dark:bg-blue-900/20'
       )}
       onClick={onToggle}
@@ -240,11 +242,11 @@ function TransactionRow({
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-gray-400" />
+            <ChevronDown className="h-4 w-4 text-neutral-400" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-gray-400" />
+            <ChevronRight className="h-4 w-4 text-neutral-400" />
           )}
-          <code className="text-xs font-mono text-gray-500 dark:text-neutral-400">
+          <code className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
             {transaction.trace_id.slice(0, 8)}...
           </code>
         </div>
@@ -254,7 +256,7 @@ function TransactionRow({
           className={clsx(
             'px-2 py-1 rounded text-xs font-bold',
             methodColors[transaction.method] ||
-              'bg-gray-100 text-gray-700 dark:bg-neutral-700 dark:text-neutral-300'
+              'bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300'
           )}
         >
           {transaction.method}
@@ -262,8 +264,10 @@ function TransactionRow({
       </td>
       <td className="px-4 py-3">
         <div className="flex flex-col">
-          <span className="font-medium text-gray-900 dark:text-white">{transaction.api_name}</span>
-          <span className="text-xs text-gray-500 dark:text-neutral-400 truncate max-w-[200px]">
+          <span className="font-medium text-neutral-900 dark:text-white">
+            {transaction.api_name}
+          </span>
+          <span className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[200px]">
             {transaction.path}
           </span>
         </div>
@@ -287,12 +291,12 @@ function TransactionRow({
         </div>
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-neutral-400">
+        <div className="flex items-center gap-1 text-sm text-neutral-600 dark:text-neutral-400">
           <Timer className="h-4 w-4" />
           {formatDuration(transaction.total_duration_ms)}
         </div>
       </td>
-      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+      <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
         {formatTime(transaction.started_at)}
       </td>
     </tr>
@@ -329,8 +333,8 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
   if (loading) {
     return (
       <tr>
-        <td colSpan={7} className="px-4 py-8 bg-gray-50 dark:bg-neutral-900">
-          <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-neutral-400">
+        <td colSpan={7} className="px-4 py-8 bg-neutral-50 dark:bg-neutral-900">
+          <div className="flex items-center justify-center gap-2 text-neutral-500 dark:text-neutral-400">
             <Loader2 className="h-5 w-5 animate-spin" />
             Loading transaction details...
           </div>
@@ -353,12 +357,12 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
     <tr>
       <td
         colSpan={7}
-        className="px-4 py-4 bg-gray-50 dark:bg-neutral-900 border-t border-b border-gray-200 dark:border-neutral-700"
+        className="px-4 py-4 bg-neutral-50 dark:bg-neutral-900 border-t border-b border-neutral-200 dark:border-neutral-700"
       >
         <div className="space-y-4">
           {/* Flow Visualization */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-neutral-300 mb-2">
+            <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
               Transaction Flow
             </h4>
             <TransactionFlow spans={transaction.spans} />
@@ -366,7 +370,7 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
 
           {/* Span Details */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-neutral-300 mb-2">
+            <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
               Span Details
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -385,26 +389,28 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
                           ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
                           : span.status === 'timeout'
                             ? 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20'
-                            : 'border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-800'
+                            : 'border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800'
                     )}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-gray-900 dark:text-white">{span.name}</span>
+                      <span className="font-medium text-neutral-900 dark:text-white">
+                        {span.name}
+                      </span>
                       <StatusIcon className={clsx('h-4 w-4', config.color)} />
                     </div>
                     <div className="text-xs space-y-1">
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Service:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Service:</span>
                         <span className="font-medium dark:text-neutral-200">{span.service}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Duration:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Duration:</span>
                         <span className="font-medium dark:text-neutral-200">
                           {formatDuration(span.duration_ms)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Started:</span>
+                        <span className="text-neutral-500 dark:text-neutral-400">Started:</span>
                         <span className="font-medium dark:text-neutral-200">
                           {formatTime(span.started_at)}
                         </span>
@@ -441,26 +447,26 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
           {/* Metadata */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
             <div>
-              <span className="text-gray-500 dark:text-neutral-400">Trace ID:</span>
-              <code className="block font-mono text-gray-900 dark:text-neutral-200">
+              <span className="text-neutral-500 dark:text-neutral-400">Trace ID:</span>
+              <code className="block font-mono text-neutral-900 dark:text-neutral-200">
                 {transaction.trace_id}
               </code>
             </div>
             <div>
-              <span className="text-gray-500 dark:text-neutral-400">Client IP:</span>
-              <span className="block text-gray-900 dark:text-neutral-200">
+              <span className="text-neutral-500 dark:text-neutral-400">Client IP:</span>
+              <span className="block text-neutral-900 dark:text-neutral-200">
                 {transaction.client_ip || '-'}
               </span>
             </div>
             <div>
-              <span className="text-gray-500 dark:text-neutral-400">User:</span>
-              <span className="block text-gray-900 dark:text-neutral-200">
+              <span className="text-neutral-500 dark:text-neutral-400">User:</span>
+              <span className="block text-neutral-900 dark:text-neutral-200">
                 {transaction.user_id || 'Anonymous'}
               </span>
             </div>
             <div>
-              <span className="text-gray-500 dark:text-neutral-400">Tenant:</span>
-              <span className="block text-gray-900 dark:text-neutral-200">
+              <span className="text-neutral-500 dark:text-neutral-400">Tenant:</span>
+              <span className="block text-neutral-900 dark:text-neutral-200">
                 {transaction.tenant_id}
               </span>
             </div>
@@ -671,8 +677,8 @@ export function APIMonitoring() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">API Monitoring</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">API Monitoring</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Real-time E2E transaction tracing - Gateway → Backend → Response
           </p>
         </div>
@@ -692,7 +698,7 @@ export function APIMonitoring() {
               'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
               autoRefresh
                 ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-600'
+                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-600'
             )}
           >
             <Activity className={clsx('h-4 w-4', autoRefresh && 'animate-pulse')} />
@@ -700,7 +706,7 @@ export function APIMonitoring() {
           </button>
           <button
             onClick={fetchData}
-            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700"
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -750,27 +756,27 @@ export function APIMonitoring() {
       )}
 
       {/* Filters */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 p-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-4">
         <div className="flex flex-wrap items-center gap-4">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
             <input
               type="text"
               placeholder="Search by trace ID, API, or path..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
           {/* Status Filter */}
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-400" />
+            <Filter className="h-4 w-4 text-neutral-400" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as TransactionStatus | 'all')}
-              className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Statuses</option>
               <option value="success">Success</option>
@@ -783,7 +789,7 @@ export function APIMonitoring() {
           <select
             value={apiFilter}
             onChange={(e) => setApiFilter(e.target.value)}
-            className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All APIs</option>
             {uniqueApis.map((api) => (
@@ -796,42 +802,42 @@ export function APIMonitoring() {
       </div>
 
       {/* Transactions Table */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 overflow-hidden">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
+            <thead className="bg-neutral-50 dark:bg-neutral-700 border-b border-neutral-200 dark:border-neutral-600">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                   Trace ID
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                   Method
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                   API / Path
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                   Result
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                   Duration
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                   Time
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-neutral-700">
+            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-700">
               {filteredTransactions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-12 text-center text-gray-500 dark:text-neutral-400"
+                    className="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400"
                   >
-                    <Activity className="h-12 w-12 mx-auto mb-4 text-gray-300 dark:text-neutral-600" />
+                    <Activity className="h-12 w-12 mx-auto mb-4 text-neutral-300 dark:text-neutral-600" />
                     <p className="text-lg font-medium">No transactions found</p>
                     <p className="text-sm">Try adjusting your filters or wait for new requests</p>
                   </td>

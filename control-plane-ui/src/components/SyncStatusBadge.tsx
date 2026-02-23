@@ -24,7 +24,7 @@ const statusConfig: Record<DeploymentSyncStatus, { label: string; classes: strin
   },
   deleting: {
     label: 'Deleting',
-    classes: 'bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-neutral-400',
+    classes: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-400',
   },
 };
 
@@ -36,7 +36,7 @@ interface SyncStatusBadgeProps {
 export function SyncStatusBadge({ status, className }: SyncStatusBadgeProps) {
   const config = statusConfig[status] || {
     label: status,
-    classes: 'bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-neutral-400',
+    classes: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-400',
   };
 
   return (

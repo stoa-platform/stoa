@@ -90,14 +90,14 @@ export function ToolCatalog() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Tool Catalog</h1>
-          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">AI Tool Catalog</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Browse MCP tools available for AI-powered API interactions
           </p>
         </div>
         <button
           onClick={loadTools}
-          className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-neutral-700 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-600 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-600 transition-colors"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -105,18 +105,18 @@ export function ToolCatalog() {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
         <div className="flex flex-wrap items-center gap-4">
           {/* Search */}
           <div className="flex-1 min-w-[250px]">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
               <input
                 type="text"
                 placeholder="Search tools by name or description..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -126,7 +126,7 @@ export function ToolCatalog() {
             <select
               value={selectedTag}
               onChange={(e) => handleTagFilter(e.target.value)}
-              className="appearance-none pl-10 pr-8 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="appearance-none pl-10 pr-8 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Tags</option>
               {tags.map((tag) => (
@@ -135,14 +135,14 @@ export function ToolCatalog() {
                 </option>
               ))}
             </select>
-            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
           </div>
 
           {/* Clear Filters */}
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1 px-3 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="flex items-center gap-1 px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
             >
               <Filter className="h-4 w-4" />
               Clear filters
@@ -152,7 +152,7 @@ export function ToolCatalog() {
 
         {/* Active Filters */}
         {hasActiveFilters && (
-          <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-neutral-700">
+          <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-700">
             {searchQuery && (
               <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded text-xs">
                 Search: {searchQuery}
@@ -197,7 +197,7 @@ export function ToolCatalog() {
       {!loading && !error && (
         <>
           {/* Results Count */}
-          <div className="flex items-center justify-between text-sm text-gray-500 dark:text-neutral-400">
+          <div className="flex items-center justify-between text-sm text-neutral-500 dark:text-neutral-400">
             <span>
               Showing {tools.length} of {totalCount} tools
             </span>
@@ -211,7 +211,7 @@ export function ToolCatalog() {
               ))}
             </div>
           ) : (
-            <div className="col-span-full bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
+            <div className="col-span-full bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
               <EmptyState
                 variant={hasActiveFilters ? 'search' : 'tools'}
                 action={

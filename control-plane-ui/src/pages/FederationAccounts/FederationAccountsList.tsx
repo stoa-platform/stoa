@@ -79,13 +79,16 @@ export function FederationAccountsList() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-8 w-64 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
-          <div className="h-10 w-40 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-8 w-64 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-10 w-40 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
           <div className="p-6 space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-gray-100 dark:bg-neutral-700 rounded animate-pulse" />
+              <div
+                key={i}
+                className="h-12 bg-neutral-100 dark:bg-neutral-700 rounded animate-pulse"
+              />
             ))}
           </div>
         </div>
@@ -98,8 +101,8 @@ export function FederationAccountsList() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Federation</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Federation</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Manage master accounts and delegated sub-accounts for MCP federation
           </p>
         </div>
@@ -140,20 +143,20 @@ export function FederationAccountsList() {
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+              <tr className="border-b dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Name
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Status
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Sub-accounts
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Created
                 </th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Actions
                 </th>
               </tr>
@@ -164,15 +167,15 @@ export function FederationAccountsList() {
                 return (
                   <tr
                     key={account.id}
-                    className="hover:bg-gray-50 dark:hover:bg-neutral-750 cursor-pointer"
+                    className="hover:bg-neutral-50 dark:hover:bg-neutral-750 cursor-pointer"
                     onClick={() => navigate(`/federation/accounts/${account.id}`)}
                   >
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 dark:text-white text-sm">
+                      <div className="font-medium text-neutral-900 dark:text-white text-sm">
                         {account.name}
                       </div>
                       {account.description && (
-                        <div className="text-xs text-gray-500 dark:text-neutral-400 truncate max-w-xs">
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-xs">
                           {account.description}
                         </div>
                       )}
@@ -184,13 +187,13 @@ export function FederationAccountsList() {
                         {status.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       <span className="inline-flex items-center gap-1">
                         <Users className="h-3.5 w-3.5" />
                         {account.sub_account_count} / {account.max_sub_accounts}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-300">
+                    <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                       {formatDate(account.created_at)}
                     </td>
                     <td className="px-4 py-3 text-right">

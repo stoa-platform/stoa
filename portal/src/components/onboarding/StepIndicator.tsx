@@ -43,7 +43,7 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
                       ? 'bg-primary-600 border-primary-600 text-white'
                       : isCurrent
                         ? 'border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/30'
-                        : 'border-gray-300 dark:border-neutral-600 text-gray-400 dark:text-neutral-500'
+                        : 'border-neutral-300 dark:border-neutral-600 text-neutral-400 dark:text-neutral-500'
                   }`}
                 >
                   {isCompleted ? (
@@ -57,12 +57,12 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
                     className={`text-xs font-medium ${
                       isCurrent
                         ? 'text-primary-600 dark:text-primary-400'
-                        : 'text-gray-500 dark:text-neutral-400'
+                        : 'text-neutral-500 dark:text-neutral-400'
                     }`}
                   >
                     {t(step.labelKey)}
                   </p>
-                  <p className="text-xs text-gray-400 dark:text-neutral-500 hidden sm:block">
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500 hidden sm:block">
                     {t(step.descKey)}
                   </p>
                 </div>
@@ -70,7 +70,7 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
               {index < STEPS.length - 1 && (
                 <div
                   className={`flex-1 h-0.5 mx-4 mt-[-1.5rem] ${
-                    isCompleted ? 'bg-primary-600' : 'bg-gray-200 dark:bg-neutral-700'
+                    isCompleted ? 'bg-primary-600' : 'bg-neutral-200 dark:bg-neutral-700'
                   }`}
                 />
               )}

@@ -53,7 +53,7 @@ export function HomePageSkeleton() {
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
-            className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4"
+            className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -69,7 +69,7 @@ export function HomePageSkeleton() {
       {/* Two columns: Quick Actions + Recent */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Quick actions */}
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
           <Skeleton className="h-6 w-32 mb-4" />
           <div className="grid grid-cols-2 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -79,7 +79,7 @@ export function HomePageSkeleton() {
         </div>
 
         {/* Recent activity */}
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
           <Skeleton className="h-6 w-36 mb-4" />
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (

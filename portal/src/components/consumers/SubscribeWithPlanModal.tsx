@@ -112,19 +112,19 @@ export function SubscribeWithPlanModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-neutral-700">
+          <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
                 Subscribe to API
               </h2>
-              <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                 {api.name} v{api.version}
               </p>
             </div>
             <button
               onClick={handleClose}
               disabled={isLoading}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <X className="h-5 w-5" />
             </button>
@@ -143,14 +143,14 @@ export function SubscribeWithPlanModal({
               <div>
                 <label
                   htmlFor="application"
-                  className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
                 >
                   Application <span className="text-red-500">*</span>
                 </label>
                 {appsLoading ? (
-                  <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                    <span className="text-sm text-gray-500 dark:text-neutral-400">
+                  <div className="flex items-center gap-2 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
+                    <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                    <span className="text-sm text-neutral-500 dark:text-neutral-400">
                       Loading applications...
                     </span>
                   </div>
@@ -173,7 +173,7 @@ export function SubscribeWithPlanModal({
                     onChange={(e) => setSelectedAppId(e.target.value)}
                     disabled={isLoading}
                     required
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"
+                    className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"
                   >
                     <option value="">Select an application...</option>
                     {activeApps.map((app: Application) => (
@@ -189,7 +189,7 @@ export function SubscribeWithPlanModal({
               <div>
                 <span
                   id="plan-label"
-                  className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3"
                 >
                   Plan <span className="text-red-500">*</span>
                 </span>
@@ -215,12 +215,12 @@ export function SubscribeWithPlanModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-neutral-700">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-200 dark:border-neutral-700">
               <button
                 type="button"
                 onClick={handleClose}
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

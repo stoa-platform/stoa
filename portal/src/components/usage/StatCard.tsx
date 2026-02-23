@@ -66,9 +66,9 @@ export const StatCard = memo(function StatCard({
   if (isLoading) {
     return (
       <div className={`rounded-xl border ${colors.border} ${colors.bg} p-6 animate-pulse`}>
-        <div className="h-4 w-24 bg-gray-200 dark:bg-neutral-700 rounded mb-3" />
-        <div className="h-8 w-32 bg-gray-200 dark:bg-neutral-700 rounded mb-2" />
-        <div className="h-3 w-20 bg-gray-200 dark:bg-neutral-700 rounded" />
+        <div className="h-4 w-24 bg-neutral-200 dark:bg-neutral-700 rounded mb-3" />
+        <div className="h-8 w-32 bg-neutral-200 dark:bg-neutral-700 rounded mb-2" />
+        <div className="h-3 w-20 bg-neutral-200 dark:bg-neutral-700 rounded" />
       </div>
     );
   }
@@ -78,7 +78,7 @@ export const StatCard = memo(function StatCard({
       className={`rounded-xl border ${colors.border} ${colors.bg} p-6 transition-shadow hover:shadow-md`}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wide">
+        <span className="text-sm font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">
           {title}
         </span>
         {icon && <span className={colors.icon}>{icon}</span>}
@@ -88,7 +88,7 @@ export const StatCard = memo(function StatCard({
 
       <div className="flex items-center gap-2">
         {subtitle && (
-          <span className="text-sm text-gray-500 dark:text-neutral-400">{subtitle}</span>
+          <span className="text-sm text-neutral-500 dark:text-neutral-400">{subtitle}</span>
         )}
 
         {trend && (

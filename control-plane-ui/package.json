@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "i18n:check:strict": "node scripts/i18n-check.mjs --fail-on-missing"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.0",

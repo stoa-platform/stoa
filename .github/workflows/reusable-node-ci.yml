@@ -60,6 +60,12 @@ jobs:
         working-directory: ${{ inputs.component }}
         run: npm run format:check --if-present
 
+      - name: Check i18n keys
+        if: hashFiles(format('{0}/scripts/i18n-check.mjs', inputs.component)) != ''
+        working-directory: ${{ inputs.component }}
+        continue-on-error: true
+        run: npm run i18n:check --if-present
+
       - name: Run tests
         working-directory: ${{ inputs.component }}
         run: npm run ${{ inputs.run-coverage && 'test:coverage' || 'test' }}

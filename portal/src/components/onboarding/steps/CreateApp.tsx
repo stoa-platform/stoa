@@ -33,15 +33,15 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('createApp.title')}</h2>
-        <p className="mt-2 text-gray-500 dark:text-neutral-400">{t('createApp.subtitle')}</p>
+        <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">{t('createApp.title')}</h2>
+        <p className="mt-2 text-neutral-500 dark:text-neutral-400">{t('createApp.subtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label
             htmlFor="displayName"
-            className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+            className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
           >
             {t('createApp.appName')}
           </label>
@@ -57,14 +57,14 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
               }
             }}
             placeholder={t('createApp.appNamePlaceholder')}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
           />
         </div>
 
         <div>
           <label
             htmlFor="slug"
-            className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+            className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
           >
             {t('createApp.slug')}
           </label>
@@ -74,14 +74,14 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
             value={name}
             onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
             placeholder={t('createApp.slugPlaceholder')}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none font-mono text-sm"
+            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none font-mono text-sm"
           />
         </div>
 
         <div>
           <label
             htmlFor="description"
-            className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+            className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
           >
             {t('createApp.description')}
           </label>
@@ -91,7 +91,7 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('createApp.descriptionPlaceholder')}
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-none"
+            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-none"
           />
         </div>
 
@@ -106,7 +106,7 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
           <button
             type="button"
             onClick={onBack}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+            className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white transition-colors"
           >
             {t('createApp.back')}
           </button>

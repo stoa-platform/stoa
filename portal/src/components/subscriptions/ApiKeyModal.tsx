@@ -83,16 +83,16 @@ export function ApiKeyModal({ isOpen, onClose, apiKey, toolId, toolName }: ApiKe
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-neutral-700">
+          <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
                   Subscription Created
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
                   {toolName || toolId}
                 </p>
               </div>
@@ -100,7 +100,7 @@ export function ApiKeyModal({ isOpen, onClose, apiKey, toolId, toolName }: ApiKe
             {acknowledged && (
               <button
                 onClick={handleClose}
-                className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+                className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -127,14 +127,14 @@ export function ApiKeyModal({ isOpen, onClose, apiKey, toolId, toolName }: ApiKe
             <div>
               <span
                 id="api-key-label"
-                className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
+                className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
               >
                 Your API Key
               </span>
               <div className="relative">
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-gray-900 rounded-lg">
-                    <Key className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-neutral-900 rounded-lg">
+                    <Key className="h-4 w-4 text-neutral-400 flex-shrink-0" />
                     <code className="flex-1 text-sm font-mono text-green-400 break-all select-all">
                       {apiKey}
                     </code>
@@ -144,7 +144,7 @@ export function ApiKeyModal({ isOpen, onClose, apiKey, toolId, toolName }: ApiKe
                     className={`p-3 rounded-lg transition-colors ${
                       copied
                         ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                        : 'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400 hover:bg-gray-200 dark:hover:bg-neutral-600'
+                        : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-600'
                     }`}
                     title={copied ? 'Copied!' : 'Copy to clipboard'}
                   >
@@ -161,7 +161,7 @@ export function ApiKeyModal({ isOpen, onClose, apiKey, toolId, toolName }: ApiKe
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleDownloadConfig}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-600 transition-colors text-sm font-medium"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors text-sm font-medium"
               >
                 <Download className="h-4 w-4" />
                 Download Config
@@ -177,11 +177,11 @@ export function ApiKeyModal({ isOpen, onClose, apiKey, toolId, toolName }: ApiKe
 
             {/* Usage Example */}
             <div>
-              <span className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+              <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                 Usage Example
               </span>
-              <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                <pre className="text-sm text-gray-100 font-mono whitespace-pre-wrap">
+              <div className="bg-neutral-900 rounded-lg p-4 overflow-x-auto">
+                <pre className="text-sm text-neutral-100 font-mono whitespace-pre-wrap">
                   {`# Use with Claude Desktop
 # Add to ~/.config/claude/claude_desktop_config.json
 
@@ -200,9 +200,9 @@ curl -X POST https://mcp.gostoa.dev/mcp/v1/invoke \\
                 type="checkbox"
                 checked={acknowledged}
                 onChange={(e) => setAcknowledged(e.target.checked)}
-                className="mt-1 h-4 w-4 text-primary-600 border-gray-300 dark:border-neutral-600 rounded focus:ring-primary-500 dark:bg-neutral-800"
+                className="mt-1 h-4 w-4 text-primary-600 border-neutral-300 dark:border-neutral-600 rounded focus:ring-primary-500 dark:bg-neutral-800"
               />
-              <span className="text-sm text-gray-700 dark:text-neutral-300">
+              <span className="text-sm text-neutral-700 dark:text-neutral-300">
                 I have copied and securely stored my API key. I understand that this key will not be
                 shown again.
               </span>
@@ -210,14 +210,14 @@ curl -X POST https://mcp.gostoa.dev/mcp/v1/invoke \\
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-neutral-700">
+          <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-200 dark:border-neutral-700">
             <button
               onClick={handleClose}
               disabled={!acknowledged}
               className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                 acknowledged
                   ? 'bg-primary-600 text-white hover:bg-primary-700'
-                  : 'bg-gray-200 dark:bg-neutral-600 text-gray-400 dark:text-neutral-500 cursor-not-allowed'
+                  : 'bg-neutral-200 dark:bg-neutral-600 text-neutral-400 dark:text-neutral-500 cursor-not-allowed'
               }`}
             >
               Done

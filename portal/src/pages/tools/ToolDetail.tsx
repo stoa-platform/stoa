@@ -119,7 +119,7 @@ export function ToolDetail() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-neutral-400">Loading tool details...</p>
+          <p className="text-neutral-500 dark:text-neutral-400">Loading tool details...</p>
         </div>
       </div>
     );
@@ -164,14 +164,14 @@ export function ToolDetail() {
       {/* Back Button */}
       <Link
         to="/tools"
-        className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+        className="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Tools Catalog
       </Link>
 
       {/* Header Card */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           {/* Tool Info */}
           <div className="flex-1">
@@ -181,7 +181,7 @@ export function ToolDetail() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
                     {tool.displayName || tool.name}
                   </h1>
                   <span
@@ -190,18 +190,18 @@ export function ToolDetail() {
                     {status.label}
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-                  <code className="bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded dark:text-neutral-200">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                  <code className="bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 rounded dark:text-neutral-200">
                     {tool.name}
                   </code>
                   {tool.version && <span className="ml-2">v{tool.version}</span>}
                 </p>
-                <p className="text-gray-600 dark:text-neutral-400 mt-3">{tool.description}</p>
+                <p className="text-neutral-600 dark:text-neutral-400 mt-3">{tool.description}</p>
               </div>
             </div>
 
             {/* Meta Info */}
-            <div className="flex flex-wrap items-center gap-4 mt-6 text-sm text-gray-500 dark:text-neutral-400">
+            <div className="flex flex-wrap items-center gap-4 mt-6 text-sm text-neutral-500 dark:text-neutral-400">
               {tool.category && (
                 <div className="flex items-center gap-1.5">
                   <Tag className="h-4 w-4" />
@@ -236,7 +236,7 @@ export function ToolDetail() {
                 {tool.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="px-2 py-1 text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400 rounded"
+                    className="px-2 py-1 text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 rounded"
                   >
                     {tag}
                   </span>
@@ -258,7 +258,7 @@ export function ToolDetail() {
             )}
             <button
               onClick={() => refetch()}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
             >
               <RefreshCw className="h-4 w-4" />
               Refresh
@@ -268,8 +268,8 @@ export function ToolDetail() {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
-        <div className="border-b border-gray-200 dark:border-neutral-700">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+        <div className="border-b border-neutral-200 dark:border-neutral-700">
           <nav className="flex -mb-px">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -280,7 +280,7 @@ export function ToolDetail() {
                   className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === tab.id
                       ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600'
+                      : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -299,11 +299,11 @@ export function ToolDetail() {
               {/* Endpoint Info */}
               {tool.endpoint && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                  <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
                     Endpoint Configuration
                   </h3>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg text-sm font-mono text-gray-800 dark:text-neutral-200 overflow-x-auto">
+                    <code className="flex-1 px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm font-mono text-neutral-800 dark:text-neutral-200 overflow-x-auto">
                       {tool.endpoint}
                     </code>
                     {tool.method && (
@@ -330,11 +330,11 @@ export function ToolDetail() {
 
               {/* Usage Example */}
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
                   Usage Example
                 </h3>
-                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                  <pre className="text-sm text-gray-100 font-mono">
+                <div className="bg-neutral-900 rounded-lg p-4 overflow-x-auto">
+                  <pre className="text-sm text-neutral-100 font-mono">
                     {`// MCP Client Usage
 const response = await mcpClient.callTool({
   name: "${tool.name}",
@@ -361,20 +361,20 @@ ${
 
               {/* Quick Actions */}
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
                   Quick Actions
                 </h3>
                 <div className="flex flex-wrap gap-3">
                   <Link
                     to="/subscriptions"
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
                   >
                     <CheckCircle className="h-4 w-4" />
                     View My Subscriptions
                   </Link>
                   <button
                     onClick={() => setActiveTab('try-it')}
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
                   >
                     <Play className="h-4 w-4" />
                     Try This Tool
@@ -384,7 +384,7 @@ ${
                       href={tool.endpoint}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
+                      className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
                     >
                       <ExternalLink className="h-4 w-4" />
                       Open Endpoint
@@ -399,7 +399,7 @@ ${
           {activeTab === 'schema' && (
             <div className="space-y-6">
               {schemaLoading ? (
-                <div className="flex items-center gap-2 text-gray-500 dark:text-neutral-400 py-8 justify-center">
+                <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400 py-8 justify-center">
                   <Loader2 className="h-5 w-5 animate-spin" />
                   Loading schema...
                 </div>
@@ -411,10 +411,10 @@ ${
                   {/* Output Schema */}
                   {tool.outputSchema && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                      <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
                         Output Schema
                       </h3>
-                      <pre className="p-4 bg-gray-900 text-gray-100 rounded-lg overflow-x-auto text-sm font-mono">
+                      <pre className="p-4 bg-neutral-900 text-neutral-100 rounded-lg overflow-x-auto text-sm font-mono">
                         {JSON.stringify(tool.outputSchema, null, 2)}
                       </pre>
                     </div>

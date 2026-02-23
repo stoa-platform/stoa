@@ -139,7 +139,7 @@ export function RotateKeyModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-neutral-700">
+          <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700">
             <div className="flex items-center gap-3">
               <div
                 className={`p-2 rounded-lg ${step === 'success' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-primary-100 dark:bg-primary-900/30'}`}
@@ -151,10 +151,10 @@ export function RotateKeyModal({
                 )}
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
                   {step === 'success' ? 'Key Rotated Successfully' : 'Rotate API Key'}
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
                   {subscription.tool_id}
                 </p>
               </div>
@@ -162,7 +162,7 @@ export function RotateKeyModal({
             {(step === 'confirm' || acknowledged) && (
               <button
                 onClick={handleClose}
-                className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+                className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -191,20 +191,20 @@ export function RotateKeyModal({
                 <div>
                   <label
                     htmlFor="grace-period-select"
-                    className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
+                    className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
                   >
                     Grace Period Duration
                   </label>
                   <div className="flex items-center gap-3">
                     <Clock
-                      className="h-5 w-5 text-gray-400 dark:text-neutral-500"
+                      className="h-5 w-5 text-neutral-400 dark:text-neutral-500"
                       aria-hidden="true"
                     />
                     <select
                       id="grace-period-select"
                       value={gracePeriodHours}
                       onChange={(e) => setGracePeriodHours(parseInt(e.target.value))}
-                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
+                      className="flex-1 px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
                     >
                       <option value={1}>1 hour</option>
                       <option value={6}>6 hours</option>
@@ -215,7 +215,7 @@ export function RotateKeyModal({
                       <option value={168}>168 hours (7 days)</option>
                     </select>
                   </div>
-                  <p className="mt-2 text-sm text-gray-500 dark:text-neutral-400">
+                  <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
                     Your old key will remain valid until{' '}
                     <strong>
                       {new Date(Date.now() + gracePeriodHours * 60 * 60 * 1000).toLocaleString()}
@@ -224,13 +224,13 @@ export function RotateKeyModal({
                 </div>
 
                 {/* Email notification info */}
-                <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg">
-                  <Mail className="h-5 w-5 text-gray-500 dark:text-neutral-400 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start gap-3 p-4 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg">
+                  <Mail className="h-5 w-5 text-neutral-500 dark:text-neutral-400 mt-0.5 flex-shrink-0" />
                   <div>
-                    <h4 className="font-medium text-gray-800 dark:text-neutral-200">
+                    <h4 className="font-medium text-neutral-800 dark:text-neutral-200">
                       Email Notification
                     </h4>
-                    <p className="text-sm text-gray-600 dark:text-neutral-400 mt-1">
+                    <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
                       A notification will be sent to your email with the new API key for your
                       records.
                     </p>
@@ -280,13 +280,13 @@ export function RotateKeyModal({
                 {/* New API Key Display */}
                 {rotationResult && (
                   <div>
-                    <span className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+                    <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                       Your New API Key
                     </span>
                     <div className="relative">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-gray-900 rounded-lg">
-                          <Key className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-neutral-900 rounded-lg">
+                          <Key className="h-4 w-4 text-neutral-400 flex-shrink-0" />
                           <code className="flex-1 text-sm font-mono text-green-400 break-all select-all">
                             {rotationResult.new_api_key}
                           </code>
@@ -296,7 +296,7 @@ export function RotateKeyModal({
                           className={`p-3 rounded-lg transition-colors ${
                             copied
                               ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                              : 'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400 hover:bg-gray-200 dark:hover:bg-neutral-600'
+                              : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-600'
                           }`}
                           title={copied ? 'Copied!' : 'Copy to clipboard'}
                         >
@@ -341,7 +341,7 @@ export function RotateKeyModal({
                 <div className="flex flex-wrap gap-3">
                   <button
                     onClick={handleDownloadConfig}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-600 transition-colors text-sm font-medium"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors text-sm font-medium"
                   >
                     <Download className="h-4 w-4" />
                     Download Config
@@ -354,9 +354,9 @@ export function RotateKeyModal({
                     type="checkbox"
                     checked={acknowledged}
                     onChange={(e) => setAcknowledged(e.target.checked)}
-                    className="mt-1 h-4 w-4 text-primary-600 border-gray-300 dark:border-neutral-600 rounded focus:ring-primary-500 dark:bg-neutral-800"
+                    className="mt-1 h-4 w-4 text-primary-600 border-neutral-300 dark:border-neutral-600 rounded focus:ring-primary-500 dark:bg-neutral-800"
                   />
-                  <span className="text-sm text-gray-700 dark:text-neutral-300">
+                  <span className="text-sm text-neutral-700 dark:text-neutral-300">
                     I have copied and securely stored my new API key. I understand that I need to
                     update my applications before the grace period ends.
                   </span>
@@ -366,13 +366,13 @@ export function RotateKeyModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-neutral-700">
+          <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-200 dark:border-neutral-700">
             {step === 'confirm' ? (
               <>
                 <button
                   onClick={handleClose}
                   disabled={isRotating}
-                  className="px-4 py-2 text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
+                  className="px-4 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
                 >
                   Cancel
                 </button>
@@ -401,7 +401,7 @@ export function RotateKeyModal({
                 className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                   acknowledged
                     ? 'bg-primary-600 text-white hover:bg-primary-700'
-                    : 'bg-gray-200 dark:bg-neutral-600 text-gray-400 dark:text-neutral-500 cursor-not-allowed'
+                    : 'bg-neutral-200 dark:bg-neutral-600 text-neutral-400 dark:text-neutral-500 cursor-not-allowed'
                 }`}
               >
                 Done

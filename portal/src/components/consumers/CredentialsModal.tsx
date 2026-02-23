@@ -51,16 +51,16 @@ export function CredentialsModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-neutral-700">
+          <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
                 Consumer Credentials
               </h2>
-              <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">{consumerName}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">{consumerName}</p>
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+              className="p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -106,10 +106,10 @@ export function CredentialsModal({
 
             {/* Grant Type */}
             <div>
-              <span className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Grant Type
               </span>
-              <div className="px-4 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg font-mono text-sm text-gray-700 dark:text-neutral-300">
+              <div className="px-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg font-mono text-sm text-neutral-700 dark:text-neutral-300">
                 {credentials.grant_type}
               </div>
             </div>
@@ -117,18 +117,18 @@ export function CredentialsModal({
             {/* cURL snippet */}
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Terminal className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-                <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                <Terminal className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                   Quick Test
                 </span>
               </div>
               <div className="relative">
-                <pre className="px-4 py-3 bg-gray-900 dark:bg-neutral-950 text-green-400 text-xs rounded-lg overflow-x-auto">
+                <pre className="px-4 py-3 bg-neutral-900 dark:bg-neutral-950 text-green-400 text-xs rounded-lg overflow-x-auto">
                   {curlSnippet}
                 </pre>
                 <button
                   onClick={() => copyToClipboard(curlSnippet, 'curl')}
-                  className="absolute top-2 right-2 p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 transition-colors"
+                  className="absolute top-2 right-2 p-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-neutral-300 transition-colors"
                   title="Copy cURL command"
                 >
                   {copiedField === 'curl' ? (
@@ -143,7 +143,7 @@ export function CredentialsModal({
 
           {/* Token Exchange Section */}
           {tenantId && consumerId && (
-            <div className="px-6 pb-4 border-t border-gray-200 dark:border-neutral-700 pt-4">
+            <div className="px-6 pb-4 border-t border-neutral-200 dark:border-neutral-700 pt-4">
               <TokenExchangePanel
                 tenantId={tenantId}
                 consumerId={consumerId}
@@ -153,7 +153,7 @@ export function CredentialsModal({
           )}
 
           {/* Footer */}
-          <div className="flex justify-end p-6 border-t border-gray-200 dark:border-neutral-700">
+          <div className="flex justify-end p-6 border-t border-neutral-200 dark:border-neutral-700">
             <button
               onClick={onClose}
               className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
@@ -182,17 +182,17 @@ function CredentialField({
 }) {
   return (
     <div>
-      <span className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+      <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
         {label}
       </span>
       <div className="flex items-center gap-2">
-        <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg font-mono text-sm">
-          <Key className="h-4 w-4 text-gray-400 dark:text-neutral-500 flex-shrink-0" />
-          <span className="flex-1 truncate text-gray-700 dark:text-neutral-300">{value}</span>
+        <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg font-mono text-sm">
+          <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500 flex-shrink-0" />
+          <span className="flex-1 truncate text-neutral-700 dark:text-neutral-300">{value}</span>
         </div>
         <button
           onClick={() => onCopy(value, fieldKey)}
-          className="p-2 text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+          className="p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
           title={`Copy ${label}`}
         >
           {copiedField === fieldKey ? (

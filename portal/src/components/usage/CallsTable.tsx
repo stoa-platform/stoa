@@ -77,12 +77,12 @@ function TableSkeleton() {
       {[...Array(5)].map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-4 p-4 border-b border-gray-100 dark:border-neutral-700"
+          className="flex items-center gap-4 p-4 border-b border-neutral-100 dark:border-neutral-700"
         >
-          <div className="h-4 w-20 bg-gray-200 dark:bg-neutral-700 rounded" />
-          <div className="h-4 w-32 bg-gray-200 dark:bg-neutral-700 rounded flex-1" />
-          <div className="h-6 w-16 bg-gray-200 dark:bg-neutral-700 rounded-full" />
-          <div className="h-4 w-16 bg-gray-200 dark:bg-neutral-700 rounded" />
+          <div className="h-4 w-20 bg-neutral-200 dark:bg-neutral-700 rounded" />
+          <div className="h-4 w-32 bg-neutral-200 dark:bg-neutral-700 rounded flex-1" />
+          <div className="h-6 w-16 bg-neutral-200 dark:bg-neutral-700 rounded-full" />
+          <div className="h-4 w-16 bg-neutral-200 dark:bg-neutral-700 rounded" />
         </div>
       ))}
     </div>
@@ -125,13 +125,13 @@ export const CallsTable = memo(function CallsTable({
   );
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 overflow-hidden">
+    <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 overflow-hidden">
       {/* Header avec filtres */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-neutral-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Calls</h3>
+      <div className="flex items-center justify-between p-4 border-b border-neutral-100 dark:border-neutral-700">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">Recent Calls</h3>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 dark:text-neutral-400 mr-2">Filter:</span>
+          <span className="text-sm text-neutral-500 dark:text-neutral-400 mr-2">Filter:</span>
 
           {(['all', 'success', 'error', 'timeout'] as const).map((status) => (
             <button
@@ -144,7 +144,7 @@ export const CallsTable = memo(function CallsTable({
                 ${
                   (status === 'all' && !selectedStatus) || selectedStatus === status
                     ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700'
-                    : 'bg-gray-50 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 border border-transparent hover:bg-gray-100 dark:hover:bg-neutral-600'
+                    : 'bg-neutral-50 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 border border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-600'
                 }
               `}
             >
@@ -161,7 +161,7 @@ export const CallsTable = memo(function CallsTable({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider border-b border-gray-100 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900">
+              <tr className="text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
                 <th className="px-4 py-3">Time</th>
                 <th className="px-4 py-3">Tool</th>
                 <th className="px-4 py-3">Status</th>
@@ -172,19 +172,19 @@ export const CallsTable = memo(function CallsTable({
               {paginatedCalls.map((call) => (
                 <tr
                   key={call.id}
-                  className="border-b border-gray-50 dark:border-neutral-700/50 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+                  className="border-b border-neutral-50 dark:border-neutral-700/50 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <span className="text-sm text-gray-500 dark:text-neutral-400">
+                    <span className="text-sm text-neutral-500 dark:text-neutral-400">
                       {formatTimestamp(call.timestamp)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      <div className="text-sm font-medium text-neutral-900 dark:text-white">
                         {call.tool_name}
                       </div>
-                      <div className="text-xs text-gray-400 dark:text-neutral-500">
+                      <div className="text-xs text-neutral-400 dark:text-neutral-500">
                         {call.tool_id}
                       </div>
                     </div>
@@ -196,7 +196,7 @@ export const CallsTable = memo(function CallsTable({
                     <span
                       className={`
                       text-sm font-mono
-                      ${call.latency_ms > 500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-neutral-300'}
+                      ${call.latency_ms > 500 ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-600 dark:text-neutral-300'}
                     `}
                     >
                       {formatLatency(call.latency_ms)}
@@ -210,29 +210,29 @@ export const CallsTable = memo(function CallsTable({
           {/* Empty state */}
           {paginatedCalls.length === 0 && (
             <div className="p-8 text-center">
-              <p className="text-gray-500 dark:text-neutral-400">No calls found</p>
+              <p className="text-neutral-500 dark:text-neutral-400">No calls found</p>
             </div>
           )}
         </div>
       )}
 
       {/* Footer with pagination */}
-      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900">
-        <span className="text-sm text-gray-500 dark:text-neutral-400">
+      <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
+        <span className="text-sm text-neutral-500 dark:text-neutral-400">
           {filteredCalls.length} results — Page {currentPage}/{totalPages}
         </span>
         <div className="flex gap-2">
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+            className="px-3 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
           >
             Previous
           </button>
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+            className="px-3 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
           >
             Next
           </button>

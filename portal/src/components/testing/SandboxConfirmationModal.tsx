@@ -49,7 +49,7 @@ export function SandboxConfirmationModal({
           {/* Close button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors"
+            className="absolute top-4 right-4 p-1 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -61,10 +61,10 @@ export function SandboxConfirmationModal({
                 <AlertTriangle className="h-6 w-6 text-amber-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
                   Production Environment Warning
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                   You are about to test against <strong>{environmentName}</strong>
                 </p>
               </div>
@@ -103,23 +103,23 @@ export function SandboxConfirmationModal({
               </ul>
             </div>
 
-            <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
               For safe testing without affecting production, consider using a non-production
               environment through the Development Portal at{' '}
-              <code className="bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded text-xs dark:text-white">
+              <code className="bg-neutral-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded text-xs dark:text-white">
                 portal.dev.gostoa.dev
               </code>
             </p>
 
             {/* Confirmation Checkbox */}
-            <label className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors">
+            <label className="flex items-start gap-3 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors">
               <input
                 type="checkbox"
                 checked={understood}
                 onChange={(e) => setUnderstood(e.target.checked)}
-                className="h-5 w-5 mt-0.5 rounded border-gray-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
+                className="h-5 w-5 mt-0.5 rounded border-neutral-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
               />
-              <span className="text-sm text-gray-700 dark:text-neutral-300">
+              <span className="text-sm text-neutral-700 dark:text-neutral-300">
                 I understand I am testing against a <strong>production environment</strong>
                 and my requests may affect production data and be logged for audit purposes.
               </span>
@@ -127,10 +127,10 @@ export function SandboxConfirmationModal({
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-gray-50 dark:bg-neutral-900 rounded-b-xl flex items-center justify-end gap-3">
+          <div className="px-6 py-4 bg-neutral-50 dark:bg-neutral-900 rounded-b-xl flex items-center justify-end gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
+              className="px-4 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
             >
               Cancel
             </button>
@@ -142,7 +142,7 @@ export function SandboxConfirmationModal({
                 ${
                   understood
                     ? 'bg-amber-600 text-white hover:bg-amber-700'
-                    : 'bg-gray-200 dark:bg-neutral-600 text-gray-400 dark:text-neutral-400 cursor-not-allowed'
+                    : 'bg-neutral-200 dark:bg-neutral-600 text-neutral-400 dark:text-neutral-400 cursor-not-allowed'
                 }
               `}
             >

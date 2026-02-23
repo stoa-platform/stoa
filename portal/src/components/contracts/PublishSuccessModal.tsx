@@ -78,7 +78,7 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
           {/* Close button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors"
+            className="absolute top-4 right-4 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
             aria-label="Close modal"
           >
             <X className="h-5 w-5" />
@@ -95,11 +95,11 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
               <div>
                 <h2
                   id="publish-success-title"
-                  className="text-xl font-semibold text-gray-900 dark:text-white"
+                  className="text-xl font-semibold text-neutral-900 dark:text-white"
                 >
                   Contract published!
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
                   <span className="font-mono font-medium">{data.name}</span> v{data.version}
                 </p>
               </div>
@@ -107,11 +107,11 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
           </div>
 
           {/* Divider */}
-          <div className="border-t border-gray-100 dark:border-neutral-700" />
+          <div className="border-t border-neutral-100 dark:border-neutral-700" />
 
           {/* Bindings list */}
           <div className="p-6 pt-4">
-            <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+            <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
               Auto-generated bindings
             </h3>
 
@@ -122,9 +122,9 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
             </div>
 
             {/* Stats summary */}
-            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-700">
-              <p className="text-sm text-gray-500 dark:text-neutral-400">
-                <span className="font-medium text-gray-700 dark:text-neutral-300">
+            <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                <span className="font-medium text-neutral-700 dark:text-neutral-300">
                   {createdBindings.length}
                 </span>{' '}
                 binding
@@ -133,7 +133,7 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
                   <span>
                     {' '}
                     &bull;{' '}
-                    <span className="font-medium text-gray-700 dark:text-neutral-300">
+                    <span className="font-medium text-neutral-700 dark:text-neutral-300">
                       {availableBindings.length}
                     </span>{' '}
                     more available
@@ -147,7 +147,7 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
           <div className="p-6 pt-0 flex gap-3">
             <button
               onClick={() => onViewContract?.(data.id)}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
               View Contract

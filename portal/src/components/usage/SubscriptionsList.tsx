@@ -46,8 +46,8 @@ function StatusBadge({ status }: { status: string }) {
   };
 
   const config = configs[status] || {
-    bg: 'bg-gray-100 dark:bg-neutral-700',
-    text: 'text-gray-700 dark:text-neutral-300',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
+    text: 'text-neutral-700 dark:text-neutral-300',
   };
 
   return (
@@ -65,12 +65,12 @@ function ListSkeleton() {
       {[...Array(4)].map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg"
+          className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg"
         >
-          <div className="w-8 h-8 bg-gray-200 dark:bg-neutral-600 rounded" />
+          <div className="w-8 h-8 bg-neutral-200 dark:bg-neutral-600 rounded" />
           <div className="flex-1">
-            <div className="h-4 w-32 bg-gray-200 dark:bg-neutral-600 rounded mb-1" />
-            <div className="h-3 w-24 bg-gray-200 dark:bg-neutral-600 rounded" />
+            <div className="h-4 w-32 bg-neutral-200 dark:bg-neutral-600 rounded mb-1" />
+            <div className="h-3 w-24 bg-neutral-200 dark:bg-neutral-600 rounded" />
           </div>
         </div>
       ))}
@@ -81,8 +81,8 @@ function ListSkeleton() {
 export function SubscriptionsList({ subscriptions, isLoading = false }: SubscriptionsListProps) {
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
           Active Subscriptions
         </h3>
         <ListSkeleton />
@@ -91,11 +91,11 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
+    <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
           Active Subscriptions
-          <span className="ml-2 text-sm font-normal text-gray-500 dark:text-neutral-400">
+          <span className="ml-2 text-sm font-normal text-neutral-500 dark:text-neutral-400">
             ({subscriptions.length})
           </span>
         </h3>
@@ -110,8 +110,8 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
 
       {subscriptions.length === 0 ? (
         <div className="text-center py-8">
-          <CreditCard className="w-8 h-8 text-gray-300 dark:text-neutral-600 mx-auto mb-2" />
-          <p className="text-gray-500 dark:text-neutral-400 text-sm">No active subscriptions</p>
+          <CreditCard className="w-8 h-8 text-neutral-300 dark:text-neutral-600 mx-auto mb-2" />
+          <p className="text-neutral-500 dark:text-neutral-400 text-sm">No active subscriptions</p>
           <Link
             to="/tools"
             className="text-sm text-primary-600 hover:text-primary-700 mt-2 inline-block"
@@ -124,7 +124,7 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
           {subscriptions.map((sub) => (
             <div
               key={sub.id}
-              className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors group"
+              className="flex items-center gap-3 p-3 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors group"
             >
               <div className="w-8 h-8 rounded bg-primary-100 flex items-center justify-center">
                 <CreditCard className="w-4 h-4 text-primary-600" />
@@ -132,12 +132,12 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
                     {sub.tool_name}
                   </span>
                   <StatusBadge status={sub.status} />
                 </div>
-                <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-neutral-500">
+                <div className="flex items-center gap-3 text-xs text-neutral-400 dark:text-neutral-500">
                   <span>{sub.call_count_total.toLocaleString()} calls</span>
                   <span>•</span>
                   <span>Last used {formatLastUsed(sub.last_used_at)}</span>
@@ -146,9 +146,9 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
 
               <Link
                 to={`/tools/${sub.tool_id}`}
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-200 dark:hover:bg-neutral-600 rounded"
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded"
               >
-                <ExternalLink className="w-4 h-4 text-gray-400 dark:text-neutral-500" />
+                <ExternalLink className="w-4 h-4 text-neutral-400 dark:text-neutral-500" />
               </Link>
             </div>
           ))}

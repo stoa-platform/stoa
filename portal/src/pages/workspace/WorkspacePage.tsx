@@ -29,9 +29,9 @@ type TabId = (typeof allTabs)[number]['id'];
 function TabSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
-      <div className="h-8 bg-gray-200 dark:bg-neutral-700 rounded w-1/3" />
-      <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-2/3" />
-      <div className="h-64 bg-gray-200 dark:bg-neutral-700 rounded" />
+      <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-1/3" />
+      <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-2/3" />
+      <div className="h-64 bg-neutral-200 dark:bg-neutral-700 rounded" />
     </div>
   );
 }
@@ -61,16 +61,16 @@ export function WorkspacePage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
           {i18nEnabled ? t('title') : 'My Workspace'}
         </h1>
-        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
           {i18nEnabled ? t('subtitle') : 'Manage your apps, subscriptions, and contracts'}
         </p>
       </div>
 
       {/* Tab bar */}
-      <div className="border-b border-gray-200 dark:border-neutral-700 mb-6">
+      <div className="border-b border-neutral-200 dark:border-neutral-700 mb-6">
         <nav className="-mb-px flex gap-6" aria-label="Workspace tabs">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -81,7 +81,7 @@ export function WorkspacePage() {
                 className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
                   isActive
                     ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
-                    : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600'
+                    : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600'
                 }`}
               >
                 <tab.icon className="h-4 w-4" />

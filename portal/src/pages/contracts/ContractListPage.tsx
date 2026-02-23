@@ -75,7 +75,7 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
     <Link
       to={`/contracts/${contract.id}`}
       className="
-        block bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700
+        block bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700
         hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md
         transition-all duration-200
         overflow-hidden
@@ -85,10 +85,10 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-2 min-w-0">
-            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+            <h3 className="font-semibold text-neutral-900 dark:text-white truncate">
               {contract.display_name || contract.name}
             </h3>
-            <span className="flex-shrink-0 text-xs text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded">
+            <span className="flex-shrink-0 text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded">
               v{contract.version}
             </span>
           </div>
@@ -106,7 +106,7 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
 
         {/* Description */}
         {contract.description && (
-          <p className="text-sm text-gray-600 dark:text-neutral-400 mb-3 line-clamp-2">
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3 line-clamp-2">
             {contract.description}
           </p>
         )}
@@ -119,14 +119,14 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
 
           {/* Show count of disabled bindings */}
           {badgeBindings.length > enabledBindings.length && (
-            <span className="text-xs text-gray-400 dark:text-neutral-500">
+            <span className="text-xs text-neutral-400 dark:text-neutral-500">
               +{badgeBindings.length - enabledBindings.length} available
             </span>
           )}
         </div>
 
         {/* Stats footer */}
-        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-neutral-400 pt-3 border-t border-gray-100 dark:border-neutral-700">
+        <div className="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400 pt-3 border-t border-neutral-100 dark:border-neutral-700">
           <span>Updated {formatRelativeTime(contract.updated_at)}</span>
           <span
             className={`
@@ -136,7 +136,7 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
                   ? 'bg-green-100 text-green-700'
                   : contract.status === 'draft'
                     ? 'bg-yellow-100 text-yellow-700'
-                    : 'bg-gray-100 text-gray-600'
+                    : 'bg-neutral-100 text-neutral-600'
               }
             `}
           >
@@ -150,10 +150,10 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
 
 // Empty state component
 const EmptyState: React.FC = () => (
-  <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
-    <FileCode2 className="h-12 w-12 text-gray-300 dark:text-neutral-600 mx-auto mb-4" />
-    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No contracts yet</h3>
-    <p className="text-gray-500 dark:text-neutral-400 mb-6 max-w-md mx-auto">
+  <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+    <FileCode2 className="h-12 w-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-4" />
+    <h3 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">No contracts yet</h3>
+    <p className="text-neutral-500 dark:text-neutral-400 mb-6 max-w-md mx-auto">
       Create your first Universal API Contract to expose your API via multiple protocols
       automatically.
     </p>
@@ -185,10 +185,10 @@ const LoadingState: React.FC = () => (
 const ErrorState: React.FC<{ message: string }> = ({ message }) => (
   <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-red-200 dark:border-red-800">
     <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+    <h3 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">
       Failed to load contracts
     </h3>
-    <p className="text-gray-500 dark:text-neutral-400">{message}</p>
+    <p className="text-neutral-500 dark:text-neutral-400">{message}</p>
   </div>
 );
 
@@ -202,8 +202,8 @@ export const ContractListPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Contracts</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Contracts</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Manage your Universal API Contracts and protocol bindings
           </p>
         </div>

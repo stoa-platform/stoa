@@ -73,7 +73,7 @@ const ToggleSwitch: React.FC<{
         relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full
         border-2 border-transparent transition-colors duration-200 ease-in-out
         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
-        ${checked ? 'bg-primary-600' : 'bg-gray-200 dark:bg-neutral-600'}
+        ${checked ? 'bg-primary-600' : 'bg-neutral-200 dark:bg-neutral-600'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
       `}
     >
@@ -148,13 +148,13 @@ export const ProtocolRow: React.FC<ProtocolRowProps> = ({
   const actionLink = getActionLink();
 
   return (
-    <div className="flex items-center justify-between py-3 px-4 border-b border-gray-100 dark:border-neutral-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
+    <div className="flex items-center justify-between py-3 px-4 border-b border-neutral-100 dark:border-neutral-700 last:border-b-0 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
       {/* Left side: Toggle + Protocol badge + Endpoint */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {/* Toggle or Loading spinner */}
         {isLoading ? (
           <div className="w-11 flex justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400 dark:text-neutral-500" />
+            <Loader2 className="h-5 w-5 animate-spin text-neutral-400 dark:text-neutral-500" />
           </div>
         ) : (
           <ToggleSwitch checked={binding.enabled} onChange={onToggle} disabled={isLoading} />
@@ -175,7 +175,7 @@ export const ProtocolRow: React.FC<ProtocolRowProps> = ({
         <span
           className={`
             text-sm truncate
-            ${binding.enabled ? 'text-gray-700 dark:text-neutral-300' : 'text-gray-400 dark:text-neutral-500 italic'}
+            ${binding.enabled ? 'text-neutral-700 dark:text-neutral-300' : 'text-neutral-400 dark:text-neutral-500 italic'}
           `}
           title={binding.enabled ? binding.endpoint : undefined}
         >
@@ -187,7 +187,7 @@ export const ProtocolRow: React.FC<ProtocolRowProps> = ({
       <div className="flex items-center gap-4 flex-shrink-0 ml-4">
         {/* Traffic stats (only when enabled) */}
         {binding.enabled && binding.traffic_24h !== undefined && (
-          <span className="text-xs text-gray-500 dark:text-neutral-400 whitespace-nowrap">
+          <span className="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
             {binding.traffic_24h.toLocaleString()} req/24h
           </span>
         )}

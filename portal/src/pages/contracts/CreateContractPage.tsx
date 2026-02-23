@@ -67,14 +67,14 @@ export const CreateContractPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900">
       {/* Header */}
-      <header className="bg-white dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
+      <header className="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/contracts')}
-              className="text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
+              className="text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
@@ -83,10 +83,10 @@ export const CreateContractPage: React.FC = () => {
                 <FileCode className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">
                   Create Contract
                 </h1>
-                <p className="text-sm text-gray-500 dark:text-neutral-400">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
                   Define once, expose via REST, MCP, GraphQL & more
                 </p>
               </div>
@@ -109,7 +109,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               Contract Name <span className="text-red-500">*</span>
             </label>
@@ -121,9 +121,9 @@ export const CreateContractPage: React.FC = () => {
               value={formData.name}
               onChange={handleInputChange}
               placeholder="e.g., customer-api"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Lowercase, hyphens allowed. Used in endpoints.
             </p>
           </div>
@@ -132,7 +132,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="display_name"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               Display Name
             </label>
@@ -143,7 +143,7 @@ export const CreateContractPage: React.FC = () => {
               value={formData.display_name || ''}
               onChange={handleInputChange}
               placeholder="e.g., Customer API"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -151,7 +151,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               Description
             </label>
@@ -162,7 +162,7 @@ export const CreateContractPage: React.FC = () => {
               value={formData.description || ''}
               onChange={handleInputChange}
               placeholder="What does this API do?"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -170,7 +170,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="version"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               Version
             </label>
@@ -181,7 +181,7 @@ export const CreateContractPage: React.FC = () => {
               value={formData.version || ''}
               onChange={handleInputChange}
               placeholder="1.0.0"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -189,7 +189,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="openapi_spec_url"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               OpenAPI Spec URL
             </label>
@@ -200,9 +200,9 @@ export const CreateContractPage: React.FC = () => {
               value={formData.openapi_spec_url || ''}
               onChange={handleInputChange}
               placeholder="https://example.com/openapi.yaml"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Optional. Link to your OpenAPI/Swagger specification.
             </p>
           </div>
@@ -224,11 +224,11 @@ export const CreateContractPage: React.FC = () => {
           </div>
 
           {/* Submit button */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-neutral-700">
+          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200 dark:border-neutral-700">
             <button
               type="button"
               onClick={() => navigate('/contracts')}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 bg-white dark:bg-neutral-700 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-200 bg-white dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-600 transition-colors"
             >
               Cancel
             </button>

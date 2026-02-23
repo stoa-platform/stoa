@@ -98,9 +98,9 @@ const QuickAccessCard: React.FC<QuickAccessCardProps> = ({ binding }) => {
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span>{config.icon}</span>
-            <span className="font-medium text-gray-900 dark:text-white">{config.label}</span>
+            <span className="font-medium text-neutral-900 dark:text-white">{config.label}</span>
           </div>
-          <p className="text-sm text-gray-600 dark:text-neutral-400 font-mono truncate">
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 font-mono truncate">
             {getDisplayValue()}
           </p>
         </div>
@@ -136,10 +136,10 @@ const LoadingState: React.FC = () => (
 const ErrorState: React.FC<{ message: string }> = ({ message }) => (
   <div className="text-center py-24">
     <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-    <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+    <h2 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">
       Failed to load contract
     </h2>
-    <p className="text-gray-500 dark:text-neutral-400 mb-6">{message}</p>
+    <p className="text-neutral-500 dark:text-neutral-400 mb-6">{message}</p>
     <Link to="/contracts" className="text-blue-600 hover:text-blue-800 font-medium">
       Back to Contracts
     </Link>
@@ -149,9 +149,9 @@ const ErrorState: React.FC<{ message: string }> = ({ message }) => (
 // Not found state
 const NotFoundState: React.FC = () => (
   <div className="text-center py-24">
-    <FileCode2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-    <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Contract not found</h2>
-    <p className="text-gray-500 dark:text-neutral-400 mb-6">
+    <FileCode2 className="h-12 w-12 text-neutral-300 mx-auto mb-4" />
+    <h2 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">Contract not found</h2>
+    <p className="text-neutral-500 dark:text-neutral-400 mb-6">
       The contract you're looking for doesn't exist or you don't have access to it.
     </p>
     <Link to="/contracts" className="text-blue-600 hover:text-blue-800 font-medium">
@@ -195,17 +195,17 @@ export const ContractDetailPage: React.FC = () => {
       {/* Back link */}
       <button
         onClick={() => navigate('/contracts')}
-        className="flex items-center gap-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
+        className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Contracts
       </button>
 
       {/* Header */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white truncate">
               {contract.display_name || contract.name}
             </h1>
 
@@ -216,7 +216,7 @@ export const ContractDetailPage: React.FC = () => {
           {/* Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+              className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
               title="Settings"
             >
               <Settings className="h-5 w-5" />
@@ -231,8 +231,8 @@ export const ContractDetailPage: React.FC = () => {
         </div>
 
         {/* Meta info */}
-        <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-neutral-400 mb-4">
-          <span className="bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded">
+        <div className="flex items-center gap-3 text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+          <span className="bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 rounded">
             v{contract.version}
           </span>
           <span>•</span>
@@ -244,7 +244,7 @@ export const ContractDetailPage: React.FC = () => {
                   ? 'bg-green-100 text-green-700'
                   : contract.status === 'draft'
                     ? 'bg-yellow-100 text-yellow-700'
-                    : 'bg-gray-100 text-gray-600'
+                    : 'bg-neutral-100 text-neutral-600'
               }
             `}
           >
@@ -256,15 +256,15 @@ export const ContractDetailPage: React.FC = () => {
 
         {/* Description */}
         {contract.description && (
-          <p className="text-gray-600 dark:text-neutral-400">{contract.description}</p>
+          <p className="text-neutral-600 dark:text-neutral-400">{contract.description}</p>
         )}
       </div>
 
       {/* Main content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Protocol Switcher - Main feature */}
-        <div className="lg:col-span-2 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div className="lg:col-span-2 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
             Protocol Bindings
           </h2>
           <ProtocolSwitcher
@@ -275,8 +275,8 @@ export const ContractDetailPage: React.FC = () => {
         </div>
 
         {/* Quick access to endpoints */}
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Access</h2>
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Quick Access</h2>
           {enabledBindings.length > 0 ? (
             <div className="space-y-3">
               {enabledBindings.map((binding) => (
@@ -284,7 +284,7 @@ export const ContractDetailPage: React.FC = () => {
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 dark:text-neutral-400 text-sm">
+            <p className="text-neutral-500 dark:text-neutral-400 text-sm">
               Enable protocol bindings to access your API endpoints.
             </p>
           )}
@@ -293,8 +293,8 @@ export const ContractDetailPage: React.FC = () => {
 
       {/* Contract source (optional) */}
       {contract.openapi_spec_url && (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">OpenAPI Spec</h2>
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">OpenAPI Spec</h2>
           <a
             href={contract.openapi_spec_url}
             target="_blank"

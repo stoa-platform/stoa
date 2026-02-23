@@ -54,12 +54,12 @@ function StatCard({ title, value, subtitle, icon, color, trend, isLoading }: Sta
       <div className={`rounded-xl border ${colors.border} ${colors.bg} p-6 animate-pulse`}>
         <div className="flex items-start justify-between">
           <div className={`p-3 rounded-xl ${colors.iconBg}`}>
-            <div className="h-6 w-6 bg-gray-200 dark:bg-gray-700 rounded" />
+            <div className="h-6 w-6 bg-neutral-200 dark:bg-neutral-700 rounded" />
           </div>
         </div>
         <div className="mt-4">
-          <div className="h-10 w-20 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
-          <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+          <div className="h-10 w-20 bg-neutral-200 dark:bg-neutral-700 rounded mb-2" />
+          <div className="h-4 w-24 bg-neutral-200 dark:bg-neutral-700 rounded" />
         </div>
       </div>
     );
@@ -89,8 +89,8 @@ function StatCard({ title, value, subtitle, icon, color, trend, isLoading }: Sta
         <p className={`text-4xl font-bold ${colors.valueColor}`}>
           {typeof value === 'number' ? value.toLocaleString() : value}
         </p>
-        <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-1">{title}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">{subtitle}</p>
+        <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mt-1">{title}</p>
+        <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-0.5">{subtitle}</p>
       </div>
     </div>
   );

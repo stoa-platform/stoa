@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-24 (C9=503/572pts 88%)
+> Last sync: 2026-02-24 (C9=383/572pts 67%)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,18 +101,18 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~572 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 503 pts (88%) | **Velocity**: 33 issues done
+**Scope**: ~572 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 383 pts (67%) | **Velocity**: 31 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
 
-- [~] CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts, P3) — Council 6.75 ⚠️
 - [~] CAB-289: Conversation History (5 pts, P3)
 - [~] CAB-802: Dry Run + Script + Video (3 pts, P1) — HUMAN ONLY
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (33)
+### Done (34)
+- [x] CAB-1327: [MEGA] Docs-as-MCP — RAG Search & AI Chat (21 pts) — PRs #912 (P1), #923 (P2)
 
 - [x] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — ALL 3 PHASES DONE — PRs #876, #882, #885, #888
   - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts) — PR #876

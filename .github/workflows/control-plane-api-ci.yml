@@ -147,9 +147,35 @@ jobs:
     permissions:
       contents: read
 
+  # === Staging: deploy same dev image to staging cluster ===
+  deploy-staging:
+    needs: smoke-test
+    if: github.event_name == 'push' && needs.smoke-test.result == 'success'
+    uses: ./.github/workflows/reusable-k8s-deploy.yml
+    with:
+      component: control-plane-api
+      image-tag: ${{ needs.docker.outputs.image-tag }}
+      environment: staging
+      environment-url: https://staging-api.gostoa.dev
+      verify-endpoint: https://staging-api.gostoa.dev/health
+      expected-status: '200'
+    permissions:
+      contents: read
+    secrets: inherit
+
+  smoke-test-staging:
+    needs: deploy-staging
+    if: needs.deploy-staging.result == 'success'
+    uses: ./.github/workflows/reusable-health-smoke.yml
+    with:
+      component: control-plane-api
+      environment: staging
+    permissions:
+      contents: read
+
   # === Notify: Slack ===
   notify:
-    needs: [ci, docker, deploy, smoke-test]
+    needs: [ci, docker, deploy, smoke-test, deploy-staging, smoke-test-staging]
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-notify.yml
     with:

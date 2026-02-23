@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (CAB-1432→Done PRs #899,#903; C9=422/523pts 81%)
+> Last sync: 2026-02-23 (5 Linear statuses pushed; C9=443/515pts 86%)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~523 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 422 pts (81%) | **Velocity**: 28 issues done
+**Scope**: ~515 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 443 pts (86%) | **Velocity**: 29 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -113,7 +113,7 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (26)
+### Done (27)
 
 - [x] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — ALL 3 PHASES DONE — PRs #876, #882, #885, #888
   - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts) — PR #876
@@ -174,6 +174,7 @@
   - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
   - [x] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — PR #870
   - [x] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts) — PR #884
+- [x] CAB-1329: [MEGA] Demo Content Library — 8 Themes (21 pts) — PR #902
 
 ### Todo
 
@@ -194,14 +195,13 @@
 *Council Fix (6.0–7.9, adjustments applied on Linear):*
 - [ ] CAB-1316: [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts, P3) — Council 7.50 ⚠️
 - [ ] CAB-1342: [MEGA] Helm Auto-Sync Secrets (21 pts, P3) — Council 7.25 ⚠️
-- [ ] CAB-1329: [MEGA] Demo Content Library — 8 Themes (21 pts, P3) — Council 7.25 ⚠️
 - [ ] CAB-1334: [MEGA] SaaS Multi-Tier Billing — Stripe (21 pts, P3) — Council 6.75 ⚠️
 - [ ] CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts, P3) — Council 6.75 ⚠️
 - [ ] CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (21 pts, P3) — Council 6.25 ⚠️
 - [ ] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts, P3) — Council 6.00 ⚠️
 
 *Not Council-evaluated:*
-- [ ] CAB-1303: [MEGA] Multi-Environment STAGING (21 pts, P3)
+- [ ] CAB-1303: [MEGA] Automated Staging Pipeline & Parity Tooling (13 pts, P3)
 - [ ] CAB-288: Chat Agent Token Metering (5 pts, P3)
 
 ### Backlog (not committed, no checkbox)

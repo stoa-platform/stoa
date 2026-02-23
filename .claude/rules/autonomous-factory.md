@@ -288,7 +288,7 @@ n8n workflow (`scripts/ai-ops/n8n-stoa-slash-command.json`) handles `/stoa` comm
 | `/stoa scan` | admin | Trigger `claude-autopilot-scan.yml` via `workflow_dispatch` |
 | `/stoa implement CAB-XXXX` | admin | Validate ticket format, trigger `repository_dispatch linear-ticket-started` |
 
-**Setup** (manual): Slack App → Slash Commands → `/stoa` → Request URL: `https://hlfh.app.n8n.cloud/webhook/stoa-slash-command`
+**Setup** (manual): Slack App → Slash Commands → `/stoa` → Request URL: `https://n8n.gostoa.dev/webhook/stoa-slash-command`
 
 **Pattern**: Immediate 200 ACK (Slack requires <3s) → deferred response via `response_url` POST.
 

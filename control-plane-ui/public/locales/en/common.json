@@ -1,0 +1,99 @@
+{
+  "nav": {
+    "overview": "Overview",
+    "dashboard": "Dashboard",
+    "operations": "Operations",
+    "myUsage": "My Usage",
+    "business": "Business",
+    "catalog": "Catalog",
+    "tenants": "Tenants",
+    "apis": "APIs",
+    "aiTools": "AI Tools",
+    "externalMcpServers": "External MCP Servers",
+    "applications": "Applications",
+    "consumers": "Consumers",
+    "saas": "SaaS",
+    "backendApis": "Backend APIs",
+    "apiKeys": "API Keys",
+    "gateway": "Gateway",
+    "status": "Status",
+    "registry": "Registry",
+    "modes": "Modes",
+    "deployments": "Deployments",
+    "drift": "Drift",
+    "metrics": "Metrics",
+    "federation": "Federation",
+    "skills": "Skills",
+    "insights": "Insights",
+    "monitoring": "Monitoring",
+    "errorSnapshots": "Error Snapshots",
+    "executions": "Executions",
+    "observability": "Observability",
+    "logs": "Logs",
+    "governance": "Governance",
+    "shadowDiscovery": "Shadow Discovery",
+    "tokenOptimizer": "Token Optimizer",
+    "policies": "Policies",
+    "auditLog": "Audit Log",
+    "workflows": "Workflows",
+    "audienceGovernance": "Audience Governance"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome to STOA Control Plane",
+    "hello": "Hello, {{name}}!",
+    "quickActions": {
+      "apis": "APIs",
+      "apisDesc": "Manage API definitions and deployments",
+      "aiTools": "AI Tools",
+      "aiToolsDesc": "Browse MCP tools catalog",
+      "applications": "Applications",
+      "applicationsDesc": "Manage consumer applications",
+      "deployments": "Deployments",
+      "deploymentsDesc": "View deployment history"
+    },
+    "quickLinks": "Quick Links",
+    "gettingStarted": "Getting Started",
+    "steps": {
+      "step1": "Go to <apisLink>APIs</apisLink> and create a new API",
+      "step2": "Import your OpenAPI/Swagger specification or create manually",
+      "step3": "Deploy to DEV environment to test",
+      "step4": "Monitor deployments in the <deploymentsLink>Deployments</deploymentsLink> page"
+    }
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search...",
+    "noResults": "No results found",
+    "viewAll": "View all",
+    "logout": "Logout",
+    "readOnly": "Read-only",
+    "fullAccess": "Full access"
+  },
+  "login": {
+    "title": "STOA Control Plane",
+    "subtitle": "Multi-tenant API Management",
+    "button": "Login with Keycloak"
+  },
+  "tenants": {
+    "title": "Tenants",
+    "subtitle": "View tenant organizations",
+    "noTenants": "No tenants found",
+    "failedToLoad": "Failed to load tenants",
+    "tenantId": "Tenant ID:",
+    "created": "Created:"
+  },
+  "apis": {
+    "title": "APIs",
+    "subtitle": "Manage API definitions across all tenants",
+    "noApis": "No APIs found",
+    "failedToLoad": "Failed to load APIs"
+  }
+}

@@ -40,6 +40,7 @@ from .routers import (
     chat,
     consumers,
     contracts,
+    credential_mappings,
     deployments,
     environments,
     events,
@@ -92,6 +93,7 @@ from .routers.mcp_admin import (
     admin_subscriptions_router as mcp_admin_subscriptions_router,
 )
 from .routers.portal import internal_router as portal_internal_router
+from .routers.tenant_mcp_servers import router as tenant_mcp_servers_router
 from .services import argocd_service, git_service, kafka_service, keycloak_service, metrics_service
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
@@ -457,6 +459,9 @@ app.include_router(mcp_admin_servers_router)
 app.include_router(external_mcp_servers_admin_router)
 app.include_router(external_mcp_servers_internal_router)
 
+# Tenant-scoped MCP Servers — developer self-service (CAB-1319)
+app.include_router(tenant_mcp_servers_router)
+
 # Portal and GitOps routers
 app.include_router(portal.router)
 app.include_router(portal_internal_router)
@@ -520,6 +525,9 @@ app.include_router(audit.router)
 # Backend APIs — SaaS self-service (CAB-1188)
 app.include_router(backend_apis.router)
 app.include_router(backend_apis.keys_router)
+
+# Credential Mappings — per-consumer backend credential injection (CAB-1432)
+app.include_router(credential_mappings.router)
 
 # Federation — enterprise MCP multi-account (CAB-1313)
 app.include_router(federation.router)

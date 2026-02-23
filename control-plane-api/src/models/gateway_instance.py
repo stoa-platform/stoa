@@ -21,6 +21,7 @@ class GatewayType(enum.StrEnum):
     KONG = "kong"
     APIGEE = "apigee"
     AWS_APIGATEWAY = "aws_apigateway"
+    AZURE_APIM = "azure_apim"
     GRAVITEE = "gravitee"
     STOA = "stoa"
     # STOA Gateway modes (ADR-024) — for filtering/grouping

@@ -761,3 +761,111 @@ push_metrics_error() {
   METRICS+="ai_factory_events_total{workflow=\"${WORKFLOW}\",stage=\"${STAGE}\",verdict=\"error\"} 1\n"
   _push_metrics "workflow/${WORKFLOW}/stage/${STAGE}/instance/${TICKET_ID:-error}" "$(printf '%b' "$METRICS")"
 }
+
+# push_metrics_cost DATE TOKENS_TOTAL COST_USD MODEL_BREAKDOWN SESSIONS MESSAGES
+# Push daily cost metrics to Pushgateway.
+push_metrics_cost() {
+  local DATE="${1:-}" TOKENS="${2:-0}" COST="${3:-0}" MODELS="${4:-}" SESSIONS="${5:-0}" MESSAGES="${6:-0}"
+  local METRICS=""
+  METRICS+="# HELP ai_factory_daily_tokens Daily token consumption\n"
+  METRICS+="# TYPE ai_factory_daily_tokens gauge\n"
+  METRICS+="ai_factory_daily_tokens{date=\"${DATE}\"} ${TOKENS}\n"
+  METRICS+="# HELP ai_factory_daily_cost_usd Daily estimated cost (API equivalent)\n"
+  METRICS+="# TYPE ai_factory_daily_cost_usd gauge\n"
+  METRICS+="ai_factory_daily_cost_usd{date=\"${DATE}\"} ${COST}\n"
+  METRICS+="# HELP ai_factory_daily_sessions Daily session count\n"
+  METRICS+="# TYPE ai_factory_daily_sessions gauge\n"
+  METRICS+="ai_factory_daily_sessions{date=\"${DATE}\"} ${SESSIONS}\n"
+  METRICS+="# HELP ai_factory_daily_messages Daily message count\n"
+  METRICS+="# TYPE ai_factory_daily_messages gauge\n"
+  METRICS+="ai_factory_daily_messages{date=\"${DATE}\"} ${MESSAGES}\n"
+
+  # Per-model token breakdown (MODELS format: "opus-4-6=123 sonnet-4-6=456")
+  if [[ -n "$MODELS" ]]; then
+    METRICS+="# HELP ai_factory_daily_tokens_by_model Daily tokens per model\n"
+    METRICS+="# TYPE ai_factory_daily_tokens_by_model gauge\n"
+    for entry in $MODELS; do
+      local model="${entry%%=*}" tokens="${entry#*=}"
+      METRICS+="ai_factory_daily_tokens_by_model{date=\"${DATE}\",model=\"${model}\"} ${tokens}\n"
+    done
+  fi
+
+  _push_metrics "cost-tracker/${DATE}" "$(printf '%b' "$METRICS")"
+}
+
+# notify_cost_report DATE TOKENS_TODAY COST_TODAY COST_7D_AVG SESSIONS MESSAGES PRS_MERGED MODEL_MIX TREND
+# Send daily cost report to Slack as Block Kit message.
+notify_cost_report() {
+  local DATE="${1:-}" TOKENS="${2:-0}" COST="${3:-0}" AVG_7D="${4:-0}"
+  local SESSIONS="${5:-0}" MESSAGES="${6:-0}" PRS="${7:-0}" MODEL_MIX="${8:-}" TREND="${9:-flat}"
+
+  [[ -z "${SLACK_WEBHOOK:-}" ]] && return 0
+
+  # Trend arrow
+  local trend_arrow="→"
+  case "$TREND" in
+    up) trend_arrow="↑" ;;
+    down) trend_arrow="↓" ;;
+  esac
+
+  # Color based on cost
+  local color="good"  # green
+  local cost_int
+  cost_int=$(awk -v c="$COST" 'BEGIN { printf "%d", c }')
+  if [[ "$cost_int" -ge 50 ]]; then
+    color="danger"  # red
+  elif [[ "$cost_int" -ge 30 ]]; then
+    color="warning"  # yellow
+  fi
+
+  # Cost per PR
+  local cost_per_pr="N/A"
+  local prs_int
+  prs_int=$(awk -v p="$PRS" 'BEGIN { printf "%d", p }')
+  if [[ "$prs_int" -gt 0 ]]; then
+    cost_per_pr=$(awk -v c="$COST" -v p="$PRS" 'BEGIN { printf "$%.2f", c/p }')
+  fi
+
+  # Format tokens with K/M suffix
+  local tokens_fmt
+  tokens_fmt=$(awk -v t="$TOKENS" 'BEGIN {
+    if (t >= 1000000) printf "%.1fM", t/1000000
+    else if (t >= 1000) printf "%.0fK", t/1000
+    else printf "%d", t
+  }')
+
+  local payload
+  payload=$(cat <<EOJSON
+{
+  "attachments": [{
+    "color": "${color}",
+    "blocks": [
+      {
+        "type": "header",
+        "text": { "type": "plain_text", "text": "AI Factory Daily Report — ${DATE}" }
+      },
+      {
+        "type": "section",
+        "fields": [
+          { "type": "mrkdwn", "text": "*Tokens*\n${tokens_fmt}" },
+          { "type": "mrkdwn", "text": "*Cost (API eq.)*\n\$${COST}" },
+          { "type": "mrkdwn", "text": "*Sessions*\n${SESSIONS}" },
+          { "type": "mrkdwn", "text": "*Messages*\n${MESSAGES}" },
+          { "type": "mrkdwn", "text": "*PRs Merged*\n${PRS}" },
+          { "type": "mrkdwn", "text": "*Cost/PR*\n${cost_per_pr}" }
+        ]
+      },
+      {
+        "type": "context",
+        "elements": [
+          { "type": "mrkdwn", "text": "7d avg: \$${AVG_7D} ${trend_arrow} | Models: ${MODEL_MIX:-n/a}" }
+        ]
+      }
+    ]
+  }]
+}
+EOJSON
+  )
+
+  curl -sf -X POST -H "Content-Type: application/json" -d "$payload" "$SLACK_WEBHOOK" >/dev/null 2>&1 || true
+}

@@ -4322,11 +4322,6 @@
       },
       "DocsSearchResponse": {
         "properties": {
-          "mode": {
-            "default": "keyword",
-            "title": "Mode",
-            "type": "string"
-          },
           "query": {
             "title": "Query",
             "type": "string"
@@ -12419,42 +12414,6 @@
         "title": "RegenerateSecretResponse",
         "type": "object"
       },
-      "ReindexResponse": {
-        "properties": {
-          "error_details": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Error Details",
-            "type": "array"
-          },
-          "errors": {
-            "title": "Errors",
-            "type": "integer"
-          },
-          "indexed": {
-            "title": "Indexed",
-            "type": "integer"
-          },
-          "total_chunks": {
-            "title": "Total Chunks",
-            "type": "integer"
-          },
-          "total_entries": {
-            "title": "Total Entries",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "total_entries",
-          "total_chunks",
-          "indexed",
-          "errors"
-        ],
-        "title": "ReindexResponse",
-        "type": "object"
-      },
       "ReplayResponse": {
         "description": "Response for replay endpoint.",
         "properties": {
@@ -18082,16 +18041,6 @@
     }
   },
   "info": {
-    "contact": {
-      "email": "support@gostoa.dev",
-      "name": "CAB Ing\u00e9nierie",
-      "url": "https://gostoa.dev/"
-    },
-    "description": "\n## STOA Platform API\n\n**The European Agent Gateway** \u2014 AI-Native API Gateway for modern enterprises.\n\n### Key Features\n\n- **MCP Server Subscriptions** \u2014 Subscribe to AI tools and manage API keys\n- **Tools Catalog** \u2014 Browse and discover MCP tools with role-based visibility\n- **Usage Tracking** \u2014 Monitor your API consumption in real-time\n- **Multi-tenant Management** \u2014 Create and manage isolated API tenants\n- **GitOps Integration** \u2014 Automatic sync with GitLab repositories\n- **Event-Driven Architecture** \u2014 Kafka/Redpanda message bus for async operations\n- **Pipeline Monitoring** \u2014 End-to-end tracing of deployments\n- **RBAC** \u2014 Role-based access control via Keycloak\n\n### Quick Start\n\n1. **Get a token** from Keycloak (`POST /realms/stoa/protocol/openid-connect/token`)\n2. **Browse MCP servers** (`GET /v1/mcp/servers`)\n3. **Subscribe to a server** (`POST /v1/mcp/subscriptions`)\n4. **Use your API key** with MCP Gateway (`https://mcp.gostoa.dev`)\n\n### Authentication\n\nAll endpoints require a valid JWT token from Keycloak (realm: `stoa`).\nInclude the token in the `Authorization: Bearer <token>` header.\n\n```\nAuthorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...\n```\n\n### Environments\n\n| Environment | Base URL |\n|-------------|----------|\n| Production | `https://api.gostoa.dev` |\n| Via Gateway | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` |\n\n### Changelog\n\n#### v2.1.0 (Current)\n- Added MCP Server Subscriptions with admin approval workflow\n- Added API key rotation with grace period support\n- Added Dashboard home page stats (`/v1/dashboard`)\n- Added Service Accounts for M2M authentication\n\n#### v2.0.0\n- Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring\n- Added GitLab Webhook integration (`/webhooks/gitlab`)\n- Added Kafka integration for event-driven deployments\n- Added Kafka integration for event-driven gateway orchestration\n\n#### v1.0.0\n- Initial release with tenant, API, and application management\n",
-    "license": {
-      "name": "Apache 2.0",
-      "url": "https://www.apache.org/licenses/LICENSE-2.0"
-    },
     "title": "STOA Control-Plane API",
     "version": "2.0.0"
   },
@@ -25093,31 +25042,9 @@
         ]
       }
     },
-    "/v1/docs/admin/reindex": {
-      "post": {
-        "description": "Reindex documentation into OpenSearch k-NN for semantic search.\n\nAdmin-only endpoint \u2014 requires DOCS_REINDEX_ENABLED=true.\nFetches llms-full.txt, chunks content, generates embeddings, and upserts to OpenSearch.",
-        "operationId": "reindex_docs_v1_docs_admin_reindex_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReindexResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Reindex Docs",
-        "tags": [
-          "Docs Search"
-        ]
-      }
-    },
     "/v1/docs/search": {
       "get": {
-        "description": "Search STOA documentation, guides, ADRs, and blog posts.\n\nPublic endpoint \u2014 no authentication required.\n\nModes:\n- **keyword** (default): Algolia full-text + llms-full.txt boost\n- **semantic**: OpenSearch k-NN vector similarity\n- **hybrid**: RRF fusion of keyword + semantic",
+        "description": "Search STOA documentation, guides, ADRs, and blog posts.\n\nPublic endpoint \u2014 no authentication required.\nCombines Algolia full-text search with llms-full.txt boosting.",
         "operationId": "search_docs_v1_docs_search_get",
         "parameters": [
           {
@@ -25145,23 +25072,6 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "description": "Search mode",
-            "in": "query",
-            "name": "mode",
-            "required": false,
-            "schema": {
-              "default": "keyword",
-              "description": "Search mode",
-              "enum": [
-                "keyword",
-                "semantic",
-                "hybrid"
-              ],
-              "title": "Mode",
-              "type": "string"
             }
           }
         ],
@@ -37969,143 +37879,5 @@
         ]
       }
     }
-  },
-  "tags": [
-    {
-      "description": "Tenant management operations",
-      "name": "Tenants"
-    },
-    {
-      "description": "API lifecycle management",
-      "name": "APIs"
-    },
-    {
-      "description": "Application and subscription management",
-      "name": "Applications"
-    },
-    {
-      "description": "Deployment operations and status",
-      "name": "Deployments"
-    },
-    {
-      "description": "GitLab integration (commits, MRs, files)",
-      "name": "Git"
-    },
-    {
-      "description": "Real-time event streaming (SSE)",
-      "name": "Events"
-    },
-    {
-      "description": "GitLab webhook handlers for GitOps",
-      "name": "Webhooks"
-    },
-    {
-      "description": "Pipeline monitoring and tracing",
-      "name": "Traces"
-    },
-    {
-      "description": "webMethods Gateway administration via OIDC proxy",
-      "name": "Gateway"
-    },
-    {
-      "description": "API subscription and API key management",
-      "name": "Subscriptions"
-    },
-    {
-      "description": "Webhook notifications for subscription events (CAB-315)",
-      "name": "Tenant Webhooks"
-    },
-    {
-      "description": "Certificate validation for mTLS subscriptions (CAB-313)",
-      "name": "certificates"
-    },
-    {
-      "description": "Full-text search across tools and APIs (CAB-307)",
-      "name": "Search"
-    },
-    {
-      "description": "Usage dashboard for API consumers (CAB-280)",
-      "name": "Usage"
-    },
-    {
-      "description": "Home dashboard stats and activity (CAB-299)",
-      "name": "Dashboard"
-    },
-    {
-      "description": "OAuth2 Service Accounts for MCP access (CAB-296)",
-      "name": "Service Accounts"
-    },
-    {
-      "description": "Universal API Contracts with multi-protocol bindings (UAC)",
-      "name": "Contracts"
-    },
-    {
-      "description": "Browse and discover MCP servers",
-      "name": "MCP Servers"
-    },
-    {
-      "description": "Subscribe to MCP servers and manage API keys",
-      "name": "MCP Subscriptions"
-    },
-    {
-      "description": "API key validation for MCP Gateway (internal)",
-      "name": "MCP Validation"
-    },
-    {
-      "description": "Admin approval workflow for MCP subscriptions",
-      "name": "MCP Admin - Subscriptions"
-    },
-    {
-      "description": "MCP server management (admin)",
-      "name": "MCP Admin - Servers"
-    },
-    {
-      "description": "Developer Portal API catalog and MCP server browsing",
-      "name": "Portal"
-    },
-    {
-      "description": "GitOps synchronization for MCP servers",
-      "name": "MCP GitOps"
-    },
-    {
-      "description": "MCP tools discovery and invocation (proxy to MCP Gateway)",
-      "name": "MCP Tools"
-    },
-    {
-      "description": "Platform status and GitOps observability (CAB-654)",
-      "name": "Platform"
-    },
-    {
-      "description": "Gateway instance management (multi-gateway orchestration)",
-      "name": "Gateways"
-    },
-    {
-      "description": "API deployment to gateways (sync engine)",
-      "name": "Gateway Deployments"
-    },
-    {
-      "description": "Gateway-agnostic policy management",
-      "name": "Gateway Policies"
-    },
-    {
-      "description": "Multi-gateway health and sync metrics",
-      "name": "Gateway Observability"
-    },
-    {
-      "description": "Internal gateway auto-registration (ADR-028)",
-      "name": "Gateway Internal"
-    },
-    {
-      "description": "Consumer onboarding and lifecycle management (CAB-1121)",
-      "name": "Consumers"
-    },
-    {
-      "description": "Subscription plan management with quotas (CAB-1121)",
-      "name": "Plans"
-    },
-    {
-      "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)",
-      "name": "Quotas"
-    }
-  ]
+  }
 }

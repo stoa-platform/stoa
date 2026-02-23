@@ -25,6 +25,7 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::proxy::consumer_credentials::ConsumerCredential;
 use crate::proxy::credentials::{AuthType, BackendCredential};
 use crate::proxy::dynamic::is_blocked_url;
 use crate::routes::{ApiRoute, PolicyEntry};
@@ -596,6 +597,62 @@ pub async fn delete_backend_credential(
 }
 
 // =============================================================================
+// Consumer Credentials CRUD (CAB-1432)
+// =============================================================================
+
+/// POST /admin/consumer-credentials — upsert a per-consumer backend credential.
+///
+/// Consumers authenticate via OAuth2 (JWT), but the backend API may require
+/// its own credential (API key, Bearer token, Basic Auth). This endpoint
+/// stores the mapping so the gateway can inject the correct header.
+pub async fn upsert_consumer_credential(
+    State(state): State<AppState>,
+    Json(cred): Json<ConsumerCredential>,
+) -> impl IntoResponse {
+    let route_id = cred.route_id.clone();
+    let consumer_id = cred.consumer_id.clone();
+    let existed = state.consumer_credential_store.upsert(cred).is_some();
+    let status = if existed {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    (
+        status,
+        Json(serde_json::json!({"route_id": route_id, "consumer_id": consumer_id, "status": "ok"})),
+    )
+        .into_response()
+}
+
+/// GET /admin/consumer-credentials — list all per-consumer credentials.
+pub async fn list_consumer_credentials(
+    State(state): State<AppState>,
+) -> Json<Vec<ConsumerCredential>> {
+    Json(state.consumer_credential_store.list())
+}
+
+/// Path parameters for consumer credential deletion.
+#[derive(Deserialize)]
+pub struct ConsumerCredentialPath {
+    pub route_id: String,
+    pub consumer_id: String,
+}
+
+/// DELETE /admin/consumer-credentials/:route_id/:consumer_id — remove a mapping.
+pub async fn delete_consumer_credential(
+    State(state): State<AppState>,
+    Path(path): Path<ConsumerCredentialPath>,
+) -> impl IntoResponse {
+    match state
+        .consumer_credential_store
+        .remove(&path.route_id, &path.consumer_id)
+    {
+        Some(_) => StatusCode::NO_CONTENT.into_response(),
+        None => (StatusCode::NOT_FOUND, "Consumer credential not found").into_response(),
+    }
+}
+
+// =============================================================================
 // UAC Contract CRUD (CAB-1299)
 // =============================================================================
 
@@ -1127,6 +1184,15 @@ mod tests {
             .route(
                 "/backend-credentials/:route_id",
                 delete(delete_backend_credential),
+            )
+            // CAB-1432: Per-consumer credentials
+            .route(
+                "/consumer-credentials",
+                get(list_consumer_credentials).post(upsert_consumer_credential),
+            )
+            .route(
+                "/consumer-credentials/:route_id/:consumer_id",
+                delete(delete_consumer_credential),
             )
             // CAB-1299: UAC contracts
             .route("/contracts", get(list_contracts).post(upsert_contract))

@@ -12,6 +12,9 @@
 #   DISCARD_FIRST   — Discard first N runs as JVM warm-up (default: 1)
 #   TIMEOUT         — Request timeout in seconds (default: 5)
 #   SCRIPT_PATH     — Path to benchmark.js (default: /scripts/benchmark.js)
+#   ARENA_INSTANCE  — Instance label for Pushgateway grouping (default: "default")
+#                     Use unique values per pusher (e.g., "k8s", "vps-stoa-kong", "vps-gravitee")
+#                     to prevent pushers from overwriting each other's metrics.
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -22,6 +25,7 @@ RUNS="${RUNS:-5}"
 DISCARD_FIRST="${DISCARD_FIRST:-1}"
 TIMEOUT="${TIMEOUT:-5}"
 SCRIPT_PATH="${SCRIPT_PATH:-/scripts/benchmark.js}"
+ARENA_INSTANCE="${ARENA_INSTANCE:-default}"
 SCENARIOS="health sequential burst_10 burst_50 burst_100 sustained ramp_up"
 WORK_DIR="/tmp/arena"
 
@@ -107,7 +111,7 @@ done < "$SCORER_STDERR"
 # ---------------------------------------------------------------------------
 # Push to Pushgateway
 # ---------------------------------------------------------------------------
-PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/gateway_arena"
+PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/gateway_arena/instance/${ARENA_INSTANCE}"
 RESPONSE_FILE="$WORK_DIR/push_response.txt"
 CURL_AUTH=""
 if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then

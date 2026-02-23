@@ -13,6 +13,7 @@
 #   TIMEOUT           — Request timeout in seconds (default: 10)
 #   ARENA_JWT         — Bearer token for authenticated scenarios (optional)
 #   SCRIPT_PATH       — Path to benchmark-enterprise.js (default: /scripts/benchmark-enterprise.js)
+#   ARENA_INSTANCE    — Instance label for Pushgateway grouping (default: "default")
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -23,6 +24,7 @@ RUNS="${RUNS:-3}"
 DISCARD_FIRST="${DISCARD_FIRST:-1}"
 TIMEOUT="${TIMEOUT:-10}"
 SCRIPT_PATH="${SCRIPT_PATH:-/scripts/benchmark-enterprise.js}"
+ARENA_INSTANCE="${ARENA_INSTANCE:-default}"
 ARENA_JWT="${ARENA_JWT:-}"
 SCENARIOS="ent_mcp_discovery ent_mcp_toolcall ent_auth_chain ent_policy_eval ent_guardrails ent_quota_burst ent_resilience ent_governance"
 WORK_DIR="/tmp/arena-enterprise"
@@ -114,7 +116,7 @@ done < "$SCORER_STDERR"
 # ---------------------------------------------------------------------------
 # Push to Pushgateway
 # ---------------------------------------------------------------------------
-PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/gateway_arena_enterprise"
+PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/gateway_arena_enterprise/instance/${ARENA_INSTANCE}"
 RESPONSE_FILE="$WORK_DIR/push_response.txt"
 CURL_AUTH=""
 if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then

@@ -80,12 +80,12 @@ export function DeployAPIDialog({ onClose, onDeployed }: DeployAPIDialogProps) {
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-2xl mx-4">
         {/* Header */}
         <div className="flex items-center justify-between border-b dark:border-neutral-700 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
             Deploy API to Gateways
           </h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:text-gray-600 dark:hover:text-neutral-300"
+            className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
           </button>
@@ -102,26 +102,26 @@ export function DeployAPIDialog({ onClose, onDeployed }: DeployAPIDialogProps) {
           {loading ? (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <div className="h-4 w-32 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
-                <div className="h-10 w-full bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+                <div className="h-4 w-32 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+                <div className="h-10 w-full bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
               </div>
               <div className="space-y-2">
-                <div className="h-4 w-28 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
-                <div className="h-32 w-full bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+                <div className="h-4 w-28 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+                <div className="h-32 w-full bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
               </div>
             </div>
           ) : (
             <>
               {/* API Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                   API Catalog Entry
                 </label>
                 <select
                   value={selectedApi}
                   onChange={(e) => setSelectedApi(e.target.value)}
                   required
-                  className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Select an API...</option>
                   {catalogEntries.map((entry) => (
@@ -134,31 +134,31 @@ export function DeployAPIDialog({ onClose, onDeployed }: DeployAPIDialogProps) {
 
               {/* Gateway Multi-Select */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                   Target Gateways
                 </label>
                 {gateways.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-neutral-400">
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
                     No gateways registered. Register a gateway first.
                   </p>
                 ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-neutral-600 rounded-lg p-3">
+                  <div className="space-y-2 max-h-48 overflow-y-auto border border-neutral-200 dark:border-neutral-600 rounded-lg p-3">
                     {gateways.map((gw) => (
                       <label
                         key={gw.id}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer"
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
                       >
                         <input
                           type="checkbox"
                           checked={selectedGateways.includes(gw.id)}
                           onChange={() => toggleGateway(gw.id)}
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          <p className="text-sm font-medium text-neutral-900 dark:text-white">
                             {gw.display_name}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-neutral-400">
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">
                             {gw.gateway_type} &middot; {gw.environment}
                           </p>
                         </div>
@@ -175,7 +175,7 @@ export function DeployAPIDialog({ onClose, onDeployed }: DeployAPIDialogProps) {
             <button
               type="button"
               onClick={onClose}
-              className="border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-neutral-700"
+              className="border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-4 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700"
             >
               Cancel
             </button>

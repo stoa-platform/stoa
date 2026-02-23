@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { Plus } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
+import { Button } from '@stoa/shared/components/Button';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
@@ -171,8 +173,8 @@ export function Applications() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
-          <div className="h-10 w-40 bg-gray-200 rounded animate-pulse" />
+          <div className="h-8 w-48 bg-neutral-200 rounded animate-pulse" />
+          <div className="h-10 w-40 bg-neutral-200 rounded animate-pulse" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
@@ -187,21 +189,18 @@ export function Applications() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Applications</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Applications</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Manage consumer applications and API subscriptions
           </p>
         </div>
-        <button
+        <Button
           onClick={() => setShowCreateModal(true)}
           disabled={!selectedTenant}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          icon={<Plus className="w-5 h-5" />}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
           Create Application
-        </button>
+        </Button>
       </div>
 
       {/* Filters */}
@@ -209,13 +208,13 @@ export function Applications() {
         <div className="flex flex-wrap gap-4 items-end">
           {/* Tenant Selector */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Tenant
             </label>
             <select
               value={selectedTenant}
               onChange={(e) => setSelectedTenant(e.target.value)}
-              className="w-48 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-48 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {tenants.map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>
@@ -227,7 +226,7 @@ export function Applications() {
 
           {/* Search Input */}
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Search
             </label>
             <div className="relative">
@@ -236,10 +235,10 @@ export function Applications() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, description, client ID..."
-                className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 pl-10 bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 pl-10 bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <svg
-                className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                className="absolute left-3 top-2.5 h-5 w-5 text-neutral-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -254,7 +253,7 @@ export function Applications() {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-600"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -271,13 +270,13 @@ export function Applications() {
 
           {/* Status Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Status
             </label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-36 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-36 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Status</option>
               <option value="pending">Pending</option>
@@ -287,7 +286,7 @@ export function Applications() {
           </div>
 
           {/* Results count */}
-          <div className="text-sm text-gray-500 dark:text-neutral-400 self-end pb-2">
+          <div className="text-sm text-neutral-500 dark:text-neutral-400 self-end pb-2">
             {filteredApplications.length} of {applications.length} applications
           </div>
         </div>
@@ -340,10 +339,10 @@ export function Applications() {
             >
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
                     {app.display_name || app.name}
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400">{app.name}</p>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">{app.name}</p>
                 </div>
                 <span
                   className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[app.status]}`}
@@ -352,14 +351,14 @@ export function Applications() {
                 </span>
               </div>
 
-              <p className="text-sm text-gray-600 dark:text-neutral-300 mb-4 line-clamp-2">
+              <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4 line-clamp-2">
                 {app.description || 'No description'}
               </p>
 
-              <div className="text-sm text-gray-600 dark:text-neutral-300 mb-4">
+              <div className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-medium">Client ID:</span>
-                  <code className="bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded text-xs">
+                  <code className="bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 rounded text-xs">
                     {app.client_id}
                   </code>
                 </div>
@@ -372,7 +371,7 @@ export function Applications() {
               {/* Subscribed APIs */}
               {app.api_subscriptions && app.api_subscriptions.length > 0 && (
                 <div className="mb-4">
-                  <p className="text-xs font-medium text-gray-500 dark:text-neutral-400 mb-2">
+                  <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-2">
                     Subscribed APIs:
                   </p>
                   <div className="flex flex-wrap gap-1">
@@ -385,7 +384,7 @@ export function Applications() {
                       </span>
                     ))}
                     {app.api_subscriptions.length > 3 && (
-                      <span className="px-2 py-0.5 bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 text-xs rounded">
+                      <span className="px-2 py-0.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs rounded">
                         +{app.api_subscriptions.length - 3} more
                       </span>
                     )}
@@ -394,18 +393,22 @@ export function Applications() {
               )}
 
               <div className="flex gap-2 pt-4 border-t dark:border-neutral-700">
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setEditingApp(app)}
-                  className="flex-1 px-3 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg"
+                  className="flex-1"
                 >
                   Edit
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={() => handleDelete(app.id, app.display_name || app.name)}
-                  className="flex-1 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                  className="flex-1"
                 >
                   Delete
-                </button>
+                </Button>
               </div>
             </div>
           ))
@@ -415,29 +418,31 @@ export function Applications() {
       {/* Pagination */}
       {!loading && filteredApplications.length > 0 && totalPages > 1 && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-6 py-3 flex items-center justify-between">
-          <div className="text-sm text-gray-500 dark:text-neutral-400">
+          <div className="text-sm text-neutral-500 dark:text-neutral-400">
             Showing {(currentPage - 1) * PAGE_SIZE + 1} to{' '}
             {Math.min(currentPage * PAGE_SIZE, filteredApplications.length)} of{' '}
             {filteredApplications.length} results
           </div>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
-            </button>
-            <span className="px-3 py-1 text-sm text-gray-700 dark:text-neutral-300">
+            </Button>
+            <span className="px-3 py-1 text-sm text-neutral-700 dark:text-neutral-300">
               Page {currentPage} of {totalPages}
             </span>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -527,10 +532,10 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center px-6 py-4 border-b dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300"
+            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -545,7 +550,7 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Name (slug)
               </label>
               <input
@@ -557,20 +562,20 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                     name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
                   })
                 }
-                className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="my-mobile-app"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Display Name
               </label>
               <input
                 type="text"
                 value={formData.display_name}
                 onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
-                className="w-full border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="My Mobile App"
                 required
               />
@@ -578,11 +583,11 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={2}
               placeholder="Application description..."
             />
@@ -590,7 +595,7 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
 
           {/* Redirect URIs */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Redirect URIs
             </label>
             <div className="flex gap-2 mb-2">
@@ -598,29 +603,25 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                 type="url"
                 value={redirectUri}
                 onChange={(e) => setRedirectUri(e.target.value)}
-                className="flex-1 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="flex-1 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="https://myapp.example.com/callback"
               />
-              <button
-                type="button"
-                onClick={addRedirectUri}
-                className="px-4 py-2 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-600"
-              >
+              <Button type="button" variant="secondary" onClick={addRedirectUri}>
                 Add
-              </button>
+              </Button>
             </div>
             {formData.redirect_uris.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {formData.redirect_uris.map((uri) => (
                   <span
                     key={uri}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 dark:bg-neutral-700 rounded-lg text-sm dark:text-neutral-300"
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-neutral-100 dark:bg-neutral-700 rounded-lg text-sm dark:text-neutral-300"
                   >
                     {uri}
                     <button
                       type="button"
                       onClick={() => removeRedirectUri(uri)}
-                      className="text-gray-500 hover:text-red-600"
+                      className="text-neutral-500 hover:text-red-600"
                     >
                       &times;
                     </button>
@@ -632,37 +633,39 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
 
           {/* API Subscriptions */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               API Subscriptions
             </label>
             {apis.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-neutral-400 italic">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 italic">
                 No APIs available for subscription
               </p>
             ) : (
-              <div className="border border-gray-200 dark:border-neutral-600 rounded-lg divide-y dark:divide-neutral-700 max-h-48 overflow-y-auto">
+              <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg divide-y dark:divide-neutral-700 max-h-48 overflow-y-auto">
                 {apis.map((api) => (
                   <label
                     key={api.id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer"
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={formData.api_subscriptions.includes(api.id)}
                       onChange={() => toggleApiSubscription(api.id)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 border-neutral-300 rounded focus:ring-blue-500"
                     />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      <p className="text-sm font-medium text-neutral-900 dark:text-white">
                         {api.display_name || api.name}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-neutral-400">v{api.version}</p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        v{api.version}
+                      </p>
                     </div>
                     <span
                       className={`px-2 py-0.5 text-xs rounded ${
                         api.status === 'published'
                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                          : 'bg-gray-100 text-gray-600 dark:bg-neutral-700 dark:text-neutral-300'
+                          : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300'
                       }`}
                     >
                       {api.status}
@@ -674,19 +677,10 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t dark:border-neutral-700 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700"
-            >
+            <Button variant="secondary" type="button" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              {app ? 'Update' : 'Create'} Application
-            </button>
+            </Button>
+            <Button type="submit">{app ? 'Update' : 'Create'} Application</Button>
           </div>
         </form>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useEvents } from './useEvents';
 import { apiService } from '../services/api';
 import type { DeploymentLog, DeploymentStatus, Event } from '../types';
@@ -24,7 +24,9 @@ export function useDeployEvents({
 }: UseDeployEventsOptions) {
   const [deployStates, setDeployStates] = useState<Record<string, DeployEventState>>({});
   const onStatusChangeRef = useRef(onStatusChange);
-  onStatusChangeRef.current = onStatusChange;
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   const handleEvent = useCallback((event: Event) => {
     const deploymentId = event.payload.deployment_id as string;

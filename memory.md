@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-23 (sync-plan: CAB-1319,1345,709,287→DONE — C9 401/523 pts 77%)
+> Derniere MAJ: 2026-02-23 (CAB-1432→DONE PRs #899,#903 — C9 422/523 pts 81%)
 
 ## ✅ DONE
 
@@ -8,6 +8,9 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1432 [MEGA] Credential Mapping (21 pts) — PRs #899 (API+GW), #903 (Portal UI)
+  - P1: Backend API (7 CRUD, Fernet encryption, RBAC, 26 tests) + Gateway credential store
+  - P2: Portal UI (table + modal + search + auth type switching, 38 tests)
 - ✅ CAB-1345 [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts) — PR #890
 - ✅ CAB-1319 [MEGA] MCP Developer Self-Service (21 pts) — PR #898 (3 phases, 77 tests, +3214 LOC)
 - ✅ CAB-709 UAC for LLM — LLM contract types for UAC (5 pts) — PR #895

@@ -28,6 +28,8 @@ pub struct TelemetryConfig {
     pub service_version: String,
     /// Enable console exporter for debugging
     pub console_export: bool,
+    /// Head-based sampling rate (0.0 = none, 1.0 = all)
+    pub sample_rate: f64,
 }
 
 impl Default for TelemetryConfig {
@@ -37,6 +39,7 @@ impl Default for TelemetryConfig {
             service_name: "stoa-gateway".to_string(),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
             console_export: false,
+            sample_rate: 1.0,
         }
     }
 }
@@ -80,9 +83,15 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
         KeyValue::new("service.version", config.service_version.clone()),
     ]);
 
+    // Head-based sampling: ParentBased wrapping ensures child spans inherit parent decision
+    use opentelemetry_sdk::trace::Sampler;
+    let ratio_sampler = Sampler::TraceIdRatioBased(config.sample_rate);
+    let sampler = Sampler::ParentBased(Box::new(ratio_sampler));
+
     let provider = TracerProvider::builder()
         .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
         .with_resource(resource)
+        .with_sampler(sampler)
         .build();
 
     // Get SDK tracer BEFORE setting as global (returns concrete Tracer, not BoxedTracer)
@@ -94,6 +103,7 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     info!(
         service = %config.service_name,
         endpoint = ?config.otlp_endpoint,
+        sample_rate = config.sample_rate,
         "OpenTelemetry initialized"
     );
     Some(tracer)
@@ -152,6 +162,16 @@ mod tests {
         let config = TelemetryConfig::default();
         assert_eq!(config.service_name, "stoa-gateway");
         assert!(!config.console_export);
+        assert!((config.sample_rate - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_telemetry_config_sample_rate() {
+        let config = TelemetryConfig {
+            sample_rate: 0.5,
+            ..TelemetryConfig::default()
+        };
+        assert!((config.sample_rate - 0.5).abs() < f64::EPSILON);
     }
 
     #[test]

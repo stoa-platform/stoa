@@ -31,7 +31,11 @@ impl ToolSpan {
             "tool_call",
             tool = %tool_name,
             tenant = %tenant_id,
-            otel.kind = "server"
+            otel.kind = "server",
+            contract_id = tracing::field::Empty,
+            auth_type = tracing::field::Empty,
+            http.method = tracing::field::Empty,
+            http.target = tracing::field::Empty,
         );
 
         debug!(
@@ -47,6 +51,32 @@ impl ToolSpan {
             _tracing_span: tracing_span,
             finished: false,
         }
+    }
+
+    /// Attach UAC context attributes to the span.
+    ///
+    /// Uses `tracing::Span::record()` to fill the pre-declared empty fields.
+    /// `None` values are silently skipped (fields remain empty in the trace).
+    pub fn with_uac(
+        self,
+        contract_id: Option<&str>,
+        auth_type: Option<&str>,
+        method: Option<&str>,
+        path: Option<&str>,
+    ) -> Self {
+        if let Some(v) = contract_id {
+            self._tracing_span.record("contract_id", v);
+        }
+        if let Some(v) = auth_type {
+            self._tracing_span.record("auth_type", v);
+        }
+        if let Some(v) = method {
+            self._tracing_span.record("http.method", v);
+        }
+        if let Some(v) = path {
+            self._tracing_span.record("http.target", v);
+        }
+        self
     }
 
     /// Get elapsed duration in seconds
@@ -242,6 +272,37 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(10));
         let elapsed = span.elapsed_secs();
         assert!(elapsed >= 0.01);
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_with_uac_attributes() {
+        let span = ToolSpan::new("test_tool", "test-tenant").with_uac(
+            Some("contract-123"),
+            Some("jwt"),
+            Some("POST"),
+            Some("/v1/tools/call"),
+        );
+        // Verify span is usable after with_uac
+        assert_eq!(span.tool_name, "test_tool");
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_with_partial_uac() {
+        let span = ToolSpan::new("test_tool", "test-tenant").with_uac(
+            Some("contract-456"),
+            None,
+            None,
+            Some("/health"),
+        );
+        // None values leave fields empty — no panic
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_with_no_uac() {
+        let span = ToolSpan::new("test_tool", "test-tenant").with_uac(None, None, None, None);
         span.finish_success();
     }
 }

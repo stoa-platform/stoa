@@ -470,6 +470,58 @@
       ],
       "title": "Fallback Chain",
       "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 34},
+      "id": 500,
+      "panels": [],
+      "title": "Trace Drill-Down",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "description": "Search recent traces by service name, filtered by tool and tenant span attributes",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"align": "auto", "displayMode": "auto"}
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Duration"}, "properties": [{"id": "unit", "value": "ns"}]},
+          {"matcher": {"id": "byName", "options": "Trace ID"}, "properties": [{"id": "links", "value": [{"title": "View trace", "url": "/explore?left={\"datasource\":\"tempo\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"traceql\",\"query\":\"${__value.raw}\"}]}"}]}]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 35},
+      "id": 13,
+      "options": {"showHeader": true, "sortBy": [{"displayName": "Start time", "desc": true}]},
+      "targets": [
+        {
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "queryType": "nativeSearch",
+          "serviceName": "stoa-gateway",
+          "spanName": "tool_call",
+          "limit": 20,
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Traces",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "description": "Service map showing trace flow between stoa-gateway and upstream services",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 35},
+      "id": 14,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "queryType": "serviceMap",
+          "refId": "A"
+        }
+      ],
+      "title": "Service Map",
+      "type": "nodeGraph"
     }
   ],
   "refresh": "30s",
@@ -485,6 +537,19 @@
         "name": "datasource",
         "options": [],
         "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {"selected": false, "text": "Tempo", "value": "tempo"},
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "tempo_datasource",
+        "options": [],
+        "query": "tempo",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,

@@ -10,6 +10,7 @@ import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { useSequenceShortcuts } from '@stoa/shared/hooks';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useTheme } from '@stoa/shared/contexts';
+import { LanguageToggle } from './LanguageToggle';
 import { apiService } from '../services/api';
 import {
   LayoutDashboard,
@@ -763,6 +764,9 @@ export function Layout({ children }: LayoutProps) {
           >
             <Search className="h-5 w-5" />
           </button>
+
+          {/* Language toggle */}
+          <LanguageToggle />
 
           {/* Theme toggle */}
           <ThemeToggle size="md" />

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { EnvironmentProvider } from './contexts/EnvironmentContext';
 import { Layout } from './components/Layout';
@@ -134,12 +135,13 @@ function PageLoader() {
 
 function Dashboard() {
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <p className="text-gray-500 dark:text-neutral-400 mt-2">Welcome to STOA Control Plane</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('dashboard.title')}</h1>
+        <p className="text-gray-500 dark:text-neutral-400 mt-2">{t('dashboard.welcome')}</p>
       </div>
 
       {/* Welcome Card */}
@@ -162,7 +164,7 @@ function Dashboard() {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Hello, {user?.name || 'User'}!
+              {t('dashboard.hello', { name: user?.name || 'User' })}
             </h2>
             <p className="text-sm text-gray-500 dark:text-neutral-400">{user?.email}</p>
           </div>
@@ -172,8 +174,8 @@ function Dashboard() {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <QuickActionCard
-          title="APIs"
-          description="Manage API definitions and deployments"
+          title={t('dashboard.quickActions.apis')}
+          description={t('dashboard.quickActions.apisDesc')}
           href="/apis"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -188,8 +190,8 @@ function Dashboard() {
           color="blue"
         />
         <QuickActionCard
-          title="AI Tools"
-          description="Browse MCP tools catalog"
+          title={t('dashboard.quickActions.aiTools')}
+          description={t('dashboard.quickActions.aiToolsDesc')}
           href="/ai-tools"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,8 +212,8 @@ function Dashboard() {
           color="orange"
         />
         <QuickActionCard
-          title="Applications"
-          description="Manage consumer applications"
+          title={t('dashboard.quickActions.applications')}
+          description={t('dashboard.quickActions.applicationsDesc')}
           href="/applications"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -226,8 +228,8 @@ function Dashboard() {
           color="purple"
         />
         <QuickActionCard
-          title="Deployments"
-          description="View deployment history"
+          title={t('dashboard.quickActions.deployments')}
+          description={t('dashboard.quickActions.deploymentsDesc')}
           href="/deployments"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -249,7 +251,9 @@ function Dashboard() {
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Links</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            {t('dashboard.quickLinks')}
+          </h3>
           <ul className="space-y-3">
             {quickLinks.map((link) => (
               <li key={link.name}>
@@ -276,7 +280,7 @@ function Dashboard() {
 
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Getting Started
+            {t('dashboard.gettingStarted')}
           </h3>
           <ol className="space-y-3 text-sm text-gray-600 dark:text-neutral-400">
             <li className="flex gap-2">
@@ -433,6 +437,7 @@ function ProtectedRoutes() {
 
 function Login() {
   const { login, isLoading } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-500 to-purple-600">
@@ -453,8 +458,8 @@ function Login() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">STOA Control Plane</h1>
-          <p className="text-gray-500 mt-1">Multi-tenant API Management</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('login.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('login.subtitle')}</p>
         </div>
         <button
           onClick={login}
@@ -464,7 +469,7 @@ function Login() {
           {isLoading ? (
             <>
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              Loading...
+              {t('common.loading')}
             </>
           ) : (
             <>
@@ -476,7 +481,7 @@ function Login() {
                   d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
                 />
               </svg>
-              Login with Keycloak
+              {t('login.button')}
             </>
           )}
         </button>

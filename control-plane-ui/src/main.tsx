@@ -9,6 +9,11 @@ import App from './App';
 import { config } from './config';
 import './index.css';
 
+// Initialize i18n (loads saved language preference)
+if (config.features.enableI18n) {
+  import('./i18n');
+}
+
 // Log Core Web Vitals in dev mode
 if (config.app.isDev) {
   onLCP(({ value }) => console.log('[WebVitals] LCP:', value, 'ms'));

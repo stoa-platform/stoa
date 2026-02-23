@@ -86,3 +86,52 @@ def map_apigee_product_to_policy(product: dict) -> dict:
         }
 
     return policy
+
+
+# --- Application Mappers (Developer Apps) ---
+
+
+def map_app_spec_to_apigee_developer_app(app_spec: dict, tenant_id: str) -> dict:
+    """Map CP application spec to Apigee Developer App payload."""
+    app_id = app_spec.get("id", "")
+    name = f"stoa-{tenant_id}-{app_id}".replace(" ", "-").lower()
+
+    app: dict = {
+        "name": name,
+        "attributes": [
+            {"name": "stoa-managed", "value": "true"},
+            {"name": "stoa-tenant", "value": tenant_id},
+            {"name": "stoa-app-id", "value": app_id},
+            {"name": "DisplayName", "value": app_spec.get("name", name)},
+        ],
+    }
+
+    # Bind to API products (policy IDs)
+    api_products = app_spec.get("api_products", [])
+    if api_products:
+        app["apiProducts"] = api_products
+
+    return app
+
+
+def map_apigee_developer_app_to_cp(app: dict) -> dict:
+    """Map Apigee Developer App to CP application format."""
+    attrs = {a["name"]: a["value"] for a in app.get("attributes", [])}
+
+    # Extract API key from credentials
+    api_key = ""
+    credentials = app.get("credentials", [])
+    if credentials:
+        api_key = credentials[0].get("consumerKey", "")
+
+    return {
+        "id": attrs.get("stoa-app-id", app.get("appId", "")),
+        "name": attrs.get("DisplayName", app.get("name", "")),
+        "gateway_app_id": app.get("name", ""),
+        "api_key": api_key,
+        "tenant_id": attrs.get("stoa-tenant", ""),
+        "gateway_type": "apigee",
+        "status": app.get("status", "approved"),
+        "created_at": app.get("createdAt"),
+        "updated_at": app.get("lastModifiedAt"),
+    }

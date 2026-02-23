@@ -82,6 +82,7 @@ from .routers.external_mcp_servers import (
     admin_router as external_mcp_servers_admin_router,
     internal_router as external_mcp_servers_internal_router,
 )
+from .routers.tenant_mcp_servers import router as tenant_mcp_servers_router
 from .routers.mcp import (
     servers_router as mcp_servers_router,
     subscriptions_router as mcp_subscriptions_router,
@@ -456,6 +457,9 @@ app.include_router(mcp_admin_servers_router)
 # External MCP Servers (Linear, GitHub, etc.)
 app.include_router(external_mcp_servers_admin_router)
 app.include_router(external_mcp_servers_internal_router)
+
+# Tenant-scoped MCP Servers — developer self-service (CAB-1319)
+app.include_router(tenant_mcp_servers_router)
 
 # Portal and GitOps routers
 app.include_router(portal.router)

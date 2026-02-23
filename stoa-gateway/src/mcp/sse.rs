@@ -330,6 +330,7 @@ pub async fn handle_sse_post(
         scopes,
         raw_token: validated_token,
         skill_instructions: None, // SSE: skills resolved per-tool in handler
+        progress_token: None,     // SSE: no progress push (half-duplex)
     };
 
     // Route to handler
@@ -580,6 +581,7 @@ pub async fn process_single_request(
         scopes: vec![],
         raw_token: None,
         skill_instructions: None,
+        progress_token: None,
     };
 
     // Route to handler
@@ -692,7 +694,11 @@ async fn handle_initialize(
                 "levels": ["none", "moderate", "aggressive"]
             },
             // Advertise elicitation support (Phase 5)
-            "elicitation": {}
+            "elicitation": {},
+            // Advertise supported transports (CAB-1345 Phase 3)
+            "experimental": {
+                "transports": ["sse", "websocket"]
+            }
         },
         "serverInfo": {
             "name": "STOA Gateway",

@@ -390,6 +390,47 @@ fn build_headers_from_token(token: &str) -> HeaderMap {
 }
 
 // ---------------------------------------------------------------------------
+// Progress Notifications (CAB-1345 Phase 3)
+// ---------------------------------------------------------------------------
+
+/// Send a `notifications/progress` notification to the client over WebSocket.
+///
+/// Used when `tools/call` includes `_meta.progressToken`. The server sends
+/// incremental progress updates as the tool executes. SSE clients are
+/// unaffected (progress_tx = None since SSE can't push mid-request).
+///
+/// MCP progress notification spec:
+/// - `progressToken`: opaque token from the client's `_meta.progressToken`
+/// - `progress`: current progress value (e.g., bytes transferred, steps done)
+/// - `total`: optional total expected (e.g., total bytes, total steps)
+pub fn notify_progress(
+    session_manager: &crate::mcp::session::SessionManager,
+    session_id: &str,
+    progress_token: &Value,
+    progress: f64,
+    total: Option<f64>,
+) {
+    let mut notification = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/progress",
+        "params": {
+            "progressToken": progress_token,
+            "progress": progress
+        }
+    });
+    if let Some(t) = total {
+        notification["params"]["total"] = serde_json::json!(t);
+    }
+    let text = serde_json::to_string(&notification).unwrap_or_default();
+    if !session_manager.send_to_session_ws(session_id, &text) {
+        debug!(
+            session_id = %session_id,
+            "Failed to send progress notification (client may have disconnected)"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Server-Initiated Request Helpers (CAB-1345 Phase 2)
 // ---------------------------------------------------------------------------
 
@@ -690,5 +731,43 @@ mod tests {
             }
             _ => panic!("expected Success"),
         }
+    }
+
+    // --- Phase 3 tests: progress notifications ---
+
+    #[test]
+    fn test_notify_progress_builds_correct_json() {
+        // Verify the JSON structure of a progress notification
+        let token = serde_json::json!("progress-token-1");
+        let mut notification = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "notifications/progress",
+            "params": {
+                "progressToken": token,
+                "progress": 5.0
+            }
+        });
+        notification["params"]["total"] = serde_json::json!(10.0);
+
+        assert_eq!(notification["method"], "notifications/progress");
+        assert_eq!(notification["params"]["progressToken"], "progress-token-1");
+        assert_eq!(notification["params"]["progress"], 5.0);
+        assert_eq!(notification["params"]["total"], 10.0);
+    }
+
+    #[test]
+    fn test_notify_progress_without_total() {
+        let token = serde_json::json!(42);
+        let notification = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "notifications/progress",
+            "params": {
+                "progressToken": token,
+                "progress": 3.0
+            }
+        });
+
+        assert!(notification["params"].get("total").is_none());
+        assert_eq!(notification["params"]["progress"], 3.0);
     }
 }

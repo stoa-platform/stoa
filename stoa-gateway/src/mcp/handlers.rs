@@ -716,6 +716,7 @@ pub async fn mcp_tools_call(
         scopes: auth.scopes.clone(),
         raw_token: auth.raw_token.clone(),
         skill_instructions,
+        progress_token: None,
     };
 
     // Phase 2: OPA policy evaluation with real scopes/roles

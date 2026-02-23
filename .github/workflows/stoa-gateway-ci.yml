@@ -149,9 +149,75 @@ jobs:
     permissions:
       contents: read
 
+  # === Staging: apply manifest + deploy + smoke on staging cluster ===
+  apply-manifest-staging:
+    needs: smoke-test
+    if: github.event_name == 'push' && needs.smoke-test.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+      - name: Configure kubeconfig
+        run: |
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "::warning::KUBECONFIG_B64 secret not set for staging. Skipping."
+            exit 0
+          fi
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+      - name: Apply k8s manifest
+        run: |
+          kubectl apply -f stoa-gateway/k8s/deployment.yaml 2>&1 || {
+            echo "Apply failed (likely immutable selector). Deleting and recreating..."
+            kubectl delete deployment stoa-gateway -n stoa-system --ignore-not-found
+            kubectl apply -f stoa-gateway/k8s/deployment.yaml
+          }
+
+  deploy-staging:
+    needs: [docker, apply-manifest-staging]
+    if: github.event_name == 'push' && needs.apply-manifest-staging.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: staging
+      url: https://staging-mcp.gostoa.dev
+    steps:
+      - name: Configure kubeconfig
+        run: |
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "::warning::KUBECONFIG_B64 secret not set for staging. Skipping."
+            exit 0
+          fi
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+      - name: Restart deployment (pull new image from GHCR)
+        run: |
+          kubectl rollout restart deployment/stoa-gateway -n stoa-system
+          kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=600s
+
+  smoke-test-staging:
+    needs: deploy-staging
+    if: needs.deploy-staging.result == 'success'
+    uses: ./.github/workflows/reusable-health-smoke.yml
+    with:
+      component: stoa-gateway
+      environment: staging
+    permissions:
+      contents: read
+
   # === Notify: Slack ===
   notify:
-    needs: [ci, docker, deploy, smoke-test]
+    needs: [ci, docker, deploy, smoke-test, deploy-staging, smoke-test-staging]
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-notify.yml
     with:

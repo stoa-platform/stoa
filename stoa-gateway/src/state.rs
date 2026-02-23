@@ -28,6 +28,7 @@ use crate::resilience::{
 };
 use crate::routes::{PolicyRegistry, RouteRegistry};
 use crate::skills::resolver::SkillResolver;
+use crate::telemetry::deploy::DeployProgressEmitter;
 use crate::uac::cache::VersionedPolicyCache;
 use crate::uac::enforcer::ClassificationEnforcer;
 use crate::uac::{Action, ContractRegistry};
@@ -87,6 +88,8 @@ pub struct AppState {
     /// Per-tenant guardrail policy store (CAB-1337 Phase 3)
     /// Populated by K8s CRD watcher; empty store = all tenants use global defaults.
     pub guardrail_policy_store: Arc<GuardrailPolicyStore>,
+    /// Deploy progress emitter for structured telemetry during API sync (CAB-1421)
+    pub deploy_progress: DeployProgressEmitter,
 }
 
 impl AppState {
@@ -344,6 +347,17 @@ impl AppState {
             tracing::info!("mTLS disabled (STOA_MTLS_ENABLED=false)");
         }
 
+        // Initialize deploy progress emitter (CAB-1421)
+        let deploy_progress = DeployProgressEmitter::new(
+            config.kafka_deploy_progress_topic.clone(),
+            metering_producer.clone(),
+        );
+        tracing::info!(
+            topic = %config.kafka_deploy_progress_topic,
+            kafka_enabled = config.kafka_enabled,
+            "Deploy progress emitter initialized"
+        );
+
         let start_time = Instant::now();
 
         Self {
@@ -375,6 +389,7 @@ impl AppState {
             federation_cache,
             token_budget,
             guardrail_policy_store: Arc::new(GuardrailPolicyStore::new()),
+            deploy_progress,
         }
     }
 

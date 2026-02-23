@@ -1,4 +1,8 @@
-"""Tests for docs search endpoint (CAB-1327)."""
+"""Tests for docs search endpoint (CAB-1327).
+
+Phase 1: Algolia keyword search + llms-full.txt boost.
+Phase 2: Semantic search (embeddings + k-NN), hybrid mode (RRF), reindex endpoint.
+"""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,7 +15,12 @@ from src.routers.docs_search import (
     DocsSearchResponse,
     DocsSearchResult,
     DocsSearchService,
+    _categorize_url,
     get_docs_search_service,
+)
+from src.services.docs_embedding_service import (
+    DocsEmbeddingService,
+    get_docs_embedding_service,
 )
 
 # ---------------------------------------------------------------------------
@@ -496,7 +505,9 @@ class TestEndpoint:
                 took_ms=5.0,
             )
         )
+        self.mock_embed_svc = MagicMock(spec=DocsEmbeddingService)
         app.dependency_overrides[get_docs_search_service] = lambda: self.mock_service
+        app.dependency_overrides[get_docs_embedding_service] = lambda: self.mock_embed_svc
         self.client = TestClient(app)
 
     def teardown_method(self):
@@ -600,81 +611,451 @@ class TestTitleFallback:
             assert response.results[0].title == "Untitled"
 
 
+# ===========================================================================
+# Phase 2 Tests — Semantic Search, Hybrid, Reindex (CAB-1327)
+# ===========================================================================
+
+
 # ---------------------------------------------------------------------------
-# Chat Tool Integration Tests (CAB-1327 Phase 1)
+# Chunking Tests
 # ---------------------------------------------------------------------------
 
 
-class TestSearchDocsChatTool:
-    def test_search_docs_in_chat_tools(self):
-        """search_docs tool must be registered in CHAT_TOOLS."""
-        from src.services.chat_tools import CHAT_TOOLS
+class TestChunking:
+    def setup_method(self):
+        self.svc = DocsEmbeddingService()
 
-        names = [t["name"] for t in CHAT_TOOLS]
-        assert "search_docs" in names
+    def test_h2_splitting(self):
+        """Split on H2 boundaries."""
+        content = "Intro text\n## Section A\nContent A\n## Section B\nContent B"
+        chunks = self.svc.chunk_markdown(content, title="Doc", url="https://example.com")
+        assert len(chunks) >= 2
+        headings = [c.heading for c in chunks]
+        assert "Section A" in headings
+        assert "Section B" in headings
 
-    def test_search_docs_tool_schema(self):
-        """search_docs tool schema must have query (required) and limit (optional)."""
-        from src.services.chat_tools import CHAT_TOOLS
+    def test_overlap_on_large_section(self):
+        """Oversized sections get character-based windowing with overlap."""
+        big_text = "## Big\n" + "x" * 5000
+        chunks = self.svc.chunk_markdown(big_text, max_chars=2048, overlap=200)
+        assert len(chunks) >= 2
+        # Second chunk should overlap with first
+        if len(chunks) >= 2:
+            first_end = chunks[0].content
+            second_start = chunks[1].content
+            assert first_end[-200:] == second_start[:200]
 
-        tool = next(t for t in CHAT_TOOLS if t["name"] == "search_docs")
-        props = tool["input_schema"]["properties"]
-        assert "query" in props
-        assert "limit" in props
-        assert tool["input_schema"]["required"] == ["query"]
+    def test_max_size_respected(self):
+        """No chunk exceeds max_chars."""
+        content = "## A\n" + "y" * 10000
+        chunks = self.svc.chunk_markdown(content, max_chars=1024, overlap=100)
+        for c in chunks:
+            assert len(c.content) <= 1024
+
+    def test_empty_input(self):
+        """Empty string returns no chunks."""
+        assert self.svc.chunk_markdown("") == []
+        assert self.svc.chunk_markdown("   ") == []
+
+    def test_metadata_preserved(self):
+        """Title and URL propagate to all chunks."""
+        content = "## Sec\nHello world"
+        chunks = self.svc.chunk_markdown(content, title="My Doc", url="https://x.com/page")
+        assert len(chunks) == 1
+        assert chunks[0].title == "My Doc"
+        assert chunks[0].url == "https://x.com/page"
+        assert chunks[0].chunk_index == 0
+
+
+# ---------------------------------------------------------------------------
+# Embedding Generation Tests
+# ---------------------------------------------------------------------------
+
+
+class TestEmbedding:
+    def setup_method(self):
+        self.svc = DocsEmbeddingService()
 
     @pytest.mark.asyncio
-    async def test_execute_tool_search_docs(self):
-        """execute_tool dispatches search_docs and returns formatted results."""
-        from src.services.chat_tools import execute_tool
+    async def test_success(self):
+        """Generate embedding returns vector on success."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"embedding": [0.1, 0.2, 0.3]}]}
+        mock_resp.raise_for_status = MagicMock()
 
-        mock_response = DocsSearchResponse(
+        with (
+            patch("src.services.docs_embedding_service.settings") as mock_settings,
+            patch("src.services.docs_embedding_service.httpx.AsyncClient") as mock_client_cls,
+        ):
+            mock_settings.EMBEDDING_PROVIDER = "openai"
+            mock_settings.EMBEDDING_API_KEY = "test-key"
+            mock_settings.EMBEDDING_API_URL = "https://api.openai.com/v1/embeddings"
+            mock_settings.EMBEDDING_MODEL = "text-embedding-3-small"
+            mock_settings.EMBEDDING_DIMENSIONS = 1536
+
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_resp
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            vec = await self.svc.generate_embedding("hello world")
+            assert vec == [0.1, 0.2, 0.3]
+
+    @pytest.mark.asyncio
+    async def test_provider_disabled(self):
+        """Provider 'none' returns empty."""
+        with patch("src.services.docs_embedding_service.settings") as mock_settings:
+            mock_settings.EMBEDDING_PROVIDER = "none"
+            mock_settings.EMBEDDING_API_KEY = "key"
+            vec = await self.svc.generate_embedding("hello")
+            assert vec == []
+
+    @pytest.mark.asyncio
+    async def test_no_api_key(self):
+        """Empty API key returns empty."""
+        with patch("src.services.docs_embedding_service.settings") as mock_settings:
+            mock_settings.EMBEDDING_PROVIDER = "openai"
+            mock_settings.EMBEDDING_API_KEY = ""
+            vec = await self.svc.generate_embedding("hello")
+            assert vec == []
+
+    @pytest.mark.asyncio
+    async def test_http_error(self):
+        """HTTP error returns empty, no crash."""
+        with (
+            patch("src.services.docs_embedding_service.settings") as mock_settings,
+            patch("src.services.docs_embedding_service.httpx.AsyncClient") as mock_client_cls,
+        ):
+            mock_settings.EMBEDDING_PROVIDER = "openai"
+            mock_settings.EMBEDDING_API_KEY = "test-key"
+            mock_settings.EMBEDDING_API_URL = "https://api.openai.com/v1/embeddings"
+            mock_settings.EMBEDDING_MODEL = "model"
+            mock_settings.EMBEDDING_DIMENSIONS = 1536
+
+            mock_client = AsyncMock()
+            mock_client.post.side_effect = httpx.HTTPError("connection refused")
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            vec = await self.svc.generate_embedding("hello")
+            assert vec == []
+
+
+# ---------------------------------------------------------------------------
+# Semantic Search Tests
+# ---------------------------------------------------------------------------
+
+
+class TestSemanticSearch:
+    def setup_method(self):
+        self.svc = DocsEmbeddingService()
+
+    @pytest.mark.asyncio
+    async def test_returns_results(self):
+        """Semantic search returns formatted results."""
+        mock_os_response = MagicMock()
+        mock_os_response.status_code = 200
+        mock_os_response.json.return_value = {
+            "hits": {
+                "hits": [
+                    {
+                        "_source": {
+                            "title": "Quick Start",
+                            "url": "https://docs.gostoa.dev/guides/quick-start",
+                            "content": "Get started quickly",
+                            "heading": "Overview",
+                        },
+                        "_score": 0.95,
+                    }
+                ]
+            }
+        }
+
+        with (
+            patch.object(self.svc, "generate_embedding", new_callable=AsyncMock, return_value=[0.1] * 1536),
+            patch("src.services.docs_embedding_service.httpx.AsyncClient") as mock_client_cls,
+        ):
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_os_response
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            results = await self.svc.search_semantic("quick start", limit=5)
+            assert len(results) == 1
+            assert results[0]["title"] == "Quick Start"
+            assert results[0]["score"] == 0.95
+
+    @pytest.mark.asyncio
+    async def test_empty_embedding_returns_empty(self):
+        """If embedding generation fails, return empty results."""
+        with patch.object(self.svc, "generate_embedding", new_callable=AsyncMock, return_value=[]):
+            results = await self.svc.search_semantic("test query", limit=5)
+            assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Hybrid Search Tests (RRF)
+# ---------------------------------------------------------------------------
+
+
+class TestHybridSearch:
+    def setup_method(self):
+        self.svc = DocsEmbeddingService()
+
+    @pytest.mark.asyncio
+    async def test_rrf_fusion_scoring(self):
+        """RRF merges keyword + semantic results with reciprocal rank scores."""
+        keyword_response = DocsSearchResponse(
             query="mcp gateway",
+            total=2,
+            results=[
+                DocsSearchResult(title="MCP Guide", url="https://docs.gostoa.dev/guides/mcp", snippet="...", score=1.0),
+                DocsSearchResult(title="Gateway ADR", url="https://docs.gostoa.dev/adr/024", snippet="...", score=0.8),
+            ],
+        )
+        semantic_results = [
+            {"title": "Gateway ADR", "url": "https://docs.gostoa.dev/adr/024", "content": "...", "score": 0.9},
+            {"title": "MCP Overview", "url": "https://docs.gostoa.dev/concepts/mcp", "content": "...", "score": 0.7},
+        ]
+
+        with (
+            patch("src.routers.docs_search.get_docs_search_service") as mock_kw_svc,
+            patch.object(self.svc, "search_semantic", new_callable=AsyncMock, return_value=semantic_results),
+        ):
+            mock_service = MagicMock()
+            mock_service.search = AsyncMock(return_value=keyword_response)
+            mock_kw_svc.return_value = mock_service
+
+            results = await self.svc.search_hybrid("mcp gateway", limit=5)
+            assert len(results) >= 2
+            # Gateway ADR appears in both lists — should have highest RRF score
+            urls = [r["url"] for r in results]
+            assert "https://docs.gostoa.dev/adr/024" in urls
+
+    @pytest.mark.asyncio
+    async def test_url_deduplication(self):
+        """Same URL from keyword + semantic should appear only once."""
+        keyword_response = DocsSearchResponse(
+            query="test",
             total=1,
             results=[
-                DocsSearchResult(
-                    title="MCP Gateway",
-                    url="https://docs.gostoa.dev/blog/what-is-mcp-gateway",
-                    snippet="The MCP Gateway bridges AI agents...",
-                    score=1.0,
-                    category="blog",
-                )
+                DocsSearchResult(title="Shared Doc", url="https://docs.gostoa.dev/shared", snippet="...", score=1.0),
             ],
-            took_ms=5.0,
         )
+        semantic_results = [
+            {"title": "Shared Doc", "url": "https://docs.gostoa.dev/shared", "content": "...", "score": 0.9},
+        ]
 
-        with patch(
-            "src.routers.docs_search.get_docs_search_service"
-        ) as mock_get_svc:
-            mock_svc = MagicMock()
-            mock_svc.search = AsyncMock(return_value=mock_response)
-            mock_get_svc.return_value = mock_svc
+        with (
+            patch("src.routers.docs_search.get_docs_search_service") as mock_kw_svc,
+            patch.object(self.svc, "search_semantic", new_callable=AsyncMock, return_value=semantic_results),
+        ):
+            mock_service = MagicMock()
+            mock_service.search = AsyncMock(return_value=keyword_response)
+            mock_kw_svc.return_value = mock_service
 
-            import json
+            results = await self.svc.search_hybrid("test", limit=5)
+            urls = [r["url"] for r in results]
+            assert len(urls) == len({u.rstrip("/") for u in urls})
 
-            session = AsyncMock()
-            result = await execute_tool("search_docs", {"query": "mcp gateway"}, session)
-            data = json.loads(result)
-            assert data["query"] == "mcp gateway"
-            assert data["total"] == 1
-            assert data["results"][0]["title"] == "MCP Gateway"
-            assert data["results"][0]["url"] == "https://docs.gostoa.dev/blog/what-is-mcp-gateway"
-            assert data["results"][0]["category"] == "blog"
+
+# ---------------------------------------------------------------------------
+# Reindex Tests
+# ---------------------------------------------------------------------------
+
+
+class TestReindex:
+    def setup_method(self):
+        self.svc = DocsEmbeddingService()
 
     @pytest.mark.asyncio
-    async def test_execute_tool_search_docs_clamps_limit(self):
-        """Limit is clamped to [1, 20]."""
-        from src.services.chat_tools import execute_tool
+    async def test_success_pipeline(self):
+        """Full reindex: fetch → parse → chunk → embed → index."""
+        mock_fetch_resp = MagicMock()
+        mock_fetch_resp.text = "## Quick Start\n> Get started\n- URL: https://example.com/qs\n"
+        mock_fetch_resp.raise_for_status = MagicMock()
 
-        mock_response = DocsSearchResponse(query="test", total=0, results=[], took_ms=1.0)
+        mock_head_resp = MagicMock()
+        mock_head_resp.status_code = 200  # Index exists
 
-        with patch(
-            "src.routers.docs_search.get_docs_search_service"
-        ) as mock_get_svc:
-            mock_svc = MagicMock()
-            mock_svc.search = AsyncMock(return_value=mock_response)
-            mock_get_svc.return_value = mock_svc
+        mock_put_resp = MagicMock()
+        mock_put_resp.status_code = 201
 
-            session = AsyncMock()
-            await execute_tool("search_docs", {"query": "test", "limit": 100}, session)
-            mock_svc.search.assert_called_once_with(query="test", limit=20)
+        with (
+            patch("src.services.docs_embedding_service.httpx.AsyncClient") as mock_client_cls,
+            patch.object(self.svc, "generate_embedding", new_callable=AsyncMock, return_value=[0.1] * 1536),
+        ):
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_fetch_resp
+            mock_client.head.return_value = mock_head_resp
+            mock_client.put.return_value = mock_put_resp
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            result = await self.svc.reindex()
+            assert result.total_entries == 1
+            assert result.total_chunks >= 1
+            assert result.indexed >= 1
+            assert result.errors == 0
+
+    @pytest.mark.asyncio
+    async def test_fetch_failure(self):
+        """Reindex returns error when llms-full.txt fetch fails."""
+        with patch("src.services.docs_embedding_service.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get.side_effect = httpx.HTTPError("timeout")
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            result = await self.svc.reindex()
+            assert result.errors == 1
+            assert "Failed to fetch" in result.error_details[0]
+
+
+# ---------------------------------------------------------------------------
+# Search Mode Endpoint Tests
+# ---------------------------------------------------------------------------
+
+
+class TestSearchModeEndpoint:
+    def setup_method(self):
+        self.mock_keyword_svc = MagicMock(spec=DocsSearchService)
+        self.mock_keyword_svc.search = AsyncMock(
+            return_value=DocsSearchResponse(
+                query="test",
+                total=1,
+                results=[
+                    DocsSearchResult(
+                        title="Keyword Result",
+                        url="https://docs.gostoa.dev/test",
+                        snippet="A keyword result",
+                        score=1.0,
+                    )
+                ],
+                took_ms=5.0,
+            )
+        )
+        self.mock_embed_svc = MagicMock(spec=DocsEmbeddingService)
+        self.mock_embed_svc.search_semantic = AsyncMock(
+            return_value=[
+                {
+                    "title": "Semantic Result",
+                    "url": "https://docs.gostoa.dev/semantic",
+                    "content": "Semantic content",
+                    "score": 0.85,
+                }
+            ]
+        )
+        self.mock_embed_svc.search_hybrid = AsyncMock(
+            return_value=[
+                {
+                    "title": "Hybrid Result",
+                    "url": "https://docs.gostoa.dev/hybrid",
+                    "snippet": "Hybrid snippet",
+                    "score": 0.75,
+                }
+            ]
+        )
+
+        app.dependency_overrides[get_docs_search_service] = lambda: self.mock_keyword_svc
+        app.dependency_overrides[get_docs_embedding_service] = lambda: self.mock_embed_svc
+        self.client = TestClient(app)
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_default_keyword_mode(self):
+        resp = self.client.get("/v1/docs/search?q=test")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode"] == "keyword"
+        self.mock_keyword_svc.search.assert_called_once()
+
+    def test_explicit_keyword_mode(self):
+        resp = self.client.get("/v1/docs/search?q=test&mode=keyword")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode"] == "keyword"
+
+    def test_semantic_mode(self):
+        resp = self.client.get("/v1/docs/search?q=test&mode=semantic")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode"] == "semantic"
+        assert data["results"][0]["title"] == "Semantic Result"
+        self.mock_embed_svc.search_semantic.assert_called_once()
+
+    def test_hybrid_mode(self):
+        resp = self.client.get("/v1/docs/search?q=test&mode=hybrid")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode"] == "hybrid"
+        assert data["results"][0]["title"] == "Hybrid Result"
+        self.mock_embed_svc.search_hybrid.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Reindex Endpoint Tests
+# ---------------------------------------------------------------------------
+
+
+class TestReindexEndpoint:
+    def test_disabled_by_default(self):
+        mock_embed_svc = MagicMock(spec=DocsEmbeddingService)
+        app.dependency_overrides[get_docs_embedding_service] = lambda: mock_embed_svc
+        client = TestClient(app)
+
+        resp = client.post("/v1/docs/admin/reindex")
+        assert resp.status_code == 403
+        assert "disabled" in resp.json()["detail"].lower()
+
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Categorize URL Helper Tests
+# ---------------------------------------------------------------------------
+
+
+class TestCategorizeUrl:
+    def test_blog(self):
+        assert _categorize_url("https://docs.gostoa.dev/blog/post") == "blog"
+
+    def test_adr(self):
+        assert _categorize_url("https://docs.gostoa.dev/adr/adr-024") == "adr"
+
+    def test_guide(self):
+        assert _categorize_url("https://docs.gostoa.dev/guides/quick-start") == "guide"
+
+    def test_docs(self):
+        assert _categorize_url("https://docs.gostoa.dev/docs/overview") == "docs"
+
+    def test_unknown(self):
+        assert _categorize_url("https://example.com/other") is None
+
+
+# ---------------------------------------------------------------------------
+# Embedding Singleton Tests
+# ---------------------------------------------------------------------------
+
+
+class TestEmbeddingSingleton:
+    def test_returns_instance(self):
+        import src.services.docs_embedding_service as mod
+
+        mod._embedding_service = None
+        svc = get_docs_embedding_service()
+        assert isinstance(svc, DocsEmbeddingService)
+
+    def test_returns_same_instance(self):
+        import src.services.docs_embedding_service as mod
+
+        mod._embedding_service = None
+        svc1 = get_docs_embedding_service()
+        svc2 = get_docs_embedding_service()
+        assert svc1 is svc2

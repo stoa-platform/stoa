@@ -279,6 +279,8 @@ _push_metrics() {
   # $1 = job path suffix (e.g., "workflow/linear-dispatch/stage/council")
   # $2 = metrics text (Prometheus exposition format)
   local JOB_PATH="${1:?}" METRICS_TEXT="${2:?}"
+  # $() strips trailing newlines but Pushgateway requires one
+  METRICS_TEXT="${METRICS_TEXT}"$'\n'
   if [ -z "${PUSHGATEWAY_URL:-}" ]; then
     echo "::notice::PUSHGATEWAY_URL not configured — skipping metrics push"
     return 0
@@ -291,13 +293,6 @@ _push_metrics() {
       -H "Content-Type: text/plain" \
       -u "${PUSHGATEWAY_AUTH}" "$PUSH_URL" 2>/dev/null)
   else
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      --data-binary "$METRICS_TEXT" \
-      -H "Content-Type: text/plain" \
-      "$PUSH_URL" 2>/dev/null)
-  fi
-  # Retry without auth if server rejects Basic Auth (IP-whitelisted setup)
-  if [ "${HTTP_CODE:-000}" = "400" ] && [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
       --data-binary "$METRICS_TEXT" \
       -H "Content-Type: text/plain" \

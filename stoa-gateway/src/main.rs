@@ -241,6 +241,7 @@ async fn register_tools(state: &AppState) {
             state.cp_circuit_breaker.clone(),
             Some(state.session_manager.clone()),
             Some(state.circuit_breakers.clone()),
+            Some(state.prompt_cache.clone()),
         )
         .await
         {

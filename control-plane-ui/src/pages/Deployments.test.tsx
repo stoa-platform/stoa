@@ -83,6 +83,14 @@ vi.mock('@stoa/shared/components/Skeleton', () => ({
   TableSkeleton: () => <div data-testid="table-skeleton">Loading...</div>,
 }));
 
+// Mock useDeployEvents to avoid QueryClient dependency
+vi.mock('../hooks/useDeployEvents', () => ({
+  useDeployEvents: () => ({
+    deployStates: {},
+    loadHistoricalLogs: vi.fn(),
+  }),
+}));
+
 import Deployments from './Deployments';
 
 function renderComponent() {

@@ -50,7 +50,9 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">{t('firstCall.title')}</h2>
+        <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">
+          {t('firstCall.title')}
+        </h2>
         <p className="mt-2 text-neutral-500 dark:text-neutral-400">{t('firstCall.subtitle')}</p>
       </div>
 
@@ -67,7 +69,9 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
             </div>
             {app.clientId && (
               <div className="flex justify-between">
-                <dt className="text-neutral-500 dark:text-neutral-400">{t('firstCall.clientId')}</dt>
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  {t('firstCall.clientId')}
+                </dt>
                 <dd className="font-mono text-neutral-900 dark:text-white">{app.clientId}</dd>
               </div>
             )}

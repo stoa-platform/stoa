@@ -9,7 +9,7 @@ use crate::auth::api_key::ApiKeyValidator;
 use crate::auth::jwt::{JwtValidator, JwtValidatorConfig};
 use crate::auth::mtls::MtlsStats;
 use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
-use crate::cache::{SemanticCache, SemanticCacheConfig};
+use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::events::polling::EventBuffer;
@@ -90,6 +90,8 @@ pub struct AppState {
     pub guardrail_policy_store: Arc<GuardrailPolicyStore>,
     /// Deploy progress emitter for structured telemetry during API sync (CAB-1421)
     pub deploy_progress: DeployProgressEmitter,
+    /// Prompt cache for reusable patterns across agent sessions (CAB-1123)
+    pub prompt_cache: Arc<PromptCache>,
 }
 
 impl AppState {
@@ -347,6 +349,12 @@ impl AppState {
             tracing::info!("mTLS disabled (STOA_MTLS_ENABLED=false)");
         }
 
+        // Initialize prompt cache (CAB-1123)
+        let prompt_cache = Arc::new(PromptCache::new(PromptCacheConfig {
+            max_entries: config.prompt_cache_max_entries,
+            default_ttl: std::time::Duration::from_secs(config.prompt_cache_ttl_secs),
+        }));
+
         // Initialize deploy progress emitter (CAB-1421)
         let deploy_progress = DeployProgressEmitter::new(
             config.kafka_deploy_progress_topic.clone(),
@@ -390,11 +398,20 @@ impl AppState {
             token_budget,
             guardrail_policy_store: Arc::new(GuardrailPolicyStore::new()),
             deploy_progress,
+            prompt_cache,
         }
     }
 
     /// Start background tasks
     pub fn start_background_tasks(&self) {
+        // Start prompt cache file watcher (CAB-1123)
+        if let Some(ref watch_dir) = self.config.prompt_cache_watch_dir {
+            crate::cache::watcher::spawn_cache_file_watcher(
+                watch_dir.clone(),
+                self.prompt_cache.clone(),
+            );
+        }
+
         // Start session cleanup
         self.session_manager.clone().start_cleanup_task();
 

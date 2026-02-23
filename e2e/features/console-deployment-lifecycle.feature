@@ -44,3 +44,20 @@ Feature: Console - Deployment Lifecycle
     When I navigate to the deployments page
     And I click the "Deployment History" tab
     Then the rollback button is not visible
+
+  Scenario: DevOps expands deployment row to view details
+    Given I am logged in to Console as "parzival" from team "high-five"
+    When I navigate to the deployments page
+    And I click the "Deployment History" tab
+    And I click on a deployment row to expand it
+    Then the deployment detail panel is visible
+    And the detail panel shows the deploy progress indicator
+    And the detail panel shows a log viewer section
+
+  Scenario: Expanded deployment shows spec hash
+    Given I am logged in to Console as "parzival" from team "high-five"
+    When I navigate to the deployments page
+    And I click the "Deployment History" tab
+    And I click on a deployment row to expand it
+    Then the deployment detail panel is visible
+    And the detail panel shows the spec hash

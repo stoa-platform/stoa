@@ -76,7 +76,7 @@ class CredentialMappingRepository:
         """Update a credential mapping (caller sets fields before calling)."""
         from datetime import datetime
 
-        mapping.updated_at = datetime.utcnow()
+        mapping.updated_at = datetime.utcnow()  # type: ignore[assignment]
         await self.session.flush()
         await self.session.refresh(mapping)
         return mapping
@@ -108,7 +108,7 @@ class CredentialMappingRepository:
         sync_items = []
         for m in mappings:
             try:
-                decrypted = decrypt_auth_config(m.encrypted_value)
+                decrypted = decrypt_auth_config(m.encrypted_value)  # type: ignore[arg-type]
                 credential_value = decrypted.get("value", "")
             except (ValueError, Exception):
                 logger.warning("Failed to decrypt credential mapping %s, skipping", m.id)

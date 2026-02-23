@@ -11,3 +11,4 @@ export * from './Collapsible';
 export * from './EmptyState';
 export * from './Celebration';
 export * from './StoaLogo';
+export * from './Button';

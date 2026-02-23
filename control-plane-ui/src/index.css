@@ -10,6 +10,26 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Accessibility: Focus visible styles (CAB-1322) */
+@layer base {
+  :focus-visible {
+    outline: 2px solid #059669;
+    outline-offset: 2px;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible {
+    outline: 2px solid #059669;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
 /* STOA Loader — animated loading indicator */
 .stoa-loader-breathe {
   animation: stoa-breathe 2.5s ease-in-out infinite;

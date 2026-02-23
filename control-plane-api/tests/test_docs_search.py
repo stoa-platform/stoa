@@ -598,3 +598,83 @@ class TestTitleFallback:
         ):
             response = await service.search("test", limit=5)
             assert response.results[0].title == "Untitled"
+
+
+# ---------------------------------------------------------------------------
+# Chat Tool Integration Tests (CAB-1327 Phase 1)
+# ---------------------------------------------------------------------------
+
+
+class TestSearchDocsChatTool:
+    def test_search_docs_in_chat_tools(self):
+        """search_docs tool must be registered in CHAT_TOOLS."""
+        from src.services.chat_tools import CHAT_TOOLS
+
+        names = [t["name"] for t in CHAT_TOOLS]
+        assert "search_docs" in names
+
+    def test_search_docs_tool_schema(self):
+        """search_docs tool schema must have query (required) and limit (optional)."""
+        from src.services.chat_tools import CHAT_TOOLS
+
+        tool = next(t for t in CHAT_TOOLS if t["name"] == "search_docs")
+        props = tool["input_schema"]["properties"]
+        assert "query" in props
+        assert "limit" in props
+        assert tool["input_schema"]["required"] == ["query"]
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_search_docs(self):
+        """execute_tool dispatches search_docs and returns formatted results."""
+        from src.services.chat_tools import execute_tool
+
+        mock_response = DocsSearchResponse(
+            query="mcp gateway",
+            total=1,
+            results=[
+                DocsSearchResult(
+                    title="MCP Gateway",
+                    url="https://docs.gostoa.dev/blog/what-is-mcp-gateway",
+                    snippet="The MCP Gateway bridges AI agents...",
+                    score=1.0,
+                    category="blog",
+                )
+            ],
+            took_ms=5.0,
+        )
+
+        with patch(
+            "src.routers.docs_search.get_docs_search_service"
+        ) as mock_get_svc:
+            mock_svc = MagicMock()
+            mock_svc.search = AsyncMock(return_value=mock_response)
+            mock_get_svc.return_value = mock_svc
+
+            import json
+
+            session = AsyncMock()
+            result = await execute_tool("search_docs", {"query": "mcp gateway"}, session)
+            data = json.loads(result)
+            assert data["query"] == "mcp gateway"
+            assert data["total"] == 1
+            assert data["results"][0]["title"] == "MCP Gateway"
+            assert data["results"][0]["url"] == "https://docs.gostoa.dev/blog/what-is-mcp-gateway"
+            assert data["results"][0]["category"] == "blog"
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_search_docs_clamps_limit(self):
+        """Limit is clamped to [1, 20]."""
+        from src.services.chat_tools import execute_tool
+
+        mock_response = DocsSearchResponse(query="test", total=0, results=[], took_ms=1.0)
+
+        with patch(
+            "src.routers.docs_search.get_docs_search_service"
+        ) as mock_get_svc:
+            mock_svc = MagicMock()
+            mock_svc.search = AsyncMock(return_value=mock_response)
+            mock_get_svc.return_value = mock_svc
+
+            session = AsyncMock()
+            await execute_tool("search_docs", {"query": "test", "limit": 100}, session)
+            mock_svc.search.assert_called_once_with(query="test", limit=20)

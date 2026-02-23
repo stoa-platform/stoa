@@ -5,10 +5,8 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "slack-interactive",
-        "responseMode": "lastNode",
-        "options": {
-          "rawBody": true
-        }
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
       },
       "id": "interactive-webhook",
       "name": "Slack Interactive Webhook",
@@ -19,351 +17,38 @@
     },
     {
       "parameters": {
-        "jsCode": "// Validate Slack request signature (X-Slack-Signature)\n// HMAC pattern adapted from n8n-approve-ticket.json\nconst crypto = require('crypto');\n\nconst signature = $input.first().json.headers['x-slack-signature'];\nconst timestamp = $input.first().json.headers['x-slack-request-timestamp'];\nconst rawBody = $input.first().json.body;\n\nconst signingSecret = $env.SLACK_SIGNING_SECRET;\n\nif (!signingSecret) {\n  throw new Error('SLACK_SIGNING_SECRET not configured — set it as Docker env var');\n}\n\n// Replay attack protection: reject if timestamp > 5 minutes old\nconst now = Math.floor(Date.now() / 1000);\nif (Math.abs(now - parseInt(timestamp, 10)) > 300) {\n  throw new Error('Request timestamp too old — possible replay attack');\n}\n\n// Compute expected signature: v0=HMAC-SHA256(secret, v0:timestamp:body)\nconst sigBasestring = `v0:${timestamp}:${rawBody}`;\nconst expected = 'v0=' + crypto.createHmac('sha256', signingSecret)\n  .update(sigBasestring)\n  .digest('hex');\n\nif (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {\n  throw new Error('Invalid Slack signature');\n}\n\n// Parse the interactive payload\nconst payload = JSON.parse(decodeURIComponent(rawBody.replace('payload=', '')));\nconst action = payload.actions?.[0] || {};\nconst actionId = action.action_id || '';\nconst userId = payload.user?.id || '';\n\nreturn [{\n  json: {\n    actionId,\n    actionValue: action.value || '',\n    userId,\n    userName: payload.user?.name || '',\n    triggerId: payload.trigger_id || '',\n    responseUrl: payload.response_url || '',\n    valid: true\n  }\n}];"
+        "jsCode": "// All-in-one: Validate Slack signature → Check allowlist → Route action → Call GitHub API\nconst crypto = require('crypto');\nconst https = require('https');\n\n// --- Helper: HTTPS request ---\nfunction httpsRequest(url, method, hdrs, body) {\n  return new Promise((resolve, reject) => {\n    const urlObj = new URL(url);\n    const bodyStr = body ? JSON.stringify(body) : null;\n    const options = {\n      hostname: urlObj.hostname,\n      path: urlObj.pathname + urlObj.search,\n      method,\n      headers: {\n        ...hdrs,\n        ...(bodyStr ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) } : {})\n      }\n    };\n    const req = https.request(options, (res) => {\n      let data = '';\n      res.on('data', chunk => data += chunk);\n      res.on('end', () => resolve({ status: res.statusCode, data }));\n    });\n    req.on('error', reject);\n    if (bodyStr) req.write(bodyStr);\n    req.end();\n  });\n}\n\n// --- 1. Validate Slack Signature ---\nconst headers = $input.first().json.headers;\nconst rawBody = $input.first().json.body;\nconst signature = headers['x-slack-signature'];\nconst timestamp = headers['x-slack-request-timestamp'];\nconst signingSecret = $env.SLACK_SIGNING_SECRET;\n\nif (!signingSecret) {\n  return [{ json: { responseText: 'Error: SLACK_SIGNING_SECRET not configured' } }];\n}\n\nconst now = Math.floor(Date.now() / 1000);\nif (Math.abs(now - parseInt(timestamp, 10)) > 300) {\n  return [{ json: { responseText: 'Error: Request timestamp too old' } }];\n}\n\nconst sigBasestring = `v0:${timestamp}:${rawBody}`;\nconst expected = 'v0=' + crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex');\nif (!crypto.timingSafeEqual(Buffer.from(signature || ''), Buffer.from(expected))) {\n  return [{ json: { responseText: 'Error: Invalid Slack signature' } }];\n}\n\n// --- 2. Parse Payload ---\nconst payload = JSON.parse(decodeURIComponent(rawBody.replace('payload=', '')));\nconst action = payload.actions?.[0] || {};\nconst actionId = action.action_id || '';\nconst actionValue = action.value || '';\nconst userId = payload.user?.id || '';\n\n// --- 3. Check Allowlist ---\nconst adminUsers = ($env.SLACK_ADMIN_USERS || '').split(',').map(s => s.trim()).filter(Boolean);\nconst allowedUsers = ($env.SLACK_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean);\n\nlet tier = 'readonly';\nif (adminUsers.length > 0 && adminUsers.includes(userId)) {\n  tier = 'admin';\n} else if (adminUsers.length === 0 && allowedUsers.length > 0 && allowedUsers.includes(userId)) {\n  tier = 'admin';\n} else if (allowedUsers.includes(userId)) {\n  tier = 'allowed';\n}\n\nif (tier === 'readonly') {\n  if (allowedUsers.length > 0) {\n    return [{ json: { responseText: 'Error: Not authorized' } }];\n  }\n  tier = 'admin';\n}\n\nconst adminOnlyPrefixes = ['scan_backlog:', 'trigger_implement:'];\nconst isAdminAction = adminOnlyPrefixes.some(p => actionId.startsWith(p));\nif (isAdminAction && tier !== 'admin') {\n  return [{ json: { responseText: 'Error: Admin action requires admin tier' } }];\n}\n\n// --- 4. Route & Execute ---\nconst githubToken = $env.GITHUB_PAT;\nconst repo = 'stoa-platform/stoa';\nconst ghHeaders = {\n  'Accept': 'application/vnd.github.v3+json',\n  'Authorization': `token ${githubToken}`,\n  'User-Agent': 'n8n-stoa-ai-factory'\n};\n\nlet responseText = 'Unknown action — ignored.';\n\ntry {\n  if (actionId.startsWith('approve_ticket:')) {\n    await httpsRequest(\n      `https://api.github.com/repos/${repo}/issues/${actionValue}/comments`,\n      'POST', ghHeaders, { body: '/go' }\n    );\n    responseText = `✅ Approved ticket — posted /go on issue #${actionValue}`;\n\n  } else if (actionId.startsWith('approve_plan:')) {\n    await httpsRequest(\n      `https://api.github.com/repos/${repo}/issues/${actionValue}/comments`,\n      'POST', ghHeaders, { body: '/go-plan' }\n    );\n    responseText = `✅ Approved plan — posted /go-plan on issue #${actionValue}`;\n\n  } else if (actionId.startsWith('merge_pr:')) {\n    await httpsRequest(\n      `https://api.github.com/repos/${repo}/pulls/${actionValue}/merge`,\n      'PUT', ghHeaders, { merge_method: 'squash' }\n    );\n    responseText = `✅ Merged PR #${actionValue} (squash)`;\n  }\n} catch (err) {\n  responseText = `❌ GitHub API error: ${err.message}`;\n}\n\nreturn [{ json: { responseText } }];"
       },
-      "id": "validate-signature",
-      "name": "Validate Slack Signature",
+      "id": "process-action",
+      "name": "Process Action",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 300]
+      "position": [500, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Tiered access control for Slack AI Factory actions\n// admin: all actions (scan, implement, approve, merge)\n// allowed: approve + merge only\n// readonly: 403 forbidden\n// Backward compatible: empty SLACK_ADMIN_USERS = all allowed users are admins\nconst adminUsers = ($env.SLACK_ADMIN_USERS || '')\n  .split(',')\n  .map(s => s.trim())\n  .filter(Boolean);\n\nconst allowedUsers = ($env.SLACK_ALLOWED_USERS || '')\n  .split(',')\n  .map(s => s.trim())\n  .filter(Boolean);\n\nconst userId = $input.first().json.userId;\nconst actionId = $input.first().json.actionId || '';\n\n// Determine tier\nlet tier = 'readonly';\nif (adminUsers.length > 0 && adminUsers.includes(userId)) {\n  tier = 'admin';\n} else if (adminUsers.length === 0 && allowedUsers.length > 0 && allowedUsers.includes(userId)) {\n  tier = 'admin'; // backward compat: no admin list = allowed users are admins\n} else if (allowedUsers.includes(userId)) {\n  tier = 'allowed';\n}\n\n// Check access\nif (tier === 'readonly') {\n  if (allowedUsers.length > 0) {\n    throw new Error(`User ${userId} not authorized (tier: readonly)`);\n  }\n  // No allowlist configured = open access (backward compat)\n  tier = 'admin';\n}\n\n// Admin-only actions: scan, implement\nconst adminOnlyPrefixes = ['scan_backlog:', 'trigger_implement:'];\nconst isAdminAction = adminOnlyPrefixes.some(p => actionId.startsWith(p));\nif (isAdminAction && tier !== 'admin') {\n  throw new Error(`Action ${actionId} requires admin tier (user ${userId} has tier: ${tier})`);\n}\n\nreturn [{ json: { ...($input.first().json), tier } }];"
+        "respondWith": "json",
+        "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": {{ JSON.stringify($json.responseText) }} }",
+        "options": { "responseCode": 200 }
       },
-      "id": "check-allowlist",
-      "name": "Check User Allowlist",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [600, 300]
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.actionId }}",
-                    "rightValue": "approve_ticket:",
-                    "operator": {
-                      "type": "string",
-                      "operation": "startsWith"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputLabel": "Approve Ticket"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.actionId }}",
-                    "rightValue": "approve_plan:",
-                    "operator": {
-                      "type": "string",
-                      "operation": "startsWith"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputLabel": "Approve Plan"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.actionId }}",
-                    "rightValue": "merge_pr:",
-                    "operator": {
-                      "type": "string",
-                      "operation": "startsWith"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputLabel": "Merge PR"
-            }
-          ],
-          "fallbackOutput": {
-            "fallbackOutputLabel": "Unknown Action"
-          }
-        }
-      },
-      "id": "route-action",
-      "name": "Route by Action",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
+      "id": "send-response",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
       "position": [800, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/issues/{{ $json.actionValue }}/comments",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/vnd.github.v3+json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={ \"body\": \"/go\" }"
-      },
-      "id": "post-go-comment",
-      "name": "Post /go Comment",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1050, 150],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "github-pat",
-          "name": "GitHub PAT"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/issues/{{ $json.actionValue }}/comments",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/vnd.github.v3+json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={ \"body\": \"/go-plan\" }"
-      },
-      "id": "post-go-plan-comment",
-      "name": "Post /go-plan Comment",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1050, 300],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "github-pat",
-          "name": "GitHub PAT"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "PUT",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/pulls/{{ $json.actionValue }}/merge",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/vnd.github.v3+json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={ \"merge_method\": \"squash\" }"
-      },
-      "id": "merge-pr",
-      "name": "Merge PR (Squash)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1050, 450],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "github-pat",
-          "name": "GitHub PAT"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": \"Action processed.\" }",
-        "options": {
-          "responseCode": 200
-        }
-      },
-      "id": "success-response",
-      "name": "Success Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [1250, 300]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": \"Unknown action — ignored.\" }",
-        "options": {
-          "responseCode": 200
-        }
-      },
-      "id": "unknown-action-response",
-      "name": "Unknown Action Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [1050, 600]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={ \"error\": \"Unauthorized — invalid signature or user not allowed\" }",
-        "options": {
-          "responseCode": 403
-        }
-      },
-      "id": "error-response",
-      "name": "Error Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [400, 500]
     }
   ],
   "connections": {
     "Slack Interactive Webhook": {
-      "main": [
-        [
-          {
-            "node": "Validate Slack Signature",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Process Action", "type": "main", "index": 0 }]]
     },
-    "Validate Slack Signature": {
-      "main": [
-        [
-          {
-            "node": "Check User Allowlist",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check User Allowlist": {
-      "main": [
-        [
-          {
-            "node": "Route by Action",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Route by Action": {
-      "main": [
-        [
-          {
-            "node": "Post /go Comment",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Post /go-plan Comment",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Merge PR (Squash)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Unknown Action Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Post /go Comment": {
-      "main": [
-        [
-          {
-            "node": "Success Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Post /go-plan Comment": {
-      "main": [
-        [
-          {
-            "node": "Success Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge PR (Squash)": {
-      "main": [
-        [
-          {
-            "node": "Success Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Process Action": {
+      "main": [[{ "node": "Send Response", "type": "main", "index": 0 }]]
     }
   },
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "tags": [
-    {
-      "name": "ai-factory"
-    }
-  ],
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "ai-factory" }],
   "meta": {
-    "notes": "Slack Interactive Handler for STOA AI Factory.\n\nHandles button clicks from Block Kit messages (approve ticket, approve plan, merge PR).\nValidates Slack request signature (HMAC-SHA256) — pattern adapted from n8n-approve-ticket.json.\n\nAccess control tiers:\n  - admin (SLACK_ADMIN_USERS): all actions including scan/implement\n  - allowed (SLACK_ALLOWED_USERS): approve + merge only\n  - readonly (everyone else): 403 forbidden\n  - Backward compatible: empty SLACK_ADMIN_USERS = all allowed users are admins\n\nRequired environment variables (Docker Compose .env):\n  - SLACK_SIGNING_SECRET: Slack app signing secret\n  - SLACK_ALLOWED_USERS: Comma-separated Slack user IDs (optional — empty = allow all)\n  - SLACK_ADMIN_USERS: Comma-separated Slack user IDs for admin tier (optional)\n\nRequired credentials:\n  - GitHub PAT (httpHeaderAuth, id: github-pat)\n\nAction routing:\n  - approve_ticket:<issue_num> → POST /go comment on GitHub issue\n  - approve_plan:<issue_num>   → POST /go-plan comment on GitHub issue\n  - merge_pr:<pr_num>          → PUT merge (squash) on GitHub PR\n  - scan_backlog:*             → admin-only (future: trigger scan)\n  - trigger_implement:*        → admin-only (future: trigger implementation)\n  - unknown                    → 200 OK (ignore)"
+    "notes": "Slack Interactive Handler for STOA AI Factory (v3 — consolidated for n8n v2).\n\nSingle Code node handles: Slack signature validation, allowlist check, routing, GitHub API calls.\nReplaces multi-node v2 which used Switch v3.2 (broken in n8n v2.8.4).\n\nRequired env vars: SLACK_SIGNING_SECRET, GITHUB_PAT, SLACK_ADMIN_USERS, SLACK_ALLOWED_USERS.\nRequired n8n env: NODE_FUNCTION_ALLOW_BUILTIN=crypto,https,url,buffer, N8N_BLOCK_ENV_ACCESS_IN_NODE=false."
   }
 }

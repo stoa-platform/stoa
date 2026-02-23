@@ -124,7 +124,7 @@ describe('Layout', () => {
 
   it('renders gateway section with items', () => {
     renderLayout();
-    expect(screen.getByText('\u26A1 Gateway')).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.textContent === '\u26A1 Gateway')).toBeInTheDocument();
     expect(screen.getByText('Registry')).toBeInTheDocument();
     expect(screen.getByText('Modes')).toBeInTheDocument();
     expect(screen.getByText('Metrics')).toBeInTheDocument();
@@ -158,13 +158,13 @@ describe('Layout', () => {
   it('collapses section when header is clicked', () => {
     renderLayout();
     // Gateway section is open by default
-    const gatewayHeader = screen.getByText('\u26A1 Gateway');
+    const gatewayHeader = screen.getByText((_, el) => el?.textContent === '\u26A1 Gateway');
     expect(gatewayHeader).toBeInTheDocument();
     // Click to collapse
     fireEvent.click(gatewayHeader);
-    // Verify localStorage was updated
+    // Verify localStorage was updated (keys are i18n keys, stable across languages)
     const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
-    expect(stored['\u26A1 Gateway']).toBe(true);
+    expect(stored['nav.gateway']).toBe(true);
   });
 
   it('expands collapsed section when header is clicked', () => {
@@ -173,21 +173,21 @@ describe('Layout', () => {
     const overviewHeader = screen.getByText('Overview');
     fireEvent.click(overviewHeader);
     const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
-    expect(stored['Overview']).toBe(false);
+    expect(stored['nav.overview']).toBe(false);
   });
 
   it('persists section state to localStorage', () => {
-    // Pre-set localStorage
+    // Pre-set localStorage (keys are i18n keys)
     localStorage.setItem(
       'stoa-sidebar-sections',
-      JSON.stringify({ Overview: false, Catalog: true })
+      JSON.stringify({ 'nav.overview': false, 'nav.catalog': true })
     );
     renderLayout();
     // Toggle Catalog to expand
     const catalogHeader = screen.getByText('Catalog');
     fireEvent.click(catalogHeader);
     const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
-    expect(stored['Catalog']).toBe(false);
+    expect(stored['nav.catalog']).toBe(false);
   });
 
   it('renders tenant selector button', () => {

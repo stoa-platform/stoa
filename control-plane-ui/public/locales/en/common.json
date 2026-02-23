@@ -25,6 +25,8 @@
     "federation": "Federation",
     "skills": "Skills",
     "insights": "Insights",
+    "identity": "Identity",
+    "apiMonitoring": "API Monitoring",
     "monitoring": "Monitoring",
     "errorSnapshots": "Error Snapshots",
     "executions": "Executions",
@@ -36,7 +38,27 @@
     "policies": "Policies",
     "auditLog": "Audit Log",
     "workflows": "Workflows",
-    "audienceGovernance": "Audience Governance"
+    "audienceGovernance": "Audience Governance",
+    "audience": "Audience"
+  },
+  "layout": {
+    "controlPlane": "Control Plane",
+    "environment": "Environment",
+    "tenant": "Tenant",
+    "selectTenant": "Select tenant",
+    "apiError": "Cannot connect to the STOA API. Some features may be unavailable."
+  },
+  "commandPalette": {
+    "createNewApi": "Create New API",
+    "createNewApiDesc": "Add a new API definition",
+    "createNewTenant": "Create New Tenant",
+    "createNewTenantDesc": "Add a new tenant",
+    "logoutDesc": "Sign out of your account",
+    "switchToLight": "Switch to Light Mode",
+    "switchToDark": "Switch to Dark Mode",
+    "currentlyIn": "Currently in {{theme}} mode",
+    "navigateTo": "Navigate to {{name}}",
+    "goTo": "Go to {{name}}"
   },
   "dashboard": {
     "title": "Dashboard",

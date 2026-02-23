@@ -1,11 +1,11 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (CAB-1420, CAB-1421, CAB-1427 → Done; 7 sub-issues decomposed for CAB-1331/1336/1338)
+> Last sync: 2026-02-23 (local-only — stale claims released, capacity check)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
-**Scope**: 905 pts | **Done**: 905 pts (100%) | **Velocity**: 88 issues closed, 129 pts/day
+**Scope**: 1305 pts | **Done**: 1305 pts (100%) | **Velocity**: 88 issues closed, 186 pts/day
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 
 ### Done (88 issues)
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~735 pts (committed) | **Done**: 267 pts (36%) | **Velocity**: 22 issues closed
+**Scope**: ~735 pts (committed) | **Done**: 288 pts (39%) | **Velocity**: 23 issues closed
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -111,7 +111,7 @@
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
 
-### Done (18)
+### Done (19)
 
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
@@ -135,24 +135,24 @@
 - [x] CAB-1394: [MEGA] SaaS Playbook Series (13 pts) — stoa-docs PRs #75, #76, #77
 - [x] CAB-1391: [MEGA] Migration Guide Expansion — Axway, WSO2, Layer7 (13 pts) — stoa-docs PR #68 + stoa-web PR #10
 - [x] CAB-1389: [MEGA] Cross-Component Quality Pass (13 pts) — PRs #810, #811, #820
-- [x] CAB-1412: [stoactl] Audit + complete CLI commands: deploy/rollback/logs/list (13 pts) — sub of CAB-374
+- [x] CAB-374: [MEGA] Vercel-Style DX (21 pts) — ALL 3 PHASES DONE
+  - [x] CAB-1420 [cp-api] Deploy log streaming + SSE (8 pts) — PR #852
+  - [x] CAB-1421 [gateway] Deploy progress telemetry (5 pts) — PR #855
+  - [x] CAB-1422 [cp-ui] Live deployment dashboard (5 pts) — PR #856
+  - [x] CAB-1423 [e2e] Deploy flow BDD scenarios (3 pts) — PR #859
+  - [x] CAB-1412 [stoactl] CLI commands: deploy/rollback/logs/list (13 pts)
+  - [x] CAB-1411 [docs] stoa.yaml spec + stoactl guide (5 pts) — stoa-docs PR #79
 - [x] CAB-86: TTL Extension — Self-Service (5 pts) — PR #780
+- [x] CAB-1427: [cp-api] AWS API Gateway adapter (8 pts) — PR #855
 - [x] CAB-1414: [docs] SaaS Playbook Parts 1-2 + Buying Guide (5 pts) — stoa-docs PR #75
 - [x] CAB-1415: [docs] SaaS Playbook Parts 3-5 (5 pts) — stoa-docs PR #76
-- [x] CAB-1411: [docs] stoa.yaml spec v1.0 reference + stoactl CLI guide (5 pts) — sub of CAB-374
 - [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
 - [x] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts) — stoa-docs PR #77
-- [x] CAB-1422: [cp-ui] Live deployment dashboard — SSE logs + rollback UX (5 pts) — PR #856
-- [x] CAB-1420: [cp-api] Deploy log streaming + SSE event fan-out (8 pts) — PR #856
-- [x] CAB-1421: [gateway] Deploy progress telemetry — structured events (5 pts) — PR #855
-- [x] CAB-1423: [e2e] Deploy flow integration tests — SSE + rollback (3 pts) — PRs #853, #859
-- [x] CAB-1427: [cp-api] AWS API Gateway adapter (8 pts) — PR #855
 - [x] CAB-1352: [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already in stoa-docs
 
 ### Todo
 
-**P1** (29 pts):
-- [ ] CAB-374: [MEGA] Vercel-Style DX (21 pts, P1) — Council validated ✅
+**P1** (8 pts):
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 
 **P2** (92 pts):

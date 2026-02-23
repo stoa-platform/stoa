@@ -20,6 +20,11 @@ spec:
       path: /metrics
       interval: {{ .Values.stoaGateway.serviceMonitor.interval | default "15s" }}
       scrapeTimeout: {{ .Values.stoaGateway.serviceMonitor.scrapeTimeout | default "10s" }}
+      metricRelabelings:
+        - targetLabel: cluster
+          replacement: {{ .Values.stoaGateway.clusterName | default "default" }}
+        - targetLabel: environment
+          replacement: {{ .Values.stoaGateway.environment | default "dev" }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}

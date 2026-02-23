@@ -2266,6 +2266,88 @@
         "title": "ComponentStatus",
         "type": "object"
       },
+      "ConnectivityResult": {
+        "description": "Multi-stage connectivity check result.",
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "gateway_id": {
+            "title": "Gateway Id",
+            "type": "string"
+          },
+          "network_path": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkPath"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overall_status": {
+            "title": "Overall Status",
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectivityStage"
+            },
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "gateway_id",
+          "overall_status"
+        ],
+        "title": "ConnectivityResult",
+        "type": "object"
+      },
+      "ConnectivityStage": {
+        "description": "Result of a single connectivity check stage.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status"
+        ],
+        "title": "ConnectivityStage",
+        "type": "object"
+      },
       "ConsumerCreate": {
         "description": "Schema for creating a new consumer.",
         "example": {
@@ -3032,294 +3114,6 @@
         "title": "ConversionFunnel",
         "type": "object"
       },
-      "CredentialAuthTypeEnum": {
-        "description": "Backend credential type.",
-        "enum": [
-          "api_key",
-          "bearer",
-          "basic"
-        ],
-        "title": "CredentialAuthTypeEnum",
-        "type": "string"
-      },
-      "CredentialMappingCreate": {
-        "description": "Schema for creating a credential mapping.",
-        "example": {
-          "api_id": "weather-api-v1",
-          "auth_type": "api_key",
-          "consumer_id": "550e8400-e29b-41d4-a716-446655440000",
-          "credential_value": "sk-live-abc123...",
-          "description": "ACME Corp production API key",
-          "header_name": "X-API-Key"
-        },
-        "properties": {
-          "api_id": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Api Id",
-            "type": "string"
-          },
-          "auth_type": {
-            "$ref": "#/components/schemas/CredentialAuthTypeEnum"
-          },
-          "consumer_id": {
-            "format": "uuid",
-            "title": "Consumer Id",
-            "type": "string"
-          },
-          "credential_value": {
-            "description": "Plaintext credential (encrypted at rest)",
-            "minLength": 1,
-            "title": "Credential Value",
-            "type": "string"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "header_name": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Header Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "consumer_id",
-          "api_id",
-          "auth_type",
-          "header_name",
-          "credential_value"
-        ],
-        "title": "CredentialMappingCreate",
-        "type": "object"
-      },
-      "CredentialMappingListResponse": {
-        "description": "Schema for paginated credential mapping list.",
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/CredentialMappingResponse"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "page": {
-            "title": "Page",
-            "type": "integer"
-          },
-          "page_size": {
-            "title": "Page Size",
-            "type": "integer"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "page",
-          "page_size"
-        ],
-        "title": "CredentialMappingListResponse",
-        "type": "object"
-      },
-      "CredentialMappingResponse": {
-        "description": "Schema for credential mapping response (value never exposed).",
-        "properties": {
-          "api_id": {
-            "title": "Api Id",
-            "type": "string"
-          },
-          "auth_type": {
-            "$ref": "#/components/schemas/CredentialAuthTypeEnum"
-          },
-          "consumer_id": {
-            "format": "uuid",
-            "title": "Consumer Id",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "has_credential": {
-            "title": "Has Credential",
-            "type": "boolean"
-          },
-          "header_name": {
-            "title": "Header Name",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "is_active": {
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "tenant_id": {
-            "title": "Tenant Id",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "consumer_id",
-          "api_id",
-          "tenant_id",
-          "auth_type",
-          "header_name",
-          "has_credential",
-          "description",
-          "is_active",
-          "created_at",
-          "updated_at",
-          "created_by"
-        ],
-        "title": "CredentialMappingResponse",
-        "type": "object"
-      },
-      "CredentialMappingSyncItem": {
-        "description": "Schema for a single credential mapping in gateway sync payload.",
-        "properties": {
-          "api_id": {
-            "title": "Api Id",
-            "type": "string"
-          },
-          "auth_type": {
-            "title": "Auth Type",
-            "type": "string"
-          },
-          "consumer_id": {
-            "title": "Consumer Id",
-            "type": "string"
-          },
-          "header_name": {
-            "title": "Header Name",
-            "type": "string"
-          },
-          "header_value": {
-            "title": "Header Value",
-            "type": "string"
-          }
-        },
-        "required": [
-          "consumer_id",
-          "api_id",
-          "auth_type",
-          "header_name",
-          "header_value"
-        ],
-        "title": "CredentialMappingSyncItem",
-        "type": "object"
-      },
-      "CredentialMappingUpdate": {
-        "description": "Schema for updating a credential mapping.",
-        "properties": {
-          "auth_type": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CredentialAuthTypeEnum"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "credential_value": {
-            "anyOf": [
-              {
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "New credential value (re-encrypted)",
-            "title": "Credential Value"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "header_name": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Header Name"
-          },
-          "is_active": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Active"
-          }
-        },
-        "title": "CredentialMappingUpdate",
-        "type": "object"
-      },
       "CredentialsInput": {
         "description": "Credentials input for server registration.",
         "properties": {
@@ -4035,6 +3829,115 @@
           "status"
         ],
         "title": "DeploymentStatusUpdate",
+        "type": "object"
+      },
+      "DiagnosticCategory": {
+        "description": "Root cause categories for diagnostic classification.",
+        "enum": [
+          "connectivity",
+          "auth",
+          "rate_limit",
+          "backend",
+          "policy",
+          "certificate",
+          "circuit_breaker"
+        ],
+        "title": "DiagnosticCategory",
+        "type": "string"
+      },
+      "DiagnosticListResponse": {
+        "description": "Paginated list of diagnostic reports.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticReport"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "DiagnosticListResponse",
+        "type": "object"
+      },
+      "DiagnosticReport": {
+        "description": "Full diagnostic report with root causes and timing.",
+        "properties": {
+          "error_count": {
+            "default": 0,
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "gateway_id": {
+            "title": "Gateway Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "network_path": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkPath"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "redacted": {
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "request_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root_causes": {
+            "items": {
+              "$ref": "#/components/schemas/RootCause"
+            },
+            "title": "Root Causes",
+            "type": "array"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "time_range_minutes": {
+            "default": 60,
+            "title": "Time Range Minutes",
+            "type": "integer"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/TimingBreakdown"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "gateway_id"
+        ],
+        "title": "DiagnosticReport",
         "type": "object"
       },
       "DiffResource": {
@@ -6975,6 +6878,36 @@
         "title": "HeartbeatPayload",
         "type": "object"
       },
+      "HopInfo": {
+        "description": "A single hop in the network path (Via header).",
+        "properties": {
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "protocol": {
+            "title": "Protocol",
+            "type": "string"
+          },
+          "pseudonym": {
+            "title": "Pseudonym",
+            "type": "string"
+          }
+        },
+        "required": [
+          "protocol",
+          "pseudonym"
+        ],
+        "title": "HopInfo",
+        "type": "object"
+      },
       "ImportAPIRequest": {
         "description": "Request model for importing an API from OpenAPI spec.\n\nUses Gateway-native field names for compatibility with existing playbooks.",
         "properties": {
@@ -9536,6 +9469,43 @@
           "usage_percent"
         ],
         "title": "NearLimitConsumer",
+        "type": "object"
+      },
+      "NetworkPath": {
+        "description": "Network path information from Via headers and intermediary detection.",
+        "properties": {
+          "detected_intermediaries": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Detected Intermediaries",
+            "type": "array"
+          },
+          "hops": {
+            "items": {
+              "$ref": "#/components/schemas/HopInfo"
+            },
+            "title": "Hops",
+            "type": "array"
+          },
+          "total_hops": {
+            "default": 0,
+            "title": "Total Hops",
+            "type": "integer"
+          },
+          "total_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Latency Ms"
+          }
+        },
+        "title": "NetworkPath",
         "type": "object"
       },
       "OAuth2Credentials": {
@@ -12170,6 +12140,57 @@
         "title": "RequestSnapshot",
         "type": "object"
       },
+      "RequestSummary": {
+        "description": "GDPR-safe request summary \u2014 no body, no headers.",
+        "properties": {
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          }
+        },
+        "title": "RequestSummary",
+        "type": "object"
+      },
       "ResolutionStatus": {
         "description": "Resolution status for error snapshots.",
         "enum": [
@@ -12294,6 +12315,49 @@
           }
         },
         "title": "RollbackCreate",
+        "type": "object"
+      },
+      "RootCause": {
+        "description": "A classified root cause with confidence score.",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/DiagnosticCategory"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "suggested_fix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Fix"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "confidence",
+          "summary"
+        ],
+        "title": "RootCause",
         "type": "object"
       },
       "RoutingInfo": {
@@ -15795,6 +15859,46 @@
         "title": "TestConnectionResponse",
         "type": "object"
       },
+      "TimingBreakdown": {
+        "description": "Timing breakdown for gateway and backend processing.",
+        "properties": {
+          "backend_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Ms"
+          },
+          "gateway_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Ms"
+          },
+          "total_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Ms"
+          }
+        },
+        "title": "TimingBreakdown",
+        "type": "object"
+      },
       "TimingMetrics": {
         "description": "Average timing metrics.",
         "properties": {
@@ -18963,6 +19067,193 @@
         "summary": "Force Sync",
         "tags": [
           "Gateway Deployments"
+        ]
+      }
+    },
+    "/v1/admin/diagnostics/{gateway_id}": {
+      "get": {
+        "description": "Run auto-RCA on recent errors for a gateway.",
+        "operationId": "run_diagnostic_v1_admin_diagnostics__gateway_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "time_range_minutes",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 1440,
+              "minimum": 1,
+              "title": "Time Range Minutes",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "request_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosticReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Diagnostic",
+        "tags": [
+          "Diagnostics"
+        ]
+      }
+    },
+    "/v1/admin/diagnostics/{gateway_id}/connectivity": {
+      "get": {
+        "description": "Test connectivity chain: DNS \u2192 TCP \u2192 TLS \u2192 HTTP health.",
+        "operationId": "check_connectivity_v1_admin_diagnostics__gateway_id__connectivity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectivityResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Connectivity",
+        "tags": [
+          "Diagnostics"
+        ]
+      }
+    },
+    "/v1/admin/diagnostics/{gateway_id}/history": {
+      "get": {
+        "description": "Past diagnostic reports for a gateway.",
+        "operationId": "get_diagnostic_history_v1_admin_diagnostics__gateway_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosticListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Diagnostic History",
+        "tags": [
+          "Diagnostics"
         ]
       }
     },
@@ -31664,404 +31955,6 @@
         "summary": "Update Backend Api",
         "tags": [
           "Backend APIs"
-        ]
-      }
-    },
-    "/v1/tenants/{tenant_id}/credential-mappings": {
-      "get": {
-        "description": "List credential mappings for a tenant.",
-        "operationId": "list_credential_mappings_v1_tenants__tenant_id__credential_mappings_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Filter by consumer ID",
-            "in": "query",
-            "name": "consumer_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Filter by consumer ID",
-              "title": "Consumer Id"
-            }
-          },
-          {
-            "description": "Filter by API ID",
-            "in": "query",
-            "name": "api_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Filter by API ID",
-              "title": "Api Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CredentialMappingListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Credential Mappings",
-        "tags": [
-          "Credential Mappings"
-        ]
-      },
-      "post": {
-        "description": "Create a new credential mapping for a consumer + API pair.",
-        "operationId": "create_credential_mapping_v1_tenants__tenant_id__credential_mappings_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CredentialMappingCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CredentialMappingResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Credential Mapping",
-        "tags": [
-          "Credential Mappings"
-        ]
-      }
-    },
-    "/v1/tenants/{tenant_id}/credential-mappings/sync/{gateway_instance_id}": {
-      "get": {
-        "description": "Bulk export active credential mappings for gateway sync (admin-only, decrypted).",
-        "operationId": "sync_credential_mappings_v1_tenants__tenant_id__credential_mappings_sync__gateway_instance_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "gateway_instance_id",
-            "required": true,
-            "schema": {
-              "title": "Gateway Instance Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CredentialMappingSyncItem"
-                  },
-                  "title": "Response Sync Credential Mappings V1 Tenants  Tenant Id  Credential Mappings Sync  Gateway Instance Id  Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Sync Credential Mappings",
-        "tags": [
-          "Credential Mappings"
-        ]
-      }
-    },
-    "/v1/tenants/{tenant_id}/credential-mappings/{mapping_id}": {
-      "delete": {
-        "description": "Delete a credential mapping (soft delete \u2014 sets is_active=false).",
-        "operationId": "delete_credential_mapping_v1_tenants__tenant_id__credential_mappings__mapping_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Mapping Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Credential Mapping",
-        "tags": [
-          "Credential Mappings"
-        ]
-      },
-      "get": {
-        "description": "Get a credential mapping by ID.",
-        "operationId": "get_credential_mapping_v1_tenants__tenant_id__credential_mappings__mapping_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Mapping Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CredentialMappingResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Credential Mapping",
-        "tags": [
-          "Credential Mappings"
-        ]
-      },
-      "put": {
-        "description": "Update a credential mapping.",
-        "operationId": "update_credential_mapping_v1_tenants__tenant_id__credential_mappings__mapping_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Mapping Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CredentialMappingUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CredentialMappingResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Update Credential Mapping",
-        "tags": [
-          "Credential Mappings"
         ]
       }
     },

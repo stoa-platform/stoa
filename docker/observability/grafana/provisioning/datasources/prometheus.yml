@@ -11,6 +11,27 @@ datasources:
       timeInterval: "15s"
       httpMethod: POST
 
+  # Multi-cluster Prometheus data sources (CAB-1426)
+  # OVH MKS production — kube-prometheus-stack on OVH K8s GRA9
+  - name: Prometheus-OVH-Prod
+    type: prometheus
+    access: proxy
+    url: ${PROMETHEUS_OVH_URL:-http://prometheus:9090}
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+
+  # Hetzner K3s staging — kube-prometheus-stack on Hetzner staging cluster
+  - name: Prometheus-Hetzner-Staging
+    type: prometheus
+    access: proxy
+    url: ${PROMETHEUS_HETZNER_URL:-http://prometheus:9090}
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+
   - name: Loki
     type: loki
     uid: loki

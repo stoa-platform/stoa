@@ -1,0 +1,452 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Hybrid Multi-Cluster Observability — OVH K8s (prod), Hetzner K3s (staging), VPS gateways",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["stoa"],
+      "targetBlank": true,
+      "title": "STOA Dashboards",
+      "type": "dashboards"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "panels": [],
+      "title": "Cluster Health Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Gateway uptime across clusters (1 = up, 0 = down)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 8, "x": 0, "y": 1},
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "title": "Gateway Health — ${cluster}",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "up{job=~\".*stoa-gateway.*\", cluster=~\"$cluster\"}",
+          "legendFormat": "{{cluster}} — {{instance}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Active gateway pods per cluster",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 8, "x": 8, "y": 1},
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "title": "Active Pods",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "count(up{job=~\".*stoa-gateway.*\", cluster=~\"$cluster\"} == 1) by (cluster)",
+          "legendFormat": "{{cluster}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Control Plane API health per cluster",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 8, "x": 16, "y": 1},
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "title": "Control Plane API Health",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "up{job=~\".*control-plane-api.*\", cluster=~\"$cluster\"}",
+          "legendFormat": "{{cluster}} — {{instance}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "id": 200,
+      "panels": [],
+      "title": "Request Rates",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "HTTP request rate per cluster (all gateway endpoints)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": true},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "id": 4,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "title": "Gateway Request Rate by Cluster",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "sum(rate(stoa_http_requests_total{cluster=~\"$cluster\"}[$__rate_interval])) by (cluster)",
+          "legendFormat": "{{cluster}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "MCP tool call rate per cluster",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": true},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "id": 5,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "title": "MCP Tool Call Rate by Cluster",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "sum(rate(stoa_mcp_tools_calls_total{cluster=~\"$cluster\"}[$__rate_interval])) by (cluster)",
+          "legendFormat": "{{cluster}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "id": 300,
+      "panels": [],
+      "title": "Error Rates & Latency",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "HTTP 5xx error rate by cluster",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": true},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 15},
+      "id": 6,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "title": "5xx Error Rate by Cluster",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "sum(rate(stoa_http_requests_total{status=~\"5..\", cluster=~\"$cluster\"}[$__rate_interval])) by (cluster)",
+          "legendFormat": "{{cluster}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Gateway request latency p50/p95/p99 by cluster",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": true},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+      "id": 7,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "title": "Request Latency Percentiles by Cluster",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "histogram_quantile(0.50, sum(rate(stoa_http_request_duration_seconds_bucket{cluster=~\"$cluster\"}[$__rate_interval])) by (le, cluster))",
+          "legendFormat": "{{cluster}} — p50",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket{cluster=~\"$cluster\"}[$__rate_interval])) by (le, cluster))",
+          "legendFormat": "{{cluster}} — p95",
+          "refId": "B"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "histogram_quantile(0.99, sum(rate(stoa_http_request_duration_seconds_bucket{cluster=~\"$cluster\"}[$__rate_interval])) by (le, cluster))",
+          "legendFormat": "{{cluster}} — p99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 23},
+      "id": 400,
+      "panels": [],
+      "title": "Arena Benchmark Scores",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Gateway Arena composite scores (Layer 0 baseline) from Pushgateway — all environments",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
+          "min": 0,
+          "max": 100,
+          "unit": "none",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 8,
+      "options": {"legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "title": "Arena Baseline Scores (Layer 0)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "gateway_arena_score",
+          "legendFormat": "{{gateway}} ({{location}})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Enterprise AI Readiness Index (Layer 1) from Pushgateway",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
+          "min": 0,
+          "max": 100,
+          "unit": "none",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 9,
+      "options": {"legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "title": "Enterprise Readiness Index (Layer 1)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "gateway_arena_enterprise_score",
+          "legendFormat": "{{gateway}} ({{location}})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 32},
+      "id": 500,
+      "panels": [],
+      "title": "Resource Utilization",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Gateway process memory (RSS) by cluster",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": true},
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 33},
+      "id": 10,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "title": "Gateway Memory (RSS) by Cluster",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "process_resident_memory_bytes{job=~\".*stoa-gateway.*\", cluster=~\"$cluster\"}",
+          "legendFormat": "{{cluster}} — {{instance}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Gateway CPU usage (rate of process_cpu_seconds_total) by cluster",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": true},
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 33},
+      "id": 11,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "title": "Gateway CPU Usage by Cluster",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "rate(process_cpu_seconds_total{job=~\".*stoa-gateway.*\", cluster=~\"$cluster\"}[$__rate_interval])",
+          "legendFormat": "{{cluster}} — {{instance}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "tags": ["stoa", "multi-cluster", "observability"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "Prometheus", "value": "prometheus"},
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {"selected": true, "text": ["All"], "value": ["$__all"]},
+        "datasource": {"type": "prometheus", "uid": "${datasource}"},
+        "definition": "label_values(up, cluster)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster",
+        "multi": true,
+        "name": "cluster",
+        "query": {"query": "label_values(up, cluster)", "refId": "StandardVariableQuery"},
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Hybrid Multi-Cluster Observability",
+  "uid": "stoa-hybrid-multicluster",
+  "version": 1
+}

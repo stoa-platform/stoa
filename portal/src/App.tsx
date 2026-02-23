@@ -16,6 +16,9 @@ const MCPServersPage = lazy(() =>
 const ServerDetailPage = lazy(() =>
   import('./pages/servers').then((m) => ({ default: m.ServerDetailPage }))
 );
+const MyMCPServersPage = lazy(() =>
+  import('./pages/servers').then((m) => ({ default: m.MyMCPServersPage }))
+);
 const APICatalog = lazy(() => import('./pages/apis').then((m) => ({ default: m.APICatalog })));
 const APIDetail = lazy(() => import('./pages/apis').then((m) => ({ default: m.APIDetail })));
 const APITestingSandbox = lazy(() =>
@@ -434,6 +437,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
                   <ServerDetailPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* My MCP Servers - self-service management (CAB-1319) */}
+            <Route
+              path="/my-servers"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <MyMCPServersPage />
                 </ProtectedRoute>
               }
             />

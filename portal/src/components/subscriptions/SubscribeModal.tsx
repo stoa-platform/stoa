@@ -351,7 +351,7 @@ export function SubscribeModal({
                 }
                 loading={isLoading}
               >
-                Subscribe
+                {isLoading ? 'Subscribing...' : 'Subscribe'}
               </Button>
             </div>
           </form>

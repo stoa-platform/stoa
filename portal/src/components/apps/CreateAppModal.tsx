@@ -209,7 +209,7 @@ export function CreateAppModal({
                 Cancel
               </Button>
               <Button type="submit" disabled={!name.trim()} loading={isLoading}>
-                Create Application
+                {isLoading ? 'Creating...' : 'Create Application'}
               </Button>
             </div>
           </form>

@@ -8,6 +8,10 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-374 [MEGA] Vercel-Style DX — Git-First API Deployment (34 pts) — ALL 3 PHASES DONE
+  - P1: API deploy log streaming + SSE (PRs #850, #852) — CAB-1420, CAB-1421
+  - P2: Console live deployment dashboard (PR #856) — CAB-1422
+  - P3: E2E deploy flow BDD scenarios — SSE + rollback (PR #859) — CAB-1423
 - ✅ CAB-1394 [MEGA] Community: SaaS Playbook Series (13 pts) — ALL 3 PHASES DONE
   - P1: Parts 1-2 + SMB Buying Guide (stoa-docs PR #75) — 3 articles, 4000+ words
   - P2: Parts 3-5 (stoa-docs PR #76) — 3 articles, production checklist

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { EnvironmentProvider } from './contexts/EnvironmentContext';
 import { Layout } from './components/Layout';
+import { FloatingChat } from './components/FloatingChat';
 import { PlatformStatus } from './components/PlatformStatus';
 import { quickLinks } from './config';
 import { ToastProvider } from '@stoa/shared/components/Toast';
@@ -428,6 +429,8 @@ function ProtectedRoutes() {
           )}
         </Layout>
       </CommandPaletteProvider>
+      {/* CAB-285: Floating AI assistant — rendered above Layout so it persists across page navigation */}
+      <FloatingChat />
     </EnvironmentProvider>
   );
 }

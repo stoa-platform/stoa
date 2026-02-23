@@ -57,9 +57,9 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
             onClick={onDismiss}
             className="
               p-1 -m-1
-              text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300
+              text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300
               rounded-md
-              hover:bg-gray-100 dark:hover:bg-neutral-700
+              hover:bg-neutral-100 dark:hover:bg-neutral-700
               transition-colors
               focus:outline-none focus:ring-2 focus:ring-blue-500
             "
@@ -71,10 +71,10 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
 
         {/* Content */}
         <div className="mt-2 ml-7">
-          <p className="text-gray-800 dark:text-neutral-200 font-medium">
+          <p className="text-neutral-800 dark:text-neutral-200 font-medium">
             STOA uses Universal API Contracts (UAC).
           </p>
-          <p className="text-gray-600 dark:text-neutral-400 text-sm mt-1">
+          <p className="text-neutral-600 dark:text-neutral-400 text-sm mt-1">
             Define your API once, expose it everywhere — REST, MCP, GraphQL, and more from a single
             definition.
           </p>
@@ -107,12 +107,12 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
             className="
               px-3 py-1.5
               text-sm font-medium
-              text-gray-700 dark:text-neutral-300
-              bg-gray-100 dark:bg-neutral-700
+              text-neutral-700 dark:text-neutral-300
+              bg-neutral-100 dark:bg-neutral-700
               rounded-md
-              hover:bg-gray-200 dark:hover:bg-neutral-600
+              hover:bg-neutral-200 dark:hover:bg-neutral-600
               transition-colors
-              focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1
+              focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:ring-offset-1
             "
           >
             Got it

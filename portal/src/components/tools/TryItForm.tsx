@@ -112,7 +112,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     if (property.enum) {
       return (
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
             {name}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -122,7 +122,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
               error
                 ? 'border-red-300 dark:border-red-700'
-                : 'border-gray-300 dark:border-neutral-600'
+                : 'border-neutral-300 dark:border-neutral-600'
             }`}
           >
             <option value="">Select {name}...</option>
@@ -133,7 +133,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             ))}
           </select>
           {property.description && (
-            <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
           )}
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
@@ -144,7 +144,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     if (property.maxLength && property.maxLength > 200) {
       return (
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
             {name}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -156,11 +156,11 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             className={`w-full px-3 py-2 border rounded-lg text-sm font-mono dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
               error
                 ? 'border-red-300 dark:border-red-700'
-                : 'border-gray-300 dark:border-neutral-600'
+                : 'border-neutral-300 dark:border-neutral-600'
             }`}
           />
           {property.description && (
-            <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
           )}
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
@@ -170,14 +170,14 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     // Regular text input
     return (
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
           {property.description && (
             <button
               type="button"
               onClick={() => setShowDescription(!showDescription)}
-              className="ml-1 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300"
+              className="ml-1 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300"
             >
               <Info className="h-3 w-3 inline" />
             </button>
@@ -189,11 +189,11 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           onChange={(e) => handleChange(e.target.value)}
           placeholder={property.default?.toString() || `Enter ${name}...`}
           className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            error ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-neutral-600'
+            error ? 'border-red-300 dark:border-red-700' : 'border-neutral-300 dark:border-neutral-600'
           }`}
         />
         {showDescription && property.description && (
-          <p className="text-xs text-gray-500 bg-gray-50 dark:bg-neutral-800 p-2 rounded">
+          <p className="text-xs text-neutral-500 bg-neutral-50 dark:bg-neutral-800 p-2 rounded">
             {property.description}
           </p>
         )}
@@ -206,7 +206,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
   if (property.type === 'number' || property.type === 'integer') {
     return (
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
         </label>
@@ -219,14 +219,14 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           max={property.maximum}
           step={property.type === 'integer' ? 1 : 'any'}
           className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            error ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-neutral-600'
+            error ? 'border-red-300 dark:border-red-700' : 'border-neutral-300 dark:border-neutral-600'
           }`}
         />
         {property.description && (
-          <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
         )}
         {(property.minimum !== undefined || property.maximum !== undefined) && (
-          <p className="text-xs text-gray-400 dark:text-neutral-500">
+          <p className="text-xs text-neutral-400 dark:text-neutral-500">
             {property.minimum !== undefined && `Min: ${property.minimum}`}
             {property.minimum !== undefined && property.maximum !== undefined && ' • '}
             {property.maximum !== undefined && `Max: ${property.maximum}`}
@@ -246,15 +246,15 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             type="checkbox"
             checked={!!value}
             onChange={(e) => handleChange(e.target.checked)}
-            className="w-4 h-4 text-primary-600 border-gray-300 dark:border-neutral-600 rounded focus:ring-primary-500"
+            className="w-4 h-4 text-primary-600 border-neutral-300 dark:border-neutral-600 rounded focus:ring-primary-500"
           />
-          <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+          <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
             {name}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </span>
         </label>
         {property.description && (
-          <p className="text-xs text-gray-500 ml-6">{property.description}</p>
+          <p className="text-xs text-neutral-500 ml-6">{property.description}</p>
         )}
         {error && <p className="text-xs text-red-600 ml-6">{error}</p>}
       </div>
@@ -267,7 +267,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
 
     return (
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
         </label>
@@ -282,7 +282,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
                   newArray[idx] = e.target.value;
                   handleChange(newArray);
                 }}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               <button
                 type="button"
@@ -290,7 +290,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
                   const newArray = arrayValue.filter((_, i) => i !== idx);
                   handleChange(newArray);
                 }}
-                className="p-2 text-gray-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -306,7 +306,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           </button>
         </div>
         {property.description && (
-          <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
         )}
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
@@ -319,10 +319,10 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
 
     return (
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
-          <span className="text-xs text-gray-400 dark:text-neutral-500 ml-2">(JSON)</span>
+          <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-2">(JSON)</span>
         </label>
         <textarea
           value={jsonValue}
@@ -340,11 +340,11 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           className={`w-full px-3 py-2 border rounded-lg text-sm font-mono dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
             jsonError || error
               ? 'border-red-300 dark:border-red-700'
-              : 'border-gray-300 dark:border-neutral-600'
+              : 'border-neutral-300 dark:border-neutral-600'
           }`}
         />
         {property.description && (
-          <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
         )}
         {(jsonError || error) && <p className="text-xs text-red-600">{jsonError || error}</p>}
       </div>
@@ -354,7 +354,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
   // Default fallback - text input
   return (
     <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
         {name}
         {isRequired && <span className="text-red-500 ml-1">*</span>}
       </label>
@@ -364,7 +364,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
         onChange={(e) => handleChange(e.target.value)}
         placeholder={`Enter ${name}...`}
         className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-          error ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-neutral-600'
+          error ? 'border-red-300 dark:border-red-700' : 'border-neutral-300 dark:border-neutral-600'
         }`}
       />
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -489,13 +489,13 @@ export function TryItForm({
   if (!schema || Object.keys(properties).length === 0) {
     return (
       <div
-        className={`bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-6 ${className}`}
+        className={`bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-6 ${className}`}
       >
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Try It</h2>
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Try It</h2>
         <div className="text-center py-8">
-          <AlertCircle className="h-12 w-12 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-neutral-400 text-sm">No input schema available</p>
-          <p className="text-gray-400 dark:text-neutral-500 text-xs mt-1">
+          <AlertCircle className="h-12 w-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
+          <p className="text-neutral-500 dark:text-neutral-400 text-sm">No input schema available</p>
+          <p className="text-neutral-400 dark:text-neutral-500 text-xs mt-1">
             This tool doesn't define input parameters
           </p>
         </div>
@@ -505,12 +505,12 @@ export function TryItForm({
 
   return (
     <div
-      className={`bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden ${className}`}
+      className={`bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden ${className}`}
     >
       {/* Header */}
-      <div className="px-6 py-4 bg-gray-50 dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Try It</h2>
-        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+      <div className="px-6 py-4 bg-neutral-50 dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Try It</h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
           Test this tool with your own parameters
         </p>
       </div>
@@ -548,7 +548,7 @@ export function TryItForm({
           <button
             type="button"
             onClick={handleReset}
-            className="px-4 py-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
+            className="px-4 py-2 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
           >
             Reset
           </button>
@@ -557,28 +557,28 @@ export function TryItForm({
 
       {/* Response Section */}
       {response !== null && (
-        <div className="border-t border-gray-200 dark:border-neutral-700">
+        <div className="border-t border-neutral-200 dark:border-neutral-700">
           <button
             onClick={() => setShowResponse(!showResponse)}
-            className="w-full px-6 py-3 flex items-center justify-between bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+            className="w-full px-6 py-3 flex items-center justify-between bg-neutral-50 dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
           >
-            <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+            <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
               Response
             </span>
             {showResponse ? (
-              <ChevronUp className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
+              <ChevronUp className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
+              <ChevronDown className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
             )}
           </button>
           {showResponse && (
             <div className="relative">
-              <pre className="p-4 bg-gray-900 text-gray-100 text-sm font-mono overflow-x-auto max-h-96">
+              <pre className="p-4 bg-neutral-900 text-neutral-100 text-sm font-mono overflow-x-auto max-h-96">
                 {JSON.stringify(response, null, 2)}
               </pre>
               <button
                 onClick={handleCopyResponse}
-                className="absolute top-2 right-2 p-2 text-gray-400 hover:text-white bg-gray-800 rounded-lg transition-colors"
+                className="absolute top-2 right-2 p-2 text-neutral-400 hover:text-white bg-neutral-800 rounded-lg transition-colors"
               >
                 {copied ? (
                   <Check className="h-4 w-4 text-green-400" />

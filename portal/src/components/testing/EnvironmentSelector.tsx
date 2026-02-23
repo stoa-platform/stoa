@@ -34,7 +34,7 @@ export function EnvironmentSelector({
     <div className="relative">
       <label
         htmlFor="environment-select"
-        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+        className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
       >
         Target Environment
       </label>
@@ -51,11 +51,11 @@ export function EnvironmentSelector({
             w-full pl-10 pr-10 py-2.5
             border rounded-lg appearance-none cursor-pointer
             focus:ring-2 focus:ring-primary-500 focus:border-primary-500
-            disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed
+            disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed
             ${
               selectedEnvironment?.isProduction
                 ? 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'
-                : 'border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 dark:text-white'
+                : 'border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 dark:text-white'
             }
           `}
         >
@@ -70,8 +70,8 @@ export function EnvironmentSelector({
             ))
           )}
         </select>
-        <Server className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500" />
-        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500 pointer-events-none" />
+        <Server className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500 pointer-events-none" />
       </div>
 
       {/* Production Warning */}
@@ -87,9 +87,9 @@ export function EnvironmentSelector({
 
       {/* Environment URL */}
       {selectedEnvironment && (
-        <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
+        <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
           Base URL:{' '}
-          <code className="bg-gray-100 dark:bg-neutral-700 px-1 rounded dark:text-white">
+          <code className="bg-neutral-100 dark:bg-neutral-700 px-1 rounded dark:text-white">
             {selectedEnvironment.baseUrl}
           </code>
         </p>

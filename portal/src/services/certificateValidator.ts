@@ -197,7 +197,7 @@ export function getCertificateStatusColor(cert: CertificateInfo): string {
   if (cert.is_expired) return 'text-red-600';
   if (cert.expires_soon) return 'text-amber-600';
   if (cert.is_valid) return 'text-green-600';
-  return 'text-gray-600';
+  return 'text-neutral-600';
 }
 
 /**

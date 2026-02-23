@@ -26,21 +26,21 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">
           {t('subscribeApi.title')}
         </h2>
-        <p className="mt-2 text-gray-500 dark:text-neutral-400">{t('subscribeApi.subtitle')}</p>
+        <p className="mt-2 text-neutral-500 dark:text-neutral-400">{t('subscribeApi.subtitle')}</p>
       </div>
 
       {/* Search */}
       <div className="relative max-w-md mx-auto">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('subscribeApi.searchPlaceholder')}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+          className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
         />
       </div>
 
@@ -50,7 +50,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
           <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
         </div>
       ) : apis.length === 0 ? (
-        <p className="text-center text-gray-500 dark:text-neutral-400 py-8">
+        <p className="text-center text-neutral-500 dark:text-neutral-400 py-8">
           {t('subscribeApi.noApis')}
         </p>
       ) : (
@@ -62,7 +62,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
               className={`relative text-left p-4 rounded-lg border transition-all ${
                 selectedId === api.id
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 ring-2 ring-primary-500'
-                  : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600'
+                  : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
               }`}
             >
               {selectedId === api.id && (
@@ -70,12 +70,12 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
                   <Check className="h-3 w-3" />
                 </div>
               )}
-              <h3 className="font-medium text-gray-900 dark:text-white text-sm">{api.name}</h3>
-              <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1 line-clamp-2">
+              <h3 className="font-medium text-neutral-900 dark:text-white text-sm">{api.name}</h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">
                 {api.description}
               </p>
               {api.version && (
-                <span className="inline-block mt-2 text-xs px-2 py-0.5 bg-gray-100 dark:bg-neutral-800 rounded text-gray-600 dark:text-neutral-400">
+                <span className="inline-block mt-2 text-xs px-2 py-0.5 bg-neutral-100 dark:bg-neutral-800 rounded text-neutral-600 dark:text-neutral-400">
                   v{api.version}
                 </span>
               )}
@@ -89,7 +89,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
         <button
           type="button"
           onClick={onBack}
-          className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+          className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white transition-colors"
         >
           {t('subscribeApi.back')}
         </button>
@@ -97,7 +97,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
           <button
             type="button"
             onClick={onSkip}
-            className="px-4 py-2 text-sm font-medium text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors"
           >
             {t('subscribeApi.skip')}
           </button>

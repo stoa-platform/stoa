@@ -18,11 +18,11 @@ export function GrafanaDashboard({
   if (!url) {
     return (
       <div
-        className={`mt-6 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-8 text-center ${className ?? ''}`}
+        className={`mt-6 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-8 text-center ${className ?? ''}`}
         data-testid="grafana-disabled"
       >
-        <BarChart3 className="h-10 w-10 mx-auto text-gray-300 dark:text-neutral-600" />
-        <p className="mt-3 text-sm text-gray-500 dark:text-neutral-400">
+        <BarChart3 className="h-10 w-10 mx-auto text-neutral-300 dark:text-neutral-600" />
+        <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
           Analytics dashboard is not configured. Set <code>VITE_GRAFANA_URL</code> to enable.
         </p>
       </div>
@@ -45,14 +45,14 @@ export function GrafanaDashboard({
 
   return (
     <div className={`mt-6 ${className ?? ''}`} data-testid="grafana-dashboard">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{title}</h2>
+      <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">{title}</h2>
       {isLoading && (
-        <div className="h-96 rounded-lg bg-gray-100 dark:bg-neutral-800 animate-pulse" />
+        <div className="h-96 rounded-lg bg-neutral-100 dark:bg-neutral-800 animate-pulse" />
       )}
       <iframe
         src={url}
         title={title}
-        className={`w-full h-96 rounded-lg border border-gray-200 dark:border-neutral-700 ${isLoading ? 'hidden' : ''}`}
+        className={`w-full h-96 rounded-lg border border-neutral-200 dark:border-neutral-700 ${isLoading ? 'hidden' : ''}`}
         sandbox="allow-scripts allow-same-origin"
         onLoad={() => setIsLoading(false)}
         onError={() => {

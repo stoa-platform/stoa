@@ -1,0 +1,27 @@
+id: risk-assessment-api
+name: risk-assessment-api
+display_name: "Risk Assessment API"
+version: "1.5.0"
+description: |
+  Credit scoring and risk assessment for the Bank of Gondor.
+
+  Fonctionnalites:
+  - Credit risk scoring
+  - Transaction risk assessment
+  - Risk report generation
+  - Regulatory reporting (DORA ICT risk)
+
+  Supports DORA ICT risk management framework requirements.
+backend_url: https://httpbin.org/anything
+status: active
+category: Risk
+tags:
+  - portal:published
+  - banking
+  - risk
+  - rest
+  - dora
+  - credit-scoring
+deployments:
+  dev: true
+  staging: false

@@ -1,0 +1,47 @@
+apiVersion: stoa.io/v1
+kind: Tenant
+metadata:
+  name: citadelle
+  displayName: "La Citadelle — Ministere de l'Interoperabilite Numerique"
+  description: "Public sector tenant for citizen services and inter-ministry data exchange"
+  labels:
+    tier: enterprise
+    visibility: public
+    managed-by: gitops
+    sector: public-sector
+
+spec:
+  portalVisibility: public
+
+  visibility:
+    allowedRoles:
+      - cpi-admin
+      - tenant-admin
+      - devops
+      - viewer
+    denyRoles: []
+
+  defaultPolicies:
+    - name: rate-limit-standard
+      config:
+        requestsPerMinute: 60
+        burstLimit: 10
+    - name: require-api-key
+      description: "Mandatory API key for all endpoints"
+
+  settings:
+    max_apis: 50
+    max_applications: 20
+    environments:
+      - dev
+      - staging
+
+  tags:
+    - public-sector
+    - rgs
+    - interoperability
+    - france
+
+  contact:
+    team: "Direction du Numerique"
+    email: "dnum@citadelle.gouv.demo"

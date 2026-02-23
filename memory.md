@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-23 (CAB-1338 i18n MEGA DONE — C9 333/523 pts)
+> Derniere MAJ: 2026-02-23 (CAB-286 Chat Backend DONE — C9 349/523 pts)
 
 ## ✅ DONE
 
@@ -25,6 +25,9 @@
   - Apigee v2 (PRs #556, #879), AWS API GW (PR #855), Azure APIM (PR #873)
 - ✅ CAB-1123 [MEGA] Prompt Cache for HEGEMON AI Factory (21 pts) — PR #878
   - PromptCache struct + 5 admin endpoints + 3 MCP tools + file watcher
+- ✅ CAB-286 Chat Agent Backend API — Anthropic Streaming (8 pts) — PR #889
+  - ChatProvider protocol + AnthropicProvider (httpx async SSE), 8 REST endpoints, Kafka metering
+  - Migration 038, 32 tests, CHAT_ENABLED feature flag, Fernet API key encryption
 - ✅ CAB-285 Chat Agent UI Component (8 pts) — PR #877
 - ✅ CAB-1352 [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already existed in stoa-docs
 - ✅ fix(docs): Vercel build fix — remove nested ajv overrides from stoa-docs (PR #78)

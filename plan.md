@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (CAB-1331→InProgress PR#870; CAB-1336→InProgress; duplicates cleaned; C8→1305pts)
+> Last sync: 2026-02-23 (CAB-285→Done PR#877; dedup CAB-1429; C9=502pts)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~735 pts (committed) | **Done**: 241 pts (33%) | **Velocity**: 16 parent issues closed
+**Scope**: ~502 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 132 pts (26%) | **Velocity**: 13 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -114,11 +114,12 @@
   - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
   - [x] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — PR #870
   - [ ] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts)
-- [~] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts, P3) — Council 8.25 ✅
-  - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
-  - [ ] CAB-1428 [cp-api] Azure APIM adapter (8 pts)
+- [~] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — Council 8.00 ✅
+  - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts)
+  - [~] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts)
+  - [ ] CAB-1431 [cp-ui] CI missing translation keys check (5 pts)
 
-### Done (16)
+### Done (19)
 
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
@@ -155,17 +156,20 @@
 - [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
 - [x] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts) — stoa-docs PR #77
 - [x] CAB-1352: [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already in stoa-docs
+- [x] CAB-1123: [MEGA] Prompt Cache for HEGEMON AI Factory (21 pts) — PR #878
+- [x] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts) — PRs #556, #855, #873, #879
+  - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
+  - [x] CAB-1428 [cp-api] Azure APIM adapter (8 pts) — PR #873
+- [x] CAB-285: Chat Agent UI Component (8 pts) — PR #877
 
 ### Todo
 
 **P1** (8 pts):
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 
-**P2** (92 pts):
-- [ ] CAB-1123: Prompt Cache for HEGEMON (21 pts, P2) — Council 8.50 Go ✅
+**P2** (63 pts):
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
-- [ ] CAB-285: Chat Agent UI Component (8 pts, P2)
 - [ ] CAB-286: Chat Agent Backend API (8 pts, P2)
 - [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
 - [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
@@ -175,14 +179,10 @@
 - [ ] CAB-287: Chat Agent Tool Injection (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 
-**P3 — MEGAs** (257 pts):
+**P3 — MEGAs** (236 pts):
 
 *Council Go (>= 8.0):*
 - [ ] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts, P3) — Council 8.00 ✅
-- [ ] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — Council 8.00 ✅
-  - [ ] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts)
-  - [ ] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts)
-  - [ ] CAB-1431 [cp-ui] CI missing translation keys check (5 pts)
 
 *Council Fix (6.0–7.9, adjustments applied on Linear):*
 - [ ] CAB-1319: [MEGA] MCP Developer Self-Service (21 pts, P3) — Council 7.50 ⚠️

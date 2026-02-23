@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-23 (CAB-1331, CAB-1336, CAB-1123 DONE — C9 312/502 pts)
+> Derniere MAJ: 2026-02-23 (CAB-1338 i18n MEGA DONE — C9 333/523 pts)
 
 ## ✅ DONE
 

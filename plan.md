@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (CAB-285→Done PR#877; dedup CAB-1429; C9=502pts)
+> Last sync: 2026-02-23 (CAB-1338→Done, +CAB-1432; C9=523pts 64%)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~502 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 312 pts (62%) | **Velocity**: 20 issues done
+**Scope**: ~523 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 333 pts (64%) | **Velocity**: 21 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -110,13 +110,12 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-- [~] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — Council 8.00 ✅
-  - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts)
-  - [x] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts)
-  - [ ] CAB-1431 [cp-ui] CI missing translation keys check (5 pts)
+### Done (21)
 
-### Done (20)
-
+- [x] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — ALL 3 PHASES DONE — PRs #876, #882, #885, #888
+  - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts) — PR #876
+  - [x] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts) — PRs #882, #888
+  - [x] CAB-1431 [cp-ui] CI missing translation keys check (5 pts) — PR #885
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
   - P1: spec coverage matrix (docs/mcp-spec-coverage.md)
@@ -167,7 +166,7 @@
 **P1** (8 pts):
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 
-**P2** (63 pts):
+**P2** (84 pts):
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
 - [ ] CAB-286: Chat Agent Backend API (8 pts, P2)
@@ -177,6 +176,7 @@
 - [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
 - [ ] CAB-287: Chat Agent Tool Injection (5 pts, P2)
+- [ ] CAB-1432: [MEGA] Credential Mapping — OAuth2 Front → Backend API Key Injection (21 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 
 **P3 — MEGAs** (236 pts):

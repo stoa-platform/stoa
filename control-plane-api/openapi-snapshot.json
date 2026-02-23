@@ -3114,6 +3114,294 @@
         "title": "ConversionFunnel",
         "type": "object"
       },
+      "CredentialAuthTypeEnum": {
+        "description": "Backend credential type.",
+        "enum": [
+          "api_key",
+          "bearer",
+          "basic"
+        ],
+        "title": "CredentialAuthTypeEnum",
+        "type": "string"
+      },
+      "CredentialMappingCreate": {
+        "description": "Schema for creating a credential mapping.",
+        "example": {
+          "api_id": "weather-api-v1",
+          "auth_type": "api_key",
+          "consumer_id": "550e8400-e29b-41d4-a716-446655440000",
+          "credential_value": "sk-live-abc123...",
+          "description": "ACME Corp production API key",
+          "header_name": "X-API-Key"
+        },
+        "properties": {
+          "api_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Api Id",
+            "type": "string"
+          },
+          "auth_type": {
+            "$ref": "#/components/schemas/CredentialAuthTypeEnum"
+          },
+          "consumer_id": {
+            "format": "uuid",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "credential_value": {
+            "description": "Plaintext credential (encrypted at rest)",
+            "minLength": 1,
+            "title": "Credential Value",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "header_name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Header Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumer_id",
+          "api_id",
+          "auth_type",
+          "header_name",
+          "credential_value"
+        ],
+        "title": "CredentialMappingCreate",
+        "type": "object"
+      },
+      "CredentialMappingListResponse": {
+        "description": "Schema for paginated credential mapping list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CredentialMappingResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "CredentialMappingListResponse",
+        "type": "object"
+      },
+      "CredentialMappingResponse": {
+        "description": "Schema for credential mapping response (value never exposed).",
+        "properties": {
+          "api_id": {
+            "title": "Api Id",
+            "type": "string"
+          },
+          "auth_type": {
+            "$ref": "#/components/schemas/CredentialAuthTypeEnum"
+          },
+          "consumer_id": {
+            "format": "uuid",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "has_credential": {
+            "title": "Has Credential",
+            "type": "boolean"
+          },
+          "header_name": {
+            "title": "Header Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "consumer_id",
+          "api_id",
+          "tenant_id",
+          "auth_type",
+          "header_name",
+          "has_credential",
+          "description",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by"
+        ],
+        "title": "CredentialMappingResponse",
+        "type": "object"
+      },
+      "CredentialMappingSyncItem": {
+        "description": "Schema for a single credential mapping in gateway sync payload.",
+        "properties": {
+          "api_id": {
+            "title": "Api Id",
+            "type": "string"
+          },
+          "auth_type": {
+            "title": "Auth Type",
+            "type": "string"
+          },
+          "consumer_id": {
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "header_name": {
+            "title": "Header Name",
+            "type": "string"
+          },
+          "header_value": {
+            "title": "Header Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumer_id",
+          "api_id",
+          "auth_type",
+          "header_name",
+          "header_value"
+        ],
+        "title": "CredentialMappingSyncItem",
+        "type": "object"
+      },
+      "CredentialMappingUpdate": {
+        "description": "Schema for updating a credential mapping.",
+        "properties": {
+          "auth_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CredentialAuthTypeEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "credential_value": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New credential value (re-encrypted)",
+            "title": "Credential Value"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "header_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Name"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "title": "CredentialMappingUpdate",
+        "type": "object"
+      },
       "CredentialsInput": {
         "description": "Credentials input for server registration.",
         "properties": {
@@ -4034,6 +4322,11 @@
       },
       "DocsSearchResponse": {
         "properties": {
+          "mode": {
+            "default": "keyword",
+            "title": "Mode",
+            "type": "string"
+          },
           "query": {
             "title": "Query",
             "type": "string"
@@ -12124,6 +12417,42 @@
           "clientSecret"
         ],
         "title": "RegenerateSecretResponse",
+        "type": "object"
+      },
+      "ReindexResponse": {
+        "properties": {
+          "error_details": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Error Details",
+            "type": "array"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "indexed": {
+            "title": "Indexed",
+            "type": "integer"
+          },
+          "total_chunks": {
+            "title": "Total Chunks",
+            "type": "integer"
+          },
+          "total_entries": {
+            "title": "Total Entries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_entries",
+          "total_chunks",
+          "indexed",
+          "errors"
+        ],
+        "title": "ReindexResponse",
         "type": "object"
       },
       "ReplayResponse": {
@@ -24764,9 +25093,31 @@
         ]
       }
     },
+    "/v1/docs/admin/reindex": {
+      "post": {
+        "description": "Reindex documentation into OpenSearch k-NN for semantic search.\n\nAdmin-only endpoint \u2014 requires DOCS_REINDEX_ENABLED=true.\nFetches llms-full.txt, chunks content, generates embeddings, and upserts to OpenSearch.",
+        "operationId": "reindex_docs_v1_docs_admin_reindex_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReindexResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Reindex Docs",
+        "tags": [
+          "Docs Search"
+        ]
+      }
+    },
     "/v1/docs/search": {
       "get": {
-        "description": "Search STOA documentation, guides, ADRs, and blog posts.\n\nPublic endpoint \u2014 no authentication required.\nCombines Algolia full-text search with llms-full.txt boosting.",
+        "description": "Search STOA documentation, guides, ADRs, and blog posts.\n\nPublic endpoint \u2014 no authentication required.\n\nModes:\n- **keyword** (default): Algolia full-text + llms-full.txt boost\n- **semantic**: OpenSearch k-NN vector similarity\n- **hybrid**: RRF fusion of keyword + semantic",
         "operationId": "search_docs_v1_docs_search_get",
         "parameters": [
           {
@@ -24794,6 +25145,23 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Search mode",
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "keyword",
+              "description": "Search mode",
+              "enum": [
+                "keyword",
+                "semantic",
+                "hybrid"
+              ],
+              "title": "Mode",
+              "type": "string"
             }
           }
         ],
@@ -32091,6 +32459,404 @@
         "summary": "Update Backend Api",
         "tags": [
           "Backend APIs"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/credential-mappings": {
+      "get": {
+        "description": "List credential mappings for a tenant.",
+        "operationId": "list_credential_mappings_v1_tenants__tenant_id__credential_mappings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by consumer ID",
+            "in": "query",
+            "name": "consumer_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by consumer ID",
+              "title": "Consumer Id"
+            }
+          },
+          {
+            "description": "Filter by API ID",
+            "in": "query",
+            "name": "api_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by API ID",
+              "title": "Api Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialMappingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Credential Mappings",
+        "tags": [
+          "Credential Mappings"
+        ]
+      },
+      "post": {
+        "description": "Create a new credential mapping for a consumer + API pair.",
+        "operationId": "create_credential_mapping_v1_tenants__tenant_id__credential_mappings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialMappingCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialMappingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Credential Mapping",
+        "tags": [
+          "Credential Mappings"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/credential-mappings/sync/{gateway_instance_id}": {
+      "get": {
+        "description": "Bulk export active credential mappings for gateway sync (admin-only, decrypted).",
+        "operationId": "sync_credential_mappings_v1_tenants__tenant_id__credential_mappings_sync__gateway_instance_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "gateway_instance_id",
+            "required": true,
+            "schema": {
+              "title": "Gateway Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CredentialMappingSyncItem"
+                  },
+                  "title": "Response Sync Credential Mappings V1 Tenants  Tenant Id  Credential Mappings Sync  Gateway Instance Id  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Credential Mappings",
+        "tags": [
+          "Credential Mappings"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/credential-mappings/{mapping_id}": {
+      "delete": {
+        "description": "Delete a credential mapping (soft delete \u2014 sets is_active=false).",
+        "operationId": "delete_credential_mapping_v1_tenants__tenant_id__credential_mappings__mapping_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Credential Mapping",
+        "tags": [
+          "Credential Mappings"
+        ]
+      },
+      "get": {
+        "description": "Get a credential mapping by ID.",
+        "operationId": "get_credential_mapping_v1_tenants__tenant_id__credential_mappings__mapping_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialMappingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credential Mapping",
+        "tags": [
+          "Credential Mappings"
+        ]
+      },
+      "put": {
+        "description": "Update a credential mapping.",
+        "operationId": "update_credential_mapping_v1_tenants__tenant_id__credential_mappings__mapping_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialMappingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialMappingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Credential Mapping",
+        "tags": [
+          "Credential Mappings"
         ]
       }
     },

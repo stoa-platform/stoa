@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (CAB-1422 → Done, PR #856)
+> Last sync: 2026-02-23 (CAB-1420, CAB-1421, CAB-1427 → Done; 7 sub-issues decomposed for CAB-1331/1336/1338)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~661 pts (committed) | **Done**: 243 pts (37%) | **Velocity**: 18 issues closed
+**Scope**: ~735 pts (committed) | **Done**: 267 pts (36%) | **Velocity**: 22 issues closed
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -143,6 +143,10 @@
 - [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
 - [x] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts) — stoa-docs PR #77
 - [x] CAB-1422: [cp-ui] Live deployment dashboard — SSE logs + rollback UX (5 pts) — PR #856
+- [x] CAB-1420: [cp-api] Deploy log streaming + SSE event fan-out (8 pts) — PR #856
+- [x] CAB-1421: [gateway] Deploy progress telemetry — structured events (5 pts) — PR #855
+- [x] CAB-1423: [e2e] Deploy flow integration tests — SSE + rollback (3 pts) — PRs #853, #859
+- [x] CAB-1427: [cp-api] AWS API Gateway adapter (8 pts) — PR #855
 - [x] CAB-1352: [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already in stoa-docs
 
 ### Todo
@@ -169,9 +173,17 @@
 
 *Council Go (>= 8.0):*
 - [ ] CAB-1331: [MEGA] UAC-Driven Observability (21 pts, P3) — Council 8.50 ✅
-- [ ] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts, P3) — Council 8.25 ✅
+  - [ ] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts)
+  - [ ] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts)
+  - [ ] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts)
+- [~] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts, P3) — Council 8.25 ✅
+  - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
+  - [ ] CAB-1428 [cp-api] Azure APIM adapter (8 pts)
 - [ ] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts, P3) — Council 8.00 ✅
 - [ ] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — Council 8.00 ✅
+  - [ ] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts)
+  - [ ] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts)
+  - [ ] CAB-1431 [cp-ui] CI missing translation keys check (5 pts)
 
 *Council Fix (6.0–7.9, adjustments applied on Linear):*
 - [ ] CAB-1319: [MEGA] MCP Developer Self-Service (21 pts, P3) — Council 7.50 ⚠️

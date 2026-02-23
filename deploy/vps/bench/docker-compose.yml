@@ -17,6 +17,7 @@ services:
       - DISCARD_FIRST=${DISCARD_FIRST:-1}
       - TIMEOUT=${TIMEOUT:-5}
       - SCRIPT_PATH=/scripts/benchmark.js
+      - ARENA_INSTANCE=${ARENA_INSTANCE:-vps}
       - GATEWAYS=${GATEWAYS}
     restart: "no"
     security_opt:

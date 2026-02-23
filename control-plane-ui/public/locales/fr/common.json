@@ -25,6 +25,8 @@
     "federation": "Federation",
     "skills": "Competences",
     "insights": "Analyses",
+    "identity": "Identite",
+    "apiMonitoring": "Supervision API",
     "monitoring": "Supervision",
     "errorSnapshots": "Captures d'erreurs",
     "executions": "Executions",
@@ -36,7 +38,27 @@
     "policies": "Politiques",
     "auditLog": "Journal d'audit",
     "workflows": "Workflows",
-    "audienceGovernance": "Gouvernance des audiences"
+    "audienceGovernance": "Gouvernance des audiences",
+    "audience": "Audience"
+  },
+  "layout": {
+    "controlPlane": "Panneau de controle",
+    "environment": "Environnement",
+    "tenant": "Tenant",
+    "selectTenant": "Selectionner un tenant",
+    "apiError": "Impossible de se connecter a l'API STOA. Certaines fonctionnalites peuvent etre indisponibles."
+  },
+  "commandPalette": {
+    "createNewApi": "Creer une nouvelle API",
+    "createNewApiDesc": "Ajouter une definition d'API",
+    "createNewTenant": "Creer un nouveau tenant",
+    "createNewTenantDesc": "Ajouter un tenant",
+    "logoutDesc": "Se deconnecter de votre compte",
+    "switchToLight": "Mode clair",
+    "switchToDark": "Mode sombre",
+    "currentlyIn": "Actuellement en mode {{theme}}",
+    "navigateTo": "Aller a {{name}}",
+    "goTo": "Aller a {{name}}"
   },
   "dashboard": {
     "title": "Tableau de bord",

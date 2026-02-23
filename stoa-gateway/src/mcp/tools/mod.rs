@@ -197,6 +197,10 @@ pub struct ToolContext {
     /// Merged skill instructions from CSS cascade resolution (CAB-1365).
     /// Concatenated instructions from all matching skills, ordered by specificity.
     pub skill_instructions: Option<String>,
+    /// Progress token from the client's `_meta.progressToken` (CAB-1345 Phase 3).
+    /// When present, the tool can send incremental progress notifications over WebSocket.
+    /// SSE connections always have this as `None` since SSE can't push mid-request.
+    pub progress_token: Option<Value>,
 }
 
 /// The Tool trait - implement this for each MCP tool

@@ -82,11 +82,11 @@ impl JsonRpcResponse {
 }
 
 // JSON-RPC Error Codes
-const PARSE_ERROR: i32 = -32700;
-const INVALID_REQUEST: i32 = -32600;
-const METHOD_NOT_FOUND: i32 = -32601;
-const INVALID_PARAMS: i32 = -32602;
-const INTERNAL_ERROR: i32 = -32603;
+pub const PARSE_ERROR: i32 = -32700;
+pub const INVALID_REQUEST: i32 = -32600;
+pub const METHOD_NOT_FOUND: i32 = -32601;
+pub const INVALID_PARAMS: i32 = -32602;
+pub const INTERNAL_ERROR: i32 = -32603;
 
 // ============================================
 // MCP Protocol Version Negotiation (2025-03-26)
@@ -330,6 +330,7 @@ pub async fn handle_sse_post(
         scopes,
         raw_token: validated_token,
         skill_instructions: None, // SSE: skills resolved per-tool in handler
+        progress_token: None,     // SSE: no progress push (half-duplex)
     };
 
     // Route to handler
@@ -544,7 +545,7 @@ async fn handle_batch_request(
 }
 
 /// Process a single JSON-RPC request (used by both single and batch handlers)
-async fn process_single_request(
+pub async fn process_single_request(
     state: &AppState,
     headers: &HeaderMap,
     params: &SseQueryParams,
@@ -580,6 +581,7 @@ async fn process_single_request(
         scopes: vec![],
         raw_token: None,
         skill_instructions: None,
+        progress_token: None,
     };
 
     // Route to handler
@@ -692,7 +694,11 @@ async fn handle_initialize(
                 "levels": ["none", "moderate", "aggressive"]
             },
             // Advertise elicitation support (Phase 5)
-            "elicitation": {}
+            "elicitation": {},
+            // Advertise supported transports (CAB-1345 Phase 3)
+            "experimental": {
+                "transports": ["sse", "websocket"]
+            }
         },
         "serverInfo": {
             "name": "STOA Gateway",
@@ -1009,6 +1015,22 @@ async fn handle_resources_read(state: &AppState, request: &JsonRpcRequest) -> Js
 // ============================================
 // Helpers
 // ============================================
+
+/// Extract Bearer token from Authorization header.
+/// Used by both SSE and WebSocket transports.
+pub fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|auth| {
+            let parts: Vec<&str> = auth.splitn(2, ' ').collect();
+            if parts.len() == 2 && parts[0].eq_ignore_ascii_case("bearer") {
+                Some(parts[1].trim().to_string())
+            } else {
+                None
+            }
+        })
+}
 
 fn extract_tenant(headers: &HeaderMap) -> Option<String> {
     // Try X-Tenant-ID header first

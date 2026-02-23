@@ -336,6 +336,7 @@ fn is_mtls_bypass_path(path: &str) -> bool {
         "/.well-known/",
         "/oauth/",
         "/mcp/sse",
+        "/mcp/ws",
         "/mcp/tools/",
         "/mcp/v1/",
         "/health",

@@ -20,6 +20,11 @@ spec:
       path: /metrics
       interval: {{ .Values.controlPlaneApi.serviceMonitor.interval | default "15s" }}
       scrapeTimeout: {{ .Values.controlPlaneApi.serviceMonitor.scrapeTimeout | default "10s" }}
+      metricRelabelings:
+        - targetLabel: cluster
+          replacement: {{ .Values.controlPlaneApi.clusterName | default "default" }}
+        - targetLabel: environment
+          replacement: {{ .Values.controlPlaneApi.environment | default "dev" }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}

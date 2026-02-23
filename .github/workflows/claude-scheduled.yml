@@ -176,7 +176,7 @@ jobs:
             Do NOT read memory.md, plan.md, or operations.log for session state.
             Focus exclusively on the task below.
 
-            Weekly audit: dependency scan + coverage check + stale branch cleanup.
+            Weekly audit: dependency scan + coverage check + stale branch cleanup + cost analysis.
             1. Dependency audit:
                - pip-audit in control-plane-api/ (install first: pip install pip-audit)
                - npm audit in control-plane-ui/ and portal/
@@ -184,6 +184,11 @@ jobs:
             2. If safe upgrades exist (patch/minor): create PR "chore(deps): weekly dependency update YYYY-MM-DD"
             3. Coverage check: read thresholds from .claude/rules/ci-quality-gates.md, check latest CI. If dropped: issue with "coverage-drop" label
             4. Stale branches >14 days: report which can be deleted
+            5. AI Factory cost efficiency:
+               - Read metrics.log for TOKEN-SPEND and COST-ALERT events from last 7 days
+               - Calculate: total weekly cost, avg daily, cost per PR, model distribution
+               - Flag anomalies: COST-ALERT events, sessions with >50K tokens, cost/PR > $20
+               - Recommend: session splitting, model routing adjustments
 
             Create issue "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
           # Model tier: sonnet (audit, may create upgrade PRs)

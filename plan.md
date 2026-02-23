@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~523 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 333 pts (64%) | **Velocity**: 21 issues done
+**Scope**: ~523 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 349 pts (67%) | **Velocity**: 23 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -155,6 +155,7 @@
 - [x] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts) — PRs #556, #855, #873, #879
   - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
   - [x] CAB-1428 [cp-api] Azure APIM adapter (8 pts) — PR #873
+- [x] CAB-286: Chat Agent Backend API — Anthropic Streaming (8 pts) — PR #889
 - [x] CAB-285: Chat Agent UI Component (8 pts) — PR #877
 - [x] CAB-1331: [MEGA] UAC-Driven Observability (21 pts) — PRs #870, #884
   - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
@@ -166,10 +167,9 @@
 **P1** (8 pts):
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 
-**P2** (84 pts):
+**P2** (76 pts):
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
-- [ ] CAB-286: Chat Agent Backend API (8 pts, P2)
 - [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
 - [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
 - [ ] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts, P2)

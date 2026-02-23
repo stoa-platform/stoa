@@ -43,14 +43,14 @@ export function MyApplications() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">{t('subtitle')}</p>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">{t('title')}</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">{t('subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => refetch()}
             disabled={isLoading}
-            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             title={t('refresh')}
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -94,9 +94,9 @@ export function MyApplications() {
 
       {/* Loading state */}
       {isLoading && (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
           <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-neutral-400">{t('loading')}</p>
+          <p className="text-neutral-500 dark:text-neutral-400">{t('loading')}</p>
         </div>
       )}
 
@@ -125,14 +125,14 @@ export function MyApplications() {
 
       {/* Empty state */}
       {!isLoading && !isError && (!applications || applications.items.length === 0) && (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
-          <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
-            <AppWindow className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
+          <div className="inline-flex p-4 bg-neutral-100 dark:bg-neutral-700 rounded-full mb-4">
+            <AppWindow className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
             {t('empty.title')}
           </h2>
-          <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
+          <p className="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
             {t('empty.description')}
           </p>
           <button
@@ -148,7 +148,7 @@ export function MyApplications() {
       {/* Applications grid */}
       {!isLoading && !isError && applications && applications.items.length > 0 && (
         <>
-          <div className="text-sm text-gray-500 dark:text-neutral-400">
+          <div className="text-sm text-neutral-500 dark:text-neutral-400">
             {t('count', { count: applications.items.length })}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

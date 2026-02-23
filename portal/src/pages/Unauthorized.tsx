@@ -19,37 +19,37 @@ export function UnauthorizedPage() {
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h1>
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white mb-2">Access Denied</h1>
 
         {/* Description */}
-        <p className="text-gray-600 dark:text-neutral-400 mb-6">
+        <p className="text-neutral-600 dark:text-neutral-400 mb-6">
           You don't have permission to access this page. Please contact your administrator if you
           believe this is an error.
         </p>
 
         {/* User info for debugging */}
         {user && (
-          <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg p-4 mb-6 text-left">
-            <p className="text-sm text-gray-500 dark:text-neutral-400 mb-2">
+          <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">
               Current user information:
             </p>
             <div className="space-y-1 text-sm">
               <p>
-                <span className="text-gray-500 dark:text-neutral-400">Email:</span>{' '}
-                <span className="font-medium text-gray-700 dark:text-neutral-300">
+                <span className="text-neutral-500 dark:text-neutral-400">Email:</span>{' '}
+                <span className="font-medium text-neutral-700 dark:text-neutral-300">
                   {user.email}
                 </span>
               </p>
               <p>
-                <span className="text-gray-500 dark:text-neutral-400">Roles:</span>{' '}
-                <span className="font-mono text-xs bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded">
+                <span className="text-neutral-500 dark:text-neutral-400">Roles:</span>{' '}
+                <span className="font-mono text-xs bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 rounded">
                   {user.roles.length > 0 ? user.roles.join(', ') : 'none'}
                 </span>
               </p>
               {user.tenant_id && (
                 <p>
-                  <span className="text-gray-500 dark:text-neutral-400">Tenant:</span>{' '}
-                  <span className="font-medium text-gray-700 dark:text-neutral-300">
+                  <span className="text-neutral-500 dark:text-neutral-400">Tenant:</span>{' '}
+                  <span className="font-medium text-neutral-700 dark:text-neutral-300">
                     {user.tenant_id}
                   </span>
                 </p>
@@ -69,7 +69,7 @@ export function UnauthorizedPage() {
           </Link>
           <button
             onClick={() => window.history.back()}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-600 transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Go Back

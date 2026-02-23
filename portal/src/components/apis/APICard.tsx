@@ -19,7 +19,7 @@ interface APICardProps {
 const statusColors = {
   published: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400',
   deprecated: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400',
-  draft: 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200',
+  draft: 'bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200',
 } as const;
 
 // Date formatting options - created once
@@ -39,21 +39,21 @@ export const APICard = memo(function APICard({ api, onMouseEnter }: APICardProps
     <Link
       to={`/apis/${api.id}`}
       onMouseEnter={onMouseEnter}
-      className="group bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all"
+      className="group bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-400 transition-colors truncate">
+          <h3 className="font-semibold text-neutral-900 dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-400 transition-colors truncate">
             {api.name}
           </h3>
-          <p className="text-sm text-gray-500 dark:text-neutral-400">v{api.version}</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">v{api.version}</p>
         </div>
         <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[api.status]}`}>
           {api.status}
         </span>
       </div>
 
-      <p className="text-sm text-gray-600 dark:text-neutral-300 line-clamp-2 mb-4 min-h-[40px]">
+      <p className="text-sm text-neutral-600 dark:text-neutral-300 line-clamp-2 mb-4 min-h-[40px]">
         {api.description || 'No description available'}
       </p>
 
@@ -67,20 +67,20 @@ export const APICard = memo(function APICard({ api, onMouseEnter }: APICardProps
         {api.tags?.slice(0, 2).map((tag) => (
           <span
             key={tag}
-            className="px-2 py-1 bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 text-xs rounded-full"
+            className="px-2 py-1 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs rounded-full"
           >
             {tag}
           </span>
         ))}
         {api.tags && api.tags.length > 2 && (
-          <span className="px-2 py-1 bg-gray-100 dark:bg-neutral-700 text-gray-500 dark:text-neutral-400 text-xs rounded-full">
+          <span className="px-2 py-1 bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 text-xs rounded-full">
             +{api.tags.length - 2}
           </span>
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-neutral-700">
-        <div className="flex items-center text-xs text-gray-500">
+      <div className="flex items-center justify-between pt-3 border-t border-neutral-100 dark:border-neutral-700">
+        <div className="flex items-center text-xs text-neutral-500">
           <Clock className="h-3 w-3 mr-1" />
           {formattedDate}
         </div>

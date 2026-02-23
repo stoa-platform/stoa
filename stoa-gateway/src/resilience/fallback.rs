@@ -248,6 +248,7 @@ mod tests {
             scopes: vec!["stoa:read".into()],
             raw_token: None,
             skill_instructions: None,
+            progress_token: None,
         }
     }
 

@@ -100,6 +100,11 @@ pub struct Config {
     #[serde(default = "default_session_ttl")]
     pub mcp_session_ttl_minutes: i64,
 
+    /// Enable WebSocket transport for MCP (default: false — opt-in)
+    /// Env: STOA_WEBSOCKET_ENABLED
+    #[serde(default)]
+    pub websocket_enabled: bool,
+
     // === Policy Engine (Phase 2 OPA) ===
     /// Path to Rego policy file (e.g., /etc/stoa/policies/default.rego)
     /// Env: STOA_POLICY_PATH
@@ -718,6 +723,7 @@ impl Default for Config {
             rate_limit_default: Some(1000),
             rate_limit_window_seconds: Some(60),
             mcp_session_ttl_minutes: default_session_ttl(),
+            websocket_enabled: false,
             policy_path: None,
             policy_enabled: default_policy_enabled(),
             log_level: Some("info".to_string()),

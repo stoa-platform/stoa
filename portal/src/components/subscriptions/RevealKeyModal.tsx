@@ -139,19 +139,19 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
       {/* Modal */}
       <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-700 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
               <Key className="h-5 w-5 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900 dark:text-white">Reveal API Key</h2>
-              <p className="text-sm text-gray-500 dark:text-neutral-400">{subscription.tool_id}</p>
+              <h2 className="font-semibold text-neutral-900 dark:text-white">Reveal API Key</h2>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">{subscription.tool_id}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+            className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -180,7 +180,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
             <div className="space-y-2">
               <label
                 htmlFor="totp-input"
-                className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-neutral-300"
+                className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300"
               >
                 <Shield className="h-4 w-4 text-primary-500" aria-hidden="true" />
                 2FA Verification Required
@@ -198,13 +198,13 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
                   setTotpCode(value);
                   setError(null);
                 }}
-                className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
+                className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
                 // UX rationale: autofocus on the key field reduces clicks for copy-paste workflow.
                 // Security context: modal is user-initiated, no risk of focus hijacking.
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
               />
-              <p className="text-xs text-gray-500 dark:text-neutral-400">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 Enter the code from your authenticator app
               </p>
             </div>
@@ -230,7 +230,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
 
               {/* Key display */}
               <div className="relative">
-                <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm break-all">
+                <div className="bg-neutral-900 rounded-lg p-4 font-mono text-sm break-all">
                   <code className="text-green-400">{isKeyVisible ? apiKey : maskKey(apiKey)}</code>
                 </div>
 
@@ -238,14 +238,14 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
                 <div className="absolute top-2 right-2 flex gap-1">
                   <button
                     onClick={() => setIsKeyVisible(!isKeyVisible)}
-                    className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                    className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors"
                     title={isKeyVisible ? 'Hide key' : 'Show key'}
                   >
                     {isKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                   <button
                     onClick={handleCopyKey}
-                    className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                    className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors"
                     title="Copy to clipboard"
                   >
                     {copied ? (
@@ -268,10 +268,10 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-neutral-700 flex justify-end gap-3">
+        <div className="px-6 py-4 border-t border-neutral-200 dark:border-neutral-700 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 dark:text-neutral-300 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
+            className="px-4 py-2 text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
           >
             {apiKey ? 'Close' : 'Cancel'}
           </button>

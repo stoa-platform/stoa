@@ -284,15 +284,25 @@ _push_metrics() {
     return 0
   fi
   local PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/ai_factory/${JOB_PATH}"
-  local CURL_AUTH=""
-  if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
-    CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
-  fi
   local HTTP_CODE
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-    --data-binary "$METRICS_TEXT" \
-    -H "Content-Type: text/plain" \
-    $CURL_AUTH "$PUSH_URL" 2>/dev/null)
+  if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary "$METRICS_TEXT" \
+      -H "Content-Type: text/plain" \
+      -u "${PUSHGATEWAY_AUTH}" "$PUSH_URL" 2>/dev/null)
+  else
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary "$METRICS_TEXT" \
+      -H "Content-Type: text/plain" \
+      "$PUSH_URL" 2>/dev/null)
+  fi
+  # Retry without auth if server rejects Basic Auth (IP-whitelisted setup)
+  if [ "${HTTP_CODE:-000}" = "400" ] && [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary "$METRICS_TEXT" \
+      -H "Content-Type: text/plain" \
+      "$PUSH_URL" 2>/dev/null)
+  fi
   [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
   if [ "$HTTP_CODE" -ge 300 ] || [ "$HTTP_CODE" = "000" ]; then
     echo "::warning::Pushgateway returned HTTP ${HTTP_CODE} (non-blocking)"

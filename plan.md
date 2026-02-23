@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (local-only — stale claims released, capacity check)
+> Last sync: 2026-02-23 (CAB-1331→InProgress PR#870; CAB-1336→InProgress; duplicates cleaned; C8→1305pts)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~735 pts (committed) | **Done**: 288 pts (39%) | **Velocity**: 23 issues closed
+**Scope**: ~735 pts (committed) | **Done**: 241 pts (33%) | **Velocity**: 16 parent issues closed
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -110,8 +110,15 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
+- [~] CAB-1331: [MEGA] UAC-Driven Observability (21 pts, P3) — Council 8.50 ✅
+  - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
+  - [x] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — PR #870
+  - [ ] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts)
+- [~] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts, P3) — Council 8.25 ✅
+  - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
+  - [ ] CAB-1428 [cp-api] Azure APIM adapter (8 pts)
 
-### Done (19)
+### Done (16)
 
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
@@ -143,7 +150,6 @@
   - [x] CAB-1412 [stoactl] CLI commands: deploy/rollback/logs/list (13 pts)
   - [x] CAB-1411 [docs] stoa.yaml spec + stoactl guide (5 pts) — stoa-docs PR #79
 - [x] CAB-86: TTL Extension — Self-Service (5 pts) — PR #780
-- [x] CAB-1427: [cp-api] AWS API Gateway adapter (8 pts) — PR #855
 - [x] CAB-1414: [docs] SaaS Playbook Parts 1-2 + Buying Guide (5 pts) — stoa-docs PR #75
 - [x] CAB-1415: [docs] SaaS Playbook Parts 3-5 (5 pts) — stoa-docs PR #76
 - [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
@@ -169,16 +175,9 @@
 - [ ] CAB-287: Chat Agent Tool Injection (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 
-**P3 — MEGAs** (299 pts):
+**P3 — MEGAs** (257 pts):
 
 *Council Go (>= 8.0):*
-- [ ] CAB-1331: [MEGA] UAC-Driven Observability (21 pts, P3) — Council 8.50 ✅
-  - [ ] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts)
-  - [ ] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts)
-  - [ ] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts)
-- [~] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts, P3) — Council 8.25 ✅
-  - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
-  - [ ] CAB-1428 [cp-api] Azure APIM adapter (8 pts)
 - [ ] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts, P3) — Council 8.00 ✅
 - [ ] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — Council 8.00 ✅
   - [ ] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts)
@@ -224,7 +223,7 @@
 
 | Date | Event | Gate |
 |------|-------|------|
-| Dim 22 fev | Cycle 8 closed | 905 pts, 88 issues |
+| Dim 22 fev | Cycle 8 closed | 1305 pts, 88 issues |
 | Mar 17 mars | DEMO DAY | 5 min live + "ESB is Dead" |
 | Dim 1 mars | Cycle 9 ends | Post-Demo roadmap |
 

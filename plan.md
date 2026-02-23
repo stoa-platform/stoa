@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~515 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 443 pts (86%) | **Velocity**: 29 issues done
+**Scope**: ~515 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 464 pts (90%) | **Velocity**: 30 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -175,6 +175,10 @@
   - [x] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — PR #870
   - [x] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts) — PR #884
 - [x] CAB-1329: [MEGA] Demo Content Library — 8 Themes (21 pts) — PR #902
+- [x] CAB-1393: [MEGA] Developer Onboarding Content (21 pts) — stoa-docs PR #82
+  - P1: UAC Hero Tutorial + Week 1 Runbook (2 articles)
+  - P2: Freelancer Security Series (3 articles)
+  - P3: GitHub Examples (5 projects)
 
 ### Todo
 
@@ -207,7 +211,6 @@
 ### Backlog (not committed, no checkbox)
 
 - CAB-1324: [MEGA] Runtime Data Governance (21 pts)
-- CAB-1393: [MEGA] Developer Onboarding Content (21 pts)
 - CAB-1392: [MEGA] Security & MCP Deep-Dive Content (21 pts)
 - CAB-1320: [MEGA] Repo Consolidation (21 pts)
 - CAB-1356: [cli] stoactl Deploy Commands (5 pts)

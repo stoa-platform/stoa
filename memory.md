@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-23 (CAB-1432→DONE PRs #899,#903 — C9 422/523 pts 81%)
+> Derniere MAJ: 2026-02-23 (CAB-1393→DONE stoa-docs PR #82 — C9 464/515 pts 90%)
 
 ## ✅ DONE
 
@@ -11,6 +11,10 @@
 - ✅ CAB-1432 [MEGA] Credential Mapping (21 pts) — PRs #899 (API+GW), #903 (Portal UI)
   - P1: Backend API (7 CRUD, Fernet encryption, RBAC, 26 tests) + Gateway credential store
   - P2: Portal UI (table + modal + search + auth type switching, 38 tests)
+- ✅ CAB-1393 [MEGA] Developer Onboarding Content (21 pts) — stoa-docs PR #82
+  - P1: UAC Hero Tutorial + Week 1 Runbook (2 articles, ~3700 words)
+  - P2: Freelancer Security Series (3 articles) — already done
+  - P3: GitHub Examples (5 projects) — already done
 - ✅ CAB-1345 [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts) — PR #890
 - ✅ CAB-1319 [MEGA] MCP Developer Self-Service (21 pts) — PR #898 (3 phases, 77 tests, +3214 LOC)
 - ✅ CAB-709 UAC for LLM — LLM contract types for UAC (5 pts) — PR #895

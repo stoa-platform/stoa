@@ -20,7 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from ..auth import User, get_current_user, require_tenant_access
+from ..config import settings
 from ..database import get_db
+from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
 from ..schemas.chat import (
     ChatTenantUsageResponse,
     ChatUsageResponse,
@@ -30,6 +32,8 @@ from ..schemas.chat import (
     ConversationResponse,
     ConversationUpdate,
     MessageSend,
+    TokenBudgetStatusResponse,
+    TokenUsageStatsResponse,
 )
 from ..services.chat_service import ChatService
 
@@ -234,3 +238,42 @@ async def get_tenant_usage(
 ) -> ChatTenantUsageResponse:
     stats = await svc.get_tenant_usage(tenant_id)
     return ChatTenantUsageResponse(**stats)
+
+
+# ---------------------------------------------------------------------------
+# Token metering (CAB-288)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/usage/budget",
+    response_model=TokenBudgetStatusResponse,
+    summary="Get token budget status for current user",
+)
+@require_tenant_access
+async def get_budget_status(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TokenBudgetStatusResponse:
+    repo = ChatTokenUsageRepository(db)
+    budget = settings.CHAT_TOKEN_BUDGET_DAILY or 1_000_000
+    status = await repo.get_budget_status(tenant_id, user.sub, daily_budget=budget)
+    return TokenBudgetStatusResponse(**status)
+
+
+@router.get(
+    "/usage/metering",
+    response_model=TokenUsageStatsResponse,
+    summary="Get aggregated token usage statistics (admin)",
+)
+@require_tenant_access
+async def get_usage_stats(
+    tenant_id: str,
+    days: int = Query(30, ge=1, le=365),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TokenUsageStatsResponse:
+    repo = ChatTokenUsageRepository(db)
+    stats = await repo.get_usage_stats(tenant_id, days=days)
+    return TokenUsageStatsResponse(**stats)

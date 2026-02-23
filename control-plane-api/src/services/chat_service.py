@@ -9,10 +9,11 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import distinct, func, select, update
+from sqlalchemy import delete, distinct, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -72,11 +73,14 @@ class ChatService:
         *,
         limit: int = 50,
         offset: int = 0,
+        status: str | None = None,
     ) -> tuple[list[ChatConversation], int]:
         base = select(ChatConversation).where(
             ChatConversation.tenant_id == tenant_id,
             ChatConversation.user_id == user_id,
         )
+        if status:
+            base = base.where(ChatConversation.status == status)
 
         count_q = select(func.count()).select_from(base.subquery())
         total = (await self.session.execute(count_q)).scalar_one()
@@ -134,6 +138,75 @@ class ChatService:
         await self.session.delete(conv)
         await self.session.flush()
         return True
+
+    # ------------------------------------------------------------------
+    # Archive / restore (CAB-289)
+    # ------------------------------------------------------------------
+
+    async def archive_conversation(
+        self,
+        conversation_id: UUID,
+        tenant_id: str,
+        user_id: str,
+        *,
+        status: str,
+    ) -> ChatConversation | None:
+        q = select(ChatConversation).where(
+            ChatConversation.id == conversation_id,
+            ChatConversation.tenant_id == tenant_id,
+            ChatConversation.user_id == user_id,
+        )
+        conv = (await self.session.execute(q)).scalar_one_or_none()
+        if conv is None:
+            return None
+        conv.status = status
+        await self.session.flush()
+        return conv
+
+    # ------------------------------------------------------------------
+    # Tenant cascade delete (CAB-289)
+    # ------------------------------------------------------------------
+
+    async def delete_tenant_conversations(self, tenant_id: str) -> int:
+        """Delete ALL conversations for a tenant (cascade). Returns count deleted."""
+        count_q = select(func.count()).select_from(
+            select(ChatConversation.id).where(ChatConversation.tenant_id == tenant_id).subquery()
+        )
+        total = (await self.session.execute(count_q)).scalar_one()
+
+        if total > 0:
+            await self.session.execute(delete(ChatConversation).where(ChatConversation.tenant_id == tenant_id))
+            await self.session.flush()
+        return total
+
+    # ------------------------------------------------------------------
+    # GDPR retention purge (CAB-289)
+    # ------------------------------------------------------------------
+
+    async def purge_expired_conversations(self, tenant_id: str, *, retention_days: int = 90) -> int:
+        """Delete archived conversations older than retention_days. Returns count purged."""
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        count_q = select(func.count()).select_from(
+            select(ChatConversation.id)
+            .where(
+                ChatConversation.tenant_id == tenant_id,
+                ChatConversation.status == "archived",
+                ChatConversation.updated_at < cutoff,
+            )
+            .subquery()
+        )
+        total = (await self.session.execute(count_q)).scalar_one()
+
+        if total > 0:
+            await self.session.execute(
+                delete(ChatConversation).where(
+                    ChatConversation.tenant_id == tenant_id,
+                    ChatConversation.status == "archived",
+                    ChatConversation.updated_at < cutoff,
+                )
+            )
+            await self.session.flush()
+        return total
 
     # ------------------------------------------------------------------
     # Usage statistics
@@ -241,6 +314,12 @@ class ChatService:
         )
         self.session.add(user_msg)
         await self.session.flush()
+
+        # Auto-title: replace default title with first user message (CAB-289)
+        if conv.title == "New conversation":
+            auto_title = content[:80].strip()
+            if auto_title:
+                conv.title = auto_title
 
         # Build message history for the provider
         history = self._build_history(conv, content)

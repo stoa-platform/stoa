@@ -1,0 +1,99 @@
+{
+  "nav": {
+    "overview": "Vue d'ensemble",
+    "dashboard": "Tableau de bord",
+    "operations": "Operations",
+    "myUsage": "Mon utilisation",
+    "business": "Business",
+    "catalog": "Catalogue",
+    "tenants": "Tenants",
+    "apis": "APIs",
+    "aiTools": "Outils IA",
+    "externalMcpServers": "Serveurs MCP externes",
+    "applications": "Applications",
+    "consumers": "Consommateurs",
+    "saas": "SaaS",
+    "backendApis": "APIs Backend",
+    "apiKeys": "Cles API",
+    "gateway": "Passerelle",
+    "status": "Statut",
+    "registry": "Registre",
+    "modes": "Modes",
+    "deployments": "Deploiements",
+    "drift": "Derive",
+    "metrics": "Metriques",
+    "federation": "Federation",
+    "skills": "Competences",
+    "insights": "Analyses",
+    "monitoring": "Supervision",
+    "errorSnapshots": "Captures d'erreurs",
+    "executions": "Executions",
+    "observability": "Observabilite",
+    "logs": "Journaux",
+    "governance": "Gouvernance",
+    "shadowDiscovery": "Decouverte shadow",
+    "tokenOptimizer": "Optimiseur de tokens",
+    "policies": "Politiques",
+    "auditLog": "Journal d'audit",
+    "workflows": "Workflows",
+    "audienceGovernance": "Gouvernance des audiences"
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "welcome": "Bienvenue sur STOA Control Plane",
+    "hello": "Bonjour, {{name}} !",
+    "quickActions": {
+      "apis": "APIs",
+      "apisDesc": "Gerer les definitions et deploiements d'API",
+      "aiTools": "Outils IA",
+      "aiToolsDesc": "Parcourir le catalogue d'outils MCP",
+      "applications": "Applications",
+      "applicationsDesc": "Gerer les applications consommatrices",
+      "deployments": "Deploiements",
+      "deploymentsDesc": "Voir l'historique des deploiements"
+    },
+    "quickLinks": "Liens rapides",
+    "gettingStarted": "Premiers pas",
+    "steps": {
+      "step1": "Allez dans <apisLink>APIs</apisLink> et creez une nouvelle API",
+      "step2": "Importez votre specification OpenAPI/Swagger ou creez manuellement",
+      "step3": "Deployez en environnement DEV pour tester",
+      "step4": "Suivez les deploiements dans la page <deploymentsLink>Deploiements</deploymentsLink>"
+    }
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur est survenue",
+    "retry": "Reessayer",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Creer",
+    "search": "Rechercher...",
+    "noResults": "Aucun resultat",
+    "viewAll": "Voir tout",
+    "logout": "Deconnexion",
+    "readOnly": "Lecture seule",
+    "fullAccess": "Acces complet"
+  },
+  "login": {
+    "title": "STOA Control Plane",
+    "subtitle": "Gestion d'API multi-tenant",
+    "button": "Se connecter avec Keycloak"
+  },
+  "tenants": {
+    "title": "Tenants",
+    "subtitle": "Voir les organisations tenant",
+    "noTenants": "Aucun tenant trouve",
+    "failedToLoad": "Echec du chargement des tenants",
+    "tenantId": "ID Tenant :",
+    "created": "Cree le :"
+  },
+  "apis": {
+    "title": "APIs",
+    "subtitle": "Gerer les definitions d'API sur tous les tenants",
+    "noApis": "Aucune API trouvee",
+    "failedToLoad": "Echec du chargement des APIs"
+  }
+}

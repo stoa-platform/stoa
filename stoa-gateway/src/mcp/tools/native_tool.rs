@@ -1307,6 +1307,7 @@ mod tests {
             scopes: vec!["stoa:read".to_string()],
             raw_token: None,
             skill_instructions: None,
+            progress_token: None,
         }
     }
 

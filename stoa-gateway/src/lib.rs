@@ -45,6 +45,7 @@ use mcp::{
     discovery::{mcp_capabilities, mcp_discovery, mcp_health},
     handlers::{mcp_rest_tools_invoke, mcp_rest_tools_list, mcp_tools_call, mcp_tools_list},
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
+    ws::handle_ws_upgrade,
 };
 use proxy::dynamic_proxy;
 use state::AppState;
@@ -216,6 +217,8 @@ pub fn build_router(state: AppState) -> Router {
                         .post(handle_sse_post)
                         .delete(handle_sse_delete),
                 )
+                // MCP WebSocket Transport (CAB-1345: bidirectional)
+                .route("/mcp/ws", get(handle_ws_upgrade))
                 // MCP Event Polling Fallback (CAB-1179)
                 .route("/mcp/events", get(poll_events))
                 // Dynamic proxy fallback — must be LAST

@@ -6,8 +6,12 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
+import { DeployLogViewer } from '../components/DeployLogViewer';
+import { DeployProgress } from '../components/DeployProgress';
+import { useDeployEvents } from '../hooks/useDeployEvents';
 import type {
   Deployment,
+  DeploymentStatus,
   Tenant,
   API,
   TraceSummary,
@@ -36,6 +40,7 @@ import {
   Rocket,
   ExternalLink,
   Settings,
+  ScrollText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -508,9 +513,46 @@ function DeploymentHistoryTab() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const canDeploy = hasPermission('apis:deploy');
   const pageSize = 20;
+
+  // SSE: real-time deploy events replace polling
+  const handleStatusChange = useCallback((deploymentId: string, newStatus: DeploymentStatus) => {
+    setDeployments((prev) =>
+      prev.map((d) => (d.id === deploymentId ? { ...d, status: newStatus } : d))
+    );
+  }, []);
+
+  const { deployStates, loadHistoricalLogs } = useDeployEvents({
+    tenantId: selectedTenant,
+    enabled: !!selectedTenant,
+    onStatusChange: handleStatusChange,
+  });
+
+  const loadDeploymentsRef = useCallback(async () => {
+    if (!selectedTenant) return;
+    try {
+      setLoading(true);
+      const result = await apiService.listDeployments(selectedTenant, {
+        api_id: selectedApi || undefined,
+        environment: selectedEnv || undefined,
+        status: selectedStatus || undefined,
+        page,
+        page_size: pageSize,
+      });
+      setDeployments(result.items);
+      setTotalCount(result.total);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load deployments');
+      setDeployments([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedTenant, selectedApi, selectedEnv, selectedStatus, page]);
 
   useEffect(() => {
     if (isReady) loadTenants();
@@ -525,9 +567,9 @@ function DeploymentHistoryTab() {
 
   useEffect(() => {
     if (selectedTenant) {
-      loadDeployments();
+      loadDeploymentsRef();
     }
-  }, [selectedTenant, selectedApi, selectedEnv, selectedStatus, page]);
+  }, [loadDeploymentsRef]);
 
   async function loadTenants() {
     try {
@@ -550,34 +592,47 @@ function DeploymentHistoryTab() {
     }
   }
 
-  async function loadDeployments() {
-    if (!selectedTenant) return;
-    try {
-      setLoading(true);
-      const result = await apiService.listDeployments(selectedTenant, {
-        api_id: selectedApi || undefined,
-        environment: selectedEnv || undefined,
-        status: selectedStatus || undefined,
-        page,
-        page_size: pageSize,
-      });
-      setDeployments(result.items);
-      setTotalCount(result.total);
-      setError(null);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load deployments');
-      setDeployments([]);
-      setTotalCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const handleExpand = useCallback(
+    (deploymentId: string) => {
+      if (expandedId === deploymentId) {
+        setExpandedId(null);
+        return;
+      }
+      setExpandedId(deploymentId);
+      // Load historical logs for completed deployments
+      const deployment = deployments.find((d) => d.id === deploymentId);
+      if (deployment && deployment.status !== 'in_progress' && deployment.status !== 'pending') {
+        loadHistoricalLogs(deploymentId).catch(console.error);
+      }
+    },
+    [expandedId, deployments, loadHistoricalLogs]
+  );
 
   const handleRollback = useCallback(
-    async (deploymentId: string, apiName: string) => {
+    async (deploymentId: string, apiName: string, apiId: string) => {
+      // Load previous successful versions for version selector
+      let versions: Deployment[] = [];
+      try {
+        const result = await apiService.listDeployments(selectedTenant, {
+          api_id: apiId,
+          status: 'success',
+          page: 1,
+          page_size: 10,
+        });
+        versions = result.items.filter((d) => d.id !== deploymentId);
+        // versions available for future version-selector UI
+      } catch {
+        // Fallback: rollback without version selection
+      }
+
+      const targetLabel =
+        versions.length > 0
+          ? `Select a version to rollback "${apiName}" to, or confirm to use the previous version.`
+          : `Are you sure you want to rollback the deployment for "${apiName}"? This will restore the previous version.`;
+
       const confirmed = await confirm({
         title: 'Rollback Deployment',
-        message: `Are you sure you want to rollback the deployment for "${apiName}"? This will restore the previous version.`,
+        message: targetLabel,
         confirmLabel: 'Rollback',
         variant: 'warning',
       });
@@ -586,12 +641,12 @@ function DeploymentHistoryTab() {
       try {
         await apiService.rollbackDeployment(selectedTenant, deploymentId);
         toast.success(`Deployment for ${apiName} rolled back successfully`);
-        loadDeployments();
+        loadDeploymentsRef();
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : 'Failed to rollback deployment');
       }
     },
-    [selectedTenant, confirm, toast]
+    [selectedTenant, confirm, toast, loadDeploymentsRef]
   );
 
   const deployStatusColors: Record<string, string> = {
@@ -627,7 +682,7 @@ function DeploymentHistoryTab() {
     <div className="space-y-6">
       {/* Filters */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-100 dark:border-neutral-700 p-4">
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
               Tenant
@@ -706,6 +761,13 @@ function DeploymentHistoryTab() {
               <option value="rolled_back">Rolled Back</option>
             </select>
           </div>
+          <button
+            onClick={loadDeploymentsRef}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 text-sm"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
         </div>
       </div>
 
@@ -725,93 +787,173 @@ function DeploymentHistoryTab() {
         ) : deployments.length === 0 ? (
           <EmptyState variant="deployments" description="Deploy an API to see it here." />
         ) : (
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-            <thead className="bg-gray-50 dark:bg-neutral-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                  API
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                  Environment
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                  Version
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                  Created
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                  Deployed By
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-neutral-800 divide-y divide-gray-200 dark:divide-neutral-700">
-              {deployments.map((deployment) => (
-                <tr key={deployment.id} className="hover:bg-gray-50 dark:hover:bg-neutral-700">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      {deployment.api_name}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-neutral-400 font-mono">
-                      {deployment.api_id}
-                    </div>
-                    {deployment.rollback_of && (
-                      <div className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
-                        rollback → v{deployment.rollback_version}
-                      </div>
+          <div className="divide-y divide-gray-200 dark:divide-neutral-700">
+            {/* Table header */}
+            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1.5fr_1fr_1fr] gap-2 px-6 py-3 bg-gray-50 dark:bg-neutral-700 text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+              <span>API</span>
+              <span>Environment</span>
+              <span>Version</span>
+              <span>Status</span>
+              <span>Created</span>
+              <span>Deployed By</span>
+              <span>Actions</span>
+            </div>
+            {deployments.map((deployment) => {
+              const isExpanded = expandedId === deployment.id;
+              const deployState = deployStates[deployment.id];
+              const liveStatus = deployState?.status || deployment.status;
+
+              return (
+                <div key={deployment.id}>
+                  <div
+                    className={clsx(
+                      'grid grid-cols-[2fr_1fr_1fr_1fr_1.5fr_1fr_1fr] gap-2 px-6 py-4 items-center cursor-pointer transition-colors',
+                      isExpanded
+                        ? 'bg-blue-50 dark:bg-blue-900/10'
+                        : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
                     )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded ${envColors[deployment.environment] || 'bg-gray-100 text-gray-700'}`}
-                    >
-                      {deployment.environment.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-neutral-400">
-                    v{deployment.version}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${deployStatusColors[deployment.status] || ''}`}
-                    >
-                      {deployment.status.replace('_', ' ')}
-                    </span>
-                    {deployment.error_message && (
-                      <p
-                        className="text-xs text-red-600 mt-1 max-w-xs truncate"
-                        title={deployment.error_message}
-                      >
-                        {deployment.error_message}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-neutral-400">
-                    {new Date(deployment.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-neutral-400">
-                    {deployment.deployed_by}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {canDeploy && deployment.status === 'success' && (
-                      <button
-                        onClick={() => handleRollback(deployment.id, deployment.api_name)}
-                        className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300"
-                      >
-                        Rollback
+                    onClick={() => handleExpand(deployment.id)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <button className="text-gray-400 dark:text-neutral-500 shrink-0">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {deployment.api_name}
+                        </div>
+                        {deployment.commit_sha && (
+                          <div className="text-xs text-gray-400 dark:text-neutral-500 font-mono">
+                            {deployment.commit_sha.slice(0, 7)}
+                          </div>
+                        )}
+                        {deployment.error_message && (
+                          <div className="text-xs text-red-500 dark:text-red-400 truncate">
+                            {deployment.error_message}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded ${envColors[deployment.environment] || 'bg-gray-100 text-gray-700'}`}
+                      >
+                        {deployment.environment.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-neutral-400">
+                      v{deployment.version}
+                      {deployment.rollback_of && (
+                        <div className="text-xs text-orange-500 dark:text-orange-400">
+                          rollback &rarr; v{deployment.rollback_version}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <span
+                        className={clsx(
+                          'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full',
+                          deployStatusColors[liveStatus] || ''
+                        )}
+                      >
+                        {liveStatus === 'in_progress' && (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        )}
+                        {liveStatus.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-neutral-400">
+                      {new Date(deployment.created_at).toLocaleString()}
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-neutral-400 truncate">
+                      {deployment.deployed_by}
+                    </div>
+                    <div className="text-sm" onClick={(e) => e.stopPropagation()}>
+                      {canDeploy && deployment.status === 'success' && (
+                        <button
+                          onClick={() =>
+                            handleRollback(deployment.id, deployment.api_name, deployment.api_id)
+                          }
+                          className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300"
+                        >
+                          Rollback
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expanded detail: live logs + progress */}
+                  {isExpanded && (
+                    <div className="bg-gray-50 dark:bg-neutral-800/50 border-t border-gray-100 dark:border-neutral-700 px-6 py-4 space-y-4">
+                      {/* Progress indicator for active deployments */}
+                      {(liveStatus === 'in_progress' || deployState) && (
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                            Progress
+                          </span>
+                          <DeployProgress
+                            currentStep={deployState?.currentStep || null}
+                            status={deployState?.status || deployment.status}
+                          />
+                        </div>
+                      )}
+
+                      {/* Deploy info summary */}
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        {deployment.rollback_of && (
+                          <div>
+                            <span className="text-gray-500 dark:text-neutral-400">
+                              Rollback of:
+                            </span>{' '}
+                            <span className="text-orange-600 dark:text-orange-400">
+                              v{deployment.rollback_version}
+                            </span>
+                          </div>
+                        )}
+                        {deployment.spec_hash && (
+                          <div>
+                            <span className="text-gray-500 dark:text-neutral-400">Spec hash:</span>{' '}
+                            <span className="font-mono text-gray-700 dark:text-neutral-300">
+                              {deployment.spec_hash.slice(0, 12)}
+                            </span>
+                          </div>
+                        )}
+                        {deployment.error_message && (
+                          <div className="col-span-3 bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-red-700 dark:text-red-400">
+                            {deployment.error_message}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Live log viewer */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <ScrollText className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                            Deploy Logs
+                          </span>
+                          {liveStatus === 'in_progress' && (
+                            <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                              </span>
+                              Live
+                            </span>
+                          )}
+                        </div>
+                        <DeployLogViewer logs={deployState?.logs || []} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 

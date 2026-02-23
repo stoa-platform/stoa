@@ -13,6 +13,7 @@ import type {
   Deployment,
   DeploymentCreate,
   DeploymentListResponse,
+  DeploymentLogListResponse,
   EnvironmentStatusResponse,
   CommitInfo,
   MergeRequest,
@@ -368,6 +369,19 @@ class ApiService {
     const { data } = await this.client.post(
       `/v1/tenants/${tenantId}/deployments/${deploymentId}/rollback`,
       { target_version: targetVersion }
+    );
+    return data;
+  }
+
+  async getDeploymentLogs(
+    tenantId: string,
+    deploymentId: string,
+    afterSeq: number = 0,
+    limit: number = 200
+  ): Promise<DeploymentLogListResponse> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/deployments/${deploymentId}/logs`,
+      { params: { after_seq: afterSeq, limit } }
     );
     return data;
   }

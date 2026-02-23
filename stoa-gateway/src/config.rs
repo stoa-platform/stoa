@@ -203,6 +203,11 @@ pub struct Config {
     #[serde(default = "default_kafka_errors_topic")]
     pub kafka_errors_topic: String,
 
+    /// Kafka topic for deployment progress events (CAB-1421)
+    /// Env: STOA_KAFKA_DEPLOY_PROGRESS_TOPIC
+    #[serde(default = "default_kafka_deploy_progress_topic")]
+    pub kafka_deploy_progress_topic: String,
+
     // === K8s CRD Watcher (Phase 7: CAB-1105) ===
     /// Enable K8s CRD watching for dynamic tool registration
     /// Env: STOA_K8S_ENABLED (default: false — explicit opt-in)
@@ -446,6 +451,10 @@ fn default_kafka_metering_topic() -> String {
 
 fn default_kafka_errors_topic() -> String {
     "stoa.errors".to_string()
+}
+
+fn default_kafka_deploy_progress_topic() -> String {
+    "stoa.deployment.progress".to_string()
 }
 
 // === mTLS Config Defaults ===
@@ -697,6 +706,7 @@ impl Default for Config {
             kafka_brokers: default_kafka_brokers(),
             kafka_metering_topic: default_kafka_metering_topic(),
             kafka_errors_topic: default_kafka_errors_topic(),
+            kafka_deploy_progress_topic: default_kafka_deploy_progress_topic(),
             k8s_enabled: false,
             kafka_cns_enabled: false,
             kafka_cns_topics: default_kafka_cns_topics(),

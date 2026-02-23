@@ -232,6 +232,38 @@ impl MeteringProducerTrait for MeteringProducer {
     }
 }
 
+impl MeteringProducer {
+    /// Send a raw payload to an arbitrary Kafka topic (fire-and-forget).
+    ///
+    /// Used by `DeployProgressEmitter` and other modules that need to publish
+    /// pre-serialized events to custom topics beyond metering/errors.
+    pub fn send_raw(&self, topic: &str, key: &str, payload: &str) {
+        #[cfg(feature = "kafka")]
+        if let Some(ref producer) = self.producer {
+            let topic = topic.to_string();
+            let key = key.to_string();
+            let payload = payload.to_string();
+            let producer = producer.clone();
+            tokio::spawn(async move {
+                use rdkafka::producer::FutureRecord;
+                use std::time::Duration;
+
+                let record = FutureRecord::to(&topic).key(&key).payload(&payload);
+                if let Err((e, _)) = producer.send(record, Duration::from_secs(0)).await {
+                    error!(error = %e, topic = %topic, "Failed to send raw event to Kafka");
+                } else {
+                    debug!(topic = %topic, key = %key, "Raw event sent to Kafka");
+                }
+            });
+            return;
+        }
+
+        // No-op mode: log the event (payload intentionally not logged — may be large)
+        let _ = payload;
+        debug!(topic = %topic, key = %key, "Raw event (no-op mode — Kafka unavailable)");
+    }
+}
+
 /// Thread-safe metering producer wrapper
 pub type SharedMeteringProducer = Arc<MeteringProducer>;
 

@@ -40,6 +40,7 @@ from .routers import (
     chat,
     consumers,
     contracts,
+    credential_mappings,
     deployments,
     diagnostics,
     environments,
@@ -515,6 +516,9 @@ app.include_router(environments.router)
 # Consumer Onboarding (CAB-1121)
 app.include_router(consumers.router)
 app.include_router(plans.router)
+
+# Credential Mappings — per-consumer backend credential injection (CAB-1432)
+app.include_router(credential_mappings.router)
 
 # Quota Enforcement (CAB-1121 Phase 4)
 app.include_router(quotas.router)

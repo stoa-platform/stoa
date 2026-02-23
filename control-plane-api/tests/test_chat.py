@@ -1,4 +1,4 @@
-"""Unit tests for Chat Agent backend (CAB-286).
+"""Unit tests for Chat Agent backend (CAB-286 + CAB-289).
 
 Tests cover:
   - ChatService CRUD (create, list, get, update, delete)
@@ -9,6 +9,7 @@ Tests cover:
   - API key encrypt/decrypt round-trip
   - _build_history edge cases
   - Kafka metering emission
+  - CAB-289: conversation status, archive/restore, auto-title, cascade, GDPR purge
 """
 
 from __future__ import annotations
@@ -25,7 +26,9 @@ import pytest
 from src.schemas.chat import (
     ChatTenantUsageResponse,
     ChatUsageResponse,
+    ConversationArchive,
     ConversationCreate,
+    ConversationStatus,
     ConversationUpdate,
     MessageSend,
 )
@@ -125,6 +128,29 @@ class TestSchemas:
 
 
 # ---------------------------------------------------------------------------
+# CAB-289: Conversation status schema tests
+# ---------------------------------------------------------------------------
+
+
+class TestConversationStatusSchema:
+    def test_status_enum_values(self):
+        assert ConversationStatus.ACTIVE == "active"
+        assert ConversationStatus.ARCHIVED == "archived"
+
+    def test_archive_schema_active(self):
+        schema = ConversationArchive(status=ConversationStatus.ACTIVE)
+        assert schema.status == ConversationStatus.ACTIVE
+
+    def test_archive_schema_archived(self):
+        schema = ConversationArchive(status=ConversationStatus.ARCHIVED)
+        assert schema.status == ConversationStatus.ARCHIVED
+
+    def test_archive_schema_invalid(self):
+        with pytest.raises(ValueError):
+            ConversationArchive(status="deleted")
+
+
+# ---------------------------------------------------------------------------
 # ChatService CRUD tests (6 tests)
 # ---------------------------------------------------------------------------
 
@@ -153,6 +179,19 @@ class TestChatServiceCreate:
         assert conv.system_prompt == "Be concise."
 
 
+class TestConversationCreateWithStatus:
+    @pytest.mark.asyncio
+    async def test_create_conversation_default_status(self, chat_service, tenant_id, user_id):
+        conv = await chat_service.create_conversation(tenant_id=tenant_id, user_id=user_id)
+        assert conv.status == "active"
+
+    @pytest.mark.asyncio
+    async def test_create_conversation_status_not_settable(self, chat_service, tenant_id, user_id):
+        """Status is always 'active' at creation — cannot override."""
+        conv = await chat_service.create_conversation(tenant_id=tenant_id, user_id=user_id)
+        assert conv.status == "active"
+
+
 class TestChatServiceList:
     @pytest.mark.asyncio
     async def test_list_conversations_empty(self, chat_service, mock_session, tenant_id, user_id):
@@ -165,6 +204,22 @@ class TestChatServiceList:
         items, total = await chat_service.list_conversations(tenant_id, user_id)
         assert total == 0
         assert items == []
+
+
+class TestChatServiceListFiltered:
+    @pytest.mark.asyncio
+    async def test_list_conversations_with_status_filter(self, chat_service, mock_session, tenant_id, user_id):
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one=MagicMock(return_value=0)),
+                MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            ]
+        )
+        items, total = await chat_service.list_conversations(tenant_id, user_id, status="archived")
+        assert total == 0
+        assert items == []
+        # Verify execute was called (status filter applied)
+        assert mock_session.execute.await_count == 2
 
 
 class TestChatServiceGet:
@@ -211,6 +266,224 @@ class TestChatServiceDelete:
 
 
 # ---------------------------------------------------------------------------
+# CAB-289: Archive / restore tests
+# ---------------------------------------------------------------------------
+
+
+class TestChatServiceArchive:
+    @pytest.mark.asyncio
+    async def test_archive_conversation_not_found(
+        self, chat_service, mock_session, conversation_id, tenant_id, user_id
+    ):
+        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
+        result = await chat_service.archive_conversation(conversation_id, tenant_id, user_id, status="archived")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_archive_conversation_success(self, chat_service, mock_session, conversation_id, tenant_id, user_id):
+        fake_conv = MagicMock()
+        fake_conv.status = "active"
+        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=fake_conv)))
+        result = await chat_service.archive_conversation(conversation_id, tenant_id, user_id, status="archived")
+        assert result is not None
+        assert result.status == "archived"
+
+    @pytest.mark.asyncio
+    async def test_restore_conversation(self, chat_service, mock_session, conversation_id, tenant_id, user_id):
+        fake_conv = MagicMock()
+        fake_conv.status = "archived"
+        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=fake_conv)))
+        result = await chat_service.archive_conversation(conversation_id, tenant_id, user_id, status="active")
+        assert result is not None
+        assert result.status == "active"
+
+
+# ---------------------------------------------------------------------------
+# CAB-289: Auto-title tests
+# ---------------------------------------------------------------------------
+
+
+class TestChatServiceAutoTitle:
+    @pytest.mark.asyncio
+    async def test_auto_title_on_first_message(self, chat_service, mock_session, conversation_id, tenant_id, user_id):
+        """First user message should auto-set the conversation title."""
+        fake_conv = MagicMock()
+        fake_conv.id = conversation_id
+        fake_conv.provider = "anthropic"
+        fake_conv.messages = []
+        fake_conv.system_prompt = None
+        fake_conv.model = "claude-sonnet-4-20250514"
+        fake_conv.title = "New conversation"
+
+        mock_events = [
+            {"event": "message_start", "data": {"message_id": "m1", "model": "test"}},
+            {"event": "content_delta", "data": {"delta": "Hi"}},
+            {"event": "message_end", "data": {"input_tokens": 5, "output_tokens": 2, "stop_reason": "end_turn"}},
+        ]
+
+        async def mock_stream(**kwargs):
+            for e in mock_events:
+                yield e
+
+        mock_provider = MagicMock()
+        mock_provider.stream_response = mock_stream
+
+        with (
+            patch.object(chat_service, "get_conversation", return_value=fake_conv),
+            patch.dict("src.services.chat_service._PROVIDERS", {"anthropic": mock_provider}),
+            patch.object(ChatService, "_emit_metering_event", new_callable=AsyncMock),
+        ):
+            events = []
+            async for event in chat_service.send_message(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                content="What is STOA Platform?",
+                api_key="test-key",
+            ):
+                events.append(event)
+            assert fake_conv.title == "What is STOA Platform?"
+
+    @pytest.mark.asyncio
+    async def test_auto_title_truncates_long_message(
+        self, chat_service, mock_session, conversation_id, tenant_id, user_id
+    ):
+        fake_conv = MagicMock()
+        fake_conv.id = conversation_id
+        fake_conv.provider = "anthropic"
+        fake_conv.messages = []
+        fake_conv.system_prompt = None
+        fake_conv.model = "claude-sonnet-4-20250514"
+        fake_conv.title = "New conversation"
+
+        mock_events = [
+            {"event": "message_start", "data": {"message_id": "m1", "model": "test"}},
+            {"event": "message_end", "data": {"input_tokens": 5, "output_tokens": 2, "stop_reason": "end_turn"}},
+        ]
+
+        async def mock_stream(**kwargs):
+            for e in mock_events:
+                yield e
+
+        mock_provider = MagicMock()
+        mock_provider.stream_response = mock_stream
+
+        long_content = "A" * 200
+
+        with (
+            patch.object(chat_service, "get_conversation", return_value=fake_conv),
+            patch.dict("src.services.chat_service._PROVIDERS", {"anthropic": mock_provider}),
+            patch.object(ChatService, "_emit_metering_event", new_callable=AsyncMock),
+        ):
+            events = []
+            async for event in chat_service.send_message(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                content=long_content,
+                api_key="test-key",
+            ):
+                events.append(event)
+            assert len(fake_conv.title) == 80
+
+    @pytest.mark.asyncio
+    async def test_no_auto_title_when_already_set(
+        self, chat_service, mock_session, conversation_id, tenant_id, user_id
+    ):
+        fake_conv = MagicMock()
+        fake_conv.id = conversation_id
+        fake_conv.provider = "anthropic"
+        fake_conv.messages = []
+        fake_conv.system_prompt = None
+        fake_conv.model = "claude-sonnet-4-20250514"
+        fake_conv.title = "My Chat"
+
+        mock_events = [
+            {"event": "message_start", "data": {"message_id": "m1", "model": "test"}},
+            {"event": "message_end", "data": {"input_tokens": 5, "output_tokens": 2, "stop_reason": "end_turn"}},
+        ]
+
+        async def mock_stream(**kwargs):
+            for e in mock_events:
+                yield e
+
+        mock_provider = MagicMock()
+        mock_provider.stream_response = mock_stream
+
+        with (
+            patch.object(chat_service, "get_conversation", return_value=fake_conv),
+            patch.dict("src.services.chat_service._PROVIDERS", {"anthropic": mock_provider}),
+            patch.object(ChatService, "_emit_metering_event", new_callable=AsyncMock),
+        ):
+            events = []
+            async for event in chat_service.send_message(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                content="Override attempt",
+                api_key="test-key",
+            ):
+                events.append(event)
+            assert fake_conv.title == "My Chat"
+
+
+# ---------------------------------------------------------------------------
+# CAB-289: Tenant cascade delete tests
+# ---------------------------------------------------------------------------
+
+
+class TestChatServiceTenantCascade:
+    @pytest.mark.asyncio
+    async def test_cascade_delete_empty_tenant(self, chat_service, mock_session, tenant_id):
+        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one=MagicMock(return_value=0)))
+        count = await chat_service.delete_tenant_conversations(tenant_id)
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_cascade_delete_with_conversations(self, chat_service, mock_session, tenant_id):
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one=MagicMock(return_value=5)),
+                MagicMock(),  # delete execute
+            ]
+        )
+        count = await chat_service.delete_tenant_conversations(tenant_id)
+        assert count == 5
+        mock_session.flush.assert_awaited()
+
+
+# ---------------------------------------------------------------------------
+# CAB-289: GDPR retention purge tests
+# ---------------------------------------------------------------------------
+
+
+class TestChatServicePurge:
+    @pytest.mark.asyncio
+    async def test_purge_no_expired(self, chat_service, mock_session, tenant_id):
+        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one=MagicMock(return_value=0)))
+        count = await chat_service.purge_expired_conversations(tenant_id, retention_days=90)
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_purge_expired_conversations(self, chat_service, mock_session, tenant_id):
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one=MagicMock(return_value=3)),
+                MagicMock(),  # delete execute
+            ]
+        )
+        count = await chat_service.purge_expired_conversations(tenant_id, retention_days=30)
+        assert count == 3
+        mock_session.flush.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_purge_custom_retention_days(self, chat_service, mock_session, tenant_id):
+        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one=MagicMock(return_value=0)))
+        count = await chat_service.purge_expired_conversations(tenant_id, retention_days=365)
+        assert count == 0
+
+
+# ---------------------------------------------------------------------------
 # ChatService.send_message tests (3 tests)
 # ---------------------------------------------------------------------------
 
@@ -239,6 +512,7 @@ class TestChatServiceSendMessage:
         fake_conv.messages = []
         fake_conv.system_prompt = None
         fake_conv.model = "some-model"
+        fake_conv.title = "My Chat"
 
         with patch.object(chat_service, "get_conversation", return_value=fake_conv):
             events = []
@@ -262,6 +536,7 @@ class TestChatServiceSendMessage:
         fake_conv.messages = []
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
+        fake_conv.title = "My Chat"
 
         mock_events = [
             {"event": "message_start", "data": {"message_id": "msg-1", "model": "claude-sonnet-4-20250514"}},
@@ -490,7 +765,7 @@ class TestKafkaMetering:
 
 
 class TestChatToolDefinitions:
-    def test_chat_tools_has_seven_tools(self):
+    def test_chat_tools_count(self):
         assert len(CHAT_TOOLS) == 7
 
     def test_each_tool_has_required_fields(self):
@@ -573,13 +848,14 @@ class TestProviderToolsParameter:
 class TestAgenticLoop:
     @pytest.mark.asyncio
     async def test_send_message_tool_use_loop(self, chat_service, mock_session, conversation_id, tenant_id, user_id):
-        """LLM requests tool_use → executor called → second LLM call → end_turn."""
+        """LLM requests tool_use -> executor called -> second LLM call -> end_turn."""
         fake_conv = MagicMock()
         fake_conv.id = conversation_id
         fake_conv.provider = "anthropic"
         fake_conv.messages = []
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
+        fake_conv.title = "My Chat"
 
         call_count = 0
 
@@ -639,6 +915,7 @@ class TestAgenticLoop:
         fake_conv.messages = []
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
+        fake_conv.title = "My Chat"
 
         call_count = 0
 

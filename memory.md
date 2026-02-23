@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-23 (Council batch: 15 MEGAs validated, 16 promoted to C9 Todo)
+> Derniere MAJ: 2026-02-23 (CAB-1331, CAB-1336, CAB-1123 DONE — C9 312/502 pts)
 
 ## ✅ DONE
 
@@ -17,6 +17,15 @@
   - P2: Parts 3-5 (stoa-docs PR #76) — 3 articles, production checklist
   - P3: Build vs Buy + series polish (stoa-docs PR #77, stoa-web PR #12) — cross-links + llms.txt
   - 7 articles total, complete series nav in each, llms.txt updated
+- ✅ CAB-1331 [MEGA] UAC-Driven Observability (21 pts) — ALL 3 PHASES DONE
+  - P1: OTel feature + UAC span enrichment (PR #870) — CAB-1424
+  - P2: UAC Debug Dashboard — per-tool drill-down (PR #870) — CAB-1425
+  - P3: Hybrid multi-cluster observability view (PR #884) — CAB-1426
+- ✅ CAB-1336 [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts) — ALL 3 DONE
+  - Apigee v2 (PRs #556, #879), AWS API GW (PR #855), Azure APIM (PR #873)
+- ✅ CAB-1123 [MEGA] Prompt Cache for HEGEMON AI Factory (21 pts) — PR #878
+  - PromptCache struct + 5 admin endpoints + 3 MCP tools + file watcher
+- ✅ CAB-285 Chat Agent UI Component (8 pts) — PR #877
 - ✅ CAB-1352 [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already existed in stoa-docs
 - ✅ fix(docs): Vercel build fix — remove nested ajv overrides from stoa-docs (PR #78)
 - ✅ chore: Model Policy update — Opus default for local impl, Sonnet for CI/subagents (PR #846)
@@ -82,13 +91,6 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
 - ✅ Production validated: 23/23 PASS, GO in 5s
 - [ ] Repetitions + video backup (human-only)
-
-Council Batch — 15 MEGAs validated, 16 promoted to C9 Todo (2026-02-23)
-- Go (6): CAB-374, CAB-1331 (8.50), CAB-1123 (8.50), CAB-1336 (8.25), CAB-1345 (8.00), CAB-1338 (8.00)
-- Fix (9): CAB-1319 (7.50), CAB-1322 (7.50), CAB-1316 (7.50), CAB-1342 (7.25), CAB-1329 (7.25), CAB-1334 (6.75), CAB-1327 (6.75), CAB-1347 (6.25), CAB-1348 (6.00)
-- Labels applied on Linear: `council:ticket-go` / `council:ticket-fix`
-- Fix adjustments applied to all 9 Fix ticket descriptions on Linear
-- C9 scope: ~735 pts (101% of 724 target capacity — at target)
 
 ## 📋 NEXT
 

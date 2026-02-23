@@ -35,3 +35,15 @@ Feature: Deployment Flow Integration
     When I update the deployment status to "failed" with error "gateway timeout"
     Then the deployment status is "failed"
     And the deployment error message contains "gateway timeout"
+
+  Scenario: SSE event stream connects and receives heartbeat
+    Given I am authenticated as "parzival" via API
+    When I connect to the SSE event stream for tenant "high-five"
+    Then the SSE connection is established
+    And I receive at least one SSE event within 10 seconds
+
+  Scenario: SSE stream delivers deploy events after deployment creation
+    Given I am authenticated as "parzival" via API
+    And I am connected to the SSE deploy event stream for tenant "high-five"
+    When I create a deployment for API "petstore" to environment "dev"
+    Then I receive a deploy event via SSE within 15 seconds

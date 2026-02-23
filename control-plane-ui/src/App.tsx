@@ -6,6 +6,7 @@ import { EnvironmentProvider } from './contexts/EnvironmentContext';
 import { Layout } from './components/Layout';
 import { FloatingChat } from './components/FloatingChat';
 import { PlatformStatus } from './components/PlatformStatus';
+import { TokenUsageWidget } from './components/chat/TokenUsageWidget';
 import { quickLinks } from './config';
 import { ToastProvider } from '@stoa/shared/components/Toast';
 import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
@@ -177,6 +178,9 @@ function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Token Usage (CAB-288) */}
+      <TokenUsageWidget />
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

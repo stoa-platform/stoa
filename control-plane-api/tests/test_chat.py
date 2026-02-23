@@ -13,6 +13,10 @@ Tests cover:
 
 from __future__ import annotations
 
+import contextlib
+import json
+from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -27,7 +31,7 @@ from src.schemas.chat import (
 )
 from src.services.chat_provider import AnthropicProvider
 from src.services.chat_service import ChatService
-
+from src.services.chat_tools import CHAT_TOOLS, execute_tool
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -338,7 +342,7 @@ class TestAnthropicProviderMapChunk:
         }
         events = [e async for e in provider._map_chunk(chunk)]
         assert len(events) == 1
-        assert events[0]["event"] == "content_delta"
+        assert events[0]["event"] == "tool_input_delta"
         assert events[0]["data"]["delta"] == '{"key":'
 
     @pytest.mark.asyncio
@@ -462,20 +466,239 @@ class TestKafkaMetering:
     @pytest.mark.asyncio
     async def test_emit_metering_event_failure_is_silent(self):
         """Kafka failures should be caught and not propagate."""
-        with patch(
-            "src.services.chat_service.ChatService._emit_metering_event",
-            new_callable=AsyncMock,
-            side_effect=Exception("Kafka down"),
+        with (
+            patch(
+                "src.services.chat_service.ChatService._emit_metering_event",
+                new_callable=AsyncMock,
+                side_effect=Exception("Kafka down"),
+            ),
+            contextlib.suppress(Exception),
         ):
-            # The method should not raise
-            try:
-                await ChatService._emit_metering_event(
-                    tenant_id="t1",
-                    user_id="u1",
-                    conversation_id="conv-1",
-                    model="test",
-                    input_tokens=10,
-                    output_tokens=5,
-                )
-            except Exception:
-                pass  # Expected when mock replaces the actual method
+            await ChatService._emit_metering_event(
+                tenant_id="t1",
+                user_id="u1",
+                conversation_id="conv-1",
+                model="test",
+                input_tokens=10,
+                output_tokens=5,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Chat tools tests — CAB-287 (8 tests)
+# ---------------------------------------------------------------------------
+
+
+class TestChatToolDefinitions:
+    def test_chat_tools_has_six_tools(self):
+        assert len(CHAT_TOOLS) == 6
+
+    def test_each_tool_has_required_fields(self):
+        for tool in CHAT_TOOLS:
+            assert "name" in tool
+            assert "description" in tool
+            assert "input_schema" in tool
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_unknown_returns_error(self):
+        session = AsyncMock()
+        result = await execute_tool("nonexistent_tool", {}, session)
+        data = json.loads(result)
+        assert "error" in data
+        assert "Unknown tool" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_platform_info(self):
+        session = AsyncMock()
+        result = await execute_tool("platform_info", {}, session)
+        data = json.loads(result)
+        assert data["name"] == "STOA Platform"
+        assert "features" in data
+        assert data["status"] == "operational"
+
+
+class TestProviderToolsParameter:
+    @pytest.mark.asyncio
+    async def test_provider_payload_includes_tools(self):
+        """Verify that tools parameter is included in the Anthropic API payload."""
+        captured_payload: dict[str, Any] = {}
+
+        class _MockResponse:
+            status_code = 200
+
+            async def aiter_lines(self):
+                yield 'data: {"type":"message_start","message":{"id":"m1","model":"test"}}'
+                yield 'data: {"type":"message_delta","usage":{"input_tokens":1,"output_tokens":1},"delta":{"stop_reason":"end_turn"}}'
+
+        class _MockStream:
+            """Sync context manager wrapping the mock response."""
+
+            async def __aenter__(self):
+                return _MockResponse()
+
+            async def __aexit__(self, *args: object):
+                pass
+
+        class _MockClient:
+            def __init__(self, **kwargs: Any):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args: object):
+                pass
+
+            def stream(self, method: str, url: str, **kwargs: Any) -> _MockStream:
+                captured_payload.update(kwargs.get("json", {}))
+                return _MockStream()
+
+        tools = [{"name": "test_tool", "description": "A test", "input_schema": {"type": "object"}}]
+
+        with patch("src.services.chat_provider.httpx.AsyncClient", _MockClient):
+            provider = AnthropicProvider()
+            events = []
+            async for evt in provider.stream_response(
+                api_key="test-key",
+                model="test-model",
+                messages=[{"role": "user", "content": "Hi"}],
+                tools=tools,
+            ):
+                events.append(evt)
+
+        assert "tools" in captured_payload
+        assert captured_payload["tools"] == tools
+
+
+class TestAgenticLoop:
+    @pytest.mark.asyncio
+    async def test_send_message_tool_use_loop(self, chat_service, mock_session, conversation_id, tenant_id, user_id):
+        """LLM requests tool_use → executor called → second LLM call → end_turn."""
+        fake_conv = MagicMock()
+        fake_conv.id = conversation_id
+        fake_conv.provider = "anthropic"
+        fake_conv.messages = []
+        fake_conv.system_prompt = None
+        fake_conv.model = "claude-sonnet-4-20250514"
+
+        call_count = 0
+
+        # First call: tool_use. Second call: end_turn with text.
+        async def mock_stream(**kwargs: Any) -> AsyncIterator[dict[str, Any]]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                yield {"event": "message_start", "data": {"message_id": "m1", "model": "test"}}
+                yield {"event": "tool_use_start", "data": {"tool_use_id": "tu-1", "tool_name": "platform_info"}}
+                yield {"event": "tool_input_delta", "data": {"delta": "{}"}}
+                yield {"event": "content_block_stop", "data": {"index": 1}}
+                yield {
+                    "event": "message_end",
+                    "data": {"input_tokens": 10, "output_tokens": 5, "stop_reason": "tool_use"},
+                }
+            else:
+                yield {"event": "message_start", "data": {"message_id": "m2", "model": "test"}}
+                yield {"event": "content_delta", "data": {"delta": "STOA is operational."}}
+                yield {
+                    "event": "message_end",
+                    "data": {"input_tokens": 20, "output_tokens": 10, "stop_reason": "end_turn"},
+                }
+
+        mock_provider = MagicMock()
+        mock_provider.stream_response = mock_stream
+
+        with (
+            patch.object(chat_service, "get_conversation", return_value=fake_conv),
+            patch.dict("src.services.chat_service._PROVIDERS", {"anthropic": mock_provider}),
+            patch.object(ChatService, "_emit_metering_event", new_callable=AsyncMock),
+        ):
+            events = []
+            async for event in chat_service.send_message(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                content="What is STOA?",
+                api_key="test-key",
+            ):
+                events.append(event)
+
+        # Should have: message_start, tool_use_start, tool_use_result,
+        # message_start, content_delta, message_end
+        assert call_count == 2
+        event_types = [e["event"] for e in events]
+        assert "tool_use_result" in event_types
+        assert "content_delta" in event_types
+        assert event_types[-1] == "message_end"
+
+    @pytest.mark.asyncio
+    async def test_max_iterations_breaks_loop(self, chat_service, mock_session, conversation_id, tenant_id, user_id):
+        """Safety cap: loop stops after MAX_TOOL_ITERATIONS even if LLM keeps requesting tools."""
+        fake_conv = MagicMock()
+        fake_conv.id = conversation_id
+        fake_conv.provider = "anthropic"
+        fake_conv.messages = []
+        fake_conv.system_prompt = None
+        fake_conv.model = "claude-sonnet-4-20250514"
+
+        call_count = 0
+
+        async def mock_stream(**kwargs: Any) -> AsyncIterator[dict[str, Any]]:
+            nonlocal call_count
+            call_count += 1
+            yield {"event": "message_start", "data": {"message_id": f"m{call_count}", "model": "test"}}
+            yield {"event": "tool_use_start", "data": {"tool_use_id": f"tu-{call_count}", "tool_name": "platform_info"}}
+            yield {"event": "tool_input_delta", "data": {"delta": "{}"}}
+            yield {"event": "content_block_stop", "data": {"index": 1}}
+            yield {"event": "message_end", "data": {"input_tokens": 5, "output_tokens": 5, "stop_reason": "tool_use"}}
+
+        mock_provider = MagicMock()
+        mock_provider.stream_response = mock_stream
+
+        with (
+            patch.object(chat_service, "get_conversation", return_value=fake_conv),
+            patch.dict("src.services.chat_service._PROVIDERS", {"anthropic": mock_provider}),
+            patch.object(ChatService, "_emit_metering_event", new_callable=AsyncMock),
+        ):
+            events = []
+            async for event in chat_service.send_message(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                content="Loop forever",
+                api_key="test-key",
+            ):
+                events.append(event)
+
+        # MAX_TOOL_ITERATIONS is 3, so we get 3 tool calls + 1 final attempt = 4 total
+        assert call_count == ChatService.MAX_TOOL_ITERATIONS + 1
+
+
+class TestBuildHistoryWithTools:
+    def test_build_history_reconstructs_tool_use_blocks(self):
+        """Messages with tool_use JSON are reconstructed as structured content blocks."""
+        tool_data = [{"tool_use_id": "tu-1", "tool_name": "platform_info", "input": {}, "result": '{"status":"ok"}'}]
+
+        msg1 = MagicMock()
+        msg1.role = "assistant"
+        msg1.content = "Let me check."
+        msg1.tool_use = json.dumps(tool_data)
+        msg1.created_at = 1
+
+        conv = MagicMock()
+        conv.messages = [msg1]
+        history = ChatService._build_history(conv, "Follow up")
+
+        # Should have: assistant (structured), user (tool_result), user (new message)
+        assert len(history) == 3
+        # First: assistant with content blocks
+        assert history[0]["role"] == "assistant"
+        assert isinstance(history[0]["content"], list)
+        assert history[0]["content"][0]["type"] == "text"
+        assert history[0]["content"][1]["type"] == "tool_use"
+        # Second: tool results
+        assert history[1]["role"] == "user"
+        assert isinstance(history[1]["content"], list)
+        assert history[1]["content"][0]["type"] == "tool_result"
+        # Third: new user message
+        assert history[2]["role"] == "user"
+        assert history[2]["content"] == "Follow up"

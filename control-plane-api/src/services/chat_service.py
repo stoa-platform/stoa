@@ -1,11 +1,12 @@
-"""Chat service — business logic for conversations and message streaming (CAB-286).
+"""Chat service — business logic for conversations and message streaming (CAB-286/287).
 
 Orchestrates conversation CRUD, message persistence, provider streaming,
-Kafka metering events, and usage statistics.
+agentic tool-calling loop, Kafka metering events, and usage statistics.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -17,6 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from ..models.chat import ChatConversation, ChatMessage
 from ..services.chat_provider import AnthropicProvider, ChatProviderProtocol
+from ..services.chat_tools import CHAT_TOOLS, execute_tool
 from ..services.encryption_service import decrypt_auth_config, encrypt_auth_config
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,8 @@ _PROVIDERS: dict[str, ChatProviderProtocol] = {
 
 class ChatService:
     """Stateless service; receives a DB session per call."""
+
+    MAX_TOOL_ITERATIONS = 3
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -202,7 +206,7 @@ class ChatService:
         content: str,
         api_key: str,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Persist user message, call provider, persist + stream assistant reply."""
+        """Persist user message, call provider with agentic tool loop, persist + stream."""
 
         conv = await self.get_conversation(conversation_id, tenant_id, user_id)
         if conv is None:
@@ -226,33 +230,115 @@ class ChatService:
             yield {"event": "error", "data": {"error": f"Unknown provider: {conv.provider}"}}
             return
 
-        # Stream from LLM and accumulate the assistant response
-        full_text: list[str] = []
-        input_tokens = 0
-        output_tokens = 0
+        # Agentic loop: call LLM, execute tools if requested, repeat
+        total_input_tokens = 0
+        total_output_tokens = 0
+        all_tool_calls: list[dict[str, Any]] = []
 
-        async for event in provider.stream_response(
-            api_key=api_key,
-            model=conv.model,
-            messages=history,
-            system_prompt=conv.system_prompt,
-        ):
-            yield event
+        for _iteration in range(self.MAX_TOOL_ITERATIONS + 1):
+            full_text: list[str] = []
+            current_tool: dict[str, Any] | None = None
+            tool_input_json = ""
+            tool_calls: list[dict[str, Any]] = []
+            stop_reason = "end_turn"
 
-            if event.get("event") == "content_delta":
-                full_text.append(event["data"].get("delta", ""))
+            async for event in provider.stream_response(
+                api_key=api_key,
+                model=conv.model,
+                messages=history,
+                system_prompt=conv.system_prompt,
+                tools=CHAT_TOOLS,
+            ):
+                evt_type = event.get("event", "")
 
-            if event.get("event") == "message_end":
-                input_tokens = event["data"].get("input_tokens", 0)
-                output_tokens = event["data"].get("output_tokens", 0)
+                if evt_type == "content_delta":
+                    full_text.append(event["data"].get("delta", ""))
+                    yield event
 
-        # Persist assistant message
-        total_tokens = input_tokens + output_tokens
+                elif evt_type == "tool_use_start":
+                    current_tool = {
+                        "tool_use_id": event["data"]["tool_use_id"],
+                        "tool_name": event["data"]["tool_name"],
+                    }
+                    tool_input_json = ""
+                    yield event
+
+                elif evt_type == "tool_input_delta":
+                    tool_input_json += event["data"].get("delta", "")
+
+                elif evt_type == "content_block_stop":
+                    if current_tool is not None:
+                        try:
+                            parsed_input = json.loads(tool_input_json) if tool_input_json else {}
+                        except json.JSONDecodeError:
+                            parsed_input = {}
+                        tool_calls.append({**current_tool, "input": parsed_input})
+                        current_tool = None
+                        tool_input_json = ""
+
+                elif evt_type == "message_end":
+                    total_input_tokens += event["data"].get("input_tokens", 0)
+                    total_output_tokens += event["data"].get("output_tokens", 0)
+                    stop_reason = event["data"].get("stop_reason", "end_turn")
+                    if stop_reason != "tool_use":
+                        yield event
+
+                else:
+                    yield event
+
+            # If the LLM wants to use tools, execute them and re-call
+            if stop_reason == "tool_use" and tool_calls:
+                all_tool_calls.extend(tool_calls)
+
+                # Build structured assistant message with tool_use blocks
+                assistant_content: list[dict[str, Any]] = []
+                if "".join(full_text):
+                    assistant_content.append({"type": "text", "text": "".join(full_text)})
+                for tc in tool_calls:
+                    assistant_content.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc["tool_use_id"],
+                            "name": tc["tool_name"],
+                            "input": tc["input"],
+                        }
+                    )
+                history.append({"role": "assistant", "content": assistant_content})
+
+                # Execute each tool and build tool_result messages
+                tool_results: list[dict[str, Any]] = []
+                for tc in tool_calls:
+                    result = await execute_tool(tc["tool_name"], tc["input"], self.session)
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tc["tool_use_id"],
+                            "content": result,
+                        }
+                    )
+                    yield {
+                        "event": "tool_use_result",
+                        "data": {
+                            "tool_use_id": tc["tool_use_id"],
+                            "tool_name": tc["tool_name"],
+                            "result": result,
+                        },
+                    }
+                history.append({"role": "user", "content": tool_results})
+                continue  # Re-call the LLM with tool results
+
+            # No more tool calls — done
+            break
+
+        # Persist assistant message with tool data
+        total_tokens = total_input_tokens + total_output_tokens
+        tool_data = json.dumps(all_tool_calls) if all_tool_calls else None
         assistant_msg = ChatMessage(
             conversation_id=conv.id,
             role="assistant",
             content="".join(full_text),
             token_count=str(total_tokens) if total_tokens else None,
+            tool_use=tool_data,
         )
         self.session.add(assistant_msg)
 
@@ -269,8 +355,8 @@ class ChatService:
                 user_id=user_id,
                 conversation_id=str(conv.id),
                 model=conv.model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
+                input_tokens=total_input_tokens,
+                output_tokens=total_output_tokens,
             )
 
     # ------------------------------------------------------------------
@@ -293,13 +379,48 @@ class ChatService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_history(conv: ChatConversation, latest_content: str) -> list[dict[str, str]]:
-        """Build the message list for the provider from persisted messages."""
-        msgs: list[dict[str, str]] = []
+    def _build_history(conv: ChatConversation, latest_content: str) -> list[dict[str, Any]]:
+        """Build the message list for the provider from persisted messages.
+
+        Reconstructs structured content blocks for messages with tool_use data.
+        """
+        msgs: list[dict[str, Any]] = []
         if conv.messages:
             for m in sorted(conv.messages, key=lambda x: x.created_at):
-                if m.role in ("user", "assistant"):
-                    msgs.append({"role": m.role, "content": m.content})
+                if m.role not in ("user", "assistant"):
+                    continue
+                # Reconstruct tool_use blocks from persisted JSON
+                if m.role == "assistant" and m.tool_use:
+                    try:
+                        tool_data = json.loads(m.tool_use)
+                    except (json.JSONDecodeError, TypeError):
+                        tool_data = None
+                    if tool_data:
+                        content_blocks: list[dict[str, Any]] = []
+                        if m.content:
+                            content_blocks.append({"type": "text", "text": m.content})
+                        for tc in tool_data:
+                            content_blocks.append(
+                                {
+                                    "type": "tool_use",
+                                    "id": tc["tool_use_id"],
+                                    "name": tc["tool_name"],
+                                    "input": tc.get("input", {}),
+                                }
+                            )
+                        msgs.append({"role": "assistant", "content": content_blocks})
+                        # Add corresponding tool_result user message
+                        tool_results = [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tc["tool_use_id"],
+                                "content": tc.get("result", ""),
+                            }
+                            for tc in tool_data
+                        ]
+                        msgs.append({"role": "user", "content": tool_results})
+                        continue
+                msgs.append({"role": m.role, "content": m.content})
         if not msgs or msgs[-1].get("content") != latest_content:
             msgs.append({"role": "user", "content": latest_content})
         return msgs

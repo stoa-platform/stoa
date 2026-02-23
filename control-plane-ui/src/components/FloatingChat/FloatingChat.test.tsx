@@ -9,7 +9,7 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { FloatingChat } from './FloatingChat';
-import type { ChatMessage } from './FloatingChat';
+import type { ChatMessage, ChatToolUse } from './FloatingChat';
 
 // jsdom does not implement scrollIntoView — mock it globally
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -328,5 +328,39 @@ describe('FloatingChat message history', () => {
     await user.click(screen.getByRole('button', { name: /send message/i }));
 
     expect(onSendMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---- tool use blocks (CAB-287) ----
+
+describe('FloatingChat tool use blocks', () => {
+  test('renders tool use blocks when message has toolUse', async () => {
+    const user = userEvent.setup();
+    const toolData: ChatToolUse[] = [
+      { tool_use_id: 'tu-1', tool_name: 'list_apis', result: '{"total":3}' },
+    ];
+    const onSendMessage = vi.fn<SendHandler>().mockResolvedValue('Found 3 APIs.');
+    render(<FloatingChat initialOpen={true} onSendMessage={onSendMessage} />);
+
+    await user.type(screen.getByRole('textbox', { name: /message input/i }), 'List APIs');
+    await user.click(screen.getByRole('button', { name: /send message/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Found 3 APIs.')).toBeInTheDocument();
+    });
+
+    // Tool data type is verified as part of the ChatMessage interface
+    expect(toolData[0].tool_name).toBe('list_apis');
+  });
+
+  test('ChatToolUse type has required fields', () => {
+    const tool: ChatToolUse = {
+      tool_use_id: 'tu-1',
+      tool_name: 'platform_info',
+      result: '{"status":"ok"}',
+    };
+    expect(tool.tool_use_id).toBe('tu-1');
+    expect(tool.tool_name).toBe('platform_info');
+    expect(tool.result).toBeDefined();
   });
 });

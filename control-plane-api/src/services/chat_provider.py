@@ -35,9 +35,10 @@ class ChatProviderProtocol(Protocol):
         *,
         api_key: str,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         system_prompt: str | None = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Yield SSE-compatible dicts with event type and data."""
         ...  # pragma: no cover
@@ -56,9 +57,10 @@ class AnthropicProvider:
         *,
         api_key: str,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         system_prompt: str | None = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Stream an Anthropic Messages response, yielding normalised events."""
 
@@ -76,6 +78,8 @@ class AnthropicProvider:
         }
         if system_prompt:
             payload["system"] = system_prompt
+        if tools:
+            payload["tools"] = tools
 
         async with (
             httpx.AsyncClient(timeout=120.0) as client,
@@ -163,9 +167,15 @@ class AnthropicProvider:
                 }
             elif delta.get("type") == "input_json_delta":
                 yield {
-                    "event": "content_delta",
+                    "event": "tool_input_delta",
                     "data": {"delta": delta.get("partial_json", "")},
                 }
+
+        elif chunk_type == "content_block_stop":
+            yield {
+                "event": "content_block_stop",
+                "data": {"index": chunk.get("index", 0)},
+            }
 
         elif chunk_type == "message_delta":
             usage = chunk.get("usage", {})

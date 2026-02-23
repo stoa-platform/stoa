@@ -10,13 +10,29 @@
  */
 
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
-import { MessageCircle, X, Send, Bot, User, Minimize2 } from 'lucide-react';
+import {
+  MessageCircle,
+  X,
+  Send,
+  Bot,
+  User,
+  Minimize2,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
+
+export interface ChatToolUse {
+  tool_use_id: string;
+  tool_name: string;
+  result?: string;
+}
 
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  toolUse?: ChatToolUse[];
 }
 
 export interface FloatingChatProps {
@@ -40,6 +56,30 @@ function formatTime(date: Date): string {
 
 function generateId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function ToolBlock({ tool }: { tool: ChatToolUse }) {
+  const [expanded, setExpanded] = useState(false);
+  const truncated =
+    tool.result && tool.result.length > 500 ? tool.result.slice(0, 500) + '…' : tool.result;
+
+  return (
+    <div className="mt-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1.5 text-xs">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1 font-medium text-blue-700 dark:text-blue-300 w-full text-left"
+        aria-label={`Toggle tool result for ${tool.tool_name}`}
+      >
+        {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        Tool: {tool.tool_name}
+      </button>
+      {expanded && truncated && (
+        <pre className="mt-1 whitespace-pre-wrap text-gray-600 dark:text-neutral-400 overflow-hidden max-h-32">
+          {truncated}
+        </pre>
+      )}
+    </div>
+  );
 }
 
 export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingChatProps) {
@@ -193,6 +233,9 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
                     }`}
                   >
                     {message.content}
+                    {message.toolUse?.map((tool) => (
+                      <ToolBlock key={tool.tool_use_id} tool={tool} />
+                    ))}
                   </div>
                   <span className="text-xs text-gray-400 dark:text-neutral-500 mt-1">
                     {formatTime(message.timestamp)}

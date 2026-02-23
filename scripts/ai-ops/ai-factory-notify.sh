@@ -847,7 +847,7 @@ push_metrics_cost() {
     done
   fi
 
-  _push_metrics "cost-tracker/${DATE}" "$(printf '%b' "$METRICS")"
+  _push_metrics "cost_tracker/${DATE}" "$(printf '%b' "$METRICS")"
 }
 
 # notify_cost_report DATE TOKENS_TODAY COST_TODAY COST_7D_AVG SESSIONS MESSAGES PRS_MERGED MODEL_MIX TREND

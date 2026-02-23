@@ -169,7 +169,7 @@ main() {
       METRICS+="ai_factory_daily_tokens_by_model{date=\"${TODAY}\",model=\"${model}\"} ${tokens}\n"
     done <<< "$tokens_by_model"
 
-    _push_metrics "cost-tracker/${TODAY}" "$(printf '%b' "$METRICS")" 2>/dev/null || true
+    _push_metrics "cost_tracker/${TODAY}" "$(printf '%b' "$METRICS")" 2>/dev/null || true
   fi
 }
 

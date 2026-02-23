@@ -29,14 +29,19 @@ if (!i18n.isInitialized) {
     },
     resources: {},
   });
-
-  // Load initial namespaces
-  const EAGER_NAMESPACES = ['common'];
-  EAGER_NAMESPACES.forEach((ns) => {
-    loadNamespace(savedLanguage, ns);
-    if (savedLanguage !== 'en') loadNamespace('en', ns);
-  });
 }
 
-export { LANGUAGE_KEY, loadNamespace };
+// Load initial namespaces and expose a promise that resolves when ready
+const EAGER_NAMESPACES = ['common'];
+const ready: Promise<void> = i18n.isInitialized
+  ? (async () => {
+      const loads = EAGER_NAMESPACES.map((ns) => loadNamespace(savedLanguage, ns));
+      if (savedLanguage !== 'en') {
+        EAGER_NAMESPACES.forEach((ns) => loads.push(loadNamespace('en', ns)));
+      }
+      await Promise.all(loads);
+    })()
+  : Promise.resolve();
+
+export { LANGUAGE_KEY, loadNamespace, ready };
 export default i18n;

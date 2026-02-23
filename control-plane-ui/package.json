@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
+    "check-i18n": "node scripts/check-i18n-keys.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.0",

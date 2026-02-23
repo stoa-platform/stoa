@@ -50,8 +50,8 @@ const healthStyles: Record<HealthLevel, { bg: string; text: string; label: strin
     label: 'Critical',
   },
   expired: {
-    bg: 'bg-gray-100 dark:bg-gray-700',
-    text: 'text-gray-800 dark:text-gray-400',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
+    text: 'text-neutral-800 dark:text-neutral-400',
     label: 'Expired',
   },
   revoked: {

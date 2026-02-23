@@ -12,7 +12,10 @@
       "name": "Approve Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "approve-ticket"
     },
     {
@@ -50,23 +53,59 @@
       "name": "Validate Parameters",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
-      "position": [400, 300]
+      "position": [
+        400,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst issue = $input.first().json.query.issue;\nconst token = $input.first().json.query.token;\n\nconst secret = $env.APPROVE_HMAC_SECRET;\n\nif (!secret) {\n  throw new Error('APPROVE_HMAC_SECRET not configured — set it as Docker env var');\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(issue).digest('hex');\n\nif (token !== expected) {\n  throw new Error('Invalid HMAC token');\n}\n\nreturn [{ json: { issue, token, valid: true } }];"
+        "jsCode": "const crypto = require('crypto');\n\nconst issue = $input.first().json.query.issue;\nconst token = $input.first().json.query.token;\n\nconst secret = $env.APPROVE_HMAC_SECRET;\n\nif (!secret) {\n  return [{ json: { valid: false, error: 'APPROVE_HMAC_SECRET not configured' } }];\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(issue).digest('hex');\n\nif (token !== expected) {\n  return [{ json: { valid: false, error: 'Invalid HMAC token' } }];\n}\n\nreturn [{ json: { issue, token, valid: true } }];"
       },
       "id": "validate-hmac",
       "name": "Validate HMAC",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 300],
-      "continueOnFail": true
+      "position": [
+        600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-hmac-result",
+      "name": "HMAC Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        800,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/issues/{{ $json.issue }}/comments",
+        "url": "=https://api.github.com/repos/stoa-platform/stoa/issues/{{ $('Validate HMAC').first().json.issue }}/comments",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -86,7 +125,10 @@
       "name": "Post /go Comment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [800, 300],
+      "position": [
+        1000,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "github-pat",
@@ -103,7 +145,10 @@
       "name": "Redirect to Issue",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1000, 300]
+      "position": [
+        1200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -117,7 +162,10 @@
       "name": "Error Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [600, 500]
+      "position": [
+        800,
+        500
+      ]
     }
   ],
   "connections": {
@@ -151,6 +199,17 @@
       ]
     },
     "Validate HMAC": {
+      "main": [
+        [
+          {
+            "node": "HMAC Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HMAC Valid?": {
       "main": [
         [
           {

@@ -1,0 +1,244 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": ["ai-factory"],
+      "targetBlank": true,
+      "title": "AI Factory Observability",
+      "type": "dashboards"
+    }
+  ],
+  "panels": [
+    {
+      "title": "Daily Token Burn",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "stacking": "normal",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "ai_factory_daily_tokens_by_model",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Daily Cost Estimate (USD)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "currencyUSD",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 50 }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": { "mode": "line+area" }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "expr": "ai_factory_daily_cost_usd",
+          "legendFormat": "Daily Cost",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Sessions & Messages",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Messages" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "ai_factory_daily_sessions",
+          "legendFormat": "Sessions",
+          "refId": "A"
+        },
+        {
+          "expr": "ai_factory_daily_messages",
+          "legendFormat": "Messages",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "7-Day Rolling Cost",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 200 },
+              { "color": "red", "value": 350 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(ai_factory_daily_cost_usd)",
+          "legendFormat": "7-Day Cost",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Model Mix",
+      "type": "piechart",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "pieType": "donut",
+        "legend": { "displayMode": "list", "placement": "right" },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (ai_factory_daily_tokens_by_model)",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Cost per PR",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 15 },
+              { "color": "red", "value": 25 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "ai_factory_daily_cost_usd / (ai_factory_events_total{verdict=\"merged\"} > 0 or vector(1))",
+          "legendFormat": "$/PR",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Cost Alerts",
+      "type": "table",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD" },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "Value", "desc": true }]
+      },
+      "targets": [
+        {
+          "expr": "ai_factory_daily_cost_usd > 50",
+          "legendFormat": "{{date}}",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["ai-factory", "cost", "hegemon"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus"
+      }
+    ]
+  },
+  "time": { "from": "now-30d", "to": "now" },
+  "title": "AI Factory — Cost Observatory",
+  "uid": "ai-factory-cost"
+}

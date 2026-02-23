@@ -40,6 +40,40 @@ globs: ".claude/**"
 
 **Rules**: Max 3-4 subagents active. Prefer haiku for `Explore`. CI implementation stays Sonnet (lighter context = no looping problem).
 
+## Token Observatory (HEGEMON auto-tracked)
+
+### Data Flow
+Stop hook → metrics.log + Pushgateway → Grafana + Daily Slack report (VPS cron)
+
+### Metrics Tracked
+| Metric | Source | Frequency |
+|--------|--------|-----------|
+| Daily tokens (per model) | stats-cache.json via stop hook | Every session end |
+| Daily cost estimate (API equivalent) | stop-cost-tracker.sh | Every session end |
+| Cost alerts (>$50/day) | stop hook → metrics.log | Real-time |
+| Daily Slack report | VPS cron → Pushgateway query | Daily 08:00 UTC |
+| Grafana dashboard | Pushgateway → Prometheus | Continuous |
+
+### Thresholds
+| Level | Daily Cost | Action |
+|-------|-----------|--------|
+| Green | < $30 | Normal — no notification |
+| Yellow | $30-50 | TOKEN-SPEND logged, Grafana visible |
+| Red | > $50 | COST-ALERT logged, Slack warning in daily report |
+
+### Metrics Log Events
+| Event | Fields | Trigger |
+|-------|--------|---------|
+| TOKEN-SPEND | date, tokens_total, cost_usd, model, sessions, messages | Every session end |
+| COST-ALERT | threshold, actual, date | cost_today > $50 |
+
+### API-Equivalent Pricing (reference)
+| Model | Input/MTok | Output/MTok | Cache Read/MTok | Cache Write/MTok |
+|-------|-----------|-------------|----------------|-----------------|
+| Opus 4.6 | $15 | $75 | $1.50 | $18.75 |
+| Sonnet 4.6 | $3 | $15 | $0.30 | $3.75 |
+| Haiku 4.5 | $0.80 | $4 | $0.08 | $1 |
+
 ## RULES-BUDGET Metric
 
 Format in `metrics.log`:

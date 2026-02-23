@@ -146,7 +146,9 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
             </div>
             <div>
               <h2 className="font-semibold text-neutral-900 dark:text-white">Reveal API Key</h2>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">{subscription.tool_id}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                {subscription.tool_id}
+              </p>
             </div>
           </div>
           <button

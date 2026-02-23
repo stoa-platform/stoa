@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { BookOpen, Grid3X3, List, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Button } from '@stoa/shared/components/Button';
 import { useAPIs, useAPICategories, useUniverses } from '../../hooks/useAPIs';
 import { APICard } from '../../components/apis/APICard';
 import { APIFilters } from '../../components/apis/APIFilters';
@@ -283,17 +284,17 @@ export function APICatalog() {
                 : 'There are no published APIs available yet. Check back later!'}
           </p>
           {(search || category || universe || audience) && (
-            <button
+            <Button
+              className="mt-4"
               onClick={() => {
                 setSearch('');
                 setCategory('');
                 setUniverse('');
                 setAudience('');
               }}
-              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
               {i18nEnabled ? t('clearFilters') : 'Clear Filters'}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -324,20 +325,20 @@ export function APICatalog() {
                   : `Page ${page} of ${totalPages}`}
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {i18nEnabled ? t('pagination.previous') : 'Previous'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {i18nEnabled ? t('pagination.next') : 'Next'}
-                </button>
+                </Button>
               </div>
             </div>
           )}

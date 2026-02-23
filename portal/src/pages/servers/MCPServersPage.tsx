@@ -322,7 +322,9 @@ export function MCPServersPage() {
                     <span>{server.tools.length} tools</span>
                   </div>
                   {server.version && (
-                    <span className="text-neutral-400 dark:text-neutral-500">v{server.version}</span>
+                    <span className="text-neutral-400 dark:text-neutral-500">
+                      v{server.version}
+                    </span>
                   )}
                 </div>
 

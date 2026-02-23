@@ -5,7 +5,8 @@
  */
 
 import { useState } from 'react';
-import { X, Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Button } from '@stoa/shared/components/Button';
 import type { ApplicationCreateRequest } from '../../types';
 
 interface CreateAppModalProps {
@@ -180,15 +181,16 @@ export function CreateAppModal({
                     </div>
                   ))}
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="link"
+                  size="sm"
+                  icon={<Plus className="h-4 w-4" />}
                   onClick={handleAddCallbackUrl}
                   disabled={isLoading}
-                  className="mt-2 inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                  className="mt-2"
                 >
-                  <Plus className="h-4 w-4" />
                   Add another URL
-                </button>
+                </Button>
               </div>
 
               {/* Info box */}
@@ -203,28 +205,12 @@ export function CreateAppModal({
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-200 dark:border-neutral-700">
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
-              >
+              <Button variant="secondary" onClick={handleClose} disabled={isLoading}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading || !name.trim()}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  'Create Application'
-                )}
-              </button>
+              </Button>
+              <Button type="submit" disabled={!name.trim()} loading={isLoading}>
+                {isLoading ? 'Creating...' : 'Create Application'}
+              </Button>
             </div>
           </form>
         </div>

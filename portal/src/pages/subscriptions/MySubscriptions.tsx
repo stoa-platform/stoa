@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { ConfirmDialog } from '@stoa/shared/components/ConfirmDialog';
 import { useToastActions } from '@stoa/shared/components/Toast';
+import { Button } from '@stoa/shared/components/Button';
 import {
   useSubscriptions,
   useRevokeSubscription,
@@ -215,14 +216,15 @@ export function MySubscriptions() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={refetchAll}
             disabled={isLoading}
-            className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             title="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+          </Button>
           <Link
             to="/servers"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"

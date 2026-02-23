@@ -140,7 +140,9 @@ export function GatewaysPage() {
       ) : gateways.length === 0 ? (
         <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
           <Server className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
-          <p className="text-neutral-500 dark:text-neutral-400 font-medium">No gateways registered</p>
+          <p className="text-neutral-500 dark:text-neutral-400 font-medium">
+            No gateways registered
+          </p>
           <p className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">
             Gateway instances will appear here once registered via the Control Plane API.
           </p>

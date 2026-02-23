@@ -125,7 +125,10 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
           />
         </div>
         <div>
-          <label htmlFor="scope" className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
+          <label
+            htmlFor="scope"
+            className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1"
+          >
             Scope <span className="text-neutral-400 dark:text-neutral-500">(optional)</span>
           </label>
           <input

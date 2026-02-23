@@ -460,7 +460,9 @@ export function ServerDetailPage() {
       {/* Tools List */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
         <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Available Tools</h2>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            Available Tools
+          </h2>
           {!subscription && (
             <button
               onClick={toggleAllTools}
@@ -480,7 +482,9 @@ export function ServerDetailPage() {
               <div
                 key={tool.id}
                 className={`p-4 flex items-center gap-4 ${
-                  !subscription ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800' : ''
+                  !subscription
+                    ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                    : ''
                 }`}
                 onClick={() => !subscription && toggleTool(tool.id)}
                 onKeyDown={(e) => e.key === 'Enter' && !subscription && toggleTool(tool.id)}

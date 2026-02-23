@@ -84,7 +84,9 @@ export const GeneratedBindingRow: React.FC<GeneratedBindingRowProps> = ({ bindin
     }
 
     if (binding.endpoint) {
-      return <span className="text-neutral-600 text-sm font-mono truncate">{binding.endpoint}</span>;
+      return (
+        <span className="text-neutral-600 text-sm font-mono truncate">{binding.endpoint}</span>
+      );
     }
 
     return null;

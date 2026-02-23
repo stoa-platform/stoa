@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { X, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Button } from '@stoa/shared/components/Button';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApplications } from '../../hooks/useApplications';
 import { usePlans } from '../../hooks/usePlans';
@@ -216,28 +217,16 @@ export function SubscribeWithPlanModal({
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-200 dark:border-neutral-700">
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
-              >
+              <Button variant="secondary" onClick={handleClose} disabled={isLoading}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                disabled={isLoading || !selectedAppId || !selectedPlanId || activeApps.length === 0}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!selectedAppId || !selectedPlanId || activeApps.length === 0}
+                loading={isLoading}
               >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Subscribing...
-                  </>
-                ) : (
-                  'Subscribe'
-                )}
-              </button>
+                Subscribe
+              </Button>
             </div>
           </form>
         </div>

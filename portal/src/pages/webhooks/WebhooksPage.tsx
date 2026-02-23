@@ -423,7 +423,9 @@ function WebhookCard({
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">{webhook.name}</h3>
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              {webhook.name}
+            </h3>
             <span
               className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                 webhook.enabled
@@ -817,7 +819,9 @@ function DeliveryRow({ delivery, onRetry, isRetrying }: DeliveryRowProps) {
             <StatusIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div>
-            <div className="font-medium text-neutral-900 dark:text-white">{delivery.event_type}</div>
+            <div className="font-medium text-neutral-900 dark:text-white">
+              {delivery.event_type}
+            </div>
             <div className="text-sm text-neutral-500 dark:text-neutral-400">
               {new Date(delivery.created_at).toLocaleString()}
             </div>

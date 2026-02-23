@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     # Health check interval in seconds (how often to check for stale gateways)
     GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS: int = 30
 
+    # Chat Agent — Anthropic integration (CAB-286)
+    CHAT_ENABLED: bool = False
+
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},https://portal.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 

@@ -1,0 +1,27 @@
+id: interop-api
+name: interop-api
+display_name: "Plateforme d'Interoperabilite"
+version: "1.0.0"
+description: |
+  API d'echange de donnees inter-ministeres.
+
+  Fonctionnalites:
+  - Echange de donnees structure entre administrations
+  - Catalogue de schemas de donnees partages
+  - Routage vers les SI ministeriels
+  - Tracabilite des echanges
+
+  Conforme au Cadre Commun d'Interoperabilite (CCI).
+backend_url: https://httpbin.org/anything
+status: active
+category: Interoperability
+tags:
+  - portal:published
+  - public-sector
+  - interoperability
+  - rest
+  - rgs
+  - cci
+deployments:
+  dev: true
+  staging: false

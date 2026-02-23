@@ -1,0 +1,62 @@
+name: citadelle
+display_name: "La Citadelle — Ministere de l'Interoperabilite Numerique"
+description: "Public sector API interoperability demo with RGS compliance posture"
+theme: public-sector
+
+compliance:
+  frameworks:
+    - RGS
+    - SecNumCloud
+  disclaimer: |
+    This demo illustrates technical capabilities that support RGS compliance
+    posture, including data sovereignty controls and secure API interoperability.
+    STOA Platform is not RGS-certified or SecNumCloud-qualified. Organizations
+    must consult ANSSI guidelines and qualified auditors for official evaluation.
+
+tenant:
+  id: citadelle
+  ref: tenants/citadelle/tenant.yaml
+
+personas:
+  - username: durand
+    email: durand@citadelle.gouv.demo
+    first_name: Claire
+    last_name: Durand
+    role: tenant-admin
+    password: Durand2026!
+    description: "RSSI / Responsable Securite des SI"
+  - username: martin
+    email: martin@citadelle.gouv.demo
+    first_name: Thomas
+    last_name: Martin
+    role: devops
+    password: Martin2026!
+    description: "Developpeur services citoyens"
+  - username: leroy
+    email: leroy@citadelle.gouv.demo
+    first_name: Sophie
+    last_name: Leroy
+    role: viewer
+    password: Leroy2026!
+    description: "Administratrice ministere"
+
+plans:
+  - slug: souverain
+    display_name: "Plan Souverain"
+    rate_limit_per_minute: 60
+    requires_approval: true
+  - slug: interne
+    display_name: "Plan Interne"
+    rate_limit_per_minute: 300
+    requires_approval: false
+
+applications:
+  - name: "Portail Citoyen"
+    plan: souverain
+    apis:
+      - citizen-identity-api
+      - document-management-api
+  - name: "Plateforme Interop"
+    plan: interne
+    apis:
+      - interop-api

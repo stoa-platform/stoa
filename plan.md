@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (CAB-1319,1345,709,287→Done, 1322→InProgress; C9=401/523pts 77%)
+> Last sync: 2026-02-23 (CAB-1432→Done PRs #899,#903; C9=422/523pts 81%)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~523 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 401 pts (77%) | **Velocity**: 27 issues done
+**Scope**: ~523 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 422 pts (81%) | **Velocity**: 28 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -113,7 +113,7 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (25)
+### Done (26)
 
 - [x] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — ALL 3 PHASES DONE — PRs #876, #882, #885, #888
   - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts) — PR #876
@@ -166,6 +166,9 @@
   - P3: RegisterServerModal + conditional credential fields (20 tests)
 - [x] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts) — PR #890
 - [x] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts) — PR #895
+- [x] CAB-1432: [MEGA] Credential Mapping — Consumer→API Key Injection (21 pts) — PRs #899 (API+GW), #903 (Portal UI)
+  - P1: Backend API (7 CRUD endpoints, Fernet encryption, RBAC, 26 tests) + Gateway credential store
+  - P2: Portal UI (table + create/edit modal + search + RBAC, 38 tests)
 - [x] CAB-287: Chat Agent Tool Injection with Agentic Loop (5 pts) — PR #894
 - [x] CAB-1331: [MEGA] UAC-Driven Observability (21 pts) — PRs #870, #884
   - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
@@ -184,7 +187,6 @@
 - [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
 - [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
-- [ ] CAB-1432: [MEGA] Credential Mapping — OAuth2 Front → Backend API Key Injection (21 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 
 **P3 — MEGAs** (236 pts):

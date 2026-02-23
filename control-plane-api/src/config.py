@@ -3,6 +3,7 @@
 All settings can be overridden via environment variables.
 For Kubernetes deployments, set these in ConfigMaps/Secrets.
 """
+
 import json
 import os
 
@@ -10,6 +11,7 @@ from pydantic_settings import BaseSettings
 
 # Base domain - used to construct default URLs
 _BASE_DOMAIN = os.getenv("BASE_DOMAIN", "gostoa.dev")
+
 
 class Settings(BaseSettings):
     # Application
@@ -33,9 +35,9 @@ class Settings(BaseSettings):
     KEYCLOAK_ADMIN_CLIENT_SECRET: str = ""
 
     # Slack Notifications (CAB-1413 — deployment event fanout)
-    SLACK_WEBHOOK_URL: str = ""       # Incoming webhook URL (fallback)
-    SLACK_BOT_TOKEN: str = ""         # Bot API token (preferred, supports threading)
-    SLACK_CHANNEL_ID: str = ""        # Target channel ID for Bot API
+    SLACK_WEBHOOK_URL: str = ""  # Incoming webhook URL (fallback)
+    SLACK_BOT_TOKEN: str = ""  # Bot API token (preferred, supports threading)
+    SLACK_CHANNEL_ID: str = ""  # Target channel ID for Bot API
 
     # GitLab Integration
     GITLAB_URL: str = "https://gitlab.com"
@@ -131,8 +133,13 @@ class Settings(BaseSettings):
     # Chat Agent — Anthropic integration (CAB-286)
     CHAT_ENABLED: bool = False
 
+    # Chat Token Budget (CAB-288) — 0 = unlimited
+    CHAT_TOKEN_BUDGET_DAILY: int = 0
+
     # CORS - comma-separated list of allowed origins
-    CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},https://portal.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
+    CORS_ORIGINS: str = (
+        f"https://console.{_BASE_DOMAIN},https://portal.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
+    )
 
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
@@ -259,5 +266,6 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+
 
 settings = Settings()

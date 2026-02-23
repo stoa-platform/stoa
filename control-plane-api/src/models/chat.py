@@ -20,6 +20,7 @@ class ChatConversation(Base):
     provider = Column(String(50), nullable=False, default="anthropic")
     model = Column(String(100), nullable=False, default="claude-sonnet-4-20250514")
     system_prompt = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="active", server_default="active")
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime(timezone=True),

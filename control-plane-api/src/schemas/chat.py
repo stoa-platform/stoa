@@ -21,6 +21,11 @@ class ChatProvider(StrEnum):
     ANTHROPIC = "anthropic"
 
 
+class ConversationStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
 # ---------------------------------------------------------------------------
 # Request schemas
 # ---------------------------------------------------------------------------
@@ -39,6 +44,12 @@ class ConversationUpdate(BaseModel):
     """Rename / update a conversation."""
 
     title: str = Field(..., min_length=1, max_length=500)
+
+
+class ConversationArchive(BaseModel):
+    """Archive or restore a conversation."""
+
+    status: ConversationStatus
 
 
 class MessageSend(BaseModel):
@@ -76,6 +87,7 @@ class ConversationResponse(BaseModel):
     provider: str
     model: str
     system_prompt: str | None = None
+    status: str = "active"
     created_at: datetime
     updated_at: datetime
 

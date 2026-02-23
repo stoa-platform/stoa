@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-23 (CAB-286 Chat Backend DONE — C9 349/523 pts)
+> Derniere MAJ: 2026-02-23 (sync-plan: CAB-1319,1345,709,287→DONE — C9 401/523 pts 77%)
 
 ## ✅ DONE
 
@@ -8,6 +8,10 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1345 [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts) — PR #890
+- ✅ CAB-1319 [MEGA] MCP Developer Self-Service (21 pts) — PR #898 (3 phases, 77 tests, +3214 LOC)
+- ✅ CAB-709 UAC for LLM — LLM contract types for UAC (5 pts) — PR #895
+- ✅ CAB-287 Chat Agent Tool Injection with Agentic Loop (5 pts) — PR #894
 - ✅ CAB-374 [MEGA] Vercel-Style DX — Git-First API Deployment (34 pts) — ALL 3 PHASES DONE
   - P1: API deploy log streaming + SSE (PRs #850, #852) — CAB-1420, CAB-1421
   - P2: Console live deployment dashboard (PR #856) — CAB-1422
@@ -89,6 +93,10 @@ Also: CAB-1176 Kafka Event Bridge (26 pts, all phases done), CAB-1317 MCP Proxy 
 CAB-1314 MCP Skills (21 pts), CAB-1332 Perf (21 pts), CAB-1292 Auth (21 pts), +40 more issues.
 
 ## 🔴 IN PROGRESS
+
+CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts)
+- ✅ P1: Shared Button component + Console focus-visible — PR #892
+- [ ] P2-P3: Remaining audit phases
 
 CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)

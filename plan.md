@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (CAB-1338→Done, +CAB-1432; C9=523pts 64%)
+> Last sync: 2026-02-23 (CAB-1319,1345,709,287→Done, 1322→InProgress; C9=401/523pts 77%)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,16 +101,19 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~523 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 349 pts (67%) | **Velocity**: 23 issues done
+**Scope**: ~523 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 401 pts (77%) | **Velocity**: 27 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
 
+- [~] CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts, P3) — Council 7.50 ⚠️
+  - [x] P1: Shared Button component + Console focus-visible — PR #892
+  - [ ] P2-P3: Remaining audit phases
 - [~] CAB-802: Dry Run + Script + Video (3 pts, P1) — HUMAN ONLY
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (21)
+### Done (25)
 
 - [x] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — ALL 3 PHASES DONE — PRs #876, #882, #885, #888
   - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts) — PR #876
@@ -157,6 +160,13 @@
   - [x] CAB-1428 [cp-api] Azure APIM adapter (8 pts) — PR #873
 - [x] CAB-286: Chat Agent Backend API — Anthropic Streaming (8 pts) — PR #889
 - [x] CAB-285: Chat Agent UI Component (8 pts) — PR #877
+- [x] CAB-1319: [MEGA] MCP Developer Self-Service (21 pts, P3) — PR #898
+  - P1: Tenant-scoped API router `/v1/tenants/{tenant_id}/mcp-servers` (8 endpoints, 37 tests)
+  - P2: Portal My MCP Servers page + service (20 tests)
+  - P3: RegisterServerModal + conditional credential fields (20 tests)
+- [x] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts) — PR #890
+- [x] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts) — PR #895
+- [x] CAB-287: Chat Agent Tool Injection with Agentic Loop (5 pts) — PR #894
 - [x] CAB-1331: [MEGA] UAC-Driven Observability (21 pts) — PRs #870, #884
   - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
   - [x] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — PR #870
@@ -172,21 +182,14 @@
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
 - [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
 - [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
-- [ ] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts, P2)
 - [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
-- [ ] CAB-287: Chat Agent Tool Injection (5 pts, P2)
 - [ ] CAB-1432: [MEGA] Credential Mapping — OAuth2 Front → Backend API Key Injection (21 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 
 **P3 — MEGAs** (236 pts):
 
-*Council Go (>= 8.0):*
-- [ ] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts, P3) — Council 8.00 ✅
-
 *Council Fix (6.0–7.9, adjustments applied on Linear):*
-- [ ] CAB-1319: [MEGA] MCP Developer Self-Service (21 pts, P3) — Council 7.50 ⚠️
-- [ ] CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts, P3) — Council 7.50 ⚠️
 - [ ] CAB-1316: [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts, P3) — Council 7.50 ⚠️
 - [ ] CAB-1342: [MEGA] Helm Auto-Sync Secrets (21 pts, P3) — Council 7.25 ⚠️
 - [ ] CAB-1329: [MEGA] Demo Content Library — 8 Themes (21 pts, P3) — Council 7.25 ⚠️

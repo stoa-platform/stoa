@@ -30,7 +30,9 @@ import {
   tenantMcpServersService,
   type TenantMCPServer,
   type TenantMCPServerDetail,
+  type TenantMCPServerCreatePayload,
 } from '../../services/tenantMcpServers';
+import { RegisterServerModal } from '../../components/servers/RegisterServerModal';
 
 const healthColors: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
   healthy: {
@@ -65,6 +67,9 @@ export function MyMCPServersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
 
   const tenantId = user?.tenant_id;
 
@@ -216,6 +221,31 @@ export function MyMCPServersPage() {
     [tenantId, expandedServer]
   );
 
+  const handleRegister = useCallback(
+    async (payload: TenantMCPServerCreatePayload) => {
+      if (!tenantId) return;
+      setRegisterLoading(true);
+      setRegisterError(null);
+      try {
+        const created = await tenantMcpServersService.create(tenantId, payload);
+        // Auto test-connection + sync-tools (best-effort, don't block)
+        try {
+          await tenantMcpServersService.testConnection(tenantId, created.id);
+          await tenantMcpServersService.syncTools(tenantId, created.id);
+        } catch {
+          // Non-blocking — server is registered even if test/sync fails
+        }
+        setIsRegisterOpen(false);
+        handleRefresh();
+      } catch (err) {
+        setRegisterError(err instanceof Error ? err.message : 'Registration failed');
+      } finally {
+        setRegisterLoading(false);
+      }
+    },
+    [tenantId]
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -238,6 +268,7 @@ export function MyMCPServersPage() {
           {isWriteUser && (
             <button
               data-testid="register-server-btn"
+              onClick={() => setIsRegisterOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
               <Plus className="h-4 w-4" />
@@ -535,6 +566,7 @@ export function MyMCPServersPage() {
           {!searchQuery && isWriteUser && (
             <button
               data-testid="register-server-empty-btn"
+              onClick={() => setIsRegisterOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
               <Plus className="h-4 w-4" />
@@ -551,6 +583,18 @@ export function MyMCPServersPage() {
           )}
         </div>
       )}
+
+      {/* Register Server Modal */}
+      <RegisterServerModal
+        isOpen={isRegisterOpen}
+        onClose={() => {
+          setIsRegisterOpen(false);
+          setRegisterError(null);
+        }}
+        onSubmit={handleRegister}
+        isLoading={registerLoading}
+        error={registerError}
+      />
     </div>
   );
 }

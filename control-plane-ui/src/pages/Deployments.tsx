@@ -6,6 +6,9 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
+import { DeployLogViewer } from '../components/DeployLogViewer';
+import { DeployProgress } from '../components/DeployProgress';
+import { useDeployEvents } from '../hooks/useDeployEvents';
 import type {
   Deployment,
   Tenant,
@@ -43,7 +46,7 @@ import { clsx } from 'clsx';
 // TAB COMPONENTS
 // =============================================================================
 
-type TabId = 'pipelines' | 'history' | 'config';
+type TabId = 'pipelines' | 'history' | 'live' | 'config';
 
 interface Tab {
   id: TabId;
@@ -65,6 +68,7 @@ const tabs: Tab[] = [
     icon: Rocket,
     description: 'API deployment records',
   },
+  { id: 'live', name: 'Live', icon: Radio, description: 'Real-time deploy logs' },
   { id: 'config', name: 'GitLab Config', icon: Settings, description: 'GitOps configuration' },
 ];
 
@@ -973,6 +977,79 @@ function GitLabConfigTab() {
 }
 
 // =============================================================================
+// LIVE DEPLOY TAB (CAB-1422)
+// =============================================================================
+
+function LiveDeployTab() {
+  const { user } = useAuth();
+  const tenantId = user?.tenants?.[0];
+  const { logs, status, lastEvent, clearLogs } = useDeployEvents({
+    tenantId,
+    enabled: true,
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Status bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span
+            className={clsx(
+              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+              status === 'connected'
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                : status === 'connecting'
+                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+            )}
+          >
+            <span
+              className={clsx(
+                'h-1.5 w-1.5 rounded-full',
+                status === 'connected'
+                  ? 'bg-green-500'
+                  : status === 'connecting'
+                    ? 'animate-pulse bg-yellow-500'
+                    : 'bg-gray-400'
+              )}
+            />
+            {status}
+          </span>
+          {logs.length > 0 && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">{logs.length} entries</span>
+          )}
+        </div>
+        <button
+          onClick={clearLogs}
+          className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+        >
+          Clear
+        </button>
+      </div>
+
+      {/* Progress indicator */}
+      {logs.length > 0 && <DeployProgress logs={logs} lastEvent={lastEvent} />}
+
+      {/* Log viewer */}
+      <DeployLogViewer
+        logs={logs}
+        streaming={
+          status === 'connected' && lastEvent !== 'deploy-success' && lastEvent !== 'deploy-failed'
+        }
+      />
+
+      {!tenantId && (
+        <EmptyState
+          icon={Radio}
+          title="No tenant selected"
+          description="Select a tenant to see live deployment logs."
+        />
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
 // MAIN DEPLOYMENTS PAGE
 // =============================================================================
 
@@ -1014,6 +1091,7 @@ export function Deployments() {
       <div>
         {activeTab === 'pipelines' && <PipelineTracesTab />}
         {activeTab === 'history' && <DeploymentHistoryTab />}
+        {activeTab === 'live' && <LiveDeployTab />}
         {activeTab === 'config' && <GitLabConfigTab />}
       </div>
     </div>

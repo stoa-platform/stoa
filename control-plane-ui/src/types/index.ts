@@ -196,6 +196,24 @@ export interface EnvironmentStatusResponse {
   deployments: EnvironmentStatusDeployment[];
 }
 
+// Deploy event types (CAB-1422 live dashboard)
+export type DeployLogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+export interface DeployLogEntry {
+  deployment_id: string;
+  tenant_id: string;
+  seq: number;
+  level: DeployLogLevel;
+  step: string | null;
+  message: string;
+}
+
+export type DeployEventType =
+  | 'deploy-started'
+  | 'deploy-progress'
+  | 'deploy-success'
+  | 'deploy-failed';
+
 // Event types
 export interface Event {
   id: string;

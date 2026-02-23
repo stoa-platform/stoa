@@ -32,6 +32,7 @@ on:
           - weekly-digest
           - weekly-capacity-check
           - weekly-backlog-stock
+          - daily-pr-hygiene
 
 permissions:
   contents: write
@@ -175,7 +176,7 @@ jobs:
             Do NOT read memory.md, plan.md, or operations.log for session state.
             Focus exclusively on the task below.
 
-            Weekly audit: dependency scan + coverage check + stale branch cleanup + cost analysis.
+            Weekly audit: dependency scan + coverage check + stale branch cleanup.
             1. Dependency audit:
                - pip-audit in control-plane-api/ (install first: pip install pip-audit)
                - npm audit in control-plane-ui/ and portal/
@@ -183,11 +184,6 @@ jobs:
             2. If safe upgrades exist (patch/minor): create PR "chore(deps): weekly dependency update YYYY-MM-DD"
             3. Coverage check: read thresholds from .claude/rules/ci-quality-gates.md, check latest CI. If dropped: issue with "coverage-drop" label
             4. Stale branches >14 days: report which can be deleted
-            5. AI Factory cost efficiency:
-               - Read metrics.log for TOKEN-SPEND and COST-ALERT events from last 7 days
-               - Calculate: total weekly cost, avg daily, cost per PR, model distribution
-               - Flag anomalies: COST-ALERT events, sessions with >50K tokens, cost/PR > $20
-               - Recommend: session splitting, model routing adjustments
 
             Create issue "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
           # Model tier: sonnet (audit, may create upgrade PRs)
@@ -448,3 +444,59 @@ jobs:
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           write_job_summary "backlog-$(date -u +%Y-%m-%d)" "${{ job.status }}" "" "haiku-4-5-batch" "backlog-stock"
+
+  # ----- Daily: PR Hygiene (zero-token — pure bash + gh CLI) -----
+  daily-pr-hygiene:
+    if: |
+      vars.DISABLE_L2_SCHEDULED != 'true' &&
+      (
+        (github.event.schedule == '30 7 * * *') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'daily-pr-hygiene')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run PR Hygiene scan
+        id: hygiene
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RESULT=$(bash scripts/ai-ops/pr-hygiene.sh)
+          echo "json=$RESULT" >> "$GITHUB_OUTPUT"
+          TOTAL=$(echo "$RESULT" | jq -r '.total')
+          STALE=$(echo "$RESULT" | jq -r '.stale')
+          ABANDONED=$(echo "$RESULT" | jq -r '.abandoned')
+          DRAFT=$(echo "$RESULT" | jq -r '.draft')
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "stale=$STALE" >> "$GITHUB_OUTPUT"
+          echo "abandoned=$ABANDONED" >> "$GITHUB_OUTPUT"
+          echo "draft=$DRAFT" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Slack + Push Metrics
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          notify_pr_hygiene \
+            "${{ steps.hygiene.outputs.total }}" \
+            "${{ steps.hygiene.outputs.stale }}" \
+            "${{ steps.hygiene.outputs.abandoned }}" \
+            "${{ steps.hygiene.outputs.draft }}"
+          push_metrics_pr_hygiene \
+            "${{ steps.hygiene.outputs.total }}" \
+            "${{ steps.hygiene.outputs.stale }}" \
+            "${{ steps.hygiene.outputs.abandoned }}" \
+            "${{ steps.hygiene.outputs.draft }}"
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          write_job_summary "pr-hygiene-$(date -u +%Y-%m-%d)" "${{ job.status }}" "" "" "pr-hygiene"

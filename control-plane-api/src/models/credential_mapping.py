@@ -40,7 +40,7 @@ class CredentialMapping(Base):
     tenant_id = Column(String(255), nullable=False, index=True)
 
     # Credential config
-    auth_type = Column(
+    auth_type = Column(  # type: ignore[var-annotated]
         SQLEnum(CredentialAuthType, values_callable=lambda x: [e.value for e in x], name="credential_auth_type"),
         nullable=False,
     )

@@ -91,6 +91,28 @@ CHAT_TOOLS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "search_docs",
+        "description": (
+            "Search STOA platform documentation, guides, ADRs, and blog posts. "
+            "Returns matching articles with titles, URLs, and snippets."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (1-20)",
+                    "default": 5,
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 
@@ -118,6 +140,8 @@ async def execute_tool(
             return await _exec_list_deployments(session)
         elif tool_name == "platform_info":
             return _exec_platform_info()
+        elif tool_name == "search_docs":
+            return await _exec_search_docs(tool_input)
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
     except Exception as exc:
@@ -258,5 +282,30 @@ def _exec_platform_info() -> str:
                 "GitOps deployments",
             ],
             "status": "operational",
+        }
+    )
+
+
+async def _exec_search_docs(tool_input: dict[str, Any]) -> str:
+    from ..routers.docs_search import get_docs_search_service
+
+    service = get_docs_search_service()
+    query = tool_input.get("query", "")
+    limit = min(max(tool_input.get("limit", 5), 1), 20)
+
+    response = await service.search(query=query, limit=limit)
+    return json.dumps(
+        {
+            "query": response.query,
+            "total": response.total,
+            "results": [
+                {
+                    "title": r.title,
+                    "url": r.url,
+                    "snippet": r.snippet,
+                    "category": r.category,
+                }
+                for r in response.results
+            ],
         }
     )

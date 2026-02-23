@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
@@ -6,6 +7,7 @@ import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { Users } from 'lucide-react';
 
 export function Tenants() {
+  const { t } = useTranslation();
   const { isReady } = useAuth();
 
   const {
@@ -40,17 +42,17 @@ export function Tenants() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tenants</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">View tenant organizations</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('tenants.title')}</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">{t('tenants.subtitle')}</p>
         </div>
         <div className="text-sm text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-700 px-3 py-2 rounded-lg">
-          Tenant management via GitOps (Phase 2)
+          {t('tenants.managedViaGitops')}
         </div>
       </div>
 
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg">
-          {error.message || 'Failed to load tenants'}
+          {error.message || t('tenants.failedToLoad')}
         </div>
       )}
 
@@ -60,8 +62,8 @@ export function Tenants() {
           <div className="col-span-full bg-white dark:bg-neutral-800 rounded-lg shadow">
             <EmptyState
               variant="users"
-              title="No tenants found"
-              description="Tenants are managed via GitOps configuration in the iam/tenants.yaml file."
+              title={t('tenants.noTenants')}
+              description={t('tenants.noTenantsDesc')}
               illustration={
                 <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center">
                   <Users className="w-10 h-10 text-purple-500" />
@@ -93,15 +95,21 @@ export function Tenants() {
 
               <div className="space-y-2 text-sm text-gray-600 dark:text-neutral-300">
                 <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">Tenant ID:</span>
+                  <span className="text-gray-500 dark:text-neutral-400">
+                    {t('tenants.tenantId')}
+                  </span>
                   <span className="font-mono text-xs">{tenant.id}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">Created:</span>
+                  <span className="text-gray-500 dark:text-neutral-400">
+                    {t('tenants.created')}
+                  </span>
                   <span>{new Date(tenant.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">Last Updated:</span>
+                  <span className="text-gray-500 dark:text-neutral-400">
+                    {t('common.lastUpdated')}
+                  </span>
                   <span>{new Date(tenant.updated_at).toLocaleDateString()}</span>
                 </div>
               </div>
@@ -128,12 +136,10 @@ export function Tenants() {
           </svg>
           <div>
             <h4 className="text-sm font-medium text-blue-800 dark:text-blue-400">
-              Tenant Management
+              {t('tenants.gitopsNote')}
             </h4>
             <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-              Tenant creation and IAM configuration is managed via the GitOps repository. See the{' '}
-              <code className="bg-blue-100 dark:bg-blue-900/30 px-1 rounded">iam/tenants.yaml</code>{' '}
-              file for tenant definitions.
+              {t('tenants.gitopsNoteDesc')}
             </p>
           </div>
         </div>

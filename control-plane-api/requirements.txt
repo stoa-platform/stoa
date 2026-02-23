@@ -40,7 +40,3 @@ opentelemetry-instrumentation-sqlalchemy>=0.48b0
 # Transitive dep pins — CVE fixes (Container Scan)
 jaraco.context>=6.1.0
 wheel>=0.46.2
-
-# Transitive dep pins — CVE fixes (Container Scan)
-jaraco.context>=6.1.0
-wheel>=0.46.2

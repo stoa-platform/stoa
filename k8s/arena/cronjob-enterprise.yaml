@@ -55,6 +55,8 @@ spec:
                   value: "10"
                 - name: SCRIPT_PATH
                   value: "/scripts/benchmark-enterprise.js"
+                - name: ARENA_INSTANCE
+                  value: "k8s"
                 - name: ARENA_JWT
                   valueFrom:
                     secretKeyRef:

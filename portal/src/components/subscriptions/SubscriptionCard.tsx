@@ -64,9 +64,9 @@ const statusConfig: Record<
   },
   cancelled: {
     icon: XCircle,
-    color: 'text-gray-500 dark:text-neutral-400',
-    bg: 'bg-gray-100 dark:bg-neutral-700',
-    text: 'text-gray-800 dark:text-neutral-200',
+    color: 'text-neutral-500 dark:text-neutral-400',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
+    text: 'text-neutral-800 dark:text-neutral-200',
     label: 'Cancelled',
   },
 };
@@ -82,8 +82,8 @@ const planConfig: Record<
 > = {
   free: {
     icon: Check,
-    color: 'text-gray-600 dark:text-neutral-400',
-    bg: 'bg-gray-100 dark:bg-neutral-700',
+    color: 'text-neutral-600 dark:text-neutral-400',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
     label: 'Free',
   },
   basic: {
@@ -136,21 +136,21 @@ export const SubscriptionCard = memo(function SubscriptionCard({
   }, [onCancel, isCancelling, subscription.id]);
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-5 hover:shadow-md transition-shadow">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-5 hover:shadow-md transition-shadow">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <Link
               to={`/apis/${subscription.apiId}`}
-              className="text-lg font-semibold text-gray-900 dark:text-white hover:text-primary-600 truncate"
+              className="text-lg font-semibold text-neutral-900 dark:text-white hover:text-primary-600 truncate"
             >
               {subscription.api?.name || subscription.apiId}
             </Link>
-            <ExternalLink className="h-4 w-4 text-gray-400 dark:text-neutral-500 flex-shrink-0" />
+            <ExternalLink className="h-4 w-4 text-neutral-400 dark:text-neutral-500 flex-shrink-0" />
           </div>
           {subscription.api?.version && (
-            <p className="text-sm text-gray-500 dark:text-neutral-400">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               v{subscription.api.version}
             </p>
           )}
@@ -179,7 +179,7 @@ export const SubscriptionCard = memo(function SubscriptionCard({
         {subscription.application && (
           <Link
             to={`/apps/${subscription.applicationId}`}
-            className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-neutral-400 hover:text-primary-600"
+            className="inline-flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400 hover:text-primary-600"
           >
             <span className="font-medium">{subscription.application.name}</span>
           </Link>
@@ -188,26 +188,26 @@ export const SubscriptionCard = memo(function SubscriptionCard({
 
       {/* Usage Stats */}
       {subscription.usage && (
-        <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg p-3 mb-4">
+        <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-3 mb-4">
           <div className="flex items-center gap-2 mb-2">
-            <BarChart3 className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            <span className="text-xs font-medium text-gray-700 dark:text-neutral-300">
+            <BarChart3 className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+            <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">
               Usage Today
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+            <span className="text-2xl font-bold text-neutral-900 dark:text-white">
               {subscription.usage.callsToday?.toLocaleString() || 0}
             </span>
             {subscription.usage.dailyLimit && (
-              <span className="text-sm text-gray-500 dark:text-neutral-400">
+              <span className="text-sm text-neutral-500 dark:text-neutral-400">
                 / {subscription.usage.dailyLimit.toLocaleString()} limit
               </span>
             )}
           </div>
           {subscription.usage.dailyLimit && (
             <div className="mt-2">
-              <div className="h-2 bg-gray-200 dark:bg-neutral-600 rounded-full overflow-hidden">
+              <div className="h-2 bg-neutral-200 dark:bg-neutral-600 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
                     (subscription.usage.callsToday || 0) / subscription.usage.dailyLimit > 0.9
@@ -230,7 +230,7 @@ export const SubscriptionCard = memo(function SubscriptionCard({
       )}
 
       {/* Metadata */}
-      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-neutral-400 mb-4">
+      <div className="flex items-center gap-4 text-xs text-neutral-500 dark:text-neutral-400 mb-4">
         <div className="flex items-center gap-1">
           <Calendar className="h-3.5 w-3.5" />
           Subscribed {formattedDate}
@@ -238,7 +238,7 @@ export const SubscriptionCard = memo(function SubscriptionCard({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-neutral-700">
+      <div className="flex items-center justify-between pt-3 border-t border-neutral-100 dark:border-neutral-700">
         <Link
           to={`/apis/${subscription.apiId}`}
           className="text-sm font-medium text-primary-600 hover:text-primary-700"

@@ -111,7 +111,7 @@ export function ConsumerRegistrationPage() {
       <div className="mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 mb-3 transition-colors"
+          className="flex items-center gap-1 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 mb-3 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -121,10 +121,10 @@ export function ConsumerRegistrationPage() {
             <UserPlus className="h-6 w-6 text-primary-600 dark:text-primary-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
               Register as Consumer
             </h1>
-            <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
               Register to get OAuth2 credentials for API access
             </p>
           </div>
@@ -134,7 +134,7 @@ export function ConsumerRegistrationPage() {
       {/* Form */}
       <form
         onSubmit={handleSubmit}
-        className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-700"
+        className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700"
       >
         <div className="p-6 space-y-5">
           {formError && (
@@ -148,7 +148,7 @@ export function ConsumerRegistrationPage() {
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               Consumer Name <span className="text-red-500">*</span>
             </label>
@@ -161,7 +161,7 @@ export function ConsumerRegistrationPage() {
               onChange={handleNameChange}
               placeholder="My Application"
               disabled={isSubmitting}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+              className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
             />
           </div>
 
@@ -169,7 +169,7 @@ export function ConsumerRegistrationPage() {
           <div>
             <label
               htmlFor="external_id"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               External ID <span className="text-red-500">*</span>
             </label>
@@ -183,9 +183,9 @@ export function ConsumerRegistrationPage() {
               placeholder="my-application"
               pattern="^[a-z0-9][a-z0-9-]*[a-z0-9]$"
               disabled={isSubmitting}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded-lg font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+              className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white rounded-lg font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
             />
-            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
               Unique identifier. Lowercase, numbers, and hyphens only. Used in your client_id.
             </p>
           </div>
@@ -194,7 +194,7 @@ export function ConsumerRegistrationPage() {
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               Email <span className="text-red-500">*</span>
             </label>
@@ -207,7 +207,7 @@ export function ConsumerRegistrationPage() {
               onChange={handleChange}
               placeholder="dev@company.com"
               disabled={isSubmitting}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+              className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
             />
           </div>
 
@@ -215,7 +215,7 @@ export function ConsumerRegistrationPage() {
           <div>
             <label
               htmlFor="company"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               Company
             </label>
@@ -227,7 +227,7 @@ export function ConsumerRegistrationPage() {
               onChange={handleChange}
               placeholder="Acme Corp"
               disabled={isSubmitting}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+              className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
             />
           </div>
 
@@ -235,7 +235,7 @@ export function ConsumerRegistrationPage() {
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+              className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
             >
               Description
             </label>
@@ -247,18 +247,18 @@ export function ConsumerRegistrationPage() {
               onChange={handleChange}
               placeholder="Brief description of how you'll use the API..."
               disabled={isSubmitting}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 resize-none placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+              className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 resize-none placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-neutral-700">
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-200 dark:border-neutral-700">
           <button
             type="button"
             onClick={() => navigate(-1)}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

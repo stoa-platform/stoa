@@ -55,29 +55,29 @@ export function APIFilters({
   const hasFilters = search || category || universe || audience;
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4 mb-6">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 mb-6">
       <div className="flex flex-col sm:flex-row gap-4">
         {/* Search input */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
           <input
             type="text"
             placeholder="Search APIs by name or description..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:bg-neutral-800 dark:text-white"
+            className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:bg-neutral-800 dark:text-white"
           />
         </div>
 
         {/* Universe filter (CAB-848) */}
         {universes.length > 0 && (
           <div className="relative sm:w-44">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500" />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
             <select
               value={universe}
               onChange={(e) => onUniverseChange(e.target.value)}
               disabled={isLoading}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
+              className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
             >
               <option value="">All Universes</option>
               {universes.map((u) => (
@@ -92,12 +92,12 @@ export function APIFilters({
         {/* Audience filter (CAB-1323) */}
         {audienceOptions.length > 1 && (
           <div className="relative sm:w-44">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500" />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
             <select
               value={audience}
               onChange={(e) => onAudienceChange(e.target.value)}
               disabled={isLoading}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
+              className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
             >
               <option value="">All Audiences</option>
               {audienceOptions.map((a) => (
@@ -111,12 +111,12 @@ export function APIFilters({
 
         {/* Category filter */}
         <div className="relative sm:w-48">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500" />
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
           <select
             value={category}
             onChange={(e) => onCategoryChange(e.target.value)}
             disabled={isLoading}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
+            className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
           >
             <option value="">All Categories</option>
             {categories.map((cat) => (
@@ -131,7 +131,7 @@ export function APIFilters({
         {hasFilters && (
           <button
             onClick={clearFilters}
-            className="inline-flex items-center gap-1 px-3 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
           >
             <X className="h-4 w-4" />
             Clear
@@ -141,8 +141,8 @@ export function APIFilters({
 
       {/* Active filters */}
       {hasFilters && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-neutral-700">
-          <span className="text-xs text-gray-500 dark:text-neutral-400">Active filters:</span>
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-700">
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">Active filters:</span>
           {search && (
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-xs rounded-full">
               Search: "{search}"

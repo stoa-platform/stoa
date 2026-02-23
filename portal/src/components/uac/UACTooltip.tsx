@@ -48,11 +48,11 @@ export const UACTooltip: React.FC<UACTooltipProps> = ({ bindings, docsUrl = '/do
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">🔗</span>
-        <span className="font-semibold text-gray-900 dark:text-white">Universal API Contract</span>
+        <span className="font-semibold text-neutral-900 dark:text-white">Universal API Contract</span>
       </div>
 
       {/* Description */}
-      <p className="text-sm text-gray-600 dark:text-neutral-400 mb-3">
+      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
         This API is defined once and automatically available via multiple protocols:
       </p>
 
@@ -62,10 +62,10 @@ export const UACTooltip: React.FC<UACTooltipProps> = ({ bindings, docsUrl = '/do
           <div key={binding.protocol} className="flex items-start gap-2 text-sm">
             <span className="flex-shrink-0 w-5 text-center">{protocolIcons[binding.protocol]}</span>
             <div className="min-w-0">
-              <span className="font-medium text-gray-800 dark:text-neutral-200">
+              <span className="font-medium text-neutral-800 dark:text-neutral-200">
                 {protocolLabels[binding.protocol]}
               </span>
-              <span className="ml-2 text-gray-500 dark:text-neutral-400 font-mono text-xs truncate block">
+              <span className="ml-2 text-neutral-500 dark:text-neutral-400 font-mono text-xs truncate block">
                 {getBindingDisplay(binding)}
               </span>
             </div>
@@ -74,12 +74,12 @@ export const UACTooltip: React.FC<UACTooltipProps> = ({ bindings, docsUrl = '/do
       </div>
 
       {/* Tagline */}
-      <p className="text-xs text-gray-500 dark:text-neutral-400 italic mb-3">
+      <p className="text-xs text-neutral-500 dark:text-neutral-400 italic mb-3">
         One contract, zero duplication.
       </p>
 
       {/* Divider and link */}
-      <div className="pt-3 border-t border-gray-100 dark:border-neutral-700">
+      <div className="pt-3 border-t border-neutral-100 dark:border-neutral-700">
         <a
           href={docsUrl}
           target="_blank"

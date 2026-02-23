@@ -9,11 +9,6 @@ import App from './App';
 import { config } from './config';
 import './index.css';
 
-// Initialize i18n (loads saved language preference)
-if (config.features.enableI18n) {
-  import('./i18n');
-}
-
 // Log Core Web Vitals in dev mode
 if (config.app.isDev) {
   onLCP(({ value }) => console.log('[WebVitals] LCP:', value, 'ms'));
@@ -53,25 +48,34 @@ const oidcConfig = {
   },
 };
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <OidcProvider {...oidcConfig}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </OidcProvider>
-    </QueryClientProvider>
-  </React.StrictMode>
-);
+function render() {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <OidcProvider {...oidcConfig}>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </OidcProvider>
+      </QueryClientProvider>
+    </React.StrictMode>
+  );
 
-// Smooth handoff: HTML splash → React app (double-rAF ensures React has painted)
-requestAnimationFrame(() => {
+  // Smooth handoff: HTML splash → React app (double-rAF ensures React has painted)
   requestAnimationFrame(() => {
-    const splash = document.getElementById('stoa-splash');
-    if (splash) {
-      splash.classList.add('hide');
-      splash.addEventListener('transitionend', () => splash.remove());
-    }
+    requestAnimationFrame(() => {
+      const splash = document.getElementById('stoa-splash');
+      if (splash) {
+        splash.classList.add('hide');
+        splash.addEventListener('transitionend', () => splash.remove());
+      }
+    });
   });
-});
+}
+
+// Initialize i18n (await translations before rendering to avoid showing raw keys)
+const i18nReady = config.features.enableI18n
+  ? import('./i18n').then((m) => m.ready)
+  : Promise.resolve();
+
+i18nReady.then(render);

@@ -40,7 +40,9 @@ opentelemetry-instrumentation-sqlalchemy>=0.48b0
 # Transitive dep pins — CVE fixes (Container Scan)
 jaraco.context>=6.1.0
 wheel>=0.46.2
-
-# Transitive dep pins — CVE fixes (Container Scan)
-jaraco.context>=6.1.0
-wheel>=0.46.2
+# Weekly audit 2026-02-23 — pip-audit findings
+certifi>=2024.7.4         # PYSEC-2024-230 / CVE-2024-39689
+idna>=3.7                 # PYSEC-2024-60
+jinja2>=3.1.6             # CVE-2024-22195, CVE-2024-34064, CVE-2024-56326, CVE-2025-27516
+requests>=2.32.4          # CVE-2024-35195, CVE-2024-47081
+urllib3>=2.5.0            # CVE-2024-37891, CVE-2025-50181

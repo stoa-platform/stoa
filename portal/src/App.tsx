@@ -63,6 +63,9 @@ const UnauthorizedPage = lazy(() =>
 const OnboardingWizardPage = lazy(() =>
   import('./pages/onboarding').then((m) => ({ default: m.OnboardingWizardPage }))
 );
+const CredentialMappingsPage = lazy(() =>
+  import('./pages/credential-mappings').then((m) => ({ default: m.CredentialMappingsPage }))
+);
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -563,6 +566,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:subscriptions:write">
                   <ServiceAccountsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Credential Mappings — consumer→API backend credentials (CAB-1432) */}
+            <Route
+              path="/credentials"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <CredentialMappingsPage />
                 </ProtectedRoute>
               }
             />

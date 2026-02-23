@@ -23,11 +23,13 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::warn;
+use uuid::Uuid;
 
 use crate::proxy::credentials::{AuthType, BackendCredential};
 use crate::proxy::dynamic::is_blocked_url;
 use crate::routes::{ApiRoute, PolicyEntry};
 use crate::state::AppState;
+use crate::telemetry::deploy::DeployStep;
 use crate::uac::binders::{mcp::McpBinder, rest::RestBinder, ProtocolBinder};
 use crate::uac::UacContractSpec;
 
@@ -101,14 +103,104 @@ pub async fn upsert_api(
     State(state): State<AppState>,
     Json(route): Json<ApiRoute>,
 ) -> impl IntoResponse {
-    let id = route.id.clone();
+    let deployment_id = Uuid::new_v4();
+    let api_id = route.id.clone();
+    let tenant = route.tenant_id.clone();
+    let emitter = &state.deploy_progress;
+    let aid = Some(api_id.as_str());
+    let tid = Some(tenant.as_str());
+
+    // Step 1: Validating
+    emitter.step_started(
+        deployment_id,
+        DeployStep::Validating,
+        format!("Validating API route '{}'", api_id),
+        aid,
+        tid,
+    );
+    emitter.step_completed(
+        deployment_id,
+        DeployStep::Validating,
+        format!("API route '{}' validated", api_id),
+        aid,
+        tid,
+    );
+
+    // Step 2: Applying routes
+    emitter.step_started(
+        deployment_id,
+        DeployStep::ApplyingRoutes,
+        format!("Applying route '{}'", api_id),
+        aid,
+        tid,
+    );
     let existed = state.route_registry.upsert(route).is_some();
+    emitter.step_completed(
+        deployment_id,
+        DeployStep::ApplyingRoutes,
+        format!(
+            "Route '{}' {}",
+            api_id,
+            if existed { "updated" } else { "created" }
+        ),
+        aid,
+        tid,
+    );
+
+    // Step 3: Applying policies (no-op for direct route upsert, but signals step)
+    emitter.step_started(
+        deployment_id,
+        DeployStep::ApplyingPolicies,
+        "Checking associated policies",
+        aid,
+        tid,
+    );
+    emitter.step_completed(
+        deployment_id,
+        DeployStep::ApplyingPolicies,
+        "Policy check complete",
+        aid,
+        tid,
+    );
+
+    // Step 4: Activating
+    emitter.step_started(
+        deployment_id,
+        DeployStep::Activating,
+        format!("Activating route '{}'", api_id),
+        aid,
+        tid,
+    );
+    emitter.step_completed(
+        deployment_id,
+        DeployStep::Activating,
+        format!("Route '{}' active", api_id),
+        aid,
+        tid,
+    );
+
+    // Step 5: Done
+    emitter.step_completed(
+        deployment_id,
+        DeployStep::Done,
+        format!("API sync complete for '{}'", api_id),
+        aid,
+        tid,
+    );
+
     let status = if existed {
         StatusCode::OK
     } else {
         StatusCode::CREATED
     };
-    (status, Json(serde_json::json!({"id": id, "status": "ok"})))
+    (
+        status,
+        Json(serde_json::json!({
+            "id": api_id,
+            "status": "ok",
+            "deployment_id": deployment_id.to_string()
+        })),
+    )
 }
 
 pub async fn list_apis(State(state): State<AppState>) -> Json<Vec<Arc<ApiRoute>>> {

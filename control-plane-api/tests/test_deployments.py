@@ -245,6 +245,7 @@ class TestDeploymentLogs:
         dep = _mock_deployment()
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.get_deployment = AsyncMock(return_value=dep)
+            MockSvc.return_value.get_logs = AsyncMock(return_value=[])
             resp = client_as_tenant_admin.get(
                 f"/v1/tenants/acme/deployments/{dep.id}/logs"
             )
@@ -302,14 +303,21 @@ class TestDeploymentServiceCreate:
         mock_db = AsyncMock()
         with (
             patch("src.services.deployment_service.DeploymentRepository") as MockRepo,
+            patch("src.services.deployment_service.DeploymentLogRepository") as MockLogRepo,
             patch("src.services.deployment_service.kafka_service") as mock_kafka,
             patch("src.services.webhook_service.emit_deployment_started") as mock_emit,
+            patch("src.services.deployment_service.emit_deployment_started") as mock_event,
+            patch("src.services.deployment_service.emit_deployment_log") as mock_log_event,
         ):
             dep = _mock_deployment()
             MockRepo.return_value.create = AsyncMock(return_value=dep)
+            MockLogRepo.return_value.next_seq = AsyncMock(return_value=1)
+            MockLogRepo.return_value.create = AsyncMock(return_value=MagicMock())
             mock_kafka.publish = AsyncMock()
             mock_kafka.emit_audit_event = AsyncMock()
             mock_emit.return_value = None
+            mock_event.return_value = ""
+            mock_log_event.return_value = ""
 
             svc = DeploymentService(mock_db)
             result = await svc.create_deployment(
@@ -332,11 +340,18 @@ class TestDeploymentServiceUpdateStatus:
         dep = _mock_deployment(status="success")
         with (
             patch("src.services.deployment_service.DeploymentRepository") as MockRepo,
+            patch("src.services.deployment_service.DeploymentLogRepository") as MockLogRepo,
             patch("src.services.webhook_service.emit_deployment_succeeded") as mock_emit,
+            patch("src.services.deployment_service.emit_deployment_completed") as mock_event,
+            patch("src.services.deployment_service.emit_deployment_log") as mock_log_event,
         ):
             MockRepo.return_value.get_by_id_and_tenant = AsyncMock(return_value=dep)
             MockRepo.return_value.update = AsyncMock(return_value=dep)
+            MockLogRepo.return_value.next_seq = AsyncMock(return_value=1)
+            MockLogRepo.return_value.create = AsyncMock(return_value=MagicMock())
             mock_emit.return_value = None
+            mock_event.return_value = ""
+            mock_log_event.return_value = ""
 
             svc = DeploymentService(mock_db)
             await svc.update_status("acme", dep.id, "success")
@@ -350,11 +365,18 @@ class TestDeploymentServiceUpdateStatus:
         dep = _mock_deployment(status="failed")
         with (
             patch("src.services.deployment_service.DeploymentRepository") as MockRepo,
+            patch("src.services.deployment_service.DeploymentLogRepository") as MockLogRepo,
             patch("src.services.webhook_service.emit_deployment_failed") as mock_emit,
+            patch("src.services.deployment_service.emit_deployment_failed") as mock_event,
+            patch("src.services.deployment_service.emit_deployment_log") as mock_log_event,
         ):
             MockRepo.return_value.get_by_id_and_tenant = AsyncMock(return_value=dep)
             MockRepo.return_value.update = AsyncMock(return_value=dep)
+            MockLogRepo.return_value.next_seq = AsyncMock(return_value=1)
+            MockLogRepo.return_value.create = AsyncMock(return_value=MagicMock())
             mock_emit.return_value = None
+            mock_event.return_value = ""
+            mock_log_event.return_value = ""
 
             svc = DeploymentService(mock_db)
             await svc.update_status("acme", dep.id, "failed", error_message="crash")

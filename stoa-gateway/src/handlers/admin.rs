@@ -617,6 +617,21 @@ pub async fn upsert_contract(
     // Ensure required_policies are up to date with classification
     contract.refresh_policies();
 
+    // Expand LLM capabilities into synthetic endpoints (CAB-709)
+    let llm_capabilities = if let Some(ref llm_config) = contract.llm_config {
+        if state.config.llm_enabled {
+            let synthetic = llm_config.expand_endpoints();
+            let count = synthetic.len();
+            contract.endpoints.extend(synthetic);
+            count
+        } else {
+            warn!("Contract has llm_config but STOA_LLM_ENABLED=false, skipping LLM expansion");
+            0
+        }
+    } else {
+        0
+    };
+
     let key = format!("{}:{}", contract.tenant_id, contract.name);
     let existed = state.contract_registry.upsert(contract.clone()).is_some();
 
@@ -652,6 +667,7 @@ pub async fn upsert_contract(
             "status": "ok",
             "routes_generated": routes_count,
             "tools_generated": tools_count,
+            "llm_capabilities": llm_capabilities,
         })),
     )
         .into_response()

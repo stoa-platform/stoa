@@ -4322,6 +4322,11 @@
       },
       "DocsSearchResponse": {
         "properties": {
+          "mode": {
+            "default": "keyword",
+            "title": "Mode",
+            "type": "string"
+          },
           "query": {
             "title": "Query",
             "type": "string"
@@ -12412,6 +12417,42 @@
           "clientSecret"
         ],
         "title": "RegenerateSecretResponse",
+        "type": "object"
+      },
+      "ReindexResponse": {
+        "properties": {
+          "error_details": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Error Details",
+            "type": "array"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "indexed": {
+            "title": "Indexed",
+            "type": "integer"
+          },
+          "total_chunks": {
+            "title": "Total Chunks",
+            "type": "integer"
+          },
+          "total_entries": {
+            "title": "Total Entries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_entries",
+          "total_chunks",
+          "indexed",
+          "errors"
+        ],
+        "title": "ReindexResponse",
         "type": "object"
       },
       "ReplayResponse": {
@@ -25052,9 +25093,31 @@
         ]
       }
     },
+    "/v1/docs/admin/reindex": {
+      "post": {
+        "description": "Reindex documentation into OpenSearch k-NN for semantic search.\n\nAdmin-only endpoint \u2014 requires DOCS_REINDEX_ENABLED=true.\nFetches llms-full.txt, chunks content, generates embeddings, and upserts to OpenSearch.",
+        "operationId": "reindex_docs_v1_docs_admin_reindex_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReindexResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Reindex Docs",
+        "tags": [
+          "Docs Search"
+        ]
+      }
+    },
     "/v1/docs/search": {
       "get": {
-        "description": "Search STOA documentation, guides, ADRs, and blog posts.\n\nPublic endpoint \u2014 no authentication required.\nCombines Algolia full-text search with llms-full.txt boosting.",
+        "description": "Search STOA documentation, guides, ADRs, and blog posts.\n\nPublic endpoint \u2014 no authentication required.\n\nModes:\n- **keyword** (default): Algolia full-text + llms-full.txt boost\n- **semantic**: OpenSearch k-NN vector similarity\n- **hybrid**: RRF fusion of keyword + semantic",
         "operationId": "search_docs_v1_docs_search_get",
         "parameters": [
           {
@@ -25082,6 +25145,23 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Search mode",
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "keyword",
+              "description": "Search mode",
+              "enum": [
+                "keyword",
+                "semantic",
+                "hybrid"
+              ],
+              "title": "Mode",
+              "type": "string"
             }
           }
         ],

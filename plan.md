@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (MEGA batch: 16 MEGAs promoted to Todo, Council scores applied, 3 orphan Done items added)
+> Last sync: 2026-02-23 (CAB-1422 → Done, PR #856)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~661 pts (committed) | **Done**: 238 pts (36%) | **Velocity**: 17 issues closed
+**Scope**: ~661 pts (committed) | **Done**: 243 pts (37%) | **Velocity**: 18 issues closed
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -111,7 +111,7 @@
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
 
-### Done (17)
+### Done (18)
 
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
@@ -142,6 +142,7 @@
 - [x] CAB-1411: [docs] stoa.yaml spec v1.0 reference + stoactl CLI guide (5 pts) — sub of CAB-374
 - [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
 - [x] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts) — stoa-docs PR #77
+- [x] CAB-1422: [cp-ui] Live deployment dashboard — SSE logs + rollback UX (5 pts) — PR #856
 - [x] CAB-1352: [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already in stoa-docs
 
 ### Todo

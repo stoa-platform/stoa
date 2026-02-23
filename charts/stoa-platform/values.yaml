@@ -98,6 +98,8 @@ stoaGateway:
   autoRegister: true
   # Environment identifier
   environment: dev
+  # Cluster name for multi-cluster observability labels (CAB-1426)
+  clusterName: default
 
   # OPA Policy Engine (Phase 1: CAB-1109)
   policies:
@@ -359,6 +361,9 @@ controlPlaneApi:
     enabled: true
     interval: 15s
     scrapeTimeout: 10s
+  # Cluster name for multi-cluster observability labels (CAB-1426)
+  clusterName: default
+  environment: dev
 
 alertmanager:
   enabled: false

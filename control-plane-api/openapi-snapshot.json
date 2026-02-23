@@ -4129,6 +4129,81 @@
         "title": "DisableBindingResponse",
         "type": "object"
       },
+      "DocsSearchResponse": {
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/DocsSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "took_ms": {
+            "default": 0.0,
+            "title": "Took Ms",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query",
+          "total",
+          "results"
+        ],
+        "title": "DocsSearchResponse",
+        "type": "object"
+      },
+      "DocsSearchResult": {
+        "properties": {
+          "boosted": {
+            "default": false,
+            "title": "Boosted",
+            "type": "boolean"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "snippet": {
+            "title": "Snippet",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "url",
+          "snippet",
+          "score"
+        ],
+        "title": "DocsSearchResult",
+        "type": "object"
+      },
       "EnableBindingRequest": {
         "description": "Request to enable a protocol binding.",
         "example": {
@@ -24395,6 +24470,67 @@
         "summary": "Get Dashboard Stats",
         "tags": [
           "Dashboard"
+        ]
+      }
+    },
+    "/v1/docs/search": {
+      "get": {
+        "description": "Search STOA documentation, guides, ADRs, and blog posts.\n\nPublic endpoint \u2014 no authentication required.\nCombines Algolia full-text search with llms-full.txt boosting.",
+        "operationId": "search_docs_v1_docs_search_get",
+        "parameters": [
+          {
+            "description": "Search query",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Search query",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max results",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "description": "Max results",
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocsSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Docs",
+        "tags": [
+          "Docs Search"
         ]
       }
     },

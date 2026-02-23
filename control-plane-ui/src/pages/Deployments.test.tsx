@@ -1,13 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { createAuthMock, mockDeployment } from '../test/helpers';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { createAuthMock, renderWithProviders, mockDeployment } from '../test/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import type { PersonaRole } from '../test/helpers';
 
 // Mock AuthContext
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(),
+}));
+
+// Mock useDeployEvents hook (SSE)
+const mockLoadHistoricalLogs = vi.fn().mockResolvedValue(undefined);
+const mockDeployStates: Record<string, unknown> = {};
+
+vi.mock('../hooks/useDeployEvents', () => ({
+  useDeployEvents: () => ({
+    deployStates: mockDeployStates,
+    loadHistoricalLogs: mockLoadHistoricalLogs,
+  }),
 }));
 
 // Mock api service
@@ -47,6 +57,7 @@ vi.mock('../services/api', () => ({
     getApis: (...args: unknown[]) => mockGetApis(...args),
     listDeployments: (...args: unknown[]) => mockListDeployments(...args),
     rollbackDeployment: vi.fn().mockResolvedValue({}),
+    getDeploymentLogs: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   },
 }));
 
@@ -83,22 +94,31 @@ vi.mock('@stoa/shared/components/Skeleton', () => ({
   TableSkeleton: () => <div data-testid="table-skeleton">Loading...</div>,
 }));
 
-// Mock useDeployEvents to avoid QueryClient dependency
-vi.mock('../hooks/useDeployEvents', () => ({
-  useDeployEvents: () => ({
-    deployStates: {},
-    loadHistoricalLogs: vi.fn(),
-  }),
+// Mock deploy UI components
+vi.mock('../components/DeployLogViewer', () => ({
+  DeployLogViewer: ({ logs }: { logs: unknown[] }) => (
+    <div data-testid="deploy-log-viewer">Logs: {logs.length}</div>
+  ),
+}));
+
+vi.mock('../components/DeployProgress', () => ({
+  DeployProgress: ({
+    currentStep,
+    status,
+  }: {
+    currentStep: string | null;
+    status: string | null;
+  }) => (
+    <div data-testid="deploy-progress">
+      Step: {currentStep || 'none'}, Status: {status || 'none'}
+    </div>
+  ),
 }));
 
 import Deployments from './Deployments';
 
 function renderComponent() {
-  return render(
-    <MemoryRouter>
-      <Deployments />
-    </MemoryRouter>
-  );
+  return renderWithProviders(<Deployments />);
 }
 
 describe('Deployments', () => {
@@ -118,6 +138,8 @@ describe('Deployments', () => {
       page: 1,
       page_size: 20,
     });
+    // Reset deploy states
+    Object.keys(mockDeployStates).forEach((key) => delete mockDeployStates[key]);
   });
 
   it('renders the Deployments heading', () => {
@@ -211,6 +233,7 @@ describe('DeploymentHistoryTab', () => {
       page: 1,
       page_size: 20,
     });
+    Object.keys(mockDeployStates).forEach((key) => delete mockDeployStates[key]);
   });
 
   async function switchToHistoryTab() {
@@ -244,7 +267,11 @@ describe('DeploymentHistoryTab', () => {
   it('renders deployment rows with API name and environment badge', async () => {
     mockListDeployments.mockResolvedValue({
       items: [
-        mockDeployment({ api_name: 'Customer API', environment: 'production', status: 'success' }),
+        mockDeployment({
+          api_name: 'Customer API',
+          environment: 'production',
+          status: 'success',
+        }),
       ],
       total: 1,
       page: 1,
@@ -358,5 +385,161 @@ describe('DeploymentHistoryTab', () => {
     expect(screen.getByText('API')).toBeInTheDocument();
     expect(screen.getByText('Environment')).toBeInTheDocument();
     expect(screen.getByText('Status')).toBeInTheDocument();
+  });
+});
+
+describe('DeploymentHistoryTab — expandable rows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+    mockGetTraces.mockResolvedValue({ traces: [] });
+    mockGetTraceStats.mockResolvedValue({
+      total: 0,
+      success_rate: 0,
+      avg_duration_ms: 0,
+      by_status: {},
+    });
+    Object.keys(mockDeployStates).forEach((key) => delete mockDeployStates[key]);
+  });
+
+  async function switchToHistoryTab() {
+    renderComponent();
+    fireEvent.click(screen.getByText('Deployment History'));
+    await waitFor(() => {
+      expect(mockGetTenants).toHaveBeenCalled();
+    });
+  }
+
+  it('expands a row and shows deploy log viewer', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: [mockDeployment({ id: 'deploy-1', status: 'success' })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    });
+
+    // Click to expand
+    fireEvent.click(screen.getByText('Payment API'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('deploy-log-viewer')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Deploy Logs')).toBeInTheDocument();
+  });
+
+  it('loads historical logs when expanding a completed deployment', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: [mockDeployment({ id: 'deploy-1', status: 'success' })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Payment API'));
+
+    await waitFor(() => {
+      expect(mockLoadHistoricalLogs).toHaveBeenCalledWith('deploy-1');
+    });
+  });
+
+  it('shows deploy progress for in-progress deployment', async () => {
+    const deployId = 'deploy-live';
+    Object.assign(mockDeployStates, {
+      [deployId]: { logs: [], currentStep: 'sync', status: 'in_progress' },
+    });
+    mockListDeployments.mockResolvedValue({
+      items: [mockDeployment({ id: deployId, status: 'in_progress' })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    });
+
+    // Click to expand
+    fireEvent.click(screen.getByText('Payment API'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('deploy-progress')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Step: sync/)).toBeInTheDocument();
+  });
+
+  it('shows live indicator for in-progress deployments', async () => {
+    const deployId = 'deploy-live';
+    Object.assign(mockDeployStates, {
+      [deployId]: { logs: [], currentStep: 'init', status: 'in_progress' },
+    });
+    mockListDeployments.mockResolvedValue({
+      items: [mockDeployment({ id: deployId, status: 'in_progress' })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    });
+
+    // Expand to see live indicator
+    fireEvent.click(screen.getByText('Payment API'));
+    await waitFor(() => {
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+  });
+
+  it('collapses expanded row on second click', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: [mockDeployment({ id: 'deploy-1', status: 'success' })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    });
+
+    // Expand
+    fireEvent.click(screen.getByText('Payment API'));
+    await waitFor(() => {
+      expect(screen.getByTestId('deploy-log-viewer')).toBeInTheDocument();
+    });
+
+    // Collapse
+    fireEvent.click(screen.getByText('Payment API'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('deploy-log-viewer')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows expanded detail with spec hash', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: [
+        mockDeployment({ id: 'deploy-1', status: 'success', spec_hash: 'abc123def456789' }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Payment API'));
+    await waitFor(() => {
+      expect(screen.getByText('abc123def456')).toBeInTheDocument();
+    });
   });
 });

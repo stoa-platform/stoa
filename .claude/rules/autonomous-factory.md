@@ -211,6 +211,8 @@ All AI Factory notifications use `scripts/ai-ops/ai-factory-notify.sh` — a cen
 | `notify_error` | `WORKFLOW JOB [TICKET] [EXEC_FILE] [DURATION_SECS]` | Vercel-style error with log excerpt + retry button |
 | `notify_scan` | `TOTAL CREATED [CAPPED]` | Autopilot scan summary |
 | `notify_scheduled` | `TASK STATUS [DETAIL]` | Daily/weekly task results |
+| `notify_pr_hygiene` | `TOTAL STALE ABANDONED DRAFT` | PR Hygiene daily report + close button |
+| `push_metrics_pr_hygiene` | `TOTAL STALE ABANDONED DRAFT` | Push PR hygiene gauges to Pushgateway |
 | `notify_plan` | `TICKET TITLE SCORE VERDICT ISSUE_URL [ISSUE_NUM]` | Plan validation (Stage 2) |
 | `linear_comment` | `TICKET STATUS [PR_NUM] [PR_URL] [PIPELINE] [DURATION_SECS] [FILES] [LOC] [MODE]` | Rich markdown report on Linear |
 | `write_job_summary` | `TICKET STATUS [PR_NUM] [MODEL] [PIPELINE] [DURATION_SECS] [ERROR_EXCERPT]` | GHA audit trail |
@@ -392,6 +394,7 @@ The `repository_dispatch` `client_payload` includes phase-aware fields:
 | Timeout per job | 15-60 min | Hard stop on runaway jobs |
 | Skip Council S2 for | Ship-mode ≤5 pts | Avoid unnecessary plan validation |
 | Schedule frequency | Daily/weekly (not hourly) | Control API usage |
+| PR Hygiene scan | Daily 07:30 UTC, zero-token bash | Labels + Slack close button, no Claude tokens |
 | Kill-switch model | `CLAUDE_DEFAULT_MODEL` repo var | Revert all tiers to `claude-sonnet-4-6` |
 
 ## Security

@@ -40,8 +40,8 @@ from .routers import (
     chat,
     consumers,
     contracts,
-    credential_mappings,
     deployments,
+    diagnostics,
     environments,
     events,
     execution_logs,
@@ -526,9 +526,6 @@ app.include_router(audit.router)
 app.include_router(backend_apis.router)
 app.include_router(backend_apis.keys_router)
 
-# Credential Mappings — per-consumer backend credential injection (CAB-1432)
-app.include_router(credential_mappings.router)
-
 # Federation — enterprise MCP multi-account (CAB-1313)
 app.include_router(federation.router)
 
@@ -537,6 +534,9 @@ app.include_router(skills.router)
 
 # Execution Logs — Consumer execution view + error taxonomy (CAB-1318)
 app.include_router(execution_logs.router)
+
+# Diagnostics — Self-diagnostic engine with auto-RCA (CAB-1316)
+app.include_router(diagnostics.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

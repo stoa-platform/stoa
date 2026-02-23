@@ -139,6 +139,8 @@ pub fn build_router(state: AppState) -> Router {
                 .post(admin::skills_upsert)
                 .delete(admin::skills_delete),
         )
+        // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
+        .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

@@ -1,0 +1,54 @@
+# Allow arena benchmark pods to push metrics to Pushgateway in monitoring namespace.
+# Required since CAB-1401 introduced default-deny-all NetworkPolicies.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-arena-to-pushgateway
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway-arena
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: pushgateway
+      ports:
+        - port: 9091
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-arena-enterprise-to-pushgateway
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway-arena-enterprise
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: pushgateway
+      ports:
+        - port: 9091
+          protocol: TCP

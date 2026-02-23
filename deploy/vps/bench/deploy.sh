@@ -35,6 +35,12 @@ declare -A UNIQUE_VPS=(
   ["54.36.209.237"]="gravitee-vps"
 )
 
+# Instance labels per VPS IP (prevent Pushgateway push overwrites between clusters)
+declare -A VPS_INSTANCE=(
+  ["51.83.45.13"]="vps-stoa-kong"
+  ["54.36.209.237"]="vps-gravitee"
+)
+
 REMOTE_DIR="/opt/arena"
 PUSHGATEWAY_URL="https://pushgateway.gostoa.dev"
 
@@ -80,13 +86,15 @@ for VPS_IP in "${!UNIQUE_VPS[@]}"; do
     "debian@${VPS_IP}:${REMOTE_DIR}/scripts/"
   scp -i "$SSH_KEY" -q "$SCRIPT_DIR/docker-compose.yml" "debian@${VPS_IP}:${REMOTE_DIR}/"
 
-  echo "  [3/5] Creating .env file..."
+  INSTANCE_LABEL="${VPS_INSTANCE[$VPS_IP]}"
+  echo "  [3/5] Creating .env file (instance=$INSTANCE_LABEL)..."
   ssh -i "$SSH_KEY" "debian@${VPS_IP}" "cat > ${REMOTE_DIR}/.env <<ENVEOF
 PUSHGATEWAY_URL=${PUSHGATEWAY_URL}
 PUSHGATEWAY_AUTH=arena:arena-push-2026
 RUNS=5
 DISCARD_FIRST=1
 TIMEOUT=5
+ARENA_INSTANCE=${INSTANCE_LABEL}
 GATEWAYS=${COMBINED_GATEWAYS}
 ENVEOF"
 

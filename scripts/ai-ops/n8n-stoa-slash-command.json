@@ -1,54 +1,89 @@
 {
-  "name": "STOA AI Factory — /stoa Slash Command",
+  "name": "STOA AI Factory \u2014 /stoa Slash Command",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "stoa-slash-command",
         "responseMode": "responseNode",
-        "options": { "rawBody": true }
+        "options": {
+          "rawBody": true
+        }
       },
       "id": "slash-webhook",
       "name": "Slash Command Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "stoa-slash-command"
     },
     {
       "parameters": {
-        "jsCode": "// All-in-one: Validate Slack signature → Parse command → Check access → Execute → Return response\nconst crypto = require('crypto');\nconst https = require('https');\n\n// --- Helper: HTTPS request ---\nfunction httpsRequest(url, method, hdrs, body) {\n  return new Promise((resolve, reject) => {\n    const urlObj = new URL(url);\n    const bodyStr = body ? JSON.stringify(body) : null;\n    const options = {\n      hostname: urlObj.hostname,\n      path: urlObj.pathname + urlObj.search,\n      method,\n      headers: {\n        ...hdrs,\n        ...(bodyStr ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) } : {})\n      }\n    };\n    const req = https.request(options, (res) => {\n      let data = '';\n      res.on('data', chunk => data += chunk);\n      res.on('end', () => resolve({ status: res.statusCode, data }));\n    });\n    req.on('error', reject);\n    if (bodyStr) req.write(bodyStr);\n    req.end();\n  });\n}\n\n// --- 1. Validate Slack Signature ---\nconst headers = $input.first().json.headers;\nconst rawBody = $input.first().json.body;\nconst signature = headers['x-slack-signature'];\nconst timestamp = headers['x-slack-request-timestamp'];\nconst signingSecret = $env.SLACK_SIGNING_SECRET;\n\nif (!signingSecret) {\n  return [{ json: { responseText: 'Error: SLACK_SIGNING_SECRET not configured' } }];\n}\n\nconst now = Math.floor(Date.now() / 1000);\nif (Math.abs(now - parseInt(timestamp, 10)) > 300) {\n  return [{ json: { responseText: 'Error: Request timestamp too old' } }];\n}\n\nconst sigBasestring = `v0:${timestamp}:${rawBody}`;\nconst expected = 'v0=' + crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex');\nif (!crypto.timingSafeEqual(Buffer.from(signature || ''), Buffer.from(expected))) {\n  return [{ json: { responseText: 'Error: Invalid Slack signature' } }];\n}\n\n// --- 2. Parse Command ---\nconst params = new URLSearchParams(rawBody);\nconst text = (params.get('text') || '').trim();\nconst userId = params.get('user_id') || '';\nconst userName = params.get('user_name') || '';\n\nconst parts = text.split(/\\s+/);\nconst command = (parts[0] || 'help').toLowerCase();\nconst arg = parts.slice(1).join(' ');\n\n// --- 3. Check Access Tier ---\nconst adminUsers = ($env.SLACK_ADMIN_USERS || '').split(',').map(s => s.trim()).filter(Boolean);\nconst allowedUsers = ($env.SLACK_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean);\n\nlet tier = 'readonly';\nif (adminUsers.length > 0 && adminUsers.includes(userId)) {\n  tier = 'admin';\n} else if (adminUsers.length === 0 && allowedUsers.length > 0 && allowedUsers.includes(userId)) {\n  tier = 'admin';\n} else if (allowedUsers.includes(userId)) {\n  tier = 'allowed';\n}\nif (tier === 'readonly') {\n  if (allowedUsers.length > 0) {\n    return [{ json: { responseText: 'Error: Not authorized' } }];\n  }\n  tier = 'admin';\n}\n\n// --- 4. Route & Execute ---\nconst githubToken = $env.GITHUB_PAT;\nconst repo = 'stoa-platform/stoa';\nconst ghHeaders = {\n  'Accept': 'application/vnd.github.v3+json',\n  'Authorization': `token ${githubToken}`,\n  'User-Agent': 'n8n-stoa-ai-factory'\n};\n\nlet responseText = '';\n\ntry {\n  if (command === 'help') {\n    responseText = ':factory: */stoa* — AI Factory Commands\\n\\n' +\n      '`/stoa help` — Show this help\\n' +\n      '`/stoa status` — Recent workflow runs\\n' +\n      '`/stoa scan` — Trigger backlog scan (admin)\\n' +\n      '`/stoa implement CAB-XXXX` — Dispatch ticket (admin)\\n\\n' +\n      'Your tier: *' + tier + '*';\n\n  } else if (command === 'status') {\n    const result = await httpsRequest(\n      'https://api.github.com/repos/' + repo + '/actions/runs?per_page=5&status=completed',\n      'GET', ghHeaders, null\n    );\n    const runs = JSON.parse(result.data).workflow_runs || [];\n    const lines = runs.map(r => {\n      const emoji = r.conclusion === 'success' ? ':white_check_mark:' : ':x:';\n      const date = new Date(r.updated_at).toISOString().slice(0, 16).replace('T', ' ');\n      return emoji + ' *' + r.name + '* — ' + r.conclusion + ' (' + date + ')';\n    });\n    responseText = lines.length > 0\n      ? ':satellite_antenna: *Recent Workflow Runs*\\n' + lines.join('\\n')\n      : ':satellite_antenna: No recent workflow runs found.';\n\n  } else if (command === 'scan') {\n    if (tier !== 'admin') {\n      responseText = 'Error: Scan requires admin tier';\n    } else {\n      await httpsRequest(\n        'https://api.github.com/repos/' + repo + '/actions/workflows/claude-autopilot-scan.yml/dispatches',\n        'POST', ghHeaders, { ref: 'main', inputs: { max_tickets: '3' } }\n      );\n      responseText = ':satellite_antenna: Backlog scan triggered. Results will appear in #ai-factory.';\n    }\n\n  } else if (command === 'implement') {\n    if (tier !== 'admin') {\n      responseText = 'Error: Implement requires admin tier';\n    } else {\n      const match = arg.match(/^(CAB-\\d+)$/i);\n      if (!match) {\n        responseText = 'Error: Invalid ticket format. Expected: CAB-XXXX';\n      } else {\n        const ticketId = match[1].toUpperCase();\n        await httpsRequest(\n          'https://api.github.com/repos/' + repo + '/dispatches',\n          'POST', ghHeaders, {\n            event_type: 'linear-ticket-started',\n            client_payload: {\n              ticket_id: ticketId,\n              ticket_title: 'Dispatched via /stoa',\n              ticket_description: 'Triggered from Slack by ' + userName,\n              priority: 2,\n              estimate: 5\n            }\n          }\n        );\n        responseText = ':rocket: L3 pipeline dispatched for *' + ticketId + '*. Council will validate in #ai-factory.';\n      }\n    }\n\n  } else {\n    responseText = 'Unknown command. Try `/stoa help`.';\n  }\n} catch (err) {\n  responseText = 'Error: ' + err.message;\n}\n\nreturn [{ json: { responseText } }];"
+        "jsCode": "// All-in-one: Validate Slack signature \u2192 Parse command \u2192 Check access \u2192 Execute \u2192 Return response\nconst crypto = require('crypto');\nconst https = require('https');\nconst { URL, URLSearchParams } = require('url');\n\n// --- Helper: HTTPS request ---\nfunction httpsRequest(url, method, hdrs, body) {\n  return new Promise((resolve, reject) => {\n    const urlObj = new URL(url);\n    const bodyStr = body ? JSON.stringify(body) : null;\n    const options = {\n      hostname: urlObj.hostname,\n      path: urlObj.pathname + urlObj.search,\n      method,\n      headers: {\n        ...hdrs,\n        ...(bodyStr ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) } : {})\n      }\n    };\n    const req = https.request(options, (res) => {\n      let data = '';\n      res.on('data', chunk => data += chunk);\n      res.on('end', () => resolve({ status: res.statusCode, data }));\n    });\n    req.on('error', reject);\n    if (bodyStr) req.write(bodyStr);\n    req.end();\n  });\n}\n\n// --- 1. Validate Slack Signature ---\nconst headers = $input.first().json.headers;\nconst rawBody = Buffer.from($input.first().binary.data.data, 'base64').toString('utf-8');\nconst signature = headers['x-slack-signature'];\nconst timestamp = headers['x-slack-request-timestamp'];\nconst signingSecret = $env.SLACK_SIGNING_SECRET;\n\nif (!signingSecret) {\n  return [{ json: { responseText: 'Error: SLACK_SIGNING_SECRET not configured' } }];\n}\n\nconst now = Math.floor(Date.now() / 1000);\nif (Math.abs(now - parseInt(timestamp, 10)) > 300) {\n  return [{ json: { responseText: 'Error: Request timestamp too old' } }];\n}\n\nconst sigBasestring = `v0:${timestamp}:${rawBody}`;\nconst expected = 'v0=' + crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex');\nif (!crypto.timingSafeEqual(Buffer.from(signature || ''), Buffer.from(expected))) {\n  return [{ json: { responseText: 'Error: Invalid Slack signature' } }];\n}\n\n// --- 2. Parse Command ---\nconst params = new URLSearchParams(rawBody);\nconst text = (params.get('text') || '').trim();\nconst userId = params.get('user_id') || '';\nconst userName = params.get('user_name') || '';\n\nconst parts = text.split(/\\s+/);\nconst command = (parts[0] || 'help').toLowerCase();\nconst arg = parts.slice(1).join(' ');\n\n// --- 3. Check Access Tier ---\nconst adminUsers = ($env.SLACK_ADMIN_USERS || '').split(',').map(s => s.trim()).filter(Boolean);\nconst allowedUsers = ($env.SLACK_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean);\n\nlet tier = 'readonly';\nif (adminUsers.length > 0 && adminUsers.includes(userId)) {\n  tier = 'admin';\n} else if (adminUsers.length === 0 && allowedUsers.length > 0 && allowedUsers.includes(userId)) {\n  tier = 'admin';\n} else if (allowedUsers.includes(userId)) {\n  tier = 'allowed';\n}\nif (tier === 'readonly') {\n  if (allowedUsers.length > 0) {\n    return [{ json: { responseText: 'Error: Not authorized' } }];\n  }\n  tier = 'admin';\n}\n\n// --- 4. Route & Execute ---\nconst githubToken = $env.GITHUB_PAT;\nconst repo = 'stoa-platform/stoa';\nconst ghHeaders = {\n  'Accept': 'application/vnd.github.v3+json',\n  'Authorization': `token ${githubToken}`,\n  'User-Agent': 'n8n-stoa-ai-factory'\n};\n\nlet responseText = '';\n\ntry {\n  if (command === 'help') {\n    responseText = ':factory: */stoa* \u2014 AI Factory Commands\\n\\n' +\n      '`/stoa help` \u2014 Show this help\\n' +\n      '`/stoa status` \u2014 Recent workflow runs\\n' +\n      '`/stoa scan` \u2014 Trigger backlog scan (admin)\\n' +\n      '`/stoa implement CAB-XXXX` \u2014 Dispatch ticket (admin)\\n\\n' +\n      'Your tier: *' + tier + '*';\n\n  } else if (command === 'status') {\n    const result = await httpsRequest(\n      'https://api.github.com/repos/' + repo + '/actions/runs?per_page=5&status=completed',\n      'GET', ghHeaders, null\n    );\n    const runs = JSON.parse(result.data).workflow_runs || [];\n    const lines = runs.map(r => {\n      const emoji = r.conclusion === 'success' ? ':white_check_mark:' : ':x:';\n      const date = new Date(r.updated_at).toISOString().slice(0, 16).replace('T', ' ');\n      return emoji + ' *' + r.name + '* \u2014 ' + r.conclusion + ' (' + date + ')';\n    });\n    responseText = lines.length > 0\n      ? ':satellite_antenna: *Recent Workflow Runs*\\n' + lines.join('\\n')\n      : ':satellite_antenna: No recent workflow runs found.';\n\n  } else if (command === 'scan') {\n    if (tier !== 'admin') {\n      responseText = 'Error: Scan requires admin tier';\n    } else {\n      await httpsRequest(\n        'https://api.github.com/repos/' + repo + '/actions/workflows/claude-autopilot-scan.yml/dispatches',\n        'POST', ghHeaders, { ref: 'main', inputs: { max_tickets: '3' } }\n      );\n      responseText = ':satellite_antenna: Backlog scan triggered. Results will appear in #ai-factory.';\n    }\n\n  } else if (command === 'implement') {\n    if (tier !== 'admin') {\n      responseText = 'Error: Implement requires admin tier';\n    } else {\n      const match = arg.match(/^(CAB-\\d+)$/i);\n      if (!match) {\n        responseText = 'Error: Invalid ticket format. Expected: CAB-XXXX';\n      } else {\n        const ticketId = match[1].toUpperCase();\n        await httpsRequest(\n          'https://api.github.com/repos/' + repo + '/dispatches',\n          'POST', ghHeaders, {\n            event_type: 'linear-ticket-started',\n            client_payload: {\n              ticket_id: ticketId,\n              ticket_title: 'Dispatched via /stoa',\n              ticket_description: 'Triggered from Slack by ' + userName,\n              priority: 2,\n              estimate: 5\n            }\n          }\n        );\n        responseText = ':rocket: L3 pipeline dispatched for *' + ticketId + '*. Council will validate in #ai-factory.';\n      }\n    }\n\n  } else {\n    responseText = 'Unknown command. Try `/stoa help`.';\n  }\n} catch (err) {\n  responseText = 'Error: ' + err.message;\n}\n\nreturn [{ json: { responseText } }];"
       },
       "id": "process-command",
       "name": "Process Command",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
         "responseBody": "={ \"response_type\": \"ephemeral\", \"text\": {{ JSON.stringify($json.responseText) }} }",
-        "options": { "responseCode": 200 }
+        "options": {
+          "responseCode": 200
+        }
       },
       "id": "send-response",
       "name": "Send Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [800, 300]
+      "position": [
+        800,
+        300
+      ]
     }
   ],
   "connections": {
     "Slash Command Webhook": {
-      "main": [[{ "node": "Process Command", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Process Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Process Command": {
-      "main": [[{ "node": "Send Response", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" },
-  "tags": [{ "name": "ai-factory" }],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ai-factory"
+    }
+  ],
   "meta": {
-    "notes": "Slack /stoa Slash Command handler for STOA AI Factory (v3 — consolidated for n8n v2).\n\nSingle Code node handles: Slack signature validation, command parsing, access check, routing + execution.\nReplaces multi-node v2 which used Switch v3.2 (broken in n8n v2.8.4).\n\nCommands: help, status (GHA runs), scan (workflow_dispatch), implement CAB-XXXX (repository_dispatch).\nRequired env vars: SLACK_SIGNING_SECRET, GITHUB_PAT, SLACK_ADMIN_USERS, SLACK_ALLOWED_USERS.\nRequired n8n env: NODE_FUNCTION_ALLOW_BUILTIN=crypto,https,url,buffer, N8N_BLOCK_ENV_ACCESS_IN_NODE=false."
+    "notes": "Slack /stoa Slash Command handler for STOA AI Factory (v3 \u2014 consolidated for n8n v2).\n\nSingle Code node handles: Slack signature validation, command parsing, access check, routing + execution.\nReplaces multi-node v2 which used Switch v3.2 (broken in n8n v2.8.4).\n\nCommands: help, status (GHA runs), scan (workflow_dispatch), implement CAB-XXXX (repository_dispatch).\nRequired env vars: SLACK_SIGNING_SECRET, GITHUB_PAT, SLACK_ADMIN_USERS, SLACK_ALLOWED_USERS.\nRequired n8n env: NODE_FUNCTION_ALLOW_BUILTIN=crypto,https,url,buffer, N8N_BLOCK_ENV_ACCESS_IN_NODE=false."
   }
 }

@@ -14,3 +14,4 @@ pub mod protocol;
 pub mod session;
 pub mod sse;
 pub mod tools;
+pub mod ws;

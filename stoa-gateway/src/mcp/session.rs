@@ -46,6 +46,8 @@ pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<String, Session>>>,
     /// NotificationBus: maps session_id -> SSE event sender (CAB-1178)
     channels: Arc<RwLock<HashMap<String, mpsc::Sender<Event>>>>,
+    /// WebSocket notification channels (CAB-1345)
+    ws_channels: Arc<RwLock<HashMap<String, mpsc::Sender<String>>>>,
     ttl: Duration,
 }
 
@@ -54,6 +56,7 @@ impl SessionManager {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             channels: Arc::new(RwLock::new(HashMap::new())),
+            ws_channels: Arc::new(RwLock::new(HashMap::new())),
             ttl: Duration::minutes(ttl_minutes),
         }
     }
@@ -76,9 +79,10 @@ impl SessionManager {
         }
     }
 
-    /// Remove session and its notification channel
+    /// Remove session and its notification channels (SSE + WS)
     pub async fn remove(&self, id: &str) -> bool {
         self.channels.write().remove(id);
+        self.ws_channels.write().remove(id);
         self.sessions.write().remove(id).is_some()
     }
 
@@ -188,6 +192,71 @@ impl SessionManager {
         sent
     }
 
+    // === WebSocket Channels (CAB-1345) ===
+
+    /// Register a WebSocket notification channel for a session.
+    pub fn register_ws_channel(&self, session_id: &str, tx: mpsc::Sender<String>) {
+        self.ws_channels.write().insert(session_id.to_string(), tx);
+        debug!(session_id = %session_id, "WS channel registered");
+    }
+
+    /// Unregister a WebSocket notification channel.
+    pub fn unregister_ws_channel(&self, session_id: &str) {
+        if self.ws_channels.write().remove(session_id).is_some() {
+            debug!(session_id = %session_id, "WS channel unregistered");
+        }
+    }
+
+    /// Send a text message to a specific session via WebSocket.
+    pub fn send_to_session_ws(&self, session_id: &str, message: &str) -> bool {
+        let channels = self.ws_channels.read();
+        if let Some(tx) = channels.get(session_id) {
+            match tx.try_send(message.to_string()) {
+                Ok(()) => return true,
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    warn!(session_id = %session_id, "WS channel full, message dropped");
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    debug!(session_id = %session_id, "WS channel closed");
+                }
+            }
+        }
+        false
+    }
+
+    /// Broadcast a text message to all WS sessions belonging to a tenant.
+    pub fn broadcast_to_tenant_ws(&self, tenant_id: &str, message: &str) -> usize {
+        let matching_ids: Vec<String> = {
+            let sessions = self.sessions.read();
+            sessions
+                .iter()
+                .filter(|(_, s)| s.tenant_id == tenant_id)
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+
+        if matching_ids.is_empty() {
+            return 0;
+        }
+
+        let channels = self.ws_channels.read();
+        let mut sent = 0;
+        for id in &matching_ids {
+            if let Some(tx) = channels.get(id) {
+                match tx.try_send(message.to_string()) {
+                    Ok(()) => sent += 1,
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        warn!(session_id = %id, "WS broadcast: channel full");
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                        debug!(session_id = %id, "WS broadcast: channel closed");
+                    }
+                }
+            }
+        }
+        sent
+    }
+
     /// Cleanup expired sessions and their channels
     pub fn cleanup_expired(&self) {
         // Phase 1: collect expired IDs (read lock)
@@ -208,9 +277,11 @@ impl SessionManager {
         {
             let mut sessions = self.sessions.write();
             let mut channels = self.channels.write();
+            let mut ws_channels = self.ws_channels.write();
             for id in &expired_ids {
                 sessions.remove(id);
                 channels.remove(id);
+                ws_channels.remove(id);
                 debug!(session_id = %id, "Session expired");
             }
         }
@@ -252,6 +323,7 @@ impl Clone for SessionManager {
         Self {
             sessions: self.sessions.clone(),
             channels: self.channels.clone(),
+            ws_channels: self.ws_channels.clone(),
             ttl: self.ttl,
         }
     }

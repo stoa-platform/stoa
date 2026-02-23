@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STOA — The European Agent Gateway | Open Source MCP Gateway</title>
+  <meta name="description" content="Open-source AI-native API gateway. Define Once, Expose Everywhere. Connect legacy APIs to AI agents via MCP in minutes. European sovereign, Apache 2.0." />
+  <meta name="keywords" content="MCP gateway, API gateway, AI agent, Model Context Protocol, open source, European sovereign, multi-gateway, UAC, Universal API Contract, Apache 2.0" />
+  <meta name="author" content="STOA Platform" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://gostoa.dev" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://gostoa.dev" />
+  <meta property="og:title" content="STOA — The European Agent Gateway" />
+  <meta property="og:description" content="Open-source AI-native API gateway. Define Once, Expose Everywhere. Connect legacy APIs to AI agents via MCP in minutes." />
+  <meta property="og:site_name" content="STOA Platform" />
+  <meta property="og:locale" content="en_US" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="STOA — The European Agent Gateway" />
+  <meta name="twitter:description" content="Open-source AI-native API gateway. Define Once, Expose Everywhere. MCP-native, multi-gateway, European sovereign." />
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "STOA Platform",
+    "alternateName": "STOA — The European Agent Gateway",
+    "description": "Open-source AI-native API gateway. Define Once, Expose Everywhere. Connect legacy APIs to AI agents via MCP.",
+    "url": "https://gostoa.dev",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, Kubernetes",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "author": { "@type": "Organization", "name": "STOA Platform", "url": "https://gostoa.dev" },
+    "sourceOrganization": { "@type": "Organization", "name": "STOA Platform" }
+  }
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Source+Code+Pro:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body>
+
+  <!-- ========== NAV ========== -->
+  <nav class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <svg width="28" height="28" viewBox="0 0 32 32">
+          <defs><linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#047857"/><stop offset="100%" style="stop-color:#059669"/></linearGradient></defs>
+          <circle cx="16" cy="16" r="15" fill="url(#logo-grad)"/>
+          <path d="M10 11 Q10 8, 16 8 Q22 8, 22 11 Q22 14, 16 14 Q10 14, 10 17 Q10 20, 16 20 Q22 20, 22 24 Q22 27, 16 27" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          <circle cx="8" cy="14" r="1.5" fill="white" opacity="0.8"/><circle cx="24" cy="14" r="1.5" fill="white" opacity="0.8"/>
+          <circle cx="8" cy="20" r="1.5" fill="white" opacity="0.8"/><circle cx="24" cy="20" r="1.5" fill="white" opacity="0.8"/>
+        </svg>
+        <span>STOA</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#ttfac">TTFAC</a>
+        <a href="https://docs.gostoa.dev" target="_blank" rel="noopener">Docs</a>
+        <a href="https://github.com/stoa-platform/stoa" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <a href="https://console.gostoa.dev" class="nav-cta">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- ========== HERO ========== -->
+  <main>
+  <section class="hero" id="hero" aria-label="Hero — The European Agent Gateway">
+    <div class="hero-bg">
+      <div class="orb orb-teal" data-parallax="0.15"></div>
+      <div class="orb orb-purple" data-parallax="0.25"></div>
+      <div class="orb orb-blue" data-parallax="0.1"></div>
+      <div class="grid-overlay"></div>
+    </div>
+
+    <div class="hero-content">
+      <div class="badge reveal" data-reveal>
+        <span class="badge-flag">&#127466;&#127482;</span>
+        Open Source &middot; Apache 2.0 &middot; European Sovereign
+      </div>
+
+      <h1 class="hero-title reveal" data-reveal data-reveal-delay="100">
+        <span class="gradient-text">The European</span><br/>
+        <span class="gradient-text-alt">Agent Gateway</span>
+      </h1>
+
+      <p class="hero-sub reveal" data-reveal data-reveal-delay="200">
+        <span class="typewriter" data-typewriter="Define Once, Expose Everywhere — connect legacy APIs to AI agents in minutes, not months."></span>
+      </p>
+
+      <div class="hero-ctas reveal" data-reveal data-reveal-delay="300">
+        <a href="https://console.gostoa.dev" class="btn btn-primary glow-btn">
+          Start Building
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a href="https://docs.gostoa.dev/docs/guides/quick-start" class="btn btn-secondary">
+          Quick Start
+        </a>
+      </div>
+
+      <div class="hero-meta reveal" data-reveal data-reveal-delay="400">
+        <span class="meta-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2v12l4-3 4 3V2z" stroke="#10b981" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+          916 PRs merged
+        </span>
+        <span class="meta-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1l2.5 5 5.5.8-4 3.9 1 5.3L8 13l-5 3 1-5.3-4-3.9 5.5-.8z" fill="#8b5cf6"/></svg>
+          13.5 PRs/day
+        </span>
+        <span class="meta-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#2dd4bf" stroke-width="2" fill="none"/><path d="M6 8l2 2 3-4" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          3,900+ tests
+        </span>
+        <span class="meta-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#f59e0b" stroke-width="1.5" fill="none"/><path d="M5 8h6M8 5v6" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg>
+          68 days
+        </span>
+      </div>
+    </div>
+
+    <!-- Mock UI Dashboard -->
+    <div class="mock-ui reveal" data-reveal data-reveal-delay="500">
+      <div class="mock-ui-inner">
+        <div class="mock-titlebar">
+          <div class="mock-dots"><span></span><span></span><span></span></div>
+          <span class="mock-titlebar-text">STOA Console — Dashboard</span>
+        </div>
+        <div class="mock-body">
+          <!-- Row 1: Stats -->
+          <div class="mock-stats">
+            <div class="mock-stat-card stagger-child" data-stagger="0">
+              <span class="mock-stat-label">PRs Merged</span>
+              <span class="mock-stat-value" data-counter="916">0</span>
+              <div class="mock-stat-bar"><div class="mock-stat-fill" style="--fill: 92%"></div></div>
+            </div>
+            <div class="mock-stat-card stagger-child" data-stagger="1">
+              <span class="mock-stat-label">Tests Passing</span>
+              <span class="mock-stat-value" data-counter="3906">0</span>
+              <div class="mock-stat-bar"><div class="mock-stat-fill" style="--fill: 100%"></div></div>
+            </div>
+            <div class="mock-stat-card stagger-child" data-stagger="2">
+              <span class="mock-stat-label">LOC Shipped</span>
+              <span class="mock-stat-value" data-counter="194501">0</span>
+              <div class="mock-stat-bar"><div class="mock-stat-fill" style="--fill: 78%"></div></div>
+            </div>
+            <div class="mock-stat-card stagger-child" data-stagger="3">
+              <span class="mock-stat-label">PRs / Day</span>
+              <span class="mock-stat-value">13.5</span>
+              <div class="mock-stat-bar"><div class="mock-stat-fill" style="--fill: 85%"></div></div>
+            </div>
+          </div>
+          <!-- Row 2: Chart + Terminal -->
+          <div class="mock-row2">
+            <div class="mock-chart stagger-child" data-stagger="4">
+              <span class="mock-chart-title">AI Velocity (3 months)</span>
+              <svg class="mock-chart-svg" viewBox="0 0 300 80" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="chart-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.4"/>
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <!-- Real data: Dec 50 commits → Jan 398 → Feb 746 (exponential growth) -->
+                <path class="chart-area" d="M0,75 C30,74 60,73 100,72 C120,70 140,45 180,35 C210,22 250,10 300,5 L300,80 L0,80 Z" fill="url(#chart-grad)"/>
+                <path class="chart-line" d="M0,75 C30,74 60,73 100,72 C120,70 140,45 180,35 C210,22 250,10 300,5" fill="none" stroke="#10b981" stroke-width="2"/>
+              </svg>
+              <div class="mock-chart-labels">
+                <span>Dec</span><span>Jan</span><span>Feb</span>
+              </div>
+            </div>
+            <div class="mock-terminal stagger-child" data-stagger="5">
+              <span class="mock-terminal-title">AI Factory</span>
+              <div class="mock-terminal-lines">
+                <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">claude /council CAB-1432</span></div>
+                <div class="term-line term-output term-success">&#10003; Council: 9.2/10 — Go (Ship)</div>
+                <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">gh pr merge --squash 903</span></div>
+                <div class="term-line term-output term-success">&#10003; PR #903 merged (13.5 PRs/day avg)</div>
+                <div class="term-line"><span class="term-prompt">$</span> <span class="term-cursor">|</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SOCIAL PROOF ========== -->
+  <section class="social-proof" id="social-proof" aria-label="Open standards and AI velocity">
+    <p class="social-proof-label reveal" data-reveal>916 PRs in 68 days &mdash; built on open standards</p>
+    <div class="logo-scroll">
+      <div class="logo-track">
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="10" fill="#5f6880" font-family="Outfit">CNCF</text></svg><span>CNCF</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="4" y="4" width="32" height="32" rx="4" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="9" fill="#5f6880" font-family="Outfit">MCP</text></svg><span>MCP Protocol</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><polygon points="20,4 36,30 4,30" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="26" text-anchor="middle" font-size="8" fill="#5f6880" font-family="Outfit">IETF</text></svg><span>IETF</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="7" fill="#5f6880" font-family="Outfit">OpenID</text></svg><span>OpenID Connect</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="4" y="10" width="32" height="20" rx="3" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="8" fill="#5f6880" font-family="Outfit">OAuth</text></svg><span>OAuth 2.1</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M20 4L4 36h32z" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="30" text-anchor="middle" font-size="7" fill="#5f6880" font-family="Outfit">OPA</text></svg><span>Open Policy Agent</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" stroke="#5f6880" stroke-width="1.5" fill="none"/><path d="M12 20h16M20 12v16" stroke="#5f6880" stroke-width="1.5"/></svg><span>Apache 2.0</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="6" y="6" width="28" height="28" rx="6" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="7" fill="#5f6880" font-family="Outfit">K8s</text></svg><span>Kubernetes</span></div>
+        <!-- Duplicate set for seamless scroll loop -->
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="10" fill="#5f6880" font-family="Outfit">CNCF</text></svg><span>CNCF</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="4" y="4" width="32" height="32" rx="4" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="9" fill="#5f6880" font-family="Outfit">MCP</text></svg><span>MCP Protocol</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><polygon points="20,4 36,30 4,30" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="26" text-anchor="middle" font-size="8" fill="#5f6880" font-family="Outfit">IETF</text></svg><span>IETF</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="7" fill="#5f6880" font-family="Outfit">OpenID</text></svg><span>OpenID Connect</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="4" y="10" width="32" height="20" rx="3" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="8" fill="#5f6880" font-family="Outfit">OAuth</text></svg><span>OAuth 2.1</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M20 4L4 36h32z" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="30" text-anchor="middle" font-size="7" fill="#5f6880" font-family="Outfit">OPA</text></svg><span>Open Policy Agent</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" stroke="#5f6880" stroke-width="1.5" fill="none"/><path d="M12 20h16M20 12v16" stroke="#5f6880" stroke-width="1.5"/></svg><span>Apache 2.0</span></div>
+        <div class="logo-item"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="6" y="6" width="28" height="28" rx="6" stroke="#5f6880" stroke-width="1.5" fill="none"/><text x="20" y="24" text-anchor="middle" font-size="7" fill="#5f6880" font-family="Outfit">K8s</text></svg><span>Kubernetes</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== TTFAC ========== -->
+  <section class="ttfac" id="ttfac" aria-label="Time to First API Call comparison">
+    <div class="section-container">
+      <div class="section-header reveal" data-reveal>
+        <span class="section-tag">Time to First API Call</span>
+        <h2 class="section-title">From weeks to <span class="gradient-text">minutes</span></h2>
+        <p class="section-desc">Traditional API gateways require weeks of configuration. STOA gets your first AI agent connected in under 5 minutes.</p>
+      </div>
+
+      <div class="ttfac-compare">
+        <div class="ttfac-card ttfac-old reveal tilt-card" data-reveal data-tilt>
+          <div class="ttfac-card-header ttfac-header-old">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#ef4444" stroke-width="2" fill="none"/><path d="M12 7v5l3 3" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/></svg>
+            <span>Traditional Gateway</span>
+          </div>
+          <div class="ttfac-counter">
+            <span class="ttfac-number" data-counter="14">0</span>
+            <span class="ttfac-unit">days</span>
+          </div>
+          <ul class="ttfac-steps">
+            <li>Procurement &amp; licensing</li>
+            <li>Infrastructure provisioning</li>
+            <li>Gateway installation</li>
+            <li>API configuration</li>
+            <li>Security policy setup</li>
+            <li>Testing &amp; validation</li>
+            <li>Custom MCP adapter development</li>
+          </ul>
+        </div>
+
+        <div class="ttfac-timeline reveal" data-reveal data-reveal-delay="200">
+          <div class="ttfac-timeline-line"></div>
+          <div class="ttfac-timeline-arrow">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="22" stroke="url(#arrow-grad)" stroke-width="2" fill="none"/>
+              <path d="M18 24h12m-5-5l5 5-5 5" stroke="url(#arrow-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <defs><linearGradient id="arrow-grad" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#10b981"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+            </svg>
+          </div>
+          <div class="ttfac-timeline-line"></div>
+        </div>
+
+        <div class="ttfac-card ttfac-new reveal tilt-card" data-reveal data-reveal-delay="100" data-tilt>
+          <div class="ttfac-card-header ttfac-header-new">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#10b981" stroke-width="2" fill="none"/><path d="M8 12l3 3 5-6" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>STOA Platform</span>
+          </div>
+          <div class="ttfac-counter">
+            <span class="ttfac-number ttfac-number-green" data-counter="5">0</span>
+            <span class="ttfac-unit">minutes</span>
+          </div>
+          <ul class="ttfac-steps ttfac-steps-fast">
+            <li>docker compose up</li>
+            <li>Define UAC contract</li>
+            <li>Connect AI agent via MCP</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== FEATURES ========== -->
+  <section class="features" id="features" aria-label="Key features">
+
+    <!-- Feature 1: MCP-Native -->
+    <div class="feature-block">
+      <div class="feature-text reveal" data-reveal>
+        <span class="feature-tag">AI-Native Protocol</span>
+        <h2 class="feature-title">MCP-Native<br/>from day one</h2>
+        <p class="feature-desc">STOA speaks the Model Context Protocol natively. No adapters, no plugins, no middleware. Your AI agents connect directly to enterprise APIs through a standardized, secure gateway.</p>
+        <ul class="feature-list">
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#10b981" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Tool discovery &amp; execution</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#10b981" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>OAuth 2.1 + PKCE authentication</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#10b981" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Streaming &amp; WebSocket transport</li>
+        </ul>
+      </div>
+      <div class="feature-visual reveal" data-reveal data-reveal-delay="200">
+        <div class="feature-anim-mcp">
+          <div class="mcp-center"><div class="mcp-hub">STOA</div></div>
+          <div class="mcp-agent mcp-agent-1"><span>Claude</span></div>
+          <div class="mcp-agent mcp-agent-2"><span>GPT-4</span></div>
+          <div class="mcp-agent mcp-agent-3"><span>Gemini</span></div>
+          <div class="mcp-line mcp-line-1"></div>
+          <div class="mcp-line mcp-line-2"></div>
+          <div class="mcp-line mcp-line-3"></div>
+          <div class="mcp-pulse mcp-pulse-1"></div>
+          <div class="mcp-pulse mcp-pulse-2"></div>
+          <div class="mcp-pulse mcp-pulse-3"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 2: UAC -->
+    <div class="feature-block feature-block-reverse">
+      <div class="feature-text reveal" data-reveal>
+        <span class="feature-tag">Kill Feature</span>
+        <h2 class="feature-title">Universal API<br/><span class="gradient-text">Contract</span></h2>
+        <p class="feature-desc">Define your API contract once, and STOA exposes it everywhere — REST, GraphQL, MCP, gRPC. One source of truth that adapts to any consumer.</p>
+        <ul class="feature-list">
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#8b5cf6" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>OpenAPI &rarr; MCP auto-transform</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#8b5cf6" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Schema validation at the edge</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#8b5cf6" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Version-aware routing</li>
+        </ul>
+      </div>
+      <div class="feature-visual reveal" data-reveal data-reveal-delay="200">
+        <div class="feature-anim-uac">
+          <div class="uac-source"><code>openapi.yaml</code></div>
+          <div class="uac-arrows">
+            <div class="uac-arrow uac-arrow-1"><span>REST</span></div>
+            <div class="uac-arrow uac-arrow-2"><span>MCP</span></div>
+            <div class="uac-arrow uac-arrow-3"><span>GraphQL</span></div>
+            <div class="uac-arrow uac-arrow-4"><span>gRPC</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 3: Multi-Gateway -->
+    <div class="feature-block">
+      <div class="feature-text reveal" data-reveal>
+        <span class="feature-tag">Enterprise Ready</span>
+        <h2 class="feature-title">Multi-Gateway<br/>orchestration</h2>
+        <p class="feature-desc">One control plane for all your gateways. STOA orchestrates Kong, Gravitee, Apigee, Azure APIM, AWS API Gateway, and webMethods from a single pane of glass.</p>
+        <ul class="feature-list">
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#2dd4bf" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#2dd4bf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>7 Stoa Links</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#2dd4bf" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#2dd4bf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Unified policy engine (OPA)</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#2dd4bf" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#2dd4bf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Hybrid cloud + on-premise</li>
+        </ul>
+      </div>
+      <div class="feature-visual reveal" data-reveal data-reveal-delay="200">
+        <div class="feature-anim-gw">
+          <div class="gw-orbit">
+            <div class="gw-center-logo">STOA</div>
+            <div class="gw-item gw-item-1">Kong</div>
+            <div class="gw-item gw-item-2">Gravitee</div>
+            <div class="gw-item gw-item-3">Apigee</div>
+            <div class="gw-item gw-item-4">Azure</div>
+            <div class="gw-item gw-item-5">AWS</div>
+            <div class="gw-item gw-item-6">wM</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== CTA CLOSING ========== -->
+  <section class="closing" id="closing" aria-label="Get started with STOA">
+    <div class="closing-bg">
+      <div class="orb orb-teal-lg" data-parallax="0.08"></div>
+      <div class="orb orb-purple-lg" data-parallax="0.12"></div>
+      <div class="grid-overlay"></div>
+    </div>
+    <div class="section-container closing-content">
+      <h2 class="closing-title reveal" data-reveal>
+        Ready to bridge<br/><span class="gradient-text-alt">legacy to AI?</span>
+      </h2>
+      <p class="closing-desc reveal" data-reveal data-reveal-delay="100">
+        Join hundreds of teams using STOA to connect their enterprise APIs to the AI agent ecosystem.
+      </p>
+      <div class="closing-ctas reveal" data-reveal data-reveal-delay="200">
+        <a href="https://console.gostoa.dev" class="btn btn-primary glow-btn btn-lg">
+          Start for Free
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a href="https://github.com/stoa-platform/stoa" class="btn btn-secondary btn-lg">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          Star on GitHub
+        </a>
+      </div>
+      <div class="closing-stats reveal" data-reveal data-reveal-delay="300">
+        <div class="closing-stat">
+          <span class="closing-stat-num" data-counter="916">0</span>
+          <span class="closing-stat-label">PRs merged</span>
+        </div>
+        <div class="closing-stat">
+          <span class="closing-stat-num" data-counter="194501">0</span>
+          <span class="closing-stat-label">lines of code</span>
+        </div>
+        <div class="closing-stat">
+          <span class="closing-stat-num" data-counter="3906">0</span>
+          <span class="closing-stat-label">tests passing</span>
+        </div>
+        <div class="closing-stat">
+          <span class="closing-stat-num" data-counter="7">0</span>
+          <span class="closing-stat-label">Stoa Links</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </main>
+
+  <!-- ========== FOOTER ========== -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <a href="#" class="nav-logo">
+          <svg width="24" height="24" viewBox="0 0 32 32">
+            <defs><linearGradient id="logo-grad2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#047857"/><stop offset="100%" style="stop-color:#059669"/></linearGradient></defs>
+            <circle cx="16" cy="16" r="15" fill="url(#logo-grad2)"/>
+            <path d="M10 11 Q10 8, 16 8 Q22 8, 22 11 Q22 14, 16 14 Q10 14, 10 17 Q10 20, 16 20 Q22 20, 22 24 Q22 27, 16 27" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <circle cx="8" cy="14" r="1.5" fill="white" opacity="0.8"/><circle cx="24" cy="14" r="1.5" fill="white" opacity="0.8"/>
+            <circle cx="8" cy="20" r="1.5" fill="white" opacity="0.8"/><circle cx="24" cy="20" r="1.5" fill="white" opacity="0.8"/>
+          </svg>
+          <span>STOA</span>
+        </a>
+        <p class="footer-desc">The European Agent Gateway.<br/>Open source, Apache 2.0.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="https://docs.gostoa.dev/docs/guides/quick-start">Quick Start</a>
+        <a href="https://docs.gostoa.dev/docs/concepts/architecture">Architecture</a>
+        <a href="https://docs.gostoa.dev/docs/api">API Reference</a>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <a href="https://github.com/stoa-platform/stoa">GitHub</a>
+        <a href="https://docs.gostoa.dev/blog">Blog</a>
+        <a href="https://docs.gostoa.dev/docs/community/philosophy">Philosophy</a>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="https://docs.gostoa.dev/docs/enterprise">Enterprise</a>
+        <a href="https://docs.gostoa.dev/docs/community/faq">FAQ</a>
+        <a href="https://docs.gostoa.dev/legal/trademarks">Trademarks</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 STOA Platform. Apache 2.0 License.</span>
+    </div>
+  </footer>
+
+</body>
+</html>

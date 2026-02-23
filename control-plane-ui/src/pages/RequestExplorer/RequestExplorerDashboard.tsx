@@ -68,14 +68,18 @@ function StatCard({
         <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{label}</p>
+        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
+          {label}
+        </p>
         <div className="flex items-baseline gap-1">
-          <p className={`text-2xl font-bold ${colorClass || 'text-gray-900 dark:text-white'}`}>
+          <p className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}>
             {value}
           </p>
-          {unit && <span className="text-sm text-gray-500 dark:text-gray-400">{unit}</span>}
+          {unit && <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>}
         </div>
-        {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{subtitle}</p>}
+        {subtitle && (
+          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
+        )}
       </div>
     </div>
   );
@@ -182,13 +186,13 @@ export function RequestExplorerDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Request Explorer</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Request Explorer</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Analyze API traffic patterns and error distribution
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg overflow-hidden">
+          <div className="flex items-center bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg overflow-hidden">
             {(['1h', '6h', '24h'] as const).map((range) => (
               <button
                 key={range}
@@ -196,19 +200,19 @@ export function RequestExplorerDashboard() {
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   timeRange === range
                     ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                 }`}
               >
                 {range}
               </button>
             ))}
           </div>
-          <span className="text-xs text-gray-400 dark:text-gray-500">
+          <span className="text-xs text-neutral-400 dark:text-neutral-500">
             {lastRefresh.toLocaleTimeString('fr-FR')}
           </span>
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+            className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${totalRequests.loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -305,7 +309,7 @@ export function RequestExplorerDashboard() {
           {/* Status Breakdown Bar */}
           {statusTotal > 0 && (
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase mb-3">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-3">
                 Status Code Distribution
               </h2>
               {/* Stacked bar */}
@@ -334,7 +338,7 @@ export function RequestExplorerDashboard() {
                   return (
                     <div key={group} className="flex items-center gap-1.5">
                       <span className={`w-2.5 h-2.5 rounded-full ${colorCfg.bg}`} />
-                      <span className="text-gray-600 dark:text-gray-400">
+                      <span className="text-neutral-600 dark:text-neutral-400">
                         {colorCfg.label}: {Math.round(count).toLocaleString()}
                       </span>
                     </div>
@@ -346,8 +350,8 @@ export function RequestExplorerDashboard() {
 
           {/* Request Table */}
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-neutral-700">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+            <div className="flex items-center justify-between p-4 border-b border-neutral-100 dark:border-neutral-700">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                 Top Endpoints
               </h2>
               <a
@@ -362,20 +366,20 @@ export function RequestExplorerDashboard() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b border-gray-100 dark:border-neutral-700">
+                    <tr className="text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase border-b border-neutral-100 dark:border-neutral-700">
                       <th className="px-4 py-3">Endpoint</th>
                       <th className="px-4 py-3">Method</th>
                       <th className="px-4 py-3 text-right">Requests</th>
                       <th className="px-4 py-3 text-right">Error Rate</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-neutral-700">
+                  <tbody className="divide-y divide-neutral-50 dark:divide-neutral-700">
                     {endpointRows.map((row) => (
                       <tr
                         key={`${row.method}:${row.path}`}
-                        className="hover:bg-gray-50 dark:hover:bg-neutral-750"
+                        className="hover:bg-neutral-50 dark:hover:bg-neutral-750"
                       >
-                        <td className="px-4 py-3 font-mono text-xs text-gray-900 dark:text-white">
+                        <td className="px-4 py-3 font-mono text-xs text-neutral-900 dark:text-white">
                           {row.path}
                         </td>
                         <td className="px-4 py-3">
@@ -389,13 +393,13 @@ export function RequestExplorerDashboard() {
                                     ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                                     : row.method === 'DELETE'
                                       ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                                      : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400'
                             }`}
                           >
                             {row.method}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                        <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                           {row.requests.toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -410,8 +414,8 @@ export function RequestExplorerDashboard() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12">
-                <Activity className="h-8 w-8 text-gray-300 dark:text-gray-600 mb-2" />
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <Activity className="h-8 w-8 text-neutral-300 dark:text-neutral-600 mb-2" />
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
                   {prometheusAvailable
                     ? 'No request data in this time range'
                     : 'Metrics unavailable'}

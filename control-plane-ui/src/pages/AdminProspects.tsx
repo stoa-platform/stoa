@@ -52,9 +52,9 @@ const statusColors: Record<ProspectStatus, { bg: string; text: string; dot: stri
     dot: 'bg-blue-500',
   },
   pending: {
-    bg: 'bg-gray-100 dark:bg-neutral-700',
-    text: 'text-gray-800 dark:text-neutral-300',
-    dot: 'bg-gray-400',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
+    text: 'text-neutral-800 dark:text-neutral-300',
+    dot: 'bg-neutral-400',
   },
   expired: {
     bg: 'bg-red-100 dark:bg-red-900/30',
@@ -143,10 +143,10 @@ export function AdminProspects() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
             Access Denied
           </h1>
-          <p className="text-gray-600 dark:text-neutral-400">
+          <p className="text-neutral-600 dark:text-neutral-400">
             Platform admin role required to view this page.
           </p>
         </div>
@@ -157,22 +157,22 @@ export function AdminProspects() {
   const totalPages = prospectsData ? Math.ceil(prospectsData.meta.total / PAGE_SIZE) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 p-6">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
               Prospects Dashboard
             </h1>
-            <p className="text-gray-500 dark:text-neutral-400 mt-1">
+            <p className="text-neutral-500 dark:text-neutral-400 mt-1">
               Conversion tracking for demo prospects
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => refresh()}
-              className="flex items-center gap-2 px-3 py-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             >
               <RefreshCw className="h-4 w-4" />
               Refresh
@@ -192,7 +192,7 @@ export function AdminProspects() {
         <MetricsHeader metrics={metrics} isLoading={metricsLoading} />
 
         {/* Filters */}
-        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-700 p-4">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-700 p-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex-1 min-w-[200px]">
               <input
@@ -200,13 +200,13 @@ export function AdminProspects() {
                 placeholder="Search by company..."
                 value={companySearch}
                 onChange={(e) => setCompanySearch(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             <select
               value={filters.status || ''}
               onChange={(e) => handleStatusFilter(e.target.value as ProspectStatus | '')}
-              className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Statuses</option>
               <option value="pending">Pending</option>
@@ -214,18 +214,18 @@ export function AdminProspects() {
               <option value="converted">Converted</option>
               <option value="expired">Expired</option>
             </select>
-            <span className="text-sm text-gray-500 dark:text-neutral-400">
+            <span className="text-sm text-neutral-500 dark:text-neutral-400">
               {prospectsData?.meta.total ?? 0} prospects
             </span>
           </div>
         </div>
 
         {/* Table */}
-        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-700 overflow-hidden">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-700 overflow-hidden">
           {prospectsLoading ? (
             <div className="p-8 text-center">
               <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
-              <p className="mt-2 text-gray-500 dark:text-neutral-400">Loading prospects...</p>
+              <p className="mt-2 text-neutral-500 dark:text-neutral-400">Loading prospects...</p>
             </div>
           ) : prospectsError ? (
             <div className="p-8 text-center">
@@ -234,35 +234,35 @@ export function AdminProspects() {
             </div>
           ) : !prospectsData?.data.length ? (
             <div className="p-8 text-center">
-              <Users className="h-8 w-8 text-gray-400 dark:text-neutral-500 mx-auto" />
-              <p className="mt-2 text-gray-500 dark:text-neutral-400">No prospects found</p>
+              <Users className="h-8 w-8 text-neutral-400 dark:text-neutral-500 mx-auto" />
+              <p className="mt-2 text-neutral-500 dark:text-neutral-400">No prospects found</p>
             </div>
           ) : (
             <>
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-                <thead className="bg-gray-50 dark:bg-neutral-700">
+              <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+                <thead className="bg-neutral-50 dark:bg-neutral-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       Name / Email
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       Time to Tool
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       NPS
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       Events
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       Last Activity
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-neutral-800 divide-y divide-gray-200 dark:divide-neutral-700">
+                <tbody className="bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700">
                   {prospectsData.data.map((prospect) => (
                     <ProspectRow
                       key={prospect.id}
@@ -275,22 +275,22 @@ export function AdminProspects() {
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="bg-gray-50 dark:bg-neutral-700 px-6 py-3 flex items-center justify-between border-t dark:border-neutral-600">
-                  <span className="text-sm text-gray-500 dark:text-neutral-400">
+                <div className="bg-neutral-50 dark:bg-neutral-700 px-6 py-3 flex items-center justify-between border-t dark:border-neutral-600">
+                  <span className="text-sm text-neutral-500 dark:text-neutral-400">
                     Page {page} of {totalPages}
                   </span>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
                       disabled={page === 1}
-                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-neutral-300"
+                      className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-neutral-300"
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </button>
                     <button
                       onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                       disabled={page === totalPages}
-                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-neutral-300"
+                      className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-neutral-300"
                     >
                       <ChevronRight className="h-5 w-5" />
                     </button>
@@ -331,10 +331,10 @@ function MetricsHeader({
         {[...Array(4)].map((_, i) => (
           <div
             key={i}
-            className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-700 p-6 animate-pulse"
+            className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 animate-pulse"
           >
-            <div className="h-4 bg-gray-200 rounded w-20 mb-2" />
-            <div className="h-8 bg-gray-200 rounded w-16" />
+            <div className="h-4 bg-neutral-200 rounded w-20 mb-2" />
+            <div className="h-8 bg-neutral-200 rounded w-16" />
           </div>
         ))}
       </div>
@@ -389,15 +389,15 @@ function MetricCard({
   color: string;
 }) {
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-700 p-6">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
       <div className="flex items-center gap-4">
         <div className={`rounded-lg p-3 ${color}`}>
           <Icon className="h-6 w-6 text-white" />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-neutral-400">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-          <p className="text-xs text-gray-400 dark:text-neutral-500">{subtitle}</p>
+          <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{title}</p>
+          <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
+          <p className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>
         </div>
       </div>
     </div>
@@ -410,18 +410,18 @@ function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick
   return (
     <tr
       onClick={onClick}
-      className="hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer transition-colors"
+      className="hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer transition-colors"
     >
       <td className="px-6 py-4">
-        <div className="font-medium text-gray-900 dark:text-white">
+        <div className="font-medium text-neutral-900 dark:text-white">
           {prospect.first_name || prospect.last_name
             ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
             : prospect.company || prospect.email}
         </div>
-        <div className="text-sm text-gray-500 dark:text-neutral-400">
+        <div className="text-sm text-neutral-500 dark:text-neutral-400">
           {prospect.email}
           {prospect.role && (
-            <span className="ml-2 text-xs bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded">
+            <span className="ml-2 text-xs bg-neutral-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded">
               {prospect.role}
             </span>
           )}
@@ -435,7 +435,7 @@ function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick
           {prospect.status}
         </span>
       </td>
-      <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+      <td className="px-6 py-4 text-sm text-neutral-900 dark:text-white">
         {formatDuration(prospect.time_to_first_tool_seconds)}
       </td>
       <td className="px-6 py-4">
@@ -446,11 +446,13 @@ function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick
             {prospect.nps_score}/10
           </span>
         ) : (
-          <span className="text-gray-400 dark:text-neutral-500">—</span>
+          <span className="text-neutral-400 dark:text-neutral-500">—</span>
         )}
       </td>
-      <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">{prospect.total_events}</td>
-      <td className="px-6 py-4 text-sm text-gray-500 dark:text-neutral-400">
+      <td className="px-6 py-4 text-sm text-neutral-900 dark:text-white">
+        {prospect.total_events}
+      </td>
+      <td className="px-6 py-4 text-sm text-neutral-500 dark:text-neutral-400">
         {formatDate(prospect.last_activity_at)}
       </td>
     </tr>
@@ -476,15 +478,15 @@ function ProspectDetailModal({
         <div className="flex items-center justify-between px-6 py-4 border-b dark:border-neutral-700">
           <div>
             {isLoading ? (
-              <div className="h-6 bg-gray-200 dark:bg-neutral-700 rounded w-40 animate-pulse" />
+              <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded w-40 animate-pulse" />
             ) : prospect ? (
               <>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
                   {prospect.first_name || prospect.last_name
                     ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
                     : prospect.company || prospect.email}
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-neutral-400">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
                   {prospect.email}
                   {prospect.company && ` · ${prospect.company}`}
                 </p>
@@ -493,9 +495,9 @@ function ProspectDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
           >
-            <X className="h-5 w-5 text-gray-500 dark:text-neutral-400" />
+            <X className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
           </button>
         </div>
 
@@ -503,9 +505,9 @@ function ProspectDetailModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {isLoading ? (
             <div className="animate-pulse space-y-4">
-              <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-3/4" />
-              <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-1/2" />
-              <div className="h-32 bg-gray-200 dark:bg-neutral-700 rounded" />
+              <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4" />
+              <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-1/2" />
+              <div className="h-32 bg-neutral-200 dark:bg-neutral-700 rounded" />
             </div>
           ) : prospect ? (
             <>
@@ -561,7 +563,7 @@ function ProspectDetailModal({
 
               {/* Timeline */}
               <div>
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                <h3 className="text-sm font-medium text-neutral-900 dark:text-white mb-3">
                   Timeline ({prospect.timeline.length} events)
                 </h3>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -595,7 +597,7 @@ function ProspectDetailModal({
               )}
             </>
           ) : (
-            <p className="text-gray-500 dark:text-neutral-400">Prospect not found</p>
+            <p className="text-neutral-500 dark:text-neutral-400">Prospect not found</p>
           )}
         </div>
       </div>
@@ -606,8 +608,8 @@ function ProspectDetailModal({
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-gray-500 dark:text-neutral-400">{label}</p>
-      <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{value}</p>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p>
+      <p className="text-sm font-medium text-neutral-900 dark:text-white capitalize">{value}</p>
     </div>
   );
 }
@@ -625,13 +627,13 @@ function StatBox({
 }) {
   return (
     <div
-      className={`rounded-lg p-3 text-center ${highlight ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-neutral-700'}`}
+      className={`rounded-lg p-3 text-center ${highlight ? 'bg-red-50 dark:bg-red-900/20' : 'bg-neutral-50 dark:bg-neutral-700'}`}
     >
       <Icon
-        className={`h-5 w-5 mx-auto ${highlight ? 'text-red-500' : 'text-gray-400 dark:text-neutral-400'}`}
+        className={`h-5 w-5 mx-auto ${highlight ? 'text-red-500' : 'text-neutral-400 dark:text-neutral-400'}`}
       />
-      <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">{value}</p>
-      <p className="text-xs text-gray-500 dark:text-neutral-400">{label}</p>
+      <p className="text-lg font-semibold text-neutral-900 dark:text-white mt-1">{value}</p>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p>
     </div>
   );
 }
@@ -648,27 +650,29 @@ function TimelineEvent({ event }: { event: ProspectDetail['timeline'][0] }) {
 
   return (
     <div className="flex items-start gap-3 text-sm">
-      <span className="text-xs text-gray-400 dark:text-neutral-500 w-20 flex-shrink-0">
+      <span className="text-xs text-neutral-400 dark:text-neutral-500 w-20 flex-shrink-0">
         {new Date(event.timestamp).toLocaleTimeString('fr-FR', {
           hour: '2-digit',
           minute: '2-digit',
         })}
       </span>
-      <Icon className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+      <Icon className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
       <div className="flex-1">
-        <span className="font-medium text-gray-700 dark:text-neutral-300">{event.event_type}</span>
+        <span className="font-medium text-neutral-700 dark:text-neutral-300">
+          {event.event_type}
+        </span>
         {event.is_first_tool_call && (
           <span className="ml-2 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded">
             First!
           </span>
         )}
         {(event.metadata as { tool?: string; page?: string }).tool && (
-          <span className="ml-2 text-gray-500 dark:text-neutral-400">
+          <span className="ml-2 text-neutral-500 dark:text-neutral-400">
             {(event.metadata as { tool: string }).tool}
           </span>
         )}
         {(event.metadata as { page?: string }).page && (
-          <span className="ml-2 text-gray-500 dark:text-neutral-400">
+          <span className="ml-2 text-neutral-500 dark:text-neutral-400">
             {(event.metadata as { page: string }).page}
           </span>
         )}

@@ -83,14 +83,18 @@ function StatCard({
         <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{label}</p>
+        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
+          {label}
+        </p>
         <div className="flex items-baseline gap-1">
-          <p className={`text-2xl font-bold ${colorClass || 'text-gray-900 dark:text-white'}`}>
+          <p className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}>
             {value}
           </p>
-          {unit && <span className="text-sm text-gray-500 dark:text-gray-400">{unit}</span>}
+          {unit && <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>}
         </div>
-        {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{subtitle}</p>}
+        {subtitle && (
+          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
+        )}
         {sparkline && <div className="mt-2">{sparkline}</div>}
       </div>
     </div>
@@ -213,8 +217,8 @@ export function TenantDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Usage</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">My Usage</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Metrics for{' '}
             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
               {tenantId}
@@ -222,7 +226,7 @@ export function TenantDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg overflow-hidden">
+          <div className="flex items-center bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg overflow-hidden">
             {(['1h', '6h', '24h'] as const).map((range) => (
               <button
                 key={range}
@@ -230,7 +234,7 @@ export function TenantDashboard() {
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   timeRange === range
                     ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                 }`}
               >
                 {range}
@@ -239,7 +243,7 @@ export function TenantDashboard() {
           </div>
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+            className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${toolCalls.loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -323,10 +327,10 @@ export function TenantDashboard() {
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Usage Trend
                   </h2>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
                     req/s over {rangeCfg.label}
                   </p>
                 </div>
@@ -344,7 +348,7 @@ export function TenantDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
                   {usageTrend.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -354,10 +358,10 @@ export function TenantDashboard() {
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Error Trend
                   </h2>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
                     errors/s over {rangeCfg.label}
                   </p>
                 </div>
@@ -375,7 +379,7 @@ export function TenantDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
                   {errorTrend.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -384,32 +388,32 @@ export function TenantDashboard() {
 
           {/* Top Tools */}
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase mb-4">
+            <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
               Top 5 Tools ({timeRange})
             </h2>
             {topToolsList.length > 0 ? (
               <div className="space-y-3">
                 {topToolsList.map((tool, i) => (
                   <div key={tool.name} className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-gray-400 dark:text-gray-500 w-5 text-right">
+                    <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
                       {i + 1}
                     </span>
-                    <Cpu className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                    <Cpu className="h-4 w-4 text-neutral-400 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
                           {tool.name}
                         </span>
                         <div className="flex items-center gap-3 ml-2">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
                             {formatNumber(tool.calls)} calls
                           </span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500 w-16 text-right">
+                          <span className="text-xs text-neutral-400 dark:text-neutral-500 w-16 text-right">
                             {Math.round(tool.latencyMs)}ms avg
                           </span>
                         </div>
                       </div>
-                      <div className="w-full bg-gray-100 dark:bg-neutral-700 rounded-full h-1.5">
+                      <div className="w-full bg-neutral-100 dark:bg-neutral-700 rounded-full h-1.5">
                         <div
                           className="bg-blue-500 h-1.5 rounded-full transition-all"
                           style={{ width: `${(tool.calls / maxToolCalls) * 100}%` }}
@@ -420,7 +424,7 @@ export function TenantDashboard() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-8">
                 No tool usage data available
               </p>
             )}

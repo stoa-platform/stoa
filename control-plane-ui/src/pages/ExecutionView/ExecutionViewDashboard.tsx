@@ -141,8 +141,8 @@ export function ExecutionViewDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Execution View</h1>
-        <p className="text-gray-500 dark:text-neutral-400 mt-1">
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Execution View</h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-1">
           Monitor API executions and error patterns
         </p>
       </div>
@@ -150,22 +150,22 @@ export function ExecutionViewDashboard() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-4">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">Total Calls</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Total Calls</p>
+          <p className="text-2xl font-bold text-neutral-900 dark:text-white">
             {taxonomy?.total_executions ?? 0}
           </p>
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-4">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">Success</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Success</p>
           <p className="text-2xl font-bold text-green-600">{successCount}</p>
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-4">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">Errors</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Errors</p>
           <p className="text-2xl font-bold text-red-600">{taxonomy?.total_errors ?? 0}</p>
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-4">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">Error Rate</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Error Rate</p>
+          <p className="text-2xl font-bold text-neutral-900 dark:text-white">
             {taxonomy?.error_rate ?? 0}%
           </p>
         </div>
@@ -174,7 +174,7 @@ export function ExecutionViewDashboard() {
       {/* Error Taxonomy Chart */}
       {taxonomy && taxonomy.items.length > 0 && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
             Error Taxonomy
           </h2>
           <ErrorTaxonomyChart items={taxonomy.items} totalErrors={taxonomy.total_errors} />
@@ -189,7 +189,7 @@ export function ExecutionViewDashboard() {
             setStatusFilter(e.target.value);
             setPage(1);
           }}
-          className="rounded-md border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-gray-900 dark:text-white"
+          className="rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-neutral-900 dark:text-white"
           aria-label="Filter by status"
         >
           <option value="">All Statuses</option>
@@ -203,7 +203,7 @@ export function ExecutionViewDashboard() {
             setCategoryFilter(e.target.value);
             setPage(1);
           }}
-          className="rounded-md border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-gray-900 dark:text-white"
+          className="rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-neutral-900 dark:text-white"
           aria-label="Filter by error category"
         >
           <option value="">All Categories</option>
@@ -218,49 +218,49 @@ export function ExecutionViewDashboard() {
       {/* Executions Table */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading...</div>
+          <div className="p-8 text-center text-neutral-500 dark:text-neutral-400">Loading...</div>
         ) : executions.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+          <div className="p-8 text-center text-neutral-500 dark:text-neutral-400">
             No executions found
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-            <thead className="bg-gray-50 dark:bg-neutral-900">
+          <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+            <thead className="bg-neutral-50 dark:bg-neutral-900">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Time
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   API / Tool
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Method
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Duration
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Error
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
+            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {executions.map((exec) => (
                 <tr
                   key={exec.id}
                   onClick={() => handleRowClick(exec)}
-                  className="hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer"
+                  className="hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
                 >
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap">
+                  <td className="px-4 py-3 text-sm text-neutral-900 dark:text-white whitespace-nowrap">
                     {new Date(exec.started_at).toLocaleTimeString()}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                  <td className="px-4 py-3 text-sm text-neutral-900 dark:text-white">
                     {exec.api_name || exec.tool_name || exec.path || '—'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                  <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                     {exec.method || '—'}
                   </td>
                   <td className="px-4 py-3">
@@ -270,10 +270,10 @@ export function ExecutionViewDashboard() {
                       {exec.status_code ?? exec.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                  <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                     {exec.duration_ms != null ? `${exec.duration_ms}ms` : '—'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                  <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                     {exec.error_category || '—'}
                   </td>
                 </tr>
@@ -284,22 +284,22 @@ export function ExecutionViewDashboard() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-gray-200 dark:border-neutral-700 flex items-center justify-between">
-            <p className="text-sm text-gray-500 dark:text-neutral-400">
+          <div className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               Page {page} of {totalPages} ({total} total)
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50"
+                className="px-3 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-600 disabled:opacity-50"
               >
                 Previous
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50"
+                className="px-3 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-600 disabled:opacity-50"
               >
                 Next
               </button>

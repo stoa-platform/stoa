@@ -48,7 +48,7 @@ export function SparklineChart({
   if (data.length < 2) {
     return (
       <div
-        className={`flex items-center justify-center text-xs text-gray-400 dark:text-gray-500 ${className}`}
+        className={`flex items-center justify-center text-xs text-neutral-400 dark:text-neutral-500 ${className}`}
         style={{ height, width }}
       >
         No data

@@ -534,6 +534,58 @@ notify_scheduled() {
   }"
 }
 
+# notify_pr_hygiene TOTAL STALE ABANDONED DRAFT
+# PR Hygiene daily report with optional close button.
+notify_pr_hygiene() {
+  local TOTAL="${1:-0}" STALE="${2:-0}" ABANDONED="${3:-0}" DRAFT="${4:-0}"
+
+  # Severity emoji
+  local EMOJI=":large_green_circle:"
+  if [ "${ABANDONED}" -gt 0 ]; then
+    EMOJI=":red_circle:"
+  elif [ "${STALE}" -gt 0 ]; then
+    EMOJI=":large_yellow_circle:"
+  fi
+
+  local DATE
+  DATE=$(date -u +%Y-%m-%d)
+  local RUN_LINK="https://github.com/${GITHUB_REPOSITORY:-stoa-platform/stoa}/actions/runs/${GITHUB_RUN_ID:-0}"
+
+  # Build actions block if abandoned > 0
+  local ACTIONS_BLOCK=""
+  if [ "${ABANDONED}" -gt 0 ]; then
+    ACTIONS_BLOCK=",{\"type\":\"actions\",\"elements\":[{\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"Close Abandoned PRs\"},\"style\":\"danger\",\"action_id\":\"close_abandoned_prs\",\"confirm\":{\"title\":{\"type\":\"plain_text\",\"text\":\"Close Abandoned PRs?\"},\"text\":{\"type\":\"mrkdwn\",\"text\":\"This will close all ${ABANDONED} PRs labelled \`abandoned\`.\"},\"confirm\":{\"type\":\"plain_text\",\"text\":\"Close them\"},\"deny\":{\"type\":\"plain_text\",\"text\":\"Cancel\"}}}]}"
+  fi
+
+  _send_slack "{
+    \"blocks\": [
+      {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"${EMOJI} *PR Hygiene Report — ${DATE}*\n<${RUN_LINK}|View Run>\"}},
+      {\"type\":\"section\",\"fields\":[
+        {\"type\":\"mrkdwn\",\"text\":\"*Total Open*\n${TOTAL}\"},
+        {\"type\":\"mrkdwn\",\"text\":\"*Stale*\n${STALE}\"},
+        {\"type\":\"mrkdwn\",\"text\":\"*Abandoned*\n${ABANDONED}\"},
+        {\"type\":\"mrkdwn\",\"text\":\"*Draft*\n${DRAFT}\"}
+      ]}
+      ${ACTIONS_BLOCK},
+      {\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"STOA AI Factory | Scheduled | $(date -u +%H:%M) UTC\"}]}
+    ]
+  }"
+}
+
+# push_metrics_pr_hygiene TOTAL STALE ABANDONED DRAFT
+# Push PR hygiene gauge metrics to Pushgateway.
+push_metrics_pr_hygiene() {
+  local TOTAL="${1:-0}" STALE="${2:-0}" ABANDONED="${3:-0}" DRAFT="${4:-0}"
+
+  _push_metrics "workflow/scheduled/stage/pr-hygiene" "$(cat <<PROM
+ai_factory_pr_hygiene{type="total"} ${TOTAL}
+ai_factory_pr_hygiene{type="stale"} ${STALE}
+ai_factory_pr_hygiene{type="abandoned"} ${ABANDONED}
+ai_factory_pr_hygiene{type="draft"} ${DRAFT}
+PROM
+)"
+}
+
 # notify_plan ISSUE_NUM ISSUE_TITLE ISSUE_URL STATUS
 # Stage 2 plan validation result.
 notify_plan() {

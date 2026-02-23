@@ -19,6 +19,10 @@ class ErrorCategory(enum.StrEnum):
     BACKEND = "backend"
     TIMEOUT = "timeout"
     VALIDATION = "validation"
+    NETWORK = "network"
+    CERTIFICATE = "certificate"
+    POLICY = "policy"
+    CIRCUIT_BREAKER = "circuit_breaker"
 
 
 class ExecutionStatus(enum.StrEnum):

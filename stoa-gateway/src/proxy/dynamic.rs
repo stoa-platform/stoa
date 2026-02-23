@@ -18,6 +18,7 @@ use rand::{Rng, SeedableRng};
 use std::cell::RefCell;
 
 use crate::proxy::credentials::{AuthType, BackendCredential};
+use crate::proxy::hop_detection;
 use crate::resilience::RetryConfig;
 use crate::state::AppState;
 
@@ -258,6 +259,15 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         cb.record_success();
     }
 
+    // Inject X-Stoa-Timing debug header with gateway/upstream timing
+    // and hop count from Via headers (CAB-1316 Phase 2).
+    let hop_chain = hop_detection::parse_via_headers(response.headers());
+    let gw_ms = (upstream_duration * 1000.0) as u64;
+    let timing_value = format!("gw={gw_ms};hops={}", hop_chain.total_hops);
+    if let Ok(hv) = HeaderValue::from_str(&timing_value) {
+        response.headers_mut().insert("x-stoa-timing", hv);
+    }
+
     response
 }
 
@@ -296,6 +306,9 @@ async fn forward_request(
     // This allows downstream services (Control-Plane API, backends) to
     // correlate their spans with the gateway's trace.
     req_builder = inject_traceparent(req_builder);
+
+    // Inject RFC 9110 §7.6.3 Via header for hop detection (CAB-1316 Phase 2)
+    req_builder = req_builder.header("Via", hop_detection::build_via_value());
 
     // BYOK: inject resolved credential header (CAB-1250 + CAB-1317)
     if let Some((name, value)) = resolved_header {

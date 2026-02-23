@@ -39,7 +39,8 @@
     "auditLog": "Journal d'audit",
     "workflows": "Workflows",
     "audienceGovernance": "Gouvernance des audiences",
-    "audience": "Audience"
+    "audience": "Audience",
+    "diagnostics": "Diagnostics"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",
@@ -260,5 +261,9 @@
     "oidcProxy": "Proxy OIDC",
     "direct": "Direct",
     "mode": "mode"
+  },
+  "diagnostics": {
+    "title": "Diagnostics Plateforme",
+    "description": "Analyse automatique des causes et tests de connectivité"
   }
 }

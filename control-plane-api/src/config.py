@@ -121,6 +121,13 @@ class Settings(BaseSettings):
     # Health check interval in seconds (how often to check for stale gateways)
     GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS: int = 30
 
+    # Docs Search — Algolia integration (CAB-1327)
+    ALGOLIA_APP_ID: str = "GIWP67WK7V"
+    ALGOLIA_SEARCH_API_KEY: str = "6f5bb332c047a35c99fd3a151c44cc7f"  # Public search-only key
+    ALGOLIA_INDEX_NAME: str = "Stoa Blog"
+    DOCS_SEARCH_ENABLED: bool = True
+    LLMS_FULL_TXT_URL: str = "https://gostoa.dev/llms-full.txt"
+
     # Chat Agent — Anthropic integration (CAB-286)
     CHAT_ENABLED: bool = False
 

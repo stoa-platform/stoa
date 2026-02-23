@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { BookOpen, Grid3X3, List, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Button } from '@stoa/shared/components/Button';
 import { useAPIs, useAPICategories, useUniverses } from '../../hooks/useAPIs';
 import { APICard } from '../../components/apis/APICard';
 import { APIFilters } from '../../components/apis/APIFilters';
@@ -151,22 +152,22 @@ export function APICatalog() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
             {i18nEnabled ? t('title') : 'API Catalog'}
           </h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             {i18nEnabled ? t('subtitle') : 'Browse and discover available APIs'}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {/* View mode toggle */}
-          <div className="flex items-center border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
+          <div className="flex items-center border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode('grid')}
               className={`p-2 ${
                 viewMode === 'grid'
                   ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                  : 'bg-white dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                  : 'bg-white dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700'
               }`}
               title={i18nEnabled ? t('gridView') : 'Grid view'}
             >
@@ -177,7 +178,7 @@ export function APICatalog() {
               className={`p-2 ${
                 viewMode === 'list'
                   ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                  : 'bg-white dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                  : 'bg-white dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700'
               }`}
               title={i18nEnabled ? t('listView') : 'List view'}
             >
@@ -188,7 +189,7 @@ export function APICatalog() {
           <button
             onClick={() => refetchAPIs()}
             disabled={apisLoading}
-            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             title={i18nEnabled ? t('refresh') : 'Refresh'}
           >
             <RefreshCw className={`h-4 w-4 ${apisLoading ? 'animate-spin' : ''}`} />
@@ -214,7 +215,7 @@ export function APICatalog() {
 
       {/* Results count */}
       {!apisLoading && !apisError && (
-        <div className="text-sm text-gray-500 dark:text-neutral-400">
+        <div className="text-sm text-neutral-500 dark:text-neutral-400">
           {i18nEnabled
             ? totalCount === 0
               ? t('apiCount.zero')
@@ -233,9 +234,9 @@ export function APICatalog() {
 
       {/* Loading state */}
       {apisLoading && (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
           <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-neutral-400">
+          <p className="text-neutral-500 dark:text-neutral-400">
             {i18nEnabled ? t('loadingApis') : 'Loading APIs...'}
           </p>
         </div>
@@ -266,14 +267,14 @@ export function APICatalog() {
 
       {/* Empty state */}
       {!apisLoading && !apisError && apis.length === 0 && (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
-          <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
-            <BookOpen className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
+          <div className="inline-flex p-4 bg-neutral-100 dark:bg-neutral-700 rounded-full mb-4">
+            <BookOpen className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
             {i18nEnabled ? t('noApisFound') : 'No APIs Found'}
           </h2>
-          <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto">
+          <p className="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto">
             {search || category || universe || audience
               ? i18nEnabled
                 ? t('noApisFiltered')
@@ -283,17 +284,17 @@ export function APICatalog() {
                 : 'There are no published APIs available yet. Check back later!'}
           </p>
           {(search || category || universe || audience) && (
-            <button
+            <Button
+              className="mt-4"
               onClick={() => {
                 setSearch('');
                 setCategory('');
                 setUniverse('');
                 setAudience('');
               }}
-              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
               {i18nEnabled ? t('clearFilters') : 'Clear Filters'}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -317,27 +318,27 @@ export function APICatalog() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-200 dark:border-neutral-700 pt-4">
-              <div className="text-sm text-gray-500 dark:text-neutral-400">
+            <div className="flex items-center justify-between border-t border-neutral-200 dark:border-neutral-700 pt-4">
+              <div className="text-sm text-neutral-500 dark:text-neutral-400">
                 {i18nEnabled
                   ? t('pagination.page', { current: page, total: totalPages })
                   : `Page ${page} of ${totalPages}`}
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {i18nEnabled ? t('pagination.previous') : 'Previous'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {i18nEnabled ? t('pagination.next') : 'Next'}
-                </button>
+                </Button>
               </div>
             </div>
           )}

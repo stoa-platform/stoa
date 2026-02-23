@@ -222,7 +222,7 @@ export function APITestingSandbox() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-neutral-400">Loading API details...</p>
+          <p className="text-neutral-500 dark:text-neutral-400">Loading API details...</p>
         </div>
       </div>
     );
@@ -259,7 +259,7 @@ export function APITestingSandbox() {
       {/* Back Button */}
       <Link
         to={`/apis/${id}`}
-        className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+        className="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to API Details
@@ -272,12 +272,12 @@ export function APITestingSandbox() {
             <FlaskConical className="h-8 w-8 text-primary-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
               API Testing Sandbox
             </h1>
-            <p className="text-gray-500 dark:text-neutral-400 mt-1">
+            <p className="text-neutral-500 dark:text-neutral-400 mt-1">
               Test{' '}
-              <span className="font-medium text-gray-700 dark:text-neutral-300">{api.name}</span>{' '}
+              <span className="font-medium text-neutral-700 dark:text-neutral-300">{api.name}</span>{' '}
               endpoints
             </p>
           </div>
@@ -285,7 +285,7 @@ export function APITestingSandbox() {
 
         <Link
           to={`/apis/${id}`}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
         >
           <BookOpen className="h-4 w-4" />
           View API Documentation
@@ -315,7 +315,7 @@ export function APITestingSandbox() {
         {/* Left Panel - Request */}
         <div className="lg:col-span-2 space-y-6">
           {/* Environment Selector */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
+          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
             <EnvironmentSelector
               environments={environments}
               selectedEnvironment={selectedEnvironment}
@@ -324,8 +324,8 @@ export function APITestingSandbox() {
           </div>
 
           {/* Request Builder */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Request</h2>
+          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Request</h2>
             <RequestBuilder
               baseUrl={selectedEnvironment?.baseUrl || ''}
               initialPath={defaultPath}
@@ -337,7 +337,9 @@ export function APITestingSandbox() {
 
           {/* Response Viewer */}
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Response</h2>
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
+              Response
+            </h2>
             <ResponseViewer response={response} isLoading={isRequestLoading} />
           </div>
         </div>
@@ -345,16 +347,16 @@ export function APITestingSandbox() {
         {/* Right Panel - History & Info */}
         <div className="space-y-6">
           {/* Test History */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
+          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <h3 className="font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
                 <History className="h-4 w-4" />
                 Recent Tests
               </h3>
               {testHistory.length > 0 && (
                 <button
                   onClick={clearHistory}
-                  className="text-xs text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 flex items-center gap-1"
+                  className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 flex items-center gap-1"
                 >
                   <Trash2 className="h-3 w-3" />
                   Clear
@@ -363,7 +365,7 @@ export function APITestingSandbox() {
             </div>
 
             {testHistory.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-neutral-400 text-center py-4">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
                 No recent tests
               </p>
             ) : (
@@ -371,7 +373,7 @@ export function APITestingSandbox() {
                 {testHistory.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between py-2 px-2 rounded hover:bg-gray-50 dark:hover:bg-neutral-800 text-sm"
+                    className="flex items-center justify-between py-2 px-2 rounded hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span
@@ -387,7 +389,7 @@ export function APITestingSandbox() {
                         {item.method}
                       </span>
                       <span
-                        className="text-gray-600 dark:text-neutral-400 truncate"
+                        className="text-neutral-600 dark:text-neutral-400 truncate"
                         title={item.path}
                       >
                         {item.path}
@@ -404,7 +406,7 @@ export function APITestingSandbox() {
                       >
                         {item.status}
                       </span>
-                      <span className="text-xs text-gray-400 dark:text-neutral-500">
+                      <span className="text-xs text-neutral-400 dark:text-neutral-500">
                         {item.timing < 1000
                           ? `${item.timing.toFixed(0)}ms`
                           : `${(item.timing / 1000).toFixed(1)}s`}
@@ -417,26 +419,26 @@ export function APITestingSandbox() {
           </div>
 
           {/* API Info */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-3">API Information</h3>
+          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+            <h3 className="font-semibold text-neutral-900 dark:text-white mb-3">API Information</h3>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-neutral-400">Name</dt>
-                <dd className="text-gray-900 dark:text-white font-medium">{api.name}</dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">Name</dt>
+                <dd className="text-neutral-900 dark:text-white font-medium">{api.name}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-neutral-400">Version</dt>
-                <dd className="text-gray-900 dark:text-white">{api.version}</dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">Version</dt>
+                <dd className="text-neutral-900 dark:text-white">{api.version}</dd>
               </div>
               {api.category && (
                 <div className="flex justify-between">
-                  <dt className="text-gray-500 dark:text-neutral-400">Category</dt>
-                  <dd className="text-gray-900 dark:text-white">{api.category}</dd>
+                  <dt className="text-neutral-500 dark:text-neutral-400">Category</dt>
+                  <dd className="text-neutral-900 dark:text-white">{api.category}</dd>
                 </div>
               )}
               <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-neutral-400">Endpoints</dt>
-                <dd className="text-gray-900 dark:text-white">{api.endpoints?.length || 0}</dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">Endpoints</dt>
+                <dd className="text-neutral-900 dark:text-white">{api.endpoints?.length || 0}</dd>
               </div>
             </dl>
           </div>

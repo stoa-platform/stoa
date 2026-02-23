@@ -1,0 +1,94 @@
+# n8n Self-Hosted — OVH VPS (n8n.gostoa.dev)
+# Replaces n8n Cloud (hlfh.app.n8n.cloud) — no execution limits
+#
+# Stack: n8n + PostgreSQL 16 + Caddy (auto-TLS)
+#
+# Usage:
+#   cp .env.template .env   # fill secrets
+#   docker compose up -d
+#
+# Health: curl https://n8n.gostoa.dev/healthz
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: n8n-postgres
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: n8n
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      # Database
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Host config
+      N8N_HOST: n8n.gostoa.dev
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.gostoa.dev/
+      # Security
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+      # Timezone
+      GENERIC_TIMEZONE: Europe/Paris
+      TZ: Europe/Paris
+      # Execution settings (no limits — whole point of self-hosting)
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+      # Workflow secrets (replaces n8n Variables — Enterprise-only feature)
+      # These are read by workflows via $env.VARIABLE_NAME
+      APPROVE_HMAC_SECRET: ${APPROVE_HMAC_SECRET:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_CHANNEL_ID: ${SLACK_CHANNEL_ID:-}
+      SLACK_ALLOWED_USERS: ${SLACK_ALLOWED_USERS:-}
+      SLACK_ADMIN_USERS: ${SLACK_ADMIN_USERS:-}
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: n8n-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - n8n
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  n8n_data:
+  caddy_data:
+  caddy_config:

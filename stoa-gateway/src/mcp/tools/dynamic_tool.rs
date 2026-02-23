@@ -312,6 +312,7 @@ mod tests {
             scopes: vec![],
             raw_token: None,
             skill_instructions: None,
+            progress_token: None,
         };
 
         let result = tool.execute(json!({}), &ctx).await;
@@ -350,6 +351,7 @@ mod tests {
             scopes: vec![],
             raw_token: None,
             skill_instructions: Some("Always use metric units".to_string()),
+            progress_token: None,
         };
 
         let result = tool.execute(json!({"query": "temp"}), &ctx).await.unwrap();
@@ -392,6 +394,7 @@ mod tests {
             scopes: vec![],
             raw_token: None,
             skill_instructions: None,
+            progress_token: None,
         };
 
         let result = tool.execute(json!({}), &ctx).await.unwrap();

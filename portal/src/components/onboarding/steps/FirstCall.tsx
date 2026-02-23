@@ -50,30 +50,34 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('firstCall.title')}</h2>
-        <p className="mt-2 text-gray-500 dark:text-neutral-400">{t('firstCall.subtitle')}</p>
+        <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">
+          {t('firstCall.title')}
+        </h2>
+        <p className="mt-2 text-neutral-500 dark:text-neutral-400">{t('firstCall.subtitle')}</p>
       </div>
 
       {/* Credentials summary */}
       {app && (
-        <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+        <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+          <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3">
             {t('firstCall.credentials')}
           </h3>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <dt className="text-gray-500 dark:text-neutral-400">{t('firstCall.appName')}</dt>
-              <dd className="font-mono text-gray-900 dark:text-white">{app.name}</dd>
+              <dt className="text-neutral-500 dark:text-neutral-400">{t('firstCall.appName')}</dt>
+              <dd className="font-mono text-neutral-900 dark:text-white">{app.name}</dd>
             </div>
             {app.clientId && (
               <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-neutral-400">{t('firstCall.clientId')}</dt>
-                <dd className="font-mono text-gray-900 dark:text-white">{app.clientId}</dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  {t('firstCall.clientId')}
+                </dt>
+                <dd className="font-mono text-neutral-900 dark:text-white">{app.clientId}</dd>
               </div>
             )}
             {app.clientSecret && (
               <div className="flex justify-between items-center">
-                <dt className="text-gray-500 dark:text-neutral-400">
+                <dt className="text-neutral-500 dark:text-neutral-400">
                   {t('firstCall.clientSecret')}
                 </dt>
                 <dd className="flex items-center gap-2">
@@ -82,7 +86,7 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
                   </code>
                   <button
                     onClick={() => handleCopy(app.clientSecret!, 'secret')}
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300"
+                    className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
                     title={t('firstCall.copySecret')}
                   >
                     {copied === 'secret' ? (
@@ -106,12 +110,12 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
       {/* curl example */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
             {useCase === 'mcp-agent' ? t('firstCall.mcpConfig') : t('firstCall.exampleCall')}
           </h3>
           <button
             onClick={() => handleCopy(useCase === 'mcp-agent' ? mcpConfig : curlCommand, 'example')}
-            className="text-xs text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 flex items-center gap-1"
+            className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 flex items-center gap-1"
           >
             {copied === 'example' ? (
               <>
@@ -124,7 +128,7 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
             )}
           </button>
         </div>
-        <pre className="bg-gray-900 dark:bg-neutral-950 text-gray-100 rounded-lg p-4 text-sm overflow-x-auto">
+        <pre className="bg-neutral-900 dark:bg-neutral-950 text-neutral-100 rounded-lg p-4 text-sm overflow-x-auto">
           <code>{useCase === 'mcp-agent' ? mcpConfig : curlCommand}</code>
         </pre>
       </div>
@@ -144,7 +148,7 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
           href={config.services.docs.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 dark:text-neutral-400 bg-gray-50 dark:bg-neutral-900 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
         >
           {t('firstCall.documentation')}
           <ExternalLink className="h-3.5 w-3.5" />

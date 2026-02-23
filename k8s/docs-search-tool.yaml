@@ -1,0 +1,33 @@
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: docs-search
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  displayName: STOA Documentation Search
+  description: >
+    Search STOA platform documentation, guides, ADRs, and blog posts.
+    Returns relevant results with titles, URLs, and snippets.
+  endpoint: http://control-plane-api.stoa-system.svc:8000/v1/docs/search
+  method: GET
+  inputSchema:
+    type: object
+    properties:
+      q:
+        type: string
+        description: Search query (e.g., "mcp gateway setup", "migrate from Kong")
+      limit:
+        type: integer
+        description: Maximum number of results (1-20)
+        default: 5
+    required:
+      - q
+  auth: none
+  rateLimit: "60/min"
+  annotations:
+    readOnly: true
+    destructive: false
+    idempotent: true
+    openWorld: false

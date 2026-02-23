@@ -1,13 +1,20 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-23 (Council batch: 15 MEGAs validated, 16 promoted to C9 Todo)
+> Derniere MAJ: 2026-02-23 (CAB-1432→DONE PRs #899,#903 — C9 422/523 pts 81%)
 
 ## ✅ DONE
 
-> Full history: 905+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
+> Full history: 1305+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1432 [MEGA] Credential Mapping (21 pts) — PRs #899 (API+GW), #903 (Portal UI)
+  - P1: Backend API (7 CRUD, Fernet encryption, RBAC, 26 tests) + Gateway credential store
+  - P2: Portal UI (table + modal + search + auth type switching, 38 tests)
+- ✅ CAB-1345 [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts) — PR #890
+- ✅ CAB-1319 [MEGA] MCP Developer Self-Service (21 pts) — PR #898 (3 phases, 77 tests, +3214 LOC)
+- ✅ CAB-709 UAC for LLM — LLM contract types for UAC (5 pts) — PR #895
+- ✅ CAB-287 Chat Agent Tool Injection with Agentic Loop (5 pts) — PR #894
 - ✅ CAB-374 [MEGA] Vercel-Style DX — Git-First API Deployment (34 pts) — ALL 3 PHASES DONE
   - P1: API deploy log streaming + SSE (PRs #850, #852) — CAB-1420, CAB-1421
   - P2: Console live deployment dashboard (PR #856) — CAB-1422
@@ -17,6 +24,18 @@
   - P2: Parts 3-5 (stoa-docs PR #76) — 3 articles, production checklist
   - P3: Build vs Buy + series polish (stoa-docs PR #77, stoa-web PR #12) — cross-links + llms.txt
   - 7 articles total, complete series nav in each, llms.txt updated
+- ✅ CAB-1331 [MEGA] UAC-Driven Observability (21 pts) — ALL 3 PHASES DONE
+  - P1: OTel feature + UAC span enrichment (PR #870) — CAB-1424
+  - P2: UAC Debug Dashboard — per-tool drill-down (PR #870) — CAB-1425
+  - P3: Hybrid multi-cluster observability view (PR #884) — CAB-1426
+- ✅ CAB-1336 [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts) — ALL 3 DONE
+  - Apigee v2 (PRs #556, #879), AWS API GW (PR #855), Azure APIM (PR #873)
+- ✅ CAB-1123 [MEGA] Prompt Cache for HEGEMON AI Factory (21 pts) — PR #878
+  - PromptCache struct + 5 admin endpoints + 3 MCP tools + file watcher
+- ✅ CAB-286 Chat Agent Backend API — Anthropic Streaming (8 pts) — PR #889
+  - ChatProvider protocol + AnthropicProvider (httpx async SSE), 8 REST endpoints, Kafka metering
+  - Migration 038, 32 tests, CHAT_ENABLED feature flag, Fernet API key encryption
+- ✅ CAB-285 Chat Agent UI Component (8 pts) — PR #877
 - ✅ CAB-1352 [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already existed in stoa-docs
 - ✅ fix(docs): Vercel build fix — remove nested ajv overrides from stoa-docs (PR #78)
 - ✅ chore: Model Policy update — Opus default for local impl, Sonnet for CI/subagents (PR #846)
@@ -68,7 +87,7 @@
 - ✅ Promote-to-prod workflow — PR #771 (reusable-promote.yml + promote-to-prod.yml + runbook)
 - ✅ Portal mock data fix — PR #771 (removed MOCK_SERVERS fallback from MCP pages, -189 LOC)
 
-### Cycle 8 (Feb 16-22) — CLOSED (905 pts, 88 issues, 129 pts/day)
+### Cycle 8 (Feb 16-22) — CLOSED (1305 pts, 88 issues, 186 pts/day)
 
 Top MEGAs: CAB-1299 UAC (34 pts), CAB-1313 Federation (34 pts), CAB-1289 GW Tests (34 pts),
 CAB-1378 Test Blitz (34 pts), CAB-1323 Portal RBAC (34 pts), CAB-1188 SaaS MVP (34 pts),
@@ -78,17 +97,14 @@ CAB-1314 MCP Skills (21 pts), CAB-1332 Perf (21 pts), CAB-1292 Auth (21 pts), +4
 
 ## 🔴 IN PROGRESS
 
+CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts)
+- ✅ P1: Shared Button component + Console focus-visible — PR #892
+- [ ] P2-P3: Remaining audit phases
+
 CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
 - ✅ Production validated: 23/23 PASS, GO in 5s
 - [ ] Repetitions + video backup (human-only)
-
-Council Batch — 15 MEGAs validated, 16 promoted to C9 Todo (2026-02-23)
-- Go (6): CAB-374, CAB-1331 (8.50), CAB-1123 (8.50), CAB-1336 (8.25), CAB-1345 (8.00), CAB-1338 (8.00)
-- Fix (9): CAB-1319 (7.50), CAB-1322 (7.50), CAB-1316 (7.50), CAB-1342 (7.25), CAB-1329 (7.25), CAB-1334 (6.75), CAB-1327 (6.75), CAB-1347 (6.25), CAB-1348 (6.00)
-- Labels applied on Linear: `council:ticket-go` / `council:ticket-fix`
-- Fix adjustments applied to all 9 Fix ticket descriptions on Linear
-- C9 scope: ~661 pts (108% of 564 target capacity — slightly overloaded)
 
 ## 📋 NEXT
 
@@ -108,7 +124,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - docs.gostoa.dev = 40 articles (Layer7 + webMethods guides live, all 8 migration spokes published)
 - llms.txt + llms-full.txt: full migration guides + AI Factory sections live
 - ADR numbering: stoa-docs owns numbers (001-050). Next: **ADR-051**
-- Velocity C8: 905 pts / 88 issues / 129 pts/day (final)
+- Velocity C8: 1305 pts / 88 issues / 186 pts/day (final)
 - Velocity C7: 505 pts / 44 issues / 72 pts/day
-- Rolling avg: 107.5 pts/day (C7+C8)
+- Rolling avg: 129.3 pts/day (C7+C8)
 - Portal MCP pages: MOCK_SERVERS removed (PR #771) — pages now use real API only

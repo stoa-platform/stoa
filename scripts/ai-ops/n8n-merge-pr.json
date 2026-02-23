@@ -54,7 +54,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst pr = $input.first().json.query.pr;\nconst token = $input.first().json.query.token;\n\nconst secret = $vars?.APPROVE_HMAC_SECRET || $env?.APPROVE_HMAC_SECRET;\n\nif (!secret) {\n  throw new Error('APPROVE_HMAC_SECRET not configured — add it in n8n Settings > Variables');\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(pr).digest('hex');\n\nif (token !== expected) {\n  throw new Error('Invalid HMAC token');\n}\n\nreturn [{ json: { pr, token, valid: true } }];"
+        "jsCode": "const crypto = require('crypto');\n\nconst pr = $input.first().json.query.pr;\nconst token = $input.first().json.query.token;\n\nconst secret = $env.APPROVE_HMAC_SECRET;\n\nif (!secret) {\n  throw new Error('APPROVE_HMAC_SECRET not configured — set it as Docker env var');\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(pr).digest('hex');\n\nif (token !== expected) {\n  throw new Error('Invalid HMAC token');\n}\n\nreturn [{ json: { pr, token, valid: true } }];"
       },
       "id": "validate-hmac",
       "name": "Validate HMAC",

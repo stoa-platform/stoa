@@ -140,7 +140,7 @@ export const UACBadge: React.FC<UACBadgeProps> = ({
             bg-white dark:bg-neutral-800
             rounded-lg
             shadow-lg
-            border border-gray-200 dark:border-neutral-700
+            border border-neutral-200 dark:border-neutral-700
             animate-in fade-in-0 zoom-in-95 duration-200
           "
           style={{
@@ -154,7 +154,7 @@ export const UACBadge: React.FC<UACBadgeProps> = ({
               absolute -top-2 left-1/2 -translate-x-1/2
               w-4 h-4
               bg-white dark:bg-neutral-800
-              border-l border-t border-gray-200 dark:border-neutral-700
+              border-l border-t border-neutral-200 dark:border-neutral-700
               rotate-45
             "
           />

@@ -10,6 +10,8 @@ import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { useSequenceShortcuts } from '@stoa/shared/hooks';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useTheme } from '@stoa/shared/contexts';
+import { useTranslation } from 'react-i18next';
+import { LanguageToggle } from './LanguageToggle';
 import { apiService } from '../services/api';
 import {
   LayoutDashboard,
@@ -49,6 +51,7 @@ import {
   KeyRound,
   Share2,
   Sparkles,
+  Stethoscope,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -72,21 +75,22 @@ interface NavSection {
   accent?: boolean;
 }
 
+// Navigation config — name/title values are i18n keys, resolved via t() in render
 const navigationSections: NavSection[] = [
   {
-    title: 'Overview',
+    title: 'nav.overview',
     items: [
-      { name: 'Dashboard', href: '/', icon: LayoutDashboard, shortcut: ['g', 'd'] },
+      { name: 'nav.dashboard', href: '/', icon: LayoutDashboard, shortcut: ['g', 'd'] },
       {
-        name: 'Operations',
+        name: 'nav.operations',
         href: '/operations',
         icon: Activity,
         permission: 'tenants:read',
         shortcut: ['g', 'o'],
       },
-      { name: 'My Usage', href: '/my-usage', icon: PieChart, shortcut: ['g', 'u'] },
+      { name: 'nav.myUsage', href: '/my-usage', icon: PieChart, shortcut: ['g', 'u'] },
       {
-        name: 'Business',
+        name: 'nav.business',
         href: '/business',
         icon: TrendingUp,
         permission: 'tenants:read',
@@ -95,24 +99,24 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: 'Catalog',
+    title: 'nav.catalog',
     items: [
       {
-        name: 'Tenants',
+        name: 'nav.tenants',
         href: '/tenants',
         icon: Building2,
         permission: 'tenants:read',
         shortcut: ['g', 't'],
       },
       {
-        name: 'APIs',
+        name: 'nav.apis',
         href: '/apis',
         icon: Layers,
         permission: 'apis:read',
         shortcut: ['g', 'a'],
       },
       {
-        name: 'AI Tools',
+        name: 'nav.aiTools',
         href: '/ai-tools',
         icon: Wrench,
         permission: 'apis:read',
@@ -120,14 +124,19 @@ const navigationSections: NavSection[] = [
         badge: 'STOA',
       },
       {
-        name: 'External MCP Servers',
+        name: 'nav.externalMcpServers',
         href: '/external-mcp-servers',
         icon: Server,
         permission: 'admin:servers',
       },
-      { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
       {
-        name: 'Consumers',
+        name: 'nav.applications',
+        href: '/applications',
+        icon: AppWindow,
+        permission: 'apps:read',
+      },
+      {
+        name: 'nav.consumers',
         href: '/consumers',
         icon: Users,
         permission: 'consumers:read',
@@ -136,16 +145,16 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: 'SaaS',
+    title: 'nav.saas',
     items: [
       {
-        name: 'Backend APIs',
+        name: 'nav.backendApis',
         href: '/backend-apis',
         icon: Server,
         permission: 'apis:read',
       },
       {
-        name: 'API Keys',
+        name: 'nav.apiKeys',
         href: '/saas-api-keys',
         icon: KeyRound,
         permission: 'apis:read',
@@ -153,18 +162,18 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: '\u26A1 Gateway',
+    title: 'nav.gateway',
     accent: true,
     items: [
-      { name: 'Status', href: '/gateway', icon: Server, permission: 'apis:read' },
+      { name: 'nav.status', href: '/gateway', icon: Server, permission: 'apis:read' },
       {
-        name: 'Registry',
+        name: 'nav.registry',
         href: '/gateways',
         icon: Network,
         permission: 'tenants:read',
       },
       {
-        name: 'Modes',
+        name: 'nav.modes',
         href: '/gateways/modes',
         icon: Gauge,
         permission: 'tenants:read',
@@ -172,31 +181,31 @@ const navigationSections: NavSection[] = [
         badge: 'STOA',
       },
       {
-        name: 'Deployments',
+        name: 'nav.deployments',
         href: '/gateway-deployments',
         icon: ArrowUpDown,
         permission: 'tenants:read',
       },
       {
-        name: 'Drift',
+        name: 'nav.drift',
         href: '/drift',
         icon: AlertTriangle,
         permission: 'tenants:read',
       },
       {
-        name: 'Metrics',
+        name: 'nav.metrics',
         href: '/gateway-observability',
         icon: BarChart3,
         permission: 'tenants:read',
       },
       {
-        name: 'Federation',
+        name: 'nav.federation',
         href: '/federation/accounts',
         icon: Share2,
         permission: 'apis:read',
       },
       {
-        name: 'Skills',
+        name: 'nav.skills',
         href: '/skills',
         icon: Sparkles,
         permission: 'apis:read',
@@ -204,63 +213,69 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: 'Insights',
+    title: 'nav.insights',
     items: [
-      { name: 'Observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
-      { name: 'Identity', href: '/identity', icon: Shield, shortcut: ['g', 'i'] },
-      { name: 'Logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
+      { name: 'nav.observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
+      { name: 'nav.identity', href: '/identity', icon: Shield, shortcut: ['g', 'i'] },
+      { name: 'nav.logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
       {
-        name: 'API Monitoring',
+        name: 'nav.apiMonitoring',
         href: '/monitoring',
         icon: Activity,
         permission: 'apis:read',
       },
       {
-        name: 'Error Snapshots',
+        name: 'nav.errorSnapshots',
         href: '/errors',
         icon: AlertTriangle,
         permission: 'apis:read',
         badge: 'STOA',
       },
       {
-        name: 'Executions',
+        name: 'nav.executions',
         href: '/executions',
         icon: ClipboardList,
         permission: 'apis:read',
       },
       {
-        name: 'Shadow Discovery',
+        name: 'nav.shadowDiscovery',
         href: '/shadow-discovery',
         icon: Eye,
         permission: 'apis:read',
       },
       {
-        name: 'Token Optimizer',
+        name: 'nav.tokenOptimizer',
         href: '/token-optimizer',
         icon: Coins,
+        permission: 'apis:read',
+      },
+      {
+        name: 'nav.diagnostics',
+        href: '/diagnostics',
+        icon: Stethoscope,
         permission: 'apis:read',
       },
     ],
   },
   {
-    title: 'Governance',
+    title: 'nav.governance',
     items: [
-      { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
-      { name: 'Policies', href: '/policies', icon: FileCheck, permission: 'apis:read' },
+      { name: 'nav.deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
+      { name: 'nav.policies', href: '/policies', icon: FileCheck, permission: 'apis:read' },
       {
-        name: 'Audit Log',
+        name: 'nav.auditLog',
         href: '/audit-log',
         icon: ClipboardList,
         permission: 'audit:read',
       },
       {
-        name: 'Workflows',
+        name: 'nav.workflows',
         href: '/workflows',
         icon: ListChecks,
         permission: 'workflows:read',
       },
       {
-        name: 'Audience',
+        name: 'nav.audience',
         href: '/audience-governance',
         icon: Users,
         permission: 'apis:update',
@@ -283,6 +298,7 @@ const routePrefetchMap: Record<string, () => Promise<unknown>> = {
 };
 
 export function Layout({ children }: LayoutProps) {
+  const { t } = useTranslation();
   const { user, logout, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -300,13 +316,13 @@ export function Layout({ children }: LayoutProps) {
     } catch {
       /* ignore corrupt data */
     }
-    // Default: Gateway open, others closed
+    // Default: Gateway open, others closed (keys are i18n keys, stable across languages)
     return {
-      Overview: true,
-      Catalog: true,
-      '\u26A1 Gateway': false,
-      Insights: true,
-      Governance: true,
+      'nav.overview': true,
+      'nav.catalog': true,
+      'nav.gateway': false,
+      'nav.insights': true,
+      'nav.governance': true,
     };
   });
 
@@ -414,9 +430,9 @@ export function Layout({ children }: LayoutProps) {
         .map((item) => ({
           keys: item.shortcut!,
           handler: () => navigate(item.href),
-          description: `Go to ${item.name}`,
+          description: t('commandPalette.goTo', { name: t(item.name) }),
         })),
-    [filteredNavigation, navigate]
+    [filteredNavigation, navigate, t]
   );
 
   useSequenceShortcuts(sequenceShortcuts);
@@ -426,15 +442,15 @@ export function Layout({ children }: LayoutProps) {
     () =>
       filteredNavigation.map((item) => ({
         id: `nav-${item.href}`,
-        label: item.name,
-        description: `Navigate to ${item.name}`,
+        label: t(item.name),
+        description: t('commandPalette.navigateTo', { name: t(item.name) }),
         icon: <item.icon className="h-4 w-4" />,
         section: 'Navigation' as const,
         shortcut: item.shortcut ? ['G', item.shortcut[1].toUpperCase()] : undefined,
-        keywords: [item.name.toLowerCase(), 'go', 'navigate'],
+        keywords: [t(item.name).toLowerCase(), 'go', 'navigate'],
         onSelect: () => navigate(item.href),
       })),
-    [filteredNavigation, navigate]
+    [filteredNavigation, navigate, t]
   );
 
   // Register command palette items — only theme-dependent items rebuild on theme change
@@ -444,8 +460,8 @@ export function Layout({ children }: LayoutProps) {
       // Quick actions
       {
         id: 'action-new-api',
-        label: 'Create New API',
-        description: 'Add a new API definition',
+        label: t('commandPalette.createNewApi'),
+        description: t('commandPalette.createNewApiDesc'),
         icon: <Plus className="h-4 w-4" />,
         section: 'Actions',
         shortcut: ['N'],
@@ -456,8 +472,8 @@ export function Layout({ children }: LayoutProps) {
       },
       {
         id: 'action-new-tenant',
-        label: 'Create New Tenant',
-        description: 'Add a new tenant',
+        label: t('commandPalette.createNewTenant'),
+        description: t('commandPalette.createNewTenantDesc'),
         icon: <Plus className="h-4 w-4" />,
         section: 'Actions',
         keywords: ['new', 'create', 'add', 'tenant'],
@@ -468,8 +484,8 @@ export function Layout({ children }: LayoutProps) {
       // User actions
       {
         id: 'user-logout',
-        label: 'Logout',
-        description: 'Sign out of your account',
+        label: t('common.logout'),
+        description: t('commandPalette.logoutDesc'),
         icon: <LogOut className="h-4 w-4" />,
         section: 'Account',
         keywords: ['logout', 'sign out', 'exit'],
@@ -478,8 +494,11 @@ export function Layout({ children }: LayoutProps) {
       // Theme toggle
       {
         id: 'toggle-theme',
-        label: resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-        description: `Currently in ${resolvedTheme} mode`,
+        label:
+          resolvedTheme === 'dark'
+            ? t('commandPalette.switchToLight')
+            : t('commandPalette.switchToDark'),
+        description: t('commandPalette.currentlyIn', { theme: resolvedTheme }),
         icon: resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />,
         section: 'Settings',
         keywords: ['theme', 'dark', 'light', 'mode', 'toggle'],
@@ -488,10 +507,10 @@ export function Layout({ children }: LayoutProps) {
     ];
 
     setCommandItems(commands);
-  }, [navigationCommands, navigate, logout, setCommandItems, resolvedTheme, toggleTheme]);
+  }, [navigationCommands, navigate, logout, setCommandItems, resolvedTheme, toggleTheme, t]);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-neutral-900 transition-colors">
+    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-900 transition-colors">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -503,26 +522,26 @@ export function Layout({ children }: LayoutProps) {
       {/* Sidebar */}
       <div
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-100 dark:bg-neutral-950 border-r border-gray-200 dark:border-neutral-800 transition-transform duration-300 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-neutral-100 dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-800 transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Sidebar header */}
-        <div className="flex h-16 items-center justify-between border-b border-gray-200 dark:border-neutral-800 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-neutral-200 dark:border-neutral-800 px-4">
           <div className="flex items-center gap-2">
             <StoaLogo size="sm" />
             <div>
-              <h1 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
+              <h1 className="text-lg font-bold text-neutral-900 dark:text-white leading-tight">
                 STOA
               </h1>
-              <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 tracking-wider uppercase">
-                Control Plane
+              <p className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400 tracking-wider uppercase">
+                {t('layout.controlPlane')}
               </p>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white lg:hidden"
+            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
@@ -544,10 +563,10 @@ export function Layout({ children }: LayoutProps) {
                   <button
                     onClick={() => toggleSection(section.title)}
                     className={clsx(
-                      'flex items-center w-full px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors rounded hover:bg-gray-200/50 dark:hover:bg-neutral-800/50',
+                      'flex items-center w-full px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors rounded hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50',
                       section.accent
                         ? 'text-primary-600 dark:text-primary-400'
-                        : 'text-gray-500 dark:text-gray-500'
+                        : 'text-neutral-500 dark:text-neutral-500'
                     )}
                   >
                     <ChevronDown
@@ -556,7 +575,8 @@ export function Layout({ children }: LayoutProps) {
                         isCollapsed && '-rotate-90'
                       )}
                     />
-                    {section.title}
+                    {section.accent ? '\u26A1 ' : ''}
+                    {t(section.title)}
                   </button>
                   <div
                     className={clsx(
@@ -580,18 +600,18 @@ export function Layout({ children }: LayoutProps) {
                                   'flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                                   isActive
                                     ? 'bg-primary-600 text-white'
-                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white'
+                                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
                                 )}
                               >
                                 <item.icon className="h-4 w-4 flex-shrink-0" />
-                                <span className="truncate">{item.name}</span>
+                                <span className="truncate">{t(item.name)}</span>
                                 {item.badge && (
                                   <span className="ml-auto rounded-full bg-accent-500/20 px-1.5 py-0.5 text-[10px] font-bold text-accent-600 dark:text-accent-400">
                                     {item.badge}
                                   </span>
                                 )}
                                 {!item.badge && item.shortcut && (
-                                  <span className="ml-auto text-xs text-gray-500 hidden xl:block">
+                                  <span className="ml-auto text-xs text-neutral-500 hidden xl:block">
                                     g{item.shortcut[1]}
                                   </span>
                                 )}
@@ -609,11 +629,11 @@ export function Layout({ children }: LayoutProps) {
         </nav>
 
         {/* Mobile-only: Env & Tenant selectors */}
-        <div className="lg:hidden border-t border-gray-200 dark:border-neutral-800 px-3 py-3 space-y-2">
+        <div className="lg:hidden border-t border-neutral-200 dark:border-neutral-800 px-3 py-3 space-y-2">
           {/* Environment selector */}
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500 mb-1 px-1">
-              Environment
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1 px-1">
+              {t('layout.environment')}
             </p>
             {environments.map((env) => (
               <button
@@ -626,7 +646,7 @@ export function Layout({ children }: LayoutProps) {
                   'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   activeEnvironment === env.name
                     ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800'
                 )}
               >
                 <span
@@ -651,8 +671,8 @@ export function Layout({ children }: LayoutProps) {
           {/* Tenant selector */}
           {tenants && tenants.length > 0 && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500 mb-1 px-1">
-                Tenant
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1 px-1">
+                {t('layout.tenant')}
               </p>
               {tenants.map((tenant) => {
                 const selectedId = activeTenantId || user?.tenant_id;
@@ -668,10 +688,10 @@ export function Layout({ children }: LayoutProps) {
                       'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                       isSelected
                         ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800'
+                        : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800'
                     )}
                   >
-                    <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <Building2 className="h-4 w-4 flex-shrink-0 text-neutral-400" />
                     <span className="flex-1 text-left truncate">
                       {tenant.display_name || tenant.name}
                     </span>
@@ -684,7 +704,7 @@ export function Layout({ children }: LayoutProps) {
         </div>
 
         {/* User section */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-neutral-800 p-4">
+        <div className="absolute bottom-0 left-0 right-0 border-t border-neutral-200 dark:border-neutral-800 p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600 flex-shrink-0">
               <User className="h-5 w-5 text-white" />
@@ -692,25 +712,25 @@ export function Layout({ children }: LayoutProps) {
             <div className="flex-1 min-w-0">
               {user ? (
                 <>
-                  <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="truncate text-sm font-medium text-neutral-900 dark:text-white">
                     {user.name}
                   </p>
-                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                  <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
                     {user.roles.join(', ')}
                   </p>
                 </>
               ) : (
                 <>
-                  <div className="h-4 w-24 bg-gray-300 dark:bg-gray-700 rounded animate-pulse" />
-                  <div className="h-3 w-16 bg-gray-300 dark:bg-gray-700 rounded animate-pulse mt-1" />
+                  <div className="h-4 w-24 bg-neutral-300 dark:bg-neutral-700 rounded animate-pulse" />
+                  <div className="h-3 w-16 bg-neutral-300 dark:bg-neutral-700 rounded animate-pulse mt-1" />
                 </>
               )}
             </div>
             {user && (
               <button
                 onClick={logout}
-                className="rounded-lg p-2 text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white flex-shrink-0"
-                title="Logout"
+                className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white flex-shrink-0"
+                title={t('common.logout')}
               >
                 <LogOut className="h-5 w-5" />
               </button>
@@ -726,7 +746,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Mobile menu button */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 lg:hidden"
+            className="rounded-lg p-2.5 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -740,18 +760,18 @@ export function Layout({ children }: LayoutProps) {
           />
 
           {/* Mobile: Just show current page name */}
-          <span className="flex-1 font-medium text-gray-900 dark:text-white truncate sm:hidden">
+          <span className="flex-1 font-medium text-neutral-900 dark:text-white truncate sm:hidden">
             {breadcrumbItems[breadcrumbItems.length - 1]?.label || 'Dashboard'}
           </span>
 
           {/* Command Palette trigger */}
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="hidden sm:flex items-center gap-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600 transition-colors"
+            className="hidden sm:flex items-center gap-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-1.5 text-sm text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-colors"
           >
             <Search className="h-4 w-4" />
-            <span className="hidden md:inline">Search...</span>
-            <kbd className="hidden md:flex items-center gap-0.5 rounded bg-white dark:bg-neutral-700 px-1.5 py-0.5 text-xs font-medium border border-gray-200 dark:border-neutral-600">
+            <span className="hidden md:inline">{t('common.search')}</span>
+            <kbd className="hidden md:flex items-center gap-0.5 rounded bg-white dark:bg-neutral-700 px-1.5 py-0.5 text-xs font-medium border border-neutral-200 dark:border-neutral-600">
               <span className="text-xs">⌘</span>K
             </kbd>
           </button>
@@ -759,10 +779,13 @@ export function Layout({ children }: LayoutProps) {
           {/* Mobile search button */}
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="rounded-lg p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 sm:hidden"
+            className="rounded-lg p-2 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 sm:hidden"
           >
             <Search className="h-5 w-5" />
           </button>
+
+          {/* Language toggle */}
+          <LanguageToggle />
 
           {/* Theme toggle */}
           <ThemeToggle size="md" />
@@ -793,7 +816,7 @@ export function Layout({ children }: LayoutProps) {
               />
             </button>
             {envDropdownOpen && (
-              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-lg z-50 py-1">
+              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-lg z-50 py-1">
                 {environments.map((env) => (
                   <button
                     key={env.name}
@@ -802,7 +825,7 @@ export function Layout({ children }: LayoutProps) {
                       'w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
                       activeEnvironment === env.name
                         ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                        : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                     )}
                   >
                     <span
@@ -815,8 +838,8 @@ export function Layout({ children }: LayoutProps) {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate font-medium">{env.label}</p>
-                      <p className="truncate text-xs text-gray-500 dark:text-neutral-400">
-                        {env.mode === 'read-only' ? 'Read-only' : 'Full access'}
+                      <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
+                        {env.mode === 'read-only' ? t('common.readOnly') : t('common.fullAccess')}
                       </p>
                     </div>
                     {env.mode === 'read-only' && (
@@ -843,7 +866,7 @@ export function Layout({ children }: LayoutProps) {
                   {activeTenant?.display_name ||
                     activeTenant?.name ||
                     user?.tenant_id ||
-                    'Select tenant'}
+                    t('layout.selectTenant')}
                 </span>
                 <ChevronDown
                   className={clsx(
@@ -853,7 +876,7 @@ export function Layout({ children }: LayoutProps) {
                 />
               </button>
               {tenantDropdownOpen && tenants && tenants.length > 0 && (
-                <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-lg z-50 py-1 max-h-64 overflow-y-auto">
+                <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-lg z-50 py-1 max-h-64 overflow-y-auto">
                   {tenants.map((tenant) => {
                     const selectedId = activeTenantId || user?.tenant_id;
                     const isSelected = selectedId === tenant.id || selectedId === tenant.name;
@@ -865,15 +888,15 @@ export function Layout({ children }: LayoutProps) {
                           'w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
                           isSelected
                             ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                            : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                            : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                         )}
                       >
-                        <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                        <Building2 className="h-4 w-4 flex-shrink-0 text-neutral-400" />
                         <div className="flex-1 min-w-0">
                           <p className="truncate font-medium">
                             {tenant.display_name || tenant.name}
                           </p>
-                          <p className="truncate text-xs text-gray-500 dark:text-neutral-400">
+                          <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
                             {tenant.name}
                           </p>
                         </div>
@@ -891,7 +914,7 @@ export function Layout({ children }: LayoutProps) {
         {!isConnected && !isChecking && (
           <div className="bg-red-600 text-white px-4 py-2 text-sm text-center">
             <AlertTriangle className="inline h-4 w-4 mr-2 -mt-0.5" />
-            Cannot connect to the STOA API. Some features may be unavailable.
+            {t('layout.apiError')}
           </div>
         )}
 

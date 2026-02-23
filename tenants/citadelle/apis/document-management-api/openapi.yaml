@@ -1,0 +1,167 @@
+openapi: "3.0.3"
+info:
+  title: Gestion Electronique de Documents
+  version: "2.0.0"
+  description: |
+    API de gestion electronique de documents securisee.
+    Supporte les formats NF Z42-013 pour l'archivage electronique.
+  contact:
+    name: Direction du Numerique
+    email: dnum@citadelle.gouv.demo
+servers:
+  - url: https://httpbin.org/anything
+    description: Mock backend
+paths:
+  /documents:
+    post:
+      summary: Deposer un document
+      operationId: uploadDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - category
+                - content
+              properties:
+                title:
+                  type: string
+                category:
+                  type: string
+                  enum: [administrative, legal, technical, financial]
+                content:
+                  type: string
+                  format: byte
+                  description: Contenu du document encode en base64
+                metadata:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        "201":
+          description: Document depose
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+  /documents/{documentId}:
+    get:
+      summary: Consulter un document
+      operationId: getDocument
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Detail du document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "404":
+          description: Document non trouve
+  /documents/{documentId}/status:
+    get:
+      summary: Suivre le statut d'un document
+      operationId: getDocumentStatus
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Statut du document
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [received, validating, archived, rejected]
+                  integrityHash:
+                    type: string
+                    description: SHA-256 hash for integrity verification
+                  archivedAt:
+                    type: string
+                    format: date-time
+  /documents/{documentId}/sign:
+    post:
+      summary: Signer electroniquement un document
+      operationId: signDocument
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - signerId
+              properties:
+                signerId:
+                  type: string
+                  format: uuid
+                signatureLevel:
+                  type: string
+                  enum: [simple, advanced, qualified]
+                  default: advanced
+      responses:
+        "200":
+          description: Document signe
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signatureId:
+                    type: string
+                    format: uuid
+                  signedAt:
+                    type: string
+                    format: date-time
+                  level:
+                    type: string
+components:
+  schemas:
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [received, validating, archived, rejected]
+        integrityHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string

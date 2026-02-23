@@ -45,6 +45,7 @@ use mcp::{
     discovery::{mcp_capabilities, mcp_discovery, mcp_health},
     handlers::{mcp_rest_tools_invoke, mcp_rest_tools_list, mcp_tools_call, mcp_tools_list},
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
+    ws::handle_ws_upgrade,
 };
 use proxy::dynamic_proxy;
 use state::AppState;
@@ -120,6 +121,15 @@ pub fn build_router(state: AppState) -> Router {
             "/federation/cache/:sub_account_id",
             delete(admin::federation_cache_invalidate),
         )
+        // CAB-1123: Prompt cache admin
+        .route("/prompt-cache/stats", get(admin::prompt_cache_stats))
+        .route("/prompt-cache/load", post(admin::prompt_cache_load))
+        .route("/prompt-cache/get/:key", get(admin::prompt_cache_get))
+        .route(
+            "/prompt-cache/invalidate",
+            post(admin::prompt_cache_invalidate),
+        )
+        .route("/prompt-cache/patterns", get(admin::prompt_cache_patterns))
         // CAB-1365/1366: Skills admin
         .route("/skills/status", get(admin::skills_status))
         .route("/skills/resolve", get(admin::skills_resolve))
@@ -129,6 +139,8 @@ pub fn build_router(state: AppState) -> Router {
                 .post(admin::skills_upsert)
                 .delete(admin::skills_delete),
         )
+        // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
+        .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -207,6 +219,8 @@ pub fn build_router(state: AppState) -> Router {
                         .post(handle_sse_post)
                         .delete(handle_sse_delete),
                 )
+                // MCP WebSocket Transport (CAB-1345: bidirectional)
+                .route("/mcp/ws", get(handle_ws_upgrade))
                 // MCP Event Polling Fallback (CAB-1179)
                 .route("/mcp/events", get(poll_events))
                 // Dynamic proxy fallback — must be LAST

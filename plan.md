@@ -1,11 +1,11 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (CAB-1420, CAB-1421, CAB-1427 → Done; 7 sub-issues decomposed for CAB-1331/1336/1338)
+> Last sync: 2026-02-23 (5 Linear statuses pushed; C9=443/515pts 86%)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
-**Scope**: 905 pts | **Done**: 905 pts (100%) | **Velocity**: 88 issues closed, 129 pts/day
+**Scope**: 1305 pts | **Done**: 1305 pts (100%) | **Velocity**: 88 issues closed, 186 pts/day
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 
 ### Done (88 issues)
@@ -101,18 +101,24 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~735 pts (committed) | **Done**: 267 pts (36%) | **Velocity**: 22 issues closed
+**Scope**: ~515 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 443 pts (86%) | **Velocity**: 29 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
 
+- [~] CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts, P3) — Council 7.50 ⚠️
+  - [x] P1: Shared Button component + Console focus-visible — PR #892
+  - [ ] P2-P3: Remaining audit phases
 - [~] CAB-802: Dry Run + Script + Video (3 pts, P1) — HUMAN ONLY
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
+### Done (27)
 
-### Done (18)
-
+- [x] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — ALL 3 PHASES DONE — PRs #876, #882, #885, #888
+  - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts) — PR #876
+  - [x] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts) — PRs #882, #888
+  - [x] CAB-1431 [cp-ui] CI missing translation keys check (5 pts) — PR #885
 - [x] CAB-1337: [MEGA] AI Guardrails V2 — Content Filtering + Token Budgets + Policy Engine (34 pts) — PRs #809, #816, #825
 - [x] CAB-1333: [MEGA] MCP Protocol Full Compliance — Spec Parity (34 pts) — PR #831
   - P1: spec coverage matrix (docs/mcp-spec-coverage.md)
@@ -135,69 +141,67 @@
 - [x] CAB-1394: [MEGA] SaaS Playbook Series (13 pts) — stoa-docs PRs #75, #76, #77
 - [x] CAB-1391: [MEGA] Migration Guide Expansion — Axway, WSO2, Layer7 (13 pts) — stoa-docs PR #68 + stoa-web PR #10
 - [x] CAB-1389: [MEGA] Cross-Component Quality Pass (13 pts) — PRs #810, #811, #820
-- [x] CAB-1412: [stoactl] Audit + complete CLI commands: deploy/rollback/logs/list (13 pts) — sub of CAB-374
+- [x] CAB-374: [MEGA] Vercel-Style DX (21 pts) — ALL 3 PHASES DONE
+  - [x] CAB-1420 [cp-api] Deploy log streaming + SSE (8 pts) — PR #852
+  - [x] CAB-1421 [gateway] Deploy progress telemetry (5 pts) — PR #855
+  - [x] CAB-1422 [cp-ui] Live deployment dashboard (5 pts) — PR #856
+  - [x] CAB-1423 [e2e] Deploy flow BDD scenarios (3 pts) — PR #859
+  - [x] CAB-1412 [stoactl] CLI commands: deploy/rollback/logs/list (13 pts)
+  - [x] CAB-1411 [docs] stoa.yaml spec + stoactl guide (5 pts) — stoa-docs PR #79
 - [x] CAB-86: TTL Extension — Self-Service (5 pts) — PR #780
 - [x] CAB-1414: [docs] SaaS Playbook Parts 1-2 + Buying Guide (5 pts) — stoa-docs PR #75
 - [x] CAB-1415: [docs] SaaS Playbook Parts 3-5 (5 pts) — stoa-docs PR #76
-- [x] CAB-1411: [docs] stoa.yaml spec v1.0 reference + stoactl CLI guide (5 pts) — sub of CAB-374
 - [x] CAB-1413: [cp-api] Notification Service — Kafka → Slack deployment fanout (3 pts) — PR #814
 - [x] CAB-1416: [docs] Build vs Buy Cost Analysis + Series Polish (3 pts) — stoa-docs PR #77
-- [x] CAB-1422: [cp-ui] Live deployment dashboard — SSE logs + rollback UX (5 pts) — PR #856
-- [x] CAB-1420: [cp-api] Deploy log streaming + SSE event fan-out (8 pts) — PR #856
-- [x] CAB-1421: [gateway] Deploy progress telemetry — structured events (5 pts) — PR #855
-- [x] CAB-1423: [e2e] Deploy flow integration tests — SSE + rollback (3 pts) — PRs #853, #859
-- [x] CAB-1427: [cp-api] AWS API Gateway adapter (8 pts) — PR #855
 - [x] CAB-1352: [docs] ADR-045: stoa.yaml Declarative API Spec (3 pts) — already in stoa-docs
+- [x] CAB-1123: [MEGA] Prompt Cache for HEGEMON AI Factory (21 pts) — PR #878
+- [x] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts) — PRs #556, #855, #873, #879
+  - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
+  - [x] CAB-1428 [cp-api] Azure APIM adapter (8 pts) — PR #873
+- [x] CAB-286: Chat Agent Backend API — Anthropic Streaming (8 pts) — PR #889
+- [x] CAB-285: Chat Agent UI Component (8 pts) — PR #877
+- [x] CAB-1319: [MEGA] MCP Developer Self-Service (21 pts, P3) — PR #898
+  - P1: Tenant-scoped API router `/v1/tenants/{tenant_id}/mcp-servers` (8 endpoints, 37 tests)
+  - P2: Portal My MCP Servers page + service (20 tests)
+  - P3: RegisterServerModal + conditional credential fields (20 tests)
+- [x] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts) — PR #890
+- [x] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts) — PR #895
+- [x] CAB-1432: [MEGA] Credential Mapping — Consumer→API Key Injection (21 pts) — PRs #899 (API+GW), #903 (Portal UI)
+  - P1: Backend API (7 CRUD endpoints, Fernet encryption, RBAC, 26 tests) + Gateway credential store
+  - P2: Portal UI (table + create/edit modal + search + RBAC, 38 tests)
+- [x] CAB-287: Chat Agent Tool Injection with Agentic Loop (5 pts) — PR #894
+- [x] CAB-1331: [MEGA] UAC-Driven Observability (21 pts) — PRs #870, #884
+  - [x] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts) — PR #870
+  - [x] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — PR #870
+  - [x] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts) — PR #884
+- [x] CAB-1329: [MEGA] Demo Content Library — 8 Themes (21 pts) — PR #902
 
 ### Todo
 
-**P1** (29 pts):
-- [ ] CAB-374: [MEGA] Vercel-Style DX (21 pts, P1) — Council validated ✅
+**P1** (8 pts):
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 
-**P2** (92 pts):
-- [ ] CAB-1123: Prompt Cache for HEGEMON (21 pts, P2) — Council 8.50 Go ✅
+**P2** (76 pts):
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
-- [ ] CAB-285: Chat Agent UI Component (8 pts, P2)
-- [ ] CAB-286: Chat Agent Backend API (8 pts, P2)
 - [ ] CAB-1384: Landing i18n FR+EN (8 pts, P2)
 - [ ] CAB-1383: Docs i18n FR+EN (8 pts, P2)
-- [ ] CAB-709: UAC for LLM — Contrats unifiés pour backends IA (5 pts, P2)
 - [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
-- [ ] CAB-287: Chat Agent Tool Injection (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 
-**P3 — MEGAs** (299 pts):
-
-*Council Go (>= 8.0):*
-- [ ] CAB-1331: [MEGA] UAC-Driven Observability (21 pts, P3) — Council 8.50 ✅
-  - [ ] CAB-1424 [gateway] Enable OTel feature + UAC span enrichment (8 pts)
-  - [ ] CAB-1425 [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts)
-  - [ ] CAB-1426 [infra] Hybrid multi-cluster observability view (5 pts)
-- [~] CAB-1336: [MEGA] Multi-Cloud Adapters — Apigee + AWS + Azure (21 pts, P3) — Council 8.25 ✅
-  - [x] CAB-1427 [cp-api] AWS API Gateway adapter (8 pts) — PR #855
-  - [ ] CAB-1428 [cp-api] Azure APIM adapter (8 pts)
-- [ ] CAB-1345: [MEGA] WebSocket & Streaming — Bidirectional MCP (21 pts, P3) — Council 8.00 ✅
-- [ ] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — Council 8.00 ✅
-  - [ ] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts)
-  - [ ] CAB-1430 [cp-ui] Console FR translation — full string extraction (8 pts)
-  - [ ] CAB-1431 [cp-ui] CI missing translation keys check (5 pts)
+**P3 — MEGAs** (236 pts):
 
 *Council Fix (6.0–7.9, adjustments applied on Linear):*
-- [ ] CAB-1319: [MEGA] MCP Developer Self-Service (21 pts, P3) — Council 7.50 ⚠️
-- [ ] CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts, P3) — Council 7.50 ⚠️
 - [ ] CAB-1316: [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts, P3) — Council 7.50 ⚠️
 - [ ] CAB-1342: [MEGA] Helm Auto-Sync Secrets (21 pts, P3) — Council 7.25 ⚠️
-- [ ] CAB-1329: [MEGA] Demo Content Library — 8 Themes (21 pts, P3) — Council 7.25 ⚠️
 - [ ] CAB-1334: [MEGA] SaaS Multi-Tier Billing — Stripe (21 pts, P3) — Council 6.75 ⚠️
 - [ ] CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts, P3) — Council 6.75 ⚠️
 - [ ] CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (21 pts, P3) — Council 6.25 ⚠️
 - [ ] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts, P3) — Council 6.00 ⚠️
 
 *Not Council-evaluated:*
-- [ ] CAB-1303: [MEGA] Multi-Environment STAGING (21 pts, P3)
+- [ ] CAB-1303: [MEGA] Automated Staging Pipeline & Parity Tooling (13 pts, P3)
 - [ ] CAB-288: Chat Agent Token Metering (5 pts, P3)
 
 ### Backlog (not committed, no checkbox)
@@ -224,7 +228,7 @@
 
 | Date | Event | Gate |
 |------|-------|------|
-| Dim 22 fev | Cycle 8 closed | 905 pts, 88 issues |
+| Dim 22 fev | Cycle 8 closed | 1305 pts, 88 issues |
 | Mar 17 mars | DEMO DAY | 5 min live + "ESB is Dead" |
 | Dim 1 mars | Cycle 9 ends | Post-Demo roadmap |
 

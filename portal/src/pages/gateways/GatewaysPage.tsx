@@ -20,8 +20,8 @@ const statusConfig: Record<GatewayStatus, { bg: string; text: string; label: str
     label: 'Degraded',
   },
   maintenance: {
-    bg: 'bg-gray-100 dark:bg-neutral-700',
-    text: 'text-gray-800 dark:text-neutral-300',
+    bg: 'bg-neutral-100 dark:bg-neutral-700',
+    text: 'text-neutral-800 dark:text-neutral-300',
     label: 'Maintenance',
   },
 };
@@ -93,14 +93,14 @@ export function GatewaysPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gateway Instances</h1>
-          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Gateway Instances</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             {total} gateway{total !== 1 ? 's' : ''} registered
           </p>
         </div>
         <button
           onClick={fetchGateways}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+          className="inline-flex items-center px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
@@ -112,7 +112,7 @@ export function GatewaysPage() {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md text-sm bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-300"
+          className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
         >
           <option value="">All Types</option>
           <option value="stoa">STOA</option>
@@ -123,7 +123,7 @@ export function GatewaysPage() {
         <select
           value={envFilter}
           onChange={(e) => setEnvFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md text-sm bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-300"
+          className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
         >
           <option value="">All Environments</option>
           <option value="dev">Development</option>
@@ -135,65 +135,67 @@ export function GatewaysPage() {
       {/* Table */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
         </div>
       ) : gateways.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
-          <Server className="w-12 h-12 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-neutral-400 font-medium">No gateways registered</p>
-          <p className="text-sm text-gray-400 dark:text-neutral-500 mt-1">
+        <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+          <Server className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
+          <p className="text-neutral-500 dark:text-neutral-400 font-medium">
+            No gateways registered
+          </p>
+          <p className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">
             Gateway instances will appear here once registered via the Control Plane API.
           </p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-            <thead className="bg-gray-50 dark:bg-neutral-900">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+          <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+            <thead className="bg-neutral-50 dark:bg-neutral-900">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Environment
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Mode
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Last Health Check
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
+            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {gateways.map((gw) => (
                 <tr
                   key={gw.id}
-                  className="hover:bg-gray-50 dark:hover:bg-neutral-700/50 transition-colors"
+                  className="hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center">
-                      <Server className="w-4 h-4 text-gray-400 dark:text-neutral-500 mr-2" />
+                      <Server className="w-4 h-4 text-neutral-400 dark:text-neutral-500 mr-2" />
                       <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        <p className="text-sm font-medium text-neutral-900 dark:text-white">
                           {gw.display_name}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-neutral-400">{gw.name}</p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">{gw.name}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
+                  <td className="px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">
                     {gatewayTypeLabels[gw.gateway_type] || gw.gateway_type}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300 capitalize">
+                  <td className="px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300 capitalize">
                     {gw.environment}
                   </td>
                   <td className="px-4 py-3">
@@ -203,10 +205,10 @@ export function GatewaysPage() {
                     {gw.mode ? (
                       <ModeBadge mode={gw.mode} />
                     ) : (
-                      <span className="text-gray-400 dark:text-neutral-500 text-sm">—</span>
+                      <span className="text-neutral-400 dark:text-neutral-500 text-sm">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                  <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                     {gw.last_health_check
                       ? new Date(gw.last_health_check).toLocaleString()
                       : 'Never'}

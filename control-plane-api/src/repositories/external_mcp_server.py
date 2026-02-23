@@ -2,6 +2,7 @@
 
 Reference: External MCP Server Registration Plan
 """
+
 from datetime import datetime
 from uuid import UUID
 
@@ -44,6 +45,52 @@ class ExternalMCPServerRepository:
             select(ExternalMCPServer)
             .options(selectinload(ExternalMCPServer.tools))
             .where(ExternalMCPServer.name == name)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_by_tenant(
+        self,
+        tenant_id: str,
+        enabled_only: bool = False,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[ExternalMCPServer], int]:
+        """List external MCP servers owned by a specific tenant."""
+        query = (
+            select(ExternalMCPServer)
+            .options(selectinload(ExternalMCPServer.tools))
+            .where(ExternalMCPServer.tenant_id == tenant_id)
+        )
+
+        if enabled_only:
+            query = query.where(ExternalMCPServer.enabled.is_(True))
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await self.session.execute(count_query)
+        total = total_result.scalar_one()
+
+        query = query.order_by(ExternalMCPServer.created_at.desc())
+        query = query.offset((page - 1) * page_size).limit(page_size)
+
+        result = await self.session.execute(query)
+        servers = result.scalars().all()
+        return list(servers), total
+
+    async def get_by_tenant_and_name(
+        self,
+        tenant_id: str,
+        name: str,
+    ) -> ExternalMCPServer | None:
+        """Get server by tenant ID and name."""
+        result = await self.session.execute(
+            select(ExternalMCPServer)
+            .options(selectinload(ExternalMCPServer.tools))
+            .where(
+                and_(
+                    ExternalMCPServer.tenant_id == tenant_id,
+                    ExternalMCPServer.name == name,
+                )
+            )
         )
         return result.scalar_one_or_none()
 
@@ -203,9 +250,7 @@ class ExternalMCPServerToolRepository:
 
     async def get_by_id(self, tool_id: UUID) -> ExternalMCPServerTool | None:
         """Get tool by ID."""
-        result = await self.session.execute(
-            select(ExternalMCPServerTool).where(ExternalMCPServerTool.id == tool_id)
-        )
+        result = await self.session.execute(select(ExternalMCPServerTool).where(ExternalMCPServerTool.id == tool_id))
         return result.scalar_one_or_none()
 
     async def get_by_server_and_name(
@@ -230,9 +275,7 @@ class ExternalMCPServerToolRepository:
         enabled_only: bool = False,
     ) -> list[ExternalMCPServerTool]:
         """List tools for a server."""
-        query = select(ExternalMCPServerTool).where(
-            ExternalMCPServerTool.server_id == server_id
-        )
+        query = select(ExternalMCPServerTool).where(ExternalMCPServerTool.server_id == server_id)
 
         if enabled_only:
             query = query.where(ExternalMCPServerTool.enabled.is_(True))

@@ -16,6 +16,7 @@ use std::time::Duration;
 use tracing::{debug, warn};
 
 use super::{Tool, ToolContext, ToolError, ToolRegistry, ToolResult, ToolSchema};
+use crate::cache::PromptCache;
 use crate::mcp::session::SessionManager;
 use crate::resilience::CircuitBreakerRegistry;
 use crate::uac::Action;
@@ -36,6 +37,8 @@ pub struct NativeTool {
     session_manager: Option<Arc<SessionManager>>,
     /// Optional circuit breaker registry for health checks
     circuit_breakers: Option<Arc<CircuitBreakerRegistry>>,
+    /// Optional prompt cache for CAB-1123 cache tools
+    prompt_cache: Option<Arc<PromptCache>>,
 }
 
 impl NativeTool {
@@ -58,6 +61,7 @@ impl NativeTool {
             output_schema: None,
             session_manager: None,
             circuit_breakers: None,
+            prompt_cache: None,
         }
     }
 
@@ -82,6 +86,12 @@ impl NativeTool {
     /// Set circuit breaker registry for health checks
     pub fn with_circuit_breakers(mut self, cb: Arc<CircuitBreakerRegistry>) -> Self {
         self.circuit_breakers = Some(cb);
+        self
+    }
+
+    /// Set prompt cache for CAB-1123 cache tools
+    pub fn with_prompt_cache(mut self, cache: Arc<PromptCache>) -> Self {
+        self.prompt_cache = Some(cache);
         self
     }
 
@@ -234,6 +244,9 @@ impl Tool for NativeTool {
             "stoa_alerts" => self.handle_alerts_stub(&args).await,
             "stoa_uac" => self.handle_uac_stub(&args).await,
             "stoa_security" => self.handle_security_stub(&args).await,
+            "stoa_cache_load" => self.handle_cache_load(&args).await,
+            "stoa_cache_get" => self.handle_cache_get(&args).await,
+            "stoa_cache_invalidate" => self.handle_cache_invalidate().await,
             _ => Err(ToolError::ExecutionFailed(format!(
                 "Unknown native tool: {}",
                 self.tool_name
@@ -828,6 +841,65 @@ impl NativeTool {
             serde_json::to_string_pretty(&stub).unwrap(),
         ))
     }
+
+    // ─── Prompt Cache Tools (CAB-1123 Phase 2) ──────────────────
+
+    async fn handle_cache_load(&self, args: &Value) -> Result<ToolResult, ToolError> {
+        let cache = self
+            .prompt_cache
+            .as_ref()
+            .ok_or_else(|| ToolError::ExecutionFailed("Prompt cache not configured".into()))?;
+
+        let entries = args
+            .get("entries")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| ToolError::InvalidArguments("Missing 'entries' array".into()))?;
+
+        let patterns: Vec<(String, String)> = entries
+            .iter()
+            .filter_map(|e| {
+                let key = e.get("key")?.as_str()?;
+                let value = e.get("value")?.as_str()?;
+                Some((key.to_string(), value.to_string()))
+            })
+            .collect();
+
+        let count = cache.load_patterns(patterns);
+        Ok(ToolResult::text(
+            json!({"loaded": count, "status": "ok"}).to_string(),
+        ))
+    }
+
+    async fn handle_cache_get(&self, args: &Value) -> Result<ToolResult, ToolError> {
+        let cache = self
+            .prompt_cache
+            .as_ref()
+            .ok_or_else(|| ToolError::ExecutionFailed("Prompt cache not configured".into()))?;
+
+        let key = args
+            .get("key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::InvalidArguments("Missing 'key' parameter".into()))?;
+
+        match cache.get(key) {
+            Some(value) => Ok(ToolResult::text(
+                json!({"key": key, "value": value}).to_string(),
+            )),
+            None => Ok(ToolResult::text(
+                json!({"key": key, "error": "Pattern not found"}).to_string(),
+            )),
+        }
+    }
+
+    async fn handle_cache_invalidate(&self) -> Result<ToolResult, ToolError> {
+        let cache = self
+            .prompt_cache
+            .as_ref()
+            .ok_or_else(|| ToolError::ExecutionFailed("Prompt cache not configured".into()))?;
+
+        cache.clear();
+        Ok(ToolResult::text(json!({"status": "cleared"}).to_string()))
+    }
 }
 
 // ============================================
@@ -859,6 +931,9 @@ pub fn has_native_implementation(tool_name: &str) -> bool {
             | "stoa_alerts"
             | "stoa_uac"
             | "stoa_security"
+            | "stoa_cache_load"
+            | "stoa_cache_get"
+            | "stoa_cache_invalidate"
     )
 }
 
@@ -870,6 +945,7 @@ pub fn register_native_tools(
     tool_registry_ref: Arc<ToolRegistry>,
     session_manager: Option<Arc<SessionManager>>,
     circuit_breakers: Option<Arc<CircuitBreakerRegistry>>,
+    prompt_cache: Option<Arc<PromptCache>>,
 ) {
     use serde_json::json;
 
@@ -1144,11 +1220,74 @@ pub fn register_native_tools(
             vec!["action"],
         ),
         Action::ViewAudit,
-        client,
+        client.clone(),
         url,
     )));
 
-    tracing::info!(tool_count = 12, "Native tools registered");
+    // 13. stoa_cache_load (CAB-1123)
+    let mut cache_load = NativeTool::new(
+        "stoa_cache_load",
+        "Load prompt patterns into the gateway cache for reuse across agent sessions",
+        schema(
+            json!({
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "key": {"type": "string"},
+                            "value": {"type": "string"}
+                        },
+                        "required": ["key", "value"]
+                    },
+                    "description": "Array of {key, value} pattern entries to cache"
+                }
+            }),
+            vec!["entries"],
+        ),
+        Action::Create,
+        client.clone(),
+        url,
+    );
+    if let Some(ref pc) = prompt_cache {
+        cache_load = cache_load.with_prompt_cache(pc.clone());
+    }
+    registry.register(Arc::new(cache_load));
+
+    // 14. stoa_cache_get (CAB-1123)
+    let mut cache_get = NativeTool::new(
+        "stoa_cache_get",
+        "Retrieve a cached prompt pattern by key",
+        schema(
+            json!({
+                "key": {"type": "string", "description": "Cache key to look up"}
+            }),
+            vec!["key"],
+        ),
+        Action::Read,
+        client.clone(),
+        url,
+    );
+    if let Some(ref pc) = prompt_cache {
+        cache_get = cache_get.with_prompt_cache(pc.clone());
+    }
+    registry.register(Arc::new(cache_get));
+
+    // 15. stoa_cache_invalidate (CAB-1123)
+    let mut cache_invalidate = NativeTool::new(
+        "stoa_cache_invalidate",
+        "Clear all cached prompt patterns",
+        schema(json!({}), vec![]),
+        Action::Delete,
+        client,
+        url,
+    );
+    if let Some(ref pc) = prompt_cache {
+        cache_invalidate = cache_invalidate.with_prompt_cache(pc.clone());
+    }
+    registry.register(Arc::new(cache_invalidate));
+
+    tracing::info!(tool_count = 15, "Native tools registered");
 }
 
 #[cfg(test)]
@@ -1168,6 +1307,7 @@ mod tests {
             scopes: vec!["stoa:read".to_string()],
             raw_token: None,
             skill_instructions: None,
+            progress_token: None,
         }
     }
 
@@ -1220,6 +1360,9 @@ mod tests {
             "stoa_alerts",
             "stoa_uac",
             "stoa_security",
+            "stoa_cache_load",
+            "stoa_cache_get",
+            "stoa_cache_invalidate",
         ];
         for name in &known {
             assert!(has_native_implementation(name), "{} should be native", name);
@@ -1842,6 +1985,85 @@ mod tests {
                 .await
                 .unwrap_err();
             assert!(err.to_string().contains("500"));
+        }
+    }
+
+    // ─── Prompt Cache Tools (CAB-1123) ──────────────────────────
+
+    mod cache_tools {
+        use super::*;
+        use crate::cache::{PromptCache, PromptCacheConfig};
+
+        fn make_cache_tool(name: &str) -> NativeTool {
+            let cache = Arc::new(PromptCache::new(PromptCacheConfig::default()));
+            make_tool(name).with_prompt_cache(cache)
+        }
+
+        #[tokio::test]
+        async fn cache_load_inserts_entries() {
+            let cache = Arc::new(PromptCache::new(PromptCacheConfig::default()));
+            let tool = make_tool("stoa_cache_load").with_prompt_cache(cache.clone());
+            let args = json!({
+                "entries": [
+                    {"key": "greet", "value": "Hello!"},
+                    {"key": "bye", "value": "Goodbye!"}
+                ]
+            });
+            let result = tool.handle_cache_load(&args).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text content"),
+            };
+            assert!(text.contains("\"loaded\":2"));
+            assert_eq!(cache.get("greet").unwrap(), "Hello!");
+        }
+
+        #[tokio::test]
+        async fn cache_get_returns_value() {
+            let cache = Arc::new(PromptCache::new(PromptCacheConfig::default()));
+            cache.put("k1".into(), "v1".into());
+            let tool = make_tool("stoa_cache_get").with_prompt_cache(cache);
+            let result = tool.handle_cache_get(&json!({"key": "k1"})).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text content"),
+            };
+            assert!(text.contains("v1"));
+        }
+
+        #[tokio::test]
+        async fn cache_get_missing_key() {
+            let tool = make_cache_tool("stoa_cache_get");
+            let result = tool
+                .handle_cache_get(&json!({"key": "nope"}))
+                .await
+                .unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text content"),
+            };
+            assert!(text.contains("Pattern not found"));
+        }
+
+        #[tokio::test]
+        async fn cache_invalidate_clears_all() {
+            let cache = Arc::new(PromptCache::new(PromptCacheConfig::default()));
+            cache.put("a".into(), "1".into());
+            let tool = make_tool("stoa_cache_invalidate").with_prompt_cache(cache.clone());
+            let result = tool.handle_cache_invalidate().await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text content"),
+            };
+            assert!(text.contains("cleared"));
+            assert_eq!(cache.stats().entry_count, 0);
+        }
+
+        #[test]
+        fn has_native_impl_includes_cache_tools() {
+            assert!(has_native_implementation("stoa_cache_load"));
+            assert!(has_native_implementation("stoa_cache_get"));
+            assert!(has_native_implementation("stoa_cache_invalidate"));
         }
     }
 }

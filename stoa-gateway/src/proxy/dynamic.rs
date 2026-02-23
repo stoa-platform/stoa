@@ -18,6 +18,7 @@ use rand::{Rng, SeedableRng};
 use std::cell::RefCell;
 
 use crate::proxy::credentials::{AuthType, BackendCredential};
+use crate::proxy::hop_detection;
 use crate::resilience::RetryConfig;
 use crate::state::AppState;
 
@@ -183,9 +184,21 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "Dynamic proxy: forwarding request"
     );
 
-    // BYOK credential injection (CAB-1250 + CAB-1317 OAuth2)
-    let credential = state.credential_store.get(&route.id);
-    let resolved_header = resolve_credential_header(&state, &route.id, credential.as_ref()).await;
+    // Per-consumer credential injection (CAB-1432) with BYOK fallback (CAB-1250 + CAB-1317)
+    // 1. Try consumer-specific credential (from JWT sub claim)
+    // 2. Fall back to route-level BYOK credential
+    let consumer_id = extract_user_id(request.extensions());
+    let consumer_cred = if consumer_id != "anonymous" {
+        state.consumer_credential_store.get(&route.id, &consumer_id)
+    } else {
+        None
+    };
+    let resolved_header = if let Some(ref cc) = consumer_cred {
+        Some((cc.header_name.clone(), cc.header_value.clone()))
+    } else {
+        let credential = state.credential_store.get(&route.id);
+        resolve_credential_header(&state, &route.id, credential.as_ref()).await
+    };
 
     // Save headers only if retry might be needed (idempotent methods with
     // retryable responses). Deferred clone avoids HeaderMap copy on every
@@ -246,6 +259,15 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         cb.record_success();
     }
 
+    // Inject X-Stoa-Timing debug header with gateway/upstream timing
+    // and hop count from Via headers (CAB-1316 Phase 2).
+    let hop_chain = hop_detection::parse_via_headers(response.headers());
+    let gw_ms = (upstream_duration * 1000.0) as u64;
+    let timing_value = format!("gw={gw_ms};hops={}", hop_chain.total_hops);
+    if let Ok(hv) = HeaderValue::from_str(&timing_value) {
+        response.headers_mut().insert("x-stoa-timing", hv);
+    }
+
     response
 }
 
@@ -284,6 +306,9 @@ async fn forward_request(
     // This allows downstream services (Control-Plane API, backends) to
     // correlate their spans with the gateway's trace.
     req_builder = inject_traceparent(req_builder);
+
+    // Inject RFC 9110 §7.6.3 Via header for hop detection (CAB-1316 Phase 2)
+    req_builder = req_builder.header("Via", hop_detection::build_via_value());
 
     // BYOK: inject resolved credential header (CAB-1250 + CAB-1317)
     if let Some((name, value)) = resolved_header {

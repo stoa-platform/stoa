@@ -124,6 +124,7 @@ export const config = {
     enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
     enableApplications: import.meta.env.VITE_ENABLE_APPLICATIONS !== 'false',
     enableAITools: import.meta.env.VITE_ENABLE_AI_TOOLS !== 'false',
+    enableI18n: import.meta.env.VITE_ENABLE_I18N !== 'false',
   },
 
   // UI Configuration

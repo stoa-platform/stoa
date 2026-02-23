@@ -70,14 +70,18 @@ function StatCard({
         <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{label}</p>
+        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
+          {label}
+        </p>
         <div className="flex items-baseline gap-1">
-          <p className={`text-2xl font-bold ${colorClass || 'text-gray-900 dark:text-white'}`}>
+          <p className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}>
             {value}
           </p>
-          {unit && <span className="text-sm text-gray-500 dark:text-gray-400">{unit}</span>}
+          {unit && <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>}
         </div>
-        {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{subtitle}</p>}
+        {subtitle && (
+          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
+        )}
         {sparkline && <div className="mt-2">{sparkline}</div>}
       </div>
     </div>
@@ -181,14 +185,14 @@ export function PlatformMetricsDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Platform Metrics</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Platform Metrics</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Real-time platform performance and health
           </p>
         </div>
         <div className="flex items-center gap-3">
           {/* Time range selector */}
-          <div className="flex items-center bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg overflow-hidden">
+          <div className="flex items-center bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg overflow-hidden">
             {(['1h', '6h', '24h'] as const).map((range) => (
               <button
                 key={range}
@@ -196,19 +200,19 @@ export function PlatformMetricsDashboard() {
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   timeRange === range
                     ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                 }`}
               >
                 {range}
               </button>
             ))}
           </div>
-          <span className="text-xs text-gray-400 dark:text-gray-500">
+          <span className="text-xs text-neutral-400 dark:text-neutral-500">
             {lastRefresh.toLocaleTimeString('fr-FR')}
           </span>
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+            className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${totalRequests.loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -284,7 +288,7 @@ export function PlatformMetricsDashboard() {
               value={servicesUpVal !== null ? Math.round(servicesUpVal).toString() : '--'}
               icon={Server}
               colorClass={
-                servicesUpVal !== null && servicesUpVal > 0 ? 'text-green-600' : 'text-gray-400'
+                servicesUpVal !== null && servicesUpVal > 0 ? 'text-green-600' : 'text-neutral-400'
               }
               subtitle="Healthy targets"
             />
@@ -296,10 +300,10 @@ export function PlatformMetricsDashboard() {
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Request Rate
                   </h2>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
                     req/s over {rangeCfg.label}
                   </p>
                 </div>
@@ -317,7 +321,7 @@ export function PlatformMetricsDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
                   {requestRateSeries.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -327,10 +331,10 @@ export function PlatformMetricsDashboard() {
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Error Rate
                   </h2>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
                     5xx ratio over {rangeCfg.label}
                   </p>
                 </div>
@@ -348,7 +352,7 @@ export function PlatformMetricsDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
                   {errorRateSeries.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -360,7 +364,7 @@ export function PlatformMetricsDashboard() {
             {/* Top Endpoints */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                   Top Endpoints
                 </h2>
                 <a
@@ -377,19 +381,19 @@ export function PlatformMetricsDashboard() {
                     const maxCalls = topApis[0]?.calls || 1;
                     return (
                       <div key={api.tool_name} className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-gray-400 dark:text-gray-500 w-5 text-right">
+                        <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
                           {i + 1}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
                               {api.display_name || api.tool_name}
                             </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                            <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-2">
                               {api.calls.toLocaleString()} calls
                             </span>
                           </div>
-                          <div className="w-full bg-gray-100 dark:bg-neutral-700 rounded-full h-1.5">
+                          <div className="w-full bg-neutral-100 dark:bg-neutral-700 rounded-full h-1.5">
                             <div
                               className="bg-blue-500 h-1.5 rounded-full transition-all"
                               style={{ width: `${(api.calls / maxCalls) * 100}%` }}
@@ -401,7 +405,7 @@ export function PlatformMetricsDashboard() {
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-8">
                   No API data available
                 </p>
               )}
@@ -410,7 +414,7 @@ export function PlatformMetricsDashboard() {
             {/* Component Health */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                   Component Health
                 </h2>
                 <a
@@ -426,12 +430,12 @@ export function PlatformMetricsDashboard() {
                   {componentHealth.map((c) => (
                     <div
                       key={c.name}
-                      className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 dark:border-neutral-700"
+                      className="flex items-center gap-2 p-2 rounded-lg border border-neutral-100 dark:border-neutral-700"
                     >
                       <CheckCircle
                         className={`h-4 w-4 flex-shrink-0 ${c.healthy ? 'text-green-500' : 'text-red-500'}`}
                       />
-                      <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                      <span className="text-sm text-neutral-700 dark:text-neutral-300 truncate">
                         {c.name}
                       </span>
                     </div>
@@ -439,8 +443,8 @@ export function PlatformMetricsDashboard() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8">
-                  <Server className="h-8 w-8 text-gray-300 dark:text-gray-600 mb-2" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <Server className="h-8 w-8 text-neutral-300 dark:text-neutral-600 mb-2" />
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
                     Component status unavailable
                   </p>
                 </div>

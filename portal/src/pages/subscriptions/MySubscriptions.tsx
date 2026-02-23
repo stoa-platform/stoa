@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { ConfirmDialog } from '@stoa/shared/components/ConfirmDialog';
 import { useToastActions } from '@stoa/shared/components/Toast';
+import { Button } from '@stoa/shared/components/Button';
 import {
   useSubscriptions,
   useRevokeSubscription,
@@ -209,20 +210,21 @@ export function MySubscriptions() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Subscriptions</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">My Subscriptions</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Manage your MCP Server and Tool subscriptions
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={refetchAll}
             disabled={isLoading}
-            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             title="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+          </Button>
           <Link
             to="/servers"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
@@ -243,46 +245,46 @@ export function MySubscriptions() {
           </>
         ) : (
           <>
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
                   <Key className="h-5 w-5 text-primary-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <p className="text-2xl font-bold text-neutral-900 dark:text-white">
                     {totalActiveCount}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400">
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
                     Active Subscriptions
                   </p>
                 </div>
               </div>
             </div>
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <Server className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <p className="text-2xl font-bold text-neutral-900 dark:text-white">
                     {activeServerCount}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400">
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
                     Server Subscriptions
                   </p>
                 </div>
               </div>
             </div>
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4">
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                   <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <p className="text-2xl font-bold text-neutral-900 dark:text-white">
                     {totalUsage.toLocaleString()}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400">Total API Calls</p>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">Total API Calls</p>
                 </div>
               </div>
             </div>
@@ -291,14 +293,14 @@ export function MySubscriptions() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-neutral-700">
+      <div className="border-b border-neutral-200 dark:border-neutral-700">
         <nav className="flex gap-8">
           <button
             onClick={() => setActiveTab('servers')}
             className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'servers'
                 ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
+                : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'
             }`}
           >
             <span className="flex items-center gap-2">
@@ -316,14 +318,14 @@ export function MySubscriptions() {
             className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'tools'
                 ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
+                : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'
             }`}
           >
             <span className="flex items-center gap-2">
               <Wrench className="h-4 w-4" />
               Individual Tools
               {activeToolCount > 0 && (
-                <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400 rounded-full">
+                <span className="px-2 py-0.5 text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 rounded-full">
                   {activeToolCount}
                 </span>
               )}
@@ -335,7 +337,7 @@ export function MySubscriptions() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
           <input
             type="text"
             placeholder={
@@ -343,15 +345,15 @@ export function MySubscriptions() {
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
+            className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
+          <Filter className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
+            className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
@@ -382,14 +384,14 @@ export function MySubscriptions() {
           )}
 
           {!serverSubsLoading && !serverSubsError && filteredServerSubs.length === 0 && (
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
-              <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
-                <Server className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
+              <div className="inline-flex p-4 bg-neutral-100 dark:bg-neutral-700 rounded-full mb-4">
+                <Server className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
                 No Server Subscriptions
               </h2>
-              <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
+              <p className="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
                 Subscribe to an MCP Server to get access to all its tools with a single API key.
               </p>
               <Link
@@ -414,7 +416,7 @@ export function MySubscriptions() {
                 return (
                   <div
                     key={sub.id}
-                    className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-5 hover:shadow-md transition-shadow"
+                    className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-5 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -428,15 +430,15 @@ export function MySubscriptions() {
                       </span>
                     </div>
 
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                    <h3 className="font-semibold text-neutral-900 dark:text-white mb-1">
                       {sub.server?.displayName || sub.server_id}
                     </h3>
-                    <p className="text-sm text-gray-500 dark:text-neutral-400 mb-3 line-clamp-2">
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3 line-clamp-2">
                       {sub.server?.description || 'MCP Server'}
                     </p>
 
                     {/* Tools access summary */}
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 mb-2">
+                    <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 mb-2">
                       <Wrench className="h-4 w-4" />
                       <span>
                         {enabledTools} / {totalTools} tools enabled
@@ -445,12 +447,12 @@ export function MySubscriptions() {
 
                     {/* API Key prefix */}
                     {sub.api_key_prefix && (
-                      <div className="mt-2 font-mono text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400 px-2 py-1 rounded inline-block">
+                      <div className="mt-2 font-mono text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 px-2 py-1 rounded inline-block">
                         {sub.api_key_prefix}...
                       </div>
                     )}
 
-                    <div className="text-sm text-gray-500 dark:text-neutral-400 space-y-1 mt-3">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400 space-y-1 mt-3">
                       <p>Created: {new Date(sub.created_at).toLocaleDateString()}</p>
                       {sub.last_used_at && (
                         <p>Last used: {new Date(sub.last_used_at).toLocaleDateString()}</p>
@@ -458,7 +460,7 @@ export function MySubscriptions() {
                     </div>
 
                     {sub.status === 'active' && (
-                      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-700 flex items-center justify-between">
+                      <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700 flex items-center justify-between">
                         <Link
                           to={`/servers/${sub.server_id}`}
                           className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
@@ -505,14 +507,14 @@ export function MySubscriptions() {
           )}
 
           {!toolSubsLoading && !toolSubsError && filteredToolSubs.length === 0 && (
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
-              <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
-                <Wrench className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
+              <div className="inline-flex p-4 bg-neutral-100 dark:bg-neutral-700 rounded-full mb-4">
+                <Wrench className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
                 No Tool Subscriptions
               </h2>
-              <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
+              <p className="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
                 Individual tool subscriptions are legacy. We recommend using MCP Server
                 subscriptions instead.
               </p>
@@ -535,7 +537,7 @@ export function MySubscriptions() {
                 return (
                   <div
                     key={subscription.id}
-                    className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-5 hover:shadow-md transition-shadow"
+                    className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-5 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="p-2 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
@@ -549,17 +551,17 @@ export function MySubscriptions() {
                       </span>
                     </div>
 
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                    <h3 className="font-semibold text-neutral-900 dark:text-white mb-1">
                       {subscription.tool_id}
                     </h3>
 
                     {subscription.api_key_prefix && (
-                      <div className="mt-2 font-mono text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400 px-2 py-1 rounded inline-block">
+                      <div className="mt-2 font-mono text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 px-2 py-1 rounded inline-block">
                         {subscription.api_key_prefix}...
                       </div>
                     )}
 
-                    <div className="text-sm text-gray-500 dark:text-neutral-400 space-y-1 mt-2">
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400 space-y-1 mt-2">
                       <p>Created: {new Date(subscription.created_at).toLocaleDateString()}</p>
                       {subscription.usage_count !== undefined && (
                         <p>Usage: {subscription.usage_count.toLocaleString()} calls</p>
@@ -574,7 +576,7 @@ export function MySubscriptions() {
                     )}
 
                     {subscription.status === 'active' && (
-                      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-700 flex items-center justify-between">
+                      <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700 flex items-center justify-between">
                         <button
                           onClick={() => setActiveModal({ type: 'reveal', subscription })}
                           className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"

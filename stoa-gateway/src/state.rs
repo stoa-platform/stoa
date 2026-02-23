@@ -9,18 +9,19 @@ use crate::auth::api_key::ApiKeyValidator;
 use crate::auth::jwt::{JwtValidator, JwtValidatorConfig};
 use crate::auth::mtls::MtlsStats;
 use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
-use crate::cache::{SemanticCache, SemanticCacheConfig};
+use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::guardrails::{GuardrailPolicyStore, TokenBudgetTracker};
+use crate::mcp::pending_requests::PendingRequestTracker;
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
-use crate::proxy::CredentialStore;
+use crate::proxy::{ConsumerCredentialStore, CredentialStore};
 use crate::quota::{ConsumerRateLimiter, QuotaManager, QuotaManagerConfig, RateLimiterConfig};
 use crate::rate_limit::RateLimiter;
 use crate::resilience::{
@@ -41,6 +42,8 @@ pub struct AppState {
     pub start_time: Instant,
     pub tool_registry: Arc<ToolRegistry>,
     pub session_manager: Arc<SessionManager>,
+    /// Tracks pending server-initiated requests (sampling, roots/list) across WS sessions.
+    pub pending_requests: Arc<PendingRequestTracker>,
     pub rate_limiter: Arc<RateLimiter>,
     pub api_key_validator: Arc<ApiKeyValidator>,
     pub uac_enforcer: Arc<UacEnforcer>,
@@ -71,6 +74,8 @@ pub struct AppState {
     pub quota_manager: Arc<QuotaManager>,
     /// BYOK credential store for backend API auth (CAB-1250)
     pub credential_store: Arc<CredentialStore>,
+    /// Per-consumer credential store for backend API auth (CAB-1432)
+    pub consumer_credential_store: Arc<ConsumerCredentialStore>,
     /// Event buffer for polling fallback (CAB-1179)
     pub event_buffer: Arc<EventBuffer>,
     /// UAC contract registry (CAB-1299)
@@ -90,6 +95,8 @@ pub struct AppState {
     pub guardrail_policy_store: Arc<GuardrailPolicyStore>,
     /// Deploy progress emitter for structured telemetry during API sync (CAB-1421)
     pub deploy_progress: DeployProgressEmitter,
+    /// Prompt cache for reusable patterns across agent sessions (CAB-1123)
+    pub prompt_cache: Arc<PromptCache>,
 }
 
 impl AppState {
@@ -276,6 +283,9 @@ impl AppState {
         // Initialize BYOK credential store (CAB-1250)
         let credential_store = Arc::new(CredentialStore::new());
 
+        // Initialize per-consumer credential store (CAB-1432)
+        let consumer_credential_store = Arc::new(ConsumerCredentialStore::new());
+
         // Initialize event buffer for polling fallback (CAB-1179)
         let event_buffer = Arc::new(EventBuffer::new());
 
@@ -347,6 +357,12 @@ impl AppState {
             tracing::info!("mTLS disabled (STOA_MTLS_ENABLED=false)");
         }
 
+        // Initialize prompt cache (CAB-1123)
+        let prompt_cache = Arc::new(PromptCache::new(PromptCacheConfig {
+            max_entries: config.prompt_cache_max_entries,
+            default_ttl: std::time::Duration::from_secs(config.prompt_cache_ttl_secs),
+        }));
+
         // Initialize deploy progress emitter (CAB-1421)
         let deploy_progress = DeployProgressEmitter::new(
             config.kafka_deploy_progress_topic.clone(),
@@ -365,6 +381,7 @@ impl AppState {
             start_time,
             tool_registry,
             session_manager,
+            pending_requests: Arc::new(PendingRequestTracker::new()),
             rate_limiter,
             api_key_validator,
             uac_enforcer,
@@ -382,6 +399,7 @@ impl AppState {
             consumer_rate_limiter,
             quota_manager,
             credential_store,
+            consumer_credential_store,
             event_buffer,
             contract_registry,
             classification_enforcer,
@@ -390,11 +408,20 @@ impl AppState {
             token_budget,
             guardrail_policy_store: Arc::new(GuardrailPolicyStore::new()),
             deploy_progress,
+            prompt_cache,
         }
     }
 
     /// Start background tasks
     pub fn start_background_tasks(&self) {
+        // Start prompt cache file watcher (CAB-1123)
+        if let Some(ref watch_dir) = self.config.prompt_cache_watch_dir {
+            crate::cache::watcher::spawn_cache_file_watcher(
+                watch_dir.clone(),
+                self.prompt_cache.clone(),
+            );
+        }
+
         // Start session cleanup
         self.session_manager.clone().start_cleanup_task();
 

@@ -37,9 +37,13 @@ from .routers import (
     business,
     catalog_admin,
     certificates,
+    chat,
     consumers,
     contracts,
+    credential_mappings,
     deployments,
+    diagnostics,
+    docs_search,
     environments,
     events,
     execution_logs,
@@ -91,6 +95,7 @@ from .routers.mcp_admin import (
     admin_subscriptions_router as mcp_admin_subscriptions_router,
 )
 from .routers.portal import internal_router as portal_internal_router
+from .routers.tenant_mcp_servers import router as tenant_mcp_servers_router
 from .services import argocd_service, git_service, kafka_service, keycloak_service, metrics_service
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
@@ -456,6 +461,9 @@ app.include_router(mcp_admin_servers_router)
 app.include_router(external_mcp_servers_admin_router)
 app.include_router(external_mcp_servers_internal_router)
 
+# Tenant-scoped MCP Servers — developer self-service (CAB-1319)
+app.include_router(tenant_mcp_servers_router)
+
 # Portal and GitOps routers
 app.include_router(portal.router)
 app.include_router(portal_internal_router)
@@ -510,6 +518,9 @@ app.include_router(environments.router)
 app.include_router(consumers.router)
 app.include_router(plans.router)
 
+# Credential Mappings — per-consumer backend credential injection (CAB-1432)
+app.include_router(credential_mappings.router)
+
 # Quota Enforcement (CAB-1121 Phase 4)
 app.include_router(quotas.router)
 
@@ -529,8 +540,19 @@ app.include_router(skills.router)
 # Execution Logs — Consumer execution view + error taxonomy (CAB-1318)
 app.include_router(execution_logs.router)
 
+# Diagnostics — Self-diagnostic engine with auto-RCA (CAB-1316)
+app.include_router(diagnostics.router)
+
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)
+
+# Docs Search — Algolia + llms.txt (CAB-1327)
+if settings.DOCS_SEARCH_ENABLED:
+    app.include_router(docs_search.router)
+
+# Chat Agent — Anthropic integration (CAB-286)
+if settings.CHAT_ENABLED:
+    app.include_router(chat.router)
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)

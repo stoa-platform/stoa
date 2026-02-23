@@ -115,6 +115,7 @@ mod tests {
             scopes: vec![],
             raw_token: None,
             skill_instructions: None,
+            progress_token: None,
         }
     }
 

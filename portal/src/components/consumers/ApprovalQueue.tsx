@@ -57,7 +57,7 @@ export function ApprovalQueue() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-neutral-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-neutral-400 dark:text-neutral-500" />
       </div>
     );
   }
@@ -78,9 +78,11 @@ export function ApprovalQueue() {
   if (pendingItems.length === 0) {
     return (
       <div className="text-center py-12">
-        <Inbox className="h-12 w-12 mx-auto text-gray-300 dark:text-neutral-600 mb-3" />
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white">No pending requests</h3>
-        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+        <Inbox className="h-12 w-12 mx-auto text-neutral-300 dark:text-neutral-600 mb-3" />
+        <h3 className="text-lg font-medium text-neutral-900 dark:text-white">
+          No pending requests
+        </h3>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
           All subscription requests have been processed.
         </p>
       </div>
@@ -91,7 +93,7 @@ export function ApprovalQueue() {
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-4">
         <Clock className="h-5 w-5 text-amber-500" />
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+        <h3 className="text-lg font-medium text-neutral-900 dark:text-white">
           Pending Requests ({pendingItems.length})
         </h3>
       </div>
@@ -99,7 +101,7 @@ export function ApprovalQueue() {
       {pendingItems.map((sub: APISubscriptionResponse) => (
         <div
           key={sub.id}
-          className="flex items-center justify-between p-4 bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg"
+          className="flex items-center justify-between p-4 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg"
         >
           <div className="flex items-start gap-3 min-w-0">
             <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg flex-shrink-0">
@@ -107,16 +109,16 @@ export function ApprovalQueue() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-gray-900 dark:text-white truncate">
+                <span className="font-medium text-neutral-900 dark:text-white truncate">
                   {sub.api_name}
                 </span>
                 {sub.api_version && (
-                  <span className="text-xs px-1.5 py-0.5 bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 rounded">
+                  <span className="text-xs px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 rounded">
                     v{sub.api_version}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-neutral-400">
+              <div className="flex items-center gap-3 mt-1 text-xs text-neutral-500 dark:text-neutral-400">
                 <span className="flex items-center gap-1">
                   <User className="h-3 w-3" />
                   {sub.subscriber_email}
@@ -131,7 +133,7 @@ export function ApprovalQueue() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-400 dark:text-neutral-500 mt-1">
+              <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
                 Requested {new Date(sub.created_at).toLocaleDateString()}
               </p>
             </div>

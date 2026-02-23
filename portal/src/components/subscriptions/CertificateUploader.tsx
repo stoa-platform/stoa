@@ -154,7 +154,7 @@ export function CertificateUploader({
     if (cert.is_expired) return <AlertCircle className="h-5 w-5 text-red-500" />;
     if (cert.expires_soon) return <AlertTriangle className="h-5 w-5 text-amber-500" />;
     if (cert.is_valid) return <CheckCircle className="h-5 w-5 text-green-500" />;
-    return <AlertCircle className="h-5 w-5 text-gray-500 dark:text-neutral-400" />;
+    return <AlertCircle className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />;
   };
 
   const getStatusText = (cert: CertificateInfo) => {
@@ -170,20 +170,20 @@ export function CertificateUploader({
       return 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20';
     if (cert.is_valid)
       return 'border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-900/20';
-    return 'border-gray-300 bg-gray-50 dark:border-neutral-600 dark:bg-neutral-900';
+    return 'border-neutral-300 bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900';
   };
 
   return (
     <div className={`space-y-4 ${className}`}>
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           Client Certificate {required && <span className="text-red-500">*</span>}
         </label>
         {result && (
           <button
             type="button"
             onClick={handleClear}
-            className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 flex items-center gap-1"
+            className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 flex items-center gap-1"
           >
             <X className="h-4 w-4" />
             Clear
@@ -206,7 +206,7 @@ export function CertificateUploader({
           className={`
             relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
             transition-colors duration-200
-            ${isDragOver ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30' : 'border-gray-300 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-500'}
+            ${isDragOver ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30' : 'border-neutral-300 dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500'}
             ${isLoading ? 'pointer-events-none opacity-60' : ''}
           `}
         >
@@ -221,21 +221,21 @@ export function CertificateUploader({
           {isLoading ? (
             <div className="flex flex-col items-center">
               <Loader2 className="h-10 w-10 text-primary-500 animate-spin mb-3" />
-              <p className="text-sm text-gray-600 dark:text-neutral-400">
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
                 Validating certificate...
               </p>
             </div>
           ) : (
             <>
-              <Upload className="h-10 w-10 text-gray-400 dark:text-neutral-500 mx-auto mb-3" />
-              <p className="text-sm text-gray-600 dark:text-neutral-400 mb-1">
+              <Upload className="h-10 w-10 text-neutral-400 dark:text-neutral-500 mx-auto mb-3" />
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-1">
                 <span className="text-primary-600 font-medium">Click to upload</span> or drag and
                 drop
               </p>
-              <p className="text-xs text-gray-500 dark:text-neutral-400">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 PEM, CRT, CER files (max 1MB)
               </p>
-              <p className="text-xs text-gray-400 dark:text-neutral-500 mt-2">
+              <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-2">
                 Or paste PEM content directly
               </p>
             </>
@@ -250,62 +250,62 @@ export function CertificateUploader({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {getStatusIcon(result.certificate)}
-                  <span className="font-medium text-gray-900 dark:text-white">
+                  <span className="font-medium text-neutral-900 dark:text-white">
                     {getStatusText(result.certificate)}
                   </span>
                 </div>
-                <FileCheck className="h-5 w-5 text-gray-400 dark:text-neutral-500" />
+                <FileCheck className="h-5 w-5 text-neutral-400 dark:text-neutral-500" />
               </div>
 
               {/* Certificate Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div className="flex items-start gap-2">
-                  <Building className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Building className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-gray-500 dark:text-neutral-400 text-xs">Subject</p>
-                    <p className="text-gray-900 dark:text-white break-all">
+                    <p className="text-neutral-500 dark:text-neutral-400 text-xs">Subject</p>
+                    <p className="text-neutral-900 dark:text-white break-all">
                       {result.certificate.subject}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-2">
-                  <Shield className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Shield className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-gray-500 dark:text-neutral-400 text-xs">Issuer</p>
-                    <p className="text-gray-900 dark:text-white break-all">
+                    <p className="text-neutral-500 dark:text-neutral-400 text-xs">Issuer</p>
+                    <p className="text-neutral-900 dark:text-white break-all">
                       {result.certificate.issuer}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-2">
-                  <Calendar className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Calendar className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-gray-500 dark:text-neutral-400 text-xs">Valid From</p>
-                    <p className="text-gray-900 dark:text-white">
+                    <p className="text-neutral-500 dark:text-neutral-400 text-xs">Valid From</p>
+                    <p className="text-neutral-900 dark:text-white">
                       {formatCertificateDate(result.certificate.valid_from)}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-2">
-                  <Calendar className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Calendar className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-gray-500 dark:text-neutral-400 text-xs">Valid To</p>
-                    <p className="text-gray-900 dark:text-white">
+                    <p className="text-neutral-500 dark:text-neutral-400 text-xs">Valid To</p>
+                    <p className="text-neutral-900 dark:text-white">
                       {formatCertificateDate(result.certificate.valid_to)}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-2 md:col-span-2">
-                  <Key className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-gray-500 dark:text-neutral-400 text-xs">
+                    <p className="text-neutral-500 dark:text-neutral-400 text-xs">
                       Fingerprint (SHA-256)
                     </p>
-                    <p className="text-gray-900 dark:text-white font-mono text-xs break-all">
+                    <p className="text-neutral-900 dark:text-white font-mono text-xs break-all">
                       {result.certificate.fingerprint_sha256}
                     </p>
                   </div>
@@ -313,12 +313,12 @@ export function CertificateUploader({
 
                 {result.certificate.san.length > 0 && (
                   <div className="flex items-start gap-2 md:col-span-2">
-                    <Shield className="h-4 w-4 text-gray-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                    <Shield className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="text-gray-500 dark:text-neutral-400 text-xs">
+                      <p className="text-neutral-500 dark:text-neutral-400 text-xs">
                         Subject Alternative Names
                       </p>
-                      <p className="text-gray-900 dark:text-white text-xs">
+                      <p className="text-neutral-900 dark:text-white text-xs">
                         {result.certificate.san.join(', ')}
                       </p>
                     </div>
@@ -369,7 +369,7 @@ export function CertificateUploader({
       )}
 
       {/* Help Text */}
-      <p className="text-xs text-gray-500 dark:text-neutral-400">
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">
         Upload your client certificate for mTLS authentication. The certificate must be in PEM
         format and not expired.
       </p>

@@ -25,6 +25,7 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::proxy::consumer_credentials::ConsumerCredential;
 use crate::proxy::credentials::{AuthType, BackendCredential};
 use crate::proxy::dynamic::is_blocked_url;
 use crate::routes::{ApiRoute, PolicyEntry};
@@ -329,6 +330,70 @@ pub async fn cache_clear(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 // =============================================================================
+// Prompt Cache (CAB-1123)
+// =============================================================================
+
+pub async fn prompt_cache_stats(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let stats = state.prompt_cache.stats();
+    Json(serde_json::json!({
+        "hits": stats.hits,
+        "misses": stats.misses,
+        "entry_count": stats.entry_count,
+        "hit_rate": stats.hit_rate,
+    }))
+}
+
+#[derive(serde::Deserialize)]
+pub struct PromptCacheLoadEntry {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(serde::Deserialize)]
+pub struct PromptCacheLoadPayload {
+    pub entries: Vec<PromptCacheLoadEntry>,
+}
+
+pub async fn prompt_cache_load(
+    State(state): State<AppState>,
+    Json(payload): Json<PromptCacheLoadPayload>,
+) -> Json<serde_json::Value> {
+    let patterns: Vec<(String, String)> = payload
+        .entries
+        .into_iter()
+        .map(|e| (e.key, e.value))
+        .collect();
+    let count = state.prompt_cache.load_patterns(patterns);
+    Json(serde_json::json!({"loaded": count, "status": "ok"}))
+}
+
+pub async fn prompt_cache_get(
+    State(state): State<AppState>,
+    axum::extract::Path(key): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    match state.prompt_cache.get(&key) {
+        Some(value) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"key": key, "value": value})),
+        ),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Pattern not found", "key": key})),
+        ),
+    }
+}
+
+pub async fn prompt_cache_invalidate(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.prompt_cache.clear();
+    Json(serde_json::json!({"status": "cleared"}))
+}
+
+pub async fn prompt_cache_patterns(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let keys = state.prompt_cache.list_keys();
+    Json(serde_json::json!({"keys": keys, "count": keys.len()}))
+}
+
+// =============================================================================
 // Session Stats (CAB-362)
 // =============================================================================
 
@@ -532,6 +597,62 @@ pub async fn delete_backend_credential(
 }
 
 // =============================================================================
+// Consumer Credentials CRUD (CAB-1432)
+// =============================================================================
+
+/// POST /admin/consumer-credentials — upsert a per-consumer backend credential.
+///
+/// Consumers authenticate via OAuth2 (JWT), but the backend API may require
+/// its own credential (API key, Bearer token, Basic Auth). This endpoint
+/// stores the mapping so the gateway can inject the correct header.
+pub async fn upsert_consumer_credential(
+    State(state): State<AppState>,
+    Json(cred): Json<ConsumerCredential>,
+) -> impl IntoResponse {
+    let route_id = cred.route_id.clone();
+    let consumer_id = cred.consumer_id.clone();
+    let existed = state.consumer_credential_store.upsert(cred).is_some();
+    let status = if existed {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    (
+        status,
+        Json(serde_json::json!({"route_id": route_id, "consumer_id": consumer_id, "status": "ok"})),
+    )
+        .into_response()
+}
+
+/// GET /admin/consumer-credentials — list all per-consumer credentials.
+pub async fn list_consumer_credentials(
+    State(state): State<AppState>,
+) -> Json<Vec<ConsumerCredential>> {
+    Json(state.consumer_credential_store.list())
+}
+
+/// Path parameters for consumer credential deletion.
+#[derive(Deserialize)]
+pub struct ConsumerCredentialPath {
+    pub route_id: String,
+    pub consumer_id: String,
+}
+
+/// DELETE /admin/consumer-credentials/:route_id/:consumer_id — remove a mapping.
+pub async fn delete_consumer_credential(
+    State(state): State<AppState>,
+    Path(path): Path<ConsumerCredentialPath>,
+) -> impl IntoResponse {
+    match state
+        .consumer_credential_store
+        .remove(&path.route_id, &path.consumer_id)
+    {
+        Some(_) => StatusCode::NO_CONTENT.into_response(),
+        None => (StatusCode::NOT_FOUND, "Consumer credential not found").into_response(),
+    }
+}
+
+// =============================================================================
 // UAC Contract CRUD (CAB-1299)
 // =============================================================================
 
@@ -552,6 +673,21 @@ pub async fn upsert_contract(
 
     // Ensure required_policies are up to date with classification
     contract.refresh_policies();
+
+    // Expand LLM capabilities into synthetic endpoints (CAB-709)
+    let llm_capabilities = if let Some(ref llm_config) = contract.llm_config {
+        if state.config.llm_enabled {
+            let synthetic = llm_config.expand_endpoints();
+            let count = synthetic.len();
+            contract.endpoints.extend(synthetic);
+            count
+        } else {
+            warn!("Contract has llm_config but STOA_LLM_ENABLED=false, skipping LLM expansion");
+            0
+        }
+    } else {
+        0
+    };
 
     let key = format!("{}:{}", contract.tenant_id, contract.name);
     let existed = state.contract_registry.upsert(contract.clone()).is_some();
@@ -588,6 +724,7 @@ pub async fn upsert_contract(
             "status": "ok",
             "routes_generated": routes_count,
             "tools_generated": tools_count,
+            "llm_capabilities": llm_capabilities,
         })),
     )
         .into_response()
@@ -1048,6 +1185,15 @@ mod tests {
                 "/backend-credentials/:route_id",
                 delete(delete_backend_credential),
             )
+            // CAB-1432: Per-consumer credentials
+            .route(
+                "/consumer-credentials",
+                get(list_consumer_credentials).post(upsert_consumer_credential),
+            )
+            .route(
+                "/consumer-credentials/:route_id/:consumer_id",
+                delete(delete_consumer_credential),
+            )
             // CAB-1299: UAC contracts
             .route("/contracts", get(list_contracts).post(upsert_contract))
             .route("/contracts/:key", get(get_contract).delete(delete_contract))
@@ -1059,6 +1205,15 @@ mod tests {
                 "/federation/cache/:sub_account_id",
                 delete(federation_cache_invalidate),
             )
+            // CAB-1123: Prompt cache admin
+            .route("/prompt-cache/stats", get(prompt_cache_stats))
+            .route("/prompt-cache/load", axum::routing::post(prompt_cache_load))
+            .route("/prompt-cache/get/:key", get(prompt_cache_get))
+            .route(
+                "/prompt-cache/invalidate",
+                axum::routing::post(prompt_cache_invalidate),
+            )
+            .route("/prompt-cache/patterns", get(prompt_cache_patterns))
             .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
             .with_state(state)
     }
@@ -2046,5 +2201,104 @@ mod tests {
         assert_eq!(data["hits"], 0);
         assert_eq!(data["misses"], 0);
         assert_eq!(data["hit_rate"], 0.0);
+    }
+
+    // ─── Prompt Cache (CAB-1123) ──────────────────────────────
+
+    #[tokio::test]
+    async fn test_prompt_cache_stats_empty() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/prompt-cache/stats"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["entry_count"], 0);
+        assert_eq!(data["hits"], 0);
+        assert_eq!(data["misses"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_prompt_cache_load() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_json_req(
+                "POST",
+                "/prompt-cache/load",
+                serde_json::json!({
+                    "entries": [
+                        {"key": "greet", "value": "Hello!"},
+                        {"key": "bye", "value": "Goodbye!"}
+                    ]
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["loaded"], 2);
+    }
+
+    #[tokio::test]
+    async fn test_prompt_cache_get_miss() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/prompt-cache/get/nonexistent"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_prompt_cache_load_then_get() {
+        let state = create_test_state(Some("secret"));
+        // Load first
+        state
+            .prompt_cache
+            .load_patterns(vec![("hello".into(), "world".into())]);
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/prompt-cache/get/hello"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["value"], "world");
+    }
+
+    #[tokio::test]
+    async fn test_prompt_cache_invalidate() {
+        let state = create_test_state(Some("secret"));
+        state
+            .prompt_cache
+            .load_patterns(vec![("x".into(), "y".into())]);
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_json_req(
+                "POST",
+                "/prompt-cache/invalidate",
+                serde_json::json!({}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["status"], "cleared");
     }
 }

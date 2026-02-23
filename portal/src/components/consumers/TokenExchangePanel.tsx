@@ -83,7 +83,7 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-neutral-300">
+      <div className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
         <ArrowRightLeft className="h-4 w-4" />
         <span>Token Exchange (RFC 8693)</span>
       </div>
@@ -92,7 +92,7 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
       <div>
         <label
           htmlFor="subject-token"
-          className="block text-sm text-gray-600 dark:text-neutral-400 mb-1"
+          className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1"
         >
           Subject Token
         </label>
@@ -102,7 +102,7 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
           onChange={(e) => setSubjectToken(e.target.value)}
           placeholder="Paste your access token here..."
           rows={3}
-          className="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg text-sm font-mono text-gray-700 dark:text-neutral-300 placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+          className="w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm font-mono text-neutral-700 dark:text-neutral-300 placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
         />
       </div>
 
@@ -111,9 +111,9 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
         <div>
           <label
             htmlFor="audience"
-            className="block text-sm text-gray-600 dark:text-neutral-400 mb-1"
+            className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1"
           >
-            Audience <span className="text-gray-400 dark:text-neutral-500">(optional)</span>
+            Audience <span className="text-neutral-400 dark:text-neutral-500">(optional)</span>
           </label>
           <input
             id="audience"
@@ -121,12 +121,15 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
             value={audience}
             onChange={(e) => setAudience(e.target.value)}
             placeholder="e.g. stoa-api"
-            className="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg text-sm text-gray-700 dark:text-neutral-300 placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm text-neutral-700 dark:text-neutral-300 placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
         <div>
-          <label htmlFor="scope" className="block text-sm text-gray-600 dark:text-neutral-400 mb-1">
-            Scope <span className="text-gray-400 dark:text-neutral-500">(optional)</span>
+          <label
+            htmlFor="scope"
+            className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1"
+          >
+            Scope <span className="text-neutral-400 dark:text-neutral-500">(optional)</span>
           </label>
           <input
             id="scope"
@@ -134,7 +137,7 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
             value={scope}
             onChange={(e) => setScope(e.target.value)}
             placeholder="e.g. openid profile"
-            className="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg text-sm text-gray-700 dark:text-neutral-300 placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm text-neutral-700 dark:text-neutral-300 placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -163,26 +166,26 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
 
       {/* Result */}
       {exchangedToken && (
-        <div className="space-y-3 pt-2 border-t border-gray-200 dark:border-neutral-700">
+        <div className="space-y-3 pt-2 border-t border-neutral-200 dark:border-neutral-700">
           {/* Exchanged Token */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 Exchanged Token
               </span>
               {expiresIn && (
-                <span className="text-xs text-gray-500 dark:text-neutral-400">
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
                   expires in {expiresIn}s
                 </span>
               )}
             </div>
             <div className="flex items-start gap-2">
-              <div className="flex-1 px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg font-mono text-xs text-gray-700 dark:text-neutral-300 break-all max-h-20 overflow-y-auto">
+              <div className="flex-1 px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg font-mono text-xs text-neutral-700 dark:text-neutral-300 break-all max-h-20 overflow-y-auto">
                 {exchangedToken}
               </div>
               <button
                 onClick={() => copyToClipboard(exchangedToken, 'token')}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors flex-shrink-0"
+                className="p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors flex-shrink-0"
                 title="Copy token"
               >
                 {copiedField === 'token' ? (
@@ -197,10 +200,10 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
           {/* Decoded Claims */}
           {decodedClaims && (
             <div>
-              <span className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Token Claims
               </span>
-              <pre className="px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg text-xs text-gray-600 dark:text-neutral-400 overflow-x-auto max-h-32 overflow-y-auto">
+              <pre className="px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg text-xs text-neutral-600 dark:text-neutral-400 overflow-x-auto max-h-32 overflow-y-auto">
                 {JSON.stringify(decodedClaims, null, 2)}
               </pre>
             </div>
@@ -209,18 +212,18 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
           {/* cURL Snippet */}
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Terminal className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-              <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+              <Terminal className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 Quick Test
               </span>
             </div>
             <div className="relative">
-              <pre className="px-3 py-2 bg-gray-900 dark:bg-neutral-950 text-green-400 text-xs rounded-lg overflow-x-auto">
+              <pre className="px-3 py-2 bg-neutral-900 dark:bg-neutral-950 text-green-400 text-xs rounded-lg overflow-x-auto">
                 {curlSnippet}
               </pre>
               <button
                 onClick={() => copyToClipboard(curlSnippet, 'curl')}
-                className="absolute top-1.5 right-1.5 p-1 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 transition-colors"
+                className="absolute top-1.5 right-1.5 p-1 bg-neutral-700 hover:bg-neutral-600 rounded text-neutral-300 transition-colors"
                 title="Copy cURL command"
               >
                 {copiedField === 'curl' ? (

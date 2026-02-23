@@ -100,6 +100,11 @@ pub struct Config {
     #[serde(default = "default_session_ttl")]
     pub mcp_session_ttl_minutes: i64,
 
+    /// Enable WebSocket transport for MCP (default: false — opt-in)
+    /// Env: STOA_WEBSOCKET_ENABLED
+    #[serde(default)]
+    pub websocket_enabled: bool,
+
     // === Policy Engine (Phase 2 OPA) ===
     /// Path to Rego policy file (e.g., /etc/stoa/policies/default.rego)
     /// Env: STOA_POLICY_PATH
@@ -392,6 +397,32 @@ pub struct Config {
     /// Env: STOA_FEDERATION_CACHE_MAX_ENTRIES
     #[serde(default = "default_federation_cache_max_entries")]
     pub federation_cache_max_entries: u64,
+
+    /// Max entries in prompt cache (default: 1000)
+    /// Env: STOA_PROMPT_CACHE_MAX_ENTRIES
+    #[serde(default = "default_prompt_cache_max_entries")]
+    pub prompt_cache_max_entries: u64,
+
+    /// Prompt cache TTL in seconds (default: 3600 = 1 hour)
+    /// Env: STOA_PROMPT_CACHE_TTL_SECS
+    #[serde(default = "default_prompt_cache_ttl_secs")]
+    pub prompt_cache_ttl_secs: u64,
+
+    /// Directory to watch for prompt/rule file changes (triggers cache invalidation)
+    /// Env: STOA_PROMPT_CACHE_WATCH_DIR
+    #[serde(default)]
+    pub prompt_cache_watch_dir: Option<String>,
+
+    // === LLM Contracts (CAB-709) ===
+    /// Enable LLM contract endpoint expansion (default: false)
+    /// Env: STOA_LLM_ENABLED
+    #[serde(default)]
+    pub llm_enabled: bool,
+
+    /// Default timeout in milliseconds for LLM backend calls
+    /// Env: STOA_LLM_DEFAULT_TIMEOUT_MS
+    #[serde(default = "default_llm_timeout_ms")]
+    pub llm_default_timeout_ms: u64,
 }
 
 fn default_port() -> u16 {
@@ -671,6 +702,18 @@ fn default_federation_cache_max_entries() -> u64 {
     10_000
 }
 
+fn default_prompt_cache_max_entries() -> u64 {
+    1000
+}
+
+fn default_prompt_cache_ttl_secs() -> u64 {
+    3600
+}
+
+fn default_llm_timeout_ms() -> u64 {
+    30_000
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -695,6 +738,7 @@ impl Default for Config {
             rate_limit_default: Some(1000),
             rate_limit_window_seconds: Some(60),
             mcp_session_ttl_minutes: default_session_ttl(),
+            websocket_enabled: false,
             policy_path: None,
             policy_enabled: default_policy_enabled(),
             log_level: Some("info".to_string()),
@@ -750,6 +794,11 @@ impl Default for Config {
             federation_enabled: false,
             federation_cache_ttl_secs: default_federation_cache_ttl(),
             federation_cache_max_entries: default_federation_cache_max_entries(),
+            prompt_cache_max_entries: default_prompt_cache_max_entries(),
+            prompt_cache_ttl_secs: default_prompt_cache_ttl_secs(),
+            prompt_cache_watch_dir: None,
+            llm_enabled: false,
+            llm_default_timeout_ms: default_llm_timeout_ms(),
         }
     }
 }

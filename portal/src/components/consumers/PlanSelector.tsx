@@ -57,9 +57,9 @@ function getPlanVisual(plan: Plan): {
   }
   return {
     icon: Check,
-    color: 'text-gray-700 dark:text-gray-400',
-    bgColor: 'bg-gray-50 dark:bg-neutral-800',
-    borderColor: 'border-gray-200 dark:border-neutral-700',
+    color: 'text-neutral-700 dark:text-neutral-400',
+    bgColor: 'bg-neutral-50 dark:bg-neutral-800',
+    borderColor: 'border-neutral-200 dark:border-neutral-700',
   };
 }
 
@@ -72,17 +72,17 @@ export function PlanSelector({
 }: PlanSelectorProps) {
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 p-4 bg-gray-50 dark:bg-neutral-800 rounded-lg">
-        <Loader2 className="h-4 w-4 animate-spin text-gray-500 dark:text-neutral-400" />
-        <span className="text-sm text-gray-500 dark:text-neutral-400">Loading plans...</span>
+      <div className="flex items-center gap-2 p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+        <Loader2 className="h-4 w-4 animate-spin text-neutral-500 dark:text-neutral-400" />
+        <span className="text-sm text-neutral-500 dark:text-neutral-400">Loading plans...</span>
       </div>
     );
   }
 
   if (plans.length === 0) {
     return (
-      <div className="p-4 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg">
-        <p className="text-sm text-gray-500 dark:text-neutral-400">
+      <div className="p-4 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
           No plans available for this tenant. Contact your administrator.
         </p>
       </div>
@@ -130,7 +130,7 @@ export function PlanSelector({
             className={`relative p-4 rounded-lg border-2 text-left transition-all ${
               isSelected
                 ? `${visual.borderColor} ${visual.bgColor} ring-2 ring-offset-1 ring-primary-500 dark:ring-offset-neutral-900`
-                : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800'
+                : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <div className="flex items-start gap-3">
@@ -139,12 +139,12 @@ export function PlanSelector({
               </div>
               <div className="flex-1 min-w-0">
                 <h4
-                  className={`font-semibold ${isSelected ? visual.color : 'text-gray-900 dark:text-white'}`}
+                  className={`font-semibold ${isSelected ? visual.color : 'text-neutral-900 dark:text-white'}`}
                 >
                   {plan.name}
                 </h4>
                 {plan.description && (
-                  <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5 truncate">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
                     {plan.description}
                   </p>
                 )}
@@ -152,7 +152,7 @@ export function PlanSelector({
                   {features.map((feature, idx) => (
                     <li
                       key={idx}
-                      className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-neutral-300"
+                      className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-300"
                     >
                       <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
                       {feature}

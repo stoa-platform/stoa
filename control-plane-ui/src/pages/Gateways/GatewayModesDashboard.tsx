@@ -94,7 +94,7 @@ export function GatewayModesDashboard() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-64 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+        <div className="h-8 w-64 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map((i) => (
             <CardSkeleton key={i} />
@@ -107,8 +107,8 @@ export function GatewayModesDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gateway Modes</h1>
-        <p className="text-gray-500 dark:text-neutral-400 mt-1">
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Gateway Modes</h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-1">
           STOA Gateway deployment modes across your infrastructure (ADR-024)
         </p>
       </div>
@@ -165,34 +165,36 @@ export function GatewayModesDashboard() {
                       />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
                     {mode.name}
                   </h3>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4 min-h-[40px]">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4 min-h-[40px]">
                   {mode.description}
                 </p>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <span className="text-2xl font-bold text-neutral-900 dark:text-white">
                       {stat.total}
                     </span>
-                    <span className="text-sm text-gray-500 dark:text-neutral-400">instances</span>
+                    <span className="text-sm text-neutral-500 dark:text-neutral-400">
+                      instances
+                    </span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="bg-white dark:bg-neutral-800 rounded-lg px-2 py-1.5 shadow-sm">
                       <div className="text-green-600 font-semibold">{stat.online}</div>
-                      <div className="text-xs text-gray-500 dark:text-neutral-400">online</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">online</div>
                     </div>
                     <div className="bg-white dark:bg-neutral-800 rounded-lg px-2 py-1.5 shadow-sm">
                       <div className="text-yellow-600 font-semibold">{stat.degraded}</div>
-                      <div className="text-xs text-gray-500 dark:text-neutral-400">degraded</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">degraded</div>
                     </div>
                     <div className="bg-white dark:bg-neutral-800 rounded-lg px-2 py-1.5 shadow-sm">
-                      <div className="text-gray-600 dark:text-neutral-400 font-semibold">
+                      <div className="text-neutral-600 dark:text-neutral-400 font-semibold">
                         {stat.offline}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-neutral-400">offline</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">offline</div>
                     </div>
                   </div>
                 </div>
@@ -209,30 +211,30 @@ export function GatewayModesDashboard() {
           );
         })}
       </div>
-      <div className="bg-white dark:bg-neutral-800 rounded-xl border border-gray-200 dark:border-neutral-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
           STOA Gateway Architecture (ADR-024)
         </h2>
-        <div className="prose prose-sm text-gray-600 dark:text-neutral-400">
+        <div className="prose prose-sm text-neutral-600 dark:text-neutral-400">
           <p>
             The STOA Gateway uses a unified architecture with 4 deployment modes, all from a single
             Rust binary:
           </p>
           <ul className="mt-2 space-y-1">
             <li>
-              <strong className="text-gray-900 dark:text-white">Edge MCP:</strong> Native MCP
+              <strong className="text-neutral-900 dark:text-white">Edge MCP:</strong> Native MCP
               protocol with SSE transport for AI agents (Claude, GPT, etc.)
             </li>
             <li>
-              <strong className="text-gray-900 dark:text-white">Sidecar:</strong> Policy enforcement
-              deployed alongside existing gateways
+              <strong className="text-neutral-900 dark:text-white">Sidecar:</strong> Policy
+              enforcement deployed alongside existing gateways
             </li>
             <li>
-              <strong className="text-gray-900 dark:text-white">Proxy:</strong> Full inline proxy
+              <strong className="text-neutral-900 dark:text-white">Proxy:</strong> Full inline proxy
               with request/response transformation
             </li>
             <li>
-              <strong className="text-gray-900 dark:text-white">Shadow:</strong> Passive traffic
+              <strong className="text-neutral-900 dark:text-white">Shadow:</strong> Passive traffic
               observation for auto-generating API contracts
             </li>
           </ul>

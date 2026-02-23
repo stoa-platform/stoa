@@ -98,14 +98,14 @@ export function QuickActions() {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
+      <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Quick Actions</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {enabledActions.map((action) => {
           const Icon = action.icon;
           const title = action.titleKey ? t(action.titleKey) : action.title;
           const description = action.descriptionKey ? t(action.descriptionKey) : action.description;
           const content = (
-            <div className="group relative bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 hover:border-gray-300 dark:hover:border-neutral-600 hover:shadow-md transition-all overflow-hidden">
+            <div className="group relative bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-700 p-5 hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-md transition-all overflow-hidden">
               {/* Gradient accent */}
               <div
                 className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${action.color}`}
@@ -118,13 +118,15 @@ export function QuickActions() {
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors flex items-center gap-1">
+                  <h3 className="font-semibold text-neutral-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors flex items-center gap-1">
                     {title}
-                    {action.external && <ExternalLink className="h-3 w-3 text-gray-400" />}
+                    {action.external && <ExternalLink className="h-3 w-3 text-neutral-400" />}
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    {description}
+                  </p>
                 </div>
-                <ArrowRight className="h-5 w-5 text-gray-400 dark:text-gray-500 group-hover:text-primary-500 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                <ArrowRight className="h-5 w-5 text-neutral-400 dark:text-neutral-500 group-hover:text-primary-500 group-hover:translate-x-1 transition-all flex-shrink-0" />
               </div>
             </div>
           );

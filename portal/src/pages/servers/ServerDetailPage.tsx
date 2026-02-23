@@ -215,7 +215,7 @@ export function ServerDetailPage() {
       <div className="space-y-6">
         <Link
           to="/servers"
-          className="inline-flex items-center gap-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
+          className="inline-flex items-center gap-2 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Servers
@@ -243,25 +243,25 @@ export function ServerDetailPage() {
       {/* Breadcrumb */}
       <Link
         to="/servers"
-        className="inline-flex items-center gap-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
+        className="inline-flex items-center gap-2 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Servers
       </Link>
 
       {/* Server Header */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-primary-50 rounded-lg">
             <CategoryIcon className="h-8 w-8 text-primary-600" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
                 {server.displayName}
               </h1>
               {server.version && (
-                <span className="text-sm text-gray-400 dark:text-neutral-500">
+                <span className="text-sm text-neutral-400 dark:text-neutral-500">
                   v{server.version}
                 </span>
               )}
@@ -275,13 +275,13 @@ export function ServerDetailPage() {
                 {server.status}
               </span>
             </div>
-            <p className="text-gray-600 dark:text-neutral-400 mt-2">{server.description}</p>
-            <div className="flex items-center gap-4 mt-4 text-sm text-gray-500 dark:text-neutral-400">
+            <p className="text-neutral-600 dark:text-neutral-400 mt-2">{server.description}</p>
+            <div className="flex items-center gap-4 mt-4 text-sm text-neutral-500 dark:text-neutral-400">
               <span className="inline-flex items-center gap-1">
                 <Wrench className="h-4 w-4" />
                 {server.tools.length} tools
               </span>
-              <span className="capitalize bg-gray-100 dark:bg-neutral-700 px-2 py-1 rounded">
+              <span className="capitalize bg-neutral-100 dark:bg-neutral-700 px-2 py-1 rounded">
                 {server.category}
               </span>
               {server.documentation_url && (
@@ -324,7 +324,7 @@ export function ServerDetailPage() {
                 </span>
               </div>
               {subscription.api_key_prefix && (
-                <div className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+                <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                   Key: {subscription.api_key_prefix}...
                 </div>
               )}
@@ -378,7 +378,7 @@ export function ServerDetailPage() {
                 {/* Claude.ai Web Config (Recommended) */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700 dark:text-neutral-300 flex items-center gap-2">
+                    <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
                       <Globe className="h-4 w-4" />
                       Claude.ai (Web) - Recommended
                     </span>
@@ -399,10 +399,10 @@ export function ServerDetailPage() {
                       {copiedConfig === 'claude' ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
+                  <pre className="bg-neutral-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
                     {JSON.stringify(generateClaudeConfig(newApiKey), null, 2)}
                   </pre>
-                  <p className="text-xs text-gray-500 dark:text-neutral-400 mt-2">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
                     Go to{' '}
                     <a
                       href="https://claude.ai/settings/mcp"
@@ -419,7 +419,7 @@ export function ServerDetailPage() {
                 {/* Claude Desktop Config */}
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700 dark:text-neutral-300 flex items-center gap-2">
+                    <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
                       <Download className="h-4 w-4" />
                       Claude Desktop App
                     </span>
@@ -440,12 +440,12 @@ export function ServerDetailPage() {
                       {copiedConfig === 'desktop' ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
+                  <pre className="bg-neutral-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
                     {JSON.stringify(generateDesktopConfig(newApiKey), null, 2)}
                   </pre>
-                  <p className="text-xs text-gray-500 dark:text-neutral-400 mt-2">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
                     Add to{' '}
-                    <code className="bg-gray-100 dark:bg-neutral-700 px-1 rounded">
+                    <code className="bg-neutral-100 dark:bg-neutral-700 px-1 rounded">
                       ~/Library/Application Support/Claude/claude_desktop_config.json
                     </code>{' '}
                     (macOS)
@@ -458,9 +458,11 @@ export function ServerDetailPage() {
       )}
 
       {/* Tools List */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
-        <div className="p-4 border-b border-gray-200 dark:border-neutral-700 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Available Tools</h2>
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+        <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            Available Tools
+          </h2>
           {!subscription && (
             <button
               onClick={toggleAllTools}
@@ -471,7 +473,7 @@ export function ServerDetailPage() {
           )}
         </div>
 
-        <div className="divide-y divide-gray-100 dark:divide-neutral-700">
+        <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
           {server.tools.map((tool) => {
             const isSelected = selectedTools.has(tool.id);
             const accessStatus = getToolAccessStatus(tool.id);
@@ -480,7 +482,9 @@ export function ServerDetailPage() {
               <div
                 key={tool.id}
                 className={`p-4 flex items-center gap-4 ${
-                  !subscription ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800' : ''
+                  !subscription
+                    ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                    : ''
                 }`}
                 onClick={() => !subscription && toggleTool(tool.id)}
                 onKeyDown={(e) => e.key === 'Enter' && !subscription && toggleTool(tool.id)}
@@ -494,7 +498,7 @@ export function ServerDetailPage() {
                     className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                       isSelected
                         ? 'bg-primary-600 border-primary-600'
-                        : 'border-gray-300 dark:border-neutral-600'
+                        : 'border-neutral-300 dark:border-neutral-600'
                     }`}
                   >
                     {isSelected && <Check className="h-3 w-3 text-white" />}
@@ -504,8 +508,8 @@ export function ServerDetailPage() {
                 {/* Tool Info */}
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <Wrench className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
-                    <span className="font-medium text-gray-900 dark:text-white">
+                    <Wrench className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                    <span className="font-medium text-neutral-900 dark:text-white">
                       {tool.displayName}
                     </span>
                     {tool.requires_approval && (
@@ -514,7 +518,7 @@ export function ServerDetailPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                     {tool.description}
                   </p>
                 </div>
@@ -527,7 +531,7 @@ export function ServerDetailPage() {
                         ? 'text-green-600'
                         : accessStatus.status === 'pending_approval'
                           ? 'text-amber-600'
-                          : 'text-gray-400'
+                          : 'text-neutral-400'
                     }`}
                   >
                     {accessStatus.status === 'enabled' ? (
@@ -553,13 +557,13 @@ export function ServerDetailPage() {
 
       {/* Subscribe Button */}
       {!subscription && (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-medium text-gray-900 dark:text-white">
+              <h3 className="font-medium text-neutral-900 dark:text-white">
                 Subscribe to {server.displayName}
               </h3>
-              <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                 {selectedTools.size} of {server.tools.length} tools selected
               </p>
             </div>
@@ -586,16 +590,16 @@ export function ServerDetailPage() {
 
       {/* Manage Subscription */}
       {subscription && (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
-          <h3 className="font-medium text-gray-900 dark:text-white mb-4">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
+          <h3 className="font-medium text-neutral-900 dark:text-white mb-4">
             Subscription Management
           </h3>
           <div className="flex flex-wrap gap-3">
-            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
+            <button className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
               <RefreshCw className="h-4 w-4" />
               Rotate API Key
             </button>
-            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
+            <button className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
               <Shield className="h-4 w-4" />
               Request Additional Tools
             </button>

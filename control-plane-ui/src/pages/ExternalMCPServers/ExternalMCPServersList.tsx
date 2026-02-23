@@ -20,7 +20,7 @@ const healthStatusConfig: Record<
   { color: string; icon: typeof CheckCircle; label: string }
 > = {
   unknown: {
-    color: 'bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300',
+    color: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300',
     icon: Clock,
     label: 'Unknown',
   },
@@ -160,10 +160,10 @@ export function ExternalMCPServersList() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-8 w-64 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-8 w-64 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
           <div className="flex gap-3">
-            <div className="h-10 w-24 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
-            <div className="h-10 w-28 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+            <div className="h-10 w-24 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+            <div className="h-10 w-28 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -180,8 +180,10 @@ export function ExternalMCPServersList() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">External MCP Servers</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+            External MCP Servers
+          </h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
             Register external MCP servers (Linear, GitHub, etc.) to proxy through STOA with
             governance
           </p>
@@ -189,7 +191,7 @@ export function ExternalMCPServersList() {
         <div className="flex gap-3">
           <button
             onClick={loadServers}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-neutral-300"
+            className="flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-neutral-300"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -241,15 +243,15 @@ export function ExternalMCPServersList() {
                     {server.icon ? (
                       <img src={server.icon} alt="" className="w-10 h-10 rounded" />
                     ) : (
-                      <div className="w-10 h-10 bg-gray-100 dark:bg-neutral-700 rounded flex items-center justify-center">
-                        <Server className="h-5 w-5 text-gray-500 dark:text-neutral-400" />
+                      <div className="w-10 h-10 bg-neutral-100 dark:bg-neutral-700 rounded flex items-center justify-center">
+                        <Server className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
                       </div>
                     )}
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
                         {server.display_name}
                       </h3>
-                      <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono">
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400 font-mono">
                         {server.name}
                       </p>
                     </div>
@@ -263,31 +265,31 @@ export function ExternalMCPServersList() {
                 </div>
 
                 {/* Info */}
-                <div className="space-y-2 text-sm text-gray-600 dark:text-neutral-300 mb-4">
+                <div className="space-y-2 text-sm text-neutral-600 dark:text-neutral-300 mb-4">
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-neutral-400">Transport:</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Transport:</span>
                     <span className="font-mono">
                       {transportLabels[server.transport] || server.transport}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-neutral-400">Auth:</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Auth:</span>
                     <span>{server.auth_type.replace('_', ' ')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-neutral-400">Tools:</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Tools:</span>
                     <span>{server.tools_count}</span>
                   </div>
                   {server.tool_prefix && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Prefix:</span>
+                      <span className="text-neutral-500 dark:text-neutral-400">Prefix:</span>
                       <span className="font-mono">{server.tool_prefix}__</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-500 dark:text-neutral-400">Status:</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Status:</span>
                     <span
-                      className={`px-2 py-0.5 text-xs rounded ${server.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300'}`}
+                      className={`px-2 py-0.5 text-xs rounded ${server.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300'}`}
                     >
                       {server.enabled ? 'Enabled' : 'Disabled'}
                     </span>
@@ -309,14 +311,14 @@ export function ExternalMCPServersList() {
                   <button
                     onClick={() => handleTestConnection(server.id)}
                     disabled={testingServerId === server.id}
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50"
+                    className="flex-1 px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50"
                   >
                     {testingServerId === server.id ? 'Testing...' : 'Test'}
                   </button>
                   <button
                     onClick={() => handleSyncTools(server.id)}
                     disabled={syncingServerId === server.id}
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50"
+                    className="flex-1 px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50"
                   >
                     {syncingServerId === server.id ? 'Syncing...' : 'Sync'}
                   </button>

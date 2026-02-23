@@ -1,0 +1,51 @@
+# Scenario Schema Reference
+# Each scenario lives in scripts/demo/scenarios/<name>/scenario.yaml
+# and follows this structure.
+
+# Required fields
+name: example                           # unique slug (a-z, 0-9, hyphens)
+display_name: "Example Corp"            # human-readable name
+description: "Short description"        # one-liner for --list output
+theme: example-vertical                 # industry vertical tag
+
+# Compliance metadata (optional)
+compliance:
+  frameworks:                           # list of referenced frameworks
+    - DORA
+    - NIS2
+  disclaimer: |                         # MANDATORY if frameworks listed
+    This demo illustrates technical capabilities that support compliance efforts.
+    It does not constitute certification or a guarantee of compliance.
+
+# Tenant definition (required)
+tenant:
+  id: example                           # must match tenants/<id>/tenant.yaml
+  ref: tenants/example/tenant.yaml      # path to GitOps tenant YAML
+
+# Personas to create in Keycloak (optional, requires ADMIN_PASSWORD)
+personas:
+  - username: alice
+    email: alice@example.demo
+    first_name: Alice
+    last_name: Smith
+    role: tenant-admin                  # cpi-admin | tenant-admin | devops | viewer
+    password: Alice2026!
+    description: "Security Officer"     # for docs/walkthrough
+
+# Subscription plans (optional)
+plans:
+  - slug: standard
+    display_name: "Standard Plan"
+    rate_limit_per_minute: 100
+    requires_approval: false
+  - slug: premium
+    display_name: "Premium Plan"
+    rate_limit_per_minute: 1000
+    requires_approval: true
+
+# Applications / subscriptions (optional)
+applications:
+  - name: "My App"
+    plan: standard
+    apis:                               # list of API ids from tenants/<id>/apis/
+      - example-api

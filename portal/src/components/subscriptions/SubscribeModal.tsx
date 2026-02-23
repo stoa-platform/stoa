@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2, AlertCircle, Check, Zap, Crown, Building2, Shield } from 'lucide-react';
+import { Button } from '@stoa/shared/components/Button';
 import { useApplications } from '../../hooks/useApplications';
 import { CertificateUploader } from './CertificateUploader';
 import type { CertificateValidationResult } from '../../services/certificateValidator';
@@ -46,9 +47,9 @@ const plans: Record<SubscriptionPlan, PlanInfo> = {
     description: 'For testing and development',
     icon: Check,
     features: ['100 requests/day', 'Basic support', 'Community access'],
-    color: 'text-gray-700',
-    bgColor: 'bg-gray-50',
-    borderColor: 'border-gray-200',
+    color: 'text-neutral-700',
+    bgColor: 'bg-neutral-50',
+    borderColor: 'border-neutral-200',
   },
   basic: {
     name: 'Basic',
@@ -155,19 +156,19 @@ export function SubscribeModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-neutral-700">
+          <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
                 Subscribe to API
               </h2>
-              <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                 {api.name} v{api.version}
               </p>
             </div>
             <button
               onClick={handleClose}
               disabled={isLoading}
-              className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <X className="h-5 w-5" />
             </button>
@@ -188,14 +189,14 @@ export function SubscribeModal({
               <div>
                 <label
                   htmlFor="application"
-                  className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
                 >
                   Select Application <span className="text-red-500">*</span>
                 </label>
                 {appsLoading ? (
-                  <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-500 dark:text-neutral-400" />
-                    <span className="text-sm text-gray-500 dark:text-neutral-400">
+                  <div className="flex items-center gap-2 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
+                    <Loader2 className="h-4 w-4 animate-spin text-neutral-500 dark:text-neutral-400" />
+                    <span className="text-sm text-neutral-500 dark:text-neutral-400">
                       Loading applications...
                     </span>
                   </div>
@@ -219,7 +220,7 @@ export function SubscribeModal({
                     onChange={(e) => setSelectedAppId(e.target.value)}
                     disabled={isLoading}
                     required
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed dark:bg-neutral-800 dark:text-white"
+                    className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed dark:bg-neutral-800 dark:text-white"
                   >
                     <option value="">Select an application...</option>
                     {activeApps.map((app: Application) => (
@@ -235,7 +236,7 @@ export function SubscribeModal({
               <div role="radiogroup" aria-labelledby="plan-label">
                 <span
                   id="plan-label"
-                  className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3"
                 >
                   Select Plan{' '}
                   <span className="text-red-500" aria-hidden="true">
@@ -258,7 +259,7 @@ export function SubscribeModal({
                         className={`relative p-4 rounded-lg border-2 text-left transition-all ${
                           isSelected
                             ? `${plan.borderColor} ${plan.bgColor} ring-2 ring-offset-1 ring-primary-500 dark:ring-offset-neutral-800`
-                            : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800'
+                            : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800'
                         } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <div className="flex items-start gap-3">
@@ -267,18 +268,18 @@ export function SubscribeModal({
                           </div>
                           <div className="flex-1">
                             <h4
-                              className={`font-semibold ${isSelected ? plan.color : 'text-gray-900 dark:text-white'}`}
+                              className={`font-semibold ${isSelected ? plan.color : 'text-neutral-900 dark:text-white'}`}
                             >
                               {plan.name}
                             </h4>
-                            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
                               {plan.description}
                             </p>
                             <ul className="mt-2 space-y-1">
                               {plan.features.map((feature, idx) => (
                                 <li
                                   key={idx}
-                                  className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-neutral-400"
+                                  className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400"
                                 >
                                   <Check className="h-3 w-3 text-green-500" />
                                   {feature}
@@ -305,14 +306,14 @@ export function SubscribeModal({
                 <div>
                   <div className="flex items-center gap-2 mb-3">
                     <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                    <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                       Client Certificate{' '}
                       <span className="text-red-500" aria-hidden="true">
                         *
                       </span>
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
                     This API requires mTLS. Upload your X.509 client certificate for
                     certificate-bound access tokens (RFC 8705).
                   </p>
@@ -322,7 +323,7 @@ export function SubscribeModal({
                     onCertificateCleared={() => setCertResult(null)}
                   />
                   {certResult?.certificate && (
-                    <p className="mt-2 text-xs text-gray-500 dark:text-neutral-400 font-mono">
+                    <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 font-mono">
                       Fingerprint: {certResult.certificate.fingerprint_sha256.substring(0, 24)}...
                     </p>
                   )}
@@ -339,34 +340,19 @@ export function SubscribeModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-neutral-700">
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
-              >
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-200 dark:border-neutral-700">
+              <Button variant="secondary" onClick={handleClose} disabled={isLoading}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={
-                  isLoading ||
-                  !selectedAppId ||
-                  activeApps.length === 0 ||
-                  (requiresMtls && !certResult?.valid)
+                  !selectedAppId || activeApps.length === 0 || (requiresMtls && !certResult?.valid)
                 }
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={isLoading}
               >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Subscribing...
-                  </>
-                ) : (
-                  'Subscribe'
-                )}
-              </button>
+                {isLoading ? 'Subscribing...' : 'Subscribe'}
+              </Button>
             </div>
           </form>
         </div>

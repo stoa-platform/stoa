@@ -37,8 +37,10 @@ export function ExecutionHistoryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Execution History</h1>
-        <p className="text-gray-500 dark:text-neutral-400 mt-1">
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+          My Execution History
+        </h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-1">
           View your API call history and error patterns
         </p>
       </div>
@@ -46,26 +48,26 @@ export function ExecutionHistoryPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-4">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">Total Calls</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Total Calls</p>
+          <p className="text-2xl font-bold text-neutral-900 dark:text-white">
             {taxonomy?.total_executions ?? 0}
           </p>
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-4">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">Errors</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Errors</p>
           <p className="text-2xl font-bold text-red-600">{taxonomy?.total_errors ?? 0}</p>
         </div>
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-4">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">Error Breakdown</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Error Breakdown</p>
           <div className="flex flex-wrap gap-2 mt-1">
             {taxonomy?.items.map((item) => (
               <span
                 key={item.category}
-                className="text-xs bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 px-2 py-0.5 rounded"
+                className="text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 px-2 py-0.5 rounded"
               >
                 {CATEGORY_LABELS[item.category] || item.category}: {item.count}
               </span>
-            )) ?? <span className="text-xs text-gray-400 dark:text-neutral-500">No errors</span>}
+            )) ?? <span className="text-xs text-neutral-400 dark:text-neutral-500">No errors</span>}
           </div>
         </div>
       </div>
@@ -78,7 +80,7 @@ export function ExecutionHistoryPage() {
             setStatusFilter(e.target.value);
             setPage(1);
           }}
-          className="rounded-md border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-gray-900 dark:text-white"
+          className="rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-neutral-900 dark:text-white"
           aria-label="Filter by status"
         >
           <option value="">All Statuses</option>
@@ -91,39 +93,39 @@ export function ExecutionHistoryPage() {
       {/* Executions Table */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading...</div>
+          <div className="p-8 text-center text-neutral-500 dark:text-neutral-400">Loading...</div>
         ) : !executions || executions.items.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+          <div className="p-8 text-center text-neutral-500 dark:text-neutral-400">
             No executions found
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-            <thead className="bg-gray-50 dark:bg-neutral-900">
+          <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+            <thead className="bg-neutral-50 dark:bg-neutral-900">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Time
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   API / Tool
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Duration
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Error
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
+            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {executions.items.map((exec) => (
                 <tr key={exec.id}>
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap">
+                  <td className="px-4 py-3 text-sm text-neutral-900 dark:text-white whitespace-nowrap">
                     {new Date(exec.started_at).toLocaleTimeString()}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                  <td className="px-4 py-3 text-sm text-neutral-900 dark:text-white">
                     {exec.api_name || exec.tool_name || exec.path || '—'}
                   </td>
                   <td className="px-4 py-3">
@@ -133,10 +135,10 @@ export function ExecutionHistoryPage() {
                       {exec.status_code ?? exec.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                  <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                     {exec.duration_ms != null ? `${exec.duration_ms}ms` : '—'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                  <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                     {exec.error_category
                       ? CATEGORY_LABELS[exec.error_category] || exec.error_category
                       : '—'}
@@ -149,22 +151,22 @@ export function ExecutionHistoryPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-gray-200 dark:border-neutral-700 flex items-center justify-between">
-            <p className="text-sm text-gray-500 dark:text-neutral-400">
+          <div className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               Page {page} of {totalPages} ({executions?.total ?? 0} total)
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50"
+                className="px-3 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-600 disabled:opacity-50"
               >
                 Previous
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50"
+                className="px-3 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-600 disabled:opacity-50"
               >
                 Next
               </button>

@@ -34,7 +34,7 @@ interface StatCardProps {
 
 function StatCard({ icon: Icon, iconColor, label, value, subtext, trend }: StatCardProps) {
   return (
-    <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-4">
+    <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg p-4">
       <div className="flex items-start justify-between">
         <div className={`p-2 rounded-lg ${iconColor}`}>
           <Icon className="h-5 w-5" />
@@ -46,7 +46,7 @@ function StatCard({ icon: Icon, iconColor, label, value, subtext, trend }: StatC
                 ? 'text-green-600 dark:text-green-400'
                 : trend === 'down'
                   ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-500 dark:text-neutral-400'
+                  : 'text-neutral-500 dark:text-neutral-400'
             }`}
           >
             <TrendingUp className={`h-3 w-3 ${trend === 'down' ? 'rotate-180' : ''}`} />
@@ -55,9 +55,11 @@ function StatCard({ icon: Icon, iconColor, label, value, subtext, trend }: StatC
         )}
       </div>
       <div className="mt-3">
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">{label}</p>
-        {subtext && <p className="text-xs text-gray-400 dark:text-neutral-500 mt-1">{subtext}</p>}
+        <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">{label}</p>
+        {subtext && (
+          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">{subtext}</p>
+        )}
       </div>
     </div>
   );
@@ -110,20 +112,22 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
 
   return (
     <div
-      className={`bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-6 ${className}`}
+      className={`bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-6 ${className}`}
     >
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Usage Statistics</h2>
-        <span className="text-xs text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-700 px-2 py-1 rounded">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Usage Statistics</h2>
+        <span className="text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700 px-2 py-1 rounded">
           This month
         </span>
       </div>
 
       {!hasStats ? (
         <div className="text-center py-8">
-          <Activity className="h-12 w-12 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-neutral-400 text-sm">No usage data available yet</p>
-          <p className="text-gray-400 dark:text-neutral-500 text-xs mt-1">
+          <Activity className="h-12 w-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
+          <p className="text-neutral-500 dark:text-neutral-400 text-sm">
+            No usage data available yet
+          </p>
+          <p className="text-neutral-400 dark:text-neutral-500 text-xs mt-1">
             Statistics will appear once you start using this tool
           </p>
         </div>
@@ -179,13 +183,13 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
 
       {/* Usage Trend Graph Placeholder */}
       {hasStats && (
-        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+        <div className="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+            <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
               Daily usage (last 7 days)
             </span>
           </div>
-          <div className="h-20 bg-gray-50 dark:bg-neutral-900 rounded-lg flex items-end justify-around px-4 py-2">
+          <div className="h-20 bg-neutral-50 dark:bg-neutral-900 rounded-lg flex items-end justify-around px-4 py-2">
             {/* Simple bar chart visualization */}
             {[40, 65, 45, 80, 55, 70, 90].map((height, idx) => (
               <div
@@ -196,7 +200,7 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
               />
             ))}
           </div>
-          <div className="flex justify-between mt-2 text-xs text-gray-400 dark:text-neutral-500">
+          <div className="flex justify-between mt-2 text-xs text-neutral-400 dark:text-neutral-500">
             <span>Mon</span>
             <span>Tue</span>
             <span>Wed</span>

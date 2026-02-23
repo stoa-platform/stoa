@@ -56,15 +56,17 @@ const gatewayStatusConfig: Record<
 
 const fallbackStatus = {
   icon: AlertTriangle,
-  color: 'text-gray-600 dark:text-gray-400',
-  bg: 'bg-gray-100 dark:bg-neutral-700',
+  color: 'text-neutral-600 dark:text-neutral-400',
+  bg: 'bg-neutral-100 dark:bg-neutral-700',
   label: 'Unknown',
 };
 
 function SummaryCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3">
-      <p className="text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">{label}</p>
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 px-4 py-3">
+      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
+        {label}
+      </p>
       <p className={`text-2xl font-bold ${color}`}>{value}</p>
     </div>
   );
@@ -154,10 +156,13 @@ export function DriftDetection() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 bg-gray-200 dark:bg-neutral-700 rounded w-1/4 animate-pulse" />
+        <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-1/4 animate-pulse" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+            <div
+              key={i}
+              className="h-20 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse"
+            />
           ))}
         </div>
         <TableSkeleton />
@@ -198,14 +203,14 @@ export function DriftDetection() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Drift Detection</h1>
-          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Drift Detection</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Monitor gateway health and deployment sync across all gateways
           </p>
         </div>
         <button
           onClick={loadData}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-700"
+          className="inline-flex items-center px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700"
         >
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
@@ -217,24 +222,26 @@ export function DriftDetection() {
         <SummaryCard
           label="Total Gateways"
           value={gateways.length}
-          color="text-gray-900 dark:text-white"
+          color="text-neutral-900 dark:text-white"
         />
         <SummaryCard label="Healthy" value={healthyGateways} color="text-green-600" />
         <SummaryCard
           label="Drifted"
           value={driftedCount}
-          color={driftedCount > 0 ? 'text-orange-600' : 'text-gray-900 dark:text-white'}
+          color={driftedCount > 0 ? 'text-orange-600' : 'text-neutral-900 dark:text-white'}
         />
         <SummaryCard
           label="Errors"
           value={errorCount}
-          color={errorCount > 0 ? 'text-red-600' : 'text-gray-900 dark:text-white'}
+          color={errorCount > 0 ? 'text-red-600' : 'text-neutral-900 dark:text-white'}
         />
       </div>
 
       {/* Gateway Health Grid */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Gateway Health</h2>
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-3">
+          Gateway Health
+        </h2>
         {gateways.length === 0 ? (
           <EmptyState
             title="No gateways registered"
@@ -248,12 +255,12 @@ export function DriftDetection() {
               return (
                 <div
                   key={gw.id}
-                  className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4"
+                  className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Server className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                      <Server className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                      <span className="font-medium text-neutral-900 dark:text-white text-sm truncate">
                         {gw.display_name || gw.name}
                       </span>
                     </div>
@@ -264,7 +271,7 @@ export function DriftDetection() {
                       {cfg.label}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-neutral-400 space-y-1">
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400 space-y-1">
                     <p>Type: {gw.gateway_type}</p>
                     {gw.last_health_check && (
                       <p>Last check: {new Date(gw.last_health_check).toLocaleString()}</p>
@@ -289,7 +296,7 @@ export function DriftDetection() {
 
       {/* Drifted Deployments */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-3">
           Drifted Deployments
         </h2>
         {driftedDeployments.length === 0 ? (
@@ -301,39 +308,39 @@ export function DriftDetection() {
             </p>
           </div>
         ) : (
-          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-              <thead className="bg-gray-50 dark:bg-neutral-900">
+          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+            <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+              <thead className="bg-neutral-50 dark:bg-neutral-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     API
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Gateway
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Error
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Last Sync
                   </th>
                   {isAdmin && (
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                       Actions
                     </th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
+              <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
                 {driftedDeployments.map((dep) => (
                   <tr key={dep.id}>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    <td className="px-4 py-3 text-sm text-neutral-900 dark:text-white">
                       {String(dep.desired_state?.['api_name'] ?? dep.api_catalog_id)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                    <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                       {dep.gateway_instance_id}
                     </td>
                     <td className="px-4 py-3">
@@ -342,7 +349,7 @@ export function DriftDetection() {
                     <td className="px-4 py-3 text-sm text-red-600 dark:text-red-400 max-w-xs truncate">
                       {dep.sync_error || '\u2014'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                    <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                       {dep.last_sync_attempt
                         ? new Date(dep.last_sync_attempt).toLocaleString()
                         : '\u2014'}

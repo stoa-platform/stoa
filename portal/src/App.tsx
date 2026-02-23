@@ -16,6 +16,9 @@ const MCPServersPage = lazy(() =>
 const ServerDetailPage = lazy(() =>
   import('./pages/servers').then((m) => ({ default: m.ServerDetailPage }))
 );
+const MyMCPServersPage = lazy(() =>
+  import('./pages/servers').then((m) => ({ default: m.MyMCPServersPage }))
+);
 const APICatalog = lazy(() => import('./pages/apis').then((m) => ({ default: m.APICatalog })));
 const APIDetail = lazy(() => import('./pages/apis').then((m) => ({ default: m.APIDetail })));
 const APITestingSandbox = lazy(() =>
@@ -59,6 +62,9 @@ const UnauthorizedPage = lazy(() =>
 );
 const OnboardingWizardPage = lazy(() =>
   import('./pages/onboarding').then((m) => ({ default: m.OnboardingWizardPage }))
+);
+const CredentialMappingsPage = lazy(() =>
+  import('./pages/credential-mappings').then((m) => ({ default: m.CredentialMappingsPage }))
 );
 
 // Loading indicator for lazy-loaded pages
@@ -147,10 +153,10 @@ function LoginScreen() {
           </div>
 
           {/* Primary: Create account */}
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
             Create your free developer account
           </h3>
-          <ul className="text-sm text-gray-600 dark:text-neutral-400 space-y-1 mb-4">
+          <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1 mb-4">
             <li>&#x2713; Instant access to the API &amp; MCP catalog</li>
             <li>&#x2713; Personal workspace with API keys</li>
             <li>&#x2713; Free tier &mdash; no credit card required</li>
@@ -161,7 +167,7 @@ function LoginScreen() {
           >
             Create Free Account
           </button>
-          <p className="text-xs text-gray-500 dark:text-neutral-500 mt-2 text-center">
+          <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-2 text-center">
             By creating an account, you agree to our{' '}
             <a
               href={`${config.services.docs.url}/legal/terms`}
@@ -174,7 +180,7 @@ function LoginScreen() {
           </p>
 
           {/* Sign in link */}
-          <p className="text-sm text-gray-500 dark:text-neutral-400 text-center mt-4">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center mt-4">
             Already have an account?{' '}
             <button
               onClick={login}
@@ -185,11 +191,11 @@ function LoginScreen() {
           </p>
 
           {/* Divider */}
-          <div className="border-t border-gray-200 dark:border-neutral-700 mt-6 pt-4">
+          <div className="border-t border-neutral-200 dark:border-neutral-700 mt-6 pt-4">
             {/* Enterprise access toggle */}
             <button
               onClick={() => setShowEnterprise(!showEnterprise)}
-              className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 w-full text-center"
+              className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 w-full text-center"
             >
               Need enterprise access?{' '}
               <span className="text-primary-600 dark:text-primary-400 hover:underline">
@@ -202,7 +208,7 @@ function LoginScreen() {
                 {submitState === 'success' ? (
                   <div className="text-center py-4">
                     <div className="text-2xl mb-2">&#x2705;</div>
-                    <p className="text-gray-900 dark:text-white font-medium text-sm">
+                    <p className="text-neutral-900 dark:text-white font-medium text-sm">
                       Thank you! We&apos;ll reach out shortly.
                     </p>
                   </div>
@@ -212,7 +218,7 @@ function LoginScreen() {
                       <div>
                         <label
                           htmlFor="firstName"
-                          className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                          className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
                         >
                           First name *
                         </label>
@@ -223,13 +229,13 @@ function LoginScreen() {
                           value={firstName}
                           onChange={(e) => setFirstName(e.target.value)}
                           placeholder="Jane"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                          className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                         />
                       </div>
                       <div>
                         <label
                           htmlFor="lastName"
-                          className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                          className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
                         >
                           Last name *
                         </label>
@@ -240,14 +246,14 @@ function LoginScreen() {
                           value={lastName}
                           onChange={(e) => setLastName(e.target.value)}
                           placeholder="Doe"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                          className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                         />
                       </div>
                     </div>
                     <div>
                       <label
                         htmlFor="email"
-                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                        className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
                       >
                         Work email *
                       </label>
@@ -258,13 +264,13 @@ function LoginScreen() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@company.com"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                       />
                     </div>
                     <div>
                       <label
                         htmlFor="company"
-                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                        className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
                       >
                         Company *
                       </label>
@@ -275,13 +281,13 @@ function LoginScreen() {
                         value={company}
                         onChange={(e) => setCompany(e.target.value)}
                         placeholder="Acme Corp"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                       />
                     </div>
                     <div>
                       <label
                         htmlFor="role"
-                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                        className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
                       >
                         Role
                       </label>
@@ -289,7 +295,7 @@ function LoginScreen() {
                         id="role"
                         value={role}
                         onChange={(e) => setRole(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                       >
                         <option value="">Select your role...</option>
                         <option value="developer">Developer</option>
@@ -302,7 +308,7 @@ function LoginScreen() {
                     <button
                       type="submit"
                       disabled={submitState === 'submitting'}
-                      className="w-full py-2.5 px-4 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors text-sm"
+                      className="w-full py-2.5 px-4 bg-neutral-600 text-white rounded-lg font-medium hover:bg-neutral-700 disabled:opacity-50 transition-colors text-sm"
                     >
                       {submitState === 'submitting' ? 'Submitting...' : 'Request Enterprise Access'}
                     </button>
@@ -438,6 +444,16 @@ function AppContent() {
               }
             />
 
+            {/* My MCP Servers - self-service management (CAB-1319) */}
+            <Route
+              path="/my-servers"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <MyMCPServersPage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Redirect legacy /tools to /servers */}
             <Route path="/tools" element={<Navigate to="/servers" replace />} />
             <Route path="/tools/:id" element={<Navigate to="/servers" replace />} />
@@ -550,6 +566,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:subscriptions:write">
                   <ServiceAccountsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Credential Mappings — consumer→API backend credentials (CAB-1432) */}
+            <Route
+              path="/credentials"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <CredentialMappingsPage />
                 </ProtectedRoute>
               }
             />

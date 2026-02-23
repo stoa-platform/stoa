@@ -65,26 +65,28 @@ export const GeneratedBindingRow: React.FC<GeneratedBindingRowProps> = ({ bindin
     if (isCreated) {
       return <Check className="h-5 w-5 text-green-500" />;
     }
-    return <Clock className="h-5 w-5 text-gray-400" />;
+    return <Clock className="h-5 w-5 text-neutral-400" />;
   };
 
   const getEndpointDisplay = () => {
     if (!isCreated) {
-      return <span className="text-gray-400 text-sm">Enable in Protocol Settings</span>;
+      return <span className="text-neutral-400 text-sm">Enable in Protocol Settings</span>;
     }
 
     if (binding.protocol === 'mcp' && binding.tool_name) {
-      return <span className="text-gray-600 text-sm font-mono">tool: {binding.tool_name}</span>;
+      return <span className="text-neutral-600 text-sm font-mono">tool: {binding.tool_name}</span>;
     }
 
     if (binding.protocol === 'graphql' && binding.operations?.length) {
       return (
-        <span className="text-gray-600 text-sm font-mono">{binding.operations.join(', ')}</span>
+        <span className="text-neutral-600 text-sm font-mono">{binding.operations.join(', ')}</span>
       );
     }
 
     if (binding.endpoint) {
-      return <span className="text-gray-600 text-sm font-mono truncate">{binding.endpoint}</span>;
+      return (
+        <span className="text-neutral-600 text-sm font-mono truncate">{binding.endpoint}</span>
+      );
     }
 
     return null;
@@ -92,7 +94,7 @@ export const GeneratedBindingRow: React.FC<GeneratedBindingRowProps> = ({ bindin
 
   return (
     <div
-      className={`flex items-start gap-3 p-3 rounded-lg ${isCreated ? config.bgColor : 'bg-gray-50'}`}
+      className={`flex items-start gap-3 p-3 rounded-lg ${isCreated ? config.bgColor : 'bg-neutral-50'}`}
     >
       {/* Status icon */}
       <div className="flex-shrink-0 mt-0.5">{getStatusIcon()}</div>
@@ -100,7 +102,7 @@ export const GeneratedBindingRow: React.FC<GeneratedBindingRowProps> = ({ bindin
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`font-medium ${isCreated ? config.color : 'text-gray-500'}`}>
+          <span className={`font-medium ${isCreated ? config.color : 'text-neutral-500'}`}>
             {config.icon} {config.label}
             {isCreated ? ' endpoint created' : ' available'}
           </span>

@@ -28,11 +28,11 @@ export function OnboardingFunnel() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
+      <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded" />
+          <div className="h-6 w-48 bg-neutral-200 dark:bg-neutral-700 rounded" />
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-8 bg-gray-200 dark:bg-gray-700 rounded" />
+            <div key={i} className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded" />
           ))}
         </div>
       </div>
@@ -47,16 +47,16 @@ export function OnboardingFunnel() {
   const stalledCount = stalled?.length ?? 0;
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 space-y-6">
+    <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
             Onboarding Funnel
           </h3>
         </div>
-        <span className="text-sm text-gray-500 dark:text-gray-400">
+        <span className="text-sm text-neutral-500 dark:text-neutral-400">
           {funnel.total_started} users started
         </span>
       </div>
@@ -71,17 +71,19 @@ export function OnboardingFunnel() {
           return (
             <div key={stage.stage} className="space-y-1">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-700 dark:text-gray-300">
+                <span className="text-neutral-700 dark:text-neutral-300">
                   {STAGE_LABELS[stage.stage] ?? stage.stage}
                 </span>
-                <span className="text-gray-500 dark:text-gray-400">
+                <span className="text-neutral-500 dark:text-neutral-400">
                   {stage.count}
                   {rate !== null && (
-                    <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">({rate}%)</span>
+                    <span className="ml-1 text-xs text-neutral-400 dark:text-neutral-500">
+                      ({rate}%)
+                    </span>
                   )}
                 </span>
               </div>
-              <div className="h-6 bg-gray-100 dark:bg-gray-700 rounded-md overflow-hidden">
+              <div className="h-6 bg-neutral-100 dark:bg-neutral-700 rounded-md overflow-hidden">
                 <div
                   className="h-full bg-primary-500 dark:bg-primary-400 rounded-md transition-all duration-500"
                   style={{ width: `${Math.max(pct, 2)}%` }}
@@ -93,25 +95,25 @@ export function OnboardingFunnel() {
       </div>
 
       {/* TTFTC Stats */}
-      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
         <div className="text-center">
           <div className="flex items-center justify-center gap-1 mb-1">
-            <Clock className="h-4 w-4 text-gray-400" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">Avg TTFTC</span>
+            <Clock className="h-4 w-4 text-neutral-400" />
+            <span className="text-xs text-neutral-500 dark:text-neutral-400">Avg TTFTC</span>
           </div>
-          <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <span className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
             {formatSeconds(funnel.avg_ttftc_seconds)}
           </span>
         </div>
         <div className="text-center">
-          <span className="text-xs text-gray-500 dark:text-gray-400">P50</span>
-          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">P50</span>
+          <p className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
             {formatSeconds(funnel.p50_ttftc_seconds)}
           </p>
         </div>
         <div className="text-center">
-          <span className="text-xs text-gray-500 dark:text-gray-400">P90</span>
-          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">P90</span>
+          <p className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
             {formatSeconds(funnel.p90_ttftc_seconds)}
           </p>
         </div>

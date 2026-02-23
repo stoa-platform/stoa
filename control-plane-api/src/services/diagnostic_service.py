@@ -21,6 +21,8 @@ from src.schemas.diagnostic import (
     DiagnosticCategory,
     DiagnosticListResponse,
     DiagnosticReport,
+    HopInfo,
+    NetworkPath,
     RequestSummary,
     RootCause,
     TimingBreakdown,
@@ -51,7 +53,12 @@ class DiagnosticService:
         if request_id:
             conditions = [ExecutionLog.request_id == request_id]
 
-        query = select(ExecutionLog).where(and_(*conditions)).order_by(ExecutionLog.started_at.desc()).limit(100)
+        query = (
+            select(ExecutionLog)
+            .where(and_(*conditions))
+            .order_by(ExecutionLog.started_at.desc())
+            .limit(100)
+        )
         result = await self.db.execute(query)
         logs = list(result.scalars().all())
 
@@ -69,14 +76,20 @@ class DiagnosticService:
             time_range_minutes=time_range_minutes,
         )
 
-    async def check_connectivity(self, tenant_id: str, gateway_id: str) -> ConnectivityResult:
+    async def check_connectivity(
+        self, tenant_id: str, gateway_id: str
+    ) -> ConnectivityResult:
         """Test connectivity chain: DNS → TCP → TLS → HTTP health."""
         gateway = await self._get_gateway(gateway_id)
         if not gateway:
             return ConnectivityResult(
                 gateway_id=gateway_id,
                 overall_status="unhealthy",
-                stages=[ConnectivityStage(name="lookup", status="error", error="Gateway not found")],
+                stages=[
+                    ConnectivityStage(
+                        name="lookup", status="error", error="Gateway not found"
+                    )
+                ],
             )
 
         stages: list[ConnectivityStage] = []
@@ -89,31 +102,57 @@ class DiagnosticService:
             port = parsed.port or (443 if str(parsed.scheme) == "https" else 80)
             is_https = str(parsed.scheme) == "https"
         except Exception as e:
-            stages.append(ConnectivityStage(name="url_parse", status="error", error=str(e)))
-            return ConnectivityResult(gateway_id=gateway_id, overall_status="unhealthy", stages=stages)
+            stages.append(
+                ConnectivityStage(name="url_parse", status="error", error=str(e))
+            )
+            return ConnectivityResult(
+                gateway_id=gateway_id, overall_status="unhealthy", stages=stages
+            )
 
         # Stage 1: DNS resolution
         dns_start = time.monotonic()
         try:
             socket.getaddrinfo(host, port)
             dns_ms = (time.monotonic() - dns_start) * 1000
-            stages.append(ConnectivityStage(name="dns", status="ok", latency_ms=round(dns_ms, 2)))
+            stages.append(
+                ConnectivityStage(name="dns", status="ok", latency_ms=round(dns_ms, 2))
+            )
         except socket.gaierror as e:
             dns_ms = (time.monotonic() - dns_start) * 1000
-            stages.append(ConnectivityStage(name="dns", status="error", latency_ms=round(dns_ms, 2), error=str(e)))
-            return ConnectivityResult(gateway_id=gateway_id, overall_status="unhealthy", stages=stages)
+            stages.append(
+                ConnectivityStage(
+                    name="dns",
+                    status="error",
+                    latency_ms=round(dns_ms, 2),
+                    error=str(e),
+                )
+            )
+            return ConnectivityResult(
+                gateway_id=gateway_id, overall_status="unhealthy", stages=stages
+            )
 
         # Stage 2: TCP connect
         tcp_start = time.monotonic()
         try:
             sock = socket.create_connection((host, port), timeout=5)
             tcp_ms = (time.monotonic() - tcp_start) * 1000
-            stages.append(ConnectivityStage(name="tcp", status="ok", latency_ms=round(tcp_ms, 2)))
+            stages.append(
+                ConnectivityStage(name="tcp", status="ok", latency_ms=round(tcp_ms, 2))
+            )
             sock.close()
         except (OSError, TimeoutError) as e:
             tcp_ms = (time.monotonic() - tcp_start) * 1000
-            stages.append(ConnectivityStage(name="tcp", status="error", latency_ms=round(tcp_ms, 2), error=str(e)))
-            return ConnectivityResult(gateway_id=gateway_id, overall_status="unhealthy", stages=stages)
+            stages.append(
+                ConnectivityStage(
+                    name="tcp",
+                    status="error",
+                    latency_ms=round(tcp_ms, 2),
+                    error=str(e),
+                )
+            )
+            return ConnectivityResult(
+                gateway_id=gateway_id, overall_status="unhealthy", stages=stages
+            )
 
         # Stage 3: TLS handshake (if HTTPS)
         if is_https:
@@ -123,17 +162,33 @@ class DiagnosticService:
                 with socket.create_connection((host, port), timeout=5) as raw_sock:
                     ctx.wrap_socket(raw_sock, server_hostname=host)
                 tls_ms = (time.monotonic() - tls_start) * 1000
-                stages.append(ConnectivityStage(name="tls", status="ok", latency_ms=round(tls_ms, 2)))
+                stages.append(
+                    ConnectivityStage(
+                        name="tls", status="ok", latency_ms=round(tls_ms, 2)
+                    )
+                )
             except (ssl.SSLError, OSError) as e:
                 tls_ms = (time.monotonic() - tls_start) * 1000
-                stages.append(ConnectivityStage(name="tls", status="error", latency_ms=round(tls_ms, 2), error=str(e)))
-                return ConnectivityResult(gateway_id=gateway_id, overall_status="unhealthy", stages=stages)
+                stages.append(
+                    ConnectivityStage(
+                        name="tls",
+                        status="error",
+                        latency_ms=round(tls_ms, 2),
+                        error=str(e),
+                    )
+                )
+                return ConnectivityResult(
+                    gateway_id=gateway_id, overall_status="unhealthy", stages=stages
+                )
 
         # Stage 4: HTTP health check
         health_url = f"{base_url.rstrip('/')}/health"
         http_start = time.monotonic()
+        network_path: NetworkPath | None = None
         try:
-            async with httpx.AsyncClient(timeout=5.0, verify=False) as client:  # noqa: S501
+            async with httpx.AsyncClient(
+                timeout=5.0, verify=False  # noqa: S501
+            ) as client:
                 resp = await client.get(health_url)
                 http_ms = (time.monotonic() - http_start) * 1000
                 status = "ok" if resp.status_code < 400 else "error"
@@ -142,20 +197,38 @@ class DiagnosticService:
                         name="http_health",
                         status=status,
                         latency_ms=round(http_ms, 2),
-                        error=f"HTTP {resp.status_code}" if resp.status_code >= 400 else None,
+                        error=(
+                            f"HTTP {resp.status_code}"
+                            if resp.status_code >= 400
+                            else None
+                        ),
                     )
                 )
+                # Parse X-Stoa-Timing and Via headers for hop chain (CAB-1316 Phase 2)
+                network_path = self._parse_network_path(resp, http_ms)
         except httpx.HTTPError as e:
             http_ms = (time.monotonic() - http_start) * 1000
             stages.append(
-                ConnectivityStage(name="http_health", status="error", latency_ms=round(http_ms, 2), error=str(e))
+                ConnectivityStage(
+                    name="http_health",
+                    status="error",
+                    latency_ms=round(http_ms, 2),
+                    error=str(e),
+                )
             )
 
         has_error = any(s.status == "error" for s in stages)
         overall = "unhealthy" if has_error else "healthy"
-        return ConnectivityResult(gateway_id=gateway_id, overall_status=overall, stages=stages)
+        return ConnectivityResult(
+            gateway_id=gateway_id,
+            overall_status=overall,
+            stages=stages,
+            network_path=network_path,
+        )
 
-    async def get_history(self, tenant_id: str, gateway_id: str, limit: int = 20) -> DiagnosticListResponse:
+    async def get_history(
+        self, tenant_id: str, gateway_id: str, limit: int = 20
+    ) -> DiagnosticListResponse:
         """Return recent error logs as lightweight diagnostic entries."""
         query = (
             select(ExecutionLog)
@@ -179,7 +252,9 @@ class DiagnosticService:
                     tenant_id=tenant_id,
                     gateway_id=gateway_id,
                     root_causes=causes,
-                    timing=TimingBreakdown(total_ms=float(log.duration_ms) if log.duration_ms else None),
+                    timing=TimingBreakdown(
+                        total_ms=float(log.duration_ms) if log.duration_ms else None
+                    ),
                     request_summary=self._build_request_summary(log),
                     error_count=1,
                     time_range_minutes=0,
@@ -202,6 +277,55 @@ class DiagnosticService:
 
         return list(causes.values())
 
+    @staticmethod
+    def _parse_network_path(
+        resp: httpx.Response, total_latency_ms: float
+    ) -> NetworkPath | None:
+        """Parse X-Stoa-Timing header and Via headers from gateway response."""
+        hops: list[HopInfo] = []
+        intermediaries: list[str] = []
+
+        # Parse Via headers for hop chain
+        via_values = (
+            resp.headers.get_list("via") if hasattr(resp.headers, "get_list") else []
+        )
+        if not via_values and "via" in resp.headers:
+            via_values = [resp.headers["via"]]
+        for via_val in via_values:
+            for entry in via_val.split(","):
+                entry = entry.strip()
+                if not entry:
+                    continue
+                parts = entry.split(None, 1)
+                if len(parts) >= 2:
+                    protocol = parts[0].split("/")[-1] if "/" in parts[0] else parts[0]
+                    pseudonym = parts[1].split("(")[0].strip()
+                    hops.append(HopInfo(protocol=protocol, pseudonym=pseudonym))
+
+        # Parse X-Stoa-Timing for gateway timing info
+        timing_header = resp.headers.get("x-stoa-timing", "")
+        if timing_header:
+            for part in timing_header.split(";"):
+                if part.startswith("hops="):
+                    try:
+                        hop_count = int(part.split("=")[1])
+                        if hop_count > 0 and not hops:
+                            intermediaries.append(
+                                f"detected:{hop_count} hops (from X-Stoa-Timing)"
+                            )
+                    except (ValueError, IndexError):
+                        pass
+
+        if not hops and not intermediaries:
+            return None
+
+        return NetworkPath(
+            hops=hops,
+            total_hops=len(hops),
+            detected_intermediaries=[h.pseudonym for h in hops] + intermediaries,
+            total_latency_ms=round(total_latency_ms, 2),
+        )
+
     def _classify_single(self, log: ExecutionLog) -> RootCause | None:
         """Classify a single execution log entry.
 
@@ -220,7 +344,9 @@ class DiagnosticService:
                 category=DiagnosticCategory.CIRCUIT_BREAKER,
                 confidence=0.95,
                 summary="Circuit breaker is open — backend marked unhealthy",
-                evidence=[f"Circuit breaker rejection: {log.error_message or 'CB open'}"],
+                evidence=[
+                    f"Circuit breaker rejection: {log.error_message or 'CB open'}"
+                ],
                 suggested_fix="Check backend health; circuit will auto-recover after reset timeout",
             )
 
@@ -261,12 +387,16 @@ class DiagnosticService:
             )
 
         if category == ErrorCategory.TIMEOUT:
-            duration_info = f" (duration: {log.duration_ms}ms)" if log.duration_ms else ""
+            duration_info = (
+                f" (duration: {log.duration_ms}ms)" if log.duration_ms else ""
+            )
             return RootCause(
                 category=DiagnosticCategory.CONNECTIVITY,
                 confidence=0.8,
                 summary=f"Request timed out{duration_info}",
-                evidence=[f"HTTP {status}: {log.error_message or 'timeout'}{duration_info}"],
+                evidence=[
+                    f"HTTP {status}: {log.error_message or 'timeout'}{duration_info}"
+                ],
                 suggested_fix="Check network path between gateway and backend; consider increasing timeout",
             )
 
@@ -295,7 +425,9 @@ class DiagnosticService:
                 category=DiagnosticCategory.CIRCUIT_BREAKER,
                 confidence=0.95,
                 summary="Circuit breaker is open — backend marked unhealthy",
-                evidence=[f"Circuit breaker rejection: {log.error_message or 'CB open'}"],
+                evidence=[
+                    f"Circuit breaker rejection: {log.error_message or 'CB open'}"
+                ],
                 suggested_fix="Check backend health; circuit will auto-recover after reset timeout",
             )
 
@@ -347,7 +479,9 @@ class DiagnosticService:
             )
 
         if status == 504:
-            duration_info = f" (duration: {log.duration_ms}ms)" if log.duration_ms else ""
+            duration_info = (
+                f" (duration: {log.duration_ms}ms)" if log.duration_ms else ""
+            )
             return RootCause(
                 category=DiagnosticCategory.CONNECTIVITY,
                 confidence=0.8,
@@ -401,5 +535,7 @@ class DiagnosticService:
             gw_uuid = UUID(gateway_id)
         except ValueError:
             return None
-        result = await self.db.execute(select(GatewayInstance).where(GatewayInstance.id == gw_uuid))
+        result = await self.db.execute(
+            select(GatewayInstance).where(GatewayInstance.id == gw_uuid)
+        )
         return result.scalar_one_or_none()

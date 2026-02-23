@@ -141,9 +141,81 @@ jobs:
     permissions:
       contents: read
 
+  # === Staging: separate Docker build (VITE_* baked at build time) + deploy ===
+  docker-staging:
+    needs: smoke-test
+    if: github.event_name == 'push' && needs.smoke-test.result == 'success'
+    uses: ./.github/workflows/reusable-docker-ghcr.yml
+    with:
+      component: control-plane-ui
+      image-name: control-plane-ui
+      environment: staging
+      platforms: linux/amd64
+      use-monorepo-context: true
+      build-args: |
+        VITE_BASE_DOMAIN=gostoa.dev
+        VITE_ENVIRONMENT=staging
+        VITE_KEYCLOAK_URL=https://staging-auth.gostoa.dev
+        VITE_KEYCLOAK_REALM=stoa
+        VITE_KEYCLOAK_CLIENT_ID=control-plane-ui
+        VITE_MCP_GATEWAY_URL=https://staging-mcp.gostoa.dev
+        VITE_API_URL=https://staging-api.gostoa.dev
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+      attestations: write
+    secrets: inherit
+
+  apply-manifest-staging:
+    needs: docker-staging
+    if: needs.docker-staging.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+      - name: Apply k8s manifest
+        run: |
+          kubectl apply -f control-plane-ui/k8s/ 2>&1 || {
+            echo "Apply failed (likely immutable selector). Deleting and recreating..."
+            kubectl delete deployment control-plane-ui -n stoa-system --ignore-not-found
+            kubectl apply -f control-plane-ui/k8s/
+          }
+
+  deploy-staging:
+    needs: [docker-staging, apply-manifest-staging]
+    if: needs.apply-manifest-staging.result == 'success'
+    uses: ./.github/workflows/reusable-k8s-deploy.yml
+    with:
+      component: control-plane-ui
+      image-tag: ${{ needs.docker-staging.outputs.image-tag }}
+      environment: staging
+      environment-url: https://staging-console.gostoa.dev
+    permissions:
+      contents: read
+    secrets: inherit
+
+  smoke-test-staging:
+    needs: deploy-staging
+    if: needs.deploy-staging.result == 'success'
+    uses: ./.github/workflows/reusable-health-smoke.yml
+    with:
+      component: control-plane-ui
+      environment: staging
+    permissions:
+      contents: read
+
   # === Notify: Slack ===
   notify:
-    needs: [ci, docker, deploy, smoke-test]
+    needs: [ci, docker, deploy, smoke-test, deploy-staging, smoke-test-staging]
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-notify.yml
     with:

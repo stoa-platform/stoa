@@ -20,3 +20,23 @@ datasources:
     jsonData:
       maxLines: 1000
       timeout: 60
+      derivedFields:
+        - datasourceUid: tempo
+          matcherRegex: '"trace_id":"([a-f0-9]+)"'
+          name: TraceID
+          url: "$${__value.raw}"
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: true
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+      nodeGraph:
+        enabled: true
+      serviceMap:
+        datasourceUid: prometheus

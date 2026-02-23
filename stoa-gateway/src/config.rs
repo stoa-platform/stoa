@@ -121,6 +121,11 @@ pub struct Config {
     #[serde(default)]
     pub otel_endpoint: Option<String>,
 
+    /// Head-based sampling rate for OTel traces (0.0 = none, 1.0 = all).
+    /// Env: STOA_OTEL_SAMPLE_RATE
+    #[serde(default = "default_otel_sample_rate")]
+    pub otel_sample_rate: f64,
+
     // === Gateway Mode (Phase 8) ===
     /// Gateway deployment mode: edge-mcp, sidecar, proxy, shadow
     /// Env: STOA_GATEWAY_MODE (default: edge-mcp)
@@ -582,6 +587,10 @@ impl Default for MtlsConfig {
     }
 }
 
+fn default_otel_sample_rate() -> f64 {
+    1.0 // Sample all traces by default
+}
+
 fn default_quota_sync_interval() -> u64 {
     60
 }
@@ -691,6 +700,7 @@ impl Default for Config {
             log_level: Some("info".to_string()),
             log_format: Some("json".to_string()),
             otel_endpoint: None,
+            otel_sample_rate: default_otel_sample_rate(),
             gateway_mode: GatewayMode::default(),
             zombie_detection_enabled: default_zombie_detection(),
             agent_session_ttl_secs: default_agent_session_ttl(),
@@ -944,5 +954,11 @@ mod tests {
         let config = Config::default();
         // Default config has no CP URL and no JWT — validate logs warnings but doesn't panic
         config.validate();
+    }
+
+    #[test]
+    fn test_default_otel_sample_rate() {
+        let config = Config::default();
+        assert!((config.otel_sample_rate - 1.0).abs() < f64::EPSILON);
     }
 }

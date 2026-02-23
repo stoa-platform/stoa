@@ -1,5 +1,5 @@
 ---
-description: Per-gateway adapter rules — STOA, Kong, Gravitee, webMethods interface, mappers, gotchas
+description: Per-gateway adapter rules — STOA, Kong, Gravitee, webMethods, Apigee, AWS, Azure interface, mappers, gotchas
 globs: "control-plane-api/src/adapters/**,control-plane-api/tests/test_*_adapter*"
 ---
 
@@ -14,7 +14,10 @@ Console → CP API → AdapterRegistry.create(gateway_type) →
   ├─ StoaGatewayAdapter     → Rust stoa-gateway /admin/* (in-memory)
   ├─ KongGatewayAdapter     → Kong Admin API /config (DB-less, declarative reload)
   ├─ GraviteeGatewayAdapter → Gravitee Mgmt API v2 (REST CRUD + lifecycle)
-  └─ WebMethodsGatewayAdapter → webMethods /rest/apigateway/* (via GatewayAdminService)
+  ├─ WebMethodsGatewayAdapter → webMethods /rest/apigateway/* (via GatewayAdminService)
+  ├─ ApigeeGatewayAdapter   → Apigee Mgmt API v1 (Bearer token auth)
+  ├─ AwsApiGatewayAdapter   → AWS API Gateway REST API (SigV4 auth)
+  └─ AzureApimAdapter       → Azure APIM ARM REST API (Bearer token auth)
 ```
 
 ## Interface Methods (16)
@@ -215,6 +218,124 @@ cd deploy/docker-compose && docker compose -f docker-compose.webmethods.yml up -
 
 ---
 
+## Apigee X (Google Cloud)
+
+### Quick Reference
+- **API**: Apigee Management API v1 at `https://apigee.googleapis.com/v1/organizations/{org}`
+- **Auth**: Google Cloud Bearer token (OAuth2 or service account)
+- **Storage**: Apigee X managed (versioned API proxies, API products, developer apps)
+- **Ports**: HTTPS only (cloud-managed)
+
+### Concept Mapping
+
+| STOA Concept | Apigee Concept | Notes |
+|-------------|---------------|-------|
+| API | API Proxy | POST create, versioned revisions |
+| Policy (rate-limit) | API Product | Product-level quota fields (`quota`, `quotaInterval`, `quotaTimeUnit`) |
+| Application | Developer App | Under STOA-managed developer (`stoa-platform@gostoa.dev`) |
+
+### Tips
+- **STOA-managed developer**: All apps are created under a single developer (`stoa-platform@gostoa.dev`), auto-created by `_ensure_developer()` if missing
+- **Idempotent developer creation**: 409 (Conflict) on developer POST is treated as success (race condition guard)
+- **Product-level quota**: Rate limiting uses Apigee product `quota`, `quotaInterval`, `quotaTimeUnit` fields (not policies)
+- **STOA naming convention**: Resources prefixed with `stoa-{tenant}-*` or have `stoa-managed: true` attribute
+- **Labels for filtering**: API proxies use `labels` dict, products/apps use `attributes` array
+- **`_get_client()` pattern**: Returns `(client, should_close_after)` for ephemeral client support
+- **No OIDC/alias/config/archive support** — returns `AdapterResult(success=False, error="Not supported")`
+
+### Config Keys
+
+```python
+{
+    "organization": "...",          # Apigee organization name
+    "auth_config": {
+        "bearer_token": "..."       # Google Cloud bearer token
+    },
+    "base_url": "https://apigee.googleapis.com"  # Override for private Apigee
+}
+```
+
+### Mappers
+| Function | Direction | Notes |
+|----------|-----------|-------|
+| `map_api_spec_to_apigee_proxy` | CP → Apigee | Returns proxy with labels |
+| `map_apigee_proxy_to_cp` | Apigee → CP | Normalize to CP format |
+| `map_policy_to_apigee_product` | CP → Apigee | Product with quota fields |
+| `map_apigee_product_to_policy` | Apigee → CP | Extract policy ID from attributes |
+| `map_app_spec_to_apigee_developer_app` | CP → Apigee | Developer App with API product bindings |
+| `map_apigee_developer_app_to_cp` | Apigee → CP | Extract app ID, API key from credentials |
+
+### Gotchas
+- **Developer must exist before creating apps**: `_ensure_developer()` handles this automatically
+- **Proxies are versioned**: each POST to `/apis` creates a new revision (not update in-place)
+- **`apiProduct` (singular key)**: `GET /apiproducts` returns `{"apiProduct": [...]}` (not `apiProducts`)
+- **`app` (singular key)**: `GET /developers/{email}/apps?expand=true` returns `{"app": [...]}` (not `apps`)
+- **Attributes are arrays**: `[{"name": "k", "value": "v"}]` not dicts — must transform for lookups
+
+### Testing
+```bash
+cd control-plane-api && pytest tests/test_apigee_adapter.py -v  # ~63 tests
+```
+
+---
+
+## Azure APIM
+
+### Quick Reference
+- **API**: Azure ARM REST API at `https://management.azure.com`
+- **Auth**: Bearer token (Azure AD / Entra ID OAuth2 client credentials)
+- **API Version**: `2023-09-01-preview` (appended as `?api-version=` on all requests)
+- **Resource Path**: `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ApiManagement/service/{name}`
+
+### Concept Mapping
+
+| STOA Concept | Azure APIM Concept | Notes |
+|-------------|-------------------|-------|
+| API | API | PUT idempotent create-or-update |
+| Policy (rate-limit) | Product + XML Policy | Product scoped, policy applied via `/policies/policy` |
+| Application | Subscription | Subscription scoped to a Product |
+
+### Tips
+- **PUT is idempotent** — both create and update use PUT (unlike AWS POST+PATCH)
+- **DELETE requires `If-Match: *`** — all three delete methods must include this header
+- **STOA naming convention**: resources prefixed with `stoa-{tenant}-*` for filtering
+- **Rate-limit via XML policy**: Applied at Product scope, uses `<rate-limit>` XML element
+- **Subscription scope binding**: `properties.scope` points to Product ARM path
+- **api-version param**: Appended to every request automatically by `_request` helper
+- No OIDC/alias/config/archive support — returns `AdapterResult(success=False, error="Not supported")`
+
+### Config Keys
+
+```python
+{
+    "subscription_id": "...",       # Azure subscription ID
+    "resource_group": "...",        # Resource group name
+    "service_name": "...",          # APIM service instance name
+    "auth_config": {
+        "bearer_token": "..."       # Azure AD bearer token
+    },
+    "base_url": "https://management.azure.com"  # Override for sovereign clouds
+}
+```
+
+### Mappers
+| Function | Direction | Notes |
+|----------|-----------|-------|
+| `map_api_spec_to_azure` | CP → Azure | Returns API PUT payload with `_stoa_api_id` |
+| `map_azure_api_to_cp` | Azure → CP | Normalize to CP format |
+| `map_policy_to_azure_product` | CP → Azure | Product + `_stoa_rate_limit` metadata |
+| `map_azure_product_to_policy` | Azure → CP | Extract policy ID from `stoa-{id}` naming |
+| `map_app_spec_to_azure_subscription` | CP → Azure | Subscription with display name |
+| `map_azure_subscription_to_cp` | Azure → CP | Extract subscription ID from naming |
+| `build_rate_limit_policy_xml` | — | XML string for `<rate-limit>` element |
+
+### Testing
+```bash
+cd control-plane-api && pytest tests/test_azure_apim_adapter.py -v  # ~53 tests
+```
+
+---
+
 ## Adding a New Gateway Adapter
 
 1. Copy `control-plane-api/src/adapters/template/` to `adapters/{new_gw}/`
@@ -253,8 +374,8 @@ Test adapter against live gateway:
 
 Gateway instances are stored in `gateway_instances` table:
 ```sql
--- gateway_type_enum: webmethods, kong, apigee, aws_apigateway, stoa,
---   stoa_edge_mcp, stoa_sidecar, stoa_proxy, stoa_shadow, gravitee
+-- gateway_type_enum: webmethods, kong, apigee, aws_apigateway, azure_apim,
+--   gravitee, stoa, stoa_edge_mcp, stoa_sidecar, stoa_proxy, stoa_shadow
 INSERT INTO gateway_instances (name, display_name, gateway_type, base_url, status, ...)
 VALUES ('kong-standalone-gra', 'Kong DB-less (GRA)', 'kong', 'https://kong.gostoa.dev', 'online', ...);
 ```

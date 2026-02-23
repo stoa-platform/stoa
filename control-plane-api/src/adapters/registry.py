@@ -83,5 +83,9 @@ def _register_builtin_adapters() -> None:
 
     AdapterRegistry.register("apigee", ApigeeGatewayAdapter)
 
+    from .aws import AwsApiGatewayAdapter
+
+    AdapterRegistry.register("aws_apigateway", AwsApiGatewayAdapter)
+
 
 _register_builtin_adapters()

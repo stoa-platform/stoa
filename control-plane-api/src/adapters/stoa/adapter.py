@@ -260,6 +260,38 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
         except Exception as e:
             return AdapterResult(success=False, error=str(e))
 
+    # --- Consumer Credentials (CAB-1432) ---
+
+    async def sync_consumer_credentials(self, mappings: list[dict]) -> AdapterResult:
+        """Push per-consumer backend credentials to the gateway.
+
+        Each mapping should contain: route_id, consumer_id, auth_type,
+        header_name, header_value.
+        """
+        errors: list[str] = []
+        synced = 0
+        for mapping in mappings:
+            try:
+                resp = await self._client.post("/admin/consumer-credentials", json=mapping)
+                if resp.status_code in (200, 201):
+                    synced += 1
+                else:
+                    errors.append(
+                        f"consumer_credential {mapping.get('consumer_id')}@{mapping.get('route_id')}: "
+                        f"HTTP {resp.status_code}"
+                    )
+            except Exception as e:
+                errors.append(
+                    f"consumer_credential {mapping.get('consumer_id')}@{mapping.get('route_id')}: {e}"
+                )
+        if errors:
+            return AdapterResult(
+                success=False,
+                error=f"Synced {synced}/{len(mappings)}. Errors: {'; '.join(errors)}",
+                data={"synced": synced, "total": len(mappings)},
+            )
+        return AdapterResult(success=True, data={"synced": synced, "total": len(mappings)})
+
     # --- Auth / OIDC (not supported by stoa-gateway) ---
 
     async def upsert_auth_server(self, auth_spec: dict, auth_token: str | None = None) -> AdapterResult:

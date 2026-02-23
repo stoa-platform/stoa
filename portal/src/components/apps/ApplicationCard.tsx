@@ -62,16 +62,16 @@ export const ApplicationCard = memo(function ApplicationCard({
   return (
     <Link
       to={`/apps/${application.id}`}
-      className="group bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all"
+      className="group bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-primary-700 transition-colors truncate">
+          <h3 className="font-semibold text-neutral-900 dark:text-white group-hover:text-primary-700 transition-colors truncate">
             {application.name}
           </h3>
           <div className="flex items-center gap-2 mt-1">
-            <Key className="h-3 w-3 text-gray-400 dark:text-neutral-500" />
-            <span className="text-xs font-mono text-gray-500 dark:text-neutral-400 truncate">
+            <Key className="h-3 w-3 text-neutral-400 dark:text-neutral-500" />
+            <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400 truncate">
               {application.clientId}
             </span>
           </div>
@@ -84,27 +84,27 @@ export const ApplicationCard = memo(function ApplicationCard({
         </span>
       </div>
 
-      <p className="text-sm text-gray-600 dark:text-neutral-400 line-clamp-2 mb-4 min-h-[40px]">
+      <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-2 mb-4 min-h-[40px]">
         {application.description || 'No description provided'}
       </p>
 
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="text-sm">
-          <span className="text-gray-500 dark:text-neutral-400">Subscriptions:</span>{' '}
-          <span className="font-medium text-gray-900 dark:text-white">{subscriptionCount}</span>
+          <span className="text-neutral-500 dark:text-neutral-400">Subscriptions:</span>{' '}
+          <span className="font-medium text-neutral-900 dark:text-white">{subscriptionCount}</span>
         </div>
         {application.callbackUrls && application.callbackUrls.length > 0 && (
           <div className="text-sm">
-            <span className="text-gray-500 dark:text-neutral-400">Callbacks:</span>{' '}
-            <span className="font-medium text-gray-900 dark:text-white">
+            <span className="text-neutral-500 dark:text-neutral-400">Callbacks:</span>{' '}
+            <span className="font-medium text-neutral-900 dark:text-white">
               {application.callbackUrls.length}
             </span>
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-neutral-700">
-        <div className="flex items-center text-xs text-gray-500 dark:text-neutral-400">
+      <div className="flex items-center justify-between pt-3 border-t border-neutral-100 dark:border-neutral-700">
+        <div className="flex items-center text-xs text-neutral-500 dark:text-neutral-400">
           <Clock className="h-3 w-3 mr-1" />
           Created {formattedDate}
         </div>

@@ -29,13 +29,13 @@ export function Header({ onMenuClick }: HeaderProps) {
   }, [userMenuOpen]);
 
   return (
-    <header className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800 sticky top-0 z-30 transition-colors">
+    <header className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 sticky top-0 z-30 transition-colors">
       <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
         {/* Left: Menu button + Logo */}
         <div className="flex items-center gap-4">
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2.5 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+            className="lg:hidden p-2.5 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
             aria-label="Open menu"
           >
             <Menu className="h-6 w-6" aria-hidden="true" />
@@ -44,8 +44,8 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Link to="/" className="flex items-center gap-3">
             <StoaLogo size="sm" />
             <div className="hidden sm:block">
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">STOA</h1>
-              <p className="text-xs text-gray-500 dark:text-neutral-400 -mt-1">Developer Portal</p>
+              <h1 className="text-lg font-semibold text-neutral-900 dark:text-white">STOA</h1>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 -mt-1">Developer Portal</p>
             </div>
           </Link>
         </div>
@@ -62,7 +62,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             href={config.services.console.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-neutral-100 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+            className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
           >
             <span>Console</span>
             <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -77,7 +77,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
           {/* Notifications */}
           <button
-            className="p-2.5 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md relative transition-colors"
+            className="p-2.5 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md relative transition-colors"
             aria-label="Notifications"
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
@@ -87,7 +87,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-2 p-2.5 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+              className="flex items-center gap-2 p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
               aria-label="User menu"
               aria-haspopup="true"
               aria-expanded={userMenuOpen}
@@ -98,17 +98,17 @@ export function Header({ onMenuClick }: HeaderProps) {
                   aria-hidden="true"
                 />
               </div>
-              <span className="hidden sm:block text-sm font-medium text-gray-700 dark:text-neutral-300">
+              <span className="hidden sm:block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 {user?.name || 'User'}
               </span>
             </button>
 
             {/* Dropdown */}
             {userMenuOpen && (
-              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-md shadow-lg border border-gray-200 dark:border-neutral-700">
-                <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-700">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-neutral-400 truncate">
+              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-700">
+                <div className="px-4 py-3 border-b border-neutral-100 dark:border-neutral-700">
+                  <p className="text-sm font-medium text-neutral-900 dark:text-white">{user?.name}</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
                     {user?.email}
                   </p>
                 </div>
@@ -116,7 +116,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   <Link
                     to="/profile"
                     onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700"
                   >
                     <User className="h-4 w-4" aria-hidden="true" />
                     My Profile

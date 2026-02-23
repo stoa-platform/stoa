@@ -53,21 +53,21 @@ export function CredentialsViewer({
       <div>
         <span
           id="client-id-label"
-          className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+          className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
         >
           Client ID
         </span>
         <div className="flex items-center gap-2">
           <div
-            className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg font-mono text-sm dark:text-white"
+            className="flex-1 flex items-center gap-2 px-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg font-mono text-sm dark:text-white"
             aria-labelledby="client-id-label"
           >
-            <Key className="h-4 w-4 text-gray-400 dark:text-neutral-500" aria-hidden="true" />
+            <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500" aria-hidden="true" />
             <span className="flex-1 truncate">{clientId}</span>
           </div>
           <button
             onClick={() => copyToClipboard(clientId, 'id')}
-            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+            className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             title="Copy Client ID"
           >
             {copiedField === 'id' ? (
@@ -83,27 +83,27 @@ export function CredentialsViewer({
       <div>
         <span
           id="client-secret-label"
-          className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+          className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
         >
           Client Secret
         </span>
         {displaySecret ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg font-mono text-sm dark:text-white">
-                <Key className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
+              <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg font-mono text-sm dark:text-white">
+                <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
                 <span className="flex-1 truncate">{showSecret ? displaySecret : maskedSecret}</span>
               </div>
               <button
                 onClick={() => setShowSecret(!showSecret)}
-                className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+                className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
                 title={showSecret ? 'Hide secret' : 'Show secret'}
               >
                 {showSecret ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
               <button
                 onClick={() => copyToClipboard(displaySecret, 'secret')}
-                className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+                className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
                 title="Copy Client Secret"
               >
                 {copiedField === 'secret' ? (
@@ -126,8 +126,8 @@ export function CredentialsViewer({
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg text-sm text-gray-500 dark:text-neutral-400">
-            <Key className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
+          <div className="flex items-center gap-2 px-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm text-neutral-500 dark:text-neutral-400">
+            <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
             <span>Secret is hidden. Regenerate to get a new one.</span>
           </div>
         )}
@@ -139,7 +139,7 @@ export function CredentialsViewer({
               <button
                 onClick={() => setShowRegenerateConfirm(true)}
                 disabled={isRegenerating}
-                className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
+                className="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white disabled:opacity-50"
               >
                 <RefreshCw className={`h-4 w-4 ${isRegenerating ? 'animate-spin' : ''}`} />
                 Regenerate Secret
@@ -176,7 +176,7 @@ export function CredentialsViewer({
                   <button
                     onClick={() => setShowRegenerateConfirm(false)}
                     disabled={isRegenerating}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg disabled:opacity-50"
+                    className="px-3 py-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg disabled:opacity-50"
                   >
                     Cancel
                   </button>

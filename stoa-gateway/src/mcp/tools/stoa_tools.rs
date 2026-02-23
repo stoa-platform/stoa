@@ -13,6 +13,7 @@ use std::time::Duration;
 use super::native_tool::{create_http_client, has_native_implementation, register_native_tools};
 use super::proxy_tool::ProxyTool;
 use super::{ToolRegistry, ToolSchema};
+use crate::cache::PromptCache;
 use crate::control_plane::{RemoteToolDef, ToolProxyClient};
 use crate::mcp::session::SessionManager;
 use crate::resilience::{
@@ -84,6 +85,7 @@ pub async fn discover_and_register(
     cb: Arc<CircuitBreaker>,
     session_manager: Option<Arc<SessionManager>>,
     circuit_breakers: Option<Arc<CircuitBreakerRegistry>>,
+    prompt_cache: Option<Arc<PromptCache>>,
 ) -> Result<usize, String> {
     // First, register all native tools
     let cp_url = cp.base_url();
@@ -96,6 +98,7 @@ pub async fn discover_and_register(
         registry.clone(),
         session_manager,
         circuit_breakers,
+        prompt_cache,
     );
 
     tracing::info!("Native tools registered (12 STOA tools, direct CP API calls)");

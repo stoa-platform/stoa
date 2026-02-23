@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-23 (5 Linear statuses pushed; C9=443/515pts 86%)
+> Last sync: 2026-02-24 (C9=503/572pts 88%)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,19 +101,18 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~515 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 464 pts (90%) | **Velocity**: 30 issues done
+**Scope**: ~572 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 503 pts (88%) | **Velocity**: 33 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
 
-- [~] CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts, P3) — Council 7.50 ⚠️
-  - [x] P1: Shared Button component + Console focus-visible — PR #892
-  - [ ] P2-P3: Remaining audit phases
+- [~] CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts, P3) — Council 6.75 ⚠️
+- [~] CAB-289: Conversation History (5 pts, P3)
 - [~] CAB-802: Dry Run + Script + Video (3 pts, P1) — HUMAN ONLY
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (27)
+### Done (33)
 
 - [x] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — ALL 3 PHASES DONE — PRs #876, #882, #885, #888
   - [x] CAB-1429 [cp-ui] Console i18n framework — react-i18next setup (8 pts) — PR #876
@@ -179,6 +178,10 @@
   - P1: UAC Hero Tutorial + Week 1 Runbook (2 articles)
   - P2: Freelancer Security Series (3 articles)
   - P3: GitHub Examples (5 projects)
+- [x] CAB-1322: [MEGA] Full UX Audit — Apple-Style (21 pts) — P1: PR #892
+- [x] CAB-1303: [MEGA] Automated Staging Pipeline & Parity Tooling (13 pts)
+- [x] CAB-1433: Token Observatory cost tracking (8 pts) — PR #927
+- [x] CAB-288: Chat Agent Token Metering (5 pts)
 
 ### Todo
 
@@ -194,26 +197,24 @@
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 
-**P3 — MEGAs** (236 pts):
+**P3 — MEGAs** (139 pts):
 
 *Council Fix (6.0–7.9, adjustments applied on Linear):*
 - [ ] CAB-1316: [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts, P3) — Council 7.50 ⚠️
 - [ ] CAB-1342: [MEGA] Helm Auto-Sync Secrets (21 pts, P3) — Council 7.25 ⚠️
 - [ ] CAB-1334: [MEGA] SaaS Multi-Tier Billing — Stripe (21 pts, P3) — Council 6.75 ⚠️
-- [ ] CAB-1327: [MEGA] Docs as Code — RAG Chatbot (21 pts, P3) — Council 6.75 ⚠️
 - [ ] CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (21 pts, P3) — Council 6.25 ⚠️
 - [ ] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts, P3) — Council 6.00 ⚠️
+- [ ] CAB-1392: [MEGA] Security & MCP Deep-Dive Content (21 pts, P3)
 
 *Not Council-evaluated:*
-- [ ] CAB-1303: [MEGA] Automated Staging Pipeline & Parity Tooling (13 pts, P3)
-- [ ] CAB-288: Chat Agent Token Metering (5 pts, P3)
+- [ ] CAB-605: Admin — Create API (8 pts)
+- [ ] CAB-606: Admin — Edit API (5 pts)
 
 ### Backlog (not committed, no checkbox)
 
 - CAB-1324: [MEGA] Runtime Data Governance (21 pts)
-- CAB-1392: [MEGA] Security & MCP Deep-Dive Content (21 pts)
 - CAB-1320: [MEGA] Repo Consolidation (21 pts)
-- CAB-1356: [cli] stoactl Deploy Commands (5 pts)
 
 ### Backlog — Legacy (parked)
 

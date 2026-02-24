@@ -15,6 +15,7 @@ class AccessRequestCreate(BaseModel):
     company: str | None = None
     role: str | None = None
     source: str | None = None
+    website: str | None = None  # Honeypot — hidden field, reject if filled
 
 
 class AccessRequestResponse(BaseModel):
@@ -38,3 +39,12 @@ class AccessRequestDetail(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AccessRequestListResponse(BaseModel):
+    """Paginated list of access requests (admin view)."""
+
+    data: list[AccessRequestDetail]
+    total: int
+    page: int
+    limit: int

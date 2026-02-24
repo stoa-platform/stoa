@@ -731,12 +731,53 @@ jobs:
 
             IMPORTANT: Do NOT implement anything. Only write the plan and validate it.
           # Model tier: sonnet (Stage 2 Council — plan validation, Sonnet sufficient)
-          claude_args: "--model claude-sonnet-4-6 --max-turns 10 --allowedTools Read,Glob,Grep"
+          # Bash required for gh issue comment (posting plan as comment on the issue)
+          claude_args: "--model claude-sonnet-4-6 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=10, Stage=plan-validate"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-6, MaxTurns=10, Stage=plan-validate"
+
+      # Fallback: if Claude didn't post the plan comment (e.g. permission issue), extract from execution file
+      - name: Post Plan Comment (fallback)
+        if: steps.plan-council.outcome == 'success' && steps.verify.outputs.valid == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+
+          # Check if a plan comment already exists (Claude may have posted it via Bash)
+          PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments \
+            --jq '[.comments[].body | select(contains("Stage 2: Plan Validation") or contains("Plan Score"))] | length' 2>/dev/null || echo "0")
+          if [ "$PLAN_COMMENT" -gt 0 ]; then
+            echo "Plan comment already posted by Claude — skipping fallback"
+            exit 0
+          fi
+
+          # Extract plan from execution file
+          EXEC_FILE="${{ steps.plan-council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          if [ ! -f "$EXEC_FILE" ]; then
+            echo "No execution file found — cannot post fallback comment"
+            exit 0
+          fi
+
+          # Extract the last assistant text message (contains the plan)
+          PLAN=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | last // empty' "$EXEC_FILE" 2>/dev/null || echo "")
+          if [ -z "$PLAN" ]; then
+            echo "No plan text found in execution file"
+            exit 0
+          fi
+
+          # Truncate if needed (GitHub comment limit is 65536 chars)
+          if [ ${#PLAN} -gt 60000 ]; then
+            PLAN="${PLAN:0:60000}\n\n---\n*[Truncated — see [workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for full plan]*"
+          fi
+
+          echo "Posting plan comment (fallback — Claude could not post it directly)"
+          gh issue comment "$ISSUE_NUM" --body "$PLAN"
 
       - name: Mark Plan validated
         if: steps.plan-council.outcome == 'success' && steps.verify.outputs.valid == 'true'

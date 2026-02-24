@@ -21,6 +21,8 @@ from src.schemas.diagnostic import (
     DiagnosticCategory,
     DiagnosticListResponse,
     DiagnosticReport,
+    DiagnosticSummaryResponse,
+    ErrorCategoryStat,
     HopInfo,
     NetworkPath,
     RequestSummary,
@@ -261,6 +263,59 @@ class DiagnosticService:
                 )
             )
         return DiagnosticListResponse(items=reports, total=len(reports))
+
+    async def get_summary(
+        self,
+        tenant_id: str,
+        time_range_minutes: int = 60,
+    ) -> DiagnosticSummaryResponse:
+        """Aggregated error stats across all gateways for a tenant."""
+        since = datetime.now(UTC) - timedelta(minutes=time_range_minutes)
+
+        query = (
+            select(ExecutionLog)
+            .where(
+                and_(
+                    ExecutionLog.tenant_id == tenant_id,
+                    ExecutionLog.status != ExecutionStatus.SUCCESS,
+                    ExecutionLog.started_at >= since,
+                )
+            )
+            .order_by(ExecutionLog.started_at.desc())
+            .limit(500)
+        )
+        result = await self.db.execute(query)
+        logs = list(result.scalars().all())
+
+        # Count by category
+        category_counts: dict[DiagnosticCategory, int] = {}
+        for log in logs:
+            cause = self._classify_single(log)
+            if cause:
+                category_counts[cause.category] = (
+                    category_counts.get(cause.category, 0) + 1
+                )
+
+        total = len(logs)
+        top_categories = sorted(
+            [
+                ErrorCategoryStat(
+                    category=cat,
+                    count=count,
+                    percentage=round((count / total * 100) if total > 0 else 0, 1),
+                )
+                for cat, count in category_counts.items()
+            ],
+            key=lambda s: s.count,
+            reverse=True,
+        )
+
+        return DiagnosticSummaryResponse(
+            tenant_id=tenant_id,
+            total_errors=total,
+            time_range_minutes=time_range_minutes,
+            top_categories=top_categories,
+        )
 
     def _classify_errors(self, logs: list[ExecutionLog]) -> list[RootCause]:
         """Rule-based error classification against the diagnostic taxonomy."""

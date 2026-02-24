@@ -1,0 +1,43 @@
+{{- if and .Values.staging.enabled .Values.staging.argocd.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ include "stoa-platform.fullname" . | default "stoa-platform" }}-staging
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: stoa-platform-staging
+    app.kubernetes.io/component: argocd
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  generators:
+    - list:
+        elements:
+          {{- range .Values.staging.stages }}
+          - stage: {{ . }}
+            namespace: {{ $.Release.Namespace }}-{{ . }}
+          {{- end }}
+  template:
+    metadata:
+      name: "stoa-{{ `{{stage}}` }}"
+      labels:
+        app.kubernetes.io/part-of: stoa-platform
+        stoa.dev/stage: "{{ `{{stage}}` }}"
+    spec:
+      project: {{ .Values.staging.argocd.project | default "default" }}
+      source:
+        repoURL: {{ .Values.staging.argocd.repoURL | quote }}
+        targetRevision: {{ .Values.staging.argocd.targetRevision | default "main" | quote }}
+        path: {{ .Values.staging.argocd.chartPath | default "charts/stoa-platform" | quote }}
+        helm:
+          valueFiles:
+            - "values-{{ `{{stage}}` }}.yaml"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ `{{namespace}}` }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=false
+{{- end }}

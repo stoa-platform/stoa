@@ -30,7 +30,7 @@ npm start                      # Vite dev server on http://localhost:5173
 npm start               # Dev server (Vite)
 npm run test            # vitest
 npm run test:coverage   # vitest with coverage
-npm run lint            # eslint (max-warnings 93)
+npm run lint            # eslint (max-warnings 105)
 npm run format:check    # prettier
 npm run build           # Production build
 ```

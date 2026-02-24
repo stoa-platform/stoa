@@ -41,6 +41,10 @@ pytest tests/ -q              # Tests
 ruff check .                  # Lint
 ```
 
+## CI
+
+No dedicated CI workflow exists for the CLI yet. Lint and test locally before pushing.
+
 ## Dependencies
 
 - **Depends on**: control-plane-api (REST API), Keycloak (auth)

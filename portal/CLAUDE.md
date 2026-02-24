@@ -31,7 +31,7 @@ npm install
 npm run dev             # Dev server (Vite)
 npm run test            # vitest
 npm run test:coverage   # vitest with coverage
-npm run lint            # eslint (max-warnings 20)
+npm run lint            # eslint (max-warnings 0)
 npm run format:check    # prettier
 npm run build           # Production build
 ```
@@ -40,7 +40,7 @@ npm run build           # Production build
 - Consumer-facing (catalog, subscriptions) vs. Provider-facing (admin, deployments)
 - More services (17 vs 7) — richer API integration
 - Has `utils/` directory
-- Looser lint threshold (20 warnings vs 0)
+- Stricter lint threshold (0 warnings vs 105 for Console)
 - No Zustand — uses Context/Hooks for state
 
 ## Dependencies

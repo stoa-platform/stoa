@@ -29,7 +29,7 @@ src/
 npm install
 npm start               # Dev server (Vite)
 npm run test            # vitest
-npm run lint            # eslint (max-warnings 0)
+npm run lint            # eslint (max-warnings 105)
 npm run format:check    # prettier
 npm run build           # Production build
 ```

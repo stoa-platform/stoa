@@ -1,8 +1,9 @@
 # Runbook: ArgoCD — Application Out of Sync
 
 > **Severity**: Critical
-> **Last updated**: 2026-02-15
+> **Last updated**: 2026-02-24
 > **Owner**: Platform Team
+> **Dashboard**: [GitOps Drift Monitoring](https://grafana.gostoa.dev/d/gitops-drift)
 
 ---
 
@@ -10,10 +11,12 @@
 
 ### Prometheus/Grafana Alerts
 
-| Alert | Threshold | Dashboard |
-|-------|-----------|-----------|
-| `ArgoCDAppOutOfSync` | `argocd_app_info{sync_status!="Synced"}` for 10m | [ArgoCD Dashboard](https://grafana.gostoa.dev/d/argocd) |
-| `ArgoCDAppDegraded` | `argocd_app_info{health_status="Degraded"}` for 5m | [ArgoCD Dashboard](https://grafana.gostoa.dev/d/argocd) |
+| Alert | Metric | Threshold | Severity | Dashboard |
+|-------|--------|-----------|----------|-----------|
+| `ArgoCDAppOutOfSync` | `argocd_app_info{sync_status!="Synced"}` | count > 0 for 5m | warning | [GitOps Drift](https://grafana.gostoa.dev/d/gitops-drift) |
+| `ArgoCDAppDegraded` | `argocd_app_info{health_status="Degraded"}` | count > 0 for 5m | critical | [GitOps Drift](https://grafana.gostoa.dev/d/gitops-drift) |
+| `ArgoCDSyncDurationHigh` | `argocd_app_sync_total` P95 | > 300s for 10m | warning | [GitOps Drift](https://grafana.gostoa.dev/d/gitops-drift) |
+| `ArgoCDRepoServerDown` | `up{job="argocd-metrics"}` | == 0 for 1m | critical | [GitOps Drift](https://grafana.gostoa.dev/d/gitops-drift) |
 
 ### Observed Behavior
 
@@ -217,28 +220,15 @@ kubectl get application <app-name> -n argocd -o jsonpath='{.status.history[-1:]}
 
 ## 6. Prevention
 
-### Recommended Monitoring
+### Deployed Monitoring (CAB-402)
 
-```yaml
-groups:
-  - name: argocd
-    rules:
-      - alert: ArgoCDAppOutOfSync
-        expr: argocd_app_info{sync_status!="Synced"} == 1
-        for: 10m
-        labels:
-          severity: critical
-        annotations:
-          summary: "ArgoCD app {{ $labels.name }} is out of sync"
+Alert rules are deployed in `deploy/prometheus/alerting-rules.yaml` (group `stoa.argocd.rules`).
+ServiceMonitors for Prometheus scraping are in `deploy/observability/argocd-servicemonitor.yaml`.
 
-      - alert: ArgoCDAppDegraded
-        expr: argocd_app_info{health_status="Degraded"} == 1
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "ArgoCD app {{ $labels.name }} is degraded"
-```
+Key expression notes:
+- **Correct metric**: `argocd_app_info` (gauge, 0/1 per app, reflects current state)
+- **Wrong metric**: `argocd_app_sync_total` (counter, counts completed operations — not current drift state)
+- **Alert fires on**: `count(argocd_app_info{sync_status!="Synced"}) > 0` for 5 minutes
 
 ### Best Practices
 
@@ -261,12 +251,45 @@ groups:
 
 ---
 
-## 7. References
+## 7. Drift SLO
+
+### Target
+
+| Metric | SLO Target | Alert Threshold |
+|--------|-----------|-----------------|
+| Sync Rate | **100%** (all apps Synced) | Any OutOfSync > 5 min |
+| Drift Duration | 0 minutes | > 5 min fires `ArgoCDAppOutOfSync` |
+| Degraded Apps | 0 | Any Degraded > 5 min fires `ArgoCDAppDegraded` |
+
+### Definition
+
+Drift = at least one application with `sync_status != "Synced"`.
+
+SLO breach = drift persisting for more than **5 minutes** at steady state. Acceptable transient drift during active deployments (rollout in progress) should not trigger the alert — the `for: 5m` clause filters these out.
+
+### Dashboard
+
+The [GitOps Drift Monitoring dashboard](https://grafana.gostoa.dev/d/gitops-drift) provides:
+- **Drift SLO gauge**: current sync % (green = 100%, red = any drift)
+- **Apps OutOfSync / Degraded**: current counts with traffic-light colors
+- **Application Status Table**: per-app sync_status and health_status
+- **Sync % Trend (24h)**: drift history with 100% SLO reference line
+
+### Metrics Source
+
+Alert rules and ServiceMonitors deployed by CAB-402:
+- `deploy/observability/argocd-servicemonitor.yaml` — Prometheus scrape config
+- `deploy/prometheus/alerting-rules.yaml` (group `stoa.argocd.rules`) — 4 alert rules
+
+---
+
+## 9. References
 
 ### Documentation
 
 - [ArgoCD Troubleshooting](https://argo-cd.readthedocs.io/en/stable/operator-manual/troubleshooting/)
 - [ArgoCD Sync Options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/)
+- [GitOps Drift Monitoring Dashboard](https://grafana.gostoa.dev/d/gitops-drift)
 
 ### STOA ArgoCD Setup
 
@@ -292,3 +315,4 @@ groups:
 | Date | Author | Modification |
 |------|--------|--------------|
 | 2026-02-15 | Platform Team | Initial creation (CAB-1030) |
+| 2026-02-24 | Platform Team | CAB-402: Fix alert names, add Drift SLO section, link GitOps Drift dashboard, correct metric expression |

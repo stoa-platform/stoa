@@ -1526,6 +1526,40 @@
         "title": "BranchInfo",
         "type": "object"
       },
+      "BudgetCheckResponse": {
+        "description": "Internal response for gateway budget check (GET /internal/budgets/{dept_id}/check).",
+        "properties": {
+          "budget_limit_microcents": {
+            "default": 0,
+            "title": "Budget Limit Microcents",
+            "type": "integer"
+          },
+          "current_spend_microcents": {
+            "default": 0,
+            "title": "Current Spend Microcents",
+            "type": "integer"
+          },
+          "enforcement": {
+            "default": "disabled",
+            "title": "Enforcement",
+            "type": "string"
+          },
+          "over_budget": {
+            "title": "Over Budget",
+            "type": "boolean"
+          },
+          "usage_pct": {
+            "default": 0.0,
+            "title": "Usage Pct",
+            "type": "number"
+          }
+        },
+        "required": [
+          "over_budget"
+        ],
+        "title": "BudgetCheckResponse",
+        "type": "object"
+      },
       "BulkResultItem": {
         "description": "Result of a single row in bulk onboarding.",
         "properties": {
@@ -26530,6 +26564,49 @@
         "summary": "List Gateway Scopes",
         "tags": [
           "Gateway"
+        ]
+      }
+    },
+    "/v1/internal/budgets/{department_id}/check": {
+      "get": {
+        "description": "Check if a department is over budget.\n\nCalled by the STOA Gateway's BudgetCache every ~60s.\nReturns over_budget=false when no budget is configured (fail-open).",
+        "operationId": "check_department_budget_v1_internal_budgets__department_id__check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "department_id",
+            "required": true,
+            "schema": {
+              "title": "Department Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Department Budget",
+        "tags": [
+          "Internal - Billing"
         ]
       }
     },

@@ -376,10 +376,8 @@ class TestConnect:
             mock_settings.GITLAB_URL = "https://gitlab.example.com"
             mock_settings.GITLAB_TOKEN = "token"
             mock_settings.GITLAB_PROJECT_ID = 1
-            with (
-                patch("src.services.git_service.gitlab.Gitlab", side_effect=Exception("fail")),
-                pytest.raises(Exception, match="fail"),
-            ):
+            with patch("src.services.git_service.gitlab.Gitlab", side_effect=Exception("fail")):
+                with pytest.raises(Exception, match="fail"):
                     await svc.connect()
 
     async def test_connect_clears_state_on_failure(self):
@@ -388,10 +386,8 @@ class TestConnect:
             mock_settings.GITLAB_URL = "https://gitlab.example.com"
             mock_settings.GITLAB_TOKEN = "token"
             mock_settings.GITLAB_PROJECT_ID = 1
-            with (
-                patch("src.services.git_service.gitlab.Gitlab", side_effect=RuntimeError("boom")),
-                pytest.raises(RuntimeError),
-            ):
+            with patch("src.services.git_service.gitlab.Gitlab", side_effect=RuntimeError("boom")):
+                with pytest.raises(RuntimeError):
                     await svc.connect()
         # _project should never have been set
         assert svc._project is None
@@ -837,6 +833,7 @@ class TestListApisParallel:
             {"type": "tree", "name": "bad-api"},
         ]
         call_count = {"n": 0}
+        original_get_api = svc.get_api
 
         async def patched_get_api(tenant_id, api_id):
             call_count["n"] += 1
@@ -866,6 +863,7 @@ class TestGetAllOpenapiSpecsParallel:
     async def test_failed_individual_fetch_yields_none(self):
         svc = _connected_service()
         call_count = {"n": 0}
+        original = svc.get_api_openapi_spec
 
         async def patched(tenant_id, api_id):
             call_count["n"] += 1
@@ -1092,7 +1090,9 @@ class TestListAllMcpServers:
 
     async def test_no_tenants_directory_returns_platform_only(self):
         svc = _connected_service()
+        raw = yaml.dump({"metadata": {"name": "svc"}, "spec": {}})
         call_count = {"n": 0}
+        original_list = svc.list_mcp_servers
 
         async def patched_list(tenant_id):
             call_count["n"] += 1

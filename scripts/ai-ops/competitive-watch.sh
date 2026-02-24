@@ -17,10 +17,15 @@ npm view @anthropic-ai/claude-code version 2>/dev/null || echo "  npm check fail
 echo ""
 echo "📢 Anthropic blog (derniers posts):"
 curl -sL --max-time 10 "https://www.anthropic.com/news" 2>/dev/null \
-  | grep -oP '<h[23][^>]*>[^<]+' \
-  | head -5 \
-  | sed 's/<[^>]*>//g; s/^/  /' \
-  || echo "  Fetch failed"
+  | python3 -c "
+import sys, re
+html = sys.stdin.read()
+titles = re.findall(r'<h[23][^>]*>([^<]+)', html)
+for t in titles[:5]:
+    print(f'  {t.strip()}')
+if not titles:
+    print('  No posts found')
+" 2>/dev/null || echo "  Fetch failed"
 
 echo ""
 echo "💬 Reddit r/ClaudeAI (top semaine):"
@@ -54,10 +59,15 @@ except Exception:
 echo ""
 echo "⚔️ Cursor changelog:"
 curl -sL --max-time 10 "https://cursor.com/changelog" 2>/dev/null \
-  | grep -oP '<h[23][^>]*>[^<]+' \
-  | head -3 \
-  | sed 's/<[^>]*>//g; s/^/  /' \
-  || echo "  Fetch failed"
+  | python3 -c "
+import sys, re
+html = sys.stdin.read()
+titles = re.findall(r'<h[23][^>]*>([^<]+)', html)
+for t in titles[:3]:
+    print(f'  {t.strip()}')
+if not titles:
+    print('  No entries found')
+" 2>/dev/null || echo "  Fetch failed"
 
 echo ""
 echo "📊 Score IA Factory actuel:"

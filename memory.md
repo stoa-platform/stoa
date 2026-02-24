@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-23 (CAB-1393→DONE stoa-docs PR #82 — C9 464/515 pts 90%)
+> Derniere MAJ: 2026-02-24 (plan sync + CAB-1440 @wip unblock — C9 401/572 pts 70%)
 
 ## ✅ DONE
 
@@ -8,6 +8,10 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-289 Conversation History (5 pts) — PR #930
+- ✅ CAB-605 Dynamic Tool Generation from UAC (8 pts) — PR #937
+- ✅ CAB-606 Migrate Tools to New Schema + Aliases (5 pts) — PR #967
+- ✅ CAB-1437 [MEGA] API Service Layer Hardening (21 pts) — PRs #912, #935, #963, #966
 - ✅ CAB-1432 [MEGA] Credential Mapping (21 pts) — PRs #899 (API+GW), #903 (Portal UI)
   - P1: Backend API (7 CRUD, Fernet encryption, RBAC, 26 tests) + Gateway credential store
   - P2: Portal UI (table + modal + search + auth type switching, 38 tests)

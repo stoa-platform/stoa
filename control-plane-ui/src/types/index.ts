@@ -877,6 +877,31 @@ export interface ProspectsFilters {
 }
 
 // =============================================================================
+// Access Request Types (CAB-1468 — Admin Access Requests)
+// =============================================================================
+
+export type AccessRequestStatus = 'pending' | 'contacted' | 'converted';
+
+export interface AccessRequestDetail {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  company?: string;
+  role?: string;
+  source?: string;
+  status: AccessRequestStatus;
+  created_at: string;
+}
+
+export interface AccessRequestListResponse {
+  data: AccessRequestDetail[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+// =============================================================================
 // Backend API Types (CAB-1188 — SaaS Self-Service)
 // =============================================================================
 

@@ -48,6 +48,9 @@ const ExternalMCPServerDetail = lazy(() =>
 const AdminProspects = lazy(() =>
   import('./pages/AdminProspects').then((m) => ({ default: m.AdminProspects }))
 );
+const AdminAccessRequests = lazy(() =>
+  import('./pages/AdminAccessRequests').then((m) => ({ default: m.AdminAccessRequests }))
+);
 const GatewayStatus = lazy(() => import('./pages/GatewayStatus'));
 const GatewayRegistry = lazy(() => gatewaysModule().then((m) => ({ default: m.GatewayList })));
 const GatewayModes = lazy(() =>
@@ -413,6 +416,7 @@ function ProtectedRoutes() {
                 <Route path="/my-usage" element={<TenantDashboard />} />
                 <Route path="/business" element={<BusinessDashboard />} />
                 <Route path="/admin/prospects" element={<AdminProspects />} />
+                <Route path="/admin/access-requests" element={<AdminAccessRequests />} />
                 {/* Native observability dashboards (replace iframe embeds) */}
                 <Route path="/observability" element={<PlatformMetrics />} />
                 <Route path="/observability/grafana" element={<GrafanaEmbed />} />

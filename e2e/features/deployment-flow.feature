@@ -1,4 +1,4 @@
-@deployment @wip
+@deployment
 Feature: Deployment Flow Integration
 
   As a devops user,

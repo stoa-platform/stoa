@@ -14,7 +14,7 @@ Endpoints:
 Auth: require_role — cpi-admin for writes, cpi-admin/tenant-admin for reads.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -43,8 +43,8 @@ class TestGatewayInstancesRouter:
             "capabilities": [],
             "version": None,
             "tags": [],
-            "created_at": datetime(2026, 2, 1),
-            "updated_at": datetime(2026, 2, 1),
+            "created_at": datetime(2026, 2, 1, tzinfo=UTC),
+            "updated_at": datetime(2026, 2, 1, tzinfo=UTC),
         }
         for k, v in {**defaults, **overrides}.items():
             setattr(mock, k, v)
@@ -198,9 +198,7 @@ class TestGatewayInstancesRouter:
         gw_id = uuid4()
 
         with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
-            MockSvc.return_value.delete = AsyncMock(
-                side_effect=ValueError("Gateway not found")
-            )
+            MockSvc.return_value.delete = AsyncMock(side_effect=ValueError("Gateway not found"))
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.delete(f"/v1/admin/gateways/{gw_id}")
@@ -229,9 +227,7 @@ class TestGatewayInstancesRouter:
         gw_id = uuid4()
 
         with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
-            MockSvc.return_value.health_check = AsyncMock(
-                side_effect=ValueError("Gateway not found")
-            )
+            MockSvc.return_value.health_check = AsyncMock(side_effect=ValueError("Gateway not found"))
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(f"/v1/admin/gateways/{gw_id}/health")
@@ -320,9 +316,7 @@ class TestGatewayInstancesRouter:
     def test_update_gateway_not_found(self, app_with_cpi_admin, mock_db_session):
         """PUT /{id} returns 404 when gateway not found."""
         with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
-            MockSvc.return_value.update = AsyncMock(
-                side_effect=ValueError("Gateway instance not found")
-            )
+            MockSvc.return_value.update = AsyncMock(side_effect=ValueError("Gateway instance not found"))
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.put(f"/v1/admin/gateways/{uuid4()}", json={"display_name": "X"})
@@ -374,9 +368,7 @@ class TestGatewayInstancesRouter:
     def test_preview_import_not_found(self, app_with_cpi_admin, mock_db_session):
         """POST /{id}/import/preview returns 404 when gateway not found."""
         with patch("src.routers.gateway_instances.GatewayImportService") as MockImportSvc:
-            MockImportSvc.return_value.preview_import = AsyncMock(
-                side_effect=ValueError("Gateway instance not found")
-            )
+            MockImportSvc.return_value.preview_import = AsyncMock(side_effect=ValueError("Gateway instance not found"))
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(f"/v1/admin/gateways/{uuid4()}/import/preview")

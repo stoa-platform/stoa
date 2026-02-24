@@ -129,6 +129,7 @@ pub async fn mcp_capabilities(State(state): State<AppState>) -> impl IntoRespons
                     "stoa.deployment.events".to_string(),
                     "stoa.security.alerts".to_string(),
                     "stoa.subscription.events".to_string(),
+                    "stoa.policy.changes".to_string(),
                 ],
             }),
         },

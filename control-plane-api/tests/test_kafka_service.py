@@ -227,3 +227,41 @@ class TestConvenienceMethods:
             user_id="user-1",
         )
         assert isinstance(event_id, str)
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_policy_created(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = False
+        event_id = await kafka_svc.emit_policy_created(
+            "acme", {"id": "p-1", "name": "rate-limit"}, "user-1"
+        )
+        assert isinstance(event_id, str)
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_policy_updated(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = False
+        event_id = await kafka_svc.emit_policy_updated(
+            "acme", {"id": "p-1", "name": "rate-limit", "enabled": True}, "user-1"
+        )
+        assert isinstance(event_id, str)
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_policy_deleted(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = False
+        event_id = await kafka_svc.emit_policy_deleted("acme", "p-1", "user-1")
+        assert isinstance(event_id, str)
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_policy_binding_created(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = False
+        event_id = await kafka_svc.emit_policy_binding_created(
+            "acme", {"id": "b-1", "policy_id": "p-1"}, "user-1"
+        )
+        assert isinstance(event_id, str)
+
+    @patch("src.services.kafka_service.settings")
+    async def test_emit_policy_binding_deleted(self, mock_settings, kafka_svc):
+        mock_settings.KAFKA_ENABLED = False
+        event_id = await kafka_svc.emit_policy_binding_deleted(
+            "acme", {"id": "b-1", "policy_id": "p-1"}, "user-1"
+        )
+        assert isinstance(event_id, str)

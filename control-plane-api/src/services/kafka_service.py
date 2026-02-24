@@ -58,6 +58,9 @@ class Topics:
     CATALOG_CHANGES = "stoa.catalog.changes"
     ERRORS = "stoa.errors"
 
+    # CAB-1347: Policy propagation
+    POLICY_CHANGES = "stoa.policy.changes"
+
 
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""
@@ -256,6 +259,32 @@ class KafkaService:
             tenant_id,
             subscription_data,
             user_id,
+        )
+
+    async def emit_policy_created(self, tenant_id: str, policy_data: dict, user_id: str) -> str:
+        """Emit policy-created event to stoa.policy.changes."""
+        return await self.publish(Topics.POLICY_CHANGES, "policy-created", tenant_id, policy_data, user_id)
+
+    async def emit_policy_updated(self, tenant_id: str, policy_data: dict, user_id: str) -> str:
+        """Emit policy-updated event to stoa.policy.changes."""
+        return await self.publish(Topics.POLICY_CHANGES, "policy-updated", tenant_id, policy_data, user_id)
+
+    async def emit_policy_deleted(self, tenant_id: str, policy_id: str, user_id: str) -> str:
+        """Emit policy-deleted event to stoa.policy.changes."""
+        return await self.publish(
+            Topics.POLICY_CHANGES, "policy-deleted", tenant_id, {"policy_id": policy_id}, user_id
+        )
+
+    async def emit_policy_binding_created(self, tenant_id: str, binding_data: dict, user_id: str) -> str:
+        """Emit policy-binding-created event to stoa.policy.changes."""
+        return await self.publish(
+            Topics.POLICY_CHANGES, "policy-binding-created", tenant_id, binding_data, user_id
+        )
+
+    async def emit_policy_binding_deleted(self, tenant_id: str, binding_data: dict, user_id: str) -> str:
+        """Emit policy-binding-deleted event to stoa.policy.changes."""
+        return await self.publish(
+            Topics.POLICY_CHANGES, "policy-binding-deleted", tenant_id, binding_data, user_id
         )
 
     def create_consumer(self, topics: list[str], group_id: str, tenant_filter: str | None = None) -> KafkaConsumer:

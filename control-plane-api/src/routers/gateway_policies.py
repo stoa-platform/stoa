@@ -16,6 +16,7 @@ from src.schemas.policy import (
     PolicyBindingCreate,
     PolicyBindingResponse,
 )
+from src.services.kafka_service import kafka_service
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,21 @@ async def create_policy(
     policy = await repo.create(policy)
     await db.commit()
     await db.refresh(policy, attribute_names=["bindings"])
+
+    try:
+        await kafka_service.emit_policy_created(
+            tenant_id=data.tenant_id,
+            policy_data={
+                "id": str(policy.id),
+                "name": policy.name,
+                "policy_type": data.policy_type,
+                "scope": data.scope,
+            },
+            user_id=user.id,
+        )
+    except Exception:
+        logger.warning("Failed to emit policy-created event", exc_info=True)
+
     return _to_response(policy)
 
 
@@ -104,6 +120,22 @@ async def update_policy(
     await repo.update(policy)
     await db.commit()
     await db.refresh(policy, attribute_names=["bindings"])
+
+    try:
+        await kafka_service.emit_policy_updated(
+            tenant_id=policy.tenant_id,
+            policy_data={
+                "id": str(policy.id),
+                "name": policy.name,
+                "policy_type": policy.policy_type.value if policy.policy_type else "",
+                "scope": policy.scope.value if policy.scope else "api",
+                "enabled": policy.enabled,
+            },
+            user_id=user.id,
+        )
+    except Exception:
+        logger.warning("Failed to emit policy-updated event", exc_info=True)
+
     return _to_response(policy)
 
 
@@ -118,8 +150,19 @@ async def delete_policy(
     policy = await repo.get_by_id(policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
+    tenant_id = policy.tenant_id
+    policy_id_str = str(policy.id)
     await repo.delete(policy)
     await db.commit()
+
+    try:
+        await kafka_service.emit_policy_deleted(
+            tenant_id=tenant_id,
+            policy_id=policy_id_str,
+            user_id=user.id,
+        )
+    except Exception:
+        logger.warning("Failed to emit policy-deleted event", exc_info=True)
 
 
 @router.post("/bindings", response_model=PolicyBindingResponse, status_code=201)
@@ -146,6 +189,21 @@ async def create_binding(
     binding = await binding_repo.create(binding)
     await db.commit()
     await db.refresh(binding)
+
+    try:
+        await kafka_service.emit_policy_binding_created(
+            tenant_id=data.tenant_id,
+            binding_data={
+                "id": str(binding.id),
+                "policy_id": str(data.policy_id),
+                "api_catalog_id": str(data.api_catalog_id) if data.api_catalog_id else None,
+                "gateway_instance_id": str(data.gateway_instance_id) if data.gateway_instance_id else None,
+            },
+            user_id=user.id,
+        )
+    except Exception:
+        logger.warning("Failed to emit policy-binding-created event", exc_info=True)
+
     return binding
 
 
@@ -160,8 +218,23 @@ async def delete_binding(
     binding = await binding_repo.get_by_id(binding_id)
     if not binding:
         raise HTTPException(status_code=404, detail="Binding not found")
+    tenant_id = binding.tenant_id
+    binding_id_str = str(binding.id)
+    policy_id_str = str(binding.policy_id)
     await binding_repo.delete(binding)
     await db.commit()
+
+    try:
+        await kafka_service.emit_policy_binding_deleted(
+            tenant_id=tenant_id,
+            binding_data={
+                "id": binding_id_str,
+                "policy_id": policy_id_str,
+            },
+            user_id=user.id,
+        )
+    except Exception:
+        logger.warning("Failed to emit policy-binding-deleted event", exc_info=True)
 
 
 @router.get("/{policy_id}/bindings", response_model=list[PolicyBindingResponse])

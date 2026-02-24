@@ -691,7 +691,7 @@ fn default_cb_success_threshold() -> u32 {
 }
 
 fn default_kafka_cns_topics() -> String {
-    "stoa.api.lifecycle,stoa.deployment.events,stoa.security.alerts".to_string()
+    "stoa.api.lifecycle,stoa.deployment.events,stoa.security.alerts,stoa.policy.changes".to_string()
 }
 
 fn default_kafka_cns_consumer_group() -> String {

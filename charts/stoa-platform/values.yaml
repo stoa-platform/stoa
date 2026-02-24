@@ -134,7 +134,7 @@ stoaGateway:
   tolerations: []
   extraEnv: []
 
-# Autoscaling (HPA) — gateway only (other components use standalone manifests)
+# Autoscaling (HPA) — stoa-gateway (Rust). Other components: see controlPlaneApi/controlPlaneUi/portal/mcpGateway sections below.
 autoscaling:
   enabled: false
   minReplicas: 2
@@ -143,7 +143,7 @@ autoscaling:
   targetMemoryUtilizationPercentage: 80
   scaleDownStabilizationSeconds: 300
 
-# Pod Disruption Budget — gateway only (other components use standalone manifests)
+# Pod Disruption Budget — stoa-gateway (Rust). Other components: see controlPlaneApi/controlPlaneUi/portal/mcpGateway sections below.
 podDisruptionBudget:
   enabled: false
   minAvailable: 1
@@ -364,6 +364,66 @@ controlPlaneApi:
   # Cluster name for multi-cluster observability labels (CAB-1426)
   clusterName: default
   environment: dev
+  # HPA — target: stoa-control-plane-api Deployment (standalone k8s manifest)
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationSeconds: 300
+  # PDB — target: stoa-control-plane-api Deployment
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+# ==============================================================================
+# Control Plane UI (Console) — HPA & PDB (CAB-1438)
+# ==============================================================================
+# Deployment: control-plane-ui (standalone k8s manifest)
+controlPlaneUi:
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationSeconds: 300
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+# ==============================================================================
+# Developer Portal — HPA & PDB (CAB-1438)
+# ==============================================================================
+# Deployment: stoa-portal (standalone k8s manifest)
+portal:
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationSeconds: 300
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+# ==============================================================================
+# MCP Gateway (Python) — HPA & PDB (CAB-1438)
+# ==============================================================================
+# Deployment: stoa-mcp-gateway (standalone k8s manifest)
+mcpGateway:
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationSeconds: 300
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
 
 alertmanager:
   enabled: false

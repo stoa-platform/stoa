@@ -162,6 +162,14 @@ mod tests {
         base_claims()
     }
 
+    fn test_claims_sub_only() -> Claims {
+        // sub_account_id set but master_account_id missing — warning path
+        let mut claims = base_claims();
+        claims.sub_account_id = Some("sub-orphan".to_string());
+        claims.master_account_id = None;
+        claims
+    }
+
     #[tokio::test]
     async fn test_disabled_passes_through() {
         let state = test_state(false);
@@ -198,6 +206,43 @@ mod tests {
             email: None,
             tenant_id: Some("acme".to_string()),
             claims: test_claims_without_federation(),
+            raw_token: "token".to_string(),
+        });
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_sub_account_without_master_passes_through_without_context() {
+        // When sub_account_id is set but master_account_id is absent, the middleware
+        // should emit a warning and pass through WITHOUT injecting SubAccountContext.
+        let state = test_state(true);
+
+        async fn check_no_context(request: axum::extract::Request) -> axum::response::Response {
+            use axum::response::IntoResponse;
+            if request.extensions().get::<SubAccountContext>().is_none() {
+                StatusCode::OK.into_response()
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+        }
+
+        let app = Router::new()
+            .route("/test", get(check_no_context))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                federation_middleware,
+            ))
+            .with_state(state);
+
+        let mut request = Request::builder().uri("/test").body(Body::empty()).unwrap();
+        request.extensions_mut().insert(AuthenticatedUser {
+            user_id: "user-orphan".to_string(),
+            username: Some("orphan".to_string()),
+            email: None,
+            tenant_id: Some("acme".to_string()),
+            claims: test_claims_sub_only(),
             raw_token: "token".to_string(),
         });
 

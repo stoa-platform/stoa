@@ -10,5 +10,6 @@ from . import (
     tenants,
     traces,
     usage,
+    usage_metering,
     webhooks,
 )

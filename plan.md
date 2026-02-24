@@ -101,17 +101,17 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~572 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 383 pts (67%) | **Velocity**: 31 issues done
+**Scope**: ~572 pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 401 pts (70%) | **Velocity**: 37 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
 
-- [~] CAB-289: Conversation History (5 pts, P3)
 - [~] CAB-802: Dry Run + Script + Video (3 pts, P1) — HUMAN ONLY
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-### Done (34)
+
+### Done (37)
 - [x] CAB-1327: [MEGA] Docs-as-MCP — RAG Search & AI Chat (21 pts) — PRs #912 (P1), #923 (P2)
 
 - [x] CAB-1338: [MEGA] Portal i18n (21 pts, P3) — ALL 3 PHASES DONE — PRs #876, #882, #885, #888
@@ -183,6 +183,10 @@
 - [x] CAB-1303: [MEGA] Automated Staging Pipeline & Parity Tooling (13 pts)
 - [x] CAB-1433: Token Observatory cost tracking (8 pts) — PR #927
 - [x] CAB-288: Chat Agent Token Metering (5 pts)
+- [x] CAB-289: Conversation History (5 pts) — PR #930
+- [x] CAB-605: Admin — Dynamic Tool Generation from UAC (8 pts) — PR #937
+- [x] CAB-606: Admin — Migrate Tools to New Schema + Aliases (5 pts) — PR #967
+- [x] CAB-1437: [MEGA] API Service Layer Hardening (21 pts) — PRs #912, #935, #963, #966
 
 ### Todo
 
@@ -207,10 +211,6 @@
 - [ ] CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (21 pts, P3) — Council 6.25 ⚠️
 - [ ] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts, P3) — Council 6.00 ⚠️
 - [ ] CAB-1392: [MEGA] Security & MCP Deep-Dive Content (21 pts, P3)
-
-*Not Council-evaluated:*
-- [ ] CAB-605: Admin — Create API (8 pts)
-- [ ] CAB-606: Admin — Edit API (5 pts)
 
 ### Backlog (not committed, no checkbox)
 

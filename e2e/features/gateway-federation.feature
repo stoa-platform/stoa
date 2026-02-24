@@ -1,4 +1,4 @@
-@federation @gateway @wip
+@federation @gateway
 Feature: Gateway - Federation Routing
 
   As a sub-account agent,

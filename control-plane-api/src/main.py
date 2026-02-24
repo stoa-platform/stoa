@@ -62,6 +62,7 @@ from .routers import (
     mcp_gitops,
     mcp_policy_proxy,
     mcp_proxy,
+    metering,
     monitoring,
     onboarding,
     onboarding_admin,
@@ -678,6 +679,9 @@ app.include_router(execution_logs.router)
 
 # Diagnostics — Self-diagnostic engine with auto-RCA (CAB-1316)
 app.include_router(diagnostics.router)
+
+# Usage Metering — aggregated metering pipeline (CAB-1334)
+app.include_router(metering.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

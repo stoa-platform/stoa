@@ -37,6 +37,7 @@ from .routers import (
     applications,
     audit,
     backend_apis,
+    billing_internal,
     business,
     catalog_admin,
     certificates,
@@ -626,6 +627,8 @@ app.include_router(gateway_deployments.router)
 app.include_router(gateway_policies.router)
 # Internal gateway registration API (ADR-028 auto-registration)
 app.include_router(gateway_internal.router)
+# Internal billing API for gateway budget enforcement (CAB-1457)
+app.include_router(billing_internal.router)
 
 # Environments (ADR-040 — Born GitOps)
 app.include_router(environments.router)

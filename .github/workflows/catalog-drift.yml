@@ -1,0 +1,87 @@
+name: Catalog Drift Detection
+
+on:
+  schedule:
+    - cron: '0 7 * * 1-5'  # Weekdays 07:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Set kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_OVH }}" | base64 -d > ~/.kube/config
+        continue-on-error: true
+
+      - name: Validate catalog structure
+        run: ./scripts/ops/catalog-sync.sh --ci
+        continue-on-error: true
+        id: drift
+
+      - name: Check architecture graph freshness
+        run: ./scripts/ops/catalog-graph.sh --check
+        continue-on-error: true
+        id: graph
+
+      - name: Create issue on drift
+        if: steps.drift.outcome == 'failure' || steps.graph.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Platform Catalog Drift Detected — ${new Date().toISOString().split('T')[0]}`;
+            // Check for existing open drift issues
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'catalog-drift',
+              state: 'open'
+            });
+            if (existing.data.length > 0) {
+              // Comment on existing issue instead of creating new
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: `Drift still detected as of ${new Date().toISOString()}.\nRun: \`./scripts/ops/catalog-sync.sh\` for details.`
+              });
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: [
+                '## Platform Catalog Drift',
+                '',
+                'The daily drift check found discrepancies between `docs/platform-catalog.yaml` and the live K8s state.',
+                '',
+                '### How to fix',
+                '1. Run `./scripts/ops/catalog-sync.sh` to see details',
+                '2. Update `docs/platform-catalog.yaml` to match reality',
+                '3. Run `./scripts/ops/catalog-graph.sh` to regenerate the architecture graph',
+                '4. Commit and push',
+                '',
+                `[Workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+              ].join('\n'),
+              labels: ['catalog-drift']
+            });

@@ -86,6 +86,7 @@ function LoginScreen() {
   const [lastName, setLastName] = useState('');
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
+  const [website, setWebsite] = useState(''); // Honeypot — hidden, traps bots
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>(
     'idle'
   );
@@ -104,6 +105,7 @@ function LoginScreen() {
           company: company || undefined,
           role: role || undefined,
           source: 'portal',
+          website: website || undefined,
         }),
       });
       if (res.ok) {
@@ -304,6 +306,18 @@ function LoginScreen() {
                         <option value="tech-lead">Tech Lead / CTO</option>
                         <option value="other">Other</option>
                       </select>
+                    </div>
+                    {/* Honeypot — hidden from real users, traps bots */}
+                    <div style={{ position: 'absolute', left: '-9999px' }} aria-hidden="true">
+                      <label htmlFor="website">Website</label>
+                      <input
+                        id="website"
+                        type="text"
+                        value={website}
+                        onChange={(e) => setWebsite(e.target.value)}
+                        tabIndex={-1}
+                        autoComplete="off"
+                      />
                     </div>
                     <button
                       type="submit"

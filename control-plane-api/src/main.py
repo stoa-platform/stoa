@@ -716,6 +716,8 @@ if settings.CHAT_ENABLED:
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)
+# Admin — Access request management (cpi-admin)
+app.include_router(access_requests.admin_router)
 
 
 # Legacy health endpoint - redirect to new /health/live

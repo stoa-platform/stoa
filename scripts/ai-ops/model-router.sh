@@ -6,17 +6,16 @@
 #        TURNS=$(echo "$ROUTE" | cut -d'|' -f2)
 
 # Tiered model routing (implementation jobs):
-#   <=3pts       → Sonnet, 25 turns  (~$7/ticket)
-#   <=8pts       → Sonnet, 40 turns  (~$12/ticket)
-#   >8pts        → Sonnet, 60 turns  (~$16.50/ticket)
+#   <=3pts Ship   → Sonnet, 20 turns  (~$5/ticket)
+#   <=3pts        → Sonnet, 25 turns  (~$7/ticket)
+#   4-5pts        → Sonnet, 35 turns  (~$10/ticket)
+#   6-8pts        → Opus,   30 turns  (~$18/ticket)
+#   >8pts         → Opus,   40 turns  (~$25/ticket)
 #
-# MODE adjustment: Ship mode on small tickets (<=3 pts) uses 20 turns
-# instead of 25 — tighter budget for trivial, auto-mergeable changes.
+# Kill-switch: set CLAUDE_DEFAULT_MODEL repo variable to force a single model
+# for all tiers (e.g. "claude-sonnet-4-6" to revert to Sonnet-only).
 #
 # Haiku is reserved for council/plan-validate (structured evaluation).
-# Implementation always requires Sonnet — Haiku lacks the capacity to
-# create branches, write code, run tests, and open PRs reliably.
-#
 # Turn budget accounts for action overhead (~5-8 turns for branch+PR+tests).
 
 route_model() {
@@ -31,13 +30,28 @@ route_model() {
     ESTIMATE=0
   fi
 
-  local TURNS
+  # Kill-switch: CLAUDE_DEFAULT_MODEL overrides all tiers
+  if [ -n "${CLAUDE_DEFAULT_MODEL:-}" ]; then
+    local TURNS=40
+    [ "$ESTIMATE" -le 3 ] && TURNS=25
+    [ "$ESTIMATE" -gt 8 ] && TURNS=60
+    echo "${CLAUDE_DEFAULT_MODEL}|${TURNS}"
+    return
+  fi
+
+  local MODEL TURNS
   if [ "$ESTIMATE" -le 3 ]; then
+    MODEL="claude-sonnet-4-6"
     TURNS=25
+  elif [ "$ESTIMATE" -le 5 ]; then
+    MODEL="claude-sonnet-4-6"
+    TURNS=35
   elif [ "$ESTIMATE" -le 8 ]; then
-    TURNS=40
+    MODEL="claude-opus-4-6"
+    TURNS=30
   else
-    TURNS=60
+    MODEL="claude-opus-4-6"
+    TURNS=40
   fi
 
   # Ship mode: tighter budget on small tickets (faster, cheaper)
@@ -45,7 +59,7 @@ route_model() {
     TURNS=20
   fi
 
-  echo "claude-sonnet-4-6|${TURNS}"
+  echo "${MODEL}|${TURNS}"
 }
 
 # Extract estimate from issue body text (searches for "Estimate: X pts" or "X pts" patterns)

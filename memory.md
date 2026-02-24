@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-24 (MEGA Strike W1-W3 — C9 519/572+ pts 91%)
+> Derniere MAJ: 2026-02-24 (MEGA Strike W1-W4 — C9 574/572+ pts 100%+)
 
 ## ✅ DONE
 
@@ -8,6 +8,9 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1450 [MEGA] DX: CI & Local Dev Completeness (13 pts) — PRs #975, #983, #987, #989
+- ✅ CAB-1342 [MEGA] Helm Auto-Sync Secrets + Multi-Staging (21 pts) — PR #990
+- ✅ CAB-1334 [MEGA] Usage Metering Pipeline P1 (21 pts) — PR #991
 - ✅ CAB-1438 [MEGA] K8s HPA + PDB for All Components (21 pts) — PR #970
 - ✅ CAB-1439 [MEGA] Portal Component Test Coverage — 14 Untested (21 pts) — PR #968
 - ✅ CAB-1316 [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts) — PR #981
@@ -70,11 +73,6 @@ CAB-1314 MCP Skills (21 pts), CAB-1332 Perf (21 pts), CAB-1292 Auth (21 pts), +4
 
 ## 🔴 IN PROGRESS
 
-CAB-1450: [MEGA] DX: CI & Local Dev Completeness (13 pts) — PRs #975, #983
-- ✅ landing-api CI workflow + README
-- ✅ L3 plan-validate allowedTools fix
-- [ ] cli CI, charts README, archive README, PR template, DEVELOPER.md
-
 CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
 - ✅ Production validated: 23/23 PASS, GO in 5s
@@ -102,4 +100,4 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - Velocity C7: 505 pts / 44 issues / 72 pts/day
 - Rolling avg: 129.3 pts/day (C7+C8)
 - Portal MCP pages: MOCK_SERVERS removed (PR #771) — pages now use real API only
-- MEGA Strike W1-W3: 8 tickets, 118 pts in single day (PRs #968-#984)
+- MEGA Strike W1-W4: 11 tickets, 173 pts in single day (PRs #968-#991)

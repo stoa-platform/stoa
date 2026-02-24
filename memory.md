@@ -9,7 +9,7 @@
 
 ### Cycle 9 (Feb 22+)
 - ✅ CAB-1304 [MEGA] Demo Tenant Automation (13 pts) — PRs #1052, #1056 (seed script, demo router, K8s cronjob, 19 tests)
-- ✅ CAB-1448 [MEGA] API Router Test Coverage Blitz (21 pts) — PR #996 + #1009 (320+ tests, 61/61 routers, DONE)
+- ✅ CAB-1448 [MEGA] API Router Test Coverage Blitz (21 pts) — 14 PRs (#996–#1074), 91% coverage, DONE
 - ✅ CAB-1451 [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974 (49 features, 0 @wip, DONE)
 - ✅ CAB-1452 [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008, #1060, #1069 (389+ tests, DONE)
 - ✅ CAB-402 Policy Drift Monitoring (5 pts) — PR #1059
@@ -74,7 +74,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
 - C9 final: 801/830 pts (96.5%), 60 issues. Only human tasks remain
-- Test suite: 5572 tests, 90% coverage (control-plane-api)
+- Test suite: 5600+ tests, 91% coverage (control-plane-api)
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

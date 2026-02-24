@@ -1,0 +1,36 @@
+{{- if and .Values.controlPlaneApi.autoscaling .Values.controlPlaneApi.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stoa-control-plane-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-control-plane-api
+    app.kubernetes.io/component: api
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: stoa-control-plane-api
+  minReplicas: {{ .Values.controlPlaneApi.autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ .Values.controlPlaneApi.autoscaling.maxReplicas | default 5 }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: {{ .Values.controlPlaneApi.autoscaling.scaleDownStabilizationSeconds | default 300 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.controlPlaneApi.autoscaling.targetCPUUtilizationPercentage | default 70 }}
+    {{- if .Values.controlPlaneApi.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.controlPlaneApi.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}

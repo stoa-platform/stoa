@@ -98,7 +98,7 @@ describe('SubscriptionCard', () => {
     };
     renderCard({ subscription: sub });
     expect(screen.getByText('150')).toBeInTheDocument();
-    expect(screen.getByText('/ 1,000 limit')).toBeInTheDocument();
+    expect(screen.getByText(/\/\s*1[\s\u202f,.]?000 limit/)).toBeInTheDocument();
   });
 
   it('should show application link when present', () => {

@@ -1,9 +1,16 @@
-# Argo CD Notifications Configuration (CAB-654)
+# Argo CD Notifications Configuration (CAB-654, CAB-402)
 #
-# Configures notifications for platform components to enable
-# real-time status updates in the Console dashboard.
+# Configures notifications for platform components to enable:
+#   - Real-time status updates in the Console dashboard (CAB-654)
+#   - Slack drift alerts for GitOps sync status monitoring (CAB-402)
 #
 # Apply with: kubectl apply -f notifications-config.yaml -n argocd
+#
+# Slack setup:
+#   Add SLACK_TOKEN to argocd-notifications-secret:
+#     kubectl create secret generic argocd-notifications-secret \
+#       --from-literal=slack-token=<BOT_TOKEN> \
+#       -n argocd --dry-run=client -o yaml | kubectl apply -f -
 #
 apiVersion: v1
 kind: ConfigMap
@@ -15,6 +22,10 @@ metadata:
     app.kubernetes.io/part-of: stoa-platform
     app.kubernetes.io/component: notifications
 data:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Services
+  # ─────────────────────────────────────────────────────────────────────────────
+
   # Webhook service for Control-Plane API
   service.webhook.control-plane: |
     url: https://api.gostoa.dev/v1/webhooks/argocd
@@ -24,7 +35,17 @@ data:
       - name: X-ArgoCD-Notification
         value: "true"
 
+  # Slack service for drift alerts (CAB-402)
+  # Requires slack-token in argocd-notifications-secret
+  service.slack: |
+    token: $slack-token
+    username: ArgoCD
+    icon: "https://argo-cd.readthedocs.io/en/stable/assets/logo.png"
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Notification templates
+  # ─────────────────────────────────────────────────────────────────────────────
+
   template.app-sync-status: |
     webhook:
       control-plane:
@@ -87,6 +108,88 @@ data:
             "timestamp": "{{.app.status.reconciledAt}}"
           }
 
+  # Slack template: app drifted (OutOfSync) — CAB-402 drift alert
+  template.app-drift-detected: |
+    slack:
+      attachments: |
+        [{
+          "color": "#f2c744",
+          "title": ":warning: GitOps Drift Detected — {{.app.metadata.name}}",
+          "title_link": "https://argocd.gostoa.dev/applications/{{.app.metadata.name}}",
+          "fields": [
+            {
+              "title": "Application",
+              "value": "{{.app.metadata.name}}",
+              "short": true
+            },
+            {
+              "title": "Project",
+              "value": "{{.app.spec.project}}",
+              "short": true
+            },
+            {
+              "title": "Sync Status",
+              "value": "{{.app.status.sync.status}}",
+              "short": true
+            },
+            {
+              "title": "Health",
+              "value": "{{.app.status.health.status}}",
+              "short": true
+            },
+            {
+              "title": "Revision",
+              "value": "{{.app.status.sync.revision | truncate 12}}",
+              "short": true
+            },
+            {
+              "title": "Message",
+              "value": "{{.app.status.operationState.message | default \"—\"}}",
+              "short": false
+            }
+          ],
+          "footer": "ArgoCD | <https://grafana.gostoa.dev/d/argocd-drift|Drift Dashboard> | <https://docs.gostoa.dev/runbooks/argocd-policy-drift|Runbook>",
+          "ts": {{now | unixEpoch}}
+        }]
+
+  # Slack template: drift resolved (back to Synced) — CAB-402
+  template.app-drift-resolved: |
+    slack:
+      attachments: |
+        [{
+          "color": "#18be52",
+          "title": ":white_check_mark: GitOps Drift Resolved — {{.app.metadata.name}}",
+          "title_link": "https://argocd.gostoa.dev/applications/{{.app.metadata.name}}",
+          "fields": [
+            {
+              "title": "Application",
+              "value": "{{.app.metadata.name}}",
+              "short": true
+            },
+            {
+              "title": "Sync Status",
+              "value": "{{.app.status.sync.status}}",
+              "short": true
+            },
+            {
+              "title": "Health",
+              "value": "{{.app.status.health.status}}",
+              "short": true
+            },
+            {
+              "title": "Revision",
+              "value": "{{.app.status.sync.revision | truncate 12}}",
+              "short": true
+            }
+          ],
+          "footer": "ArgoCD | <https://grafana.gostoa.dev/d/argocd-drift|Drift Dashboard>",
+          "ts": {{now | unixEpoch}}
+        }]
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Notification triggers
+  # ─────────────────────────────────────────────────────────────────────────────
+
   # Notification triggers
   trigger.on-sync-status-unknown: |
     - when: app.status.sync.status == 'Unknown'
@@ -108,15 +211,44 @@ data:
     - when: app.status.health.status == 'Degraded'
       send: [app-health-degraded]
 
+  # Trigger: drift detected — app transitioned to OutOfSync (CAB-402)
+  # Oncall channel receives alert; resolves automatically on re-sync
+  trigger.on-sync-out-of-sync: |
+    - when: app.status.sync.status == 'OutOfSync'
+      send: [app-drift-detected]
+      oncePer: app.status.sync.revision
+
+  # Trigger: drift resolved — app returned to Synced after being OutOfSync (CAB-402)
+  trigger.on-drift-resolved: |
+    - when: >-
+        app.status.sync.status == 'Synced' and
+        app.status.operationState != nil and
+        app.status.operationState.phase == 'Succeeded'
+      send: [app-drift-resolved]
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Default subscriptions
+  # ─────────────────────────────────────────────────────────────────────────────
+
   # Default subscriptions for platform components
   # Subscribe these apps by adding annotation:
   # notifications.argoproj.io/subscribe.on-sync-succeeded.control-plane: ""
+  #
+  # Drift alerts (CAB-402) — sent to #ops-alerts Slack channel
+  # Enable by subscribing: notifications.argoproj.io/subscribe.on-sync-out-of-sync.slack: ops-alerts
   subscriptions: |
     - recipients:
         - control-plane
       triggers:
         - on-sync-succeeded
         - on-sync-failed
+        - on-health-degraded
+      selector: app.kubernetes.io/part-of=stoa-platform
+    - recipients:
+        - slack:ops-alerts
+      triggers:
+        - on-sync-out-of-sync
+        - on-drift-resolved
         - on-health-degraded
       selector: app.kubernetes.io/part-of=stoa-platform
 ---
@@ -134,3 +266,11 @@ type: Opaque
 stringData:
   # Add webhook authentication token if needed
   # webhook-token: "your-webhook-token"
+  #
+  # Slack Bot Token for drift notifications (CAB-402)
+  # Bot must have: channels:read, chat:write, chat:write.public scopes
+  # Store via: infisical secrets set ARGOCD_SLACK_TOKEN=<token> --env=prod --path=/argocd
+  # Then: kubectl create secret generic argocd-notifications-secret \
+  #         --from-literal=slack-token=<BOT_TOKEN> \
+  #         -n argocd --dry-run=client -o yaml | kubectl apply -f -
+  # slack-token: "<set via infisical>"

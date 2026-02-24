@@ -1,0 +1,103 @@
+# ArgoCD ServiceMonitor — Prometheus auto-discovery (CAB-402)
+#
+# Enables Prometheus to scrape ArgoCD application controller and server metrics.
+# ArgoCD exposes metrics on two ports:
+#   - port 8082: application controller metrics (argocd_app_info, argocd_app_sync_total, etc.)
+#   - port 8083: ArgoCD server metrics (requests, gRPC stats)
+#
+# Prerequisites:
+#   ArgoCD must have metrics enabled. With argocd-helm chart, set:
+#     server.metrics.enabled: true
+#     applicationSet.metrics.enabled: true
+#   or with argocd-install.yaml, the default metrics ports are 8082/8083.
+#
+# Usage:
+#   kubectl apply -f k8s/argocd/argocd-servicemonitor.yaml
+#
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: argocd-app-controller
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-app-controller
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: gitops-monitoring
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-application-controller
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      metricRelabelings:
+        - targetLabel: cluster
+          replacement: stoa-prod
+        - targetLabel: component
+          replacement: argocd-app-controller
+  namespaceSelector:
+    matchNames:
+      - argocd
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: argocd-server
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-server
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: gitops-monitoring
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      metricRelabelings:
+        - targetLabel: cluster
+          replacement: stoa-prod
+        - targetLabel: component
+          replacement: argocd-server
+  namespaceSelector:
+    matchNames:
+      - argocd
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-repo-server
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: gitops-monitoring
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-repo-server
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      metricRelabelings:
+        - targetLabel: cluster
+          replacement: stoa-prod
+        - targetLabel: component
+          replacement: argocd-repo-server
+  namespaceSelector:
+    matchNames:
+      - argocd

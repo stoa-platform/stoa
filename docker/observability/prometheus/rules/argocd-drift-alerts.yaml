@@ -1,0 +1,168 @@
+# ArgoCD Policy Drift Alert Rules (CAB-402)
+#
+# Monitors GitOps sync status to detect policy drift:
+# when the cluster state diverges from the desired state in Git.
+#
+# KPI: Target drift = 0% (all apps Synced at all times)
+# SLO: No app OutOfSync for more than 5 minutes
+#
+# Key ArgoCD metrics:
+#   argocd_app_info{sync_status, health_status, name, namespace, project}
+#     - sync_status: Synced | OutOfSync | Unknown
+#     - health_status: Healthy | Progressing | Degraded | Suspended | Missing | Unknown
+#   argocd_app_sync_total{name, namespace, project, dest_namespace, phase}
+#     - phase: Succeeded | Failed | Error
+#
+# Usage:
+#   kubectl apply -f docker/observability/prometheus/rules/argocd-drift-alerts.yaml -n stoa-system
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-drift-alerts
+  namespace: stoa-system
+  labels:
+    app: stoa-platform
+    prometheus: stoa
+    role: alerting-rules
+spec:
+  groups:
+    # ======================================================================
+    # Recording Rules — pre-computed GitOps SLO metrics
+    # ======================================================================
+    - name: argocd-drift-recording
+      interval: 1m
+      rules:
+        # Drift ratio: fraction of apps that are OutOfSync
+        # 0.0 = all Synced (perfect), 1.0 = all OutOfSync
+        - record: gitops:drift_ratio:gauge
+          expr: |
+            (
+              count(argocd_app_info{sync_status="OutOfSync"}) or vector(0)
+            )
+            /
+            clamp_min(count(argocd_app_info), 1)
+
+        # Sync success rate over 1h (rolling)
+        - record: gitops:sync_success_rate:1h
+          expr: |
+            sum(increase(argocd_app_sync_total{phase="Succeeded"}[1h]))
+            / clamp_min(
+              sum(increase(argocd_app_sync_total[1h])),
+              1
+            )
+
+        # Number of apps currently OutOfSync
+        - record: gitops:apps_out_of_sync:count
+          expr: |
+            count(argocd_app_info{sync_status="OutOfSync"}) or vector(0)
+
+        # Number of apps currently Degraded
+        - record: gitops:apps_degraded:count
+          expr: |
+            count(argocd_app_info{health_status="Degraded"}) or vector(0)
+
+    # ======================================================================
+    # Alert Rules — actionable GitOps drift conditions
+    # ======================================================================
+    - name: argocd-drift-alerts
+      rules:
+        # ── Primary SLO alert ─────────────────────────────────────────────
+        # Fires when any app is OutOfSync for more than 5 minutes.
+        # This is the core KPI alert for drift monitoring.
+        - alert: ArgoCDAppOutOfSync
+          expr: |
+            argocd_app_info{sync_status="OutOfSync"} == 1
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            component: gitops
+          annotations:
+            summary: "ArgoCD app {{ $labels.name }} is OutOfSync for >5min"
+            description: >
+              Application {{ $labels.name }} (project: {{ $labels.project }},
+              namespace: {{ $labels.dest_namespace }}) has been OutOfSync for
+              more than 5 minutes. The cluster state has drifted from the
+              desired state in Git. Review and sync the application in ArgoCD.
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-policy-drift"
+            dashboard_url: "https://grafana.gostoa.dev/d/argocd-drift"
+
+        # ── Cluster-wide drift alert ───────────────────────────────────────
+        # Fires when 2+ apps are simultaneously OutOfSync (systemic drift).
+        - alert: ArgoCDMultipleAppsDrifted
+          expr: |
+            gitops:apps_out_of_sync:count >= 2
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+            component: gitops
+          annotations:
+            summary: "{{ $value | humanize }} ArgoCD apps OutOfSync simultaneously"
+            description: >
+              {{ $value | humanize }} applications are currently OutOfSync.
+              This indicates a potential systemic drift event (Git push not
+              reconciled, network issue, or cluster disruption). Check ArgoCD
+              UI and reconcile all affected applications.
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-policy-drift"
+            dashboard_url: "https://grafana.gostoa.dev/d/argocd-drift"
+
+        # ── Health degradation alert ───────────────────────────────────────
+        - alert: ArgoCDAppDegraded
+          expr: |
+            argocd_app_info{health_status="Degraded"} == 1
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            component: gitops
+          annotations:
+            summary: "ArgoCD app {{ $labels.name }} is Degraded"
+            description: >
+              Application {{ $labels.name }} (project: {{ $labels.project }})
+              health status is Degraded. This may indicate pods CrashLooping,
+              resource quota exhausted, or misconfiguration. Check pod logs
+              and events in the {{ $labels.dest_namespace }} namespace.
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-policy-drift"
+            dashboard_url: "https://grafana.gostoa.dev/d/argocd-drift"
+
+        # ── Sync failure rate alert ────────────────────────────────────────
+        - alert: ArgoCDSyncFailureRateHigh
+          expr: |
+            (
+              sum(increase(argocd_app_sync_total{phase="Failed"}[1h]))
+              / clamp_min(sum(increase(argocd_app_sync_total[1h])), 1)
+            ) > 0.2
+          for: 30m
+          labels:
+            severity: warning
+            team: platform
+            component: gitops
+          annotations:
+            summary: "ArgoCD sync failure rate >20% over last hour"
+            description: >
+              ArgoCD sync failure rate is {{ $value | humanizePercentage }}
+              over the last hour (threshold: 20%). Check for manifest errors,
+              RBAC issues, or cluster resource constraints preventing sync.
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-policy-drift"
+            dashboard_url: "https://grafana.gostoa.dev/d/argocd-drift"
+
+        # ── Reconciliation stall alert ─────────────────────────────────────
+        # Fires when ArgoCD metrics stop being scraped (controller down or metrics unreachable)
+        - alert: ArgoCDMetricsAbsent
+          expr: |
+            absent(argocd_app_info)
+          for: 10m
+          labels:
+            severity: critical
+            team: platform
+            component: gitops
+          annotations:
+            summary: "ArgoCD app metrics absent for >10min"
+            description: >
+              The argocd_app_info metric has been absent for more than 10
+              minutes. This means either ArgoCD application controller is
+              down or Prometheus cannot scrape it. Drift cannot be detected
+              while metrics are absent.
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-policy-drift"

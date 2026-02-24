@@ -1,0 +1,14 @@
+{{- if .Values.staging.enabled }}
+{{- range .Values.staging.stages }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $.Release.Namespace }}-{{ . }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/stage: {{ . | quote }}
+    {{- include "stoa-platform.labels" $ | nindent 4 }}
+{{- end }}
+{{- end }}

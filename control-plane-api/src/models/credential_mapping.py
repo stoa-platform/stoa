@@ -8,8 +8,9 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Enum as SQLEnum, Index, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum as SQLEnum, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database import Base
 
@@ -32,31 +33,31 @@ class CredentialMapping(Base):
     __tablename__ = "credential_mappings"
 
     # Primary key
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Foreign references (not FK constraints — soft references for flexibility)
-    consumer_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    api_id = Column(String(255), nullable=False, index=True)
-    tenant_id = Column(String(255), nullable=False, index=True)
+    consumer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    api_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 
     # Credential config
-    auth_type = Column(  # type: ignore[var-annotated]
+    auth_type: Mapped[CredentialAuthType] = mapped_column(
         SQLEnum(CredentialAuthType, values_callable=lambda x: [e.value for e in x], name="credential_auth_type"),
         nullable=False,
     )
-    header_name = Column(String(255), nullable=False)
-    encrypted_value = Column(Text, nullable=False)
+    header_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    encrypted_value: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Metadata
-    description = Column(String(500), nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
 
     # Timestamps
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Audit
-    created_by = Column(String(255), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("consumer_id", "api_id", name="uq_credential_mappings_consumer_api"),

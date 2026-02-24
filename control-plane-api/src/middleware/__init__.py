@@ -2,6 +2,7 @@
 
 from .http_logging import HTTPLoggingMiddleware
 from .metrics import MetricsMiddleware
+from .pii_masking import PIIMaskingMiddleware
 from .rate_limit import (
     limit_anonymous,
     limit_authenticated,
@@ -14,6 +15,7 @@ from .rate_limit import (
 __all__ = [
     "HTTPLoggingMiddleware",
     "MetricsMiddleware",
+    "PIIMaskingMiddleware",
     "limit_anonymous",
     "limit_authenticated",
     "limit_subscription",

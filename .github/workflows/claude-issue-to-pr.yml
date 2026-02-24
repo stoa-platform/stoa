@@ -536,30 +536,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Guard: verify both Stage 1 and Stage 2 passed
+      # Guard: verify both Stage 1 and Stage 2 passed (with polling for race condition)
       - name: Verify Plan validation
         id: verify-council
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE_NUM="${{ github.event.issue.number }}"
-          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          MAX_ATTEMPTS=10
+          POLL_INTERVAL=30
 
-          if echo "$LABELS" | grep -q "plan-validated"; then
-            echo "Stage 2 plan validation confirmed"
-            echo "validated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::No plan-validated label found on issue #$ISSUE_NUM"
-            echo "Checking for Plan Score comment as fallback..."
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+
+            if echo "$LABELS" | grep -q "plan-validated"; then
+              echo "Stage 2 plan validation confirmed (attempt ${attempt}/${MAX_ATTEMPTS})"
+              echo "validated=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            # Fallback: check for Plan Score comment
             PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Plan Score"))] | length')
             if [ "$PLAN_COMMENT" -gt 0 ]; then
-              echo "Plan validation comment found"
+              echo "Plan validation comment found (attempt ${attempt}/${MAX_ATTEMPTS})"
               echo "validated=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "::error::No plan validation found."
-              echo "validated=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
-          fi
+
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              echo "::notice::plan-validated not found yet (attempt ${attempt}/${MAX_ATTEMPTS}). Waiting ${POLL_INTERVAL}s for plan-validate job..."
+              sleep "$POLL_INTERVAL"
+            fi
+          done
+
+          echo "::error::No plan validation found after ${MAX_ATTEMPTS} attempts (~$((MAX_ATTEMPTS * POLL_INTERVAL))s)."
+          echo "validated=false" >> "$GITHUB_OUTPUT"
 
       - name: Abort if no Plan validation
         if: steps.verify-council.outputs.validated != 'true'
@@ -575,11 +586,23 @@ jobs:
         if: steps.verify-council.outputs.validated == 'true'
         id: route
         env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           source scripts/ai-ops/model-router.sh
+          ISSUE_NUM="${{ github.event.issue.number }}"
+
+          # Read issue body (Stage 1 Council report or claude-implement issue)
+          ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body' 2>/dev/null || echo "")
           ESTIMATE=$(extract_estimate "$ISSUE_BODY")
           MODE=$(extract_mode "$ISSUE_BODY")
+
+          # If estimate not found in body, search comments (Stage 2 plan has LOC estimate)
+          if [ "${ESTIMATE:-0}" = "0" ]; then
+            COMMENTS=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
+            ESTIMATE=$(extract_estimate "$COMMENTS")
+            echo "Estimate from body: 0 — retried from comments: ${ESTIMATE}pt"
+          fi
+
           ROUTE=$(route_model "$ESTIMATE" "$MODE")
           MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
           TURNS=$(echo "$ROUTE" | cut -d'|' -f2)

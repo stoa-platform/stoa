@@ -71,7 +71,7 @@ async def trigger_catalog_sync(
 
         # Launch sync in background
         async def run_sync():
-            async with get_async_db() as session:
+            async for session in get_async_db():
                 service = CatalogSyncService(session, git_service)
                 await service.sync_all()
 
@@ -108,9 +108,7 @@ async def trigger_mcp_servers_sync(
     try:
 
         async def run_sync():
-            from ..database import get_db as get_async_db_gen
-
-            async for session in get_async_db_gen():
+            async for session in get_async_db():
                 service = CatalogSyncService(session, git_service)
                 await service.sync_mcp_servers(tenant_id)
 
@@ -148,7 +146,7 @@ async def trigger_tenant_sync(
     try:
 
         async def run_sync():
-            async with get_async_db() as session:
+            async for session in get_async_db():
                 service = CatalogSyncService(session, git_service)
                 await service.sync_tenant(tenant_id)
 

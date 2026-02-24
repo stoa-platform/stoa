@@ -1,0 +1,89 @@
+{
+  "_meta": {
+    "description": "STOA Platform shared technical glossary — canonical translations for domain terms across all UIs",
+    "usage": "Referenced by scripts/check-i18n.sh to validate consistency across portal and console locale files",
+    "languages": ["en", "fr"]
+  },
+  "terms": {
+    "UAC": {
+      "en": "Universal API Contract",
+      "fr": "Contrat API Universel"
+    },
+    "MCP": {
+      "en": "Model Context Protocol",
+      "fr": "Model Context Protocol"
+    },
+    "tenant": {
+      "en": "Tenant",
+      "fr": "Locataire"
+    },
+    "gateway": {
+      "en": "Gateway",
+      "fr": "Passerelle"
+    },
+    "subscription": {
+      "en": "Subscription",
+      "fr": "Abonnement"
+    },
+    "api_key": {
+      "en": "API Key",
+      "fr": "Cle API"
+    },
+    "deployment": {
+      "en": "Deployment",
+      "fr": "Deploiement"
+    },
+    "catalog": {
+      "en": "Catalog",
+      "fr": "Catalogue"
+    },
+    "onboarding": {
+      "en": "Onboarding",
+      "fr": "Integration"
+    },
+    "rate_limit": {
+      "en": "Rate Limit",
+      "fr": "Limite de debit"
+    },
+    "consumer": {
+      "en": "Consumer",
+      "fr": "Consommateur"
+    },
+    "provider": {
+      "en": "Provider",
+      "fr": "Fournisseur"
+    },
+    "credential": {
+      "en": "Credential",
+      "fr": "Identifiant"
+    },
+    "workspace": {
+      "en": "Workspace",
+      "fr": "Espace de travail"
+    },
+    "sandbox": {
+      "en": "Sandbox",
+      "fr": "Bac a sable"
+    },
+    "promotion": {
+      "en": "Promotion",
+      "fr": "Promotion"
+    },
+    "dashboard": {
+      "en": "Dashboard",
+      "fr": "Tableau de bord"
+    },
+    "endpoint": {
+      "en": "Endpoint",
+      "fr": "Point de terminaison"
+    },
+    "middleware": {
+      "en": "Middleware",
+      "fr": "Intergiciel"
+    },
+    "policy": {
+      "en": "Policy",
+      "fr": "Politique"
+    }
+  }
+}

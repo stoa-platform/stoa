@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 POLICY_REPO = "src.routers.gateway_policies.GatewayPolicyRepository"
 BINDING_REPO = "src.routers.gateway_policies.GatewayPolicyBindingRepository"
+KAFKA_SVC = "src.routers.gateway_policies.kafka_service"
 BASE = "/v1/admin/policies"
 
 POLICY_ID = uuid4()
@@ -71,8 +72,14 @@ class TestCreatePolicy:
         policy = _mock_policy()
         mock_repo = MagicMock()
         mock_repo.create = AsyncMock(return_value=policy)
+        mock_kafka = MagicMock()
+        mock_kafka.emit_policy_created = AsyncMock(return_value="evt-1")
 
-        with patch(POLICY_REPO, return_value=mock_repo), TestClient(app_with_cpi_admin) as client:
+        with (
+            patch(POLICY_REPO, return_value=mock_repo),
+            patch(KAFKA_SVC, mock_kafka),
+            TestClient(app_with_cpi_admin) as client,
+        ):
             resp = client.post(
                 BASE,
                 json={
@@ -89,6 +96,7 @@ class TestCreatePolicy:
 
         assert resp.status_code == 201
         assert resp.json()["name"] == "rate-limit-gold"
+        mock_kafka.emit_policy_created.assert_called_once()
 
     def test_create_403_viewer(self, app_with_no_tenant_user, mock_db_session):
         with TestClient(app_with_no_tenant_user) as client:
@@ -153,8 +161,14 @@ class TestUpdatePolicy:
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=policy)
         mock_repo.update = AsyncMock(return_value=policy)
+        mock_kafka = MagicMock()
+        mock_kafka.emit_policy_updated = AsyncMock(return_value="evt-2")
 
-        with patch(POLICY_REPO, return_value=mock_repo), TestClient(app_with_cpi_admin) as client:
+        with (
+            patch(POLICY_REPO, return_value=mock_repo),
+            patch(KAFKA_SVC, mock_kafka),
+            TestClient(app_with_cpi_admin) as client,
+        ):
             resp = client.put(
                 f"{BASE}/{POLICY_ID}",
                 json={
@@ -167,6 +181,7 @@ class TestUpdatePolicy:
             )
 
         assert resp.status_code == 200
+        mock_kafka.emit_policy_updated.assert_called_once()
 
     def test_update_404(self, app_with_cpi_admin, mock_db_session):
         mock_repo = MagicMock()
@@ -186,11 +201,18 @@ class TestDeletePolicy:
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=policy)
         mock_repo.delete = AsyncMock()
+        mock_kafka = MagicMock()
+        mock_kafka.emit_policy_deleted = AsyncMock(return_value="evt-3")
 
-        with patch(POLICY_REPO, return_value=mock_repo), TestClient(app_with_cpi_admin) as client:
+        with (
+            patch(POLICY_REPO, return_value=mock_repo),
+            patch(KAFKA_SVC, mock_kafka),
+            TestClient(app_with_cpi_admin) as client,
+        ):
             resp = client.delete(f"{BASE}/{POLICY_ID}")
 
         assert resp.status_code == 204
+        mock_kafka.emit_policy_deleted.assert_called_once()
 
     def test_delete_404(self, app_with_cpi_admin, mock_db_session):
         mock_repo = MagicMock()
@@ -219,10 +241,13 @@ class TestCreateBinding:
         mock_policy_repo.get_by_id = AsyncMock(return_value=policy)
         mock_binding_repo = MagicMock()
         mock_binding_repo.create = AsyncMock(return_value=binding)
+        mock_kafka = MagicMock()
+        mock_kafka.emit_policy_binding_created = AsyncMock(return_value="evt-4")
 
         with (
             patch(POLICY_REPO, return_value=mock_policy_repo),
             patch(BINDING_REPO, return_value=mock_binding_repo),
+            patch(KAFKA_SVC, mock_kafka),
             TestClient(app_with_cpi_admin) as client,
         ):
             resp = client.post(
@@ -237,6 +262,7 @@ class TestCreateBinding:
             )
 
         assert resp.status_code == 201
+        mock_kafka.emit_policy_binding_created.assert_called_once()
 
     def test_create_binding_policy_not_found(self, app_with_cpi_admin, mock_db_session):
         mock_policy_repo = MagicMock()
@@ -262,11 +288,18 @@ class TestDeleteBinding:
         mock_binding_repo = MagicMock()
         mock_binding_repo.get_by_id = AsyncMock(return_value=binding)
         mock_binding_repo.delete = AsyncMock()
+        mock_kafka = MagicMock()
+        mock_kafka.emit_policy_binding_deleted = AsyncMock(return_value="evt-5")
 
-        with patch(BINDING_REPO, return_value=mock_binding_repo), TestClient(app_with_cpi_admin) as client:
+        with (
+            patch(BINDING_REPO, return_value=mock_binding_repo),
+            patch(KAFKA_SVC, mock_kafka),
+            TestClient(app_with_cpi_admin) as client,
+        ):
             resp = client.delete(f"{BASE}/bindings/{BINDING_ID}")
 
         assert resp.status_code == 204
+        mock_kafka.emit_policy_binding_deleted.assert_called_once()
 
     def test_delete_binding_404(self, app_with_cpi_admin, mock_db_session):
         mock_binding_repo = MagicMock()
@@ -306,3 +339,49 @@ class TestListBindings:
             resp = client.get(f"{BASE}/{uuid4()}/bindings")
 
         assert resp.status_code == 404
+
+
+class TestKafkaResilience:
+    """Kafka failures must not break policy CRUD responses."""
+
+    def test_create_succeeds_when_kafka_fails(self, app_with_cpi_admin, mock_db_session):
+        policy = _mock_policy()
+        mock_repo = MagicMock()
+        mock_repo.create = AsyncMock(return_value=policy)
+        mock_kafka = MagicMock()
+        mock_kafka.emit_policy_created = AsyncMock(side_effect=RuntimeError("Kafka down"))
+
+        with (
+            patch(POLICY_REPO, return_value=mock_repo),
+            patch(KAFKA_SVC, mock_kafka),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.post(
+                BASE,
+                json={
+                    "name": "rate-limit-gold",
+                    "policy_type": "rate_limit",
+                    "tenant_id": "acme",
+                    "scope": "api",
+                    "config": {},
+                },
+            )
+
+        assert resp.status_code == 201
+
+    def test_delete_succeeds_when_kafka_fails(self, app_with_cpi_admin, mock_db_session):
+        policy = _mock_policy()
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=policy)
+        mock_repo.delete = AsyncMock()
+        mock_kafka = MagicMock()
+        mock_kafka.emit_policy_deleted = AsyncMock(side_effect=RuntimeError("Kafka down"))
+
+        with (
+            patch(POLICY_REPO, return_value=mock_repo),
+            patch(KAFKA_SVC, mock_kafka),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.delete(f"{BASE}/{POLICY_ID}")
+
+        assert resp.status_code == 204

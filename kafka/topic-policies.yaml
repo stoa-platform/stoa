@@ -190,3 +190,11 @@ topics:
     partitions: 3
     key: tenant_id
     description: Application error tracking and debugging events
+
+  # --- Policy propagation (CAB-1347) ---
+  stoa.policy.changes:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 6
+    key: tenant_id
+    description: Policy created/updated/deleted and binding changes for gateway enforcement

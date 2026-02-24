@@ -104,14 +104,16 @@ jobs:
           # Client-side filters:
           # 1. No "no-autopilot" or "strategy" label (strategy = human business tasks)
           # 2. Sub-tickets ALLOWED (they are the actual implementable work items)
-          # 3. Estimate <= 13 OR no estimate (null) — MEGAs >13 need manual decomposition
+          # 3. Estimate <= 8 OR no estimate (null) — complex tickets (>8pt) burn tokens without results
           # 4. Priority <= 3 OR null priority (null = not yet triaged, still eligible)
-          # Sort by priority (1=Urgent first, null=last) then cap at REMAINING
+          # 5. Exclude infra-heavy tickets (Helm, Terraform, Istio, etc.) — CI agent has no cluster access
+          # Sort: small estimates first (1-5pt), then unpointed, then 6-8pt
           echo "$RESPONSE" | jq -c "[
             .data.issues.nodes[]
             | select((.labels.nodes // []) | map(.name) | any(. == \"no-autopilot\" or . == \"strategy\") | not)
-            | select(.estimate == null or .estimate <= 13)
+            | select(.estimate == null or .estimate <= 8)
             | select(.priority == null or .priority <= 3)
+            | select(.title | test(\"[Hh]elm|[Tt]erraform|[Ii]stio|[Ff]lagger|[Cc]haos [Ee]ngine|[Cc]anary [Dd]eploy|[Kk]3s|[Cc]luster [Mm]igrat\") | not)
             | {
                 id: .id,
                 identifier: .identifier,
@@ -122,7 +124,7 @@ jobs:
                 labels: [(.labels.nodes // [])[].name],
                 parent: .parent.identifier
               }
-          ] | sort_by(.priority // 99) | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
+          ] | sort_by(if .estimate == null then 50 elif .estimate <= 5 then .estimate else (.estimate + 10) end) | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
 
           TICKET_COUNT=$(jq 'length' eligible-tickets.json)
           echo "Found ${TICKET_COUNT} eligible tickets (from ${RAW_COUNT} raw)"

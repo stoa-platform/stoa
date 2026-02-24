@@ -88,7 +88,7 @@ jobs:
       - name: Log token usage
         if: always() && steps.guard.outputs.skip != 'true'
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=5, Stage=council-validate"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-6, MaxTurns=5, Stage=council-validate"
 
       # Add council-validated label so plan-validate job can verify
       - name: Mark Council complete
@@ -405,7 +405,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=10, Stage=plan-validate"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-6, MaxTurns=10, Stage=plan-validate"
 
       - name: Mark Plan validated
         if: steps.plan-council.outcome == 'success' && steps.fast-path.outputs.skipped != 'true'
@@ -587,6 +587,7 @@ jobs:
         id: route
         env:
           GH_TOKEN: ${{ github.token }}
+          CLAUDE_DEFAULT_MODEL: ${{ vars.CLAUDE_DEFAULT_MODEL }}
         run: |
           source scripts/ai-ops/model-router.sh
           ISSUE_NUM="${{ github.event.issue.number }}"
@@ -654,7 +655,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-5' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-6' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
 
       - name: Detect Partial Success
         id: detect-partial
@@ -722,7 +723,7 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome || 'skipped' }}
-          ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-5' }}
+          ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-6' }}
           ROUTE_TURNS: ${{ steps.route.outputs.turns || '60' }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
@@ -756,7 +757,7 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome || 'skipped' }}
-          ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-5' }}
+          ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-6' }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)

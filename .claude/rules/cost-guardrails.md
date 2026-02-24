@@ -35,7 +35,8 @@ globs: ".claude/**"
 | **Council S1** (ticket pertinence) | `claude-sonnet-4-6` | Structured eval, 5 turns |
 | **Council S2** (plan validation) | `claude-sonnet-4-6` | Structured eval, 10 turns |
 | **Autopilot scan** (backlog scoring) | `claude-haiku-4-5-20251001` | Quick scoring, high volume |
-| **Implementation** (L1/L3 pipeline) | `claude-sonnet-4-6` | CI context is lighter (no 40K rules), Sonnet sufficient |
+| **Implementation ≤5pts** (L1/L3 pipeline) | `claude-sonnet-4-6` | Small tickets, Sonnet sufficient |
+| **Implementation >5pts** (L1/L3 pipeline) | `claude-opus-4-6` | Complex tickets hit max_turns with Sonnet (100% failure on 6+ pts) |
 | **Auto-review** (PR review) | `claude-sonnet-4-6` | Read-only, structured output |
 
 **Rules**: Max 3-4 subagents active. Prefer haiku for `Explore`. CI implementation stays Sonnet (lighter context = no looping problem).

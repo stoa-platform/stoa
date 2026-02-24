@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-24 (C9 830pts scope, 801pts done (96.5%), 60 issues) — all code tasks complete
+> Derniere MAJ: 2026-02-24 (C9 830pts scope, 806pts done (97.1%), 61 issues) — all code tasks complete
 
 ## ✅ DONE
 
@@ -12,6 +12,7 @@
 - ✅ CAB-1448 [MEGA] API Router Test Coverage Blitz (21 pts) — 14 PRs (#996–#1074), 91% coverage, DONE
 - ✅ CAB-1451 [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974 (49 features, 0 @wip, DONE)
 - ✅ CAB-1452 [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008, #1060, #1069 (389+ tests, DONE)
+- ✅ CAB-1457 [api] Billing models + migration + service (5 pts) — PR #1000
 - ✅ CAB-402 Policy Drift Monitoring (5 pts) — PR #1059
 - ✅ CAB-1460 Scheduled Blog Publishing Pipeline (5 pts) — PR #1053
 - ✅ CAB-1326 [MEGA] Community Launch Prep (13 pts) — PRs #1048-#1052

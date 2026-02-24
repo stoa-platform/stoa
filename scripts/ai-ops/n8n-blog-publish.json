@@ -5,7 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "blog-publish",
-        "responseMode": "lastNode",
+        "responseMode": "responseNode",
         "options": {}
       },
       "id": "blog-webhook",

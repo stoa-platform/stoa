@@ -1,0 +1,118 @@
+name: Landing API CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'landing-api/**'
+      - '.github/workflows/landing-api-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'landing-api/**'
+      - '.github/workflows/landing-api-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  ci:
+    name: Lint and Test (landing-api)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: stoa_test
+          POSTGRES_PASSWORD: stoa_test
+          POSTGRES_DB: stoa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.12'
+          working-directory: landing-api
+
+      - name: Run linter (ruff)
+        working-directory: landing-api
+        run: |
+          pip install ruff
+          ruff check src/
+
+      - name: Run type checker (mypy)
+        working-directory: landing-api
+        continue-on-error: true
+        run: |
+          pip install mypy
+          mypy src/ --ignore-missing-imports
+
+      - name: Run tests
+        working-directory: landing-api
+        env:
+          STOA_DB_USER: stoa_test
+          STOA_DB_PASSWORD: stoa_test
+          STOA_DB_NAME: stoa
+          STOA_DB_HOST: localhost
+          STOA_DB_PORT: '5432'
+        run: |
+          pip install pytest pytest-asyncio pytest-cov
+          pytest tests/ -v --tb=short \
+            --cov=src \
+            --cov-report=xml:coverage.xml \
+            --junitxml=test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: always()
+        with:
+          name: test-results-landing-api
+          path: |
+            landing-api/test-results.xml
+            landing-api/coverage.xml
+          retention-days: 30
+
+      - name: Test Report
+        uses: dorny/test-reporter@d61b558e8df85cb60d09ca3e5b09653b4477cea7 # v1
+        if: always()
+        with:
+          name: 'landing-api Tests'
+          path: 'landing-api/test-results.xml'
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## landing-api CI Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f "landing-api/test-results.xml" ]; then
+            python3 -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('landing-api/test-results.xml')
+          root = tree.getroot()
+          tests = int(root.get('tests', 0))
+          failures = int(root.get('failures', 0))
+          errors = int(root.get('errors', 0))
+          skipped = int(root.get('skipped', 0))
+          passed = tests - failures - errors - skipped
+          print(f'| Metric | Count |')
+          print(f'|--------|-------|')
+          print(f'| Total | {tests} |')
+          print(f'| Passed | {passed} |')
+          print(f'| Failed | {failures + errors} |')
+          print(f'| Skipped | {skipped} |')
+          " >> $GITHUB_STEP_SUMMARY
+          fi

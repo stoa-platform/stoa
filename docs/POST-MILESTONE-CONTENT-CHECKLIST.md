@@ -1,261 +1,181 @@
 # Post-Milestone Public Content Update Checklist
 
-> **Purpose**: Ensure STOA's public presence stays current and consistent after every significant milestone.
-> **Scope**: stoa-web (gostoa.dev), stoa-docs (docs.gostoa.dev), blog posts, social channels.
-> **Compliance authority**: [`.claude/rules/content-compliance.md`](../.claude/rules/content-compliance.md)
-> **Content rules**: [`.claude/rules/seo-content.md`](../.claude/rules/seo-content.md)
-> **Review agent**: `content-reviewer` subagent (`.claude/agents/content-reviewer.md`)
+> **Purpose**: Ensure consistent, compliant public content updates after every STOA milestone.
+> **Audience**: Platform team, content contributors, AI Factory agents.
+> **Compliance reference**: [content-compliance.md](../.claude/rules/content-compliance.md)
+> **Last Updated**: 2026-02-24
 
 ---
 
-## Triggers — When to Run This Checklist
+## When to Use This Checklist
 
-Run this checklist after any of the following events:
+Trigger this checklist after any of the following milestones:
 
-| Trigger | Examples | Priority |
-|---------|----------|----------|
-| **Release** | v1.x.0, major/minor version bump | P0 — same day |
-| **Major Feature** | New gateway mode, OAuth 2.1, MCP protocol support | P0 — within 48h |
-| **New Integration** | New adapter (Apigee, Azure APIM), new MCP client support | P1 — within 1 week |
-| **Performance Milestone** | Benchmark improvement >20%, latency record | P1 — within 1 week |
-| **Security Update** | CVE patch, new auth mechanism, audit certification | P0 — same day |
-| **Community Event** | KubeCon, API Days, launch week, hackathon | P1 — before/after event |
-| **Partnership / Logo** | New design partner, early adopter, integration partner | P1 — on announcement |
-
----
-
-## Section 1 — Landing Page (gostoa.dev)
-
-### 1.1 Hero & Positioning
-
-- [ ] **Tagline reflects latest capabilities?**
-  - Update if a new kill-feature launched (e.g., UAC, new gateway mode)
-  - Max 8 words, benefit-first (not feature-first)
-
-- [ ] **Feature highlights current?**
-  - "What's New" section or feature badges updated
-  - Remove deprecated/removed features
-
-- [ ] **CTA links work?**
-  - Quick start link → correct docs version
-  - "Try STOA" → functional console or Docker Compose link
-  - GitHub star count badge auto-refreshes (no manual update needed)
-
-### 1.2 Competitive Comparison Table
-
-- [ ] **Feature table rows are accurate?**
-  - Each row has "last verified: YYYY-MM" comment in source
-  - Claims older than 6 months must be re-verified before publish
-  - Run `content-reviewer` agent on any modified row
-
-- [ ] **No competitor pricing in table?**
-  - P0 violation: any `$`, pricing tier, or cost claim about competitors
-  - Use "Open Source (free)", "Enterprise (contact vendor)" — not specific prices
-
-- [ ] **Disclaimer present?**
-  ```
-  Feature comparisons are based on publicly available documentation as of [YYYY-MM].
-  Product capabilities change frequently. All trademarks belong to their respective owners.
-  See /legal/trademarks for details.
-  ```
-
-### 1.3 Architecture / Diagram
-
-- [ ] **Diagrams match current architecture?**
-  - Gateway modes diagram matches `ADR-024` (edge-mcp current, sidecar Q2, etc.)
-  - Component names match actual deployment (`stoa-gateway`, not `mcp-gateway`)
+| Trigger | Examples | Urgency |
+|---------|----------|---------|
+| **Release** | v1.x.0, minor version bump, hotfix | Within 48h |
+| **Major feature** | New gateway mode, UAC launch, new adapter | Within 1 week |
+| **Integration** | New partner gateway, new auth provider, new MCP capability | Within 1 week |
+| **Event / Conference** | KubeCon, APIdays, launch week, beta announcement | Day-of or day-after |
+| **Milestone reached** | Beta → GA, 100 stars, first enterprise customer (anonymized) | Within 48h |
+| **Architecture Decision** | New ADR published, major design change | Within 1 week |
 
 ---
 
-## Section 2 — Blog
+## Phase 1 — Pre-Update Checks
 
-### 2.1 Announcement Post
+Before writing any content:
 
-For every release or major feature, publish one of:
+- [ ] **Identify scope**: Which milestone was reached? What changed?
+- [ ] **Check existing content**: Search stoa-docs and stoa-web for pages that reference this feature/area — they may need updates
+- [ ] **Verify feature is actually live**: Don't document something not yet deployed
+- [ ] **No embargoed information**: Confirm no client names, partner agreements, or pricing will be mentioned
 
-- [ ] **Release announcement** (for version bumps): News type, ≥800 words
-  - Title format: "STOA Platform vX.Y — [Key Feature]"
-  - Includes: what changed, why it matters, migration notes (if any), quickstart
-  - Front-matter: `tags: [release, announcement]`, `unlisted: true` if pre-publishing
+---
 
-- [ ] **Feature deep-dive** (for major features): Tutorial type, ≥1500 words
-  - Title format: "How [Feature] Works in STOA vX.Y"
-  - Includes: architecture, code example, comparison to before
+## Phase 2 — Landing Page (stoa-web)
 
-### 2.2 Hub & Spoke Maintenance
+**Repo**: `stoa-platform/stoa-web` · **URL**: `gostoa.dev`
 
-After publishing an announcement, update the hub articles that reference this feature:
-
-- [ ] **Does this change affect a Hub article?**
-  - Check `seo-content.md` — Pillar 1 (API Gateway Migration), Pillar 2 (MCP & AI Agents), Pillar 3 (OSS API Management)
-  - If yes: update the hub's feature table or capabilities section
-
-- [ ] **Update internal links in existing blog posts?**
-  - Add cross-link from announcement to relevant spokes
-  - Add cross-link from spokes to announcement (if directly relevant)
-
-### 2.3 Compliance Pre-Check
-
-Before any blog post goes live, run `content-reviewer` agent:
-
-- [ ] **Competitor claims verified?**
-  - Source cited, "last verified: YYYY-MM" present
-  - No P0 violations (pricing, defamation, false claims)
-  - See `content-compliance.md` — P0/P1/P2 categories
-
-- [ ] **Compliance language correct?**
-  - "supports DORA compliance" not "is DORA-compliant"
-  - Regulatory disclaimer included if applicable
-
-- [ ] **Build passes?**
+- [ ] **Hero / tagline**: Does it still reflect the latest positioning?
+- [ ] **Feature highlights**: Add/update feature cards for the new capability
+- [ ] **Integration logos**: Add new partner gateway if applicable
+- [ ] **"Try STOA" CTA**: Verify the link points to the correct Quick Start or signup page
+- [ ] **llms.txt / llms-full.txt**: Add new feature summary line and URL so AI crawlers discover it
   ```bash
-  cd stoa-docs && npm run build 2>&1 | grep -E "broken|error"
+  # Files to update:
+  # stoa-web/public/llms.txt
+  # stoa-web/public/llms-full.txt
   ```
+- [ ] **JSON-LD structured data**: If a new page was added, verify `TechArticle` + `BreadcrumbList` schema
 
 ---
 
-## Section 3 — Documentation (docs.gostoa.dev)
+## Phase 3 — Blog Post (stoa-docs)
 
-### 3.1 Architecture & Concept Pages
+**Repo**: `stoa-platform/stoa-docs` · **URL**: `docs.gostoa.dev/blog`
 
-- [ ] **Concept pages updated?**
-  - `docs/concepts/architecture.md` — component diagram, gateway modes
-  - `docs/concepts/gateway.md` — current modes, capabilities
-  - `docs/concepts/mcp.md` — protocol version, supported clients
+Follow the [seo-content.md rules](../.claude/rules/seo-content.md) for all blog posts.
 
-- [ ] **ADR created for architectural decision?**
-  - If the milestone includes a design decision: create ADR in stoa-docs
-  - Next ADR number: check `stoa-docs/docs/architecture/adr/` for highest number
-  - Follow ADR template and link from implementation PR
-
-### 3.2 API Reference
-
-- [ ] **Swagger/OpenAPI spec updated?**
-  - If new endpoints added, removed, or signatures changed
-  - `docs/api/control-plane-api.md` and `docs/api/mcp-gateway-api.md`
-
-- [ ] **Changelog / Migration section added?**
-  - Breaking changes: add `docs/guides/migration/vX-to-vY.md`
-  - Backwards-compatible: add note in relevant guide
-
-### 3.3 Quick Start & Guides
-
-- [ ] **Quick start still works end-to-end?**
-  - Run through `docs/guides/quickstart` manually or via E2E smoke test
-  - Docker Compose image tag matches released version
-
-- [ ] **Guide screenshots / code blocks current?**
-  - Console UI screenshots show current version
-  - All `curl` examples use `${STOA_API_URL}` (not hardcoded `api.gostoa.dev`)
-  - See `docs-url-convention.md` for URL zone rules
+- [ ] **Announce the milestone**: Create a blog post of the appropriate type:
+  - Release → `News/Update` type (min 800 words)
+  - Major feature → `Tutorial` type (min 1500 words) with working code examples
+  - Migration guide → `Comparison` type (min 1200 words) with disclaimer
+- [ ] **Front-matter complete**: `slug`, `title`, `description`, `tags`, `keywords`, `authors`
+- [ ] **Scheduled post**: If post date is in the future, add `unlisted: true`
+- [ ] **Hub link**: Article links to its content pillar hub (see Hub & Spoke model in seo-content.md)
+- [ ] **Spoke update**: If the new article is a spoke, update the hub article to link back to it
+- [ ] **Internal links**: At least 3 internal links to existing blog posts or docs pages
+- [ ] **FAQ section**: Add `## FAQ` with 3–5 Q&A pairs at the end
+- [ ] **Answer-first format**: Article opens with a 2–3 sentence summary before the `<!-- truncate -->` tag
+- [ ] **Word count**: Run `wc -w <file>` to verify minimum
+- [ ] **Build passes**: `npm run build` in `stoa-docs` returns zero errors
 
 ---
 
-## Section 4 — SEO Metadata
+## Phase 4 — Technical Documentation (stoa-docs)
 
-### 4.1 Structured Data
+**Repo**: `stoa-platform/stoa-docs` · **Path**: `docs/`
 
-- [ ] **JSON-LD updated on docs homepage?**
-  - Version number in TechArticle schema
-  - Feature list in description field
-
-- [ ] **Sitemap regenerates on build?**
-  - Confirmed by running `npm run build` (Docusaurus auto-generates)
-  - Submit updated sitemap to Google Search Console after deploy
-
-### 4.2 llms.txt
-
-After publishing a batch of blog posts or a major release:
-
-- [ ] **`stoa-web/public/llms.txt` updated?**
-  - Add new article titles + URLs
-  - Add release announcement summary
-
-- [ ] **`stoa-web/public/llms-full.txt` updated?**
-  - Add full article summaries (1–3 sentences per new article)
-
-### 4.3 Keywords & Meta Descriptions
-
-- [ ] **New feature keywords added to PLAN-SEO.md subject bank?**
-  - If the feature has dedicated search intent (e.g., "MCP gateway tutorial"), add as topic
-  - Update `stoa-docs/PLAN-SEO.md` with keyword + target article plan
+- [ ] **Concept page**: Does the feature have or need a concept explainer in `docs/concepts/`?
+- [ ] **Guide / Tutorial**: Does the feature need an operational how-to in `docs/guides/`?
+- [ ] **ADR**: Was an Architecture Decision Record created? Verify it is published in `docs/architecture/adr/` with the next sequential ADR number
+  - Next available ADR number: check `stoa-docs/docs/architecture/adr/` before creating
+- [ ] **API Reference**: Did any API endpoint change? Update `docs/api/`
+- [ ] **CRD Reference**: Did any CRD change? Update `docs/reference/crds/`
+- [ ] **Migration guide**: Does the change affect users upgrading from a previous version? Add or update `docs/guides/migration/`
+- [ ] **Quick Start**: Is the Quick Start still accurate? Verify `docs/guides/quickstart.md`
+- [ ] **Changelog**: Add entry to the public changelog (if maintained)
+- [ ] **Cross-links**: Pages that reference the changed feature now point to the updated docs
 
 ---
 
-## Section 5 — Social & Community
+## Phase 5 — SEO Metadata
 
-### 5.1 GitHub
-
-- [ ] **Release tagged on GitHub?**
-  - `gh release create vX.Y.Z --generate-notes`
-  - Links to docs announcement post in release body
-
-- [ ] **Changelog PR merged?**
-  - Release Please handles this automatically on version bump commits
-  - Verify: `gh run list --workflow=release-please.yml --limit 3`
-
-### 5.2 Community Channels
-
-- [ ] **#announcements or #release-notes channel notified?**
-  - Slack / Discord message with: version, headline feature, link to blog post
-
-- [ ] **GitHub Discussions announcement posted?**
-  - Category: Announcements
-  - Title: "STOA vX.Y released — [headline feature]"
-  - Body: 3–5 bullet points + link to full blog post
+- [ ] **Sitemap**: Auto-generated by Docusaurus — verify no build errors that would suppress new pages
+- [ ] **Google Search Console**: Submit updated sitemap URL if significant new pages were added
+- [ ] **Canonical URLs**: New pages have correct `canonical` metadata (Docusaurus default is correct — verify no override breaking it)
+- [ ] **Meta description**: Every new page has `description` front-matter (120–160 chars, contains primary keyword)
+- [ ] **Title tags**: Every new page has `title` front-matter (max 65 chars, contains primary keyword)
+- [ ] **Open Graph / Twitter cards**: If the landing page or social-share image changed, verify preview with a link unfurler
+- [ ] **llms.txt refresh**: After publishing a blog batch, update `stoa-web/public/llms.txt` and `llms-full.txt`
 
 ---
 
-## Compliance Review Step (MANDATORY)
+## Phase 6 — Compliance Scan (MANDATORY)
 
-Before any public content goes live, run the `content-reviewer` subagent:
+Run before any PR is merged for public-facing content.
 
 ```bash
-# Trigger content-reviewer on changed files
-# (Use Task tool in Claude Code with subagent_type=content-reviewer)
+# 1. Run content-reviewer agent on changed files
+# (via Claude Code — pass changed file paths as context)
+
+# 2. Manual checks — grep for common P0 violations:
+grep -rn '\$[0-9]' docs/ blog/ stoa-web/src/  # Pricing mentions
+grep -rn 'compliant\|certified\|approved by' docs/ blog/  # False certifications
+grep -rn 'secure\|insecure\|scam\|expensive' docs/ blog/  # Defamatory language
+
+# 3. Verify "last verified" tags on comparative claims
+grep -rn 'Kong\|MuleSoft\|Apigee\|Gravitee\|Axway' blog/ docs/ | \
+  grep -v 'last verified' | \
+  grep -v 'migration\|disclaimer\|alternative'
 ```
 
-The reviewer checks for:
-- P0 violations (blocking): competitor pricing, false compliance claims, undisclosed client names
-- P1 issues (fix before publish): missing "last verified" dates, missing disclaimers
-- P2 suggestions (non-blocking): trademark attribution, tone improvements
+**Risk level reference** (from [content-compliance.md](../.claude/rules/content-compliance.md)):
 
-See `docs/CONTENT-EXPANSION-COMPLIANCE.md` for the full per-content-type checklist.
+| Level | Description | Action |
+|-------|-------------|--------|
+| **P0** | Competitor pricing, client names, false certifications, defamatory claims | Block publication — fix immediately |
+| **P1** | Missing "last verified" date, missing disclaimer, regulatory over-claim | Fix before merging |
+| **P2** | Missing trademark attribution, aggressive phrasing | Fix if time allows, log as follow-up |
+
+- [ ] **P0 violations**: Zero — publication is blocked until resolved
+- [ ] **P1 violations**: Zero — fix before merging
+- [ ] **Competitor mentions**: Each has `<!-- last verified: YYYY-MM -->` tag
+- [ ] **Regulatory claims**: Use "supports compliance with" not "is compliant with"
+- [ ] **Client mentions**: None without explicit written authorization (use "an enterprise customer")
+- [ ] **Disclaimer**: Articles comparing features include the standard disclaimer footer
 
 ---
 
-## Execution Workflow
+## Phase 7 — Community & Distribution
 
-```
-Milestone happens
-  │
-  ├─ [Same day] Section 5 (GitHub release tag) + Section 3.2 (API ref if changed)
-  │
-  ├─ [Within 48h] Section 2.1 (Blog announcement) → content-reviewer → publish
-  │                Section 1.1 (Landing page hero if needed)
-  │
-  ├─ [Within 1 week] Section 3.1 (Architecture docs) + Section 3.3 (Guides)
-  │                   Section 1.2 (Comparison table if new features)
-  │                   Section 4.1 (SEO metadata)
-  │
-  └─ [Next blog batch] Section 4.2 (llms.txt update)
-                        Section 4.3 (PLAN-SEO.md keyword bank)
-```
+- [ ] **GitHub Release**: If this is a version release, create a GitHub Release with changelog
+- [ ] **Slack announcement**: Post update summary to `#platform-team`
+- [ ] **Social media draft**: Prepare post linking to the blog post (no confidential details)
+- [ ] **Discord / GitHub Discussions**: If applicable, post announcement thread
+- [ ] **stoa-docs community page**: Update the community section if new channels or events were added
+
+---
+
+## Phase 8 — Post-Publish Verification
+
+After content is live:
+
+- [ ] **Links work**: Open each new URL and verify it loads correctly
+- [ ] **Images load**: No broken image references (check browser network panel)
+- [ ] **Build is green**: Vercel / CI shows successful deploy
+  ```bash
+  # Check Vercel deploy status via MCP or CLI:
+  # vercel.list_deployments({ projectId: "stoa-docs" })
+  ```
+- [ ] **No console errors**: Open browser DevTools, verify no 404/500 errors in console
+- [ ] **GSC indexation**: Submit URL to Google Search Console "URL Inspection" tool for faster indexing
+- [ ] **llms.txt is accessible**: `curl -s https://gostoa.dev/llms.txt | head -20`
 
 ---
 
 ## Quick Reference: Who Does What
 
-| Section | Owner | Reviewer |
-|---------|-------|----------|
-| Landing page (stoa-web) | Platform team | content-reviewer agent |
-| Blog posts (stoa-docs) | docs-writer agent + Platform team | content-reviewer agent |
-| Architecture docs | Platform team | docs-writer agent |
-| ADRs | Architect | docs-writer agent |
-| API Reference | Engineer | — |
-| llms.txt | Platform team | — |
-| GitHub Release | Engineer | — |
-| Community channels | Platform team | — |
+| Task | Owner | Tool |
+|------|-------|------|
+| Blog post draft | `docs-writer` subagent or human | Claude Code + stoa-docs repo |
+| Content compliance scan | `content-reviewer` subagent | Claude Code (read-only) |
+| Landing page update | Human (stoa-web repo) | Direct edit + Vercel deploy |
+| SEO metadata | Human or `docs-writer` | Front-matter in `.md` files |
+| GSC submission | Human | Google Search Console UI |
+| llms.txt update | Human or `docs-writer` | Edit `stoa-web/public/llms.txt` |
+| GitHub Release | Human | `gh release create` |
 
 ---
 
@@ -264,17 +184,16 @@ Milestone happens
 | Document | Location | Purpose |
 |----------|----------|---------|
 | Content compliance rules | `.claude/rules/content-compliance.md` | P0/P1/P2 violation reference |
-| SEO content strategy | `.claude/rules/seo-content.md` | Blog templates, hub & spoke model |
-| Documentation strategy | `.claude/rules/documentation.md` | Where docs live, ADR numbering |
-| Compliance checklist | `docs/CONTENT-EXPANSION-COMPLIANCE.md` | Per-content-type pre-publication checks |
-| SEO tracking | `docs/SEO-TRACKING.md` | Keyword rankings, GSC monitoring |
+| SEO content strategy | `.claude/rules/seo-content.md` | Blog post templates, Hub & Spoke model, scheduling |
+| Docs strategy | `.claude/rules/documentation.md` | Where each doc type lives |
+| content-reviewer agent | `.claude/agents/content-reviewer.md` | Automated compliance scanning |
+| Runbooks index | `docs/runbooks/README.md` | Operational procedure index |
+| SEO tracking | `docs/SEO-TRACKING.md` | Current keyword rankings and GSC data |
 
 ---
 
-## Document Metadata
+## History
 
-- **Created**: 2026-02-24
-- **Applies to**: All public-facing content updates post-milestone
-- **Linked from**: `docs/runbooks/README.md`
-- **Review cadence**: Update when new content channels are added or triggers change
-- **Owner**: Platform team + content-reviewer subagent
+| Date | Change |
+|------|--------|
+| 2026-02-24 | Initial creation — CAB-371 |

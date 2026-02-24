@@ -37,11 +37,11 @@ This directory contains operational procedures for incident management on the ST
 | [API Rollback](medium/api-rollback.md) | API rollback procedure | Restore previous version |
 | [MCP Gateway Migration](mcp-gateway-migration.md) | Python → Rust gateway migration | Gateway transition |
 
-### Operational Processes
+### Content Operations
 
-| Document | Description | When to use |
-|----------|-------------|-------------|
-| [Post-Milestone Content Checklist](../POST-MILESTONE-CONTENT-CHECKLIST.md) | Update public content after releases, features, integrations | After every milestone (release, major feature, event) |
+| Runbook | Description | Trigger |
+|---------|-------------|---------|
+| [Post-Milestone Content Checklist](../POST-MILESTONE-CONTENT-CHECKLIST.md) | Update landing page, blog, docs, SEO after each milestone | Release, major feature, event |
 
 ### Archived (Obsolete — do not use)
 
@@ -166,4 +166,3 @@ To add or modify a runbook:
 | 2024-12-28 | Initial creation - 9 runbooks |
 | 2026-02-06 | Added Gateway Registration Failed runbook (ADR-028) |
 | 2026-02-15 | Archived 3 Vault runbooks, added ArgoCD + Operator runbooks, updated for Infisical (CAB-1030) |
-| 2026-02-24 | Added Post-Milestone Content Checklist process document (CAB-371) |

@@ -1,0 +1,16 @@
+{{- if and .Values.portal .Values.portal.podDisruptionBudget .Values.portal.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stoa-portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-portal
+    app.kubernetes.io/component: portal
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.portal.podDisruptionBudget.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stoa-portal
+{{- end }}

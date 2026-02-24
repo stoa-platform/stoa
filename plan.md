@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-24 (C9=600/572+pts 105%)
+> Last sync: 2026-02-24 (C9=804/802pts 100%+)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~572+ pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 600 pts (105%) | **Velocity**: 50 issues done
+**Scope**: 802 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 804 pts (100%+) | **Velocity**: 53 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -110,8 +110,11 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
+- [~] CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts, P3) — PR #996 (partial, 320 tests/15 routers)
+- [~] CAB-1451: [MEGA] E2E Test Expansion (21 pts, P3) — PRs #997, #1006, #974 (partial)
+- [~] CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts, P3) — PRs #984, #1008 (partial, 110+14 tests)
 
-### Done (47)
+### Done (53)
 - [x] CAB-1446: [MEGA] Gateway Test Coverage Expansion (21 pts) — PR #995
 - [x] CAB-1456: [gateway] Metering enrichment + budget enforcement (5 pts) — PR #998
 - [x] CAB-1438: [MEGA] K8s HPA + PDB for All Components (21 pts) — PR #970
@@ -167,6 +170,8 @@
 - [x] CAB-1450: [MEGA] DX: CI & Local Dev Completeness (13 pts) — PRs #975, #983, #987, #989
 - [x] CAB-1342: [MEGA] Helm Auto-Sync Secrets + Multi-Staging (21 pts) — PR #990
 - [x] CAB-1334: [MEGA] Usage Metering Pipeline P1 (21 pts) — PR #991
+- [x] CAB-1436: [MEGA] API Router Test Coverage Blitz — 38 Routers (21 pts)
+- [x] CAB-1441: [MEGA] Internationalisation FR+EN — Docs, Landing & CI (21 pts)
 
 ### Todo
 
@@ -179,6 +184,7 @@
 - [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
+- [ ] CAB-1460: Scheduled Blog Publishing Pipeline (5 pts, P2)
 
 **P3 — MEGAs** (42 pts):
 
@@ -190,9 +196,6 @@
 
 - CAB-1324: [MEGA] Runtime Data Governance (21 pts)
 - CAB-1320: [MEGA] Repo Consolidation (21 pts) — PR #1004 (partial, root configs unified)
-- CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts) — PR #996 (partial, 320 tests/15 routers)
-- CAB-1451: [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974 (partial, credential-mapping + chat/UAC)
-- CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008 (partial, 110+14 tests)
 
 ### Backlog — Legacy (parked)
 

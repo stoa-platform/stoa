@@ -1,0 +1,36 @@
+{{- if and .Values.mcpGateway .Values.mcpGateway.autoscaling .Values.mcpGateway.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stoa-mcp-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-mcp-gateway
+    app.kubernetes.io/component: mcp-gateway
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: stoa-mcp-gateway
+  minReplicas: {{ .Values.mcpGateway.autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ .Values.mcpGateway.autoscaling.maxReplicas | default 5 }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: {{ .Values.mcpGateway.autoscaling.scaleDownStabilizationSeconds | default 300 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.mcpGateway.autoscaling.targetCPUUtilizationPercentage | default 70 }}
+    {{- if .Values.mcpGateway.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.mcpGateway.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}

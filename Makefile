@@ -1,7 +1,7 @@
 # STOA Platform — Developer Makefile
 # Usage: make <target>
 
-.PHONY: setup test lint run-api run-ui run-portal run-gateway \
+.PHONY: setup test test-all lint lint-all run-api run-ui run-portal run-gateway \
 	test-api test-ui test-portal test-gateway test-cli \
 	lint-api lint-ui lint-portal lint-gateway lint-cli \
 	check-docs \
@@ -42,7 +42,10 @@ run-gateway: ## Start STOA Gateway (port 8080)
 
 # ── Test ─────────────────────────────────────────────────────────────────────
 
-test: test-api test-ui test-portal test-gateway test-cli ## Run all tests
+test: test-api test-ui test-portal test-gateway test-cli ## Run all tests (sequential)
+
+test-all: ## Run all tests (parallel)
+	$(MAKE) -j test-api test-ui test-portal test-gateway test-cli
 
 test-api: ## Run control-plane-api tests
 	cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=58 --ignore=tests/test_opensearch.py -q
@@ -61,7 +64,10 @@ test-cli: ## Run CLI tests
 
 # ── Lint ─────────────────────────────────────────────────────────────────────
 
-lint: lint-api lint-ui lint-portal lint-gateway lint-cli ## Run all linters
+lint: lint-api lint-ui lint-portal lint-gateway lint-cli ## Run all linters (sequential)
+
+lint-all: ## Run all linters (parallel)
+	$(MAKE) -j lint-api lint-ui lint-portal lint-gateway lint-cli
 
 lint-api: ## Lint control-plane-api (ruff + black)
 	cd control-plane-api && ruff check . && black --check .

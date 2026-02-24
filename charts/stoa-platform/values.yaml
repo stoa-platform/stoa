@@ -134,7 +134,7 @@ stoaGateway:
   tolerations: []
   extraEnv: []
 
-# Autoscaling (HPA) — gateway only (other components use standalone manifests)
+# Autoscaling (HPA) — stoa-gateway (Rust). Other components: see controlPlaneApi/controlPlaneUi/portal/mcpGateway sections below.
 autoscaling:
   enabled: false
   minReplicas: 2
@@ -143,7 +143,7 @@ autoscaling:
   targetMemoryUtilizationPercentage: 80
   scaleDownStabilizationSeconds: 300
 
-# Pod Disruption Budget — gateway only (other components use standalone manifests)
+# Pod Disruption Budget — stoa-gateway (Rust). Other components: see controlPlaneApi/controlPlaneUi/portal/mcpGateway sections below.
 podDisruptionBudget:
   enabled: false
   minAvailable: 1
@@ -364,6 +364,66 @@ controlPlaneApi:
   # Cluster name for multi-cluster observability labels (CAB-1426)
   clusterName: default
   environment: dev
+  # HPA — target: stoa-control-plane-api Deployment (standalone k8s manifest)
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationSeconds: 300
+  # PDB — target: stoa-control-plane-api Deployment
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+# ==============================================================================
+# Control Plane UI (Console) — HPA & PDB (CAB-1438)
+# ==============================================================================
+# Deployment: control-plane-ui (standalone k8s manifest)
+controlPlaneUi:
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationSeconds: 300
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+# ==============================================================================
+# Developer Portal — HPA & PDB (CAB-1438)
+# ==============================================================================
+# Deployment: stoa-portal (standalone k8s manifest)
+portal:
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationSeconds: 300
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+# ==============================================================================
+# MCP Gateway (Python) — HPA & PDB (CAB-1438)
+# ==============================================================================
+# Deployment: stoa-mcp-gateway (standalone k8s manifest)
+mcpGateway:
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationSeconds: 300
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
 
 alertmanager:
   enabled: false
@@ -403,3 +463,64 @@ alertmanager:
     limits:
       cpu: 100m
       memory: 64Mi
+
+# ==============================================================================
+# Infisical Secret Sync — Init Container Pattern (CAB-1342 Phase 1)
+# ==============================================================================
+# Fetches secrets from Infisical (vault.gostoa.dev) at pod startup via init
+# container. Secrets are written to a shared emptyDir (Memory-backed) and
+# read by the main container at /secrets/<SECRET_KEY>.
+#
+# Prerequisites:
+#   1. Create a K8s Secret with the Infisical Machine Identity access token:
+#      kubectl create secret generic infisical-machine-identity-token \
+#        --from-literal=token=<YOUR_TOKEN> -n stoa-system
+#   2. Set infisical.projectId to your Infisical workspace ID
+#   3. Set infisical.environment to match your cluster (dev/staging/prod)
+#
+# The init container uses curl + python3 (available in python:3.11-slim)
+# to avoid requiring the Infisical CLI in the image.
+infisical:
+  enabled: false
+  url: "https://vault.gostoa.dev/api"
+  projectId: ""
+  environment: "prod"
+  # Default secret path used when including the init container
+  defaultSecretPath: "/"
+  # Name of the K8s Secret containing the Infisical access token
+  # The secret must have a key named "token"
+  tokenSecretName: "infisical-machine-identity-token"
+  image:
+    repository: python
+    tag: "3.11-slim"
+
+# ==============================================================================
+# Multi-Staging Pattern — Namespace-per-Stage (CAB-1342 Phase 2)
+# ==============================================================================
+# Creates isolated namespaces (e.g., stoa-system-staging-1, stoa-system-staging-2)
+# and optionally generates an ArgoCD ApplicationSet for dynamic stage management.
+#
+# Usage:
+#   staging:
+#     enabled: true
+#     stages:
+#       - staging-1
+#       - staging-2
+#     argocd:
+#       enabled: true
+#       repoURL: "https://github.com/stoa-platform/stoa.git"
+#
+# Each stage gets its own namespace and ArgoCD Application sourcing from
+# a stage-specific values file (e.g., values-staging-1.yaml).
+# OpenShift compatible: all containers use restricted-v2 SCC.
+staging:
+  enabled: false
+  stages: []
+  # - staging-1
+  # - staging-2
+  argocd:
+    enabled: false
+    repoURL: "https://github.com/stoa-platform/stoa.git"
+    targetRevision: main
+    chartPath: "charts/stoa-platform"
+    project: "default"

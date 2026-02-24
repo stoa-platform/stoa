@@ -76,6 +76,8 @@ Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024)
 | `k8s-ops` | K8s debug, Helm, nginx, rollout | Read-only (plan) |
 | `docs-writer` | ADRs, guides, runbooks, memory | No Bash |
 | `content-reviewer` | Contenu public, concurrents, compliance | Read-only (plan) |
+| `verify-app` | Post-deploy SRE verification (9 checks) | Read-only (plan) |
+| `competitive-analyst` | AI coding tools competitive intelligence | Read-only (plan) |
 
 ### MCP Integrations (Claude.ai Native)
 | Service | Use For | Key Actions |
@@ -97,9 +99,25 @@ Key rules for AI Factory workflow:
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
 - 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)
 - 3 MCP-powered: `/council` (4-persona validation → Linear), `/sync-plan` (plan.md ↔ Linear), `/decompose` (MEGA → component-scoped sub-issues + DAG)
+- 3 ops: `/analytics` (5 data sources, 12 queries), `/competitive-watch` (veille L1-L3), `/ci-fix` (auto-fix CI)
+- 2 sprint: `/fill-cycle` (capacity gap analysis), `/generate-backlog` (MEGA backlog generation)
+
+### Slash Commands (`.claude/commands/`)
+- `/status` — quick project snapshot (git, PRs, CI, pods, tokens)
+- `/deploy-check` — post-merge CD verification
+- `/token-report` — 7-day token cost analysis
+- `/benchmark-competitors` — quarterly competitive benchmark (9-dimension matrix)
 
 ### Agent Teams (experimental)
 Prerequis: `brew install tmux` + `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+
+### Parallel Sessions (git worktrees)
+Named worktrees in `.claude/worktrees/` for concurrent Claude Code sessions:
+```bash
+za   # analysis worktree (read-only exploration)
+zf   # feature session (main repo)
+zh   # hotfix worktree (ephemeral, from main)
+```
 
 ## Repos
 

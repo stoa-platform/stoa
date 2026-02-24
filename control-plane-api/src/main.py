@@ -27,6 +27,7 @@ from .middleware.http_logging import HTTPLoggingMiddleware
 
 # Note: These are now imported as instances, not modules
 from .middleware.metrics import MetricsMiddleware, get_metrics
+from .middleware.pii_masking import PIIMaskingMiddleware
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .opensearch import search_router, setup_opensearch
 from .opensearch.audit_middleware import AuditMiddleware
@@ -37,6 +38,8 @@ from .routers import (
     applications,
     audit,
     backend_apis,
+    billing,
+    billing_internal,
     business,
     catalog_admin,
     certificates,
@@ -44,6 +47,7 @@ from .routers import (
     consumers,
     contracts,
     credential_mappings,
+    data_governance,
     deployments,
     diagnostics,
     docs_search,
@@ -66,6 +70,7 @@ from .routers import (
     onboarding,
     onboarding_admin,
     operations,
+    pii_admin,
     plans,
     platform,
     portal,
@@ -80,6 +85,7 @@ from .routers import (
     tenants,
     traces,
     usage,
+    usage_metering,
     users,
     webhooks,
     workflows,
@@ -108,6 +114,7 @@ from .services import (
 )
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
+from .workers.billing_metering_consumer import billing_metering_consumer
 from .workers.chat_metering_consumer import chat_metering_consumer
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.gateway_health_worker import gateway_health_worker
@@ -123,6 +130,7 @@ ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower()
 ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
 ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
 ENABLE_CHAT_METERING_CONSUMER = os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true").lower() == "true"
+ENABLE_BILLING_METERING_CONSUMER = os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -233,6 +241,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start chat metering consumer", error=str(e))
 
+    # Start billing metering consumer (CAB-1458)
+    billing_metering_task = None
+    if ENABLE_BILLING_METERING_CONSUMER:
+        try:
+            billing_metering_task = asyncio.create_task(billing_metering_consumer.start())
+            logger.info("Billing metering consumer started")
+        except Exception as e:
+            logger.warning("Failed to start billing metering consumer", error=str(e))
+
     yield
 
     # Shutdown
@@ -272,6 +289,13 @@ async def lifespan(app: FastAPI):
         chat_metering_task.cancel()
         with suppress(asyncio.CancelledError):
             await chat_metering_task
+
+    # Stop billing metering consumer (CAB-1458)
+    if ENABLE_BILLING_METERING_CONSUMER and billing_metering_task:
+        await billing_metering_consumer.stop()
+        billing_metering_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await billing_metering_task
 
     await kafka_service.disconnect()
     await git_service.disconnect()
@@ -450,6 +474,14 @@ app = FastAPI(
             "name": "Quotas",
             "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)",
         },
+        {
+            "name": "MCP Discovery",
+            "description": "Gateway discovery for UAC-generated MCP tools (CAB-605)",
+        },
+        {
+            "name": "Data Governance",
+            "description": "Source-of-truth classification, drift detection, reconciliation (CAB-1324)",
+        },
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -525,6 +557,9 @@ app.add_middleware(
 # Prometheus metrics middleware
 app.add_middleware(MetricsMiddleware)
 
+# PII masking middleware — masks PII in ASGI scope before logging (CAB-430)
+app.add_middleware(PIIMaskingMiddleware)
+
 # HTTP request/response logging middleware (CAB-330)
 if settings.LOG_HTTP_MIDDLEWARE_ENABLED:
     app.add_middleware(HTTPLoggingMiddleware)
@@ -553,11 +588,13 @@ app.include_router(certificates.router)
 app.include_router(search_router, prefix="/v1/search", tags=["Search"])
 app.include_router(usage.router)
 app.include_router(usage.dashboard_router)
+app.include_router(usage_metering.router)
 app.include_router(service_accounts.router)
 app.include_router(health.router)
 
 # Contracts router (UAC Protocol Switcher)
 app.include_router(contracts.router)
+app.include_router(contracts.discovery_router)
 
 # MCP Server Subscription routers
 app.include_router(mcp_servers_router)
@@ -601,6 +638,9 @@ app.include_router(catalog_admin.router)
 # Admin Prospects Dashboard (CAB-911 - Conversion Cockpit)
 app.include_router(admin_prospects.router)
 
+# PII Admin — scan, mask, config (CAB-430)
+app.include_router(pii_admin.router)
+
 # Operations and Business Analytics (CAB-Observability)
 app.include_router(operations.router)
 app.include_router(business.router)
@@ -619,6 +659,10 @@ app.include_router(gateway_deployments.router)
 app.include_router(gateway_policies.router)
 # Internal gateway registration API (ADR-028 auto-registration)
 app.include_router(gateway_internal.router)
+# Internal billing API for gateway budget enforcement (CAB-1457)
+app.include_router(billing_internal.router)
+# Billing CRUD API for tenant admins (CAB-1458)
+app.include_router(billing.router)
 
 # Environments (ADR-040 — Born GitOps)
 app.include_router(environments.router)
@@ -651,6 +695,9 @@ app.include_router(execution_logs.router)
 
 # Diagnostics — Self-diagnostic engine with auto-RCA (CAB-1316)
 app.include_router(diagnostics.router)
+
+# Data Governance — Source-of-truth matrix + drift detection (CAB-1324)
+app.include_router(data_governance.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

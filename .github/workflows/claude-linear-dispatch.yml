@@ -731,12 +731,53 @@ jobs:
 
             IMPORTANT: Do NOT implement anything. Only write the plan and validate it.
           # Model tier: sonnet (Stage 2 Council — plan validation, Sonnet sufficient)
-          claude_args: "--model claude-sonnet-4-6 --max-turns 10 --allowedTools Read,Glob,Grep"
+          # Bash required for gh issue comment (posting plan as comment on the issue)
+          claude_args: "--model claude-sonnet-4-6 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=10, Stage=plan-validate"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-6, MaxTurns=10, Stage=plan-validate"
+
+      # Fallback: if Claude didn't post the plan comment (e.g. permission issue), extract from execution file
+      - name: Post Plan Comment (fallback)
+        if: steps.plan-council.outcome == 'success' && steps.verify.outputs.valid == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+
+          # Check if a plan comment already exists (Claude may have posted it via Bash)
+          PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments \
+            --jq '[.comments[].body | select(contains("Stage 2: Plan Validation") or contains("Plan Score"))] | length' 2>/dev/null || echo "0")
+          if [ "$PLAN_COMMENT" -gt 0 ]; then
+            echo "Plan comment already posted by Claude — skipping fallback"
+            exit 0
+          fi
+
+          # Extract plan from execution file
+          EXEC_FILE="${{ steps.plan-council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          if [ ! -f "$EXEC_FILE" ]; then
+            echo "No execution file found — cannot post fallback comment"
+            exit 0
+          fi
+
+          # Extract the last assistant text message (contains the plan)
+          PLAN=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | last // empty' "$EXEC_FILE" 2>/dev/null || echo "")
+          if [ -z "$PLAN" ]; then
+            echo "No plan text found in execution file"
+            exit 0
+          fi
+
+          # Truncate if needed (GitHub comment limit is 65536 chars)
+          if [ ${#PLAN} -gt 60000 ]; then
+            PLAN="${PLAN:0:60000}\n\n---\n*[Truncated — see [workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for full plan]*"
+          fi
+
+          echo "Posting plan comment (fallback — Claude could not post it directly)"
+          gh issue comment "$ISSUE_NUM" --body "$PLAN"
 
       - name: Mark Plan validated
         if: steps.plan-council.outcome == 'success' && steps.verify.outputs.valid == 'true'
@@ -855,46 +896,73 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Guard: only run on L3 issues with plan-validated label
+      # Guard: only run on L3 issues with plan-validated label (with polling for race condition)
       - name: Verify L3 Plan validated
         id: verify
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE_NUM="${{ github.event.issue.number }}"
-          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          MAX_ATTEMPTS=10
+          POLL_INTERVAL=30
 
-          if echo "$LABELS" | grep -q "council-review"; then
-            if echo "$LABELS" | grep -q "plan-validated"; then
-              echo "L3 issue with plan validation confirmed"
-              echo "valid=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "::warning::L3 issue but no plan-validated label"
-              # Fallback: check for Plan Score comment
-              PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Plan Score"))] | length')
-              if [ "$PLAN_COMMENT" -gt 0 ]; then
-                echo "Plan validation comment found"
-                echo "valid=true" >> "$GITHUB_OUTPUT"
-              else
-                echo "valid=false" >> "$GITHUB_OUTPUT"
-                gh issue comment "$ISSUE_NUM" \
-                  --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first, then \`/go-plan\` after Stage 2 passes."
-              fi
-            fi
-          else
+          # First check: must be a council-review issue
+          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          if ! echo "$LABELS" | grep -q "council-review"; then
             echo "Not a council-review issue — skipping (L3 only handles its own issues)"
             echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      # Route model based on ticket estimate (extracted from issue body)
+          # Poll for plan-validated label (handles race with plan-validate job)
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+
+            if echo "$LABELS" | grep -q "plan-validated"; then
+              echo "L3 issue with plan validation confirmed (attempt ${attempt}/${MAX_ATTEMPTS})"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            # Fallback: check for Plan Score comment
+            PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Plan Score"))] | length')
+            if [ "$PLAN_COMMENT" -gt 0 ]; then
+              echo "Plan validation comment found (attempt ${attempt}/${MAX_ATTEMPTS})"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              echo "::notice::plan-validated not found yet (attempt ${attempt}/${MAX_ATTEMPTS}). Waiting ${POLL_INTERVAL}s for plan-validate job..."
+              sleep "$POLL_INTERVAL"
+            fi
+          done
+
+          echo "::warning::L3 issue but no plan-validated label after ${MAX_ATTEMPTS} attempts"
+          echo "valid=false" >> "$GITHUB_OUTPUT"
+          gh issue comment "$ISSUE_NUM" \
+            --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first, then \`/go-plan\` after Stage 2 passes."
+
+      # Route model based on ticket estimate (extracted from issue body + comments)
       - name: Route Model
         if: steps.verify.outputs.valid == 'true'
         id: route
         run: |
           source scripts/ai-ops/model-router.sh
-          ISSUE_BODY=$(gh issue view "${{ github.event.issue.number }}" --json body --jq '.body' 2>/dev/null || echo "")
+          ISSUE_NUM="${{ github.event.issue.number }}"
+
+          # Read issue body (Stage 1 Council report)
+          ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body' 2>/dev/null || echo "")
           ESTIMATE=$(extract_estimate "$ISSUE_BODY")
           MODE=$(extract_mode "$ISSUE_BODY")
+
+          # If estimate not found in body, search comments (Stage 2 plan has LOC estimate)
+          if [ "${ESTIMATE:-0}" = "0" ]; then
+            COMMENTS=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
+            ESTIMATE=$(extract_estimate "$COMMENTS")
+            echo "Estimate from body: 0 — retried from comments: ${ESTIMATE}pt"
+          fi
+
           ROUTE=$(route_model "$ESTIMATE" "$MODE")
           MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
           TURNS=$(echo "$ROUTE" | cut -d'|' -f2)

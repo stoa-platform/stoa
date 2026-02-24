@@ -1,7 +1,8 @@
-"""Tests for Chat Token Metering — CAB-288.
+"""Tests for Chat Token Metering — CAB-288 + CAB-1452.
 
 Covers: model, schemas, repository, budget enforcement, consumer.
-22 tests total.
+Extended with edge-case coverage for consumer error paths,
+repository budget boundaries, and usage stats with data.
 """
 
 from __future__ import annotations
@@ -474,3 +475,289 @@ class TestChatMeteringConsumer:
             output_tokens=50,
         )
         mock_session.commit.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Consumer — extended edge cases (CAB-1452)
+# ---------------------------------------------------------------------------
+
+
+class TestChatMeteringConsumerEdgeCases:
+    """Extended consumer tests: error paths, null guards, DB failures."""
+
+    def test_process_message_sync_no_loop(self):
+        """When _loop is None, message is parsed but not dispatched."""
+        consumer = ChatMeteringConsumer()
+        consumer._loop = None  # No event loop captured
+
+        msg = MagicMock()
+        msg.value = {
+            "tenant_id": "t1",
+            "user_id": "u1",
+            "conversation_id": "c1",
+            "model": "claude-sonnet-4-20250514",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+        }
+
+        # Should not raise — silently skip dispatch
+        consumer._process_message_sync(msg)
+
+    def test_process_message_sync_null_message(self):
+        """Null message value triggers the except branch."""
+        consumer = ChatMeteringConsumer()
+        consumer._loop = asyncio.new_event_loop()
+
+        msg = MagicMock()
+        msg.value = None
+
+        # Should not raise — caught by except
+        consumer._process_message_sync(msg)
+        consumer._loop.close()
+
+    def test_process_message_sync_extra_fields_ignored(self):
+        """Extra fields in the payload should be silently ignored by Pydantic."""
+        consumer = ChatMeteringConsumer()
+        consumer._loop = asyncio.new_event_loop()
+
+        msg = MagicMock()
+        msg.value = {
+            "tenant_id": "t1",
+            "user_id": "u1",
+            "conversation_id": "c1",
+            "model": "claude-sonnet-4-20250514",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "extra_unknown_field": "should be ignored",
+        }
+
+        with patch.object(consumer, "_handle_event", new_callable=AsyncMock):
+            consumer._process_message_sync(msg)
+
+        consumer._loop.close()
+
+    @pytest.mark.asyncio
+    async def test_handle_event_db_exception_is_swallowed(self):
+        """DB failure in _handle_event is logged but not raised."""
+        consumer = ChatMeteringConsumer()
+        event = ChatTokensEvent(
+            tenant_id="t1",
+            user_id="u1",
+            conversation_id="c1",
+            model="claude-sonnet-4-20250514",
+            input_tokens=100,
+            output_tokens=50,
+            total_tokens=150,
+        )
+
+        mock_factory = MagicMock()
+        mock_session = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        mock_factory.return_value = mock_cm
+
+        mock_repo = AsyncMock()
+        mock_repo.increment = AsyncMock(side_effect=RuntimeError("DB connection lost"))
+
+        with (
+            patch(
+                "src.workers.chat_metering_consumer._get_session_factory",
+                return_value=mock_factory,
+            ),
+            patch(
+                "src.workers.chat_metering_consumer.ChatTokenUsageRepository",
+                return_value=mock_repo,
+            ),
+        ):
+            # Should not raise — exception is swallowed
+            await consumer._handle_event(event)
+
+    @pytest.mark.asyncio
+    async def test_handle_event_session_factory_exception(self):
+        """When _get_session_factory raises, the error is swallowed."""
+        consumer = ChatMeteringConsumer()
+        event = ChatTokensEvent(
+            tenant_id="t1",
+            user_id="u1",
+            conversation_id="c1",
+            model="claude-sonnet-4-20250514",
+            input_tokens=100,
+            output_tokens=50,
+            total_tokens=150,
+        )
+
+        with patch(
+            "src.workers.chat_metering_consumer._get_session_factory",
+            side_effect=RuntimeError("No engine configured"),
+        ):
+            # Should not raise
+            await consumer._handle_event(event)
+
+    @pytest.mark.asyncio
+    async def test_stop_without_consumer(self):
+        """stop() when _consumer is None should not raise."""
+        consumer = ChatMeteringConsumer()
+        consumer._running = True
+        consumer._consumer = None
+        await consumer.stop()
+        assert consumer._running is False
+
+    def test_initial_state(self):
+        """Fresh consumer has correct initial state."""
+        consumer = ChatMeteringConsumer()
+        assert consumer._running is False
+        assert consumer._consumer is None
+        assert consumer._thread is None
+        assert consumer._loop is None
+
+
+# ---------------------------------------------------------------------------
+# Repository — extended edge cases (CAB-1452)
+# ---------------------------------------------------------------------------
+
+
+class TestChatTokenUsageRepositoryEdgeCases:
+    """Extended repository tests: budget boundaries, populated stats."""
+
+    def _make_repo(self, session: AsyncMock) -> ChatTokenUsageRepository:
+        return ChatTokenUsageRepository(session)
+
+    @pytest.mark.asyncio
+    async def test_budget_status_zero_budget(self):
+        """Zero budget: usage_percent=0, budget_exceeded=True (0>=0)."""
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 0
+        session.execute = AsyncMock(return_value=mock_result)
+
+        repo = self._make_repo(session)
+        status = await repo.get_budget_status("t1", "u1", daily_budget=0)
+        assert status["budget_exceeded"] is True
+        assert status["usage_percent"] == 0.0
+        assert status["remaining"] == 0
+
+    @pytest.mark.asyncio
+    async def test_budget_status_zero_budget_with_usage(self):
+        """Zero budget with existing usage: exceeded, 0% (not division by zero)."""
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 5000
+        session.execute = AsyncMock(return_value=mock_result)
+
+        repo = self._make_repo(session)
+        status = await repo.get_budget_status("t1", "u1", daily_budget=0)
+        assert status["budget_exceeded"] is True
+        assert status["usage_percent"] == 0.0  # Not division by zero
+        assert status["remaining"] == 0
+
+    @pytest.mark.asyncio
+    async def test_budget_status_exact_limit(self):
+        """At exact limit: budget_exceeded=True, remaining=0, usage_percent=100."""
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 10000
+        session.execute = AsyncMock(return_value=mock_result)
+
+        repo = self._make_repo(session)
+        status = await repo.get_budget_status("t1", "u1", daily_budget=10000)
+        assert status["budget_exceeded"] is True
+        assert status["remaining"] == 0
+        assert status["usage_percent"] == 100.0
+
+    @pytest.mark.asyncio
+    async def test_budget_status_one_under_limit(self):
+        """One token under limit: not exceeded, 1 remaining."""
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 9999
+        session.execute = AsyncMock(return_value=mock_result)
+
+        repo = self._make_repo(session)
+        status = await repo.get_budget_status("t1", "u1", daily_budget=10000)
+        assert status["budget_exceeded"] is False
+        assert status["remaining"] == 1
+
+    @pytest.mark.asyncio
+    async def test_budget_status_includes_tenant_usage(self):
+        """get_budget_status returns both user and tenant usage."""
+        session = AsyncMock()
+
+        # Two sequential calls: user_usage=5000, tenant_usage=25000
+        user_result = MagicMock()
+        user_result.scalar_one.return_value = 5000
+        tenant_result = MagicMock()
+        tenant_result.scalar_one.return_value = 25000
+
+        session.execute = AsyncMock(side_effect=[user_result, tenant_result])
+
+        repo = self._make_repo(session)
+        status = await repo.get_budget_status("t1", "u1", daily_budget=10000)
+        assert status["user_tokens_today"] == 5000
+        assert status["tenant_tokens_today"] == 25000
+        assert status["daily_budget"] == 10000
+
+    @pytest.mark.asyncio
+    async def test_get_usage_stats_with_data(self):
+        """get_usage_stats returns populated stats with top users and breakdown."""
+        session = AsyncMock()
+
+        # Totals query
+        totals_result = MagicMock()
+        totals_result.one.return_value = (150000, 100000, 50000, 500)
+
+        # Today query
+        today_result = MagicMock()
+        today_result.scalar_one.return_value = 8000
+
+        # Top users
+        user1 = MagicMock()
+        user1.user_id = "alice"
+        user1.tokens = 80000
+        user2 = MagicMock()
+        user2.user_id = "bob"
+        user2.tokens = 70000
+        top_result = MagicMock()
+        top_result.all.return_value = [user1, user2]
+
+        # Daily breakdown
+        day1 = MagicMock()
+        day1.day = _today
+        day1.tokens = 8000
+        day1.requests = 30
+        daily_result = MagicMock()
+        daily_result.all.return_value = [day1]
+
+        session.execute = AsyncMock(side_effect=[totals_result, today_result, top_result, daily_result])
+
+        repo = self._make_repo(session)
+        stats = await repo.get_usage_stats("t1", days=7)
+
+        assert stats["tenant_id"] == "t1"
+        assert stats["period_days"] == 7
+        assert stats["total_tokens"] == 150000
+        assert stats["total_input_tokens"] == 100000
+        assert stats["total_output_tokens"] == 50000
+        assert stats["total_requests"] == 500
+        assert stats["today_tokens"] == 8000
+        assert len(stats["top_users"]) == 2
+        assert stats["top_users"][0]["user_id"] == "alice"
+        assert stats["top_users"][0]["tokens"] == 80000
+        assert len(stats["daily_breakdown"]) == 1
+        assert stats["daily_breakdown"][0]["tokens"] == 8000
+
+    @pytest.mark.asyncio
+    async def test_budget_status_over_budget_usage_capped(self):
+        """When over budget, usage_percent is capped at 100.0."""
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 20000  # 2x the budget
+        session.execute = AsyncMock(return_value=mock_result)
+
+        repo = self._make_repo(session)
+        status = await repo.get_budget_status("t1", "u1", daily_budget=10000)
+        assert status["budget_exceeded"] is True
+        assert status["usage_percent"] == 100.0  # Capped by min(100.0, ...)
+        assert status["remaining"] == 0

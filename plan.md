@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-24 (C9=804/802pts 100%+)
+> Last sync: 2026-02-24 (C9: 802pts scope, 663pts C9-done (82.7%) + 141pts cross-cycle = 804pts total Done)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -206,6 +206,25 @@
 - CAB-1310: [MEGA] Jenkins Orchestration Layer (34 pts)
 - CAB-1304: [MEGA] Demo Tenant Automation (13 pts)
 - CAB-1311: [MEGA] GTM Strategy & Licensing (13 pts)
+
+---
+
+## Cycle 10 (Mar 2–8) — NEXT
+
+**Scope**: 0 pts committed | **Theme**: TBD (no committed items yet)
+
+### Todo
+(empty — no tickets assigned to C10 yet)
+
+### Backlog (in cycle, not committed)
+- CAB-384: [Phase 17] AI Gateway — LLM Cost Optimization (21 pts, P2)
+- CAB-361: [Enterprise] OAuth2/OIDC Authentication (21 pts, P2)
+- CAB-240: [EPIC] Open Core Strategy (2 pts, P0)
+- CAB-173: [JALON] v1.0 GA — Mi-Mai 2026 (2 pts, P1)
+- CAB-178: [JALON] Q1 2026 — Fondations (2 pts, P1)
+- CAB-172: [JALON] Q2 2026 — Stabilite (2 pts, P2)
+- CAB-410: [Security] mTLS/OAuth2 Decision Tree (0 pts, P2)
+- CAB-396: [Community] Adapter STOA → Kong (0 pts, P3)
 
 ---
 

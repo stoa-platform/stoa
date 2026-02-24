@@ -3595,6 +3595,17 @@
         "title": "DashboardStats",
         "type": "object"
       },
+      "DataSourceOfTruth": {
+        "description": "Where the canonical version of an entity lives.",
+        "enum": [
+          "git",
+          "database",
+          "runtime",
+          "hybrid"
+        ],
+        "title": "DataSourceOfTruth",
+        "type": "string"
+      },
       "DelegationTokenRequest": {
         "description": "Request schema for token delegation via master account.",
         "properties": {
@@ -4756,6 +4767,91 @@
         "title": "DocsSearchResult",
         "type": "object"
       },
+      "DriftItem": {
+        "description": "A single drifted item within an entity type.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "drift_type": {
+            "description": "orphan | stale | desync | error",
+            "title": "Drift Type",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_name": {
+            "title": "Entity Name",
+            "type": "string"
+          },
+          "last_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync At"
+          }
+        },
+        "required": [
+          "entity_id",
+          "entity_name",
+          "drift_type",
+          "detail"
+        ],
+        "title": "DriftItem",
+        "type": "object"
+      },
+      "DriftReportResponse": {
+        "properties": {
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/EntityDriftDetail"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "total_drifted": {
+            "title": "Total Drifted",
+            "type": "integer"
+          },
+          "total_entities": {
+            "title": "Total Entities",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "total_entities",
+          "total_drifted",
+          "entities"
+        ],
+        "title": "DriftReportResponse",
+        "type": "object"
+      },
+      "DriftStatus": {
+        "description": "Drift status of an entity class.",
+        "enum": [
+          "clean",
+          "drifted",
+          "unknown",
+          "error"
+        ],
+        "title": "DriftStatus",
+        "type": "string"
+      },
       "EnableBindingRequest": {
         "description": "Request to enable a protocol binding.",
         "example": {
@@ -4829,6 +4925,42 @@
           "generated_at"
         ],
         "title": "EnableBindingResponse",
+        "type": "object"
+      },
+      "EntityDriftDetail": {
+        "description": "Drift report for a single entity type.",
+        "properties": {
+          "drifted": {
+            "title": "Drifted",
+            "type": "integer"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DriftItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "source_of_truth": {
+            "$ref": "#/components/schemas/DataSourceOfTruth"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entity_type",
+          "source_of_truth",
+          "total",
+          "drifted",
+          "items"
+        ],
+        "title": "EntityDriftDetail",
         "type": "object"
       },
       "EnvironmentConfig": {
@@ -7503,6 +7635,130 @@
           "checked_at"
         ],
         "title": "GitOpsStatus",
+        "type": "object"
+      },
+      "GovernanceEntity": {
+        "description": "Classification of a single entity type in the governance matrix.",
+        "properties": {
+          "drift_detection": {
+            "description": "Whether drift is actively monitored",
+            "title": "Drift Detection",
+            "type": "boolean"
+          },
+          "drift_status": {
+            "$ref": "#/components/schemas/DriftStatus",
+            "default": "unknown"
+          },
+          "drifted_count": {
+            "default": 0,
+            "title": "Drifted Count",
+            "type": "integer"
+          },
+          "entity_type": {
+            "description": "Logical entity name (e.g. api_catalog)",
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "error_count": {
+            "default": 0,
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "last_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync At"
+          },
+          "reconciliation_method": {
+            "$ref": "#/components/schemas/ReconcileAction"
+          },
+          "source_of_truth": {
+            "$ref": "#/components/schemas/DataSourceOfTruth"
+          },
+          "sync_direction": {
+            "$ref": "#/components/schemas/SyncDirection"
+          },
+          "total_count": {
+            "default": 0,
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entity_type",
+          "source_of_truth",
+          "sync_direction",
+          "drift_detection",
+          "reconciliation_method"
+        ],
+        "title": "GovernanceEntity",
+        "type": "object"
+      },
+      "GovernanceMatrixResponse": {
+        "properties": {
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/GovernanceEntity"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/GovernanceMatrixSummary"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timestamp",
+          "entities",
+          "summary"
+        ],
+        "title": "GovernanceMatrixResponse",
+        "type": "object"
+      },
+      "GovernanceMatrixSummary": {
+        "properties": {
+          "health_pct": {
+            "description": "Percentage of items with clean status",
+            "title": "Health Pct",
+            "type": "number"
+          },
+          "total_drifted": {
+            "title": "Total Drifted",
+            "type": "integer"
+          },
+          "total_entity_types": {
+            "title": "Total Entity Types",
+            "type": "integer"
+          },
+          "total_errors": {
+            "title": "Total Errors",
+            "type": "integer"
+          },
+          "total_items": {
+            "title": "Total Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_entity_types",
+          "total_items",
+          "total_drifted",
+          "total_errors",
+          "health_pct"
+        ],
+        "title": "GovernanceMatrixSummary",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -13105,6 +13361,90 @@
         "title": "RecentActivityItem",
         "type": "object"
       },
+      "ReconcileAction": {
+        "description": "How drift is resolved.",
+        "enum": [
+          "auto",
+          "manual",
+          "on-sync"
+        ],
+        "title": "ReconcileAction",
+        "type": "string"
+      },
+      "ReconcileRequest": {
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "description": "Preview changes without applying",
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "ReconcileRequest",
+        "type": "object"
+      },
+      "ReconcileResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ReconcileResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timestamp",
+          "results"
+        ],
+        "title": "ReconcileResponse",
+        "type": "object"
+      },
+      "ReconcileResult": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "items_reconciled": {
+            "title": "Items Reconciled",
+            "type": "integer"
+          },
+          "items_skipped": {
+            "default": 0,
+            "title": "Items Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entity_type",
+          "action",
+          "items_reconciled",
+          "dry_run"
+        ],
+        "title": "ReconcileResult",
+        "type": "object"
+      },
       "RegenerateSecretResponse": {
         "description": "Response for regenerate secret.",
         "properties": {
@@ -15605,6 +15945,16 @@
         ],
         "title": "SuggestResponse",
         "type": "object"
+      },
+      "SyncDirection": {
+        "description": "Direction of data flow between source and replicas.",
+        "enum": [
+          "git\u2192db",
+          "db\u2192gateway",
+          "bidirectional"
+        ],
+        "title": "SyncDirection",
+        "type": "string"
       },
       "SyncHistoryResponse": {
         "description": "Response for sync history.",
@@ -21620,6 +21970,122 @@
         "summary": "Get Gateway Metrics",
         "tags": [
           "Gateway Observability"
+        ]
+      }
+    },
+    "/v1/admin/governance/drift": {
+      "get": {
+        "description": "Cross-entity drift report with per-item details.\n\nLists every drifted item across all governed entity types: orphan MCP\nservers, never-synced APIs, drifted gateway deployments, etc.\nLimited to 50 items per entity type.  Admin-only (cpi-admin).",
+        "operationId": "get_drift_report_v1_admin_governance_drift_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Drift Report",
+        "tags": [
+          "Data Governance"
+        ]
+      }
+    },
+    "/v1/admin/governance/matrix": {
+      "get": {
+        "description": "Return the full governance matrix with live drift counts.\n\nClassifies every governed entity type by source-of-truth, sync direction,\nand current drift status.  Admin-only (cpi-admin).",
+        "operationId": "get_governance_matrix_v1_admin_governance_matrix_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceMatrixResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Governance Matrix",
+        "tags": [
+          "Data Governance"
+        ]
+      }
+    },
+    "/v1/admin/governance/reconcile/{entity_type}": {
+      "post": {
+        "description": "Trigger reconciliation for a specific entity type.\n\nBy default runs in dry_run mode (preview only).  Set `dry_run: false`\nin the request body to apply changes.\n\nSupported entity types: api_catalog, mcp_servers, gateway_deployments.\nAdmin-only (cpi-admin).",
+        "operationId": "reconcile_entity_v1_admin_governance_reconcile__entity_type__post",
+        "parameters": [
+          {
+            "description": "Entity type to reconcile",
+            "in": "path",
+            "name": "entity_type",
+            "required": true,
+            "schema": {
+              "description": "Entity type to reconcile",
+              "title": "Entity Type",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileRequest",
+                "default": {
+                  "dry_run": true
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reconcile Entity",
+        "tags": [
+          "Data Governance"
         ]
       }
     },
@@ -39736,6 +40202,10 @@
     {
       "description": "Gateway discovery for UAC-generated MCP tools (CAB-605)",
       "name": "MCP Discovery"
+    },
+    {
+      "description": "Source-of-truth classification, drift detection, reconciliation (CAB-1324)",
+      "name": "Data Governance"
     }
   ]
 }

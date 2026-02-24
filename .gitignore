@@ -142,6 +142,9 @@ backups/
 .claude/claims/*.json
 .claude/claims/*.lock
 
+# Git worktrees (parallel Claude sessions)
+.claude/worktrees/
+
 # Infisical
 .infisical.json
 

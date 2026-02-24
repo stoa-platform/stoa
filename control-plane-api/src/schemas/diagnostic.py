@@ -108,3 +108,21 @@ class DiagnosticListResponse(BaseModel):
 
     items: list[DiagnosticReport]
     total: int
+
+
+class ErrorCategoryStat(BaseModel):
+    """Error category with occurrence count."""
+
+    category: DiagnosticCategory
+    count: int
+    percentage: float = 0.0
+
+
+class DiagnosticSummaryResponse(BaseModel):
+    """Aggregated diagnostic summary across all gateways."""
+
+    tenant_id: str
+    total_errors: int = 0
+    time_range_minutes: int = 60
+    top_categories: list[ErrorCategoryStat] = Field(default_factory=list)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))

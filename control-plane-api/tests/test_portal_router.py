@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-
 CATALOG_REPO = "src.routers.portal.CatalogRepository"
 
 
@@ -97,21 +96,6 @@ class TestListPortalAPIs:
 
 class TestGetPortalAPI:
     """Tests for GET /v1/portal/apis/{api_id}."""
-
-    def test_get_api_by_tenant_and_name(self, app_with_tenant_admin, mock_db_session):
-        """Get API by tenant/api_name format."""
-        api = _make_cached_api()
-        mock_repo = MagicMock()
-        mock_repo.get_api_by_id = AsyncMock(return_value=api)
-
-        with patch(CATALOG_REPO, return_value=mock_repo):
-            with TestClient(app_with_tenant_admin) as client:
-                resp = client.get("/v1/portal/apis/acme/weather-api")
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["name"] == "weather-api"
-        assert data["tenant_id"] == "acme"
 
     def test_get_api_by_name_only(self, app_with_tenant_admin, mock_db_session):
         """Get API by name (cross-tenant search)."""

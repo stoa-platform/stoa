@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-24 (C9: 825pts scope, 720pts done (87.3%), 55 issues closed)
+> Last sync: 2026-02-24 (C9: 830pts scope, 801pts done (96.5%), 60 issues closed)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 825 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 720 pts (87.3%) | **Velocity**: 55 issues done
+**Scope**: 830 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 801 pts (96.5%) | **Velocity**: 60 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -110,12 +110,13 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-- [~] CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts, P3) — PR #996 (partial, 320 tests/15 routers)
-- [~] CAB-1451: [MEGA] E2E Test Expansion (21 pts, P3) — PRs #997, #1006, #974 (partial)
-- [~] CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts, P3) — PRs #984, #1008 (partial, 110+14 tests)
-- [~] CAB-1304: [MEGA] Demo Tenant Automation (13 pts, P3) — PR #1052 (partial)
 
-### Done (54)
+### Done (60)
+- [x] CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts) — PR #996
+- [x] CAB-1451: [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974
+- [x] CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008
+- [x] CAB-1304: [MEGA] Demo Tenant Automation (13 pts) — PR #1052
+- [x] CAB-402: Policy Drift Monitoring — GitOps Sync Status (5 pts) — PR #1059
 - [x] CAB-1446: [MEGA] Gateway Test Coverage Expansion (21 pts) — PR #995
 - [x] CAB-1456: [gateway] Metering enrichment + budget enforcement (5 pts) — PR #998
 - [x] CAB-1438: [MEGA] K8s HPA + PDB for All Components (21 pts) — PR #970

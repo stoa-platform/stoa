@@ -896,36 +896,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Guard: only run on L3 issues with plan-validated label
+      # Guard: only run on L3 issues with plan-validated label (with polling for race condition)
       - name: Verify L3 Plan validated
         id: verify
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE_NUM="${{ github.event.issue.number }}"
-          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          MAX_ATTEMPTS=10
+          POLL_INTERVAL=30
 
-          if echo "$LABELS" | grep -q "council-review"; then
-            if echo "$LABELS" | grep -q "plan-validated"; then
-              echo "L3 issue with plan validation confirmed"
-              echo "valid=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "::warning::L3 issue but no plan-validated label"
-              # Fallback: check for Plan Score comment
-              PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Plan Score"))] | length')
-              if [ "$PLAN_COMMENT" -gt 0 ]; then
-                echo "Plan validation comment found"
-                echo "valid=true" >> "$GITHUB_OUTPUT"
-              else
-                echo "valid=false" >> "$GITHUB_OUTPUT"
-                gh issue comment "$ISSUE_NUM" \
-                  --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first, then \`/go-plan\` after Stage 2 passes."
-              fi
-            fi
-          else
+          # First check: must be a council-review issue
+          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          if ! echo "$LABELS" | grep -q "council-review"; then
             echo "Not a council-review issue — skipping (L3 only handles its own issues)"
             echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          # Poll for plan-validated label (handles race with plan-validate job)
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+
+            if echo "$LABELS" | grep -q "plan-validated"; then
+              echo "L3 issue with plan validation confirmed (attempt ${attempt}/${MAX_ATTEMPTS})"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            # Fallback: check for Plan Score comment
+            PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Plan Score"))] | length')
+            if [ "$PLAN_COMMENT" -gt 0 ]; then
+              echo "Plan validation comment found (attempt ${attempt}/${MAX_ATTEMPTS})"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              echo "::notice::plan-validated not found yet (attempt ${attempt}/${MAX_ATTEMPTS}). Waiting ${POLL_INTERVAL}s for plan-validate job..."
+              sleep "$POLL_INTERVAL"
+            fi
+          done
+
+          echo "::warning::L3 issue but no plan-validated label after ${MAX_ATTEMPTS} attempts"
+          echo "valid=false" >> "$GITHUB_OUTPUT"
+          gh issue comment "$ISSUE_NUM" \
+            --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first, then \`/go-plan\` after Stage 2 passes."
 
       # Route model based on ticket estimate (extracted from issue body + comments)
       - name: Route Model

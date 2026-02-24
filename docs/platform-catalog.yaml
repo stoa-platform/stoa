@@ -1,0 +1,696 @@
+apiVersion: v1
+kind: PlatformCatalog
+metadata:
+  name: stoa-platform
+  description: STOA Platform — service inventory and dependency map
+  lastUpdated: "2026-02-24"
+
+# ==============================================================================
+# CORE SERVICES — Control Plane
+# ==============================================================================
+services:
+  # --------------------------------------------------------------------------
+  # Control Plane API — Backend
+  # --------------------------------------------------------------------------
+  - name: control-plane-api
+    displayName: Control Plane API
+    type: backend
+    tech: Python 3.11, FastAPI, SQLAlchemy
+    path: control-plane-api/
+    containerPort: 8000
+    image: ghcr.io/stoa-platform/control-plane-api
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 2
+        k8sName: stoa-control-plane-api
+      staging:
+        cluster: hetzner-k3s
+        namespace: stoa-system
+        replicas: 1
+        k8sName: stoa-control-plane-api
+    dependsOn:
+      - postgres
+      - keycloak
+      - redpanda
+      - opensearch
+    consumesSecrets:
+      - DATABASE_PASSWORD
+      - KEYCLOAK_CLIENT_SECRET
+      - GATEWAY_API_KEYS
+      - OPENSEARCH_PASSWORD
+    exposedTo:
+      - control-plane-ui
+      - stoa-portal
+      - stoa-gateway
+      - stoa-operator
+    health: /health
+    metrics: /metrics
+    argocdApp: control-plane-api
+    ciWorkflow: control-plane-api-ci
+    owner: platform-team
+
+  # --------------------------------------------------------------------------
+  # Console UI — Admin frontend
+  # --------------------------------------------------------------------------
+  - name: control-plane-ui
+    displayName: Console (Admin UI)
+    type: frontend
+    tech: React 18, TypeScript, Vite
+    path: control-plane-ui/
+    containerPort: 8080
+    image: ghcr.io/stoa-platform/control-plane-ui
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 2
+        k8sName: control-plane-ui
+      staging:
+        cluster: hetzner-k3s
+        namespace: stoa-system
+        replicas: 1
+        k8sName: control-plane-ui
+    dependsOn:
+      - control-plane-api
+      - keycloak
+    consumesSecrets: []
+    exposedTo: []  # end-user UI, no downstream consumers
+    health: /health
+    metrics: null
+    argocdApp: control-plane-ui
+    ciWorkflow: control-plane-ui-ci
+    oidcClient: control-plane-ui
+    owner: platform-team
+
+  # --------------------------------------------------------------------------
+  # Developer Portal — Consumer frontend
+  # --------------------------------------------------------------------------
+  - name: stoa-portal
+    displayName: Developer Portal
+    type: frontend
+    tech: React 18, TypeScript, Vite
+    path: portal/
+    containerPort: 8080
+    image: ghcr.io/stoa-platform/stoa-portal
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 2
+        k8sName: stoa-portal
+      staging:
+        cluster: hetzner-k3s
+        namespace: stoa-system
+        replicas: 1
+        k8sName: stoa-portal
+    dependsOn:
+      - control-plane-api
+      - keycloak
+    consumesSecrets: []
+    exposedTo: []
+    health: /health
+    metrics: null
+    argocdApp: stoa-portal
+    ciWorkflow: stoa-portal-ci
+    oidcClient: stoa-portal
+    owner: platform-team
+
+  # --------------------------------------------------------------------------
+  # STOA Gateway — Rust MCP gateway
+  # --------------------------------------------------------------------------
+  - name: stoa-gateway
+    displayName: STOA Gateway (Rust)
+    type: gateway
+    tech: Rust, Tokio, axum
+    path: stoa-gateway/
+    containerPort: 8080
+    image: ghcr.io/stoa-platform/stoa-gateway
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 2
+        k8sName: stoa-gateway
+      staging:
+        cluster: hetzner-k3s
+        namespace: stoa-system
+        replicas: 1
+        k8sName: stoa-gateway
+    dependsOn:
+      - control-plane-api
+      - keycloak
+      - redpanda
+    consumesSecrets:
+      - STOA_CONTROL_PLANE_API_KEY
+      - KEYCLOAK_ADMIN_PASSWORD
+    exposedTo: []  # entry point for external MCP clients
+    health: /health
+    metrics: /metrics
+    argocdApp: stoa-gateway
+    ciWorkflow: stoa-gateway-ci
+    owner: platform-team
+
+  # --------------------------------------------------------------------------
+  # STOA Operator — K8s CRD controller
+  # --------------------------------------------------------------------------
+  - name: stoa-operator
+    displayName: STOA Operator
+    type: operator
+    tech: Rust, kube-rs
+    path: stoa-operator/
+    containerPort: 8080
+    image: ghcr.io/stoa-platform/stoa-operator
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 1
+        k8sName: stoa-operator
+    dependsOn:
+      - control-plane-api
+    consumesSecrets:
+      - STOA_CONTROL_PLANE_API_KEY
+    exposedTo: []
+    health: /health
+    metrics: /metrics
+    argocdApp: null  # standalone manifest
+    ciWorkflow: null  # not yet in CI
+    owner: platform-team
+
+# ==============================================================================
+# DATA LAYER
+# ==============================================================================
+
+  - name: postgres
+    displayName: PostgreSQL
+    type: database
+    tech: PostgreSQL 15
+    path: null  # managed externally
+    containerPort: 5432
+    image: postgres:15-alpine
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 1
+        k8sName: postgres
+        storage: 20Gi
+    dependsOn: []
+    consumesSecrets:
+      - POSTGRES_PASSWORD
+    exposedTo:
+      - control-plane-api
+    health: pg_isready
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    owner: platform-team
+
+  - name: redpanda
+    displayName: Redpanda (Kafka)
+    type: messaging
+    tech: Redpanda (Kafka-compatible)
+    path: null
+    containerPort: 9092
+    image: redpandadata/redpanda
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 1
+        k8sName: redpanda
+        storage: 10Gi
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo:
+      - control-plane-api
+      - stoa-gateway
+    health: null
+    metrics: /metrics
+    argocdApp: null
+    ciWorkflow: null
+    topics:
+      - stoa.metering
+      - stoa.errors
+      - stoa.audit
+      - stoa.policy.changes
+      - stoa.deployments
+    owner: platform-team
+
+  - name: opensearch
+    displayName: OpenSearch
+    type: search
+    tech: OpenSearch 2.11
+    path: null
+    containerPort: 9200
+    image: opensearchproject/opensearch:2.11.1
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: opensearch
+        replicas: 1
+        k8sName: opensearch
+        storage: 50Gi
+    dependsOn: []
+    consumesSecrets:
+      - OPENSEARCH_PASSWORD
+    exposedTo:
+      - control-plane-api
+    health: /_cluster/health
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    owner: platform-team
+
+# ==============================================================================
+# IDENTITY & AUTH
+# ==============================================================================
+
+  - name: keycloak
+    displayName: Keycloak (OIDC)
+    type: identity
+    tech: Keycloak 23
+    path: null
+    containerPort: 8080
+    image: quay.io/keycloak/keycloak:23.0
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 1
+        k8sName: keycloak
+    dependsOn:
+      - postgres
+    consumesSecrets:
+      - KEYCLOAK_ADMIN_PASSWORD
+    exposedTo:
+      - control-plane-api
+      - control-plane-ui
+      - stoa-portal
+      - stoa-gateway
+    health: /health/ready
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    realms:
+      - stoa
+    roles:
+      - cpi-admin
+      - tenant-admin
+      - devops
+      - viewer
+    owner: platform-team
+
+  - name: infisical
+    displayName: Infisical (Secrets Vault)
+    type: secrets
+    tech: Infisical (self-hosted)
+    path: null
+    containerPort: 443
+    image: infisical/infisical
+    deploy:
+      prod:
+        cluster: hetzner-standalone
+        namespace: null
+        replicas: 1
+        k8sName: null
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo:
+      - control-plane-api
+      - stoa-gateway
+    health: /api/status
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    owner: platform-team
+
+# ==============================================================================
+# OBSERVABILITY
+# ==============================================================================
+
+  - name: prometheus
+    displayName: Prometheus
+    type: monitoring
+    tech: Prometheus (kube-prometheus-stack)
+    path: null
+    containerPort: 9090
+    image: null  # Helm-managed
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: monitoring
+        replicas: 1
+        k8sName: prometheus-kube-prometheus-prometheus
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo:
+      - control-plane-api
+      - grafana
+    health: /-/healthy
+    metrics: /metrics
+    argocdApp: null
+    ciWorkflow: null
+    owner: platform-team
+
+  - name: grafana
+    displayName: Grafana
+    type: monitoring
+    tech: Grafana
+    path: null
+    containerPort: 3000
+    image: null  # Helm-managed
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: monitoring
+        replicas: 1
+        k8sName: grafana
+    dependsOn:
+      - prometheus
+      - loki
+    consumesSecrets: []
+    exposedTo: []
+    health: /api/health
+    metrics: /metrics
+    argocdApp: null
+    ciWorkflow: null
+    dashboards: 22
+    owner: platform-team
+
+  - name: loki
+    displayName: Loki (Logs)
+    type: logging
+    tech: Grafana Loki
+    path: null
+    containerPort: 3100
+    image: null  # Helm-managed
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: monitoring
+        replicas: 1
+        k8sName: loki
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo:
+      - grafana
+    health: /ready
+    metrics: /metrics
+    argocdApp: null
+    ciWorkflow: null
+    owner: platform-team
+
+  - name: opensearch-dashboards
+    displayName: OpenSearch Dashboards (STOA Logs)
+    type: monitoring
+    tech: OpenSearch Dashboards
+    path: null
+    containerPort: 5601
+    image: opensearchproject/opensearch-dashboards:2.11.1
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: opensearch
+        replicas: 1
+        k8sName: opensearch-dashboards
+    dependsOn:
+      - opensearch
+    consumesSecrets:
+      - OPENSEARCH_PASSWORD
+    exposedTo: []
+    health: /api/status
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    owner: platform-team
+
+# ==============================================================================
+# GITOPS & CI/CD
+# ==============================================================================
+
+  - name: argocd
+    displayName: ArgoCD
+    type: gitops
+    tech: ArgoCD
+    path: null
+    containerPort: 8080
+    image: null  # Helm-managed
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: argocd
+        replicas: 1
+        k8sName: argocd-server
+    dependsOn: []
+    consumesSecrets:
+      - ARGOCD_ADMIN_PASSWORD
+    exposedTo:
+      - control-plane-api
+    health: /healthz
+    metrics: /metrics
+    argocdApp: null
+    ciWorkflow: null
+    managedApps:
+      - control-plane-api
+      - control-plane-ui
+      - stoa-portal
+      - stoa-gateway
+    owner: platform-team
+
+# ==============================================================================
+# AUTOMATION
+# ==============================================================================
+
+  - name: n8n
+    displayName: n8n (Workflow Engine)
+    type: automation
+    tech: n8n (self-hosted)
+    path: null
+    containerPort: 5678
+    image: n8nio/n8n
+    deploy:
+      prod:
+        cluster: vps-ovh
+        namespace: null
+        replicas: 1
+        k8sName: null
+        host: n8n-vps
+    dependsOn: []
+    consumesSecrets:
+      - N8N_ENCRYPTION_KEY
+      - GITHUB_PAT
+      - LINEAR_API_KEY
+      - SLACK_WEBHOOK
+    exposedTo: []
+    health: /healthz
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    workflows:
+      - linear-to-claude
+      - slack-interactive
+      - stoa-slash-command
+      - approve-webhook
+      - daily-digest
+    owner: platform-team
+
+# ==============================================================================
+# GATEWAY ARENA — Benchmark instances
+# ==============================================================================
+
+  - name: kong-arena
+    displayName: Kong DB-less (Arena)
+    type: gateway-benchmark
+    tech: Kong 3.x (DB-less)
+    path: null
+    containerPort: 8000
+    image: kong:3.6
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 1
+        k8sName: kong-arena
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo: []
+    health: ":8001/status"
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    purpose: Layer 0 + Layer 1 benchmark baseline
+    owner: platform-team
+
+  - name: gravitee-arena
+    displayName: Gravitee APIM (Arena)
+    type: gateway-benchmark
+    tech: Gravitee APIM 4.x
+    path: null
+    containerPort: 8082
+    image: graviteeio/apim-gateway:4
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 1
+        k8sName: gravitee-arena-gw
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo: []
+    health: ":18082/_node/health"
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    purpose: Layer 0 + Layer 1 benchmark baseline
+    owner: platform-team
+
+# ==============================================================================
+# VPS GATEWAY INSTANCES — Live adapter testing
+# ==============================================================================
+
+  - name: kong-vps
+    displayName: Kong Standalone (VPS)
+    type: gateway-external
+    tech: Kong 3.x (DB-less)
+    path: null
+    containerPort: 8000
+    image: kong:3.6
+    deploy:
+      prod:
+        cluster: vps-ovh
+        namespace: null
+        replicas: 1
+        k8sName: null
+        host: kong-gra
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo: []
+    health: ":8001/status"
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    purpose: Live adapter testing + VPS benchmark sidecar
+    owner: platform-team
+
+  - name: gravitee-vps
+    displayName: Gravitee APIM (VPS)
+    type: gateway-external
+    tech: Gravitee APIM 4.x
+    path: null
+    containerPort: 8082
+    image: graviteeio/apim-gateway:4
+    deploy:
+      prod:
+        cluster: vps-ovh
+        namespace: null
+        replicas: 1
+        k8sName: null
+        host: gravitee-gra
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo: []
+    health: ":8083/management/organizations/DEFAULT/environments/DEFAULT"
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    purpose: Live adapter testing + VPS benchmark sidecar
+    owner: platform-team
+
+  - name: webmethods-vps
+    displayName: webMethods API Gateway (VPS)
+    type: gateway-external
+    tech: webMethods 10.15 (trial)
+    path: null
+    containerPort: 5555
+    image: softwareag/apigateway-trial:10.15
+    deploy:
+      prod:
+        cluster: vps-ovh
+        namespace: null
+        replicas: 1
+        k8sName: null
+        host: webmethods-vps
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo: []
+    health: /rest/apigateway/health
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    purpose: Live adapter testing
+    owner: platform-team
+
+# ==============================================================================
+# INFRASTRUCTURE METADATA
+# ==============================================================================
+
+clusters:
+  - name: ovh-mks
+    displayName: OVH Managed Kubernetes (GRA9)
+    provider: OVH
+    region: GRA9
+    nodes: 3
+    nodeType: B2-15
+    namespaces:
+      - stoa-system
+      - monitoring
+      - opensearch
+      - argocd
+      - kyverno
+      - nginx-gateway
+
+  - name: hetzner-k3s
+    displayName: Hetzner K3s (Staging)
+    provider: Hetzner
+    region: Frankfurt
+    nodes: 1
+    nodeType: K3s single-node
+    namespaces:
+      - stoa-system
+
+  - name: vps-ovh
+    displayName: OVH VPS Fleet
+    provider: OVH
+    region: GRA
+    nodes: 4
+    nodeType: VPS
+    hosts:
+      - name: kong-gra
+        purpose: Kong standalone + benchmark sidecar
+      - name: gravitee-gra
+        purpose: Gravitee APIM + benchmark sidecar
+      - name: webmethods-vps
+        purpose: webMethods trial gateway
+      - name: n8n-vps
+        purpose: n8n workflow engine
+
+  - name: hetzner-standalone
+    displayName: Hetzner Dedicated (Infisical)
+    provider: Hetzner
+    region: Frankfurt
+    nodes: 1
+    nodeType: Dedicated
+    hosts:
+      - name: master-1
+        purpose: Infisical secrets vault
+
+# ==============================================================================
+# RBAC ROLES
+# ==============================================================================
+
+roles:
+  - name: cpi-admin
+    scope: "stoa:admin"
+    description: Full platform access — create/update/delete tenants, APIs, gateways, users
+  - name: tenant-admin
+    scope: "stoa:write, stoa:read"
+    description: Own tenant management — APIs, subscriptions, credentials
+  - name: devops
+    scope: "stoa:write, stoa:read"
+    description: Deploy/promote, gateway integrations, quota enforcement
+  - name: viewer
+    scope: "stoa:read"
+    description: Read-only access to dashboards, APIs, subscriptions

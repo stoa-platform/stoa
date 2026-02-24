@@ -12,5 +12,8 @@
   ],
   "mcp-gateway/src/**/*.py": [
     "bash -c 'cd mcp-gateway && python3 -m ruff check \"$@\"' _"
+  ],
+  "docs/platform-catalog.yaml": [
+    "bash -c './scripts/ops/catalog-graph.sh && git add docs/architecture-graph.md'"
   ]
 }

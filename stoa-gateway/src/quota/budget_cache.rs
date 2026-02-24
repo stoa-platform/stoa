@@ -36,14 +36,21 @@ struct BudgetState {
 pub struct BudgetCache {
     states: Arc<RwLock<HashMap<String, BudgetState>>>,
     config: BudgetCacheConfig,
+    /// Shared HTTP client — reuses TCP connections across refresh cycles.
+    http_client: reqwest::Client,
 }
 
 impl BudgetCache {
     /// Create a new budget cache.
     pub fn new(config: BudgetCacheConfig) -> Self {
+        let http_client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap_or_default();
         Self {
             states: Arc::new(RwLock::new(HashMap::new())),
             config,
+            http_client,
         }
     }
 
@@ -143,17 +150,6 @@ impl BudgetCache {
             return;
         }
 
-        let client = match reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .build()
-        {
-            Ok(c) => c,
-            Err(e) => {
-                warn!(error = %e, "Failed to create HTTP client for budget refresh");
-                return;
-            }
-        };
-
         for dept_id in &departments {
             let url = format!(
                 "{}/internal/budgets/{}/check",
@@ -161,7 +157,7 @@ impl BudgetCache {
                 dept_id,
             );
 
-            match client.get(&url).send().await {
+            match self.http_client.get(&url).send().await {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         match resp.json::<BudgetCheckResponse>().await {

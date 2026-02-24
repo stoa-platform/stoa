@@ -669,6 +669,8 @@ pub async fn mcp_tools_call(
     }
 
     // CAB-1456: Department budget enforcement
+    // Currently tenant_id == department_id (1:1 mapping). When multi-department
+    // tenants are supported, resolve department_id from a tenant→dept mapping.
     if let Some(ref budget_cache) = state.budget_cache {
         let dept_id = auth.tenant_id.as_str();
         budget_cache.track_department(dept_id);
@@ -1099,6 +1101,8 @@ fn emit_metering_event(
         );
 
         // CAB-1456: Billing enrichment — informational cost estimate
+        // Rough BPE approximation: ~4 bytes/token for English text.
+        // Advisory only — CP API computes authoritative billing amounts.
         let token_count = (sizes.request + sizes.response) / 4;
         let tool_tier = "standard";
         let cost_microcents = compute_cost(

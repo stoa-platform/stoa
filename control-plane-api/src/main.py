@@ -27,6 +27,7 @@ from .middleware.http_logging import HTTPLoggingMiddleware
 
 # Note: These are now imported as instances, not modules
 from .middleware.metrics import MetricsMiddleware, get_metrics
+from .middleware.pii_masking import PIIMaskingMiddleware
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .opensearch import search_router, setup_opensearch
 from .opensearch.audit_middleware import AuditMiddleware
@@ -68,6 +69,7 @@ from .routers import (
     onboarding,
     onboarding_admin,
     operations,
+    pii_admin,
     plans,
     platform,
     portal,
@@ -550,6 +552,9 @@ app.add_middleware(
 # Prometheus metrics middleware
 app.add_middleware(MetricsMiddleware)
 
+# PII masking middleware — masks PII in ASGI scope before logging (CAB-430)
+app.add_middleware(PIIMaskingMiddleware)
+
 # HTTP request/response logging middleware (CAB-330)
 if settings.LOG_HTTP_MIDDLEWARE_ENABLED:
     app.add_middleware(HTTPLoggingMiddleware)
@@ -627,6 +632,9 @@ app.include_router(catalog_admin.router)
 
 # Admin Prospects Dashboard (CAB-911 - Conversion Cockpit)
 app.include_router(admin_prospects.router)
+
+# PII Admin — scan, mask, config (CAB-430)
+app.include_router(pii_admin.router)
 
 # Operations and Business Analytics (CAB-Observability)
 app.include_router(operations.router)

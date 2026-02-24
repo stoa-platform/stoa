@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "linear": {
+      "command": "bash",
+      "args": ["-c", "LINEAR_API_KEY=$(security find-generic-password -a linear-mcp -s linear-api-key -w 2>/dev/null) exec npx -y linear-mcp-server"],
+      "disabled": true
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    }
+  }
+}

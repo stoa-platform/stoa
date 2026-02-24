@@ -17,8 +17,17 @@ from src.auth.dependencies import User, get_current_user
 from src.config import settings
 from src.database import get_db
 from src.logging_config import get_logger
-from src.models.contract import Contract, ProtocolBinding, ProtocolType
-from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
+from src.models.contract import (
+    Contract,
+    McpGeneratedTool,
+    ProtocolBinding,
+    ProtocolType,
+)
+from src.models.gateway_instance import (
+    GatewayInstance,
+    GatewayInstanceStatus,
+    GatewayType,
+)
 from src.schemas.contract import (
     BindingsListResponse,
     ContractCreate,
@@ -28,9 +37,14 @@ from src.schemas.contract import (
     DisableBindingResponse,
     EnableBindingRequest,
     EnableBindingResponse,
+    McpToolDefinition,
+    McpToolsGenerateResponse,
+    McpToolsListResponse,
     ProtocolBindingResponse,
+    TenantToolsResponse,
 )
 from src.services.cache_service import contract_cache
+from src.services.uac_tool_generator import UacToolGenerator
 
 logger = get_logger(__name__)
 
@@ -47,9 +61,13 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
     return user.tenant_id == tenant_id
 
 
-async def _get_or_create_default_bindings(db: AsyncSession, contract: Contract) -> list[ProtocolBinding]:
+async def _get_or_create_default_bindings(
+    db: AsyncSession, contract: Contract
+) -> list[ProtocolBinding]:
     """Get existing bindings or create default disabled bindings for all protocols."""
-    result = await db.execute(select(ProtocolBinding).where(ProtocolBinding.contract_id == contract.id))
+    result = await db.execute(
+        select(ProtocolBinding).where(ProtocolBinding.contract_id == contract.id)
+    )
     bindings = list(result.scalars().all())
 
     # Check which protocols already have bindings
@@ -93,10 +111,14 @@ def _generate_endpoint_info(contract: Contract, protocol: ProtocolType) -> dict:
     otherwise generates base URLs from config. For GraphQL/gRPC/Kafka: stub endpoints.
     """
     base_url = (
-        f"https://api.{settings.BASE_DOMAIN}" if hasattr(settings, "BASE_DOMAIN") else "https://api.stoa.example.com"
+        f"https://api.{settings.BASE_DOMAIN}"
+        if hasattr(settings, "BASE_DOMAIN")
+        else "https://api.stoa.example.com"
     )
     gateway_url = (
-        f"https://mcp.{settings.BASE_DOMAIN}" if hasattr(settings, "BASE_DOMAIN") else "https://mcp.stoa.example.com"
+        f"https://mcp.{settings.BASE_DOMAIN}"
+        if hasattr(settings, "BASE_DOMAIN")
+        else "https://mcp.stoa.example.com"
     )
     contract_name = contract.name.replace("_", "-").lower()
 
@@ -134,7 +156,9 @@ def _generate_endpoint_info(contract: Contract, protocol: ProtocolType) -> dict:
     }
 
 
-def _binding_to_response(binding: ProtocolBinding, traffic_24h: int | None = None) -> ProtocolBindingResponse:
+def _binding_to_response(
+    binding: ProtocolBinding, traffic_24h: int | None = None
+) -> ProtocolBindingResponse:
     """Convert ProtocolBinding model to response schema."""
     operations = None
     if binding.operations:
@@ -175,10 +199,15 @@ async def create_contract(
 
     # Check for duplicate name
     existing = await db.execute(
-        select(Contract).where(and_(Contract.tenant_id == tenant_id, Contract.name == request.name))
+        select(Contract).where(
+            and_(Contract.tenant_id == tenant_id, Contract.name == request.name)
+        )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail=f"Contract '{request.name}' already exists in this tenant")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Contract '{request.name}' already exists in this tenant",
+        )
 
     contract = Contract(
         id=uuid.uuid4(),
@@ -287,7 +316,9 @@ async def list_contracts(
             )
         )
 
-    response = ContractListResponse(items=items, total=total, page=page, page_size=page_size)
+    response = ContractListResponse(
+        items=items, total=total, page=page, page_size=page_size
+    )
     await contract_cache.set(cache_key, response)
     return response
 
@@ -498,7 +529,10 @@ async def enable_binding(
         db.add(binding)
 
     if binding.enabled:
-        raise HTTPException(status_code=409, detail=f"{request.protocol.value.upper()} binding is already enabled")
+        raise HTTPException(
+            status_code=409,
+            detail=f"{request.protocol.value.upper()} binding is already enabled",
+        )
 
     # Generate endpoint info
     endpoint_info = _generate_endpoint_info(contract, request.protocol)
@@ -571,6 +605,29 @@ async def enable_binding(
         )
     # --- end gateway dispatch ---
 
+    # --- Auto-generate MCP tools when MCP binding is enabled (CAB-605) ---
+    if request.protocol == ProtocolType.MCP and contract.openapi_spec_url:
+        try:
+            from src.services.uac_transformer import (
+                fetch_openapi_spec,
+                transform_openapi_to_uac,
+            )
+
+            openapi_spec = await fetch_openapi_spec(contract.openapi_spec_url)
+            uac_spec = transform_openapi_to_uac(
+                openapi_spec,
+                tenant_id=contract.tenant_id,
+                source_spec_url=contract.openapi_spec_url,
+            )
+            generator = UacToolGenerator(db)
+            await generator.generate_tools(contract, uac_spec)
+        except Exception as exc:
+            logger.warning(
+                "MCP tool generation failed (non-blocking)",
+                contract_id=str(contract_id),
+                error=str(exc),
+            )
+
     logger.info(
         "Protocol binding enabled",
         contract_id=str(contract_id),
@@ -589,7 +646,9 @@ async def enable_binding(
     )
 
 
-@router.delete("/{contract_id}/bindings/{protocol}", response_model=DisableBindingResponse)
+@router.delete(
+    "/{contract_id}/bindings/{protocol}", response_model=DisableBindingResponse
+)
 async def disable_binding(
     contract_id: uuid.UUID,
     protocol: ProtocolType,
@@ -621,10 +680,15 @@ async def disable_binding(
     binding = binding_result.scalar_one_or_none()
 
     if not binding:
-        raise HTTPException(status_code=404, detail=f"{protocol.value.upper()} binding not found")
+        raise HTTPException(
+            status_code=404, detail=f"{protocol.value.upper()} binding not found"
+        )
 
     if not binding.enabled:
-        raise HTTPException(status_code=409, detail=f"{protocol.value.upper()} binding is already disabled")
+        raise HTTPException(
+            status_code=409,
+            detail=f"{protocol.value.upper()} binding is already disabled",
+        )
 
     binding.enabled = False
 
@@ -641,4 +705,139 @@ async def disable_binding(
         protocol=protocol,
         status="disabled",
         disabled_at=datetime.utcnow(),
+    )
+
+
+# ============ MCP Tool Endpoints (CAB-605) ============
+
+
+def _tool_to_response(tool: McpGeneratedTool) -> McpToolDefinition:
+    """Convert ORM tool to response schema."""
+    import json as _json
+
+    return McpToolDefinition(
+        tool_name=tool.tool_name,
+        description=tool.description,
+        input_schema=_json.loads(tool.input_schema) if tool.input_schema else None,
+        output_schema=_json.loads(tool.output_schema) if tool.output_schema else None,
+        backend_url=tool.backend_url,
+        http_method=tool.http_method,
+        path_pattern=tool.path_pattern,
+        version=tool.version,
+        spec_hash=tool.spec_hash,
+        enabled=tool.enabled,
+    )
+
+
+@router.post(
+    "/{contract_id}/mcp-tools/generate",
+    response_model=McpToolsGenerateResponse,
+    summary="Generate MCP tools from UAC contract",
+)
+async def generate_mcp_tools(
+    contract_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger MCP tool generation from a UAC contract's endpoints."""
+    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    contract = result.scalars().first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    if not _has_tenant_access(user, contract.tenant_id):
+        raise HTTPException(status_code=403, detail="Not authorized for this tenant")
+
+    from src.schemas.uac import UacContractSpec
+
+    spec = UacContractSpec(
+        name=contract.name,
+        version=contract.version,
+        tenant_id=contract.tenant_id,
+        display_name=contract.display_name,
+        description=contract.description,
+        endpoints=[],
+        spec_hash=contract.schema_hash,
+    )
+
+    if contract.openapi_spec_url:
+        try:
+            from src.services.uac_transformer import (
+                fetch_openapi_spec,
+                transform_openapi_to_uac,
+            )
+
+            openapi_spec = await fetch_openapi_spec(contract.openapi_spec_url)
+            spec = transform_openapi_to_uac(
+                openapi_spec,
+                tenant_id=contract.tenant_id,
+                source_spec_url=contract.openapi_spec_url,
+            )
+        except Exception as exc:
+            logger.warning("Failed to fetch OpenAPI spec", error=str(exc))
+
+    generator = UacToolGenerator(db)
+    tools = await generator.generate_tools(contract, spec)
+
+    return McpToolsGenerateResponse(
+        generated=len(tools),
+        contract_id=contract.id,
+        tools=[_tool_to_response(t) for t in tools],
+    )
+
+
+@router.get(
+    "/{contract_id}/mcp-tools",
+    response_model=McpToolsListResponse,
+    summary="List MCP tools for a contract",
+)
+async def list_mcp_tools(
+    contract_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all generated MCP tools for a contract."""
+    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    contract = result.scalars().first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    if not _has_tenant_access(user, contract.tenant_id):
+        raise HTTPException(status_code=403, detail="Not authorized for this tenant")
+
+    generator = UacToolGenerator(db)
+    tools = await generator.get_tools_for_contract(contract_id)
+
+    return McpToolsListResponse(
+        contract_id=contract.id,
+        contract_name=contract.name,
+        tools=[_tool_to_response(t) for t in tools],
+        spec_hash=contract.schema_hash,
+    )
+
+
+# ============ MCP Discovery Router (CAB-605) ============
+
+discovery_router = APIRouter(prefix="/v1/mcp", tags=["MCP Discovery"])
+
+
+@discovery_router.get(
+    "/generated-tools",
+    response_model=TenantToolsResponse,
+    summary="Gateway discovery — list all tools for a tenant",
+)
+async def get_tenant_tools(
+    tenant_id: str = Query(..., description="Tenant ID"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gateway discovery endpoint: list all enabled MCP tools for a tenant."""
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Not authorized for this tenant")
+
+    generator = UacToolGenerator(db)
+    tools = await generator.get_tools_for_tenant(tenant_id)
+
+    return TenantToolsResponse(
+        tenant_id=tenant_id,
+        tools=[_tool_to_response(t) for t in tools],
+        total=len(tools),
     )

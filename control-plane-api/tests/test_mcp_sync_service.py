@@ -13,7 +13,7 @@ Covers:
   error list content, exception returns error dict
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.models.mcp_subscription import (
@@ -171,7 +171,7 @@ class TestSyncServerCreate:
         db.execute.return_value = _exec_returning(scalar=None)
 
         svc = MCPSyncService(git, db)
-        result = await svc.sync_server("_platform", "test-server")
+        await svc.sync_server("_platform", "test-server")
 
         db.add.assert_called()
         db.commit.assert_awaited()
@@ -595,7 +595,7 @@ class TestSyncTenantServers:
         svc = MCPSyncService(git, db)
         # Patch sync_server so it succeeds without needing a real GitLab round-trip
         svc.sync_server = AsyncMock(
-            side_effect=lambda tid, name, commit_sha=None: _make_server_orm(name=name, tools=[])
+            side_effect=lambda _tid, name, _commit_sha=None: _make_server_orm(name=name, tools=[])
         )
 
         result = await svc.sync_tenant_servers("_platform")
@@ -868,8 +868,8 @@ class TestGetSyncStatus:
         db = _make_db()
         git = _make_git()
 
-        old_dt = datetime(2026, 1, 1, 0, 0, 0)
-        new_dt = datetime(2026, 2, 1, 0, 0, 0)
+        old_dt = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        new_dt = datetime(2026, 2, 1, 0, 0, 0, tzinfo=timezone.utc)
 
         servers = [
             _make_server_orm(sync_status=MCPServerSyncStatus.SYNCED, last_synced_at=old_dt, sync_error=None),

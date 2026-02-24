@@ -95,11 +95,11 @@ patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
 from src.middleware.pii_masking import PIIMaskingMiddleware
 
 _ORIGINAL_MASK_QUERY_STRING = PIIMaskingMiddleware._mask_query_string
-PIIMaskingMiddleware._mask_query_string = lambda self, qs: qs
+PIIMaskingMiddleware._mask_query_string = lambda _self, qs: qs
 
 import asyncio
 from collections.abc import AsyncGenerator, Generator
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Any, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch

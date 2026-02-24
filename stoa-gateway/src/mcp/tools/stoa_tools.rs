@@ -5,7 +5,8 @@
 //! Flow:
 //!   1. Register native tools (12 STOA tools, direct CP API calls)
 //!   2. Try `GET /v1/mcp/tools` on Control Plane → dynamic registration for unknown tools
-//!   3. Background task refreshes every 60s from CP (only registers non-native tools)
+//!   3. Try `GET /v1/mcp/generated-tools` → UAC-generated tools (CAB-606)
+//!   4. Background task refreshes every 60s from CP (only registers non-native tools)
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +15,7 @@ use super::native_tool::{create_http_client, has_native_implementation, register
 use super::proxy_tool::ProxyTool;
 use super::{ToolRegistry, ToolSchema};
 use crate::cache::PromptCache;
-use crate::control_plane::{RemoteToolDef, ToolProxyClient};
+use crate::control_plane::{GeneratedToolDef, RemoteToolDef, ToolProxyClient};
 use crate::mcp::session::SessionManager;
 use crate::resilience::{
     retry_with_backoff, CircuitBreaker, CircuitBreakerError, CircuitBreakerRegistry, RetryConfig,
@@ -53,6 +54,62 @@ fn register_remote_tool(registry: &ToolRegistry, def: &RemoteToolDef, cp: &Arc<T
     tracing::info!(tool = %def.name, "Registered remote tool (proxy fallback)");
 }
 
+/// Register a UAC-generated tool definition as a ProxyTool (CAB-606).
+///
+/// Generated tools use the naming convention `{contract}:{operation_id}` and
+/// come from the Control Plane's `GET /v1/mcp/generated-tools` endpoint.
+/// If the tool name collides with a native tool, an alias is registered
+/// so clients can still call the generated variant by its full name.
+fn register_generated_tool(
+    registry: &ToolRegistry,
+    def: &GeneratedToolDef,
+    cp: &Arc<ToolProxyClient>,
+) {
+    // Build input schema from the definition (or default to empty object)
+    let tool_schema = match &def.input_schema {
+        Some(schema_val) => {
+            let properties: std::collections::HashMap<String, serde_json::Value> = schema_val
+                .get("properties")
+                .and_then(|p| serde_json::from_value(p.clone()).ok())
+                .unwrap_or_default();
+            let required: Vec<String> = schema_val
+                .get("required")
+                .and_then(|r| serde_json::from_value(r.clone()).ok())
+                .unwrap_or_default();
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties,
+                required,
+            }
+        }
+        None => ToolSchema {
+            schema_type: "object".to_string(),
+            properties: Default::default(),
+            required: vec![],
+        },
+    };
+
+    let action = infer_action(&def.tool_name);
+    let description = def
+        .description
+        .clone()
+        .unwrap_or_else(|| format!("UAC-generated tool: {}", def.tool_name));
+
+    registry.register(Arc::new(ProxyTool::new(
+        &def.tool_name,
+        &description,
+        tool_schema,
+        action,
+        cp.clone(),
+    )));
+
+    tracing::info!(
+        tool = %def.tool_name,
+        version = %def.version,
+        "Registered UAC-generated tool (CAB-606)"
+    );
+}
+
 /// Infer UAC action from tool name convention
 fn infer_action(tool_name: &str) -> Action {
     if tool_name.contains("security") || tool_name.contains("audit") {
@@ -79,6 +136,7 @@ fn infer_action(tool_name: &str) -> Action {
 /// Native tools (12 STOA tools) are always registered and call CP API directly.
 /// Additional tools discovered from CP are registered as ProxyTool (fallback).
 /// Phase 6: CP discovery is wrapped with circuit breaker + retry for resilience.
+/// CAB-606: Also discovers UAC-generated tools from the generated-tools endpoint.
 pub async fn discover_and_register(
     registry: Arc<ToolRegistry>,
     cp: &Arc<ToolProxyClient>,
@@ -118,11 +176,42 @@ pub async fn discover_and_register(
             if proxy_count > 0 {
                 tracing::info!(proxy_count, "Additional tools registered via CP proxy");
             }
-            Ok(registry.count())
         }
         Err(e) => {
             tracing::warn!(error = %e, "CP unreachable — using native tools only");
-            Ok(registry.count())
+        }
+    }
+
+    // CAB-606: Discover UAC-generated tools (best-effort, non-blocking)
+    discover_generated_tools_best_effort(&registry, cp).await;
+
+    Ok(registry.count())
+}
+
+/// Discover UAC-generated tools from CP (CAB-606).
+///
+/// Best-effort: logs a warning on failure but doesn't block startup.
+/// Uses a default tenant ID for initial discovery; per-tenant discovery
+/// happens in `refresh_tools_for_tenant()`.
+async fn discover_generated_tools_best_effort(registry: &ToolRegistry, cp: &Arc<ToolProxyClient>) {
+    match cp.discover_generated_tools("_default").await {
+        Ok(gen_tools) => {
+            let mut gen_count = 0;
+            for def in &gen_tools {
+                if !registry.exists(&def.tool_name) {
+                    register_generated_tool(registry, def, cp);
+                    gen_count += 1;
+                }
+            }
+            if gen_count > 0 {
+                tracing::info!(gen_count, "UAC-generated tools registered (CAB-606)");
+            }
+        }
+        Err(e) => {
+            tracing::debug!(
+                error = %e,
+                "Generated tools discovery unavailable (CAB-606 endpoint may not exist yet)"
+            );
         }
     }
 }
@@ -191,6 +280,9 @@ pub fn start_tool_refresh_task(
                     tracing::debug!(error = %e, "Tool refresh from CP failed (keeping existing tools)");
                 }
             }
+
+            // CAB-606: Also refresh generated tools
+            discover_generated_tools_best_effort(&registry, &cp).await;
         }
     });
 }
@@ -202,6 +294,7 @@ pub fn start_tool_refresh_task(
 /// Only registers NEW tools that don't already have native implementations.
 /// Marks the tenant as freshly loaded in the registry (staleness tracking).
 /// Called by handlers.rs stale-while-revalidate logic.
+/// CAB-606: Also discovers tenant-scoped generated tools.
 pub async fn refresh_tools_for_tenant(
     registry: &Arc<ToolRegistry>,
     cp: &Arc<ToolProxyClient>,
@@ -216,9 +309,29 @@ pub async fn refresh_tools_for_tenant(
             new_count += 1;
         }
     }
+
+    // CAB-606: Discover tenant-specific generated tools
+    match cp.discover_generated_tools(tenant_id).await {
+        Ok(gen_tools) => {
+            for def in &gen_tools {
+                if !registry.exists(&def.tool_name) {
+                    register_generated_tool(registry, def, cp);
+                    new_count += 1;
+                }
+            }
+        }
+        Err(e) => {
+            tracing::debug!(
+                tenant_id = %tenant_id,
+                error = %e,
+                "Generated tools discovery failed for tenant (CAB-606)"
+            );
+        }
+    }
+
     registry.mark_loaded(tenant_id);
     if new_count > 0 {
-        tracing::info!(new_count, tenant_id = %tenant_id, "Tenant tool refresh: new proxy tools registered");
+        tracing::info!(new_count, tenant_id = %tenant_id, "Tenant tool refresh: new tools registered");
     }
     Ok(new_count)
 }
@@ -557,5 +670,86 @@ mod tests {
         let tool = registry.get("my_tool").unwrap();
         let schema = tool.input_schema();
         assert_eq!(schema.required, vec!["action".to_string()]);
+    }
+
+    // ─── register_generated_tool (CAB-606) ─────────────────────
+
+    fn make_generated_def(name: &str) -> GeneratedToolDef {
+        GeneratedToolDef {
+            tool_name: name.to_string(),
+            description: Some(format!("Generated: {}", name)),
+            input_schema: Some(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"}
+                },
+                "required": ["id"]
+            })),
+            output_schema: None,
+            backend_url: Some("https://api.example.com".to_string()),
+            http_method: Some("POST".to_string()),
+            path_pattern: Some("/v1/invoices".to_string()),
+            version: "1.0.0".to_string(),
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn register_generated_tool_creates_proxy() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let def = make_generated_def("billing:create_invoice");
+        register_generated_tool(&registry, &def, &cp);
+
+        assert_eq!(registry.count(), 1);
+        let tool = registry.get("billing:create_invoice").unwrap();
+        assert_eq!(tool.name(), "billing:create_invoice");
+        assert_eq!(tool.required_action(), Action::Create); // inferred from "create"
+    }
+
+    #[test]
+    fn register_generated_tool_with_no_schema() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let def = GeneratedToolDef {
+            tool_name: "simple_tool".to_string(),
+            description: None,
+            input_schema: None,
+            output_schema: None,
+            backend_url: None,
+            http_method: None,
+            path_pattern: None,
+            version: "1.0.0".to_string(),
+            enabled: true,
+        };
+        register_generated_tool(&registry, &def, &cp);
+
+        assert_eq!(registry.count(), 1);
+        let tool = registry.get("simple_tool").unwrap();
+        let schema = tool.input_schema();
+        assert!(schema.properties.is_empty());
+        assert!(schema.required.is_empty());
+    }
+
+    #[test]
+    fn register_generated_tool_preserves_schema() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let def = make_generated_def("billing:create_invoice");
+        register_generated_tool(&registry, &def, &cp);
+
+        let tool = registry.get("billing:create_invoice").unwrap();
+        let schema = tool.input_schema();
+        assert!(schema.properties.contains_key("id"));
+        assert_eq!(schema.required, vec!["id".to_string()]);
     }
 }

@@ -270,11 +270,16 @@ pub enum ToolError {
     Internal(String),
 }
 
-/// Registry of available tools with per-tenant staleness tracking (CAB-1317).
+/// Registry of available tools with per-tenant staleness tracking (CAB-1317)
+/// and alias support for migration (CAB-606).
 pub struct ToolRegistry {
     tools: RwLock<HashMap<String, Arc<dyn Tool>>>,
     /// Tracks when tools were last loaded for each tenant (CAB-1317 Phase 2).
     tenant_loaded_at: RwLock<HashMap<String, std::time::Instant>>,
+    /// Old name → new name mapping for migrated tools (CAB-606).
+    /// When a client calls a tool by its old name, the alias resolves to the
+    /// canonical name and a deprecation warning is logged.
+    aliases: RwLock<HashMap<String, String>>,
 }
 
 impl ToolRegistry {
@@ -282,6 +287,7 @@ impl ToolRegistry {
         Self {
             tools: RwLock::new(HashMap::new()),
             tenant_loaded_at: RwLock::new(HashMap::new()),
+            aliases: RwLock::new(HashMap::new()),
         }
     }
 
@@ -292,9 +298,42 @@ impl ToolRegistry {
         self.tools.write().insert(name, tool);
     }
 
-    /// Get a tool by name
+    /// Register an alias from an old tool name to a new canonical name (CAB-606).
+    ///
+    /// When `get(old_name)` is called, the registry will transparently resolve
+    /// to the tool registered under `new_name` and log a deprecation warning.
+    pub fn register_alias(&self, old_name: &str, new_name: &str) {
+        tracing::info!(
+            old_name = %old_name,
+            new_name = %new_name,
+            "Registering tool alias (migration)"
+        );
+        self.aliases
+            .write()
+            .insert(old_name.to_string(), new_name.to_string());
+    }
+
+    /// Get a tool by name, checking aliases if the direct lookup misses (CAB-606).
     pub fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
-        self.tools.read().get(name).cloned()
+        // Direct lookup first
+        let tools = self.tools.read();
+        if let Some(tool) = tools.get(name) {
+            return Some(tool.clone());
+        }
+        drop(tools);
+
+        // Check aliases
+        let aliases = self.aliases.read();
+        if let Some(canonical) = aliases.get(name) {
+            tracing::warn!(
+                old_name = %name,
+                new_name = %canonical,
+                "Tool called by deprecated name — use the new name instead"
+            );
+            let tools = self.tools.read();
+            return tools.get(canonical).cloned();
+        }
+        None
     }
 
     /// List all tools, optionally filtered by tenant.
@@ -343,6 +382,11 @@ impl ToolRegistry {
     /// Get all tool names
     pub fn names(&self) -> Vec<String> {
         self.tools.read().keys().cloned().collect()
+    }
+
+    /// Get alias count (CAB-606)
+    pub fn alias_count(&self) -> usize {
+        self.aliases.read().len()
     }
 
     // === Staleness tracking (CAB-1317 Phase 2) ===
@@ -761,5 +805,52 @@ mod tests {
     fn test_tenant_cache_age_none_when_never_loaded() {
         let registry = ToolRegistry::new();
         assert!(registry.tenant_cache_age("ghost").is_none());
+    }
+
+    // === Alias Tests (CAB-606) ===
+
+    #[test]
+    fn test_register_alias_resolves() {
+        let registry = ToolRegistry::new();
+        let tool = Arc::new(StoaCreateApiTool::new(
+            reqwest::Client::new(),
+            "http://localhost:8000".to_string(),
+        ));
+        registry.register(tool);
+
+        // Register alias: old_name → stoa_create_api
+        registry.register_alias("create_api_legacy", "stoa_create_api");
+
+        // Direct name works
+        assert!(registry.get("stoa_create_api").is_some());
+        // Alias resolves to same tool
+        let aliased = registry.get("create_api_legacy");
+        assert!(aliased.is_some());
+        assert_eq!(aliased.unwrap().name(), "stoa_create_api");
+    }
+
+    #[test]
+    fn test_alias_returns_none_when_target_missing() {
+        let registry = ToolRegistry::new();
+        registry.register_alias("old_tool", "nonexistent_tool");
+
+        // Alias points to a tool that doesn't exist
+        assert!(registry.get("old_tool").is_none());
+    }
+
+    #[test]
+    fn test_alias_count() {
+        let registry = ToolRegistry::new();
+        assert_eq!(registry.alias_count(), 0);
+        registry.register_alias("a", "b");
+        registry.register_alias("c", "d");
+        assert_eq!(registry.alias_count(), 2);
+    }
+
+    #[test]
+    fn test_get_without_alias_returns_none() {
+        let registry = ToolRegistry::new();
+        // No tool, no alias → None
+        assert!(registry.get("ghost_tool").is_none());
     }
 }

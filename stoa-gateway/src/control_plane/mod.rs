@@ -7,4 +7,4 @@ pub mod registration;
 pub mod tool_proxy;
 
 pub use registration::GatewayRegistrar;
-pub use tool_proxy::{OidcConfig, RemoteToolDef, ToolProxyClient};
+pub use tool_proxy::{GeneratedToolDef, OidcConfig, RemoteToolDef, ToolProxyClient};

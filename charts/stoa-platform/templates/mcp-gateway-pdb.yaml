@@ -1,0 +1,16 @@
+{{- if and .Values.mcpGateway .Values.mcpGateway.podDisruptionBudget .Values.mcpGateway.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stoa-mcp-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-mcp-gateway
+    app.kubernetes.io/component: mcp-gateway
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.mcpGateway.podDisruptionBudget.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stoa-mcp-gateway
+{{- end }}

@@ -12,224 +12,29 @@
       "name": "Merge Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        200,
-        300
-      ],
+      "position": [200, 300],
       "webhookId": "merge-pr"
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "check-pr",
-              "leftValue": "={{ $json.query.pr }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
-            },
-            {
-              "id": "check-token",
-              "leftValue": "={{ $json.query.token }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
-            }
-          ],
-          "combinator": "and"
-        }
+        "jsCode": "const crypto = require('crypto');\nconst https = require('https');\nconst { URL } = require('url');\n\nfunction httpsRequest(options, body) {\n  return new Promise((resolve, reject) => {\n    const req = https.request(options, (res) => {\n      let data = '';\n      res.on('data', (chunk) => { data += chunk; });\n      res.on('end', () => {\n        try { resolve({ statusCode: res.statusCode, body: JSON.parse(data) }); }\n        catch { resolve({ statusCode: res.statusCode, body: data }); }\n      });\n    });\n    req.on('error', reject);\n    if (body) req.write(body);\n    req.end();\n  });\n}\n\nfunction ghRequest(method, path, pat, body) {\n  const url = new URL(`https://api.github.com${path}`);\n  const opts = {\n    hostname: url.hostname,\n    path: url.pathname,\n    method,\n    headers: {\n      'Authorization': `token ${pat}`,\n      'Accept': 'application/vnd.github.v3+json',\n      'User-Agent': 'n8n-stoa-factory'\n    }\n  };\n  if (body) {\n    const bodyStr = JSON.stringify(body);\n    opts.headers['Content-Type'] = 'application/json';\n    opts.headers['Content-Length'] = Buffer.byteLength(bodyStr);\n    return httpsRequest(opts, bodyStr);\n  }\n  return httpsRequest(opts);\n}\n\nconst pr = $input.first().json.query.pr;\nconst token = $input.first().json.query.token;\nconst repo = 'stoa-platform/stoa';\nconst prURL = `https://github.com/${repo}/pull/${pr}`;\n\n// Validate params\nif (!pr || !token) {\n  return [{ json: { redirectURL: `https://github.com/${repo}` } }];\n}\n\n// Validate HMAC\nconst secret = $env.APPROVE_HMAC_SECRET;\nif (!secret) {\n  return [{ json: { redirectURL: `https://github.com/${repo}` } }];\n}\nconst expected = crypto.createHmac('sha256', secret).update(pr).digest('hex');\nif (token !== expected) {\n  return [{ json: { redirectURL: `https://github.com/${repo}` } }];\n}\n\nconst pat = $env.GITHUB_PAT;\n\ntry {\n  // Fetch PR (get branch name)\n  const prRes = await ghRequest('GET', `/repos/${repo}/pulls/${pr}`, pat);\n  if (prRes.statusCode !== 200) {\n    return [{ json: { redirectURL: prURL } }];\n  }\n  const branchRef = prRes.body.head && prRes.body.head.ref;\n\n  // Squash merge\n  const mergeRes = await ghRequest('PUT', `/repos/${repo}/pulls/${pr}/merge`, pat, { merge_method: 'squash' });\n\n  // Delete branch (best-effort)\n  if (branchRef) {\n    try {\n      await ghRequest('DELETE', `/repos/${repo}/git/refs/heads/${branchRef}`, pat);\n    } catch (e) { /* ignore */ }\n  }\n\n  return [{ json: { redirectURL: prURL } }];\n} catch (e) {\n  return [{ json: { redirectURL: prURL } }];\n}"
       },
-      "id": "validate-params",
-      "name": "Validate Parameters",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2,
-      "position": [
-        400,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst pr = $input.first().json.query.pr;\nconst token = $input.first().json.query.token;\n\nconst secret = $env.APPROVE_HMAC_SECRET;\n\nif (!secret) {\n  return [{ json: { valid: false, error: 'APPROVE_HMAC_SECRET not configured' } }];\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(pr).digest('hex');\n\nif (token !== expected) {\n  return [{ json: { valid: false, error: 'Invalid HMAC token' } }];\n}\n\nreturn [{ json: { pr, token, valid: true } }];"
-      },
-      "id": "validate-hmac",
-      "name": "Validate HMAC",
+      "id": "process-merge",
+      "name": "Process Merge",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        600,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "check-valid",
-              "leftValue": "={{ $json.valid }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        }
-      },
-      "id": "check-hmac-result",
-      "name": "HMAC Valid?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        800,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/pulls/{{ $('Validate HMAC').first().json.pr }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/vnd.github.v3+json"
-            }
-          ]
-        }
-      },
-      "id": "fetch-pr",
-      "name": "Fetch PR",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1000,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "github-pat",
-          "name": "GitHub PAT"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "PUT",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/pulls/{{ $('Validate HMAC').first().json.pr }}/merge",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/vnd.github.v3+json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={ \"merge_method\": \"squash\" }"
-      },
-      "id": "merge-pr",
-      "name": "Merge PR",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1200,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "github-pat",
-          "name": "GitHub PAT"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "DELETE",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/git/refs/heads/{{ $('Fetch PR').first().json.head.ref }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/vnd.github.v3+json"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "delete-branch",
-      "name": "Delete Branch",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1400,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "github-pat",
-          "name": "GitHub PAT"
-        }
-      },
-      "continueOnFail": true
+      "position": [450, 300]
     },
     {
       "parameters": {
         "respondWith": "redirect",
-        "redirectURL": "=https://github.com/stoa-platform/stoa/pull/{{ $('Validate HMAC').first().json.pr }}"
+        "redirectURL": "={{ $json.redirectURL }}"
       },
-      "id": "redirect-to-pr",
-      "name": "Redirect to PR",
+      "id": "redirect-response",
+      "name": "Redirect",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        1600,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={ \"error\": \"Unauthorized — invalid or missing merge token\" }",
-        "options": {
-          "responseCode": 403
-        }
-      },
-      "id": "error-response",
-      "name": "Error Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        800,
-        500
-      ]
+      "position": [700, 300]
     }
   ],
   "connections": {
@@ -237,87 +42,18 @@
       "main": [
         [
           {
-            "node": "Validate Parameters",
+            "node": "Process Merge",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate Parameters": {
+    "Process Merge": {
       "main": [
         [
           {
-            "node": "Validate HMAC",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validate HMAC": {
-      "main": [
-        [
-          {
-            "node": "HMAC Valid?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HMAC Valid?": {
-      "main": [
-        [
-          {
-            "node": "Fetch PR",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch PR": {
-      "main": [
-        [
-          {
-            "node": "Merge PR",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge PR": {
-      "main": [
-        [
-          {
-            "node": "Delete Branch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Delete Branch": {
-      "main": [
-        [
-          {
-            "node": "Redirect to PR",
+            "node": "Redirect",
             "type": "main",
             "index": 0
           }
@@ -327,6 +63,9 @@
   },
   "settings": {
     "executionOrder": "v1"
+  },
+  "meta": {
+    "notes": "v2: Consolidated to single Code node. Requires env vars: APPROVE_HMAC_SECRET, GITHUB_PAT. n8n settings: NODE_FUNCTION_ALLOW_BUILTIN=crypto,https,url,buffer and N8N_BLOCK_ENV_ACCESS_IN_NODE=false"
   },
   "tags": [
     {

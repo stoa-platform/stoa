@@ -1,6 +1,11 @@
-"""Tests for GET /v1/me — user permissions and scopes endpoint"""
+"""Tests for /v1/me and /v1/me/tenant — user permissions, scopes, personal tenant (CAB-1436)"""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from fastapi.testclient import TestClient
 
 from src.routers.users import (
+    _sanitize_slug,
     filter_system_roles,
     get_effective_scopes,
 )
@@ -75,3 +80,88 @@ class TestGetEffectiveScopes:
         # viewer has stoa:catalog:read, devops adds stoa:catalog:write
         assert "stoa:catalog:read" in scopes
         assert "stoa:catalog:write" in scopes
+
+
+class TestSanitizeSlug:
+    """Tests for _sanitize_slug helper."""
+
+    def test_simple_username(self):
+        assert _sanitize_slug("alice") == "alice"
+
+    def test_email_style_username(self):
+        assert _sanitize_slug("alice@example.com") == "alice-example-com"
+
+    def test_special_chars(self):
+        assert _sanitize_slug("Al!ce B.ob") == "al-ce-b-ob"
+
+    def test_consecutive_dashes_collapsed(self):
+        assert _sanitize_slug("a--b---c") == "a-b-c"
+
+    def test_empty_string_returns_user(self):
+        assert _sanitize_slug("!!!") == "user"
+
+    def test_long_username_truncated(self):
+        slug = _sanitize_slug("a" * 100)
+        assert len(slug) <= 50
+
+
+TENANT_REPO = "src.routers.users.TenantRepository"
+KC_SVC = "src.routers.users.keycloak_service"
+KAFKA_SVC = "src.routers.users.kafka_service"
+
+
+class TestProvisionPersonalTenant:
+    """Tests for POST /v1/me/tenant."""
+
+    def test_provision_new_tenant(self, app_with_no_tenant_user, mock_db_session):
+        """User without tenant gets a personal tenant created."""
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=None)  # no collision
+        mock_tenant = MagicMock()
+        mock_tenant.id = "free-orphan-user"
+        mock_tenant.name = "orphan-user's workspace"
+        mock_repo.create = AsyncMock(return_value=mock_tenant)
+
+        mock_kc = MagicMock()
+        mock_kc.setup_tenant_group = AsyncMock()
+        mock_kc.add_user_to_tenant = AsyncMock()
+        mock_kc.assign_role = AsyncMock()
+
+        mock_kafka = MagicMock()
+        mock_kafka.emit_audit_event = AsyncMock()
+
+        with (
+            patch(TENANT_REPO, return_value=mock_repo),
+            patch(KC_SVC, mock_kc),
+            patch(KAFKA_SVC, mock_kafka),
+        ):
+            with TestClient(app_with_no_tenant_user) as client:
+                resp = client.post("/v1/me/tenant")
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["created"] is True
+        assert "free-" in data["tenant_id"]
+
+    def test_provision_idempotent_existing_tenant(self, app_with_tenant_admin, mock_db_session):
+        """User with existing tenant gets it returned (idempotent)."""
+        existing = MagicMock()
+        existing.id = "acme"
+        existing.name = "ACME Corporation"
+
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=existing)
+
+        with patch(TENANT_REPO, return_value=mock_repo):
+            with TestClient(app_with_tenant_admin) as client:
+                resp = client.post("/v1/me/tenant")
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["created"] is False
+        assert data["tenant_id"] == "acme"
+
+    def test_provision_unauthenticated(self, client):
+        """Unauthenticated user gets 401."""
+        resp = client.post("/v1/me/tenant")
+        assert resp.status_code == 401

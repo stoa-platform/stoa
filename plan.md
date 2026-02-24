@@ -128,6 +128,7 @@
   - [x] Phase 2: Slack Bot API dual-path — PR #775
   - [x] Phase 3: Slack Threading + Reactions — PR #781
   - [x] Phase 4: /stoa slash command + gap fixes — PRs #792, #795
+  - [x] n8n v3→v4 fix: rawBody binary + URL sandbox import — PR #933 (all 4 `/stoa` commands tested PASS)
 - [x] CAB-1388: [MEGA] API Test & Service Hardening Round 2 (21 pts) — PR #818
 - [x] CAB-1390: [MEGA] Portal Component Test Coverage & Feature Fixes (21 pts) — PRs #833, #836, #838
   - P1: Critical components — Onboarding, Contracts, Apps test files (PR #833)

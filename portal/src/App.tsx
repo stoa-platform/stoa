@@ -94,7 +94,7 @@ function LoginScreen() {
     e.preventDefault();
     setSubmitState('submitting');
     try {
-      const res = await fetch(`${config.api.baseUrl}/v1/access-requests`, {
+      const res = await fetch('/api/v1/access-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

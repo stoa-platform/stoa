@@ -21,10 +21,12 @@
 //! Both components use in-memory state with `parking_lot::RwLock` for
 //! thread-safe access without poisoning risk.
 
+pub mod budget_cache;
 mod middleware;
 mod quota_manager;
 mod rate_limiter;
 
+pub use budget_cache::{BudgetCache, BudgetCacheConfig};
 pub use middleware::quota_middleware;
 pub use quota_manager::{QuotaManager, QuotaManagerConfig};
 pub use quota_manager::{QuotaState, QuotaStats};

@@ -84,7 +84,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=5, Stage=council"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-6, MaxTurns=5, Stage=council"
 
       # Extract Claude's Council report from execution log
       - name: Extract Council Report
@@ -376,6 +376,8 @@ jobs:
 
       - name: Route Model
         id: route
+        env:
+          CLAUDE_DEFAULT_MODEL: ${{ vars.CLAUDE_DEFAULT_MODEL }}
         run: |
           source scripts/ai-ops/model-router.sh
           ESTIMATE="${{ github.event.client_payload.ticket_estimate }}"
@@ -947,6 +949,9 @@ jobs:
       - name: Route Model
         if: steps.verify.outputs.valid == 'true'
         id: route
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLAUDE_DEFAULT_MODEL: ${{ vars.CLAUDE_DEFAULT_MODEL }}
         run: |
           source scripts/ai-ops/model-router.sh
           ISSUE_NUM="${{ github.event.issue.number }}"
@@ -969,8 +974,6 @@ jobs:
           echo "model=$MODEL" >> "$GITHUB_OUTPUT"
           echo "turns=$TURNS" >> "$GITHUB_OUTPUT"
           echo "Routed: ${ESTIMATE}pt ${MODE} → ${MODEL}, ${TURNS} turns"
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Record Start Time
         if: steps.verify.outputs.valid == 'true'
@@ -1029,7 +1032,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-5' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-6' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
 
       - name: Detect Partial Success
         id: detect-partial
@@ -1259,7 +1262,7 @@ jobs:
           TICKET="${TICKET_ID:-}"
           [ -z "$TICKET" ] && TICKET="Issue-${{ github.event.issue.number }}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
-          MODEL="${{ steps.route.outputs.model || 'sonnet-4-5' }}"
+          MODEL="${{ steps.route.outputs.model || 'sonnet-4-6' }}"
           MAX_TURNS="${{ steps.route.outputs.turns || '60' }}"
           # Extract PR stats
           PR_FILES="" PR_LOC=""

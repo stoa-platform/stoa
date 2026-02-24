@@ -1,6 +1,5 @@
 """Tests for GatewayHealthWorker (src/workers/gateway_health_worker.py)."""
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,7 +9,6 @@ import pytest
 
 from src.models.gateway_instance import GatewayInstanceStatus, GatewayType
 from src.workers.gateway_health_worker import GatewayHealthWorker
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -172,9 +170,11 @@ class TestStart:
 
         worker._check_gateway_health = boom  # type: ignore[assignment]
 
-        with patch("src.workers.gateway_health_worker.asyncio.sleep", new=AsyncMock()):
-            with caplog.at_level(logging.ERROR, logger="src.workers.gateway_health_worker"):
-                await worker.start()
+        with (
+            patch("src.workers.gateway_health_worker.asyncio.sleep", new=AsyncMock()),
+            caplog.at_level(logging.ERROR, logger="src.workers.gateway_health_worker"),
+        ):
+            await worker.start()
 
         assert any("gateway health check" in msg.lower() for msg in caplog.messages)
 
@@ -292,8 +292,7 @@ class TestMarkStaleGatewaysOffline:
         worker = GatewayHealthWorker()
         stale_hc = datetime.now(UTC) - timedelta(seconds=200)
         gateways = [
-            _make_gateway(name=f"gw-{i}", last_health_check=stale_hc, gateway_type=GatewayType.STOA)
-            for i in range(3)
+            _make_gateway(name=f"gw-{i}", last_health_check=stale_hc, gateway_type=GatewayType.STOA) for i in range(3)
         ]
         mock_session = _make_session(scalars_result=gateways)
 
@@ -303,14 +302,10 @@ class TestMarkStaleGatewaysOffline:
             assert gw.status == GatewayInstanceStatus.OFFLINE
             assert gw.health_details["offline_reason"] == "heartbeat_timeout"
 
-    async def test_multiple_stale_gateways_logs_count(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_multiple_stale_gateways_logs_count(self, caplog: pytest.LogCaptureFixture) -> None:
         worker = GatewayHealthWorker()
         stale_hc = datetime.now(UTC) - timedelta(seconds=200)
-        gateways = [
-            _make_gateway(name=f"gw-{i}", last_health_check=stale_hc) for i in range(2)
-        ]
+        gateways = [_make_gateway(name=f"gw-{i}", last_health_check=stale_hc) for i in range(2)]
         mock_session = _make_session(scalars_result=gateways)
 
         with caplog.at_level(logging.INFO, logger="src.workers.gateway_health_worker"):

@@ -14,7 +14,6 @@ from src.workers.security_alert_consumer import (
     SecurityAlertPayload,
 )
 
-
 # ── SecurityAlertPayload schema ──────────────────────────────────────────────
 
 
@@ -65,9 +64,7 @@ class TestSecurityAlertPayload:
     # severity property
 
     def test_severity_from_payload(self):
-        alert = SecurityAlertPayload(
-            id="e1", type="t1", payload={"severity": "critical"}
-        )
+        alert = SecurityAlertPayload(id="e1", type="t1", payload={"severity": "critical"})
         assert alert.severity == "critical"
 
     def test_severity_default_medium(self):
@@ -81,9 +78,7 @@ class TestSecurityAlertPayload:
     # details property
 
     def test_details_from_payload(self):
-        alert = SecurityAlertPayload(
-            id="e1", type="t1", payload={"details": {"ip": "10.0.0.1", "count": 5}}
-        )
+        alert = SecurityAlertPayload(id="e1", type="t1", payload={"details": {"ip": "10.0.0.1", "count": 5}})
         assert alert.details == {"ip": "10.0.0.1", "count": 5}
 
     def test_details_default_empty_dict(self):
@@ -109,7 +104,7 @@ class TestSecurityAlertConsumerInit:
     def test_constants(self):
         assert TOPIC == "stoa.security.alerts"
         assert GROUP_ID == "security-alert-consumer"
-        assert VALID_SEVERITIES == {"critical", "high", "medium", "low"}
+        assert {"critical", "high", "medium", "low"} == VALID_SEVERITIES
 
 
 # ── start() ──────────────────────────────────────────────────────────────────
@@ -254,7 +249,6 @@ class TestCreateConsumer:
     @patch("src.workers.security_alert_consumer.KafkaConsumer")
     @patch("src.workers.security_alert_consumer.settings")
     def test_value_deserializer_decodes_json(self, mock_settings, mock_kafka_cls):
-        import json
 
         mock_settings.KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
         mock_settings.KAFKA_SASL_USERNAME = ""
@@ -295,15 +289,14 @@ class TestProcessMessage:
         consumer._loop = MagicMock()
         mock_future = MagicMock()
 
-        with patch(
-            "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
-            return_value=mock_future,
-        ) as mock_dispatch, patch.object(
-            consumer, "_persist_alert", new_callable=AsyncMock
+        with (
+            patch(
+                "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
+                return_value=mock_future,
+            ) as mock_dispatch,
+            patch.object(consumer, "_persist_alert", new_callable=AsyncMock),
         ):
-            msg = self._make_message(
-                {"id": "evt-001", "type": "auth_failure", "payload": {"severity": "high"}}
-            )
+            msg = self._make_message({"id": "evt-001", "type": "auth_failure", "payload": {"severity": "high"}})
             consumer._process_message(msg)
 
         mock_dispatch.assert_called_once()
@@ -318,13 +311,14 @@ class TestProcessMessage:
         async def fake_persist(alert, severity):
             captured_severity.append(severity)
 
-        with patch(
-            "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
-            return_value=mock_future,
-        ), patch.object(consumer, "_persist_alert", side_effect=fake_persist):
-            msg = self._make_message(
-                {"id": "evt-002", "type": "brute_force", "payload": {"severity": "unknown_value"}}
-            )
+        with (
+            patch(
+                "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
+                return_value=mock_future,
+            ),
+            patch.object(consumer, "_persist_alert", side_effect=fake_persist),
+        ):
+            msg = self._make_message({"id": "evt-002", "type": "brute_force", "payload": {"severity": "unknown_value"}})
             consumer._process_message(msg)
 
         # severity was captured via run_coroutine_threadsafe call args
@@ -341,19 +335,20 @@ class TestProcessMessage:
         mock_future = MagicMock()
 
         for sev in ("critical", "high", "medium", "low"):
-            with patch(
-                "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
-                return_value=mock_future,
-            ) as mock_dispatch, patch(
-                "src.workers.security_alert_consumer.asyncio.iscoroutine",
-                return_value=False,
+            with (
+                patch(
+                    "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
+                    return_value=mock_future,
+                ) as mock_dispatch,
+                patch(
+                    "src.workers.security_alert_consumer.asyncio.iscoroutine",
+                    return_value=False,
+                ),
             ):
                 # Replace _persist_alert with a MagicMock that returns a sentinel
                 # to avoid unawaited coroutine warnings from AsyncMock
                 consumer._persist_alert = MagicMock(return_value=MagicMock())
-                msg = self._make_message(
-                    {"id": "evt-003", "type": "t", "payload": {"severity": sev}}
-                )
+                msg = self._make_message({"id": "evt-003", "type": "t", "payload": {"severity": sev}})
                 consumer._process_message(msg)
                 mock_dispatch.assert_called_once()
                 mock_dispatch.reset_mock()
@@ -384,8 +379,10 @@ class TestProcessMessage:
         consumer = SecurityAlertConsumer()
         consumer._loop = None
 
-        with patch.object(consumer, "_persist_alert", new_callable=AsyncMock) as mock_persist, \
-             patch("src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe") as mock_dispatch:
+        with (
+            patch.object(consumer, "_persist_alert", new_callable=AsyncMock) as mock_persist,
+            patch("src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe") as mock_dispatch,
+        ):
             msg = self._make_message({"id": "evt-004", "type": "t"})
             consumer._process_message(msg)
 
@@ -397,14 +394,17 @@ class TestProcessMessage:
         consumer = SecurityAlertConsumer()
         consumer._loop = MagicMock()
 
-        with patch.object(
-            consumer,
-            "_persist_alert",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("db down"),
-        ), patch(
-            "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
-        ) as mock_dispatch:
+        with (
+            patch.object(
+                consumer,
+                "_persist_alert",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("db down"),
+            ),
+            patch(
+                "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
+            ) as mock_dispatch,
+        ):
             mock_future = MagicMock()
             mock_future.result.side_effect = RuntimeError("db down")
             mock_dispatch.return_value = mock_future
@@ -419,13 +419,14 @@ class TestProcessMessage:
         consumer._loop = mock_loop
         mock_future = MagicMock()
 
-        with patch(
-            "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
-            return_value=mock_future,
-        ) as mock_dispatch, patch.object(consumer, "_persist_alert", new_callable=AsyncMock):
-            msg = self._make_message(
-                {"id": "evt-006", "type": "injection", "payload": {"severity": "critical"}}
-            )
+        with (
+            patch(
+                "src.workers.security_alert_consumer.asyncio.run_coroutine_threadsafe",
+                return_value=mock_future,
+            ) as mock_dispatch,
+            patch.object(consumer, "_persist_alert", new_callable=AsyncMock),
+        ):
+            msg = self._make_message({"id": "evt-006", "type": "injection", "payload": {"severity": "critical"}})
             consumer._process_message(msg)
 
         # Second positional arg to run_coroutine_threadsafe must be the event loop
@@ -531,7 +532,7 @@ class TestPersistAlert:
 
         assert len(captured_stmt) == 1
         # The compiled parameters should carry the right values
-        params = captured_stmt[0].compile(compile_kwargs={"literal_binds": False})
+        captured_stmt[0].compile(compile_kwargs={"literal_binds": False})
         # Check that the statement targets security_events table
         assert "security_events" in str(captured_stmt[0])
 

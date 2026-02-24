@@ -184,18 +184,14 @@ class TestListTemplates:
         data = resp.json()
         assert data["page"] == 2
         assert data["page_size"] == 10
-        mock_svc.list_templates.assert_called_once_with(
-            TENANT_ID, workflow_type=None, page=2, page_size=10
-        )
+        mock_svc.list_templates.assert_called_once_with(TENANT_ID, workflow_type=None, page=2, page_size=10)
 
     def test_list_templates_workflow_type_filter(self, client_as_tenant_admin, mock_db_session):
         with patch(WF_SVC_PATH) as MockSvc:
             mock_svc = MockSvc.return_value
             mock_svc.list_templates = AsyncMock(return_value=([], 0))
 
-            resp = client_as_tenant_admin.get(
-                f"{BASE_URL}/templates?workflow_type=user_registration"
-            )
+            resp = client_as_tenant_admin.get(f"{BASE_URL}/templates?workflow_type=user_registration")
 
         assert resp.status_code == 200
         mock_svc.list_templates.assert_called_once_with(
@@ -305,9 +301,7 @@ class TestCreateTemplate:
 
         assert resp.status_code == 403
 
-    def test_create_template_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_create_template_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.post(
             f"{BASE_URL}/templates",
             json={"workflow_type": "user_registration", "name": "T", "mode": "manual"},
@@ -340,9 +334,7 @@ class TestGetTemplate:
         assert resp.status_code == 404
         assert "Template not found" in resp.json()["detail"]
 
-    def test_get_template_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_get_template_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.get(f"{BASE_URL}/templates/{uuid4()}")
         assert resp.status_code == 403
 
@@ -368,9 +360,7 @@ class TestUpdateTemplate:
 
     def test_update_template_not_found(self, client_as_tenant_admin, mock_db_session):
         with patch(WF_SVC_PATH) as MockSvc:
-            MockSvc.return_value.update_template = AsyncMock(
-                side_effect=ValueError("Template not found")
-            )
+            MockSvc.return_value.update_template = AsyncMock(side_effect=ValueError("Template not found"))
             resp = client_as_tenant_admin.put(
                 f"{BASE_URL}/templates/{uuid4()}",
                 json={"name": "New Name"},
@@ -397,9 +387,7 @@ class TestUpdateTemplate:
         call_kwargs = mock_svc.update_template.call_args.kwargs
         assert "description" in call_kwargs
 
-    def test_update_template_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_update_template_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.put(
             f"{BASE_URL}/templates/{uuid4()}",
             json={"name": "X"},
@@ -424,17 +412,13 @@ class TestDeleteTemplate:
 
     def test_delete_template_not_found(self, client_as_tenant_admin, mock_db_session):
         with patch(WF_SVC_PATH) as MockSvc:
-            MockSvc.return_value.delete_template = AsyncMock(
-                side_effect=ValueError("Template not found")
-            )
+            MockSvc.return_value.delete_template = AsyncMock(side_effect=ValueError("Template not found"))
             resp = client_as_tenant_admin.delete(f"{BASE_URL}/templates/{uuid4()}")
 
         assert resp.status_code == 404
         assert "Template not found" in resp.json()["detail"]
 
-    def test_delete_template_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_delete_template_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.delete(f"{BASE_URL}/templates/{uuid4()}")
         assert resp.status_code == 403
 
@@ -472,9 +456,7 @@ class TestStartWorkflow:
 
     def test_start_workflow_invalid(self, client_as_tenant_admin, mock_db_session):
         with patch(WF_SVC_PATH) as MockSvc:
-            MockSvc.return_value.start_workflow = AsyncMock(
-                side_effect=ValueError("Template not found or inactive")
-            )
+            MockSvc.return_value.start_workflow = AsyncMock(side_effect=ValueError("Template not found or inactive"))
             resp = client_as_tenant_admin.post(
                 f"{BASE_URL}/instances",
                 json={
@@ -486,18 +468,14 @@ class TestStartWorkflow:
         assert resp.status_code == 400
         assert "Template not found or inactive" in resp.json()["detail"]
 
-    def test_start_workflow_missing_subject_id_422(
-        self, client_as_tenant_admin, mock_db_session
-    ):
+    def test_start_workflow_missing_subject_id_422(self, client_as_tenant_admin, mock_db_session):
         resp = client_as_tenant_admin.post(
             f"{BASE_URL}/instances",
             json={"template_id": str(uuid4())},
         )
         assert resp.status_code == 422
 
-    def test_start_workflow_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_start_workflow_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.post(
             f"{BASE_URL}/instances",
             json={"template_id": str(uuid4()), "subject_id": "x"},
@@ -547,9 +525,7 @@ class TestListInstances:
             TENANT_ID, workflow_type=None, status="pending", page=1, page_size=50
         )
 
-    def test_list_instances_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_list_instances_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.get(f"{BASE_URL}/instances")
         assert resp.status_code == 403
 
@@ -579,9 +555,7 @@ class TestGetInstance:
         assert resp.status_code == 404
         assert "Workflow instance not found" in resp.json()["detail"]
 
-    def test_get_instance_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_get_instance_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.get(f"{BASE_URL}/instances/{uuid4()}")
         assert resp.status_code == 403
 
@@ -607,9 +581,7 @@ class TestApproveStep:
                 )
 
         assert resp.status_code == 200
-        mock_svc.approve_step.assert_called_once_with(
-            TENANT_ID, instance.id, "tenant-admin-user-id", "Approved!"
-        )
+        mock_svc.approve_step.assert_called_once_with(TENANT_ID, instance.id, "tenant-admin-user-id", "Approved!")
 
     def test_approve_step_no_body(self, client_as_tenant_admin, mock_db_session):
         instance = _make_instance()
@@ -626,15 +598,11 @@ class TestApproveStep:
                 )
 
         assert resp.status_code == 200
-        mock_svc.approve_step.assert_called_once_with(
-            TENANT_ID, instance.id, "tenant-admin-user-id", None
-        )
+        mock_svc.approve_step.assert_called_once_with(TENANT_ID, instance.id, "tenant-admin-user-id", None)
 
     def test_approve_step_invalid(self, client_as_tenant_admin, mock_db_session):
         with patch(WF_SVC_PATH) as MockSvc:
-            MockSvc.return_value.approve_step = AsyncMock(
-                side_effect=ValueError("No pending step to approve")
-            )
+            MockSvc.return_value.approve_step = AsyncMock(side_effect=ValueError("No pending step to approve"))
             resp = client_as_tenant_admin.post(
                 f"{BASE_URL}/instances/{uuid4()}/approve",
                 json={"comment": "approve"},
@@ -643,9 +611,7 @@ class TestApproveStep:
         assert resp.status_code == 400
         assert "No pending step to approve" in resp.json()["detail"]
 
-    def test_approve_step_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_approve_step_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.post(
             f"{BASE_URL}/instances/{uuid4()}/approve",
             json={},
@@ -690,9 +656,7 @@ class TestRejectStep:
                 )
 
         assert resp.status_code == 200
-        mock_svc.reject_step.assert_called_once_with(
-            TENANT_ID, instance.id, "tenant-admin-user-id", None
-        )
+        mock_svc.reject_step.assert_called_once_with(TENANT_ID, instance.id, "tenant-admin-user-id", None)
 
     def test_reject_step_invalid(self, client_as_tenant_admin, mock_db_session):
         with patch(WF_SVC_PATH) as MockSvc:
@@ -707,9 +671,7 @@ class TestRejectStep:
         assert resp.status_code == 400
         assert "Instance is not in a rejectable state" in resp.json()["detail"]
 
-    def test_reject_step_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_reject_step_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.post(
             f"{BASE_URL}/instances/{uuid4()}/reject",
             json={},
@@ -762,16 +724,12 @@ class TestGetAuditTrail:
             mock_svc = MockSvc.return_value
             mock_svc.get_audit_log = AsyncMock(return_value=([], 0))
 
-            resp = client_as_tenant_admin.get(
-                f"{BASE_URL}/audit/{instance_id}?page=2&page_size=5"
-            )
+            resp = client_as_tenant_admin.get(f"{BASE_URL}/audit/{instance_id}?page=2&page_size=5")
 
         assert resp.status_code == 200
         mock_svc.get_audit_log.assert_called_once_with(instance_id, page=2, page_size=5)
 
-    def test_audit_trail_other_tenant_forbidden(
-        self, client_as_other_tenant, mock_db_session
-    ):
+    def test_audit_trail_other_tenant_forbidden(self, client_as_other_tenant, mock_db_session):
         resp = client_as_other_tenant.get(f"{BASE_URL}/audit/{uuid4()}")
         assert resp.status_code == 403
 

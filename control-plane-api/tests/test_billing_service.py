@@ -450,7 +450,8 @@ class TestRecordSpend:
         with caplog.at_level(logging.WARNING, logger="src.services.billing_service"):
             await service.record_spend("acme", "engineering", 5_000_000)
 
-        assert caplog.messages == []
+        billing_msgs = [r.message for r in caplog.records if r.name == "src.services.billing_service"]
+        assert billing_msgs == []
 
     async def test_zero_limit_does_not_compute_threshold(
         self, service: BillingService, caplog: pytest.LogCaptureFixture
@@ -469,4 +470,5 @@ class TestRecordSpend:
             await service.record_spend("acme", "engineering", 1_000)
 
         # No warning should be raised for a zero-limit budget
-        assert caplog.messages == []
+        billing_msgs = [r.message for r in caplog.records if r.name == "src.services.billing_service"]
+        assert billing_msgs == []

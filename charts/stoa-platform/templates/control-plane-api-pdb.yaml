@@ -1,0 +1,16 @@
+{{- if and .Values.controlPlaneApi.podDisruptionBudget .Values.controlPlaneApi.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stoa-control-plane-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-control-plane-api
+    app.kubernetes.io/component: api
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.controlPlaneApi.podDisruptionBudget.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stoa-control-plane-api
+{{- end }}

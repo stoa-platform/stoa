@@ -54,10 +54,10 @@ jobs:
           ISSUE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
             -H "Authorization: $LINEAR_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { id identifier state { name type } } } }\"}")
+            -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { id identifier state { name type } } } }\"}")
 
-          ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issueSearch.nodes[0].id // empty')
-          CURRENT_STATE=$(echo "$ISSUE_DATA" | jq -r '.data.issueSearch.nodes[0].state.type // empty')
+          ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].id // empty')
+          CURRENT_STATE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].state.type // empty')
 
           if [ -z "$ISSUE_ID" ]; then
             echo "Issue $TICKET_ID not found in Linear — skipping"

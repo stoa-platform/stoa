@@ -96,8 +96,11 @@ server {
     }
 
     # API proxy (Swagger UI requires unsafe-eval + unsafe-inline for JS rendering)
+    # rewrite is required: with variable-based proxy_pass, nginx does NOT
+    # perform URI substitution — a trailing / would send all requests to /
     location /api/ {
-        proxy_pass $api_backend/;
+        rewrite ^/api(/.*)$ $1 break;
+        proxy_pass $api_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';

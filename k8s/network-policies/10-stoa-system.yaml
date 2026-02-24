@@ -42,7 +42,7 @@ spec:
         - podSelector: {}
 ---
 # Control Plane API → Keycloak (external HTTPS for OIDC)
-# Control Plane API → external services
+# Control Plane API → external services (PostgreSQL OVH on port 20184)
 # Gateway → external backends (MCP proxy)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -65,7 +65,8 @@ spec:
   policyTypes:
     - Egress
   egress:
-    # HTTPS to external (Keycloak OIDC, MCP backends, GitHub, etc.)
+    # HTTPS + HTTP to external (Keycloak OIDC, MCP backends, GitHub, etc.)
+    # Port 20184: OVH Managed PostgreSQL (postgresql-*.database.cloud.ovh.net)
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -78,6 +79,8 @@ spec:
           port: 443
         - protocol: TCP
           port: 80
+        - protocol: TCP
+          port: 20184
 ---
 # API → OpenSearch (log shipping)
 apiVersion: networking.k8s.io/v1

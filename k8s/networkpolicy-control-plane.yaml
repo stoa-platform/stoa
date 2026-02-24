@@ -116,6 +116,7 @@ spec:
           port: 53
 
     # Allow HTTPS to external services (Keycloak, etc.)
+    # Port 20184: OVH Managed PostgreSQL (postgresql-*.database.cloud.ovh.net)
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -126,6 +127,8 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 20184
 ---
 # Network Policy for STOA Gateway (Rust)
 apiVersion: networking.k8s.io/v1
@@ -252,8 +255,15 @@ spec:
           port: 8080
 
   egress:
-    # Portal only serves static files, minimal egress needed
-    # Allow DNS for any dynamic config
+    # Allow to Control Plane API (nginx proxy_pass for /api/)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: stoa-control-plane-api
+      ports:
+        - protocol: TCP
+          port: 80
+    # Allow DNS for dynamic proxy_pass resolution
     - to:
         - namespaceSelector: {}
           podSelector:

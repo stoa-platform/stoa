@@ -32,6 +32,7 @@ import type {
   WorkflowInstance,
   WorkflowTemplateListResponse,
   WorkflowListResponse,
+  AccessRequestListResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -519,6 +520,16 @@ class ApiService {
       params,
       responseType: 'blob',
     });
+    return data;
+  }
+
+  // Admin Access Requests (CAB-1468)
+  async getAccessRequests(params: {
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<AccessRequestListResponse> {
+    const { data } = await this.client.get('/v1/admin/access-requests', { params });
     return data;
   }
 

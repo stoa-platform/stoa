@@ -68,4 +68,33 @@ mod tests {
         };
         assert!(ctx.is_tool_allowed("anything"));
     }
+
+    #[test]
+    fn test_empty_allow_list_denies_all_tools() {
+        // An explicit empty set means no tools are allowed (differs from None)
+        let ctx = ctx_with_tools(vec![]);
+        assert!(!ctx.is_tool_allowed("any_tool"));
+        assert!(!ctx.is_tool_allowed("tool_a"));
+        assert!(!ctx.is_tool_allowed(""));
+    }
+
+    #[test]
+    fn test_allow_list_is_case_sensitive() {
+        let ctx = ctx_with_tools(vec!["MyTool"]);
+        // Exact match works
+        assert!(ctx.is_tool_allowed("MyTool"));
+        // Different case does not match
+        assert!(!ctx.is_tool_allowed("mytool"));
+        assert!(!ctx.is_tool_allowed("MYTOOL"));
+    }
+
+    #[test]
+    fn test_clone_preserves_allowed_tools() {
+        let ctx = ctx_with_tools(vec!["tool_a", "tool_b"]);
+        let cloned = ctx.clone();
+        assert!(cloned.is_tool_allowed("tool_a"));
+        assert!(cloned.is_tool_allowed("tool_b"));
+        assert!(!cloned.is_tool_allowed("tool_c"));
+        assert_eq!(cloned.sub_account_id, ctx.sub_account_id);
+    }
 }

@@ -40,7 +40,7 @@ def sample_algolia_hits():
     return [
         {
             "title": "Quick Start Guide",
-            "url": "https://docs.gostoa.dev/docs/guides/quick-start",
+            "url": "https://docs.gostoa.dev/docs/guides/quickstart",
             "content": "Get started with STOA in 5 minutes...",
             "_snippetResult": {"content": {"value": "Get started with <em>STOA</em> in 5 minutes..."}},
         },
@@ -59,7 +59,7 @@ def sample_llms_entries():
     return [
         {
             "title": "Quick Start Guide",
-            "url": "https://docs.gostoa.dev/docs/guides/quick-start",
+            "url": "https://docs.gostoa.dev/docs/guides/quickstart",
             "description": "Get started with STOA in 5 minutes",
         },
         {
@@ -177,7 +177,7 @@ class TestBoostLogic:
         algolia_results = [
             DocsSearchResult(
                 title="Quick Start Guide",
-                url="https://docs.gostoa.dev/docs/guides/quick-start",
+                url="https://docs.gostoa.dev/docs/guides/quickstart",
                 snippet="...",
                 score=1.0,
             )
@@ -197,7 +197,7 @@ class TestBoostLogic:
         algolia_results = [
             DocsSearchResult(
                 title="Quick Start",
-                url="https://docs.gostoa.dev/docs/guides/quick-start",
+                url="https://docs.gostoa.dev/docs/guides/quickstart",
                 snippet="...",
                 score=1.0,
             )
@@ -216,7 +216,7 @@ class TestBoostLogic:
             ),
             DocsSearchResult(
                 title="Quick Start Guide",
-                url="https://docs.gostoa.dev/docs/guides/quick-start",
+                url="https://docs.gostoa.dev/docs/guides/quickstart",
                 snippet="...",
                 score=1.0,
             ),
@@ -429,7 +429,7 @@ class TestCategoryDetection:
                 return_value=[
                     {
                         "title": "Guide",
-                        "url": "https://docs.gostoa.dev/guides/quick-start",
+                        "url": "https://docs.gostoa.dev/guides/quickstart",
                         "content": "...",
                         "_snippetResult": {"content": {"value": "..."}},
                     }
@@ -763,7 +763,7 @@ class TestSemanticSearch:
                     {
                         "_source": {
                             "title": "Quick Start",
-                            "url": "https://docs.gostoa.dev/guides/quick-start",
+                            "url": "https://docs.gostoa.dev/guides/quickstart",
                             "content": "Get started quickly",
                             "heading": "Overview",
                         },
@@ -1030,7 +1030,7 @@ class TestCategorizeUrl:
         assert _categorize_url("https://docs.gostoa.dev/adr/adr-024") == "adr"
 
     def test_guide(self):
-        assert _categorize_url("https://docs.gostoa.dev/guides/quick-start") == "guide"
+        assert _categorize_url("https://docs.gostoa.dev/guides/quickstart") == "guide"
 
     def test_docs(self):
         assert _categorize_url("https://docs.gostoa.dev/docs/overview") == "docs"

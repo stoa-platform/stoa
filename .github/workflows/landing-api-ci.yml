@@ -69,7 +69,7 @@ jobs:
           STOA_DB_HOST: localhost
           STOA_DB_PORT: '5432'
         run: |
-          pip install pytest pytest-asyncio pytest-cov
+          pip install pytest pytest-asyncio pytest-cov httpx
           pytest tests/ -v --tb=short \
             --cov=src \
             --cov-report=xml:coverage.xml \

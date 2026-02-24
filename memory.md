@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-24 (C9 802pts scope, 663pts C9-done (82.7%)) — veille system live
+> Derniere MAJ: 2026-02-24 (C9 802pts scope, 684pts C9-done (85.3%)) — W3 complete, veille system live
 
 ## ✅ DONE
 
@@ -8,7 +8,8 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
-- ✅ CAB-1347 Kafka policy propagation events — PR #1032 (API+Gateway, stoa.policy.changes topic, 12 tests)
+- ✅ CAB-1347 [MEGA] Event-Driven V2 Phase 3 (Policy Propagation) — PRs #1032, #1034 (API+Gateway, stoa.policy.changes topic, 13 tests). Phases 1-2 (CQRS, Sagas) deferred per Council.
+- ✅ CAB-1348 [MEGA] v2 Linux Native — CANCELLED (tokio-uring incompatible with #[tokio::main], Council 6.0)
 - ✅ Veille concurrentielle 3 niveaux — PRs #1019, #1020, #1025
   - L1: competitive-watch skill + CLI script + n8n template (hebdo)
   - L2: monthly-ia-factory-audit GHA (14 dimensions/100, regression alerts)
@@ -113,6 +114,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - Portal MCP pages: MOCK_SERVERS removed (PR #771) — pages now use real API only
 - MEGA Strike W1-W4: 11 tickets, 173 pts in single day (PRs #968-#991)
 - Test Blitz + Metering: PRs #984, #996, #997, #998 (3 partial MEGAs + CAB-1456 done)
+- MEGA Strike W3: CAB-1347 done (PRs #1032, #1034), CAB-1348 cancelled (tokio-uring infeasible)
 - PR hygiene: 10 merged, 3 stale closed, 3 deferred (OTel 0.31 breaking, TS-eslint 6→8 breaking)
 - Veille system: L1 weekly (skill+CLI), L2 monthly (GHA audit), L3 quarterly (benchmark command+agent)
 - Benchmark Q1 gaps: sandbox isolation (P1, Codex), plugin marketplace (P2, Cursor). Cursor copie patterns CC.

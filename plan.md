@@ -188,9 +188,9 @@
 
 **P3 — MEGAs** (42 pts):
 
-*Council Fix (6.0–7.9, adjustments applied on Linear):*
-- [ ] CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (21 pts, P3) — Council 6.25 ⚠️
-- [ ] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts, P3) — Council 6.00 ⚠️
+*Council Fix (6.0–7.9, resolved):*
+- [x] CAB-1347: [MEGA] Event-Driven V2 — Phase 3 only (Policy Propagation) (21 pts) — PRs #1032, #1034. Phases 1-2 deferred.
+- [x] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts) — Cancelled (tokio-uring incompatible with #[tokio::main])
 
 ### Backlog (not committed, no checkbox)
 

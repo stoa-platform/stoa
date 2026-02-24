@@ -1,21 +1,20 @@
-## Description
+## Summary
 
-<!-- Describe your changes in a few sentences -->
+<!-- 1-3 bullets: what changed and why -->
+
+## Linear Ticket
+
+<!-- Link the Linear ticket, e.g. CAB-1234 -->
 
 ## Type of Change
 
-- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
-- [ ] ✨ New feature (non-breaking change that adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to change)
-- [ ] 📚 Documentation update
-- [ ] 🔧 Refactoring (no functional changes)
-- [ ] 🧪 Tests (adding or updating tests)
-
-## Related Issues
-
-<!-- Link related issues using "Closes #123" or "Fixes #123" -->
-
-Closes #
+- [ ] Bug fix (non-breaking change that fixes an issue)
+- [ ] New feature (non-breaking change that adds functionality)
+- [ ] Breaking change (fix or feature that causes existing functionality to change)
+- [ ] Documentation update
+- [ ] Refactoring (no functional changes)
+- [ ] Tests (adding or updating tests)
+- [ ] CI/CD (workflow, pipeline, or config changes)
 
 ## How Has This Been Tested?
 
@@ -25,21 +24,42 @@ Closes #
 - [ ] Integration tests
 - [ ] Manual testing
 
-## Checklist
+## Quality Gate Checklist
 
-- [ ] My code follows the project's code style
-- [ ] I have performed a self-review of my code
-- [ ] I have commented my code where necessary
-- [ ] I have updated the documentation accordingly
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix/feature works
-- [ ] New and existing tests pass locally
-- [ ] All commits are signed off (`git commit -s`) per [DCO requirements](../CLA.md)
+### All Components
+
+- [ ] Code compiles with zero errors
+- [ ] All tests pass locally
+- [ ] No new lint warnings introduced
+- [ ] No secrets or credentials in code
+- [ ] Commit messages follow `type(scope): description` format
+
+### Python (control-plane-api / landing-api)
+
+- [ ] `ruff check .` clean
+- [ ] `black --check .` clean
+- [ ] `pytest tests/ --cov=src --cov-fail-under=70 -q` passes
+
+### TypeScript (control-plane-ui / portal)
+
+- [ ] `npm run lint` clean (max-warnings: 105 for console, 0 for portal)
+- [ ] `npm run format:check` clean
+- [ ] `npx tsc -p tsconfig.app.json --noEmit` clean
+
+### Rust (stoa-gateway)
+
+- [ ] `cargo fmt --check` clean
+- [ ] `RUSTFLAGS=-Dwarnings cargo clippy --all-targets --all-features -- -D warnings` clean
+- [ ] `cargo test` passes
+
+## CI Required Checks
+
+These 3 checks must pass before merge (branch protection):
+
+1. **License Compliance** — Trivy SPDX scan
+2. **SBOM Generation** — CycloneDX + SPDX
+3. **Verify Signed Commits** — signature check
 
 ## Screenshots (if applicable)
 
-<!-- Add screenshots to help explain your changes -->
-
-## Additional Notes
-
-<!-- Any additional information reviewers should know -->
+<!-- Add screenshots to help explain UI changes -->

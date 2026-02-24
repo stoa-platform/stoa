@@ -1526,6 +1526,40 @@
         "title": "BranchInfo",
         "type": "object"
       },
+      "BudgetCheckResponse": {
+        "description": "Internal response for gateway budget check (GET /internal/budgets/{dept_id}/check).",
+        "properties": {
+          "budget_limit_microcents": {
+            "default": 0,
+            "title": "Budget Limit Microcents",
+            "type": "integer"
+          },
+          "current_spend_microcents": {
+            "default": 0,
+            "title": "Current Spend Microcents",
+            "type": "integer"
+          },
+          "enforcement": {
+            "default": "disabled",
+            "title": "Enforcement",
+            "type": "string"
+          },
+          "over_budget": {
+            "title": "Over Budget",
+            "type": "boolean"
+          },
+          "usage_pct": {
+            "default": 0.0,
+            "title": "Usage Pct",
+            "type": "number"
+          }
+        },
+        "required": [
+          "over_budget"
+        ],
+        "title": "BudgetCheckResponse",
+        "type": "object"
+      },
       "BulkResultItem": {
         "description": "Result of a single row in bulk onboarding.",
         "properties": {
@@ -3624,6 +3658,288 @@
         "title": "DelegationTokenResponse",
         "type": "object"
       },
+      "DepartmentBudgetCreate": {
+        "description": "Schema for creating a department budget.",
+        "example": {
+          "budget_limit_microcents": 100000000,
+          "department_id": "engineering",
+          "department_name": "Engineering Team",
+          "enforcement": "warn_only",
+          "period": "monthly",
+          "period_start": "2026-03-01T00:00:00"
+        },
+        "properties": {
+          "budget_limit_microcents": {
+            "minimum": 0.0,
+            "title": "Budget Limit Microcents",
+            "type": "integer"
+          },
+          "critical_threshold_pct": {
+            "default": 95,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Critical Threshold Pct",
+            "type": "integer"
+          },
+          "department_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Department Id",
+            "type": "string"
+          },
+          "department_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Name"
+          },
+          "enforcement": {
+            "default": "disabled",
+            "pattern": "^(enabled|disabled|warn_only)$",
+            "title": "Enforcement",
+            "type": "string"
+          },
+          "period": {
+            "default": "monthly",
+            "pattern": "^(monthly|quarterly)$",
+            "title": "Period",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "warning_threshold_pct": {
+            "default": 80,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Warning Threshold Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "department_id",
+          "budget_limit_microcents",
+          "period_start"
+        ],
+        "title": "DepartmentBudgetCreate",
+        "type": "object"
+      },
+      "DepartmentBudgetListResponse": {
+        "description": "Schema for paginated department budget list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentBudgetResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "DepartmentBudgetListResponse",
+        "type": "object"
+      },
+      "DepartmentBudgetResponse": {
+        "description": "Schema for department budget response.",
+        "properties": {
+          "budget_limit_microcents": {
+            "title": "Budget Limit Microcents",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "critical_threshold_pct": {
+            "title": "Critical Threshold Pct",
+            "type": "integer"
+          },
+          "current_spend_microcents": {
+            "title": "Current Spend Microcents",
+            "type": "integer"
+          },
+          "department_id": {
+            "title": "Department Id",
+            "type": "string"
+          },
+          "department_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Name"
+          },
+          "enforcement": {
+            "title": "Enforcement",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_over_budget": {
+            "title": "Is Over Budget",
+            "type": "boolean"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "usage_pct": {
+            "title": "Usage Pct",
+            "type": "number"
+          },
+          "warning_threshold_pct": {
+            "title": "Warning Threshold Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "department_id",
+          "department_name",
+          "period",
+          "budget_limit_microcents",
+          "current_spend_microcents",
+          "period_start",
+          "warning_threshold_pct",
+          "critical_threshold_pct",
+          "enforcement",
+          "usage_pct",
+          "is_over_budget",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DepartmentBudgetResponse",
+        "type": "object"
+      },
+      "DepartmentBudgetUpdate": {
+        "description": "Schema for updating a department budget (all fields optional).",
+        "properties": {
+          "budget_limit_microcents": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Limit Microcents"
+          },
+          "critical_threshold_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Critical Threshold Pct"
+          },
+          "department_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Name"
+          },
+          "enforcement": {
+            "anyOf": [
+              {
+                "pattern": "^(enabled|disabled|warn_only)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enforcement"
+          },
+          "warning_threshold_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning Threshold Pct"
+          }
+        },
+        "title": "DepartmentBudgetUpdate",
+        "type": "object"
+      },
       "DeploymentCreate": {
         "properties": {
           "api_id": {
@@ -4228,6 +4544,42 @@
         "title": "DiagnosticReport",
         "type": "object"
       },
+      "DiagnosticSummaryResponse": {
+        "description": "Aggregated diagnostic summary across all gateways.",
+        "properties": {
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "time_range_minutes": {
+            "default": 60,
+            "title": "Time Range Minutes",
+            "type": "integer"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "top_categories": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorCategoryStat"
+            },
+            "title": "Top Categories",
+            "type": "array"
+          },
+          "total_errors": {
+            "default": 0,
+            "title": "Total Errors",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tenant_id"
+        ],
+        "title": "DiagnosticSummaryResponse",
+        "type": "object"
+      },
       "DiffResource": {
         "description": "Resource diff for OutOfSync applications.",
         "properties": {
@@ -4676,6 +5028,29 @@
         ],
         "title": "ErrorCategoryEnum",
         "type": "string"
+      },
+      "ErrorCategoryStat": {
+        "description": "Error category with occurrence count.",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/DiagnosticCategory"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "percentage": {
+            "default": 0.0,
+            "title": "Percentage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "category",
+          "count"
+        ],
+        "title": "ErrorCategoryStat",
+        "type": "object"
       },
       "ErrorSnapshot": {
         "description": "Complete error snapshot for time-travel debugging.\n\nCaptures the full context of an error including:\n- Request/response data (with PII masked)\n- Routing and policy information\n- Backend state and health\n- Related log entries\n- Environment information",
@@ -9638,6 +10013,174 @@
           }
         },
         "title": "MasterAccountUpdate",
+        "type": "object"
+      },
+      "McpToolDefinition": {
+        "description": "A single MCP tool generated from a UAC endpoint.",
+        "properties": {
+          "backend_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Url"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "http_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Http Method"
+          },
+          "input_schema": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Schema"
+          },
+          "output_schema": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Schema"
+          },
+          "path_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path Pattern"
+          },
+          "spec_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Hash"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_name",
+          "version"
+        ],
+        "title": "McpToolDefinition",
+        "type": "object"
+      },
+      "McpToolsGenerateResponse": {
+        "description": "Response after generating MCP tools from a UAC contract.",
+        "properties": {
+          "contract_id": {
+            "format": "uuid",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "generated": {
+            "title": "Generated",
+            "type": "integer"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/McpToolDefinition"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated",
+          "contract_id",
+          "tools"
+        ],
+        "title": "McpToolsGenerateResponse",
+        "type": "object"
+      },
+      "McpToolsListResponse": {
+        "description": "List of MCP tools generated from a contract.",
+        "properties": {
+          "contract_id": {
+            "format": "uuid",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "contract_name": {
+            "title": "Contract Name",
+            "type": "string"
+          },
+          "spec_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Hash"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/McpToolDefinition"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_id",
+          "contract_name",
+          "tools"
+        ],
+        "title": "McpToolsListResponse",
         "type": "object"
       },
       "MergeRequestCreate": {
@@ -16164,6 +16707,33 @@
         "title": "TenantResponse",
         "type": "object"
       },
+      "TenantToolsResponse": {
+        "description": "All generated MCP tools for a tenant (gateway discovery).",
+        "properties": {
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/McpToolDefinition"
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "tools",
+          "total"
+        ],
+        "title": "TenantToolsResponse",
+        "type": "object"
+      },
       "TenantUpdate": {
         "properties": {
           "description": {
@@ -16812,6 +17382,75 @@
         "title": "UsageCallsResponse",
         "type": "object"
       },
+      "UsageDetailResponse": {
+        "description": "Detailed usage breakdown for a specific API.",
+        "properties": {
+          "api_id": {
+            "format": "uuid",
+            "title": "Api Id",
+            "type": "string"
+          },
+          "avg_latency_ms": {
+            "default": 0.0,
+            "description": "Average latency in milliseconds",
+            "title": "Avg Latency Ms",
+            "type": "number"
+          },
+          "error_rate": {
+            "default": 0.0,
+            "description": "Error rate as a percentage",
+            "title": "Error Rate",
+            "type": "number"
+          },
+          "p99_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P99 Latency Ms"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "total_errors": {
+            "default": 0,
+            "title": "Total Errors",
+            "type": "integer"
+          },
+          "total_requests": {
+            "default": 0,
+            "title": "Total Requests",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "api_id",
+          "tenant_id",
+          "period",
+          "period_start"
+        ],
+        "title": "UsageDetailResponse",
+        "type": "object"
+      },
       "UsagePeriodStats": {
         "description": "Statistics for a specific period",
         "example": {
@@ -17068,6 +17707,130 @@
           "this_month"
         ],
         "title": "UsageSummary",
+        "type": "object"
+      },
+      "UsageSummaryListResponse": {
+        "description": "Paginated list of usage summaries.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UsageSummaryResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "UsageSummaryListResponse",
+        "type": "object"
+      },
+      "UsageSummaryResponse": {
+        "description": "Single usage summary record.",
+        "properties": {
+          "api_id": {
+            "format": "uuid",
+            "title": "Api Id",
+            "type": "string"
+          },
+          "consumer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_count": {
+            "default": 0,
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "p99_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P99 Latency Ms"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "request_count": {
+            "default": 0,
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "total_latency_ms": {
+            "default": 0,
+            "title": "Total Latency Ms",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "api_id",
+          "period",
+          "period_start",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UsageSummaryResponse",
         "type": "object"
       },
       "UserPermissionsResponse": {
@@ -19472,6 +20235,57 @@
         ]
       }
     },
+    "/v1/admin/diagnostics/summary": {
+      "get": {
+        "description": "Aggregated error stats: top error categories, RCA distribution.",
+        "operationId": "get_diagnostic_summary_v1_admin_diagnostics_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "time_range_minutes",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 1440,
+              "minimum": 1,
+              "title": "Time Range Minutes",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosticSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Diagnostic Summary",
+        "tags": [
+          "Diagnostics"
+        ]
+      }
+    },
     "/v1/admin/diagnostics/{gateway_id}": {
       "get": {
         "description": "Run auto-RCA on recent errors for a gateway.",
@@ -19551,7 +20365,7 @@
     },
     "/v1/admin/diagnostics/{gateway_id}/connectivity": {
       "get": {
-        "description": "Test connectivity chain: DNS \u2192 TCP \u2192 TLS \u2192 HTTP health.",
+        "description": "Test connectivity chain: DNS -> TCP -> TLS -> HTTP health.",
         "operationId": "check_connectivity_v1_admin_diagnostics__gateway_id__connectivity_get",
         "parameters": [
           {
@@ -25011,6 +25825,104 @@
         ]
       }
     },
+    "/v1/contracts/{contract_id}/mcp-tools": {
+      "get": {
+        "description": "List all generated MCP tools for a contract.",
+        "operationId": "list_mcp_tools_v1_contracts__contract_id__mcp_tools_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpToolsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List MCP tools for a contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/contracts/{contract_id}/mcp-tools/generate": {
+      "post": {
+        "description": "Trigger MCP tool generation from a UAC contract's endpoints.",
+        "operationId": "generate_mcp_tools_v1_contracts__contract_id__mcp_tools_generate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpToolsGenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Generate MCP tools from UAC contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
     "/v1/dashboard/activity": {
       "get": {
         "description": "Retourne l'activit\u00e9 r\u00e9cente pour la home page du Portal.\n\nData Sources (CAB-840):\n- Loki for activity logs\n- Falls back to empty list if Loki unavailable",
@@ -25937,6 +26849,49 @@
         ]
       }
     },
+    "/v1/internal/budgets/{department_id}/check": {
+      "get": {
+        "description": "Check if a department is over budget.\n\nCalled by the STOA Gateway's BudgetCache every ~60s.\nReturns over_budget=false when no budget is configured (fail-open).",
+        "operationId": "check_department_budget_v1_internal_budgets__department_id__check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "department_id",
+            "required": true,
+            "schema": {
+              "title": "Department Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Department Budget",
+        "tags": [
+          "Internal - Billing"
+        ]
+      }
+    },
     "/v1/internal/catalog/apis": {
       "get": {
         "description": "List published APIs with backend_url for gateway API-to-Tool bridge.\n\nInternal endpoint \u2014 no JWT auth required (service-to-service on internal network).\nUsed by stoa-gateway to discover APIs and register them as MCP tools.",
@@ -26495,6 +27450,56 @@
         "summary": "Get single log entry by request ID",
         "tags": [
           "Logs"
+        ]
+      }
+    },
+    "/v1/mcp/generated-tools": {
+      "get": {
+        "description": "Gateway discovery endpoint: list all enabled MCP tools for a tenant.",
+        "operationId": "get_tenant_tools_v1_mcp_generated_tools_get",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "description": "Tenant ID",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantToolsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Gateway discovery \u2014 list all tools for a tenant",
+        "tags": [
+          "MCP Discovery"
         ]
       }
     },
@@ -32460,6 +33465,306 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/budgets": {
+      "get": {
+        "description": "List department budgets for a tenant.",
+        "operationId": "list_budgets_v1_tenants__tenant_id__budgets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentBudgetListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Budgets",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      },
+      "post": {
+        "description": "Create a new department budget.",
+        "operationId": "create_budget_v1_tenants__tenant_id__budgets_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentBudgetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Budget",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/budgets/{budget_id}": {
+      "delete": {
+        "description": "Delete a department budget.",
+        "operationId": "delete_budget_v1_tenants__tenant_id__budgets__budget_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "budget_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Budget Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Budget",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      },
+      "get": {
+        "description": "Get a specific department budget.",
+        "operationId": "get_budget_v1_tenants__tenant_id__budgets__budget_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "budget_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Budget Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Budget",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      },
+      "put": {
+        "description": "Update a department budget configuration.",
+        "operationId": "update_budget_v1_tenants__tenant_id__budgets__budget_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "budget_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Budget Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentBudgetUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Budget",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/credential-mappings": {
       "get": {
         "description": "List credential mappings for a tenant.",
@@ -37476,6 +38781,69 @@
         ]
       }
     },
+    "/v1/usage/details": {
+      "get": {
+        "description": "Get aggregated usage details for a specific API.\n\nReturns total requests, errors, error rate, average latency, and token usage.",
+        "operationId": "get_usage_details_v1_usage_details_get",
+        "parameters": [
+          {
+            "description": "API ID to get details for",
+            "in": "query",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "description": "API ID to get details for",
+              "format": "uuid",
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Period type: daily or monthly",
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "daily",
+              "description": "Period type: daily or monthly",
+              "title": "Period",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Usage Details",
+        "tags": [
+          "Usage Metering"
+        ]
+      }
+    },
     "/v1/usage/me": {
       "get": {
         "description": "Retourne le r\u00e9sum\u00e9 d'usage pour l'utilisateur connect\u00e9.\n\nInclut:\n- Stats aujourd'hui / cette semaine / ce mois\n- Top 5 des tools les plus utilis\u00e9s\n- Evolution des appels sur 7 jours\n\nData Sources (CAB-840):\n- Prometheus for metrics\n- Falls back to empty data if Prometheus unavailable",
@@ -37776,6 +39144,103 @@
         "summary": "Get My Active Subscriptions",
         "tags": [
           "Usage"
+        ]
+      }
+    },
+    "/v1/usage/summary": {
+      "get": {
+        "description": "Get paginated usage summaries for the current tenant.\n\n- **cpi-admin**: can view all tenants (uses default tenant or requires tenant_id param)\n- **tenant-admin**: scoped to own tenant",
+        "operationId": "get_usage_summary_v1_usage_summary_get",
+        "parameters": [
+          {
+            "description": "Filter by API ID",
+            "in": "query",
+            "name": "api_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by API ID",
+              "title": "Api Id"
+            }
+          },
+          {
+            "description": "Period type: daily or monthly",
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "daily",
+              "description": "Period type: daily or monthly",
+              "title": "Period",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max results per page",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Max results per page",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Pagination offset",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Pagination offset",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummaryListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Usage Summary",
+        "tags": [
+          "Usage Metering"
         ]
       }
     },
@@ -38104,6 +39569,10 @@
     {
       "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)",
       "name": "Quotas"
+    },
+    {
+      "description": "Gateway discovery for UAC-generated MCP tools (CAB-605)",
+      "name": "MCP Discovery"
     }
   ]
 }

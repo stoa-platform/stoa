@@ -4,6 +4,12 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # DNS resolver for dynamic proxy_pass (K8s CoreDNS)
+    resolver ${DNS_RESOLVER} valid=30s ipv6=off;
+
+    # Backend URL resolved at request time (not startup)
+    set $api_backend "${API_BACKEND_URL}";
+
     # Gzip compression
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
@@ -14,6 +20,17 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # API proxy — eliminates CORS, routes through internal K8s network
+    location /api/ {
+        proxy_pass $api_backend/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Content-Type $http_content_type;
+    }
 
     # SPA routing - always serve index.html for client-side routes
     # no-cache ensures browser revalidates index.html on every load

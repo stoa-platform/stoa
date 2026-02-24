@@ -1,0 +1,36 @@
+{{- if and .Values.portal .Values.portal.autoscaling .Values.portal.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stoa-portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-portal
+    app.kubernetes.io/component: portal
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: stoa-portal
+  minReplicas: {{ .Values.portal.autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ .Values.portal.autoscaling.maxReplicas | default 5 }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: {{ .Values.portal.autoscaling.scaleDownStabilizationSeconds | default 300 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.portal.autoscaling.targetCPUUtilizationPercentage | default 70 }}
+    {{- if .Values.portal.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.portal.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}

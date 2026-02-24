@@ -85,8 +85,15 @@ RUN npm run build
 # Production stage - Use nginx-unprivileged for Kubernetes compatibility
 FROM nginxinc/nginx-unprivileged:alpine
 
-# Copy custom nginx config (nginx-unprivileged uses 8080 by default)
-COPY portal/nginx.conf /etc/nginx/conf.d/default.conf
+# Default API backend (overridden by K8s env var)
+ENV API_BACKEND_URL=http://control-plane-api:8000
+
+# Copy entrypoint scripts (DNS resolver extraction + envsubst with explicit var filter)
+COPY portal/docker-entrypoint.d/15-extract-dns-resolver.envsh /docker-entrypoint.d/15-extract-dns-resolver.envsh
+COPY portal/docker-entrypoint.d/19-envsubst-custom.sh /docker-entrypoint.d/19-envsubst-custom.sh
+
+# Copy nginx template to custom dir (NOT /etc/nginx/templates/ — avoids built-in envsubst)
+COPY portal/nginx.conf.template /etc/nginx/custom-templates/default.conf.template
 
 # Copy built app
 COPY --from=builder /app/portal/dist /usr/share/nginx/html

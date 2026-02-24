@@ -51,6 +51,28 @@ pub struct ToolsListResponse {
     pub tools: Vec<RemoteToolDef>,
 }
 
+/// A UAC-generated tool definition fetched from the Control Plane (CAB-605/606).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratedToolDef {
+    pub tool_name: String,
+    pub description: Option<String>,
+    pub input_schema: Option<Value>,
+    pub output_schema: Option<Value>,
+    pub backend_url: Option<String>,
+    pub http_method: Option<String>,
+    pub path_pattern: Option<String>,
+    pub version: String,
+    pub enabled: bool,
+}
+
+/// Response from CP generated-tools endpoint (CAB-605)
+#[derive(Debug, Deserialize)]
+pub struct GeneratedToolsResponse {
+    pub tenant_id: String,
+    pub tools: Vec<GeneratedToolDef>,
+    pub total: usize,
+}
+
 /// Keycloak token response
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
@@ -234,6 +256,51 @@ impl ToolProxyClient {
             "Discovered tools (unauthenticated)"
         );
         Ok(list.tools)
+    }
+
+    /// Discover UAC-generated tools for a tenant from the Control Plane (CAB-605/606).
+    ///
+    /// Calls GET /v1/mcp/generated-tools?tenant_id=X to fetch tools that were
+    /// dynamically generated from UAC contracts via UacToolGenerator.
+    pub async fn discover_generated_tools(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Vec<GeneratedToolDef>, String> {
+        let url = format!(
+            "{}/v1/mcp/generated-tools?tenant_id={}",
+            self.base_url, tenant_id
+        );
+        debug!(url = %url, tenant_id, "Discovering UAC-generated tools");
+
+        let mut req = self.client.get(&url);
+
+        // Use OIDC token if available
+        if self.oidc.is_some() {
+            if let Ok(token) = self.get_token().await {
+                req = req.header("Authorization", format!("Bearer {}", token));
+            }
+        }
+
+        let resp = req.send().await.map_err(|e| {
+            warn!(tenant_id, error = %e, "Failed to discover generated tools");
+            e.to_string()
+        })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!(
+                "Generated tools discovery error {}: {}",
+                status, body
+            ));
+        }
+
+        let list: GeneratedToolsResponse = resp.json().await.map_err(|e| e.to_string())?;
+        info!(
+            count = list.tools.len(),
+            tenant_id, "Discovered UAC-generated tools"
+        );
+        Ok(list.tools.into_iter().filter(|t| t.enabled).collect())
     }
 
     /// Proxy a tool call to the Control Plane API.
@@ -647,6 +714,107 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result["clean"], true);
+    }
+
+    // === CAB-606: Generated tool discovery tests ===
+
+    #[test]
+    fn test_generated_tool_def_deserialize() {
+        let json = r#"{
+            "tool_name": "acme:billing:create_invoice",
+            "description": "Create a new invoice",
+            "input_schema": {"type": "object", "properties": {"amount": {"type": "number"}}},
+            "output_schema": null,
+            "backend_url": "https://billing.acme.com/v1/invoices",
+            "http_method": "POST",
+            "path_pattern": "/v1/invoices",
+            "version": "1.0.0",
+            "enabled": true
+        }"#;
+
+        let tool: GeneratedToolDef = serde_json::from_str(json).unwrap();
+        assert_eq!(tool.tool_name, "acme:billing:create_invoice");
+        assert_eq!(tool.description.as_deref(), Some("Create a new invoice"));
+        assert_eq!(tool.http_method.as_deref(), Some("POST"));
+        assert!(tool.enabled);
+    }
+
+    #[test]
+    fn test_generated_tools_response_deserialize() {
+        let json = r#"{
+            "tenant_id": "acme",
+            "tools": [
+                {"tool_name": "t1", "version": "1.0", "enabled": true},
+                {"tool_name": "t2", "version": "1.0", "enabled": false}
+            ],
+            "total": 2
+        }"#;
+
+        let resp: GeneratedToolsResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.tenant_id, "acme");
+        assert_eq!(resp.tools.len(), 2);
+        assert_eq!(resp.total, 2);
+    }
+
+    #[tokio::test]
+    async fn test_discover_generated_tools_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/mcp/generated-tools"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tenant_id": "acme",
+                "tools": [
+                    {"tool_name": "acme:billing:create_invoice", "version": "1.0", "enabled": true},
+                    {"tool_name": "acme:billing:list_invoices", "version": "1.0", "enabled": true},
+                    {"tool_name": "acme:billing:deprecated_tool", "version": "0.9", "enabled": false}
+                ],
+                "total": 3
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let tools = client.discover_generated_tools("acme").await.unwrap();
+        // Only enabled tools returned
+        assert_eq!(tools.len(), 2);
+        assert_eq!(tools[0].tool_name, "acme:billing:create_invoice");
+        assert_eq!(tools[1].tool_name, "acme:billing:list_invoices");
+    }
+
+    #[tokio::test]
+    async fn test_discover_generated_tools_server_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/mcp/generated-tools"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("Internal error"))
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let result = client.discover_generated_tools("acme").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("500"));
+    }
+
+    #[tokio::test]
+    async fn test_discover_generated_tools_empty_tenant() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/mcp/generated-tools"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tenant_id": "empty-corp",
+                "tools": [],
+                "total": 0
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let tools = client.discover_generated_tools("empty-corp").await.unwrap();
+        assert!(tools.is_empty());
     }
 
     #[tokio::test]

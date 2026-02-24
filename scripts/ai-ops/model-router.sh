@@ -57,9 +57,30 @@ extract_estimate() {
   # Try "Estimate: X pts" pattern first
   EST=$(echo "$TEXT" | grep -oiE 'estimate:?\s*[0-9]+\s*pts?' | head -1 | grep -oE '[0-9]+' | head -1)
 
-  # Fallback: try "(X pts" pattern
+  # Fallback: try "(X pts" pattern (e.g. "(13 pts)")
   if [ -z "$EST" ]; then
     EST=$(echo "$TEXT" | grep -oE '\([0-9]+ pts' | head -1 | grep -oE '[0-9]+' | head -1)
+  fi
+
+  # Fallback: try "X pts" in Council context (e.g. "8 pts reasonable", "13 pts")
+  # Only match small numbers (1-99) to avoid false positives with scores like "8.0/10"
+  if [ -z "$EST" ]; then
+    EST=$(echo "$TEXT" | grep -oE '\b[0-9]{1,2} pts\b' | head -1 | grep -oE '[0-9]+' | head -1)
+  fi
+
+  # Fallback: try "Total: ~NNN LOC" from Stage 2 plan comments
+  if [ -z "$EST" ]; then
+    local LOC_TOTAL
+    LOC_TOTAL=$(echo "$TEXT" | grep -oiE 'total:?\s*~?[0-9]+\s*LOC' | head -1 | grep -oE '[0-9]+' | head -1)
+    if [ -n "$LOC_TOTAL" ]; then
+      if [ "$LOC_TOTAL" -le 100 ]; then
+        EST=3
+      elif [ "$LOC_TOTAL" -le 300 ]; then
+        EST=5
+      else
+        EST=8
+      fi
+    fi
   fi
 
   # Fallback: derive from LOC estimate ("Estimated LOC: ~80" or "~150 LOC")

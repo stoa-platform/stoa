@@ -214,6 +214,10 @@ class TestGetDashboardStats:
 
     def test_returns_dashboard_stats(self, client_as_tenant_admin):
         """Returns aggregated dashboard stats."""
+        from src.routers.usage import _dashboard_cache
+
+        _dashboard_cache._cache.clear()
+
         stats = DashboardStats(
             tools_available=10,
             active_subscriptions=3,

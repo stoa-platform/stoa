@@ -18,7 +18,7 @@ class TestMCPPolicyProxyRouter:
 
     # ============== POST /check ==============
 
-    def test_check_policies_success(self, app_with_tenant_admin):
+    def test_check_policies_success(self, client_as_tenant_admin: TestClient):
         """POST /check proxies to MCP Gateway and returns result."""
         mock_response = {
             "allowed": True,
@@ -31,15 +31,14 @@ class TestMCPPolicyProxyRouter:
         with patch("src.routers.mcp_policy_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
             mock_proxy.return_value = mock_response
 
-            with TestClient(app_with_tenant_admin) as client:
-                response = client.post(
-                    "/v1/mcp/policies/check",
-                    json={
-                        "tool_name": "Linear:create_issue",
-                        "arguments": {"title": "Test issue"},
-                    },
-                    headers={"Authorization": "Bearer test-token"},
-                )
+            response = client_as_tenant_admin.post(
+                "/v1/mcp/policies/check",
+                json={
+                    "tool_name": "Linear:create_issue",
+                    "arguments": {"title": "Test issue"},
+                },
+                headers={"Authorization": "Bearer test-token"},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -47,7 +46,7 @@ class TestMCPPolicyProxyRouter:
         assert data["policy_name"] == "default-allow"
         mock_proxy.assert_awaited_once()
 
-    def test_check_policies_denied(self, app_with_tenant_admin):
+    def test_check_policies_denied(self, client_as_tenant_admin: TestClient):
         """POST /check returns denied result from MCP Gateway."""
         mock_response = {
             "allowed": False,
@@ -60,40 +59,43 @@ class TestMCPPolicyProxyRouter:
         with patch("src.routers.mcp_policy_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
             mock_proxy.return_value = mock_response
 
-            with TestClient(app_with_tenant_admin) as client:
-                response = client.post(
-                    "/v1/mcp/policies/check",
-                    json={
-                        "tool_name": "Dangerous:delete_all",
-                        "arguments": {},
-                    },
-                    headers={"Authorization": "Bearer test-token"},
-                )
+            response = client_as_tenant_admin.post(
+                "/v1/mcp/policies/check",
+                json={
+                    "tool_name": "Dangerous:delete_all",
+                    "arguments": {},
+                },
+                headers={"Authorization": "Bearer test-token"},
+            )
 
         assert response.status_code == 200
         data = response.json()
         assert data["allowed"] is False
         assert data["action"] == "deny"
 
-    def test_check_policies_forwards_token(self, app_with_tenant_admin):
-        """POST /check forwards Bearer token to MCP Gateway proxy."""
+    def test_check_policies_forwards_token(self, client_as_tenant_admin: TestClient):
+        """POST /check forwards Bearer token to MCP Gateway proxy.
+
+        The HTTPBearer dep is overridden in client_as_tenant_admin to return
+        credentials="mock-token". We verify the router forwards whatever token
+        it received from the security dependency.
+        """
         with patch("src.routers.mcp_policy_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
             mock_proxy.return_value = {"allowed": True}
 
-            with TestClient(app_with_tenant_admin) as client:
-                client.post(
-                    "/v1/mcp/policies/check",
-                    json={"tool_name": "test:tool", "arguments": {}},
-                    headers={"Authorization": "Bearer my-special-token"},
-                )
+            client_as_tenant_admin.post(
+                "/v1/mcp/policies/check",
+                json={"tool_name": "test:tool", "arguments": {}},
+                headers={"Authorization": "Bearer mock-token"},
+            )
 
         # Verify token was forwarded (4th positional arg)
         call_args = mock_proxy.call_args
-        assert call_args[0][3] == "my-special-token"
+        assert call_args[0][3] == "mock-token"
 
     # ============== GET /rules ==============
 
-    def test_list_policy_rules_success(self, app_with_tenant_admin):
+    def test_list_policy_rules_success(self, client_as_tenant_admin: TestClient):
         """GET /rules returns active policy rules from MCP Gateway."""
         mock_response = {
             "rules": [
@@ -113,11 +115,10 @@ class TestMCPPolicyProxyRouter:
         with patch("src.routers.mcp_policy_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
             mock_proxy.return_value = mock_response
 
-            with TestClient(app_with_tenant_admin) as client:
-                response = client.get(
-                    "/v1/mcp/policies/rules",
-                    headers={"Authorization": "Bearer test-token"},
-                )
+            response = client_as_tenant_admin.get(
+                "/v1/mcp/policies/rules",
+                headers={"Authorization": "Bearer test-token"},
+            )
 
         assert response.status_code == 200
         data = response.json()

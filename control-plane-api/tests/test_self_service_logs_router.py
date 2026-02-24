@@ -138,7 +138,8 @@ class TestExportMyLogs:
 
         with patch(f"{SVC_MODULE}.ConsumerLogsService.export_csv", new_callable=AsyncMock, return_value=csv_content):
             response = client_as_tenant_admin.get(
-                "/v1/logs/calls/export" "?start_time=2026-02-24T09:00:00Z" "&end_time=2026-02-24T10:00:00Z"
+                "/v1/logs/calls/export",
+                params={"start_time": "2026-02-24T09:00:00+00:00", "end_time": "2026-02-24T10:00:00+00:00"},
             )
 
         assert response.status_code == 200
@@ -151,7 +152,8 @@ class TestExportMyLogs:
 
         with patch(f"{SVC_MODULE}.ConsumerLogsService.export_csv", new_callable=AsyncMock, return_value=csv_content):
             response = client_as_tenant_admin.get(
-                "/v1/logs/calls/export" "?start_time=2026-02-24T09:00:00Z" "&end_time=2026-02-24T10:00:00Z"
+                "/v1/logs/calls/export",
+                params={"start_time": "2026-02-24T09:00:00+00:00", "end_time": "2026-02-24T10:00:00+00:00"},
             )
 
         assert "req-001" in response.text
@@ -172,7 +174,8 @@ class TestExportMyLogs:
 
         with patch(f"{SVC_MODULE}.ConsumerLogsService.export_csv", new_callable=AsyncMock, return_value=csv_content):
             response = client_as_tenant_admin.get(
-                "/v1/logs/calls/export" "?start_time=2026-02-24T09:00:00Z" "&end_time=2026-02-24T10:00:00Z"
+                "/v1/logs/calls/export",
+                params={"start_time": "2026-02-24T09:00:00+00:00", "end_time": "2026-02-24T10:00:00+00:00"},
             )
 
         cd = response.headers.get("content-disposition", "")

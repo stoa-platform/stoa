@@ -282,6 +282,17 @@ class TestModuleHelpers:
 class TestPIIMaskingMiddleware:
     """PIIMaskingMiddleware — ASGI scope masking."""
 
+    @pytest.fixture(autouse=True)
+    def _restore_mask_query_string(self):
+        """Restore original _mask_query_string so middleware unit tests work."""
+        from src.middleware.pii_masking import PIIMaskingMiddleware
+
+        from tests.conftest import _ORIGINAL_MASK_QUERY_STRING
+
+        PIIMaskingMiddleware._mask_query_string = _ORIGINAL_MASK_QUERY_STRING
+        yield
+        PIIMaskingMiddleware._mask_query_string = lambda self, qs: qs
+
     def _make_scope(self, **kwargs):
         defaults = {
             "type": "http",

@@ -88,6 +88,15 @@ patch.object(_main_module, 'setup_opensearch', AsyncMock()).start()
 patch.object(_main_module, 'connect_error_snapshots', AsyncMock(return_value=None)).start()
 patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
 
+# ============== Disable PII Masking in Tests ==============
+# PIIMaskingMiddleware._mask_query_string corrupts UUIDs and datetime query params
+# e.g. uuid "af85fcc7-..." → "af85****fcc7-..." causing 422 validation errors.
+# Disable at class level so all instances (including freshly created ones) are affected.
+from src.middleware.pii_masking import PIIMaskingMiddleware
+
+_ORIGINAL_MASK_QUERY_STRING = PIIMaskingMiddleware._mask_query_string
+PIIMaskingMiddleware._mask_query_string = lambda self, qs: qs
+
 import asyncio
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timedelta
@@ -447,6 +456,30 @@ def sample_quota_plan_data(sample_plan_id):
     }
 
 
+# ============== HTTPBearer Override Helper ==============
+
+
+def _add_http_bearer_overrides(app):
+    """Override router-local HTTPBearer security deps.
+
+    Routers gateway, mcp_proxy, mcp_policy_proxy, platform define their own
+    HTTPBearer() with auto_error=True.  This rejects TestClient requests
+    (which carry no real token) before get_current_user fires.
+    """
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    from src.routers.gateway import security as gw_sec
+    from src.routers.mcp_policy_proxy import security as mcp_pol_sec
+    from src.routers.mcp_proxy import security as mcp_sec
+    from src.routers.platform import security as plat_sec
+
+    async def _fake():
+        return HTTPAuthorizationCredentials(scheme="Bearer", credentials="mock-token")
+
+    for sec in (gw_sec, mcp_sec, mcp_pol_sec, plat_sec):
+        app.dependency_overrides[sec] = _fake
+
+
 # ============== App & Client Fixtures ==============
 
 @pytest.fixture
@@ -486,6 +519,7 @@ def app_with_tenant_admin(app, mock_user_tenant_admin, mock_db_session):
 
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_db] = override_get_db
+    _add_http_bearer_overrides(app)
 
     yield app
 
@@ -506,6 +540,7 @@ def app_with_cpi_admin(app, mock_user_cpi_admin, mock_db_session):
 
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_db] = override_get_db
+    _add_http_bearer_overrides(app)
 
     yield app
 
@@ -526,6 +561,7 @@ def app_with_other_tenant(app, mock_user_other_tenant, mock_db_session):
 
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_db] = override_get_db
+    _add_http_bearer_overrides(app)
 
     yield app
 
@@ -546,6 +582,7 @@ def app_with_no_tenant_user(app, mock_user_no_tenant, mock_db_session):
 
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_db] = override_get_db
+    _add_http_bearer_overrides(app)
 
     yield app
 

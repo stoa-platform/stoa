@@ -37,6 +37,7 @@ from .routers import (
     applications,
     audit,
     backend_apis,
+    billing_internal,
     business,
     catalog_admin,
     certificates,
@@ -80,6 +81,7 @@ from .routers import (
     tenants,
     traces,
     usage,
+    usage_metering,
     users,
     webhooks,
     workflows,
@@ -118,19 +120,11 @@ configure_logging()
 logger = get_logger(__name__)
 
 # Flag to control worker startup (can be disabled for dev/testing)
-ENABLE_DEPLOYMENT_NOTIFIER = (
-    os.getenv("ENABLE_DEPLOYMENT_NOTIFIER", "true").lower() == "true"
-)
-ENABLE_SNAPSHOT_CONSUMER = (
-    os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
-)
+ENABLE_DEPLOYMENT_NOTIFIER = os.getenv("ENABLE_DEPLOYMENT_NOTIFIER", "true").lower() == "true"
+ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
 ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
-ENABLE_GATEWAY_HEALTH_WORKER = (
-    os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
-)
-ENABLE_CHAT_METERING_CONSUMER = (
-    os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true").lower() == "true"
-)
+ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
+ENABLE_CHAT_METERING_CONSUMER = os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -203,17 +197,13 @@ async def lifespan(app: FastAPI):
             deployment_consumer_task = asyncio.create_task(deployment_consumer.start())
             logger.info("Deployment notification consumer started")
         except Exception as e:
-            logger.warning(
-                "Failed to start deployment notification consumer", error=str(e)
-            )
+            logger.warning("Failed to start deployment notification consumer", error=str(e))
 
     # Start error snapshot consumer for gateway snapshots (CAB-485)
     snapshot_consumer_task = None
     if ENABLE_SNAPSHOT_CONSUMER:
         try:
-            snapshot_consumer_task = asyncio.create_task(
-                error_snapshot_consumer.start()
-            )
+            snapshot_consumer_task = asyncio.create_task(error_snapshot_consumer.start())
             logger.info("Error snapshot consumer started")
         except Exception as e:
             logger.warning("Failed to start error snapshot consumer", error=str(e))
@@ -491,13 +481,9 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # === CAB-1122: Global exception handlers — structured error taxonomy ===
 @app.exception_handler(sqlalchemy.exc.IntegrityError)
-async def integrity_error_handler(
-    request: Request, exc: sqlalchemy.exc.IntegrityError
-) -> JSONResponse:
+async def integrity_error_handler(request: Request, exc: sqlalchemy.exc.IntegrityError) -> JSONResponse:
     detail = str(exc.orig) if exc.orig else str(exc)
-    logger.warning(
-        "Database integrity error", path=str(request.url.path), detail=detail
-    )
+    logger.warning("Database integrity error", path=str(request.url.path), detail=detail)
     return JSONResponse(
         status_code=409,
         content={"detail": "Conflict: a resource with this identifier already exists."},
@@ -505,12 +491,8 @@ async def integrity_error_handler(
 
 
 @app.exception_handler(sqlalchemy.exc.OperationalError)
-async def operational_error_handler(
-    request: Request, exc: sqlalchemy.exc.OperationalError
-) -> JSONResponse:
-    logger.error(
-        "Database operational error", path=str(request.url.path), error=str(exc)
-    )
+async def operational_error_handler(request: Request, exc: sqlalchemy.exc.OperationalError) -> JSONResponse:
+    logger.error("Database operational error", path=str(request.url.path), error=str(exc))
     return JSONResponse(
         status_code=503,
         content={"detail": "Database service unavailable. Please retry later."},
@@ -520,9 +502,7 @@ async def operational_error_handler(
 @app.exception_handler(httpx.HTTPError)
 async def httpx_error_handler(request: Request, exc: httpx.HTTPError) -> JSONResponse:
     logger.error("External service error", path=str(request.url.path), error=str(exc))
-    return JSONResponse(
-        status_code=502, content={"detail": "An upstream service is unavailable."}
-    )
+    return JSONResponse(status_code=502, content={"detail": "An upstream service is unavailable."})
 
 
 @app.exception_handler(Exception)
@@ -579,6 +559,7 @@ app.include_router(certificates.router)
 app.include_router(search_router, prefix="/v1/search", tags=["Search"])
 app.include_router(usage.router)
 app.include_router(usage.dashboard_router)
+app.include_router(usage_metering.router)
 app.include_router(service_accounts.router)
 app.include_router(health.router)
 
@@ -646,6 +627,8 @@ app.include_router(gateway_deployments.router)
 app.include_router(gateway_policies.router)
 # Internal gateway registration API (ADR-028 auto-registration)
 app.include_router(gateway_internal.router)
+# Internal billing API for gateway budget enforcement (CAB-1457)
+app.include_router(billing_internal.router)
 
 # Environments (ADR-040 — Born GitOps)
 app.include_router(environments.router)

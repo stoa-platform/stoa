@@ -14,7 +14,7 @@ pyyaml==6.0.3
 sse-starlette==1.8.2
 aiocache==0.12.3
 prometheus-client==0.24.1
-structlog==24.1.0
+structlog==25.5.0
 # Database
 sqlalchemy[asyncio]==2.0.46
 asyncpg==0.31.0

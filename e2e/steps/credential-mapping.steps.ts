@@ -1,8 +1,12 @@
 /**
- * Credential Mapping step definitions for STOA E2E Tests (CAB-1432)
+ * Credential Mapping step definitions for STOA E2E Tests (CAB-1432, CAB-1451)
  *
  * Tests per-consumer credential injection via the gateway admin API.
- * All scenarios are @wip until live infra is available.
+ * Covers 6 scenarios: CRUD, injection per-consumer, BYOK fallback,
+ * anonymous negative case, and delete.
+ *
+ * Steps require live infrastructure (STOA Gateway + backend).
+ * Tagged @gateway and @credential-mapping for targeted execution.
  */
 
 import { createBdd } from 'playwright-bdd';

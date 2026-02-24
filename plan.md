@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-24 (C9: 802pts scope, 663pts C9-done (82.7%) + 141pts cross-cycle = 804pts total Done)
+> Last sync: 2026-02-24 (C9: 825pts scope, 715pts done (86.7%), 54 issues closed)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 802 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 804 pts (100%+) | **Velocity**: 53 issues done
+**Scope**: 825 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 715 pts (86.7%) | **Velocity**: 54 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -113,8 +113,9 @@
 - [~] CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts, P3) — PR #996 (partial, 320 tests/15 routers)
 - [~] CAB-1451: [MEGA] E2E Test Expansion (21 pts, P3) — PRs #997, #1006, #974 (partial)
 - [~] CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts, P3) — PRs #984, #1008 (partial, 110+14 tests)
+- [~] CAB-1304: [MEGA] Demo Tenant Automation (13 pts, P3) — PR #1052 (partial)
 
-### Done (53)
+### Done (54)
 - [x] CAB-1446: [MEGA] Gateway Test Coverage Expansion (21 pts) — PR #995
 - [x] CAB-1456: [gateway] Metering enrichment + budget enforcement (5 pts) — PR #998
 - [x] CAB-1438: [MEGA] K8s HPA + PDB for All Components (21 pts) — PR #970
@@ -172,6 +173,18 @@
 - [x] CAB-1334: [MEGA] Usage Metering Pipeline P1 (21 pts) — PR #991
 - [x] CAB-1436: [MEGA] API Router Test Coverage Blitz — 38 Routers (21 pts)
 - [x] CAB-1441: [MEGA] Internationalisation FR+EN — Docs, Landing & CI (21 pts)
+- [x] CAB-1326: [MEGA] Community Launch Preparation — Channels, Templates & Good First Issues (13 pts)
+- [x] CAB-1467: feat(ops): Platform Service Catalog + /carto AI Factory skill (13 pts)
+- [x] CAB-1469: feat(ops): Impact Analysis — /impact skill + reverse dependency graph (5 pts)
+- [x] CAB-1420: [cp-api] Deploy log streaming + SSE event fan-out (8 pts) — sub of CAB-374
+- [x] CAB-1421: [gateway] Deploy progress telemetry — structured events (5 pts) — sub of CAB-374
+- [x] CAB-1422: [cp-ui] Live deployment dashboard — SSE logs + rollback UX (5 pts) — sub of CAB-374
+- [x] CAB-1423: [e2e] Deploy flow integration tests — SSE + rollback (3 pts) — sub of CAB-374
+- [x] CAB-1424: [gateway] Enable OTel feature + UAC span enrichment (8 pts) — sub of CAB-1331
+- [x] CAB-1425: [grafana] UAC Debug Dashboard — per-tool drill-down (8 pts) — sub of CAB-1331
+- [x] CAB-1426: [infra] Hybrid multi-cluster observability view (5 pts) — sub of CAB-1331
+- [x] CAB-1427: [cp-api] AWS API Gateway adapter (8 pts) — sub of CAB-1336
+- [x] CAB-1428: [cp-api] Azure APIM adapter (8 pts) — sub of CAB-1336
 
 ### Todo
 
@@ -199,7 +212,6 @@
 ### Backlog — Legacy (triaged 2026-02-24)
 
 *Keep (demo/launch prerequisites):*
-- CAB-1304: [MEGA] Demo Tenant Automation (13 pts) — supports March 17 demo
 - CAB-1311: [MEGA] GTM Strategy & Licensing (13 pts) — unblocks post-demo execution
 
 *Deferred (post-launch, Q2+):*

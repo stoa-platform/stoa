@@ -1,0 +1,66 @@
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# CronJob: Reset demo tenant every 24 hours at 04:00 UTC.
+# Ensures demo environment is always in a clean, predictable state
+# for prospects and community members.
+#
+# Manual trigger:
+#   kubectl create job --from=cronjob/demo-tenant-reset demo-reset-manual -n stoa-system
+#
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: demo-tenant-reset
+  namespace: stoa-system
+  labels:
+    app: demo-tenant-reset
+    component: demo
+spec:
+  schedule: "0 4 * * *"  # Daily at 04:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300  # 5 min max
+      template:
+        metadata:
+          labels:
+            app: demo-tenant-reset
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: seed
+              image: ghcr.io/stoa-platform/control-plane-api:latest
+              command:
+                - python
+                - -m
+                - scripts.seed_demo_tenant
+                - --reset
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: stoa-control-plane-api
+                      key: DATABASE_URL
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL

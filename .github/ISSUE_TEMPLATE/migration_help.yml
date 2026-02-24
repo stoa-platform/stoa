@@ -1,0 +1,92 @@
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: "\U0001F500 Migration Help"
+description: Request help migrating from another API gateway to STOA
+title: "[Migration] "
+labels: ["type:migration", "status:triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Migrating from another API gateway? We're here to help!
+        Check our [migration guides](https://docs.gostoa.dev/docs/guides/migration/) first.
+
+  - type: dropdown
+    id: source_gateway
+    attributes:
+      label: Source Gateway
+      description: Which API gateway are you migrating from?
+      options:
+        - Kong
+        - Apigee (Google)
+        - MuleSoft Anypoint
+        - webMethods (Software AG)
+        - AWS API Gateway
+        - Azure API Management
+        - IBM DataPower / API Connect
+        - Oracle API Gateway / OAM
+        - Axway API Gateway
+        - WSO2 API Manager
+        - Tyk
+        - Gravitee
+        - KrakenD
+        - Other (specify below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scale
+    attributes:
+      label: Migration Scale
+      description: How many APIs are you migrating?
+      options:
+        - Small (1-10 APIs)
+        - Medium (10-50 APIs)
+        - Large (50-200 APIs)
+        - Enterprise (200+ APIs)
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_setup
+    attributes:
+      label: Current Setup
+      description: Describe your current API gateway setup (deployment model, auth, key features used).
+      placeholder: |
+        - Deployment: on-prem / cloud / hybrid
+        - Auth: OAuth2 / API keys / mTLS
+        - Features used: rate limiting, transformations, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: blockers
+    attributes:
+      label: Migration Blockers
+      description: What specific challenges or blockers are you facing?
+      placeholder: |
+        - Feature parity concerns
+        - Data migration questions
+        - Integration compatibility
+    validations:
+      required: true
+
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline & Context
+      description: Any deadline or context for the migration?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have reviewed the relevant [migration guide](https://docs.gostoa.dev/docs/guides/migration/)
+          required: true
+        - label: I have searched existing issues for similar migration questions
+          required: true

@@ -927,15 +927,26 @@ jobs:
             echo "valid=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Route model based on ticket estimate (extracted from issue body)
+      # Route model based on ticket estimate (extracted from issue body + comments)
       - name: Route Model
         if: steps.verify.outputs.valid == 'true'
         id: route
         run: |
           source scripts/ai-ops/model-router.sh
-          ISSUE_BODY=$(gh issue view "${{ github.event.issue.number }}" --json body --jq '.body' 2>/dev/null || echo "")
+          ISSUE_NUM="${{ github.event.issue.number }}"
+
+          # Read issue body (Stage 1 Council report)
+          ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body' 2>/dev/null || echo "")
           ESTIMATE=$(extract_estimate "$ISSUE_BODY")
           MODE=$(extract_mode "$ISSUE_BODY")
+
+          # If estimate not found in body, search comments (Stage 2 plan has LOC estimate)
+          if [ "${ESTIMATE:-0}" = "0" ]; then
+            COMMENTS=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
+            ESTIMATE=$(extract_estimate "$COMMENTS")
+            echo "Estimate from body: 0 — retried from comments: ${ESTIMATE}pt"
+          fi
+
           ROUTE=$(route_model "$ESTIMATE" "$MODE")
           MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
           TURNS=$(echo "$ROUTE" | cut -d'|' -f2)

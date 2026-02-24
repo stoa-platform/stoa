@@ -32,8 +32,10 @@ class TestConnect:
 
     async def test_connect_error_raises(self):
         svc = KeycloakService()
-        with patch("src.services.keycloak_service.KeycloakOpenIDConnection", side_effect=Exception("fail")):
-            with pytest.raises(Exception, match="fail"):
+        with (
+            patch("src.services.keycloak_service.KeycloakOpenIDConnection", side_effect=Exception("fail")),
+            pytest.raises(Exception, match="fail"),
+        ):
                 await svc.connect()
 
 

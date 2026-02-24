@@ -212,4 +212,68 @@ mod tests {
         cache.cache.run_pending_tasks().await;
         assert_eq!(cache.entry_count(), 0);
     }
+
+    #[tokio::test]
+    async fn test_cache_miss_increments_miss_counter() {
+        let cp = Arc::new(ToolProxyClient::new("http://localhost:9999", None));
+        let cache = FederationCache::new(300, 1000, cp);
+
+        // Attempt get with no entry in cache and unreachable CP — should miss
+        let _result = cache
+            .get_allowed_tools("sub-unknown", "tenant", "master")
+            .await;
+
+        let stats = cache.stats();
+        assert_eq!(stats.misses, 1);
+        assert_eq!(stats.hits, 0);
+    }
+
+    #[tokio::test]
+    async fn test_cache_hit_rate_with_one_hit_one_miss() {
+        let cp = Arc::new(ToolProxyClient::new("http://localhost:9999", None));
+        let cache = FederationCache::new(300, 1000, cp);
+
+        // Seed a cache entry directly
+        let tools: HashSet<String> = vec!["tool_x".to_string()].into_iter().collect();
+        cache.cache.insert("sub-hit".to_string(), tools).await;
+
+        // One hit
+        let _ = cache.get_allowed_tools("sub-hit", "tenant", "master").await;
+        // One miss (unreachable CP)
+        let _ = cache
+            .get_allowed_tools("sub-miss", "tenant", "master")
+            .await;
+
+        let stats = cache.stats();
+        assert_eq!(stats.hits, 1);
+        assert_eq!(stats.misses, 1);
+        // hit_rate = 1 / 2 = 0.5
+        assert!((stats.hit_rate - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn test_entry_count_after_multiple_inserts() {
+        let cp = Arc::new(ToolProxyClient::new("http://localhost:8000", None));
+        let cache = FederationCache::new(300, 1000, cp);
+
+        for i in 0..5u32 {
+            let tools: HashSet<String> = vec![format!("tool_{i}")].into_iter().collect();
+            cache.cache.insert(format!("sub-{i}"), tools).await;
+        }
+        cache.cache.run_pending_tasks().await;
+
+        assert_eq!(cache.entry_count(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_hit_rate_zero_when_no_requests() {
+        let cp = Arc::new(ToolProxyClient::new("http://localhost:8000", None));
+        let cache = FederationCache::new(300, 1000, cp);
+
+        let stats = cache.stats();
+        // No requests → hit_rate must be 0.0 (avoids divide-by-zero)
+        assert_eq!(stats.hit_rate, 0.0);
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
+    }
 }

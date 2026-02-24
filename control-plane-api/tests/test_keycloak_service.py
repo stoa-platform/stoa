@@ -557,3 +557,191 @@ class TestGetUserRoles:
     async def test_not_connected(self, disconnected_svc):
         with pytest.raises(RuntimeError, match="not connected"):
             await disconnected_svc.get_user_roles("u1")
+
+
+# ── Get Client By ID ──
+
+
+class TestGetClientById:
+    async def test_found(self, svc):
+        svc._admin.get_client.return_value = {"id": "uuid-1", "clientId": "acme-app"}
+        result = await svc.get_client_by_id("uuid-1")
+        assert result["clientId"] == "acme-app"
+
+    async def test_not_found_returns_none(self, svc):
+        """get_client_by_id() catches all exceptions and returns None."""
+        svc._admin.get_client.side_effect = Exception("not found")
+        result = await svc.get_client_by_id("bad-uuid")
+        assert result is None
+
+    async def test_not_connected(self, disconnected_svc):
+        with pytest.raises(RuntimeError, match="not connected"):
+            await disconnected_svc.get_client_by_id("uuid-1")
+
+
+# ── Regenerate Client Secret ──
+
+
+class TestRegenerateClientSecret:
+    async def test_not_connected(self, disconnected_svc):
+        with pytest.raises(RuntimeError, match="not connected"):
+            await disconnected_svc.regenerate_client_secret("uuid-1")
+
+
+# ── Delete User (not connected) ──
+
+
+class TestDeleteUserNotConnected:
+    async def test_not_connected(self, disconnected_svc):
+        with pytest.raises(RuntimeError, match="not connected"):
+            await disconnected_svc.delete_user("u1")
+
+
+# ── Exchange Token — error path ──
+
+
+class TestExchangeTokenError:
+    async def test_raises_on_http_status_error(self, svc):
+        """exchange_token() propagates HTTPStatusError from raise_for_status."""
+        import httpx
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "401 Unauthorized", request=MagicMock(), response=MagicMock()
+        )
+
+        with patch("src.services.keycloak_service.httpx.AsyncClient") as mock_cls:
+            mock_http = AsyncMock()
+            mock_http.post.return_value = mock_response
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with pytest.raises(httpx.HTTPStatusError):
+                await svc.exchange_token("c", "cs", "tok")
+
+
+# ── Exchange Federation Token ──
+
+
+class TestExchangeFederationToken:
+    async def test_returns_token_on_success(self, svc):
+        svc._admin.get_client_id.return_value = "internal-uuid"
+        svc._admin.get_client_secret.return_value = {"value": "fed-secret"}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "access_token": "fed-tok",
+            "token_type": "Bearer",
+            "expires_in": 60,
+            "scope": "stoa:read",
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("src.services.keycloak_service.httpx.AsyncClient") as mock_cls:
+            mock_http = AsyncMock()
+            mock_http.post.return_value = mock_response
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await svc.exchange_federation_token("fed-client", ["stoa:read"], 60)
+
+        assert result is not None
+        assert result["access_token"] == "fed-tok"
+        assert result["token_type"] == "Bearer"
+
+    async def test_returns_none_when_not_connected(self, disconnected_svc):
+        result = await disconnected_svc.exchange_federation_token("fed-client", ["stoa:read"], 60)
+        assert result is None
+
+    async def test_returns_none_when_client_not_found(self, svc):
+        svc._admin.get_client_id.return_value = None
+        result = await svc.exchange_federation_token("unknown", ["stoa:read"], 60)
+        assert result is None
+
+    async def test_returns_none_when_no_secret(self, svc):
+        svc._admin.get_client_id.return_value = "internal-uuid"
+        svc._admin.get_client_secret.return_value = {"value": ""}
+        result = await svc.exchange_federation_token("fed-client", ["stoa:read"], 60)
+        assert result is None
+
+    async def test_returns_none_on_http_exception(self, svc):
+        """exchange_federation_token() swallows all exceptions and returns None."""
+        svc._admin.get_client_id.return_value = "internal-uuid"
+        svc._admin.get_client_secret.return_value = {"value": "secret"}
+
+        with patch("src.services.keycloak_service.httpx.AsyncClient") as mock_cls:
+            mock_http = AsyncMock()
+            mock_http.post.side_effect = Exception("connection refused")
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await svc.exchange_federation_token("fed-client", ["stoa:read"], 60)
+
+        assert result is None
+
+    async def test_includes_ttl_in_result_when_expires_in_absent(self, svc):
+        """exchange_federation_token() falls back to ttl_seconds for expires_in."""
+        svc._admin.get_client_id.return_value = "internal-uuid"
+        svc._admin.get_client_secret.return_value = {"value": "secret"}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "access_token": "t",
+            # no expires_in, no scope
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("src.services.keycloak_service.httpx.AsyncClient") as mock_cls:
+            mock_http = AsyncMock()
+            mock_http.post.return_value = mock_response
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await svc.exchange_federation_token("fed-client", ["stoa:read"], 120)
+
+        assert result is not None
+        assert result["expires_in"] == 120
+
+
+# ── Setup Federation Client ──
+
+
+class TestSetupFederationClient:
+    async def test_creates_client_returns_client_id(self, svc):
+        svc._admin.create_client.return_value = None
+
+        result = await svc.setup_federation_client(
+            sub_account_id="sub-account-abcd1234",
+            master_account_id="master-uuid",
+            tenant_id="acme",
+        )
+
+        assert result is not None
+        assert result.startswith("stoa-fed-")
+        call_data = svc._admin.create_client.call_args[0][0]
+        assert call_data["attributes"]["federation_client"] == "true"
+        assert call_data["attributes"]["tenant_id"] == "acme"
+        assert call_data["attributes"]["master_account_id"] == "master-uuid"
+        assert call_data["serviceAccountsEnabled"] is True
+        assert call_data["standardFlowEnabled"] is False
+
+    async def test_uses_first_8_chars_of_sub_account(self, svc):
+        svc._admin.create_client.return_value = None
+
+        result = await svc.setup_federation_client(
+            sub_account_id="abcdefghijklmnop",
+            master_account_id="master",
+            tenant_id="t",
+        )
+
+        # client_id should be stoa-fed-<first 8 chars>
+        assert result == "stoa-fed-abcdefgh"
+
+    async def test_returns_none_when_not_connected(self, disconnected_svc):
+        result = await disconnected_svc.setup_federation_client("sub", "master", "acme")
+        assert result is None
+
+    async def test_returns_none_on_exception(self, svc):
+        svc._admin.create_client.side_effect = Exception("KC down")
+        result = await svc.setup_federation_client("sub-id-12345678", "master", "acme")
+        assert result is None

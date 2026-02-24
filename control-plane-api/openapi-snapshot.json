@@ -824,6 +824,7 @@
           "details": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -949,6 +950,7 @@
           "details": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -1022,6 +1024,7 @@
           "auth_config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -1032,11 +1035,7 @@
             "title": "Auth Config"
           },
           "auth_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/BackendApiAuthTypeEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/BackendApiAuthTypeEnum",
             "default": "none"
           },
           "backend_url": {
@@ -1276,6 +1275,7 @@
           "auth_config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -2407,6 +2407,7 @@
           "consumer_metadata": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -2611,6 +2612,7 @@
           "consumer_metadata": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -2767,6 +2769,7 @@
           "consumer_metadata": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -4405,6 +4408,7 @@
           "metadata": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -4759,11 +4763,7 @@
         },
         "properties": {
           "protocol": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ProtocolType"
-              }
-            ],
+            "$ref": "#/components/schemas/ProtocolType",
             "description": "Protocol to enable"
           }
         },
@@ -5125,11 +5125,7 @@
             "title": "Resolution Notes"
           },
           "resolution_status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ResolutionStatus"
-              }
-            ],
+            "$ref": "#/components/schemas/ResolutionStatus",
             "default": "unresolved"
           },
           "response": {
@@ -5175,11 +5171,7 @@
             "title": "Trace Id"
           },
           "trigger": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SnapshotTrigger"
-              }
-            ],
+            "$ref": "#/components/schemas/SnapshotTrigger",
             "default": "5xx"
           }
         },
@@ -5236,6 +5228,7 @@
             "type": "string"
           },
           "payload_example": {
+            "additionalProperties": true,
             "title": "Payload Example",
             "type": "object"
           }
@@ -5406,6 +5399,7 @@
           "request_headers": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -5421,6 +5415,7 @@
           "response_summary": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -5657,11 +5652,7 @@
         },
         "properties": {
           "auth_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AuthTypeEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/AuthTypeEnum",
             "default": "none",
             "description": "Authentication type"
           },
@@ -5747,11 +5738,7 @@
             "title": "Tool Prefix"
           },
           "transport": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TransportTypeEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/TransportTypeEnum",
             "default": "sse",
             "description": "Transport protocol"
           }
@@ -5811,11 +5798,7 @@
             "type": "boolean"
           },
           "health_status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/HealthStatusEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/HealthStatusEnum",
             "default": "unknown"
           },
           "icon": {
@@ -5943,6 +5926,7 @@
           "credentials": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -6083,11 +6067,7 @@
             "type": "boolean"
           },
           "health_status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/HealthStatusEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/HealthStatusEnum",
             "default": "unknown"
           },
           "icon": {
@@ -6232,6 +6212,7 @@
           "input_schema": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -6410,6 +6391,7 @@
         "properties": {
           "categories": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Categories",
@@ -6417,6 +6399,7 @@
           },
           "tags": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Tags",
@@ -6424,6 +6407,7 @@
           },
           "visibility": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Visibility",
@@ -6703,6 +6687,7 @@
           "actual_state": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -6727,6 +6712,7 @@
             "type": "string"
           },
           "desired_state": {
+            "additionalProperties": true,
             "title": "Desired State",
             "type": "object"
           },
@@ -6826,6 +6812,7 @@
           "details": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -6859,6 +6846,7 @@
         "description": "Schema for creating a new gateway instance.",
         "properties": {
           "auth_config": {
+            "additionalProperties": true,
             "description": "Auth config: {type, vault_path, ...}",
             "title": "Auth Config",
             "type": "object"
@@ -6933,6 +6921,7 @@
         "description": "Schema for gateway instance in API responses.",
         "properties": {
           "auth_config": {
+            "additionalProperties": true,
             "title": "Auth Config",
             "type": "object"
           },
@@ -6967,6 +6956,7 @@
           "health_details": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -7074,6 +7064,7 @@
           "auth_config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -7176,6 +7167,7 @@
         "description": "Schema for creating a new gateway policy.",
         "properties": {
           "config": {
+            "additionalProperties": true,
             "title": "Config",
             "type": "object"
           },
@@ -7248,6 +7240,7 @@
             "type": "integer"
           },
           "config": {
+            "additionalProperties": true,
             "title": "Config",
             "type": "object"
           },
@@ -7331,6 +7324,7 @@
           "config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -7530,6 +7524,7 @@
           "checks": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -7657,6 +7652,7 @@
           "apiDefinition": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -7815,6 +7811,7 @@
         "description": "Start a new workflow instance",
         "properties": {
           "context": {
+            "additionalProperties": true,
             "title": "Context",
             "type": "object"
           },
@@ -7899,6 +7896,7 @@
           "context": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -8118,6 +8116,7 @@
         "properties": {
           "categories": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Categories",
@@ -8225,6 +8224,7 @@
         "description": "Log entry captured around the error time.",
         "properties": {
           "extra": {
+            "additionalProperties": true,
             "title": "Extra",
             "type": "object"
           },
@@ -8598,11 +8598,7 @@
             "title": "Auto Approve Roles"
           },
           "category": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MCPServerCategoryEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/MCPServerCategoryEnum",
             "default": "public"
           },
           "description": {
@@ -8676,11 +8672,7 @@
             "title": "Version"
           },
           "visibility": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MCPServerVisibility"
-              }
-            ],
+            "$ref": "#/components/schemas/MCPServerVisibility",
             "default": {
               "public": true
             }
@@ -8970,6 +8962,7 @@
           "input_schema": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9022,6 +9015,7 @@
           "input_schema": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9702,6 +9696,7 @@
           "inputSchema": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9794,6 +9789,7 @@
           "quota_config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9898,6 +9894,7 @@
           "quota_config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9993,6 +9990,7 @@
           "quota_config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -10059,6 +10057,7 @@
           "input_schema": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -10070,6 +10069,7 @@
           "output_schema": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -10506,6 +10506,7 @@
           "application": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -10522,6 +10523,7 @@
           "scopes": {
             "default": [],
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Scopes",
@@ -10530,6 +10532,7 @@
           "strategy": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -10680,6 +10683,158 @@
           "uptime"
         ],
         "title": "OperationsMetrics",
+        "type": "object"
+      },
+      "PIIConfigResponse": {
+        "properties": {
+          "disabled_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Disabled Types",
+            "type": "array"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "exempt_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exempt Roles",
+            "type": "array"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "max_text_length": {
+            "title": "Max Text Length",
+            "type": "integer"
+          },
+          "pii_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pii Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "level",
+          "pii_types",
+          "disabled_types",
+          "exempt_roles",
+          "max_text_length"
+        ],
+        "title": "PIIConfigResponse",
+        "type": "object"
+      },
+      "PIIDetection": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "pii_type": {
+            "title": "Pii Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pii_type",
+          "count"
+        ],
+        "title": "PIIDetection",
+        "type": "object"
+      },
+      "PIIMaskRequest": {
+        "properties": {
+          "text": {
+            "description": "Text to mask",
+            "maxLength": 100000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PIIMaskRequest",
+        "type": "object"
+      },
+      "PIIMaskResponse": {
+        "properties": {
+          "detections": {
+            "items": {
+              "$ref": "#/components/schemas/PIIDetection"
+            },
+            "title": "Detections",
+            "type": "array"
+          },
+          "masked_length": {
+            "title": "Masked Length",
+            "type": "integer"
+          },
+          "masked_text": {
+            "title": "Masked Text",
+            "type": "string"
+          },
+          "original_length": {
+            "title": "Original Length",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "masked_text",
+          "original_length",
+          "masked_length",
+          "detections"
+        ],
+        "title": "PIIMaskResponse",
+        "type": "object"
+      },
+      "PIIScanRequest": {
+        "properties": {
+          "text": {
+            "description": "Text to scan for PII",
+            "maxLength": 100000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PIIScanRequest",
+        "type": "object"
+      },
+      "PIIScanResponse": {
+        "properties": {
+          "detections": {
+            "items": {
+              "$ref": "#/components/schemas/PIIDetection"
+            },
+            "title": "Detections",
+            "type": "array"
+          },
+          "text_length": {
+            "title": "Text Length",
+            "type": "integer"
+          },
+          "total_pii_count": {
+            "title": "Total Pii Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "detections",
+          "total_pii_count",
+          "text_length"
+        ],
+        "title": "PIIScanResponse",
         "type": "object"
       },
       "PaginatedGatewayDeployments": {
@@ -10977,6 +11132,7 @@
           "pricing_metadata": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -11155,6 +11311,7 @@
           "pricing_metadata": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -11318,6 +11475,7 @@
           "pricing_metadata": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -11602,6 +11760,7 @@
         "description": "Request to check policies against a tool invocation.",
         "properties": {
           "arguments": {
+            "additionalProperties": true,
             "description": "Tool arguments to validate",
             "title": "Arguments",
             "type": "object"
@@ -11795,6 +11954,7 @@
             "title": "Created At"
           },
           "deployments": {
+            "additionalProperties": true,
             "default": {},
             "title": "Deployments",
             "type": "object"
@@ -12101,6 +12261,7 @@
             "type": "boolean"
           },
           "metadata": {
+            "additionalProperties": true,
             "title": "Metadata",
             "type": "object"
           },
@@ -12931,11 +13092,7 @@
             "title": "Tool Name"
           },
           "type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ActivityType"
-              }
-            ],
+            "$ref": "#/components/schemas/ActivityType",
             "description": "Type of activity"
           }
         },
@@ -13627,6 +13784,7 @@
         "description": "Search response model.",
         "properties": {
           "facets": {
+            "additionalProperties": true,
             "title": "Facets",
             "type": "object"
           },
@@ -13690,6 +13848,7 @@
           "details": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -14053,11 +14212,7 @@
             "type": "integer"
           },
           "scope": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SkillScope"
-              }
-            ],
+            "$ref": "#/components/schemas/SkillScope",
             "default": "tenant"
           },
           "tool_ref": {
@@ -14396,11 +14551,7 @@
             "type": "string"
           },
           "resolution_status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ResolutionStatus"
-              }
-            ],
+            "$ref": "#/components/schemas/ResolutionStatus",
             "default": "unresolved"
           },
           "source": {
@@ -14530,11 +14681,7 @@
         },
         "properties": {
           "account_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SubAccountTypeEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/SubAccountTypeEnum",
             "default": "developer"
           },
           "display_name": {
@@ -15440,6 +15587,7 @@
           },
           "suggestions": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Suggestions",
@@ -15742,6 +15890,7 @@
             "type": "string"
           },
           "notification_config": {
+            "additionalProperties": true,
             "title": "Notification Config",
             "type": "object"
           },
@@ -15868,6 +16017,7 @@
           "notification_config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -15993,6 +16143,7 @@
           "notification_config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -16060,11 +16211,7 @@
         },
         "properties": {
           "auth_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AuthTypeEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/AuthTypeEnum",
             "default": "none",
             "description": "Authentication type"
           },
@@ -16130,11 +16277,7 @@
             "title": "Tool Prefix"
           },
           "transport": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TransportTypeEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/TransportTypeEnum",
             "default": "sse",
             "description": "Transport protocol"
           }
@@ -16187,11 +16330,7 @@
             "type": "boolean"
           },
           "health_status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/HealthStatusEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/HealthStatusEnum",
             "default": "unknown"
           },
           "icon": {
@@ -16368,11 +16507,7 @@
             "type": "boolean"
           },
           "health_status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/HealthStatusEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/HealthStatusEnum",
             "default": "unknown"
           },
           "icon": {
@@ -16801,6 +16936,7 @@
           "server_info": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -17037,6 +17173,7 @@
         "description": "Tool invocation request.",
         "properties": {
           "arguments": {
+            "additionalProperties": true,
             "title": "Arguments",
             "type": "object"
           }
@@ -17054,6 +17191,7 @@
             "anyOf": [
               {
                 "items": {
+                  "additionalProperties": true,
                   "type": "object"
                 },
                 "type": "array"
@@ -17099,6 +17237,7 @@
             "title": "Description"
           },
           "highlights": {
+            "additionalProperties": true,
             "title": "Highlights",
             "type": "object"
           },
@@ -17116,6 +17255,7 @@
             "type": "number"
           },
           "stats": {
+            "additionalProperties": true,
             "title": "Stats",
             "type": "object"
           },
@@ -17302,11 +17442,7 @@
             "type": "integer"
           },
           "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/CallStatus"
-              }
-            ],
+            "$ref": "#/components/schemas/CallStatus",
             "description": "Call status"
           },
           "timestamp": {
@@ -17662,27 +17798,15 @@
             "type": "string"
           },
           "this_month": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UsagePeriodStats"
-              }
-            ],
+            "$ref": "#/components/schemas/UsagePeriodStats",
             "description": "This month's statistics"
           },
           "this_week": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UsagePeriodStats"
-              }
-            ],
+            "$ref": "#/components/schemas/UsagePeriodStats",
             "description": "This week's statistics"
           },
           "today": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UsagePeriodStats"
-              }
-            ],
+            "$ref": "#/components/schemas/UsagePeriodStats",
             "description": "Today's statistics"
           },
           "top_tools": {
@@ -17928,6 +18052,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -17986,6 +18117,7 @@
           "headers": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -18127,6 +18259,7 @@
             "title": "Next Retry At"
           },
           "payload": {
+            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -18264,6 +18397,7 @@
           "headers": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -18428,6 +18562,7 @@
           "headers": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -18755,6 +18890,7 @@
           "errors": {
             "default": [],
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Errors",
@@ -22022,13 +22158,8 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/MCPSubscriptionApprove"
-                  }
-                ],
-                "default": {},
-                "title": "Request"
+                "$ref": "#/components/schemas/MCPSubscriptionApprove",
+                "default": {}
               }
             }
           }
@@ -22304,6 +22435,127 @@
         "summary": "Get Stalled Users",
         "tags": [
           "onboarding-admin"
+        ]
+      }
+    },
+    "/v1/admin/pii/config": {
+      "get": {
+        "description": "Return the current PII masking configuration.",
+        "operationId": "get_config_v1_admin_pii_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PIIConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Config",
+        "tags": [
+          "Admin - PII Masking"
+        ]
+      }
+    },
+    "/v1/admin/pii/mask": {
+      "post": {
+        "description": "Mask PII in the provided text and return the result.\n\nApplies the production masking configuration. Useful for previewing\nhow PII masking will transform data before enabling it on a pipeline.",
+        "operationId": "mask_text_v1_admin_pii_mask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PIIMaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PIIMaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mask Text",
+        "tags": [
+          "Admin - PII Masking"
+        ]
+      }
+    },
+    "/v1/admin/pii/scan": {
+      "post": {
+        "description": "Detect PII types in the provided text without masking.\n\nReturns a list of detected PII types and their occurrence counts.\nUseful for compliance auditing and data classification.",
+        "operationId": "scan_text_v1_admin_pii_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PIIScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PIIScanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Scan Text",
+        "tags": [
+          "Admin - PII Masking"
         ]
       }
     },
@@ -23651,6 +23903,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get Global Audit Summary V1 Audit Global Summary Get",
                   "type": "object"
                 }
@@ -24010,6 +24263,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Test Tenant Isolation V1 Audit  Tenant Id  Isolation Test Get",
                   "type": "object"
                 }
@@ -24230,6 +24484,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Health Check V1 Certificates Health Get",
                   "type": "object"
                 }
@@ -26415,9 +26670,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "List Gateway Apis",
@@ -26461,9 +26713,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -26512,9 +26761,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "Delete Gateway Api",
@@ -26557,9 +26803,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -26608,9 +26851,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "Activate Gateway Api",
@@ -26655,9 +26895,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -26726,9 +26963,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "List Gateway Applications",
@@ -26776,9 +27010,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "Configure Api Oidc",
@@ -26802,9 +27033,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -26836,9 +27064,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -27183,14 +27408,9 @@
             "name": "status",
             "required": false,
             "schema": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/LogStatus"
-                }
-              ],
+              "$ref": "#/components/schemas/LogStatus",
               "default": "all",
-              "description": "Filter by status",
-              "title": "Status"
+              "description": "Filter by status"
             }
           },
           {
@@ -27350,14 +27570,9 @@
             "name": "status",
             "required": false,
             "schema": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/LogStatus"
-                }
-              ],
+              "$ref": "#/components/schemas/LogStatus",
               "default": "all",
-              "description": "Filter by status",
-              "title": "Status"
+              "description": "Filter by status"
             }
           }
         ],
@@ -27418,6 +27633,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get Log By Request Id V1 Logs Calls  Request Id  Get",
                   "type": "object"
                 }
@@ -27751,9 +27967,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "Check Policies",
@@ -27779,9 +27992,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -28226,15 +28436,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/MCPKeyRotationRequest"
-                  }
-                ],
+                "$ref": "#/components/schemas/MCPKeyRotationRequest",
                 "default": {
                   "grace_period_hours": 24
-                },
-                "title": "Body"
+                }
               }
             }
           }
@@ -28440,9 +28645,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "List Tools",
@@ -28470,9 +28672,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "Get Tool Categories",
@@ -28498,9 +28697,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -28549,9 +28745,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -28612,9 +28805,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "Invoke Tool",
@@ -28659,9 +28849,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -29419,9 +29606,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "List Platform Components",
@@ -29468,9 +29652,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -29521,9 +29702,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "Get Component Diff",
@@ -29568,9 +29746,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -29648,9 +29823,6 @@
         "security": [
           {
             "HTTPBearer": []
-          },
-          {
-            "HTTPBearer": []
           }
         ],
         "summary": "List Platform Events",
@@ -29676,9 +29848,6 @@
           }
         },
         "security": [
-          {
-            "HTTPBearer": []
-          },
           {
             "HTTPBearer": []
           }
@@ -30281,14 +30450,9 @@
             "name": "sort",
             "required": false,
             "schema": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/SortOrder"
-                }
-              ],
+              "$ref": "#/components/schemas/SortOrder",
               "default": "relevance",
-              "description": "Sort order",
-              "title": "Sort"
+              "description": "Sort order"
             }
           },
           {
@@ -30964,6 +31128,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get Snapshot Stats V1 Snapshots Stats Get",
                   "type": "object"
                 }
@@ -31042,6 +31207,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get Snapshot Stats Summary V1 Snapshots Stats Summary Get",
                   "type": "object"
                 }
@@ -31862,15 +32028,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/KeyRotationRequest"
-                  }
-                ],
+                "$ref": "#/components/schemas/KeyRotationRequest",
                 "default": {
                   "grace_period_hours": 24
-                },
-                "title": "Request"
+                }
               }
             }
           }
@@ -39267,6 +39428,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get Token Usage V1 Usage Tokens Get",
                   "type": "object"
                 }
@@ -39319,6 +39481,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get Token Usage Compare V1 Usage Tokens Compare Get",
                   "type": "object"
                 }

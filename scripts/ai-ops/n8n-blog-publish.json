@@ -1,0 +1,78 @@
+{
+  "name": "STOA Content — Blog Publish (Google Indexing + Slack)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "blog-publish",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "blog-webhook",
+      "name": "Blog Publish Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "blog-publish"
+    },
+    {
+      "parameters": {
+        "jsCode": "const https = require('https');\n\n// Input: { urls: [\"https://docs.gostoa.dev/blog/slug1\", ...], source, run_id }\nconst { urls, source, run_id } = $input.first().json.body;\n\nif (!urls || !Array.isArray(urls) || urls.length === 0) {\n  return [{ json: { status: 'skipped', reason: 'no URLs provided' } }];\n}\n\nfunction httpsRequest(options, body) {\n  return new Promise((resolve, reject) => {\n    const req = https.request(options, (res) => {\n      let data = '';\n      res.on('data', (chunk) => { data += chunk; });\n      res.on('end', () => resolve({ statusCode: res.statusCode, body: data }));\n    });\n    req.on('error', reject);\n    if (body) req.write(body);\n    req.end();\n  });\n}\n\n// --- Google Indexing API ---\n// Requires GOOGLE_INDEXING_API_KEY or OAuth2 service account token.\n// For service accounts: use n8n's Google credentials (OAuth2) and swap\n// this Code node for the built-in HTTP Request with Google OAuth2.\nconst apiKey = $env.GOOGLE_INDEXING_API_KEY || '';\nconst indexResults = [];\n\nif (apiKey) {\n  for (const url of urls) {\n    try {\n      const payload = JSON.stringify({ url, type: 'URL_UPDATED' });\n      const res = await httpsRequest({\n        hostname: 'indexing.googleapis.com',\n        path: `/v3/urlNotifications:publish?key=${apiKey}`,\n        method: 'POST',\n        headers: {\n          'Content-Type': 'application/json',\n          'Content-Length': Buffer.byteLength(payload)\n        }\n      }, payload);\n      indexResults.push({ url, status: res.statusCode, ok: res.statusCode === 200 });\n    } catch (e) {\n      indexResults.push({ url, status: 'error', error: e.message });\n    }\n  }\n} else {\n  // No API key — skip indexing, still send Slack notification\n  for (const url of urls) {\n    indexResults.push({ url, status: 'skipped', reason: 'GOOGLE_INDEXING_API_KEY not configured' });\n  }\n}\n\n// --- Slack Notification ---\nconst slackWebhook = $env.SLACK_CONTENT_WEBHOOK || $env.SLACK_WEBHOOK_URL || '';\n\nif (slackWebhook) {\n  const links = urls.map(u => {\n    const slug = u.split('/blog/')[1] || u;\n    return `• <${u}|${slug}>`;\n  }).join('\\n');\n\n  const indexed = indexResults.filter(r => r.ok).length;\n  const indexStatus = apiKey\n    ? ` | Google Indexing: ${indexed}/${urls.length} submitted`\n    : '';\n\n  const text = `:pencil: *${urls.length} Blog Post(s) Published*\\n${links}\\n\\n_Source: ${source || 'manual'}${indexStatus}_`;\n\n  try {\n    const { hostname, pathname } = new URL(slackWebhook);\n    const payload = JSON.stringify({ text });\n    await httpsRequest({\n      hostname,\n      path: pathname,\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'Content-Length': Buffer.byteLength(payload)\n      }\n    }, payload);\n  } catch (e) {\n    // Slack notification failure is non-blocking\n  }\n}\n\nreturn [{ json: {\n  status: 'ok',\n  urls_processed: urls.length,\n  index_results: indexResults,\n  slack_sent: !!slackWebhook,\n  source: source || 'manual',\n  run_id: run_id || null\n} }];"
+      },
+      "id": "process-publish",
+      "name": "Index & Notify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [800, 300]
+    }
+  ],
+  "connections": {
+    "Blog Publish Webhook": {
+      "main": [
+        [
+          {
+            "node": "Index & Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Index & Notify": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "notes": "Blog publish pipeline: receives URLs from GHA scheduled-publish workflow, submits to Google Indexing API, sends Slack notification.\n\nRequired env vars:\n  - GOOGLE_INDEXING_API_KEY: Google Cloud API key with Indexing API enabled (optional — Slack still fires without it)\n  - SLACK_CONTENT_WEBHOOK or SLACK_WEBHOOK_URL: Slack incoming webhook URL\n\nRequired n8n settings:\n  - NODE_FUNCTION_ALLOW_BUILTIN=crypto,https,url,buffer\n  - N8N_BLOCK_ENV_ACCESS_IN_NODE=false\n\nSetup:\n  1. Import this workflow in n8n (n8n.gostoa.dev)\n  2. Set env vars in n8n\n  3. Activate the workflow\n  4. Copy the webhook URL to stoa-docs repo: Settings > Variables > N8N_BLOG_PUBLISH_WEBHOOK\n\nGoogle Indexing API setup:\n  1. Enable Indexing API in Google Cloud Console\n  2. Create API key or service account\n  3. Add the service account as Owner in Google Search Console (site: docs.gostoa.dev)\n  4. Set GOOGLE_INDEXING_API_KEY env var in n8n"
+  },
+  "tags": [
+    {
+      "name": "content"
+    },
+    {
+      "name": "ai-factory"
+    }
+  ]
+}

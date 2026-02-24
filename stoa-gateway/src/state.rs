@@ -12,6 +12,7 @@ use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
+use crate::diagnostics::DiagnosticEngine;
 use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
@@ -97,6 +98,8 @@ pub struct AppState {
     pub deploy_progress: DeployProgressEmitter,
     /// Prompt cache for reusable patterns across agent sessions (CAB-1123)
     pub prompt_cache: Arc<PromptCache>,
+    /// Self-diagnostic engine for auto-RCA and hop detection (CAB-1316)
+    pub diagnostic_engine: Arc<DiagnosticEngine>,
 }
 
 impl AppState {
@@ -374,6 +377,10 @@ impl AppState {
             "Deploy progress emitter initialized"
         );
 
+        // Initialize diagnostic engine (CAB-1316)
+        let diagnostic_engine = Arc::new(DiagnosticEngine::new(1000));
+        tracing::info!("Diagnostic engine initialized (buffer: 1000 reports)");
+
         let start_time = Instant::now();
 
         Self {
@@ -409,6 +416,7 @@ impl AppState {
             guardrail_policy_store: Arc::new(GuardrailPolicyStore::new()),
             deploy_progress,
             prompt_cache,
+            diagnostic_engine,
         }
     }
 

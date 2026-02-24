@@ -116,7 +116,8 @@
 - [x] CAB-1451: [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974
 - [x] CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008
 - [x] CAB-1304: [MEGA] Demo Tenant Automation (13 pts) — PR #1052
-- [x] CAB-402: Policy Drift Monitoring — GitOps Sync Status (5 pts) — PR #1059
+- [x] CAB-1460: Scheduled Blog Publishing Pipeline (5 pts) — PR #1053
+- [x] CAB-402: Policy Drift Monitoring — GitOps Sync Status (5 pts)
 - [x] CAB-1446: [MEGA] Gateway Test Coverage Expansion (21 pts) — PR #995
 - [x] CAB-1456: [gateway] Metering enrichment + budget enforcement (5 pts) — PR #998
 - [x] CAB-1438: [MEGA] K8s HPA + PDB for All Components (21 pts) — PR #970
@@ -192,13 +193,12 @@
 **P1** (8 pts):
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
 
-**P2** (60 pts):
+**P2** (29 pts):
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)
 - [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2)
 - [ ] CAB-1127: Dual-Track Content — Demo Client + Landing (5 pts, P2)
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
-- [x] CAB-1460: Scheduled Blog Publishing Pipeline (5 pts) — PR #1053
 
 **P3 — MEGAs** (42 pts):
 

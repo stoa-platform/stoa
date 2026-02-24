@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-24 (C9 802pts scope, 684pts C9-done (85.3%)) — W3 complete, veille system live
+> Derniere MAJ: 2026-02-24 (C9 830pts scope, 801pts done (96.5%), 60 issues) — all code tasks complete
 
 ## ✅ DONE
 
@@ -19,7 +19,12 @@
 - ✅ chore(deps): 6 Dependabot PRs merged (#961, #960, #958, #957, #955, #954)
 - ✅ CAB-1446 [MEGA] Gateway Test Coverage Expansion (21 pts) — PR #995
 - ✅ CAB-1456 [gateway] Metering enrichment + budget enforcement (5 pts) — PR #998
-- ✅ Test Blitz: CAB-1448 PR #996 (320 tests), CAB-1451 PR #997 (E2E), CAB-1452 PR #984 (110 tests) — partial MEGAs
+- ✅ CAB-1448 [MEGA] API Router Test Coverage Blitz (21 pts) — PR #996 (320 tests/15 routers)
+- ✅ CAB-1451 [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974
+- ✅ CAB-1452 [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008 (110+14 tests)
+- ✅ CAB-1304 [MEGA] Demo Tenant Automation (13 pts) — PR #1052
+- ✅ CAB-1460 Scheduled Blog Publishing Pipeline (5 pts) — PR #1053
+- ✅ CAB-402 Policy Drift Monitoring — GitOps Sync Status (5 pts)
 - ✅ CAB-1450 [MEGA] DX: CI & Local Dev Completeness (13 pts) — PRs #975, #983, #987, #989
 - ✅ CAB-1342 [MEGA] Helm Auto-Sync Secrets + Multi-Staging (21 pts) — PR #990
 - ✅ CAB-1334 [MEGA] Usage Metering Pipeline P1 (21 pts) — PR #991
@@ -113,7 +118,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - Rolling avg: 129.3 pts/day (C7+C8)
 - Portal MCP pages: MOCK_SERVERS removed (PR #771) — pages now use real API only
 - MEGA Strike W1-W4: 11 tickets, 173 pts in single day (PRs #968-#991)
-- Test Blitz + Metering: PRs #984, #996, #997, #998 (3 partial MEGAs + CAB-1456 done)
+- Test Blitz + Metering: PRs #984, #996, #997, #998 (CAB-1448, 1451, 1452 all DONE + CAB-1456 done)
 - MEGA Strike W3: CAB-1347 done (PRs #1032, #1034), CAB-1348 cancelled (tokio-uring infeasible)
 - MEGA Strike W4 triage: 3 cancelled (CAB-1307, 1309, 1310 — off-mission), 2 kept (CAB-1304, 1311), 3 deferred (CAB-1308, 1324, 1402)
 - PR hygiene: 10 merged, 3 stale closed, 3 deferred (OTel 0.31 breaking, TS-eslint 6→8 breaking)

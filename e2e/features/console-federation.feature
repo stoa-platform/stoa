@@ -1,4 +1,4 @@
-@federation @console @wip
+@federation @console
 Feature: Console - Federation Master Account Management
 
   As a tenant admin,

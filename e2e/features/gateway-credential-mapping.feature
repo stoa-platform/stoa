@@ -1,4 +1,4 @@
-@gateway @credential-mapping @wip
+@gateway @credential-mapping
 Feature: Gateway - Per-consumer credential mapping (CAB-1432)
 
   The gateway resolves per-consumer backend credentials from the

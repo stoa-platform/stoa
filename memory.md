@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-24 (C9 600/572+ pts (105%))
+> Derniere MAJ: 2026-02-24 (C9 600/572+ pts (105%)) — veille system live
 
 ## ✅ DONE
 
@@ -8,6 +8,11 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ Veille concurrentielle 3 niveaux — PRs #1019, #1020, #1025
+  - L1: competitive-watch skill + CLI script + n8n template (hebdo)
+  - L2: monthly-ia-factory-audit GHA (14 dimensions/100, regression alerts)
+  - L3: /benchmark-competitors command + competitive-analyst agent (trimestriel)
+  - Q1 Benchmark: STOA 91/100, Cursor 62, Codex 48, Windsurf 38, Aider 35, Q Dev 32
 - ✅ PR backlog cleanup: 4 factory PRs merged (#1008, #1006, #1004, #974), 3 stale closed (#1012, #977, #971)
 - ✅ chore(deps): 6 Dependabot PRs merged (#961, #960, #958, #957, #955, #954)
 - ✅ CAB-1446 [MEGA] Gateway Test Coverage Expansion (21 pts) — PR #995
@@ -108,3 +113,5 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - MEGA Strike W1-W4: 11 tickets, 173 pts in single day (PRs #968-#991)
 - Test Blitz + Metering: PRs #984, #996, #997, #998 (3 partial MEGAs + CAB-1456 done)
 - PR hygiene: 10 merged, 3 stale closed, 3 deferred (OTel 0.31 breaking, TS-eslint 6→8 breaking)
+- Veille system: L1 weekly (skill+CLI), L2 monthly (GHA audit), L3 quarterly (benchmark command+agent)
+- Benchmark Q1 gaps: sandbox isolation (P1, Codex), plugin marketplace (P2, Cursor). Cursor copie patterns CC.

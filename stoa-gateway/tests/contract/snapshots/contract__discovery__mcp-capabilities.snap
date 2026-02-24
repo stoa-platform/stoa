@@ -12,7 +12,8 @@ expression: json
         "stoa.api.lifecycle",
         "stoa.deployment.events",
         "stoa.security.alerts",
-        "stoa.subscription.events"
+        "stoa.subscription.events",
+        "stoa.policy.changes"
       ]
     },
     "prompts": {

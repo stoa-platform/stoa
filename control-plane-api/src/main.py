@@ -48,6 +48,7 @@ from .routers import (
     contracts,
     credential_mappings,
     data_governance,
+    demo,
     deployments,
     diagnostics,
     docs_search,
@@ -637,6 +638,9 @@ app.include_router(catalog_admin.router)
 
 # Admin Prospects Dashboard (CAB-911 - Conversion Cockpit)
 app.include_router(admin_prospects.router)
+
+# Demo Tenant Management (CAB-1304)
+app.include_router(demo.router)
 
 # PII Admin — scan, mask, config (CAB-430)
 app.include_router(pii_admin.router)

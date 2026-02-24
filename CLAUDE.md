@@ -99,7 +99,7 @@ Key rules for AI Factory workflow:
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
 - 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)
 - 3 MCP-powered: `/council` (4-persona validation → Linear), `/sync-plan` (plan.md ↔ Linear), `/decompose` (MEGA → component-scoped sub-issues + DAG)
-- 4 ops: `/analytics` (5 data sources, 12 queries), `/competitive-watch` (veille L1-L3), `/ci-fix` (auto-fix CI), `/carto` (platform service catalog + drift detection)
+- 5 ops: `/analytics` (5 data sources, 12 queries), `/competitive-watch` (veille L1-L3), `/ci-fix` (auto-fix CI), `/carto` (platform service catalog + drift detection), `/impact` (reverse dependency analysis + blast radius)
 - 2 sprint: `/fill-cycle` (capacity gap analysis), `/generate-backlog` (MEGA backlog generation)
 
 ### Slash Commands (`.claude/commands/`)

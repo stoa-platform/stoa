@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-24 (C9: 830pts scope, 801pts done (96.5%), 60 issues closed — backlog trimmed: 106 tickets canceled)
+> Last sync: 2026-02-25 (C9: 835pts scope, 801pts done (96%), 60 issues closed)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 830 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 801 pts (96.5%) | **Velocity**: 60 issues done
+**Scope**: 835 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 806 pts (97%) | **Velocity**: 61 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -110,8 +110,9 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
+- [~] CAB-1457: [api] Billing models + migration + service (5 pts, P2)
 
-### Done (60)
+### Done (61)
 - [x] CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts) — PR #996
 - [x] CAB-1451: [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974
 - [x] CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008
@@ -187,11 +188,12 @@
 - [x] CAB-1426: [infra] Hybrid multi-cluster observability view (5 pts) — sub of CAB-1331
 - [x] CAB-1427: [cp-api] AWS API Gateway adapter (8 pts) — sub of CAB-1336
 - [x] CAB-1428: [cp-api] Azure APIM adapter (8 pts) — sub of CAB-1336
+- [x] CAB-1460: Scheduled Blog Publishing Pipeline (5 pts) — PR #1053
 
 ### Todo
 
 **P1** (8 pts):
-- [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
+- [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1) ⚠️ orphan: not in C9 cycle
 
 **P2** (29 pts):
 - [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2)

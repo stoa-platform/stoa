@@ -37,6 +37,12 @@ This directory contains operational procedures for incident management on the ST
 | [API Rollback](medium/api-rollback.md) | API rollback procedure | Restore previous version |
 | [MCP Gateway Migration](mcp-gateway-migration.md) | Python → Rust gateway migration | Gateway transition |
 
+### Content Operations
+
+| Runbook | Description | Trigger |
+|---------|-------------|---------|
+| [Post-Milestone Content Checklist](../POST-MILESTONE-CONTENT-CHECKLIST.md) | Update landing page, blog, docs, SEO after each milestone | Release, major feature, event |
+
 ### Archived (Obsolete — do not use)
 
 | Runbook | Reason | Replacement |

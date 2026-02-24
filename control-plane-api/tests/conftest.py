@@ -90,12 +90,12 @@ patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
 
 # ============== Disable PII Masking in Tests ==============
 # PIIMaskingMiddleware._mask_query_string corrupts UUIDs and datetime query params
-# e.g. uuid "af85fcc7-..." → "af85****fcc7-..." causing 422 validation errors.
+# e.g. uuid "af85fcc7-..." -> "af85****fcc7-..." causing 422 validation errors.
 # Disable at class level so all instances (including freshly created ones) are affected.
 from src.middleware.pii_masking import PIIMaskingMiddleware
 
 _ORIGINAL_MASK_QUERY_STRING = PIIMaskingMiddleware._mask_query_string
-PIIMaskingMiddleware._mask_query_string = lambda self, qs: qs
+PIIMaskingMiddleware._mask_query_string = lambda _self, qs: qs
 
 import asyncio
 from collections.abc import AsyncGenerator, Generator

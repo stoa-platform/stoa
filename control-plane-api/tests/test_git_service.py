@@ -1,7 +1,6 @@
 """Tests for GitLabService pure/sync helpers + mocked async methods (CAB-1291)"""
 import asyncio
-import re
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,7 +13,6 @@ from src.services.git_service import (
     _fetch_with_protection,
     _normalize_api_data,
 )
-
 
 # ── Constants ──
 
@@ -274,9 +272,11 @@ class TestConnect:
             mock_settings.GITLAB_URL = "https://gitlab.example.com"
             mock_settings.GITLAB_TOKEN = "token"
             mock_settings.GITLAB_PROJECT_ID = 1
-            with patch("src.services.git_service.gitlab.Gitlab", side_effect=Exception("fail")):
-                with pytest.raises(Exception, match="fail"):
-                    await svc.connect()
+            with (
+                patch("src.services.git_service.gitlab.Gitlab", side_effect=Exception("fail")),
+                pytest.raises(Exception, match="fail"),
+            ):
+                await svc.connect()
 
 
 class TestDisconnect:

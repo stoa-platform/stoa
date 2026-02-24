@@ -32,9 +32,11 @@ class TestConnect:
 
     async def test_connect_error_raises(self):
         svc = KeycloakService()
-        with patch("src.services.keycloak_service.KeycloakOpenIDConnection", side_effect=Exception("fail")):
-            with pytest.raises(Exception, match="fail"):
-                await svc.connect()
+        with (
+            patch("src.services.keycloak_service.KeycloakOpenIDConnection", side_effect=Exception("fail")),
+            pytest.raises(Exception, match="fail"),
+        ):
+            await svc.connect()
 
 
 class TestDisconnect:
@@ -93,7 +95,7 @@ class TestCreateUser:
     async def test_creates_with_password(self, svc):
         svc._admin.create_user.return_value = "uid"
         svc._admin.get_realm_role.return_value = {"name": "viewer"}
-        await svc.create_user("bob", "bob@ex.com", "Bob", "B", "acme", ["viewer"], temporary_password="pass123")
+        await svc.create_user("bob", "bob@ex.com", "Bob", "B", "acme", ["viewer"], temporary_password="pass123")  # noqa: S106
         call_args = svc._admin.create_user.call_args[0][0]
         assert "credentials" in call_args
         assert call_args["credentials"][0]["temporary"] is True

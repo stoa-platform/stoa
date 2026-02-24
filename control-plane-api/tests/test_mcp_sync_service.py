@@ -1,10 +1,7 @@
 """Tests for MCPSyncService + SyncResult (CAB-1291)"""
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 from src.services.mcp_sync_service import MCPSyncService, SyncResult
-
 
 # ── SyncResult dataclass ──
 

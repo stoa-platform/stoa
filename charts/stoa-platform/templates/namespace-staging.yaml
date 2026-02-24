@@ -1,0 +1,15 @@
+{{- if .Values.staging.enabled }}
+{{- range .Values.staging.environments }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .namespace }}
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/managed-by: Helm
+    stoa.io/staging-env: {{ .name }}
+  annotations:
+    stoa.io/infisical-env: {{ .infisicalEnv | default "staging" }}
+{{- end }}
+{{- end }}

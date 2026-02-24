@@ -1,0 +1,59 @@
+{{- if .Values.staging.enabled }}
+---
+# ArgoCD ApplicationSet — generates one Application per staging environment.
+# Each staging env gets its own namespace and Infisical environment binding.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: stoa-staging-environments
+  namespace: {{ .Values.staging.argocdNamespace | default "argocd" }}
+  labels:
+    app.kubernetes.io/name: stoa-staging
+    app.kubernetes.io/component: applicationset
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  generators:
+    - list:
+        elements:
+          {{- range .Values.staging.environments }}
+          - name: {{ .name }}
+            namespace: {{ .namespace }}
+            infisicalEnv: {{ .infisicalEnv | default "staging" }}
+            {{- if .domain }}
+            domain: {{ .domain }}
+            {{- end }}
+          {{- end }}
+  template:
+    metadata:
+      name: 'stoa-{{`{{name}}`}}'
+      labels:
+        app.kubernetes.io/part-of: stoa-platform
+        stoa.io/staging-env: '{{`{{name}}`}}'
+    spec:
+      project: {{ .Values.staging.argocdProject | default "default" }}
+      source:
+        repoURL: {{ .Values.staging.repoURL | default "https://github.com/stoa-platform/stoa.git" }}
+        targetRevision: {{ .Values.staging.targetRevision | default "main" }}
+        path: charts/stoa-platform
+        helm:
+          valueFiles:
+            - values.yaml
+            - values-staging.yaml
+          parameters:
+            - name: stoaGateway.environment
+              value: '{{`{{name}}`}}'
+            {{- if .Values.infisical.enabled }}
+            - name: infisical.environment
+              value: '{{`{{infisicalEnv}}`}}'
+            {{- end }}
+      destination:
+        server: {{ .Values.staging.destinationServer | default "https://kubernetes.default.svc" }}
+        namespace: '{{`{{namespace}}`}}'
+      syncPolicy:
+        automated:
+          prune: {{ .Values.staging.autoPrune | default true }}
+          selfHeal: {{ .Values.staging.selfHeal | default true }}
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+{{- end }}

@@ -37,6 +37,10 @@ spec:
       {{- else }}
       serviceAccountName: {{ .Values.stoaGateway.serviceAccount | default "default" }}
       {{- end }}
+      {{- if .Values.infisical.enabled }}
+      initContainers:
+        {{- include "stoa-platform.infisicalInitContainer" . | nindent 8 }}
+      {{- end }}
       containers:
         - name: stoa-gateway
           image: "{{ .Values.stoaGateway.image.repository }}:{{ .Values.stoaGateway.image.tag }}"
@@ -163,6 +167,7 @@ spec:
               mountPath: /etc/stoa/policies
               readOnly: true
             {{- end }}
+            {{- include "stoa-platform.infisicalVolumeMount" . | nindent 12 }}
       securityContext:
         runAsNonRoot: true
         fsGroup: 1000
@@ -174,6 +179,7 @@ spec:
           configMap:
             name: stoa-gateway-policies
         {{- end }}
+        {{- include "stoa-platform.infisicalVolume" . | nindent 8 }}
       {{- with .Values.stoaGateway.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

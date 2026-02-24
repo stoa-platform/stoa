@@ -425,6 +425,82 @@ mcpGateway:
     enabled: false
     minAvailable: 1
 
+# ==============================================================================
+# Infisical Secret Sync (CAB-1342 Phase 1)
+# ==============================================================================
+# Opt-in init container that fetches secrets from Infisical on pod startup.
+# Secrets are written to a shared emptyDir volume (/secrets) as individual
+# files and a combined .env file. Uses Universal Auth (Machine Identity).
+#
+# Prerequisites:
+#   1. Create a K8s Secret with Infisical Machine Identity credentials:
+#      kubectl create secret generic infisical-machine-identity \
+#        --from-literal=client-id=<CLIENT_ID> \
+#        --from-literal=client-secret=<CLIENT_SECRET> \
+#        -n stoa-system
+#   2. Set infisical.enabled=true and fill in projectId
+infisical:
+  enabled: false
+  # Infisical API address (self-hosted or cloud)
+  address: "https://vault.gostoa.dev/api"
+  # Infisical project ID
+  projectId: ""
+  # Environment to fetch secrets from (dev | staging | prod)
+  environment: "prod"
+  # Secret path within the project
+  secretPath: "/"
+  # Auth method (only universal-auth supported)
+  authMethod: "universal-auth"
+  # Init container image
+  image: "infisical/cli:latest"
+  # If true, pod fails to start when Infisical is unreachable
+  # If false, pod starts with empty /secrets (graceful degradation)
+  required: false
+  # Reference to the K8s Secret containing Machine Identity credentials
+  clientSecretRef:
+    # Name of the K8s Secret
+    name: "infisical-machine-identity"
+    # Key within the Secret for client ID
+    clientIdKey: "client-id"
+    # Key within the Secret for client secret
+    clientSecretKey: "client-secret"
+
+# ==============================================================================
+# Multi-Staging Pattern (CAB-1342 Phase 2)
+# ==============================================================================
+# ArgoCD ApplicationSet that generates N staging environments from a list.
+# Each environment gets its own namespace and Infisical env binding.
+# Requires ArgoCD ApplicationSet controller (included in ArgoCD >= 2.3).
+staging:
+  enabled: false
+  # ArgoCD namespace where the ApplicationSet will be created
+  argocdNamespace: argocd
+  # ArgoCD project
+  argocdProject: default
+  # Git repo URL for Helm source
+  repoURL: "https://github.com/stoa-platform/stoa.git"
+  # Git branch/tag/commit
+  targetRevision: main
+  # K8s API server for destination
+  destinationServer: "https://kubernetes.default.svc"
+  # Auto-prune removed resources
+  autoPrune: true
+  # Self-heal drift from desired state
+  selfHeal: true
+  # List of staging environments to generate
+  environments: []
+  # Example:
+  #   - name: staging-1
+  #     namespace: stoa-staging-1
+  #     infisicalEnv: staging
+  #   - name: staging-2
+  #     namespace: stoa-staging-2
+  #     infisicalEnv: staging
+  #   - name: qa
+  #     namespace: stoa-qa
+  #     infisicalEnv: staging
+  #     domain: qa.gostoa.dev
+
 alertmanager:
   enabled: false
   image:

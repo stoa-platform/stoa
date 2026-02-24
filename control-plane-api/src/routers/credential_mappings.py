@@ -11,6 +11,7 @@ from ..database import get_db
 from ..models.credential_mapping import CredentialAuthType, CredentialMapping
 from ..repositories.credential_mapping import CredentialMappingRepository
 from ..schemas.credential_mapping import (
+    CredentialAuthTypeEnum,
     CredentialMappingCreate,
     CredentialMappingListResponse,
     CredentialMappingResponse,
@@ -50,18 +51,18 @@ def _require_admin_access(user: User) -> None:
 def _to_response(mapping: CredentialMapping) -> CredentialMappingResponse:
     """Convert model to response (never expose encrypted value)."""
     return CredentialMappingResponse(
-        id=mapping.id,  # type: ignore[arg-type]
-        consumer_id=mapping.consumer_id,  # type: ignore[arg-type]
-        api_id=mapping.api_id,  # type: ignore[arg-type]
-        tenant_id=mapping.tenant_id,  # type: ignore[arg-type]
-        auth_type=mapping.auth_type.value if hasattr(mapping.auth_type, "value") else str(mapping.auth_type),  # type: ignore[arg-type]
-        header_name=mapping.header_name,  # type: ignore[arg-type]
+        id=mapping.id,
+        consumer_id=mapping.consumer_id,
+        api_id=mapping.api_id,
+        tenant_id=mapping.tenant_id,
+        auth_type=CredentialAuthTypeEnum(mapping.auth_type.value),
+        header_name=mapping.header_name,
         has_credential=mapping.encrypted_value is not None,
-        description=mapping.description,  # type: ignore[arg-type]
-        is_active=mapping.is_active,  # type: ignore[arg-type]
-        created_at=mapping.created_at,  # type: ignore[arg-type]
-        updated_at=mapping.updated_at,  # type: ignore[arg-type]
-        created_by=mapping.created_by,  # type: ignore[arg-type]
+        description=mapping.description,
+        is_active=mapping.is_active,
+        created_at=mapping.created_at,
+        updated_at=mapping.updated_at,
+        created_by=mapping.created_by,
     )
 
 
@@ -199,15 +200,15 @@ async def update_credential_mapping(
         raise HTTPException(status_code=404, detail="Credential mapping not found")
 
     if request.auth_type is not None:
-        mapping.auth_type = CredentialAuthType(request.auth_type.value)  # type: ignore[assignment]
+        mapping.auth_type = CredentialAuthType(request.auth_type.value)
     if request.header_name is not None:
-        mapping.header_name = request.header_name  # type: ignore[assignment]
+        mapping.header_name = request.header_name
     if request.credential_value is not None:
-        mapping.encrypted_value = CredentialMappingRepository.encrypt_credential(request.credential_value)  # type: ignore[assignment]
+        mapping.encrypted_value = CredentialMappingRepository.encrypt_credential(request.credential_value)
     if request.description is not None:
-        mapping.description = request.description  # type: ignore[assignment]
+        mapping.description = request.description
     if request.is_active is not None:
-        mapping.is_active = request.is_active  # type: ignore[assignment]
+        mapping.is_active = request.is_active
 
     mapping = await repo.update(mapping)
     await db.commit()
@@ -236,7 +237,7 @@ async def delete_credential_mapping(
     if not mapping or mapping.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Credential mapping not found")
 
-    mapping.is_active = False  # type: ignore[assignment]
+    mapping.is_active = False
     await repo.update(mapping)
     await db.commit()
 

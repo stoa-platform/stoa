@@ -1,0 +1,169 @@
+name: "L2: Monthly IA Factory Audit"
+
+on:
+  schedule:
+    - cron: '0 8 1 * *'  # 1er de chaque mois a 8h UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit structure
+        id: audit
+        run: |
+          SCORE=0
+
+          # 1. CLAUDE.md (10 pts)
+          if [ -f "CLAUDE.md" ]; then
+            LINES=$(wc -l < CLAUDE.md)
+            [ "$LINES" -ge 50 ] && SCORE=$((SCORE + 10)) || SCORE=$((SCORE + 5))
+          fi
+
+          # 2. memory.md + plan.md (5 pts)
+          [ -f "memory.md" ] && SCORE=$((SCORE + 3))
+          [ -f "plan.md" ] && SCORE=$((SCORE + 2))
+
+          # 3. Slash commands + skills (10 pts)
+          CMD_COUNT=$(find .claude/commands -name "*.md" 2>/dev/null | wc -l)
+          SKILL_COUNT=$(find .claude/skills -name "SKILL.md" 2>/dev/null | wc -l)
+          TOTAL_CMD=$((CMD_COUNT + SKILL_COUNT))
+          [ "$TOTAL_CMD" -ge 5 ] && SCORE=$((SCORE + 10)) || SCORE=$((SCORE + TOTAL_CMD))
+
+          # 4. Subagents (8 pts)
+          AGENT_COUNT=$(find .claude/agents -name "*.md" 2>/dev/null | wc -l)
+          [ "$AGENT_COUNT" -ge 2 ] && SCORE=$((SCORE + 8)) || SCORE=$((SCORE + AGENT_COUNT * 4))
+
+          # 5. MCP config (8 pts)
+          [ -f ".mcp.json" ] && SCORE=$((SCORE + 6))
+          grep -q "Keychain\|keychain\|security " .mcp.json 2>/dev/null && SCORE=$((SCORE + 2))
+
+          # 6. Permissions (7 pts)
+          if [ -f ".claude/settings.json" ] || [ -f ".claude/settings.local.json" ]; then
+            PERM_COUNT=$(grep -c "allow" .claude/settings.local.json 2>/dev/null || echo 0)
+            [ "$PERM_COUNT" -ge 5 ] && SCORE=$((SCORE + 7)) || SCORE=$((SCORE + 4))
+          fi
+
+          # 7. Skills depth (8 pts)
+          [ "$SKILL_COUNT" -ge 3 ] && SCORE=$((SCORE + 8)) || SCORE=$((SCORE + SKILL_COUNT * 3))
+
+          # 8. Hooks (7 pts)
+          grep -q "PostToolUse\|PreToolUse\|Stop" .claude/settings.json 2>/dev/null && SCORE=$((SCORE + 7))
+
+          # 9. Worktrees support (7 pts)
+          if [ -d ".claude/claims" ] || grep -rq "worktree\|isolation" .claude/ 2>/dev/null; then
+            SCORE=$((SCORE + 7))
+          else
+            SCORE=$((SCORE + 4))
+          fi
+
+          # 10. Parallelisme (5 pts)
+          grep -rq "AGENT_TEAMS\|claims\|phase-ownership" .claude/ 2>/dev/null && SCORE=$((SCORE + 5))
+
+          # 11. Verification agents (10 pts)
+          [ -f ".claude/agents/verify-app.md" ] && SCORE=$((SCORE + 5))
+          find .claude/skills -name "*review*" -o -name "*test*" 2>/dev/null | grep -q . && SCORE=$((SCORE + 5))
+          find .claude/agents -name "*review*" -o -name "*test*" 2>/dev/null | grep -q . && SCORE=$((SCORE + 0))
+
+          # 12. CI/CD Claude workflows (5 pts)
+          CLAUDE_WF=$(ls .github/workflows/*claude* 2>/dev/null | wc -l)
+          [ "$CLAUDE_WF" -ge 3 ] && SCORE=$((SCORE + 5)) || SCORE=$((SCORE + 2))
+
+          # 13. Data & Analytics (5 pts)
+          [ -d ".claude/skills/analytics" ] && SCORE=$((SCORE + 5))
+
+          # 14. AI Factory scripts (5 pts)
+          [ -d "scripts/ai-ops" ] && SCORE=$((SCORE + 5))
+
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+          echo "Score: $SCORE/100"
+
+          # Status label
+          if [ "$SCORE" -ge 90 ]; then
+            echo "status=Excellent" >> "$GITHUB_OUTPUT"
+          elif [ "$SCORE" -ge 70 ]; then
+            echo "status=Bon" >> "$GITHUB_OUTPUT"
+          elif [ "$SCORE" -ge 50 ]; then
+            echo "status=A ameliorer" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=Critique" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check Claude Code version
+        id: version
+        run: |
+          LATEST=$(npm view @anthropic-ai/claude-code version 2>/dev/null || echo "unknown")
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+
+      - name: Compare to previous score
+        id: compare
+        run: |
+          PREV=$(cat .claude/audit-score.txt 2>/dev/null || echo "0")
+          CURR=${{ steps.audit.outputs.score }}
+          DIFF=$((CURR - PREV))
+          echo "previous=$PREV" >> "$GITHUB_OUTPUT"
+          echo "diff=$DIFF" >> "$GITHUB_OUTPUT"
+
+      - name: Write job summary
+        run: |
+          SCORE=${{ steps.audit.outputs.score }}
+          STATUS="${{ steps.audit.outputs.status }}"
+          PREV=${{ steps.compare.outputs.previous }}
+          DIFF=${{ steps.compare.outputs.diff }}
+          LATEST="${{ steps.version.outputs.latest }}"
+
+          if [ "$DIFF" -gt 0 ]; then
+            TREND="+$DIFF"
+          elif [ "$DIFF" -lt 0 ]; then
+            TREND="$DIFF"
+          else
+            TREND="="
+          fi
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## IA Factory Audit — $(date -u +%Y-%m-%d)
+
+          | Metric | Value |
+          |--------|-------|
+          | Score | **$SCORE/100** ($STATUS) |
+          | Previous | $PREV/100 |
+          | Trend | $TREND |
+          | Claude Code latest | $LATEST |
+
+          Run: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          EOF
+
+      - name: Notify via Slack
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          [ -z "${SLACK_WEBHOOK:-}" ] && exit 0
+
+          SCORE=${{ steps.audit.outputs.score }}
+          STATUS="${{ steps.audit.outputs.status }}"
+          PREV=${{ steps.compare.outputs.previous }}
+          DIFF=${{ steps.compare.outputs.diff }}
+          LATEST="${{ steps.version.outputs.latest }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ "$DIFF" -gt 0 ]; then EMOJI=":chart_with_upwards_trend:"; TREND="+$DIFF"
+          elif [ "$DIFF" -lt 0 ]; then EMOJI=":chart_with_downwards_trend:"; TREND="$DIFF"
+          else EMOJI=":heavy_minus_sign:"; TREND="="; fi
+
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"$EMOJI *IA Factory Audit* — $SCORE/100 ($STATUS)\\nPrevious: $PREV | Trend: $TREND\\nClaude Code latest: $LATEST\\n<$RUN_URL|View run>\"}" \
+            || true
+
+      - name: Alert on regression
+        if: steps.compare.outputs.diff < 0
+        run: |
+          echo "::warning::Score regression detected: ${{ steps.compare.outputs.previous }} -> ${{ steps.audit.outputs.score }} (${{ steps.compare.outputs.diff }})"

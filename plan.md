@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-24 (C9: 830pts scope, 801pts done (96.5%), 60 issues closed)
+> Last sync: 2026-02-24 (C9: 830pts scope, 801pts done (96.5%), 60 issues closed — backlog trimmed: 106 tickets canceled)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -206,10 +206,6 @@
 - [x] CAB-1347: [MEGA] Event-Driven V2 — Phase 3 only (Policy Propagation) (21 pts) — PRs #1032, #1034. Phases 1-2 deferred.
 - [x] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts) — Cancelled (tokio-uring incompatible with #[tokio::main])
 
-### Backlog (not committed, no checkbox)
-
-- CAB-1320: [MEGA] Repo Consolidation (21 pts) — PR #1004 (partial, root configs unified)
-
 ### Backlog — Legacy (triaged 2026-02-24)
 
 *Keep (demo/launch prerequisites):*
@@ -217,10 +213,11 @@
 
 *Deferred (post-launch, Q2+):*
 - CAB-1308: [MEGA] Resource Lifecycle Management (34 pts) — operational maturity, not launch-critical
-- CAB-1324: [MEGA] Runtime Data Governance (21 pts) — architectural refinement
-- CAB-1402: [infra] Cilium CNI Foundation (13 pts) — blocked: MKS Standard GA
 
-*Canceled (off-mission):*
+*Canceled (backlog trim 2026-02-24, 106 tickets):*
+- ~~CAB-1320: [MEGA] Repo Consolidation (21 pts) — partial work in PR #1004, deprioritized~~
+- ~~CAB-1324: [MEGA] Runtime Data Governance (21 pts) — architectural refinement, no demand signal~~
+- ~~CAB-1402: [infra] Cilium CNI Foundation (13 pts) — blocked: MKS Standard GA~~
 - ~~CAB-1307: [MEGA] Ticketing ITSM (34 pts) — ITSM not core to API gateway~~
 - ~~CAB-1309: [MEGA] Resource Lifecycle Advanced (34 pts) — speculative, no demand signal~~
 - ~~CAB-1310: [MEGA] Jenkins Orchestration Layer (34 pts) — orthogonal to gateway mission~~
@@ -229,20 +226,14 @@
 
 ## Cycle 10 (Mar 2–8) — NEXT
 
-**Scope**: 0 pts committed | **Theme**: TBD (no committed items yet)
+**Scope**: 0 pts committed | **Theme**: TBD (post-demo planning)
 
 ### Todo
-(empty — no tickets assigned to C10 yet)
+(empty — no tickets committed to C10 yet)
 
 ### Backlog (in cycle, not committed)
 - CAB-384: [Phase 17] AI Gateway — LLM Cost Optimization (21 pts, P2)
-- CAB-361: [Enterprise] OAuth2/OIDC Authentication (21 pts, P2)
-- CAB-240: [EPIC] Open Core Strategy (2 pts, P0)
 - CAB-173: [JALON] v1.0 GA — Mi-Mai 2026 (2 pts, P1)
-- CAB-178: [JALON] Q1 2026 — Fondations (2 pts, P1)
-- CAB-172: [JALON] Q2 2026 — Stabilite (2 pts, P2)
-- CAB-410: [Security] mTLS/OAuth2 Decision Tree (0 pts, P2)
-- CAB-396: [Community] Adapter STOA → Kong (0 pts, P3)
 
 ---
 

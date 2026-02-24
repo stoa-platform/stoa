@@ -46,6 +46,7 @@ from .routers import (
     consumers,
     contracts,
     credential_mappings,
+    data_governance,
     deployments,
     diagnostics,
     docs_search,
@@ -475,6 +476,10 @@ app = FastAPI(
             "name": "MCP Discovery",
             "description": "Gateway discovery for UAC-generated MCP tools (CAB-605)",
         },
+        {
+            "name": "Data Governance",
+            "description": "Source-of-truth classification, drift detection, reconciliation (CAB-1324)",
+        },
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -682,6 +687,9 @@ app.include_router(execution_logs.router)
 
 # Diagnostics — Self-diagnostic engine with auto-RCA (CAB-1316)
 app.include_router(diagnostics.router)
+
+# Data Governance — Source-of-truth matrix + drift detection (CAB-1324)
+app.include_router(data_governance.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

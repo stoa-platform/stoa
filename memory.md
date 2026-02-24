@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-24 (C9 600/572+ pts (105%)) — veille system live
+> Derniere MAJ: 2026-02-24 (C9 802pts scope, 663pts C9-done (82.7%)) — veille system live
 
 ## ✅ DONE
 
@@ -8,6 +8,7 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1347 Kafka policy propagation events — PR #1032 (API+Gateway, stoa.policy.changes topic, 12 tests)
 - ✅ Veille concurrentielle 3 niveaux — PRs #1019, #1020, #1025
   - L1: competitive-watch skill + CLI script + n8n template (hebdo)
   - L2: monthly-ia-factory-audit GHA (14 dimensions/100, regression alerts)

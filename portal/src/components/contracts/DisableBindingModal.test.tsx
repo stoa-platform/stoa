@@ -44,8 +44,8 @@ describe('DisableBindingModal', () => {
   it('shows traffic count formatted with locale separator', () => {
     renderWithProviders(<DisableBindingModal {...defaultProps} />);
 
-    // 1250 formatted with toLocaleString → "1,250" in en-US
-    expect(screen.getByText(/1[,.]?250/)).toBeInTheDocument();
+    // 1250 formatted with toLocaleString → "1,250" (en-US), "1 250" (fr-FR)
+    expect(screen.getByText(/1[\s\u202f,.]?250/)).toBeInTheDocument();
   });
 
   it('shows the endpoint URL', () => {

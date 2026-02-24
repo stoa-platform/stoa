@@ -139,7 +139,7 @@ describe('ProtocolRow', () => {
 
   it('should show traffic stats when enabled and available', () => {
     render(<ProtocolRow {...defaultProps} binding={makeBinding({ traffic_24h: 12345 })} />);
-    expect(screen.getByText(/12,345 req\/24h/)).toBeInTheDocument();
+    expect(screen.getByText(/12[\s\u202f,.]?345 req\/24h/)).toBeInTheDocument();
   });
 
   it('should not show traffic stats when not enabled', () => {

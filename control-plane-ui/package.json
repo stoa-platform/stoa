@@ -49,7 +49,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.5",
     "jsdom": "^28.0.0",
-    "msw": "^2.12.9",
+    "msw": "^2.12.10",
     "postcss": "^8.4.33",
     "prettier": "^3.2.0",
     "tailwindcss": "^3.4.1",

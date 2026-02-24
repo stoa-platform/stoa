@@ -9,6 +9,7 @@ from .catalog import (
 from .chat import ChatConversation, ChatMessage
 from .chat_token_usage import ChatTokenUsage
 from .consumer import Consumer, ConsumerStatus
+from .department_budget import BudgetPeriod, DepartmentBudget
 from .deployment import Deployment, DeploymentStatus, Environment
 from .execution_log import ErrorCategory, ExecutionLog, ExecutionStatus
 from .external_mcp_server import (

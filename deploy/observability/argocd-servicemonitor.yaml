@@ -1,0 +1,81 @@
+# CAB-402: ArgoCD ServiceMonitors — Policy Drift Monitoring
+# Enables Prometheus to scrape ArgoCD metrics for GitOps sync status tracking.
+#
+# ArgoCD exposes metrics on two services:
+#   - argocd-metrics       (application-controller): argocd_app_info, argocd_app_sync_total
+#   - argocd-server-metrics (API server):             argocd_redis_request_*, argocd_app_k8s_request_*
+#
+# Label selector must match the Prometheus operator's serviceMonitorSelector:
+#   prometheus: kube-prometheus-stack
+#   release: kube-prometheus-stack
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: argocd-metrics
+  namespace: argocd
+  labels:
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: stoa-platform
+    gostoa.dev/created-by: cab-402
+spec:
+  namespaceSelector:
+    matchNames:
+      - argocd
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-metrics
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+---
+# API server metrics (sync operations, API latency, Redis requests)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: argocd-server-metrics
+  namespace: argocd
+  labels:
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: stoa-platform
+    gostoa.dev/created-by: cab-402
+spec:
+  namespaceSelector:
+    matchNames:
+      - argocd
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server-metrics
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+---
+# Repo server metrics (git operations, repo access latency)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: argocd-repo-server-metrics
+  namespace: argocd
+  labels:
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: stoa-platform
+    gostoa.dev/created-by: cab-402
+spec:
+  namespaceSelector:
+    matchNames:
+      - argocd
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-repo-server
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics

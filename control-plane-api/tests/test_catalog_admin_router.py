@@ -106,6 +106,16 @@ class TestTriggerCatalogSync:
 
         assert resp.status_code == 403
 
+    def test_trigger_sync_500_service_error(self, app_with_cpi_admin, mock_db_session):
+        with (
+            patch(SYNC_SVC_PATH, side_effect=RuntimeError("DB connection lost")),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.post("/v1/admin/catalog/sync")
+
+        assert resp.status_code == 500
+        assert "Failed to trigger sync" in resp.json()["detail"]
+
 
 class TestTriggerMcpServersSync:
     """Tests for POST /v1/admin/catalog/sync/mcp-servers."""
@@ -143,6 +153,7 @@ class TestTriggerMcpServersSync:
             resp = client.post("/v1/admin/catalog/sync/mcp-servers")
 
         assert resp.status_code == 403
+
 
 
 class TestTriggerTenantSync:
@@ -188,6 +199,7 @@ class TestTriggerTenantSync:
         assert resp.status_code == 403
 
 
+
 class TestGetSyncStatus:
     """Tests for GET /v1/admin/catalog/sync/status."""
 
@@ -218,6 +230,16 @@ class TestGetSyncStatus:
             resp = client.get("/v1/admin/catalog/sync/status")
 
         assert resp.status_code == 403
+
+    def test_get_sync_status_500_service_error(self, app_with_cpi_admin, mock_db_session):
+        with (
+            patch(SYNC_SVC_PATH, side_effect=RuntimeError("DB read failure")),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.get("/v1/admin/catalog/sync/status")
+
+        assert resp.status_code == 500
+        assert "Failed to get sync status" in resp.json()["detail"]
 
 
 class TestGetSyncHistory:
@@ -261,6 +283,28 @@ class TestGetSyncHistory:
             resp = client.get("/v1/admin/catalog/sync/history")
 
         assert resp.status_code == 403
+
+    def test_get_sync_history_500_service_error(self, app_with_cpi_admin, mock_db_session):
+        with (
+            patch(SYNC_SVC_PATH, side_effect=RuntimeError("DB read failure")),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.get("/v1/admin/catalog/sync/history")
+
+        assert resp.status_code == 500
+        assert "Failed to get sync history" in resp.json()["detail"]
+
+    def test_get_sync_history_422_limit_too_low(self, app_with_cpi_admin, mock_db_session):
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/admin/catalog/sync/history?limit=0")
+
+        assert resp.status_code == 422
+
+    def test_get_sync_history_422_limit_too_high(self, app_with_cpi_admin, mock_db_session):
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/admin/catalog/sync/history?limit=101")
+
+        assert resp.status_code == 422
 
 
 class TestGetCatalogStats:
@@ -322,6 +366,16 @@ class TestGetCatalogStats:
             resp = client.get("/v1/admin/catalog/stats")
 
         assert resp.status_code == 403
+
+    def test_get_stats_500_repo_error(self, app_with_cpi_admin, mock_db_session):
+        with (
+            patch(CATALOG_REPO_PATH, side_effect=RuntimeError("DB failure")),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.get("/v1/admin/catalog/stats")
+
+        assert resp.status_code == 500
+        assert "Failed to get catalog stats" in resp.json()["detail"]
 
 
 class TestInvalidateCache:
@@ -390,6 +444,136 @@ class TestSeedCatalog:
 
         assert resp.status_code == 200
         assert resp.json()["seeded"] == 0
+
+    def test_seed_catalog_with_valid_openapi_spec(self, app_with_cpi_admin, mock_db_session):
+        mock_db_session.execute = AsyncMock(return_value=MagicMock())
+        mock_db_session.commit = AsyncMock()
+
+        payload = {
+            "tenant_id": "acme",
+            "apis": [
+                {
+                    "name": "petstore-api",
+                    "display_name": "Petstore",
+                    "version": "3.0.0",
+                    "description": "Pet store",
+                    "backend_url": "https://petstore.example.com",
+                    "tags": [],
+                    "openapi_spec": '{"openapi": "3.0.0", "info": {"title": "Petstore"}}',
+                }
+            ],
+        }
+
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.post("/v1/admin/catalog/seed", json=payload)
+
+        assert resp.status_code == 200
+        assert resp.json()["seeded"] == 1
+
+    def test_seed_catalog_invalid_openapi_spec_graceful(self, app_with_cpi_admin, mock_db_session):
+        mock_db_session.execute = AsyncMock(return_value=MagicMock())
+        mock_db_session.commit = AsyncMock()
+
+        payload = {
+            "tenant_id": "acme",
+            "apis": [
+                {
+                    "name": "broken-api",
+                    "display_name": "Broken Spec",
+                    "version": "1.0.0",
+                    "description": "Has invalid JSON spec",
+                    "backend_url": "https://example.com",
+                    "tags": [],
+                    "openapi_spec": "NOT VALID JSON {{{",
+                }
+            ],
+        }
+
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.post("/v1/admin/catalog/seed", json=payload)
+
+        assert resp.status_code == 200
+        assert resp.json()["seeded"] == 1
+        assert resp.json()["failed"] == 0
+
+    def test_seed_catalog_per_api_db_failure(self, app_with_cpi_admin, mock_db_session):
+        mock_db_session.execute = AsyncMock(side_effect=RuntimeError("constraint violation"))
+        mock_db_session.commit = AsyncMock()
+
+        payload = {
+            "tenant_id": "acme",
+            "apis": [
+                {
+                    "name": "fail-api",
+                    "display_name": "Will Fail",
+                    "version": "1.0.0",
+                    "description": "DB error",
+                    "backend_url": "https://example.com",
+                    "tags": [],
+                }
+            ],
+        }
+
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.post("/v1/admin/catalog/seed", json=payload)
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["seeded"] == 0
+        assert data["failed"] == 1
+        assert "failed:" in data["results"]["fail-api"]
+
+    def test_seed_catalog_mixed_success_and_failure(self, app_with_cpi_admin, mock_db_session):
+        call_count = 0
+
+        async def execute_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("duplicate key")
+            return MagicMock()
+
+        mock_db_session.execute = AsyncMock(side_effect=execute_side_effect)
+        mock_db_session.commit = AsyncMock()
+
+        payload = {
+            "tenant_id": "acme",
+            "apis": [
+                {"name": "api-ok", "display_name": "OK", "version": "1.0.0"},
+                {"name": "api-fail", "display_name": "Fail", "version": "1.0.0"},
+                {"name": "api-ok-2", "display_name": "OK 2", "version": "1.0.0"},
+            ],
+        }
+
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.post("/v1/admin/catalog/seed", json=payload)
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["seeded"] == 2
+        assert data["failed"] == 1
+
+    def test_seed_catalog_portal_published_tags(self, app_with_cpi_admin, mock_db_session):
+        mock_db_session.execute = AsyncMock(return_value=MagicMock())
+        mock_db_session.commit = AsyncMock()
+
+        payload = {
+            "tenant_id": "acme",
+            "apis": [
+                {
+                    "name": "promoted-api",
+                    "display_name": "Promoted",
+                    "version": "1.0.0",
+                    "tags": ["portal:published", "v2"],
+                }
+            ],
+        }
+
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.post("/v1/admin/catalog/seed", json=payload)
+
+        assert resp.status_code == 200
+        assert resp.json()["seeded"] == 1
 
     def test_seed_catalog_403_viewer(self, app_with_no_tenant_user, mock_db_session):
         with TestClient(app_with_no_tenant_user) as client:
@@ -474,3 +658,22 @@ class TestUpdateApiAudience:
             )
 
         assert resp.status_code == 403
+
+    def test_update_audience_all_valid_values(self, app_with_cpi_admin, mock_db_session):
+        for audience_val in ("public", "internal", "partner"):
+            api = _mock_catalog_api()
+            mock_repo = MagicMock()
+            mock_repo.get_api_by_id = AsyncMock(return_value=api)
+            mock_db_session.commit = AsyncMock()
+
+            with (
+                patch(CATALOG_REPO_PATH, return_value=mock_repo),
+                TestClient(app_with_cpi_admin) as client,
+            ):
+                resp = client.patch(
+                    f"/v1/admin/catalog/acme/{api.api_id}/audience",
+                    json={"audience": audience_val},
+                )
+
+            assert resp.status_code == 200
+            assert resp.json()["audience"] == audience_val

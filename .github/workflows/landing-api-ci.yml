@@ -25,13 +25,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: stoa_test
-          POSTGRES_PASSWORD: stoa_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: stoa_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stoa_test"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -63,8 +63,8 @@ jobs:
       - name: Run tests
         working-directory: landing-api
         env:
-          STOA_DB_USER: stoa_test
-          STOA_DB_PASSWORD: stoa_test
+          STOA_DB_USER: postgres
+          STOA_DB_PASSWORD: postgres
           STOA_DB_NAME: stoa
           STOA_DB_HOST: localhost
           STOA_DB_PORT: '5432'

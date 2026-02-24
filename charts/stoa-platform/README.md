@@ -25,30 +25,36 @@ helm upgrade --install stoa-platform ./charts/stoa-platform \
 kubectl apply -f charts/stoa-platform/crds/
 ```
 
-## Values Files
+## Key Values
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `stoaGateway.enabled` | `true` | Deploy the Rust gateway |
+| `stoaGateway.replicas` | `2` | Pod replica count |
+| `stoaGateway.image.repository` | `ghcr.io/stoa-platform/stoa-gateway` | Container image |
+| `stoaGateway.image.tag` | `latest` | Image tag |
+| `stoaGateway.controlPlaneUrl` | `http://control-plane-api:8000` | API sync endpoint |
+| `stoaGateway.keycloakUrl` | `http://keycloak:8080` | OIDC provider |
+| `stoaGateway.mode` | `edge-mcp` | Gateway mode (edge-mcp, sidecar, proxy, shadow) |
+| `stoaGateway.autoRegister` | `true` | Register with control plane on startup |
+| `stoaGateway.ingress.enabled` | `true` | Create Ingress resource |
+| `stoaGateway.ingress.host` | `mcp.<YOUR_DOMAIN>` | Ingress hostname |
+| `stoaGateway.serviceMonitor.enabled` | `true` | Create Prometheus ServiceMonitor |
+| `stoaGateway.resources.requests.memory` | `128Mi` | Memory request |
+| `stoaGateway.resources.limits.memory` | `256Mi` | Memory limit |
+| `stoaSidecar.enabled` | `false` | Deploy sidecar mode (future) |
+| `gatewaySync.enabled` | `false` | Enable OpenAPI sync CronJob |
+| `gatewaySync.schedule` | `*/30 * * * *` | Sync frequency |
+| `autoscaling.enabled` | `false` | Enable HPA |
+| `podDisruptionBudget.enabled` | `false` | Enable PDB |
+
+### Environment overrides
 
 | File | Environment | Usage |
 |------|-------------|-------|
-| `values.yaml` | Base defaults | Always loaded |
-| `values-dev.yaml` | Local / CI dev | `helm upgrade ... -f values-dev.yaml` |
+| `values-dev.yaml` | Local / CI | `helm upgrade ... -f values-dev.yaml` |
 | `values-staging.yaml` | Hetzner K3s | ArgoCD auto-sync |
 | `values-prod.yaml` | OVH MKS | ArgoCD auto-sync |
-
-## Key Values
-
-```yaml
-stoaGateway:
-  enabled: true            # Rust gateway (primary)
-  replicas: 2
-  image:
-    repository: ghcr.io/stoa-platform/stoa-gateway
-    tag: latest
-
-gateway:
-  image:
-    repository: ghcr.io/hlfh/mcp-gateway  # Python (legacy)
-    tag: latest
-```
 
 ## Templates
 
@@ -73,6 +79,7 @@ Custom Resource Definitions in `crds/` (applied separately, not managed by Helm 
 | `tools.gostoa.dev` | `gostoa.dev/v1alpha1` | MCP Tool definitions |
 | `toolsets.gostoa.dev` | `gostoa.dev/v1alpha1` | Tool groupings |
 | `gatewayinstances.gostoa.dev` | `gostoa.dev/v1alpha1` | Gateway instance registration |
+| `skills.gostoa.dev` | `gostoa.dev/v1alpha1` | MCP Skill definitions |
 | `gatewaybindings.gostoa.dev` | `gostoa.dev/v1alpha1` | Gateway-to-tool bindings |
 
 ## Architecture

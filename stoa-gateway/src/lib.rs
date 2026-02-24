@@ -7,6 +7,7 @@ pub mod auth;
 pub mod cache;
 pub mod config;
 pub mod control_plane;
+pub mod diagnostics;
 pub mod events;
 pub mod federation;
 pub mod git;
@@ -141,6 +142,15 @@ pub fn build_router(state: AppState) -> Router {
         )
         // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
         .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
+        // CAB-1316: Per-request diagnostic report + aggregated summary
+        .route(
+            "/diagnostics/summary",
+            get(handlers::diagnostic::diagnostic_summary_handler),
+        )
+        .route(
+            "/diagnostics/:request_id",
+            get(handlers::diagnostic::diagnostic_report_handler),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

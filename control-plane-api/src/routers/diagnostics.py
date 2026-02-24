@@ -5,9 +5,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.auth.dependencies import User
 from src.auth.rbac import require_role
 from src.database import get_db
-from src.schemas.diagnostic import ConnectivityResult, DiagnosticListResponse, DiagnosticReport
+from src.schemas.diagnostic import (
+    ConnectivityResult,
+    DiagnosticListResponse,
+    DiagnosticReport,
+    DiagnosticSummaryResponse,
+)
 from src.services.diagnostic_service import DiagnosticService
 
 router = APIRouter(
@@ -16,17 +22,32 @@ router = APIRouter(
 )
 
 
+@router.get("/summary", response_model=DiagnosticSummaryResponse)
+async def get_diagnostic_summary(
+    time_range_minutes: int = Query(default=60, ge=1, le=1440),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
+) -> DiagnosticSummaryResponse:
+    """Aggregated error stats: top error categories, RCA distribution."""
+    svc = DiagnosticService(db)
+    tenant_id = user.tenant_id or ""
+    return await svc.get_summary(
+        tenant_id=tenant_id,
+        time_range_minutes=time_range_minutes,
+    )
+
+
 @router.get("/{gateway_id}", response_model=DiagnosticReport)
 async def run_diagnostic(
     gateway_id: UUID,
     time_range_minutes: int = Query(default=60, ge=1, le=1440),
     request_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(require_role(["cpi-admin", "tenant-admin"])),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
 ) -> DiagnosticReport:
     """Run auto-RCA on recent errors for a gateway."""
     svc = DiagnosticService(db)
-    tenant_id = user.get("tenant_id", "")
+    tenant_id = user.tenant_id or ""
     return await svc.diagnose(
         tenant_id=tenant_id,
         gateway_id=str(gateway_id),
@@ -39,11 +60,11 @@ async def run_diagnostic(
 async def check_connectivity(
     gateway_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(require_role(["cpi-admin", "tenant-admin"])),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
 ) -> ConnectivityResult:
-    """Test connectivity chain: DNS → TCP → TLS → HTTP health."""
+    """Test connectivity chain: DNS -> TCP -> TLS -> HTTP health."""
     svc = DiagnosticService(db)
-    tenant_id = user.get("tenant_id", "")
+    tenant_id = user.tenant_id or ""
     return await svc.check_connectivity(tenant_id=tenant_id, gateway_id=str(gateway_id))
 
 
@@ -52,9 +73,9 @@ async def get_diagnostic_history(
     gateway_id: UUID,
     limit: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(require_role(["cpi-admin", "tenant-admin"])),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
 ) -> DiagnosticListResponse:
     """Past diagnostic reports for a gateway."""
     svc = DiagnosticService(db)
-    tenant_id = user.get("tenant_id", "")
+    tenant_id = user.tenant_id or ""
     return await svc.get_history(tenant_id=tenant_id, gateway_id=str(gateway_id), limit=limit)

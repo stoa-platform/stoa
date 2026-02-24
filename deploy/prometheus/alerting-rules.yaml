@@ -447,3 +447,60 @@ spec:
           annotations:
             summary: "TLS certificate invalid or unreachable"
             description: "Certificate for {{ $labels.host }} is expired or could not be retrieved"
+
+    # ============================================
+    # ArgoCD GitOps Drift Alerts (CAB-402)
+    # Correct metric: argocd_app_info (gauge, 0/1 per app)
+    # NOT argocd_app_sync_total (counter of completed operations)
+    # ============================================
+    - name: stoa.argocd.rules
+      rules:
+        - alert: ArgoCDAppOutOfSync
+          expr: |
+            count(argocd_app_info{sync_status!="Synced"}) > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: argocd
+          annotations:
+            summary: "ArgoCD application(s) out of sync"
+            description: "{{ $value }} application(s) are not in sync with Git. Drift detected for more than 5 minutes."
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-out-of-sync"
+
+        - alert: ArgoCDAppDegraded
+          expr: |
+            count(argocd_app_info{health_status="Degraded"}) > 0
+          for: 5m
+          labels:
+            severity: critical
+            component: argocd
+          annotations:
+            summary: "ArgoCD application(s) degraded"
+            description: "{{ $value }} application(s) health is Degraded — pods may not be running."
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-out-of-sync"
+
+        - alert: ArgoCDSyncDurationHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(argocd_app_sync_total[10m])) by (le)
+            ) > 300
+          for: 10m
+          labels:
+            severity: warning
+            component: argocd
+          annotations:
+            summary: "ArgoCD sync duration is high"
+            description: "ArgoCD P95 sync duration is {{ $value | humanizeDuration }} (threshold: 5 minutes). Check repo-server and cluster connectivity."
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-out-of-sync"
+
+        - alert: ArgoCDRepoServerDown
+          expr: |
+            up{job="argocd-metrics"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: argocd
+          annotations:
+            summary: "ArgoCD metrics unreachable"
+            description: "ArgoCD application-controller metrics endpoint has been down for more than 1 minute. GitOps sync status is unknown."
+            runbook_url: "https://docs.gostoa.dev/runbooks/argocd-out-of-sync"

@@ -115,6 +115,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - MEGA Strike W1-W4: 11 tickets, 173 pts in single day (PRs #968-#991)
 - Test Blitz + Metering: PRs #984, #996, #997, #998 (3 partial MEGAs + CAB-1456 done)
 - MEGA Strike W3: CAB-1347 done (PRs #1032, #1034), CAB-1348 cancelled (tokio-uring infeasible)
+- MEGA Strike W4 triage: 3 cancelled (CAB-1307, 1309, 1310 — off-mission), 2 kept (CAB-1304, 1311), 3 deferred (CAB-1308, 1324, 1402)
 - PR hygiene: 10 merged, 3 stale closed, 3 deferred (OTel 0.31 breaking, TS-eslint 6→8 breaking)
 - Veille system: L1 weekly (skill+CLI), L2 monthly (GHA audit), L3 quarterly (benchmark command+agent)
 - Benchmark Q1 gaps: sandbox isolation (P1, Codex), plugin marketplace (P2, Cursor). Cursor copie patterns CC.

@@ -194,18 +194,23 @@
 
 ### Backlog (not committed, no checkbox)
 
-- CAB-1324: [MEGA] Runtime Data Governance (21 pts)
 - CAB-1320: [MEGA] Repo Consolidation (21 pts) — PR #1004 (partial, root configs unified)
 
-### Backlog — Legacy (parked)
+### Backlog — Legacy (triaged 2026-02-24)
 
-- CAB-1402: [infra] Cilium CNI Foundation — Deferred (13 pts, blocked: MKS Standard GA)
-- CAB-1307: [MEGA] Ticketing ITSM (34 pts)
-- CAB-1308: [MEGA] Resource Lifecycle Management (34 pts)
-- CAB-1309: [MEGA] Resource Lifecycle Advanced (34 pts)
-- CAB-1310: [MEGA] Jenkins Orchestration Layer (34 pts)
-- CAB-1304: [MEGA] Demo Tenant Automation (13 pts)
-- CAB-1311: [MEGA] GTM Strategy & Licensing (13 pts)
+*Keep (demo/launch prerequisites):*
+- CAB-1304: [MEGA] Demo Tenant Automation (13 pts) — supports March 17 demo
+- CAB-1311: [MEGA] GTM Strategy & Licensing (13 pts) — unblocks post-demo execution
+
+*Deferred (post-launch, Q2+):*
+- CAB-1308: [MEGA] Resource Lifecycle Management (34 pts) — operational maturity, not launch-critical
+- CAB-1324: [MEGA] Runtime Data Governance (21 pts) — architectural refinement
+- CAB-1402: [infra] Cilium CNI Foundation (13 pts) — blocked: MKS Standard GA
+
+*Canceled (off-mission):*
+- ~~CAB-1307: [MEGA] Ticketing ITSM (34 pts) — ITSM not core to API gateway~~
+- ~~CAB-1309: [MEGA] Resource Lifecycle Advanced (34 pts) — speculative, no demand signal~~
+- ~~CAB-1310: [MEGA] Jenkins Orchestration Layer (34 pts) — orthogonal to gateway mission~~
 
 ---
 

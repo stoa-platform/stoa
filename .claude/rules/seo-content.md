@@ -161,7 +161,7 @@ Blog posts link to each other using relative paths:
 
 Docs pages use full paths:
 ```markdown
-[Quick Start](/docs/guides/quick-start)
+[Quick Start](/docs/guides/quickstart)
 [Architecture Overview](/docs/concepts/architecture)
 [Migration Guide](/docs/guides/migration/)
 [ADR-024 Gateway Modes](/docs/architecture/adr/adr-024-gateway-unified-modes)
@@ -216,7 +216,7 @@ When delegating to `docs-writer`, ALWAYS provide:
 2. **Valid link list** — extract from build or provide known-good paths:
    ```
    Blog: /blog/what-is-mcp-gateway, /blog/open-source-api-gateway-2026, ...
-   Docs: /docs/guides/quick-start, /docs/concepts/architecture, ...
+   Docs: /docs/guides/quickstart, /docs/concepts/architecture, ...
    ```
 3. **Hub article** — which pillar hub to link back to
 4. **Word count target** — minimum for the content type

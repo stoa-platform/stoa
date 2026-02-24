@@ -9,7 +9,7 @@
 MEMORY="$CLAUDE_PROJECT_DIR/memory.md"
 [ ! -f "$MEMORY" ] && exit 0
 
-METRICS_LOG="$HOME/.claude/projects/-Users-torpedo-CabIngenierie-Dropbox-Christophe-ABOULICAM--PERSO-stoa-platform-stoa/memory/metrics.log"
+METRICS_LOG="$HOME/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory/metrics.log"
 VIOLATIONS=0
 
 # Extract section between an H2 heading containing $1 and the next H2 heading.

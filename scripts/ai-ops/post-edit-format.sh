@@ -5,6 +5,14 @@
 
 set -euo pipefail
 
+# Kill switch: set DISABLE_FORMAT_HOOK=1 to skip formatting (useful for batch sessions)
+[ "${DISABLE_FORMAT_HOOK:-}" = "1" ] && exit 0
+
+# Instance guard: skip formatting if too many Claude processes (prevents I/O storms)
+MAX_INSTANCES="${CLAUDE_MAX_HOOK_INSTANCES:-8}"
+INSTANCE_COUNT=$(pgrep -fc "claude" 2>/dev/null || echo 0)
+[ "$INSTANCE_COUNT" -gt "$MAX_INSTANCES" ] && exit 0
+
 FILE="${CLAUDE_FILE:-}"
 [ -z "$FILE" ] && exit 0
 [ ! -f "$FILE" ] && exit 0

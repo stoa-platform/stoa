@@ -101,15 +101,10 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: ~572+ pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 519 pts (91%) | **Velocity**: 45 issues done
+**Scope**: ~572+ pts (committed, excl. Backlog/Canceled/Dup) | **Done**: 574 pts (100%+) | **Velocity**: 48 issues done
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
-
-- [~] CAB-1450: [MEGA] DX: CI & Local Dev Completeness (13 pts) — PRs #975, #983
-  - ✅ landing-api CI workflow + README
-  - ✅ L3 plan-validate allowedTools fix
-  - [ ] cli CI, charts README, PR template, DEVELOPER.md
 
 - [~] CAB-802: Dry Run + Script + Video (3 pts, P1) — HUMAN ONLY
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
@@ -167,6 +162,9 @@
 - [x] CAB-605: Admin — Dynamic Tool Generation from UAC (8 pts) — PR #937
 - [x] CAB-606: Admin — Migrate Tools to New Schema + Aliases (5 pts) — PR #967
 - [x] CAB-1437: [MEGA] API Service Layer Hardening (21 pts) — PRs #912, #935, #963, #966
+- [x] CAB-1450: [MEGA] DX: CI & Local Dev Completeness (13 pts) — PRs #975, #983, #987, #989
+- [x] CAB-1342: [MEGA] Helm Auto-Sync Secrets + Multi-Staging (21 pts) — PR #990
+- [x] CAB-1334: [MEGA] Usage Metering Pipeline P1 (21 pts) — PR #991
 
 ### Todo
 
@@ -180,11 +178,9 @@
 - [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
 
-**P3 — MEGAs** (97 pts):
+**P3 — MEGAs** (42 pts):
 
 *Council Fix (6.0–7.9, adjustments applied on Linear):*
-- [ ] CAB-1342: [MEGA] Helm Auto-Sync Secrets (21 pts, P3) — Council 7.25 ⚠️
-- [ ] CAB-1334: [MEGA] SaaS Multi-Tier Billing — Stripe (21 pts, P3) — Council 6.75 ⚠️
 - [ ] CAB-1347: [MEGA] Event-Driven V2 — CQRS + Sagas (21 pts, P3) — Council 6.25 ⚠️
 - [ ] CAB-1348: [MEGA] v2 Linux Native — eBPF + io_uring (21 pts, P3) — Council 6.00 ⚠️
 

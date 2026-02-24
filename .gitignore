@@ -142,6 +142,9 @@ backups/
 .claude/claims/*.json
 .claude/claims/*.lock
 
+# Competitive watch signals (JSONL, ephemeral, machine-local)
+.claude/watch/signals-*.jsonl
+
 # Git worktrees (parallel Claude sessions)
 .claude/worktrees/
 

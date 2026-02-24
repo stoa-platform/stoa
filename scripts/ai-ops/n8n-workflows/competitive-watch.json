@@ -1,15 +1,15 @@
 {
-  "name": "STOA AI Factory — Competitive Watch Weekly Digest",
+  "name": "STOA AI Factory — Competitive Watch (2-Phase)",
   "meta": {
-    "description": "Template documentation for the n8n competitive watch workflow. Import into n8n manually.",
-    "version": "1.0.0",
+    "description": "Template documentation for the n8n competitive watch workflow. 2 phases: Collect (2x/day) + Digest (weekly Monday). Import into n8n manually.",
+    "version": "2.0.0",
     "author": "STOA AI Factory"
   },
-  "pipeline": {
+  "phase_1_collect": {
     "trigger": {
       "type": "schedule",
-      "cron": "0 7 * * 1",
-      "description": "Every Monday at 07:00 UTC (08:00 CET)"
+      "cron": "0 7,17 * * *",
+      "description": "Every day at 07:00 + 17:00 UTC (08:00 + 18:00 CET)"
     },
     "steps": [
       {
@@ -40,7 +40,7 @@
         "id": "fetch-reddit-claudeai",
         "type": "httpRequest",
         "description": "Fetch top posts from r/ClaudeAI this week",
-        "url": "https://www.reddit.com/r/ClaudeAI/top/.json?t=week&limit=5",
+        "url": "https://www.reddit.com/r/ClaudeAI/top/.json?t=week&limit=10",
         "method": "GET",
         "headers": { "User-Agent": "stoa-ai-factory/1.0" },
         "parseResponse": "json"
@@ -49,23 +49,47 @@
         "id": "fetch-hn-claude",
         "type": "httpRequest",
         "description": "Search Hacker News for Claude Code mentions",
-        "url": "https://hn.algolia.com/api/v1/search_by_date?query=%22claude+code%22&tags=story&hitsPerPage=5",
+        "url": "https://hn.algolia.com/api/v1/search_by_date?query=%22claude+code%22&tags=story&hitsPerPage=10",
         "method": "GET",
         "parseResponse": "json"
       },
       {
-        "id": "aggregate",
-        "type": "code",
-        "description": "Aggregate and deduplicate results from all sources",
-        "language": "javascript",
-        "pseudocode": "Merge all HTTP responses, deduplicate by URL/title, sort by relevance/recency"
+        "id": "fetch-aider-changelog",
+        "type": "httpRequest",
+        "description": "Fetch Aider changelog",
+        "url": "https://aider.chat/HISTORY.html",
+        "method": "GET",
+        "parseResponse": "html"
       },
       {
-        "id": "ai-digest",
-        "type": "aiAgent",
-        "description": "Generate the weekly digest using Claude",
-        "model": "claude-sonnet-4-6",
-        "prompt": "Tu es un analyste tech. A partir de ces sources, redige un digest de veille concurrentielle pour une equipe qui developpe une IA Factory basee sur Claude Code. Focus sur : nouveautes Claude Code, patterns emergents, moves concurrents, actions recommandees. Format: [voir SKILL.md digest format]"
+        "id": "append-signals",
+        "type": "code",
+        "description": "Append new signals to JSONL file (dedup by source+title). Equivalent of watch-collect.sh.",
+        "language": "javascript",
+        "pseudocode": "For each HTTP response, extract signals → deduplicate against existing signals-YYYY-WNN.jsonl → append new lines"
+      }
+    ]
+  },
+  "phase_2_digest": {
+    "trigger": {
+      "type": "schedule",
+      "cron": "0 7 * * 1",
+      "description": "Every Monday at 07:00 UTC (08:00 CET)"
+    },
+    "steps": [
+      {
+        "id": "read-signals",
+        "type": "code",
+        "description": "Read and deduplicate signals from current week JSONL file",
+        "language": "javascript",
+        "pseudocode": "Read .claude/watch/signals-YYYY-WNN.jsonl → deduplicate by source+title → sort by score → group by source"
+      },
+      {
+        "id": "format-digest",
+        "type": "code",
+        "description": "Format signals into digest using SKILL.md template",
+        "language": "javascript",
+        "pseudocode": "Group signals into BREAKING/NOUVEAUTES/CONCURRENCE/COMMUNAUTE/PATTERNS → format markdown → detect action items"
       },
       {
         "id": "slack-notify",
@@ -77,8 +101,8 @@
       {
         "id": "linear-ticket",
         "type": "conditional",
-        "description": "If BREAKING items found, create Linear ticket",
-        "condition": "digest contains BREAKING items with action required",
+        "description": "If BREAKING items found, create Linear ticket with action items",
+        "condition": "digest contains BREAKING items with score >= 200",
         "action": {
           "type": "httpRequest",
           "url": "https://api.linear.app/graphql",
@@ -91,13 +115,16 @@
   "env_vars": {
     "SLACK_WEBHOOK": "secrets.SLACK_WEBHOOK_URL — #stoa-ai-watch channel",
     "LINEAR_API_KEY": "secrets.LINEAR_API_KEY — for auto-ticket creation",
-    "REDDIT_USER_AGENT": "stoa-ai-factory/1.0 (competitive watch)"
+    "REDDIT_USER_AGENT": "stoa-ai-factory/1.0 (competitive watch)",
+    "WATCH_DIR": ".claude/watch — JSONL signal storage directory"
   },
   "setup_notes": [
     "1. Import this workflow concept into n8n at n8n.gostoa.dev",
-    "2. Configure HTTP Request nodes with actual URLs",
-    "3. Set up Slack webhook for #stoa-ai-watch channel",
-    "4. Optional: configure Linear API key for auto-ticket creation",
-    "5. Test with manual trigger before enabling schedule"
+    "2. Create 2 workflows: one for Phase 1 (Collect, 2x/day), one for Phase 2 (Digest, Monday)",
+    "3. Configure HTTP Request nodes with actual URLs",
+    "4. Set up Slack webhook for #stoa-ai-watch channel",
+    "5. Optional: configure Linear API key for auto-ticket creation",
+    "6. Test with manual trigger before enabling schedules",
+    "7. Alternative: use cron/launchd with watch-collect.sh + watch-digest.sh (see CRON-SETUP.md)"
   ]
 }

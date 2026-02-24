@@ -23,7 +23,10 @@ use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
 use crate::proxy::{ConsumerCredentialStore, CredentialStore};
-use crate::quota::{ConsumerRateLimiter, QuotaManager, QuotaManagerConfig, RateLimiterConfig};
+use crate::quota::{
+    BudgetCache, BudgetCacheConfig, ConsumerRateLimiter, QuotaManager, QuotaManagerConfig,
+    RateLimiterConfig,
+};
 use crate::rate_limit::RateLimiter;
 use crate::resilience::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, FallbackChain,
@@ -100,6 +103,9 @@ pub struct AppState {
     pub prompt_cache: Arc<PromptCache>,
     /// Self-diagnostic engine for auto-RCA and hop detection (CAB-1316)
     pub diagnostic_engine: Arc<DiagnosticEngine>,
+    /// Pull-based budget cache for department chargeback enforcement (CAB-1456)
+    /// None when budget enforcement is disabled.
+    pub budget_cache: Option<Arc<BudgetCache>>,
 }
 
 impl AppState {
@@ -377,6 +383,28 @@ impl AppState {
             "Deploy progress emitter initialized"
         );
 
+        // Initialize budget cache (CAB-1456)
+        let budget_cache = if config.budget_enforcement_enabled {
+            let billing_url = config
+                .billing_api_url
+                .clone()
+                .or_else(|| config.control_plane_url.clone())
+                .unwrap_or_else(|| "http://localhost:8000".to_string());
+            let cache = Arc::new(BudgetCache::new(BudgetCacheConfig {
+                billing_api_url: billing_url.clone(),
+                cache_ttl_secs: config.budget_cache_ttl_secs,
+            }));
+            tracing::info!(
+                billing_api_url = %billing_url,
+                cache_ttl_secs = config.budget_cache_ttl_secs,
+                "Budget enforcement enabled"
+            );
+            Some(cache)
+        } else {
+            tracing::info!("Budget enforcement disabled (STOA_BUDGET_ENFORCEMENT_ENABLED=false)");
+            None
+        };
+
         // Initialize diagnostic engine (CAB-1316)
         let diagnostic_engine = Arc::new(DiagnosticEngine::new(1000));
         tracing::info!("Diagnostic engine initialized (buffer: 1000 reports)");
@@ -417,6 +445,7 @@ impl AppState {
             deploy_progress,
             prompt_cache,
             diagnostic_engine,
+            budget_cache,
         }
     }
 
@@ -448,6 +477,11 @@ impl AppState {
         // Start token budget sync task (CAB-1337 Phase 2)
         if let Some(ref tracker) = self.token_budget {
             TokenBudgetTracker::spawn_sync_task(tracker.clone());
+        }
+
+        // Start budget cache refresh task (CAB-1456)
+        if let Some(ref cache) = self.budget_cache {
+            cache.clone().start_refresh_task();
         }
 
         // Start zombie reaper (CAB-362)

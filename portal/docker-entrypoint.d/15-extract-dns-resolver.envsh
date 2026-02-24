@@ -1,0 +1,3 @@
+#!/bin/sh
+DNS_RESOLVER=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)
+export DNS_RESOLVER="${DNS_RESOLVER:-127.0.0.11}"

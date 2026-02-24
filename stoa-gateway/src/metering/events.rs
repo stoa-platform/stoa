@@ -101,6 +101,27 @@ pub struct ToolCallEvent {
     /// Federation: master account ID (CAB-1362)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub master_account_id: Option<String>,
+
+    // === Billing Enrichment (CAB-1456) ===
+    /// Department ID for chargeback attribution
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub department_id: Option<String>,
+
+    /// Estimated token count for billing (input + output)
+    #[serde(default)]
+    pub token_count: u64,
+
+    /// Tool tier: "standard" or "premium" (determines cost multiplier)
+    #[serde(default = "default_tool_tier")]
+    pub tool_tier: String,
+
+    /// Informational cost estimate in micro-cents (advisory, CP API is source of truth)
+    #[serde(default)]
+    pub cost_units_microcents: i64,
+}
+
+fn default_tool_tier() -> String {
+    "standard".to_string()
 }
 
 impl ToolCallEvent {
@@ -125,6 +146,10 @@ impl ToolCallEvent {
             gateway_id: None,
             sub_account_id: None,
             master_account_id: None,
+            department_id: None,
+            token_count: 0,
+            tool_tier: "standard".to_string(),
+            cost_units_microcents: 0,
         }
     }
 
@@ -171,6 +196,21 @@ impl ToolCallEvent {
     ) -> Self {
         self.sub_account_id = sub_account_id.map(|s| s.to_string());
         self.master_account_id = master_account_id.map(|s| s.to_string());
+        self
+    }
+
+    /// Set billing enrichment fields (CAB-1456)
+    pub fn with_billing(
+        mut self,
+        department_id: Option<&str>,
+        token_count: u64,
+        tool_tier: &str,
+        cost_microcents: i64,
+    ) -> Self {
+        self.department_id = department_id.map(|s| s.to_string());
+        self.token_count = token_count;
+        self.tool_tier = tool_tier.to_string();
+        self.cost_units_microcents = cost_microcents;
         self
     }
 }

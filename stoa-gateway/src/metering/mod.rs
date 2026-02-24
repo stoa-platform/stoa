@@ -21,6 +21,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+pub mod cost;
 mod events;
 mod producer;
 

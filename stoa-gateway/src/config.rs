@@ -413,6 +413,22 @@ pub struct Config {
     #[serde(default)]
     pub prompt_cache_watch_dir: Option<String>,
 
+    // === Budget Enforcement (CAB-1456) ===
+    /// Enable department budget enforcement (429 when over budget).
+    /// Env: STOA_BUDGET_ENFORCEMENT_ENABLED
+    #[serde(default)]
+    pub budget_enforcement_enabled: bool,
+
+    /// Cache TTL in seconds for budget status refresh from CP API (default: 60).
+    /// Env: STOA_BUDGET_CACHE_TTL_SECS
+    #[serde(default = "default_budget_cache_ttl")]
+    pub budget_cache_ttl_secs: u64,
+
+    /// Billing API URL for budget checks (defaults to control_plane_url).
+    /// Env: STOA_BILLING_API_URL
+    #[serde(default)]
+    pub billing_api_url: Option<String>,
+
     // === LLM Contracts (CAB-709) ===
     /// Enable LLM contract endpoint expansion (default: false)
     /// Env: STOA_LLM_ENABLED
@@ -710,6 +726,10 @@ fn default_prompt_cache_ttl_secs() -> u64 {
     3600
 }
 
+fn default_budget_cache_ttl() -> u64 {
+    60 // Refresh budget status every 60 seconds
+}
+
 fn default_llm_timeout_ms() -> u64 {
     30_000
 }
@@ -797,6 +817,9 @@ impl Default for Config {
             prompt_cache_max_entries: default_prompt_cache_max_entries(),
             prompt_cache_ttl_secs: default_prompt_cache_ttl_secs(),
             prompt_cache_watch_dir: None,
+            budget_enforcement_enabled: false,
+            budget_cache_ttl_secs: default_budget_cache_ttl(),
+            billing_api_url: None,
             llm_enabled: false,
             llm_default_timeout_ms: default_llm_timeout_ms(),
         }

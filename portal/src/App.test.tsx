@@ -217,6 +217,42 @@ describe('App', () => {
       expect(screen.getByLabelText('Company *')).toBeInTheDocument();
     });
 
+    it('should submit enterprise form to /api/v1/access-requests', async () => {
+      mockAuth.isAuthenticated = false;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+      } as Response);
+
+      renderApp('/');
+
+      fireEvent.click(screen.getByText(/Need enterprise access/));
+      fireEvent.change(screen.getByLabelText('First name *'), {
+        target: { value: 'Jane' },
+      });
+      fireEvent.change(screen.getByLabelText('Last name *'), {
+        target: { value: 'Doe' },
+      });
+      fireEvent.change(screen.getByLabelText('Work email *'), {
+        target: { value: 'jane@acme.com' },
+      });
+      fireEvent.change(screen.getByLabelText('Company *'), {
+        target: { value: 'Acme' },
+      });
+      fireEvent.click(screen.getByText('Request Enterprise Access'));
+
+      await screen.findByText("Thank you! We'll reach out shortly.");
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/access-requests',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+
+      fetchSpy.mockRestore();
+    });
+
     it('should show loading screen while authenticating', () => {
       mockAuth.isLoading = true;
 

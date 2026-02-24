@@ -24,6 +24,7 @@ import secrets
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 # Add parent directory to path for imports
@@ -45,7 +46,7 @@ DEMO_TENANT_DESCRIPTION = (
 DEMO_OWNER_EMAIL = "admin@demo.gostoa.dev"
 
 # MCP Servers — grouped collections of tools
-DEMO_MCP_SERVERS = [
+DEMO_MCP_SERVERS: list[dict[str, Any]] = [
     {
         "name": "weather-service",
         "display_name": "Weather Service",
@@ -293,9 +294,9 @@ def _generate_api_key() -> tuple[str, str, str]:
 # ---------------------------------------------------------------------------
 
 
-async def check_demo_state(session: AsyncSession) -> dict:
+async def check_demo_state(session: AsyncSession) -> dict[str, Any]:
     """Check current demo data state."""
-    counts = {}
+    counts: dict[str, Any] = {}
     for table, condition in [
         ("tenants", f"id = '{DEMO_TENANT_ID}'"),
         ("mcp_servers", f"tenant_id = '{DEMO_TENANT_ID}'"),
@@ -328,7 +329,7 @@ async def delete_demo_data(session: AsyncSession) -> int:
     for table, condition in delete_order:
         try:
             result = await session.execute(text(f"DELETE FROM {table} WHERE {condition}"))  # noqa: S608
-            deleted = result.rowcount
+            deleted: int = result.rowcount or 0  # type: ignore[assignment]
             if deleted > 0:
                 print(f"  Deleted {deleted} rows from {table}")
                 total += deleted
@@ -337,10 +338,10 @@ async def delete_demo_data(session: AsyncSession) -> int:
     return total
 
 
-async def seed_demo_tenant(session: AsyncSession) -> dict:
+async def seed_demo_tenant(session: AsyncSession) -> dict[str, Any]:
     """Seed the demo tenant with all data. Returns summary of created items."""
     now = datetime.now(UTC)
-    summary = {"tenant": 0, "servers": 0, "tools": 0, "consumers": 0, "subscriptions": 0, "catalog": 0, "api_keys": []}
+    summary: dict[str, Any] = {"tenant": 0, "servers": 0, "tools": 0, "consumers": 0, "subscriptions": 0, "catalog": 0, "api_keys": []}
 
     # 1. Create tenant (set provisioning_status=ready to skip async provisioning)
     result = await session.execute(text(f"SELECT COUNT(*) FROM tenants WHERE id = '{DEMO_TENANT_ID}'"))  # noqa: S608

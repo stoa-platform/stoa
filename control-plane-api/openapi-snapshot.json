@@ -397,12 +397,141 @@
               }
             ],
             "title": "Source"
+          },
+          "website": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website"
           }
         },
         "required": [
           "email"
         ],
         "title": "AccessRequestCreate",
+        "type": "object"
+      },
+      "AccessRequestDetail": {
+        "description": "Admin view of an access request.",
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "status",
+          "created_at"
+        ],
+        "title": "AccessRequestDetail",
+        "type": "object"
+      },
+      "AccessRequestListResponse": {
+        "description": "Paginated list of access requests (admin view).",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AccessRequestDetail"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data",
+          "total",
+          "page",
+          "limit"
+        ],
+        "title": "AccessRequestListResponse",
         "type": "object"
       },
       "AccessRequestResponse": {
@@ -3670,6 +3799,99 @@
           "sub_account_name"
         ],
         "title": "DelegationTokenResponse",
+        "type": "object"
+      },
+      "DemoSeedResponse": {
+        "description": "Demo seed result.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "catalog_apis_created": {
+            "default": 0,
+            "title": "Catalog Apis Created",
+            "type": "integer"
+          },
+          "consumers_created": {
+            "default": 0,
+            "title": "Consumers Created",
+            "type": "integer"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "servers_created": {
+            "default": 0,
+            "title": "Servers Created",
+            "type": "integer"
+          },
+          "subscriptions_created": {
+            "default": 0,
+            "title": "Subscriptions Created",
+            "type": "integer"
+          },
+          "tenant_created": {
+            "default": 0,
+            "title": "Tenant Created",
+            "type": "integer"
+          },
+          "tools_created": {
+            "default": 0,
+            "title": "Tools Created",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "DemoSeedResponse",
+        "type": "object"
+      },
+      "DemoStatusResponse": {
+        "description": "Demo tenant status.",
+        "properties": {
+          "catalog_apis": {
+            "default": 0,
+            "title": "Catalog Apis",
+            "type": "integer"
+          },
+          "consumers": {
+            "default": 0,
+            "title": "Consumers",
+            "type": "integer"
+          },
+          "exists": {
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "mcp_servers": {
+            "default": 0,
+            "title": "Mcp Servers",
+            "type": "integer"
+          },
+          "subscriptions": {
+            "default": 0,
+            "title": "Subscriptions",
+            "type": "integer"
+          },
+          "tenants": {
+            "default": 0,
+            "title": "Tenants",
+            "type": "integer"
+          },
+          "tools": {
+            "default": 0,
+            "title": "Tools",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "exists"
+        ],
+        "title": "DemoStatusResponse",
         "type": "object"
       },
       "DepartmentBudgetCreate": {
@@ -19968,7 +20190,7 @@
     },
     "/v1/access-requests": {
       "post": {
-        "description": "Submit an access request (public, no auth).\n\nIdempotent: returns 200 if email already exists, 201 if new.",
+        "description": "Submit an access request (public, no auth, rate-limited 5/min per IP).\n\nIdempotent: returns 200 if email already exists, 201 if new.",
         "operationId": "create_access_request_v1_access_requests_post",
         "requestBody": {
           "content": {
@@ -20008,6 +20230,90 @@
         "summary": "Create Access Request",
         "tags": [
           "Access Requests"
+        ]
+      }
+    },
+    "/v1/admin/access-requests": {
+      "get": {
+        "description": "List all access requests with pagination.\n\n**Requires**: `cpi-admin` role.",
+        "operationId": "list_access_requests_v1_admin_access_requests_get",
+        "parameters": [
+          {
+            "description": "Filter by status (pending, contacted, converted)",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status (pending, contacted, converted)",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Access Requests",
+        "tags": [
+          "Admin Access Requests"
         ]
       }
     },
@@ -26721,6 +27027,87 @@
         "summary": "Get Dashboard Stats",
         "tags": [
           "Dashboard"
+        ]
+      }
+    },
+    "/v1/demo/reset": {
+      "post": {
+        "description": "Reset demo tenant \u2014 delete all demo data and re-seed.",
+        "operationId": "reset_demo_v1_demo_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoSeedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset Demo",
+        "tags": [
+          "Demo"
+        ]
+      }
+    },
+    "/v1/demo/seed": {
+      "post": {
+        "description": "Seed the demo tenant with sample data (idempotent).",
+        "operationId": "seed_demo_v1_demo_seed_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoSeedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Seed Demo",
+        "tags": [
+          "Demo"
+        ]
+      }
+    },
+    "/v1/demo/status": {
+      "get": {
+        "description": "Check current demo tenant state.",
+        "operationId": "get_demo_status_v1_demo_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Demo Status",
+        "tags": [
+          "Demo"
         ]
       }
     },

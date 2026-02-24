@@ -24,7 +24,8 @@ use crate::auth::jwt::JwtValidator;
 use crate::control_plane::ToolProxyClient;
 use crate::mcp::tools::{ToolContext, ToolDefinition, ToolRegistry};
 use crate::metering::{
-    ErrorSnapshot, EventStatus, GatewaySnapshot, MeteringProducerTrait, ToolCallEvent,
+    cost::compute_cost, ErrorSnapshot, EventStatus, GatewaySnapshot, MeteringProducerTrait,
+    ToolCallEvent,
 };
 use crate::metrics;
 use crate::optimization::{OptimizationLevel, OptimizationSettings, TokenOptimizer};
@@ -667,6 +668,35 @@ pub async fn mcp_tools_call(
         metrics::record_token_budget_usage(&auth.tenant_id, "input", input_tokens);
     }
 
+    // CAB-1456: Department budget enforcement
+    if let Some(ref budget_cache) = state.budget_cache {
+        let dept_id = auth.tenant_id.as_str();
+        budget_cache.track_department(dept_id);
+        if budget_cache.is_over_budget(dept_id) {
+            warn!(
+                department_id = %dept_id,
+                tool = %request.name,
+                "Department budget exceeded"
+            );
+            metrics::record_tool_call(
+                &request.name,
+                &auth.tenant_id,
+                "budget_exceeded",
+                start.elapsed().as_secs_f64(),
+            );
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ToolsCallResponse {
+                    content: vec![ToolContent::Text {
+                        text: "Department budget exceeded. Contact your administrator.".to_string(),
+                    }],
+                    is_error: Some(true),
+                }),
+            )
+                .into_response();
+        }
+    }
+
     // Resolve tool-specific skill instructions (CAB-1365)
     let skill_instructions = if state.config.skill_context_enabled {
         let resolved = state.skill_resolver.resolve(
@@ -1066,6 +1096,21 @@ fn emit_metering_event(
         .with_federation(
             auth.sub_account_id.as_deref(),
             auth.master_account_id.as_deref(),
+        );
+
+        // CAB-1456: Billing enrichment — informational cost estimate
+        let token_count = (sizes.request + sizes.response) / 4;
+        let tool_tier = "standard";
+        let cost_microcents = compute_cost(
+            token_count,
+            timing.start.elapsed().as_millis() as u64,
+            tool_tier,
+        );
+        let event = event.with_billing(
+            Some(auth.tenant_id.as_str()),
+            token_count,
+            tool_tier,
+            cost_microcents,
         );
 
         producer.send_metering_event(event);

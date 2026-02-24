@@ -12,160 +12,29 @@
       "name": "Approve Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        200,
-        300
-      ],
+      "position": [200, 300],
       "webhookId": "approve-ticket"
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "check-issue",
-              "leftValue": "={{ $json.query.issue }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
-            },
-            {
-              "id": "check-token",
-              "leftValue": "={{ $json.query.token }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
-            }
-          ],
-          "combinator": "and"
-        }
+        "jsCode": "const crypto = require('crypto');\nconst https = require('https');\nconst { URL } = require('url');\n\nfunction httpsRequest(options, body) {\n  return new Promise((resolve, reject) => {\n    const req = https.request(options, (res) => {\n      let data = '';\n      res.on('data', (chunk) => { data += chunk; });\n      res.on('end', () => resolve({ statusCode: res.statusCode, body: data }));\n    });\n    req.on('error', reject);\n    if (body) req.write(body);\n    req.end();\n  });\n}\n\nconst issue = $input.first().json.query.issue;\nconst token = $input.first().json.query.token;\n\n// Validate params\nif (!issue || !token) {\n  return [{ json: { redirectURL: 'https://github.com/stoa-platform/stoa' } }];\n}\n\n// Validate HMAC\nconst secret = $env.APPROVE_HMAC_SECRET;\nif (!secret) {\n  return [{ json: { redirectURL: 'https://github.com/stoa-platform/stoa' } }];\n}\nconst expected = crypto.createHmac('sha256', secret).update(issue).digest('hex');\nif (token !== expected) {\n  return [{ json: { redirectURL: 'https://github.com/stoa-platform/stoa' } }];\n}\n\n// Post /go comment\ntry {\n  const pat = $env.GITHUB_PAT;\n  const postBody = JSON.stringify({ body: '/go' });\n  const url = new URL(`https://api.github.com/repos/stoa-platform/stoa/issues/${issue}/comments`);\n  const res = await httpsRequest({\n    hostname: url.hostname,\n    path: url.pathname,\n    method: 'POST',\n    headers: {\n      'Authorization': `token ${pat}`,\n      'Accept': 'application/vnd.github.v3+json',\n      'Content-Type': 'application/json',\n      'User-Agent': 'n8n-stoa-factory',\n      'Content-Length': Buffer.byteLength(postBody)\n    }\n  }, postBody);\n\n  return [{ json: { redirectURL: `https://github.com/stoa-platform/stoa/issues/${issue}` } }];\n} catch (e) {\n  return [{ json: { redirectURL: `https://github.com/stoa-platform/stoa/issues/${issue}` } }];\n}"
       },
-      "id": "validate-params",
-      "name": "Validate Parameters",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2,
-      "position": [
-        400,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst issue = $input.first().json.query.issue;\nconst token = $input.first().json.query.token;\n\nconst secret = $env.APPROVE_HMAC_SECRET;\n\nif (!secret) {\n  return [{ json: { valid: false, error: 'APPROVE_HMAC_SECRET not configured' } }];\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(issue).digest('hex');\n\nif (token !== expected) {\n  return [{ json: { valid: false, error: 'Invalid HMAC token' } }];\n}\n\nreturn [{ json: { issue, token, valid: true } }];"
-      },
-      "id": "validate-hmac",
-      "name": "Validate HMAC",
+      "id": "process-approve",
+      "name": "Process Approve",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        600,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "check-valid",
-              "leftValue": "={{ $json.valid }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        }
-      },
-      "id": "check-hmac-result",
-      "name": "HMAC Valid?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        800,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://api.github.com/repos/stoa-platform/stoa/issues/{{ $('Validate HMAC').first().json.issue }}/comments",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/vnd.github.v3+json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={ \"body\": \"/go\" }"
-      },
-      "id": "post-go-comment",
-      "name": "Post /go Comment",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1000,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "github-pat",
-          "name": "GitHub PAT"
-        }
-      }
+      "position": [450, 300]
     },
     {
       "parameters": {
         "respondWith": "redirect",
-        "redirectURL": "=https://github.com/stoa-platform/stoa/issues/{{ $('Validate HMAC').first().json.issue }}"
+        "redirectURL": "={{ $json.redirectURL }}"
       },
-      "id": "redirect-to-issue",
-      "name": "Redirect to Issue",
+      "id": "redirect-response",
+      "name": "Redirect",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        1200,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={ \"error\": \"Unauthorized — invalid or missing approval token\" }",
-        "options": {
-          "responseCode": 403
-        }
-      },
-      "id": "error-response",
-      "name": "Error Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        800,
-        500
-      ]
+      "position": [700, 300]
     }
   ],
   "connections": {
@@ -173,65 +42,18 @@
       "main": [
         [
           {
-            "node": "Validate Parameters",
+            "node": "Process Approve",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate Parameters": {
+    "Process Approve": {
       "main": [
         [
           {
-            "node": "Validate HMAC",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validate HMAC": {
-      "main": [
-        [
-          {
-            "node": "HMAC Valid?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HMAC Valid?": {
-      "main": [
-        [
-          {
-            "node": "Post /go Comment",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Post /go Comment": {
-      "main": [
-        [
-          {
-            "node": "Redirect to Issue",
+            "node": "Redirect",
             "type": "main",
             "index": 0
           }
@@ -241,6 +63,9 @@
   },
   "settings": {
     "executionOrder": "v1"
+  },
+  "meta": {
+    "notes": "v2: Consolidated to single Code node. Requires env vars: APPROVE_HMAC_SECRET, GITHUB_PAT. n8n settings: NODE_FUNCTION_ALLOW_BUILTIN=crypto,https,url,buffer and N8N_BLOCK_ENV_ACCESS_IN_NODE=false"
   },
   "tags": [
     {

@@ -675,7 +675,6 @@ mod tests {
     #[test]
     fn test_parse_request() {
         let raw = b"GET /api/v1/users?page=1&limit=10 HTTP/1.1\r\nHost: example.com\r\nContent-Type: application/json\r\n\r\n";
-
         let request = TrafficCapture::parse_request(raw).unwrap();
         assert_eq!(request.method, "GET");
         assert_eq!(request.path, "/api/v1/users");
@@ -686,7 +685,6 @@ mod tests {
     #[test]
     fn test_parse_response() {
         let raw = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"ok\"}";
-
         let response = TrafficCapture::parse_response(raw).unwrap();
         assert_eq!(response.status_code, 200);
         assert!(response.body.is_some());
@@ -720,7 +718,6 @@ mod tests {
                 }
             }
         }"#;
-
         let tx = TrafficCapture::parse_envoy_tap_record(json).unwrap();
         assert_eq!(tx.request.method, "POST");
         assert_eq!(tx.request.path, "/api/v1/users");
@@ -784,7 +781,6 @@ mod tests {
             latency_ms: 42,
             source: "kafka".to_string(),
         };
-
         let bytes = serde_json::to_vec(&tx).unwrap();
         let deserialized: CapturedTransaction = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(deserialized.id, "kafka-1");
@@ -795,7 +791,6 @@ mod tests {
 
     #[test]
     fn test_capture_source_serialization() {
-        // Verify all 4 variants roundtrip through serde
         let sources = vec![
             CaptureSource::EnvoyTap {
                 endpoint: "http://envoy:9901".to_string(),
@@ -811,13 +806,246 @@ mod tests {
                 group_id: "shadow".to_string(),
             },
         ];
-
         for source in &sources {
             let json = serde_json::to_string(source).unwrap();
             let deserialized: CaptureSource = serde_json::from_str(&json).unwrap();
-            // Verify roundtrip by re-serializing
             let json2 = serde_json::to_string(&deserialized).unwrap();
             assert_eq!(json, json2);
         }
+    }
+
+    #[test]
+    fn test_parse_request_with_post_method() {
+        let raw = b"POST /api/v1/tools/call HTTP/1.1\r\nHost: gateway\r\nContent-Type: application/json\r\n\r\n{\"tool\":\"read\"}";
+        let req = TrafficCapture::parse_request(raw).unwrap();
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/api/v1/tools/call");
+        assert!(req.body.is_some());
+    }
+
+    #[test]
+    fn test_parse_request_no_query_params() {
+        let raw = b"GET /health HTTP/1.1\r\nHost: gw\r\n\r\n";
+        let req = TrafficCapture::parse_request(raw).unwrap();
+        assert_eq!(req.path, "/health");
+        assert!(req.query_params.is_empty());
+    }
+
+    #[test]
+    fn test_parse_request_sensitive_headers_redacted() {
+        let raw = b"GET /api HTTP/1.1\r\nAuthorization: Bearer secret\r\nX-Api-Key: my-key\r\nHost: gw\r\n\r\n";
+        let req = TrafficCapture::parse_request(raw).unwrap();
+        assert!(!req.headers.contains_key("authorization"));
+        assert!(!req.headers.contains_key("x-api-key"));
+        assert!(req.headers.contains_key("host"));
+    }
+
+    #[test]
+    fn test_parse_request_with_json_body() {
+        let raw =
+            b"POST /api HTTP/1.1\r\nContent-Type: application/json\r\n\r\n{\"key\":\"value\"}";
+        let req = TrafficCapture::parse_request(raw).unwrap();
+        assert!(req.body.is_some());
+        let body = req.body.unwrap();
+        assert_eq!(body["key"], "value");
+    }
+
+    #[test]
+    fn test_parse_request_garbage_returns_none() {
+        let raw = b"garbage";
+        assert!(TrafficCapture::parse_request(raw).is_none());
+    }
+
+    #[test]
+    fn test_parse_request_empty_returns_none() {
+        assert!(TrafficCapture::parse_request(b"").is_none());
+    }
+
+    #[test]
+    fn test_parse_response_various_status_codes() {
+        for (code, status_line) in [
+            (404, "HTTP/1.1 404 Not Found"),
+            (500, "HTTP/1.1 500 Internal Server Error"),
+            (201, "HTTP/1.1 201 Created"),
+            (301, "HTTP/1.1 301 Moved Permanently"),
+        ] {
+            let raw = format!("{}\r\nContent-Length: 0\r\n\r\n", status_line);
+            let resp = TrafficCapture::parse_response(raw.as_bytes()).unwrap();
+            assert_eq!(resp.status_code, code);
+        }
+    }
+
+    #[test]
+    fn test_parse_response_with_json_body() {
+        let raw = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"items\":[1,2,3]}";
+        let resp = TrafficCapture::parse_response(raw).unwrap();
+        assert_eq!(resp.status_code, 200);
+        let body = resp.body.unwrap();
+        assert_eq!(body["items"], serde_json::json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn test_parse_response_no_body() {
+        let raw = b"HTTP/1.1 204 No Content\r\n\r\n";
+        let resp = TrafficCapture::parse_response(raw).unwrap();
+        assert_eq!(resp.status_code, 204);
+        assert!(resp.body.is_none());
+    }
+
+    #[test]
+    fn test_parse_response_garbage_returns_none() {
+        assert!(TrafficCapture::parse_response(b"garbage data").is_none());
+    }
+
+    #[test]
+    fn test_parse_response_invalid_status_returns_none() {
+        let raw = b"HTTP/1.1 abc OK\r\n\r\n";
+        assert!(TrafficCapture::parse_response(raw).is_none());
+    }
+
+    #[test]
+    fn test_sensitive_header_x_api_key() {
+        assert!(is_sensitive_header("x-api-key"));
+    }
+
+    #[test]
+    fn test_sensitive_header_x_auth_token() {
+        assert!(is_sensitive_header("x-auth-token"));
+    }
+
+    #[test]
+    fn test_sensitive_header_set_cookie() {
+        assert!(is_sensitive_header("set-cookie"));
+    }
+
+    #[test]
+    fn test_non_sensitive_headers() {
+        assert!(!is_sensitive_header("host"));
+        assert!(!is_sensitive_header("accept"));
+        assert!(!is_sensitive_header("user-agent"));
+        assert!(!is_sensitive_header("x-request-id"));
+    }
+
+    #[tokio::test]
+    async fn test_traffic_capture_new_creates_channel() {
+        let (capture, _rx) = TrafficCapture::new(CaptureSource::Inline, 100);
+        assert!(!capture.running.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_traffic_capture_stop_sets_flag() {
+        let (capture, _rx) = TrafficCapture::new(CaptureSource::Inline, 10);
+        capture
+            .running
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        capture.stop();
+        assert!(!capture.running.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn test_submit_sends_transaction() {
+        let (capture, mut rx) = TrafficCapture::new(CaptureSource::Inline, 10);
+        let tx = CapturedTransaction {
+            id: "test-1".to_string(),
+            timestamp: chrono::Utc::now(),
+            request: CapturedRequest {
+                method: "GET".to_string(),
+                path: "/test".to_string(),
+                query_params: HashMap::new(),
+                headers: HashMap::new(),
+                content_type: None,
+                body: None,
+                body_size: 0,
+            },
+            response: CapturedResponse {
+                status_code: 200,
+                headers: HashMap::new(),
+                content_type: None,
+                body: None,
+                body_size: 0,
+            },
+            latency_ms: 0,
+            source: "inline".to_string(),
+        };
+        capture.submit(tx).await;
+        let received = rx.recv().await.unwrap();
+        assert_eq!(received.id, "test-1");
+    }
+
+    #[test]
+    fn test_envoy_tap_with_response_body() {
+        let json = r#"{
+            "http_buffered_trace": {
+                "request": {
+                    "headers": [
+                        {"key": ":method", "value": "GET"},
+                        {"key": ":path", "value": "/data"}
+                    ]
+                },
+                "response": {
+                    "headers": [
+                        {"key": ":status", "value": "200"},
+                        {"key": "content-type", "value": "application/json"}
+                    ],
+                    "body": {"as_string": "{\"count\":5}"}
+                }
+            }
+        }"#;
+        let tx = TrafficCapture::parse_envoy_tap_record(json).unwrap();
+        assert!(tx.response.body.is_some());
+        assert_eq!(tx.response.body.unwrap()["count"], 5);
+    }
+
+    #[test]
+    fn test_envoy_tap_pseudo_headers_excluded() {
+        let json = r#"{
+            "http_buffered_trace": {
+                "request": {
+                    "headers": [
+                        {"key": ":method", "value": "GET"},
+                        {"key": ":path", "value": "/test"},
+                        {"key": ":authority", "value": "example.com"},
+                        {"key": "accept", "value": "*/*"}
+                    ]
+                },
+                "response": {
+                    "headers": [
+                        {"key": ":status", "value": "200"}
+                    ]
+                }
+            }
+        }"#;
+        let tx = TrafficCapture::parse_envoy_tap_record(json).unwrap();
+        assert!(!tx.request.headers.contains_key(":authority"));
+        assert!(tx.request.headers.contains_key("accept"));
+    }
+
+    #[test]
+    fn test_envoy_tap_invalid_json_returns_none() {
+        assert!(TrafficCapture::parse_envoy_tap_record("{invalid json").is_none());
+    }
+
+    #[test]
+    fn test_parse_request_multiple_query_params() {
+        let raw = b"GET /search?q=test&sort=asc&page=1&limit=20 HTTP/1.1\r\nHost: gw\r\n\r\n";
+        let req = TrafficCapture::parse_request(raw).unwrap();
+        assert_eq!(req.query_params.len(), 4);
+        assert_eq!(req.query_params.get("q"), Some(&"test".to_string()));
+        assert_eq!(req.query_params.get("sort"), Some(&"asc".to_string()));
+    }
+
+    #[test]
+    fn test_parse_request_content_type_stored() {
+        let raw = b"POST /api HTTP/1.1\r\nContent-Type: text/plain\r\n\r\nhello";
+        let req = TrafficCapture::parse_request(raw).unwrap();
+        assert_eq!(req.content_type.as_deref(), Some("text/plain"));
+        assert!(req.body.is_none());
+    }
+
+    #[test]
+    fn test_parse_response_content_type_contains_json() {
+        let raw = b"HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n\r\n{\"ok\":true}";
+        let resp = TrafficCapture::parse_response(raw).unwrap();
+        assert!(resp.body.is_some());
     }
 }

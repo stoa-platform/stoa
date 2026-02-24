@@ -142,16 +142,104 @@ impl HealthChecker {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_health_checker_initial_state() {
-        let checker = HealthChecker::new(
+    fn make_checker() -> HealthChecker {
+        HealthChecker::new(
             "http://localhost:9999".to_string(),
             Duration::from_secs(5),
             Duration::from_secs(2),
-        );
+        )
+    }
 
-        // Initially assumes healthy
+    #[tokio::test]
+    async fn test_health_checker_initial_state() {
+        let checker = make_checker();
         assert!(checker.is_healthy());
         assert_eq!(checker.failover_count(), 0);
+    }
+
+    #[test]
+    fn test_state_returns_arc_clone() {
+        let checker = make_checker();
+        let state = checker.state();
+        assert!(state.load(Ordering::SeqCst));
+        checker.current_state.store(false, Ordering::SeqCst);
+        assert!(!state.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_failover_count_starts_at_zero() {
+        let checker = make_checker();
+        assert_eq!(checker.failover_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_run_exits_on_shutdown() {
+        let checker = make_checker();
+        let (tx, rx) = broadcast::channel(1);
+        let handle = tokio::spawn(async move {
+            checker.run(rx).await;
+        });
+        let _ = tx.send(());
+        tokio::time::timeout(Duration::from_secs(2), handle)
+            .await
+            .expect("run should exit on shutdown")
+            .expect("task should not panic");
+    }
+
+    #[tokio::test]
+    async fn test_run_marks_unhealthy_on_unreachable() {
+        let checker = Arc::new(HealthChecker::new(
+            "http://127.0.0.1:1".to_string(),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+        ));
+        let state = checker.state();
+        let (tx, rx) = broadcast::channel(1);
+        let c = Arc::clone(&checker);
+        let handle = tokio::spawn(async move { c.run(rx).await });
+        tokio::time::sleep(Duration::from_millis(350)).await;
+        let _ = tx.send(());
+        let _ = handle.await;
+        assert!(!state.load(Ordering::SeqCst));
+        assert!(checker.failover_count() >= 1);
+    }
+
+    #[test]
+    fn test_custom_durations_stored() {
+        let checker = HealthChecker::new(
+            "http://example.com".to_string(),
+            Duration::from_secs(30),
+            Duration::from_secs(10),
+        );
+        assert_eq!(checker.check_interval, Duration::from_secs(30));
+        assert_eq!(checker.check_timeout, Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_url_stored() {
+        let checker = HealthChecker::new(
+            "http://wm.example.com:5555".to_string(),
+            Duration::from_secs(5),
+            Duration::from_secs(2),
+        );
+        assert_eq!(checker.webmethods_url, "http://wm.example.com:5555");
+    }
+
+    #[test]
+    fn test_multiple_state_clones_share_state() {
+        let checker = make_checker();
+        let s1 = checker.state();
+        let s2 = checker.state();
+        s1.store(false, Ordering::SeqCst);
+        assert!(!s2.load(Ordering::SeqCst));
+        assert!(!checker.is_healthy());
+    }
+
+    #[test]
+    fn test_failover_count_atomic_increment() {
+        let checker = make_checker();
+        checker.failover_count.fetch_add(1, Ordering::Relaxed);
+        checker.failover_count.fetch_add(1, Ordering::Relaxed);
+        assert_eq!(checker.failover_count(), 2);
     }
 }

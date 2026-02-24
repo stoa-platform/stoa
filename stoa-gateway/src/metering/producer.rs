@@ -270,26 +270,30 @@ pub type SharedMeteringProducer = Arc<MeteringProducer>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metering::{ErrorSnapshot, EventStatus, GatewaySnapshot};
 
-    #[test]
-    fn test_noop_producer() {
-        let config = MeteringProducerConfig {
+    fn make_config() -> MeteringProducerConfig {
+        MeteringProducerConfig {
             brokers: "localhost:9092".to_string(),
             metering_topic: "test.metering".to_string(),
             errors_topic: "test.errors".to_string(),
-        };
+        }
+    }
 
-        let producer = MeteringProducer::noop(config);
-        assert_eq!(producer.events_sent(), 0);
-        assert_eq!(producer.errors_sent(), 0);
-
-        // Send an event (should not panic)
-        let event = ToolCallEvent::new(
+    fn make_event() -> ToolCallEvent {
+        ToolCallEvent::new(
             "tenant-test".to_string(),
             "test_tool".to_string(),
             "Read".to_string(),
-        );
-        producer.send_metering_event(event);
+        )
+    }
+
+    #[test]
+    fn test_noop_producer() {
+        let producer = MeteringProducer::noop(make_config());
+        assert_eq!(producer.events_sent(), 0);
+        assert_eq!(producer.errors_sent(), 0);
+        producer.send_metering_event(make_event());
         assert_eq!(producer.events_sent(), 1);
     }
 
@@ -301,9 +305,129 @@ mod tests {
             errors_topic: "custom.errors".to_string(),
             enabled: true,
         };
-
         let config: MeteringProducerConfig = (&kafka_config).into();
         assert_eq!(config.brokers, "broker1:9092,broker2:9092");
         assert_eq!(config.metering_topic, "custom.metering");
+        assert_eq!(config.errors_topic, "custom.errors");
+    }
+
+    #[test]
+    fn test_noop_producer_increments_event_count() {
+        let producer = MeteringProducer::noop(make_config());
+        for _ in 0..5 {
+            producer.send_metering_event(make_event());
+        }
+        assert_eq!(producer.events_sent(), 5);
+    }
+
+    #[test]
+    fn test_noop_producer_increments_error_count() {
+        let producer = MeteringProducer::noop(make_config());
+        let event = make_event().with_status(EventStatus::Error);
+        let snapshot =
+            ErrorSnapshot::from_event(event, "Timeout".to_string(), "timed out".to_string(), 504)
+                .with_request("/mcp/tools/call".to_string(), "POST".to_string());
+        producer.send_error_snapshot(snapshot);
+        assert_eq!(producer.errors_sent(), 1);
+        assert_eq!(producer.events_sent(), 0);
+    }
+
+    #[test]
+    fn test_noop_producer_mixed_events_and_errors() {
+        let producer = MeteringProducer::noop(make_config());
+        producer.send_metering_event(make_event());
+        producer.send_metering_event(make_event());
+        let err_event = make_event().with_status(EventStatus::PolicyDenied);
+        let snapshot = ErrorSnapshot::from_event(
+            err_event,
+            "PolicyDenied".to_string(),
+            "denied".to_string(),
+            403,
+        );
+        producer.send_error_snapshot(snapshot);
+        assert_eq!(producer.events_sent(), 2);
+        assert_eq!(producer.errors_sent(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_new_without_kafka_feature() {
+        let producer = MeteringProducer::new(make_config()).unwrap();
+        assert_eq!(producer.events_sent(), 0);
+        producer.send_metering_event(make_event());
+        assert_eq!(producer.events_sent(), 1);
+    }
+
+    #[test]
+    fn test_send_raw_noop_mode() {
+        let producer = MeteringProducer::noop(make_config());
+        producer.send_raw("custom.topic", "key-1", r#"{"data":"test"}"#);
+    }
+
+    #[test]
+    fn test_shared_producer_type() {
+        let producer = MeteringProducer::noop(make_config());
+        let shared: SharedMeteringProducer = Arc::new(producer);
+        shared.send_metering_event(make_event());
+        assert_eq!(shared.events_sent(), 1);
+        let shared2 = Arc::clone(&shared);
+        shared2.send_metering_event(make_event());
+        assert_eq!(shared.events_sent(), 2);
+    }
+
+    #[test]
+    fn test_config_fields() {
+        let config = make_config();
+        assert_eq!(config.brokers, "localhost:9092");
+        assert_eq!(config.metering_topic, "test.metering");
+        assert_eq!(config.errors_topic, "test.errors");
+    }
+
+    #[test]
+    fn test_noop_producer_config_stored() {
+        let config = MeteringProducerConfig {
+            brokers: "kafka:9092".to_string(),
+            metering_topic: "stoa.metering".to_string(),
+            errors_topic: "stoa.errors".to_string(),
+        };
+        let producer = MeteringProducer::noop(config);
+        assert_eq!(producer.config.brokers, "kafka:9092");
+        assert_eq!(producer.config.metering_topic, "stoa.metering");
+    }
+
+    #[test]
+    fn test_event_with_enrichment_fields() {
+        let producer = MeteringProducer::noop(make_config());
+        let event = make_event()
+            .with_user(
+                Some("user-1".to_string()),
+                Some("user@test.com".to_string()),
+            )
+            .with_timing(100, 20, 80)
+            .with_sizes(256, 1024)
+            .with_federation(Some("sub-1"), Some("master-1"))
+            .with_billing(Some("dept-eng"), 500, "premium", 2500);
+        producer.send_metering_event(event);
+        assert_eq!(producer.events_sent(), 1);
+    }
+
+    #[test]
+    fn test_error_snapshot_with_gateway_state() {
+        let producer = MeteringProducer::noop(make_config());
+        let event = make_event().with_status(EventStatus::Error);
+        let snapshot = ErrorSnapshot::from_event(
+            event,
+            "BackendError".to_string(),
+            "connection refused".to_string(),
+            502,
+        )
+        .with_request("/mcp/tools/call".to_string(), "POST".to_string())
+        .with_gateway_state(GatewaySnapshot {
+            active_sessions: 42,
+            uptime_secs: 3600,
+            rate_limit_buckets: 10,
+            memory_rss_bytes: Some(128_000_000),
+        });
+        producer.send_error_snapshot(snapshot);
+        assert_eq!(producer.errors_sent(), 1);
     }
 }

@@ -15,7 +15,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers: generate real PEM certificates via the cryptography library
 # ---------------------------------------------------------------------------

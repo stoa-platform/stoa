@@ -78,11 +78,14 @@ All implementation workflows use `scripts/ai-ops/model-router.sh` for cost-optim
 
 | Estimate | Mode | Model | Max Turns | Est. Cost/Ticket |
 |----------|------|-------|-----------|-----------------|
-| ≤3 pts | Ship | `claude-sonnet-4-6` | 25 | ~$7 |
-| ≤8 pts | Any | `claude-sonnet-4-6` | 40 | ~$12 |
-| >8 pts | Any | `claude-sonnet-4-6` | 60 | ~$16.50 |
+| ≤3 pts | Ship | `claude-sonnet-4-6` | 20 | ~$5 |
+| ≤3 pts | Any | `claude-sonnet-4-6` | 25 | ~$7 |
+| 4-5 pts | Any | `claude-sonnet-4-6` | 35 | ~$10 |
+| 6-8 pts | Any | `claude-opus-4-6` | 30 | ~$18 |
+| >8 pts | Any | `claude-opus-4-6` | 40 | ~$25 |
 
-Weighted average: ~$11/ticket. Haiku dropped from implementation routing (PR #737) — lacks capacity for branch creation, code gen, and PR workflows.
+Weighted average: ~$13/ticket. Opus for >5pt tickets prevents `error_max_turns` failures (100% failure rate with Sonnet on 6+ pt tickets).
+Kill-switch: set `CLAUDE_DEFAULT_MODEL` repo variable to force a single model for all tiers.
 
 ### Ship Fast Path (Skip Stage 2)
 

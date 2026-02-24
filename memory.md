@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-24 (MEGA Strike W1-W4 — C9 574/572+ pts 100%+)
+> Derniere MAJ: 2026-02-24 (C9 600/572+ pts (105%))
 
 ## ✅ DONE
 
@@ -8,6 +8,9 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 9 (Feb 22+)
+- ✅ CAB-1446 [MEGA] Gateway Test Coverage Expansion (21 pts) — PR #995
+- ✅ CAB-1456 [gateway] Metering enrichment + budget enforcement (5 pts) — PR #998
+- ✅ Test Blitz: CAB-1448 PR #996 (320 tests), CAB-1451 PR #997 (E2E), CAB-1452 PR #984 (110 tests) — partial MEGAs
 - ✅ CAB-1450 [MEGA] DX: CI & Local Dev Completeness (13 pts) — PRs #975, #983, #987, #989
 - ✅ CAB-1342 [MEGA] Helm Auto-Sync Secrets + Multi-Staging (21 pts) — PR #990
 - ✅ CAB-1334 [MEGA] Usage Metering Pipeline P1 (21 pts) — PR #991
@@ -101,3 +104,5 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - Rolling avg: 129.3 pts/day (C7+C8)
 - Portal MCP pages: MOCK_SERVERS removed (PR #771) — pages now use real API only
 - MEGA Strike W1-W4: 11 tickets, 173 pts in single day (PRs #968-#991)
+- Test Blitz + Metering: PRs #984, #996, #997, #998 (3 partial MEGAs + CAB-1456 done)
+- CAB-1446 PR #995 MERGED (gateway test coverage, 21 pts)

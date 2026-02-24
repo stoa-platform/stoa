@@ -1526,6 +1526,40 @@
         "title": "BranchInfo",
         "type": "object"
       },
+      "BudgetCheckResponse": {
+        "description": "Internal response for gateway budget check (GET /internal/budgets/{dept_id}/check).",
+        "properties": {
+          "budget_limit_microcents": {
+            "default": 0,
+            "title": "Budget Limit Microcents",
+            "type": "integer"
+          },
+          "current_spend_microcents": {
+            "default": 0,
+            "title": "Current Spend Microcents",
+            "type": "integer"
+          },
+          "enforcement": {
+            "default": "disabled",
+            "title": "Enforcement",
+            "type": "string"
+          },
+          "over_budget": {
+            "title": "Over Budget",
+            "type": "boolean"
+          },
+          "usage_pct": {
+            "default": 0.0,
+            "title": "Usage Pct",
+            "type": "number"
+          }
+        },
+        "required": [
+          "over_budget"
+        ],
+        "title": "BudgetCheckResponse",
+        "type": "object"
+      },
       "BulkResultItem": {
         "description": "Result of a single row in bulk onboarding.",
         "properties": {
@@ -3622,6 +3656,288 @@
           "sub_account_name"
         ],
         "title": "DelegationTokenResponse",
+        "type": "object"
+      },
+      "DepartmentBudgetCreate": {
+        "description": "Schema for creating a department budget.",
+        "example": {
+          "budget_limit_microcents": 100000000,
+          "department_id": "engineering",
+          "department_name": "Engineering Team",
+          "enforcement": "warn_only",
+          "period": "monthly",
+          "period_start": "2026-03-01T00:00:00"
+        },
+        "properties": {
+          "budget_limit_microcents": {
+            "minimum": 0.0,
+            "title": "Budget Limit Microcents",
+            "type": "integer"
+          },
+          "critical_threshold_pct": {
+            "default": 95,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Critical Threshold Pct",
+            "type": "integer"
+          },
+          "department_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Department Id",
+            "type": "string"
+          },
+          "department_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Name"
+          },
+          "enforcement": {
+            "default": "disabled",
+            "pattern": "^(enabled|disabled|warn_only)$",
+            "title": "Enforcement",
+            "type": "string"
+          },
+          "period": {
+            "default": "monthly",
+            "pattern": "^(monthly|quarterly)$",
+            "title": "Period",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "warning_threshold_pct": {
+            "default": 80,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Warning Threshold Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "department_id",
+          "budget_limit_microcents",
+          "period_start"
+        ],
+        "title": "DepartmentBudgetCreate",
+        "type": "object"
+      },
+      "DepartmentBudgetListResponse": {
+        "description": "Schema for paginated department budget list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentBudgetResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "DepartmentBudgetListResponse",
+        "type": "object"
+      },
+      "DepartmentBudgetResponse": {
+        "description": "Schema for department budget response.",
+        "properties": {
+          "budget_limit_microcents": {
+            "title": "Budget Limit Microcents",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "critical_threshold_pct": {
+            "title": "Critical Threshold Pct",
+            "type": "integer"
+          },
+          "current_spend_microcents": {
+            "title": "Current Spend Microcents",
+            "type": "integer"
+          },
+          "department_id": {
+            "title": "Department Id",
+            "type": "string"
+          },
+          "department_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Name"
+          },
+          "enforcement": {
+            "title": "Enforcement",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_over_budget": {
+            "title": "Is Over Budget",
+            "type": "boolean"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "usage_pct": {
+            "title": "Usage Pct",
+            "type": "number"
+          },
+          "warning_threshold_pct": {
+            "title": "Warning Threshold Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "department_id",
+          "department_name",
+          "period",
+          "budget_limit_microcents",
+          "current_spend_microcents",
+          "period_start",
+          "warning_threshold_pct",
+          "critical_threshold_pct",
+          "enforcement",
+          "usage_pct",
+          "is_over_budget",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DepartmentBudgetResponse",
+        "type": "object"
+      },
+      "DepartmentBudgetUpdate": {
+        "description": "Schema for updating a department budget (all fields optional).",
+        "properties": {
+          "budget_limit_microcents": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Limit Microcents"
+          },
+          "critical_threshold_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Critical Threshold Pct"
+          },
+          "department_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Name"
+          },
+          "enforcement": {
+            "anyOf": [
+              {
+                "pattern": "^(enabled|disabled|warn_only)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enforcement"
+          },
+          "warning_threshold_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning Threshold Pct"
+          }
+        },
+        "title": "DepartmentBudgetUpdate",
         "type": "object"
       },
       "DeploymentCreate": {
@@ -26533,6 +26849,49 @@
         ]
       }
     },
+    "/v1/internal/budgets/{department_id}/check": {
+      "get": {
+        "description": "Check if a department is over budget.\n\nCalled by the STOA Gateway's BudgetCache every ~60s.\nReturns over_budget=false when no budget is configured (fail-open).",
+        "operationId": "check_department_budget_v1_internal_budgets__department_id__check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "department_id",
+            "required": true,
+            "schema": {
+              "title": "Department Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Department Budget",
+        "tags": [
+          "Internal - Billing"
+        ]
+      }
+    },
     "/v1/internal/catalog/apis": {
       "get": {
         "description": "List published APIs with backend_url for gateway API-to-Tool bridge.\n\nInternal endpoint \u2014 no JWT auth required (service-to-service on internal network).\nUsed by stoa-gateway to discover APIs and register them as MCP tools.",
@@ -33103,6 +33462,306 @@
         "summary": "Update Backend Api",
         "tags": [
           "Backend APIs"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/budgets": {
+      "get": {
+        "description": "List department budgets for a tenant.",
+        "operationId": "list_budgets_v1_tenants__tenant_id__budgets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentBudgetListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Budgets",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      },
+      "post": {
+        "description": "Create a new department budget.",
+        "operationId": "create_budget_v1_tenants__tenant_id__budgets_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentBudgetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Budget",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/budgets/{budget_id}": {
+      "delete": {
+        "description": "Delete a department budget.",
+        "operationId": "delete_budget_v1_tenants__tenant_id__budgets__budget_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "budget_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Budget Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Budget",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      },
+      "get": {
+        "description": "Get a specific department budget.",
+        "operationId": "get_budget_v1_tenants__tenant_id__budgets__budget_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "budget_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Budget Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Budget",
+        "tags": [
+          "Billing - Department Budgets"
+        ]
+      },
+      "put": {
+        "description": "Update a department budget configuration.",
+        "operationId": "update_budget_v1_tenants__tenant_id__budgets__budget_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "budget_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Budget Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentBudgetUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Budget",
+        "tags": [
+          "Billing - Department Budgets"
         ]
       }
     },

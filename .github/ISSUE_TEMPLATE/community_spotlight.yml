@@ -1,0 +1,43 @@
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: "\U0001F31F Community Spotlight"
+description: Nominate a contributor for community recognition
+title: "[Spotlight] "
+labels: ["community", "spotlight"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Know someone who's made great contributions to STOA? Nominate them
+        for a community spotlight! We highlight contributors monthly.
+
+  - type: input
+    id: nominee
+    attributes:
+      label: Nominee
+      description: GitHub username of the contributor
+      placeholder: "@username"
+    validations:
+      required: true
+
+  - type: textarea
+    id: contributions
+    attributes:
+      label: Contributions
+      description: What has this person contributed? (PRs, issues, docs, community help, etc.)
+      placeholder: |
+        - PR #123: Added rate limiting for MCP tools
+        - Helped 5 users in Discord with migration questions
+        - Wrote a blog post about STOA deployment
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: How has their contribution impacted the project or community?
+    validations:
+      required: true

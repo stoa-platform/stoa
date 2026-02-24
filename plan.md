@@ -189,10 +189,10 @@
 ### Backlog (not committed, no checkbox)
 
 - CAB-1324: [MEGA] Runtime Data Governance (21 pts)
-- CAB-1320: [MEGA] Repo Consolidation (21 pts)
+- CAB-1320: [MEGA] Repo Consolidation (21 pts) — PR #1004 (partial, root configs unified)
 - CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts) — PR #996 (partial, 320 tests/15 routers)
-- CAB-1451: [MEGA] E2E Test Expansion (21 pts) — PR #997 (partial, @wip unblocked + chat/UAC)
-- CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts) — PR #984 (partial, 110 tests)
+- CAB-1451: [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974 (partial, credential-mapping + chat/UAC)
+- CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008 (partial, 110+14 tests)
 
 ### Backlog — Legacy (parked)
 

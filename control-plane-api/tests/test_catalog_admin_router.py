@@ -15,6 +15,12 @@ from fastapi.testclient import TestClient
 
 SYNC_SVC_PATH = "src.routers.catalog_admin.CatalogSyncService"
 CATALOG_REPO_PATH = "src.routers.catalog_admin.CatalogRepository"
+GET_ASYNC_DB_PATH = "src.routers.catalog_admin.get_async_db"
+
+
+async def _fake_get_db():
+    """Mock async generator for get_db used by background tasks."""
+    yield AsyncMock()
 
 
 def _mock_sync_status(status: str = "success") -> MagicMock:
@@ -57,8 +63,13 @@ class TestTriggerCatalogSync:
     def test_trigger_sync_cpi_admin(self, app_with_cpi_admin, mock_db_session):
         mock_svc = MagicMock()
         mock_svc.get_last_sync_status = AsyncMock(return_value=None)
+        mock_svc.sync_all = AsyncMock()
 
-        with patch(SYNC_SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+        with (
+            patch(SYNC_SVC_PATH, return_value=mock_svc),
+            patch(GET_ASYNC_DB_PATH, _fake_get_db),
+            TestClient(app_with_cpi_admin) as client,
+        ):
             resp = client.post("/v1/admin/catalog/sync")
 
         assert resp.status_code == 200
@@ -67,8 +78,13 @@ class TestTriggerCatalogSync:
     def test_trigger_sync_tenant_admin(self, app_with_tenant_admin, mock_db_session):
         mock_svc = MagicMock()
         mock_svc.get_last_sync_status = AsyncMock(return_value=None)
+        mock_svc.sync_all = AsyncMock()
 
-        with patch(SYNC_SVC_PATH, return_value=mock_svc), TestClient(app_with_tenant_admin) as client:
+        with (
+            patch(SYNC_SVC_PATH, return_value=mock_svc),
+            patch(GET_ASYNC_DB_PATH, _fake_get_db),
+            TestClient(app_with_tenant_admin) as client,
+        ):
             resp = client.post("/v1/admin/catalog/sync")
 
         assert resp.status_code == 200
@@ -95,14 +111,28 @@ class TestTriggerMcpServersSync:
     """Tests for POST /v1/admin/catalog/sync/mcp-servers."""
 
     def test_trigger_mcp_sync_cpi_admin(self, app_with_cpi_admin, mock_db_session):
-        with TestClient(app_with_cpi_admin) as client:
+        mock_svc = MagicMock()
+        mock_svc.sync_mcp_servers = AsyncMock()
+
+        with (
+            patch(SYNC_SVC_PATH, return_value=mock_svc),
+            patch(GET_ASYNC_DB_PATH, _fake_get_db),
+            TestClient(app_with_cpi_admin) as client,
+        ):
             resp = client.post("/v1/admin/catalog/sync/mcp-servers")
 
         assert resp.status_code == 200
         assert resp.json()["status"] == "sync_started"
 
     def test_trigger_mcp_sync_with_tenant_filter(self, app_with_cpi_admin, mock_db_session):
-        with TestClient(app_with_cpi_admin) as client:
+        mock_svc = MagicMock()
+        mock_svc.sync_mcp_servers = AsyncMock()
+
+        with (
+            patch(SYNC_SVC_PATH, return_value=mock_svc),
+            patch(GET_ASYNC_DB_PATH, _fake_get_db),
+            TestClient(app_with_cpi_admin) as client,
+        ):
             resp = client.post("/v1/admin/catalog/sync/mcp-servers?tenant_id=acme")
 
         assert resp.status_code == 200
@@ -119,14 +149,28 @@ class TestTriggerTenantSync:
     """Tests for POST /v1/admin/catalog/sync/tenant/{tenant_id}."""
 
     def test_trigger_tenant_sync_cpi_admin(self, app_with_cpi_admin, mock_db_session):
-        with TestClient(app_with_cpi_admin) as client:
+        mock_svc = MagicMock()
+        mock_svc.sync_tenant = AsyncMock()
+
+        with (
+            patch(SYNC_SVC_PATH, return_value=mock_svc),
+            patch(GET_ASYNC_DB_PATH, _fake_get_db),
+            TestClient(app_with_cpi_admin) as client,
+        ):
             resp = client.post("/v1/admin/catalog/sync/tenant/acme")
 
         assert resp.status_code == 200
         assert "acme" in resp.json()["message"]
 
     def test_trigger_tenant_sync_own_tenant(self, app_with_tenant_admin, mock_db_session):
-        with TestClient(app_with_tenant_admin) as client:
+        mock_svc = MagicMock()
+        mock_svc.sync_tenant = AsyncMock()
+
+        with (
+            patch(SYNC_SVC_PATH, return_value=mock_svc),
+            patch(GET_ASYNC_DB_PATH, _fake_get_db),
+            TestClient(app_with_tenant_admin) as client,
+        ):
             resp = client.post("/v1/admin/catalog/sync/tenant/acme")
 
         assert resp.status_code == 200

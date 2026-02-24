@@ -76,6 +76,7 @@ Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024)
 | `k8s-ops` | K8s debug, Helm, nginx, rollout | Read-only (plan) |
 | `docs-writer` | ADRs, guides, runbooks, memory | No Bash |
 | `content-reviewer` | Contenu public, concurrents, compliance | Read-only (plan) |
+| `verify-app` | Post-deploy SRE verification (9 checks) | Read-only (plan) |
 
 ### MCP Integrations (Claude.ai Native)
 | Service | Use For | Key Actions |
@@ -100,6 +101,14 @@ Key rules for AI Factory workflow:
 
 ### Agent Teams (experimental)
 Prerequis: `brew install tmux` + `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+
+### Parallel Sessions (git worktrees)
+Named worktrees in `.claude/worktrees/` for concurrent Claude Code sessions:
+```bash
+za   # analysis worktree (read-only exploration)
+zf   # feature session (main repo)
+zh   # hotfix worktree (ephemeral, from main)
+```
 
 ## Repos
 

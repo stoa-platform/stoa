@@ -532,21 +532,13 @@ mod tests {
     #[tokio::test]
     async fn test_session_lifecycle() {
         let detector = ZombieDetector::new(ZombieConfig::default());
-
-        // Start session
         detector
             .start_session("test-session", Some("user-1".to_string()), None)
             .await;
-
-        // Record activity
         let health = detector.record_activity("test-session").await.unwrap();
         assert_eq!(health, SessionHealth::Healthy);
-
-        // Get session
         let session = detector.get_session("test-session").await.unwrap();
         assert_eq!(session.request_count, 1);
-
-        // End session
         detector.end_session("test-session").await;
         assert!(detector.get_session("test-session").await.is_none());
     }
@@ -554,7 +546,6 @@ mod tests {
     #[tokio::test]
     async fn test_session_not_found() {
         let detector = ZombieDetector::new(ZombieConfig::default());
-
         let result = detector.record_activity("non-existent").await;
         assert_eq!(result, Err(ZombieError::SessionNotFound));
     }
@@ -565,18 +556,11 @@ mod tests {
             attestation_interval: 2,
             ..Default::default()
         });
-
         detector.start_session("test-session", None, None).await;
-
-        // First two requests ok
         detector.record_activity("test-session").await.unwrap();
         detector.record_activity("test-session").await.unwrap();
-
-        // Third request requires attestation
         let result = detector.record_activity("test-session").await;
         assert_eq!(result, Err(ZombieError::AttestationRequired));
-
-        // After attestation, activity allowed again
         detector.record_attestation("test-session").await.unwrap();
         let health = detector.record_activity("test-session").await.unwrap();
         assert_eq!(health, SessionHealth::Healthy);
@@ -585,15 +569,10 @@ mod tests {
     #[tokio::test]
     async fn test_session_revocation() {
         let detector = ZombieDetector::new(ZombieConfig::default());
-
         detector.start_session("test-session", None, None).await;
         detector.revoke_session("test-session").await.unwrap();
-
-        // Activity should fail
         let result = detector.record_activity("test-session").await;
         assert_eq!(result, Err(ZombieError::SessionRevoked));
-
-        // Health should show revoked
         let health = detector.get_health("test-session").await.unwrap();
         assert_eq!(health, SessionHealth::Revoked);
     }
@@ -601,23 +580,15 @@ mod tests {
     #[tokio::test]
     async fn test_zombie_detection() {
         let detector = ZombieDetector::new(ZombieConfig {
-            session_ttl_secs: 1, // 1 second TTL for testing
-            zombie_factor: 2.0,  // 2 seconds to zombie
-            auto_revoke: false,  // Don't auto-revoke for this test
+            session_ttl_secs: 1,
+            zombie_factor: 2.0,
+            auto_revoke: false,
             ..Default::default()
         });
-
         detector.start_session("test-session", None, None).await;
-
-        // Wait for zombie threshold
         sleep(tokio::time::Duration::from_secs(3)).await;
-
-        // Check for zombies
         let alerts = detector.check_zombies().await;
-
-        // Should have warning and/or zombie alerts
         assert!(!alerts.is_empty());
-
         let health = detector.get_health("test-session").await.unwrap();
         assert_eq!(health, SessionHealth::Zombie);
     }
@@ -625,12 +596,10 @@ mod tests {
     #[tokio::test]
     async fn test_stats() {
         let detector = ZombieDetector::new(ZombieConfig::default());
-
         detector.start_session("session-1", None, None).await;
         detector.start_session("session-2", None, None).await;
         detector.start_session("session-3", None, None).await;
         detector.revoke_session("session-3").await.unwrap();
-
         let stats = detector.stats().await;
         assert_eq!(stats.total_sessions, 3);
         assert_eq!(stats.healthy, 2);
@@ -644,12 +613,8 @@ mod tests {
             zombie_factor: 1.0,
             ..Default::default()
         });
-
         detector.start_session("test-session", None, None).await;
-
-        // Wait for cleanup threshold (2 * zombie_factor * TTL)
         sleep(tokio::time::Duration::from_secs(3)).await;
-
         let removed = detector.cleanup().await;
         assert_eq!(removed, 1);
     }
@@ -658,12 +623,215 @@ mod tests {
     fn test_session_touch() {
         let mut session = TrackedSession::new("test".to_string());
         assert_eq!(session.request_count, 0);
-
         session.touch();
         assert_eq!(session.request_count, 1);
         assert_eq!(session.requests_since_attestation, 1);
-
         session.attest();
         assert_eq!(session.requests_since_attestation, 0);
+    }
+
+    #[tokio::test]
+    async fn test_session_stores_user_and_tenant() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        detector
+            .start_session(
+                "s1",
+                Some("user-42".to_string()),
+                Some("tenant-acme".to_string()),
+            )
+            .await;
+        let session = detector.get_session("s1").await.unwrap();
+        assert_eq!(session.user_id.as_deref(), Some("user-42"));
+        assert_eq!(session.tenant_id.as_deref(), Some("tenant-acme"));
+    }
+
+    #[tokio::test]
+    async fn test_end_session_removes_it() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        detector.start_session("s1", None, None).await;
+        assert!(detector.get_session("s1").await.is_some());
+        detector.end_session("s1").await;
+        assert!(detector.get_session("s1").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_end_nonexistent_session_is_noop() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        detector.end_session("does-not-exist").await;
+    }
+
+    #[tokio::test]
+    async fn test_revoke_nonexistent_returns_error() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        let result = detector.revoke_session("nope").await;
+        assert_eq!(result, Err(ZombieError::SessionNotFound));
+    }
+
+    #[tokio::test]
+    async fn test_attestation_on_revoked_fails() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        detector.start_session("s1", None, None).await;
+        detector.revoke_session("s1").await.unwrap();
+        let result = detector.record_attestation("s1").await;
+        assert_eq!(result, Err(ZombieError::SessionRevoked));
+    }
+
+    #[tokio::test]
+    async fn test_attestation_on_unknown_fails() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        let result = detector.record_attestation("unknown").await;
+        assert_eq!(result, Err(ZombieError::SessionNotFound));
+    }
+
+    #[tokio::test]
+    async fn test_recent_alerts_empty_initially() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        let alerts = detector.recent_alerts(10).await;
+        assert!(alerts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_stats_all_healthy() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        detector.start_session("a", None, None).await;
+        detector.start_session("b", None, None).await;
+        let stats = detector.stats().await;
+        assert_eq!(stats.total_sessions, 2);
+        assert_eq!(stats.healthy, 2);
+        assert_eq!(stats.warning, 0);
+        assert_eq!(stats.zombie, 0);
+    }
+
+    #[tokio::test]
+    async fn test_reap_dead_sessions() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        detector.start_session("alive", None, None).await;
+        detector.start_session("dead", None, None).await;
+        detector.revoke_session("dead").await.unwrap();
+        let reaped = detector.reap_dead_sessions().await;
+        assert_eq!(reaped, vec!["dead".to_string()]);
+        let stats = detector.stats().await;
+        assert_eq!(stats.total_sessions, 1);
+    }
+
+    #[tokio::test]
+    async fn test_reap_with_no_dead_sessions() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        detector.start_session("healthy", None, None).await;
+        let reaped = detector.reap_dead_sessions().await;
+        assert!(reaped.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_alert_threshold_not_exceeded_initially() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        assert!(!detector.is_alert_threshold_exceeded().await);
+    }
+
+    #[test]
+    fn test_zombie_error_display() {
+        assert_eq!(
+            ZombieError::SessionNotFound.to_string(),
+            "Session not found"
+        );
+        assert_eq!(
+            ZombieError::SessionRevoked.to_string(),
+            "Session has been revoked"
+        );
+        assert_eq!(
+            ZombieError::AttestationRequired.to_string(),
+            "Session attestation required"
+        );
+    }
+
+    #[test]
+    fn test_zombie_config_default() {
+        let config = ZombieConfig::default();
+        assert_eq!(config.session_ttl_secs, 600);
+        assert!((config.zombie_factor - 2.0).abs() < f64::EPSILON);
+        assert_eq!(config.attestation_interval, 100);
+        assert!(config.auto_revoke);
+        assert_eq!(config.alert_threshold, 10);
+        assert_eq!(config.cleanup_interval_secs, 60);
+    }
+
+    #[test]
+    fn test_zombie_stats_default() {
+        let stats = ZombieStats::default();
+        assert_eq!(stats.total_sessions, 0);
+        assert_eq!(stats.healthy, 0);
+        assert_eq!(stats.alerts_total, 0);
+    }
+
+    #[test]
+    fn test_session_health_equality() {
+        assert_eq!(SessionHealth::Healthy, SessionHealth::Healthy);
+        assert_ne!(SessionHealth::Healthy, SessionHealth::Zombie);
+        assert_ne!(SessionHealth::Revoked, SessionHealth::Expired);
+    }
+
+    #[tokio::test]
+    async fn test_get_health_revoked_via_set() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        detector.start_session("s1", None, None).await;
+        detector.revoked.write().await.insert("s1".to_string());
+        let h = detector.get_health("s1").await.unwrap();
+        assert_eq!(h, SessionHealth::Revoked);
+    }
+
+    #[tokio::test]
+    async fn test_get_health_unknown_session() {
+        let detector = ZombieDetector::new(ZombieConfig::default());
+        assert!(detector.get_health("nope").await.is_none());
+    }
+
+    #[test]
+    fn test_tracked_session_new_defaults() {
+        let session = TrackedSession::new("abc".to_string());
+        assert_eq!(session.session_id, "abc");
+        assert!(session.user_id.is_none());
+        assert!(session.tenant_id.is_none());
+        assert_eq!(session.request_count, 0);
+        assert_eq!(session.requests_since_attestation, 0);
+        assert_eq!(session.health, SessionHealth::Healthy);
+        assert!(session.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_session_idle_and_age() {
+        let session = TrackedSession::new("s".to_string());
+        assert!(session.idle_duration().num_seconds() < 2);
+        assert!(session.age().num_seconds() < 2);
+    }
+
+    #[tokio::test]
+    async fn test_zombie_auto_revoke_enabled() {
+        let detector = ZombieDetector::new(ZombieConfig {
+            session_ttl_secs: 1,
+            zombie_factor: 1.5,
+            auto_revoke: true,
+            ..Default::default()
+        });
+        detector.start_session("s1", None, None).await;
+        sleep(tokio::time::Duration::from_secs(2)).await;
+        let alerts = detector.check_zombies().await;
+        assert!(!alerts.is_empty());
+        let health = detector.get_health("s1").await.unwrap();
+        assert_eq!(health, SessionHealth::Revoked);
+    }
+
+    #[tokio::test]
+    async fn test_touch_increments_both_counters() {
+        let detector = ZombieDetector::new(ZombieConfig {
+            attestation_interval: 1000,
+            ..Default::default()
+        });
+        detector.start_session("s1", None, None).await;
+        detector.record_activity("s1").await.unwrap();
+        detector.record_activity("s1").await.unwrap();
+        detector.record_activity("s1").await.unwrap();
+        let session = detector.get_session("s1").await.unwrap();
+        assert_eq!(session.request_count, 3);
+        assert_eq!(session.requests_since_attestation, 3);
     }
 }

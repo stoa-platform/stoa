@@ -51,6 +51,8 @@ fn event_namespace(event_type: &str) -> &str {
         "stoa.security.alerts"
     } else if event_type.starts_with("subscription") {
         "stoa.subscription.events"
+    } else if event_type.starts_with("policy-") {
+        "stoa.policy.changes"
     } else {
         "stoa.events"
     }
@@ -99,6 +101,14 @@ fn tool_hint(event_type: &str) -> Option<ToolHint> {
         "security-alert" => Some(ToolHint {
             action: "logging".into(),
             reason: "Security event — review alert details".into(),
+        }),
+        "policy-created" | "policy-updated" | "policy-deleted" => Some(ToolHint {
+            action: "resources/list".into(),
+            reason: "Policy changed — enforcement rules may have updated".into(),
+        }),
+        "policy-binding-created" | "policy-binding-deleted" => Some(ToolHint {
+            action: "resources/list".into(),
+            reason: "Policy binding changed — check affected APIs".into(),
         }),
         _ => None,
     }
@@ -176,6 +186,13 @@ mod tests {
             event_namespace("subscription-changed"),
             "stoa.subscription.events"
         );
+        assert_eq!(event_namespace("policy-created"), "stoa.policy.changes");
+        assert_eq!(event_namespace("policy-updated"), "stoa.policy.changes");
+        assert_eq!(event_namespace("policy-deleted"), "stoa.policy.changes");
+        assert_eq!(
+            event_namespace("policy-binding-created"),
+            "stoa.policy.changes"
+        );
         assert_eq!(event_namespace("unknown"), "stoa.events");
     }
 
@@ -199,6 +216,21 @@ mod tests {
         assert!(tool_hint("deploy-request").is_some());
         assert!(tool_hint("deployment-success").is_some());
         assert!(tool_hint("security-alert").is_some());
+        assert!(tool_hint("policy-created").is_some());
+        assert!(tool_hint("policy-updated").is_some());
+        assert!(tool_hint("policy-deleted").is_some());
+        assert!(tool_hint("policy-binding-created").is_some());
+        assert!(tool_hint("policy-binding-deleted").is_some());
         assert!(tool_hint("completely-unknown").is_none());
+    }
+
+    #[test]
+    fn test_format_notification_policy_created() {
+        let event = make_event("policy-created");
+        let notif = format_notification(&event);
+
+        assert_eq!(notif["params"]["type"], "stoa.policy.changes");
+        assert_eq!(notif["params"]["data"]["event"], "policy-created");
+        assert_eq!(notif["params"]["hint"]["action"], "resources/list");
     }
 }

@@ -47,10 +47,42 @@ Veille concurrentielle integree a l'IA Factory STOA. 3 niveaux d'execution.
 - Nouveaux MCP servers populaires
 - Patterns d'integration emergents
 
+## Architecture L1 — Mode Accumulation
+
+L1 fonctionne en 2 phases (collect + digest) avec accumulation JSONL:
+
+```
+watch-collect.sh (2x/jour)           watch-digest.sh (lundi)
+  Sources → JSONL append      →     Dedup + tri + format digest
+  .claude/watch/signals-YYYY-WNN.jsonl
+```
+
+### Phase 1: Collect (`watch-collect.sh`)
+- Cadence: 2x/jour (08:00 + 18:00 CET)
+- Append-only: chaque signal = 1 ligne JSONL
+- Dedup a l'ecriture: source+title (case-insensitive)
+- Fichier par semaine ISO: `signals-2026-W09.jsonl`
+- 6 sources: Anthropic blog, npm, Reddit, HN, Cursor, Aider
+
+### Phase 2: Digest (`watch-digest.sh`)
+- Cadence: lundi 08:00 CET
+- Lit les signaux de la semaine courante
+- Deduplique (source+title), trie par score
+- Produit le digest formate (voir format ci-dessous)
+- Optionnel: poste sur Slack via `$SLACK_WEBHOOK`
+
+### Format JSONL (un signal)
+
+```json
+{"ts":"2026-02-24T08:00:00+00:00","source":"reddit","title":"...","url":"...","score":142,"meta":{}}
+```
+
+### L'ancien one-shot (`competitive-watch.sh`) reste disponible pour affichage rapide en CLI.
+
 ## Format du Digest (L1 — hebdomadaire)
 
 ```
-:telescope: VEILLE IA FACTORY — Semaine du [DATE]
+:telescope: VEILLE IA FACTORY — Semaine YYYY-WNN
 
 :loudspeaker: BREAKING (action requise)
 - [changement majeur qui impacte notre setup]
@@ -58,18 +90,19 @@ Veille concurrentielle integree a l'IA Factory STOA. 3 niveaux d'execution.
 :new: NOUVEAUTES
 - Claude Code vX.X.X : [features notables]
 - Boris tip : [resume si nouveau thread]
-- [autre nouveaute]
 
 :crossed_swords: CONCURRENCE
 - Cursor : [mouvement notable]
 - [autre concurrent] : [mouvement notable]
+
+:speech_balloon: COMMUNAUTE (top signaux)
+- [Reddit/HN posts classes par score]
 
 :bulb: PATTERNS A TESTER
 - [pattern vu dans la communaute qu'on n'utilise pas encore]
 
 :bar_chart: NOTRE SCORE
 - Setup actuel : XX/100 (dernier audit)
-- Ecart identifie : [si applicable]
 
 :dart: ACTION ITEMS
 - [ ] [action concrete si necessaire]
@@ -79,14 +112,19 @@ Veille concurrentielle integree a l'IA Factory STOA. 3 niveaux d'execution.
 
 | Niveau | Cadence | Declencheur | Outil |
 |--------|---------|-------------|-------|
-| L1 Digest | Hebdo (lundi 8h CET) | n8n schedule | `scripts/ai-ops/competitive-watch.sh` (CLI) ou n8n workflow |
+| L1 Collect | 2x/jour (8h + 18h CET) | cron / launchd / n8n | `scripts/ai-ops/watch-collect.sh` |
+| L1 Digest | Hebdo (lundi 8h CET) | cron / launchd / n8n | `scripts/ai-ops/watch-digest.sh` |
+| L1 One-shot | Manuel (CLI) | Utilisateur | `scripts/ai-ops/competitive-watch.sh` |
 | L2 Audit | Mensuel (1er du mois 8h UTC) | GHA cron | `.github/workflows/monthly-ia-factory-audit.yml` |
 | L3 Benchmark | Trimestriel | Manuel | `/benchmark-competitors` slash command |
+
+Setup cron/launchd/n8n: voir `scripts/ai-ops/CRON-SETUP.md`
 
 ## Usage
 
 ```
-User: /competitive-watch digest     → lance le script CLI de veille
+User: /competitive-watch digest     → lance le digest de la semaine courante
+User: /competitive-watch collect    → lance une collecte manuelle
 User: /competitive-watch audit      → affiche le dernier score audit
 User: /competitive-watch benchmark  → lance le benchmark trimestriel complet
 ```

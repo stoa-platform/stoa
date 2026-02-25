@@ -33,6 +33,10 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-bash-log.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/hegemon/tools/state/hook-state-tracker.sh\""
           }
         ]
       },
@@ -64,6 +68,10 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-slack-notify.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/hegemon/tools/state/hook-session-end.sh\""
           }
         ]
       }

@@ -16,8 +16,9 @@ COPY control-plane-ui/package*.json ./control-plane-ui/
 WORKDIR /app/control-plane-ui
 RUN npm ci
 
-# Copy source files
+# Copy source files (tsconfig.base.json needed by tsconfig.json extends)
 WORKDIR /app
+COPY tsconfig.base.json ./
 COPY shared/ ./shared/
 COPY control-plane-ui/ ./control-plane-ui/
 

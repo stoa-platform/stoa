@@ -16,8 +16,9 @@ COPY portal/package*.json ./portal/
 WORKDIR /app/portal
 RUN npm ci
 
-# Copy source files
+# Copy source files (tsconfig.base.json needed by tsconfig.json extends)
 WORKDIR /app
+COPY tsconfig.base.json ./
 COPY shared/ ./shared/
 COPY portal/ ./portal/
 

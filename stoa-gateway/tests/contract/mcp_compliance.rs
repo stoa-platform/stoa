@@ -412,12 +412,15 @@ async fn test_unregistered_method_returns_not_found() {
 }
 
 #[tokio::test]
-async fn test_roots_list_returns_not_found() {
+async fn test_roots_list_returns_empty_array() {
     let app = TestApp::new();
     let (status, resp) = jsonrpc(&app, "roots/list", None).await;
 
-    // roots/list is deferred (server→client complexity)
+    // roots/list implemented (CAB-1472) — returns empty roots (gateway has no filesystem roots)
     assert_eq!(status, axum::http::StatusCode::OK);
-    let code = resp["error"]["code"].as_i64().unwrap();
-    assert_eq!(code, -32601);
+    assert!(resp.get("error").is_none(), "roots/list should succeed");
+    let roots = resp["result"]["roots"]
+        .as_array()
+        .expect("result.roots must be an array");
+    assert!(roots.is_empty(), "gateway roots list should be empty");
 }

@@ -1,16 +1,11 @@
 import { useState } from 'react';
-import {
-  RefreshCw,
-  Activity,
-  AlertTriangle,
-  Clock,
-  Shield,
-  TrendingUp,
-  TrendingDown,
-  Cpu,
-} from 'lucide-react';
+import { RefreshCw, Activity, AlertTriangle, Clock, Shield, Cpu } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { StatCard } from '@stoa/shared/components/StatCard';
+import { TimeRangeSelector, RANGE_CONFIG } from '@stoa/shared/components/TimeRangeSelector';
+import { TrendIndicator } from '@stoa/shared/components/TrendIndicator';
+import type { TimeRange } from '@stoa/shared/components/TimeRangeSelector';
 import {
   usePrometheusQuery,
   usePrometheusRange,
@@ -21,14 +16,6 @@ import { SparklineChart } from '../../components/charts/SparklineChart';
 
 const ACTIVE_TENANT_KEY = 'stoa-active-tenant';
 const AUTO_REFRESH_INTERVAL = 15_000;
-
-type TimeRange = '1h' | '6h' | '24h';
-
-const RANGE_CONFIG: Record<TimeRange, { seconds: number; step: string; label: string }> = {
-  '1h': { seconds: 3600, step: '60s', label: '1 hour' },
-  '6h': { seconds: 21600, step: '300s', label: '6 hours' },
-  '24h': { seconds: 86400, step: '900s', label: '24 hours' },
-};
 
 function formatNumber(num: number): string {
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
@@ -46,90 +33,6 @@ function getLatencyColor(ms: number): string {
   if (ms < 300) return 'text-green-600';
   if (ms < 500) return 'text-yellow-600';
   return 'text-red-600';
-}
-
-function StatCard({
-  label,
-  value,
-  unit,
-  icon: Icon,
-  colorClass,
-  subtitle,
-  sparkline,
-}: {
-  label: string;
-  value: string | number;
-  unit?: string;
-  icon: React.ElementType;
-  colorClass?: string;
-  subtitle?: string;
-  sparkline?: React.ReactNode;
-}) {
-  const bgClass = colorClass?.includes('green')
-    ? 'bg-green-100 dark:bg-green-900/30'
-    : colorClass?.includes('red')
-      ? 'bg-red-100 dark:bg-red-900/30'
-      : colorClass?.includes('yellow')
-        ? 'bg-yellow-100 dark:bg-yellow-900/30'
-        : colorClass?.includes('orange')
-          ? 'bg-orange-100 dark:bg-orange-900/30'
-          : colorClass?.includes('purple')
-            ? 'bg-purple-100 dark:bg-purple-900/30'
-            : 'bg-blue-100 dark:bg-blue-900/30';
-
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4 flex items-start gap-4">
-      <div className={`p-2 rounded-lg ${bgClass}`}>
-        <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-          {label}
-        </p>
-        <div className="flex items-baseline gap-1">
-          <p className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}>
-            {value}
-          </p>
-          {unit && <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>}
-        </div>
-        {subtitle && (
-          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
-        )}
-        {sparkline && <div className="mt-2">{sparkline}</div>}
-      </div>
-    </div>
-  );
-}
-
-function TrendIndicator({
-  data,
-  invertColor = false,
-}: {
-  data: { value: number }[];
-  invertColor?: boolean;
-}) {
-  if (data.length < 6) return null;
-  const third = Math.floor(data.length / 3);
-  const firstAvg = data.slice(0, third).reduce((s, d) => s + d.value, 0) / third;
-  const lastAvg = data.slice(-third).reduce((s, d) => s + d.value, 0) / third;
-  if (firstAvg === 0) return null;
-  const change = ((lastAvg - firstAvg) / firstAvg) * 100;
-  const isUp = change > 0;
-  const Icon = isUp ? TrendingUp : TrendingDown;
-  const color = invertColor
-    ? isUp
-      ? 'text-red-500'
-      : 'text-green-500'
-    : isUp
-      ? 'text-green-500'
-      : 'text-red-500';
-
-  return (
-    <div className={`flex items-center gap-1 text-xs ${color}`}>
-      <Icon className="h-3.5 w-3.5" />
-      <span>{Math.abs(change).toFixed(1)}%</span>
-    </div>
-  );
 }
 
 export function TenantDashboard() {
@@ -226,21 +129,7 @@ export function TenantDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg overflow-hidden">
-            {(['1h', '6h', '24h'] as const).map((range) => (
-              <button
-                key={range}
-                onClick={() => setTimeRange(range)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  timeRange === range
-                    ? 'bg-blue-600 text-white'
-                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
-                }`}
-              >
-                {range}
-              </button>
-            ))}
-          </div>
+          <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
           <button
             onClick={handleRefresh}
             className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"

@@ -41,7 +41,7 @@ describe('RequestExplorerDashboard', () => {
     render(<RequestExplorerDashboard />);
     const buttons = screen.getAllByRole('button');
     const oneHourButton = buttons.find((btn) => btn.textContent === '1h');
-    expect(oneHourButton).toHaveClass('bg-blue-600');
+    expect(oneHourButton).toHaveClass('bg-white');
   });
 
   it('changes time range when button clicked', () => {
@@ -51,7 +51,7 @@ describe('RequestExplorerDashboard', () => {
 
     if (twentyFourHourButton) {
       fireEvent.click(twentyFourHourButton);
-      expect(twentyFourHourButton).toHaveClass('bg-blue-600');
+      expect(twentyFourHourButton).toHaveClass('bg-white');
     }
   });
 

@@ -6,12 +6,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
-import { useAPIs, useAPI, useAPICategories, useUniverses, useAPITags } from './useAPIs';
+import {
+  useAPIs,
+  useAPI,
+  useOpenAPISpec,
+  useAPICategories,
+  useUniverses,
+  useAPITags,
+} from './useAPIs';
 
 vi.mock('../services/apiCatalog', () => ({
   apiCatalogService: {
     listAPIs: vi.fn(),
     getAPI: vi.fn(),
+    getOpenAPISpec: vi.fn(),
     getCategories: vi.fn(),
     getUniverses: vi.fn(),
     getTags: vi.fn(),
@@ -49,6 +57,23 @@ describe('useAPIs', () => {
 
     expect(result.current.data?.items).toHaveLength(1);
   });
+
+  it('should pass params to listAPIs', async () => {
+    vi.mocked(apiCatalogService.listAPIs).mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 0,
+    } as any);
+
+    const params = { page: 2, pageSize: 10, category: 'finance' };
+    const { result } = renderHook(() => useAPIs(params), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(apiCatalogService.listAPIs).toHaveBeenCalledWith(params);
+  });
 });
 
 describe('useAPI', () => {
@@ -73,6 +98,33 @@ describe('useAPI', () => {
     const { result } = renderHook(() => useAPI(undefined), { wrapper: createWrapper() });
 
     expect(result.current.fetchStatus).toBe('idle');
+  });
+});
+
+describe('useOpenAPISpec', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should fetch OpenAPI spec for an API', async () => {
+    const mockSpec = { openapi: '3.0.0', info: { title: 'Payments', version: '1.0' } };
+    vi.mocked(apiCatalogService.getOpenAPISpec).mockResolvedValueOnce(mockSpec);
+
+    const { result } = renderHook(() => useOpenAPISpec('api-1'), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toEqual(mockSpec);
+    expect(apiCatalogService.getOpenAPISpec).toHaveBeenCalledWith('api-1');
+  });
+
+  it('should not fetch when id is undefined', () => {
+    const { result } = renderHook(() => useOpenAPISpec(undefined), {
+      wrapper: createWrapper(),
+    });
+
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(apiCatalogService.getOpenAPISpec).not.toHaveBeenCalled();
   });
 });
 

@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { StatCard } from '@stoa/shared/components/StatCard';
 import { useNavigate } from 'react-router-dom';
 import { config } from '../../config';
 import { observabilityPath } from '../../utils/navigation';
@@ -33,17 +34,6 @@ const overallStatusConfig: Record<string, { label: string; color: string; bg: st
     bg: 'bg-neutral-100 dark:bg-neutral-700',
   },
 };
-
-function StatCard({ label, count, color }: { label: string; count: number; color: string }) {
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-3">
-      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-        {label}
-      </p>
-      <p className={`text-2xl font-bold ${color}`}>{count}</p>
-    </div>
-  );
-}
 
 function ProgressBar({ label, percentage }: { label: string; percentage: number }) {
   const barColor =
@@ -235,16 +225,20 @@ export function GatewayObservabilityDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <StatCard
                 label="Total"
-                count={metrics.health.total_gateways}
-                color="text-neutral-900 dark:text-white"
+                value={metrics.health.total_gateways}
+                colorClass="text-neutral-900 dark:text-white"
               />
-              <StatCard label="Online" count={metrics.health.online} color="text-green-600" />
-              <StatCard label="Degraded" count={metrics.health.degraded} color="text-yellow-600" />
-              <StatCard label="Offline" count={metrics.health.offline} color="text-red-600" />
+              <StatCard label="Online" value={metrics.health.online} colorClass="text-green-600" />
+              <StatCard
+                label="Degraded"
+                value={metrics.health.degraded}
+                colorClass="text-yellow-600"
+              />
+              <StatCard label="Offline" value={metrics.health.offline} colorClass="text-red-600" />
               <StatCard
                 label="Maintenance"
-                count={metrics.health.maintenance}
-                color="text-neutral-600 dark:text-neutral-400"
+                value={metrics.health.maintenance}
+                colorClass="text-neutral-600 dark:text-neutral-400"
               />
             </div>
           </div>
@@ -257,18 +251,18 @@ export function GatewayObservabilityDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
               <StatCard
                 label="Total"
-                count={metrics.sync.total_deployments}
-                color="text-neutral-900 dark:text-white"
+                value={metrics.sync.total_deployments}
+                colorClass="text-neutral-900 dark:text-white"
               />
-              <StatCard label="Synced" count={metrics.sync.synced} color="text-green-600" />
-              <StatCard label="Pending" count={metrics.sync.pending} color="text-yellow-600" />
-              <StatCard label="Syncing" count={metrics.sync.syncing} color="text-blue-600" />
-              <StatCard label="Drifted" count={metrics.sync.drifted} color="text-orange-600" />
-              <StatCard label="Error" count={metrics.sync.error} color="text-red-600" />
+              <StatCard label="Synced" value={metrics.sync.synced} colorClass="text-green-600" />
+              <StatCard label="Pending" value={metrics.sync.pending} colorClass="text-yellow-600" />
+              <StatCard label="Syncing" value={metrics.sync.syncing} colorClass="text-blue-600" />
+              <StatCard label="Drifted" value={metrics.sync.drifted} colorClass="text-orange-600" />
+              <StatCard label="Error" value={metrics.sync.error} colorClass="text-red-600" />
               <StatCard
                 label="Deleting"
-                count={metrics.sync.deleting ?? 0}
-                color="text-neutral-600 dark:text-neutral-400"
+                value={metrics.sync.deleting ?? 0}
+                colorClass="text-neutral-600 dark:text-neutral-400"
               />
             </div>
           </div>

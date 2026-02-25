@@ -137,6 +137,14 @@ const DiagnosticsPage = lazy(() =>
   import('./pages/DiagnosticsPage').then((m) => ({ default: m.DiagnosticsPage }))
 );
 
+// Wave 1: Dashboard pages (CAB-1461, CAB-1476)
+const SecurityPostureDashboard = lazy(() =>
+  import('./pages/SecurityPosture').then((m) => ({ default: m.SecurityPostureDashboard }))
+);
+const AnalyticsDashboard = lazy(() =>
+  import('./pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard }))
+);
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -440,6 +448,9 @@ function ProtectedRoutes() {
                 <Route path="/executions" element={<ExecutionViewDashboard />} />
                 <Route path="/audience-governance" element={<AudienceGovernance />} />
                 <Route path="/diagnostics" element={<DiagnosticsPage />} />
+                {/* Wave 1: Dashboard pages */}
+                <Route path="/security-posture" element={<SecurityPostureDashboard />} />
+                <Route path="/analytics" element={<AnalyticsDashboard />} />
               </Routes>
             </Suspense>
           )}

@@ -170,6 +170,26 @@ Then(
 );
 
 Then(
+  'the tool from contract {string} is no longer listed',
+  async ({}, contractLabel: string) => {
+    const ctx = (globalThis as Record<string, unknown>).__lastToolListResponse as {
+      status: number;
+      body: Record<string, unknown>;
+    } | undefined;
+
+    if (!ctx || ctx.status === 404 || ctx.status === 503) {
+      return;
+    }
+
+    const tools = (ctx.body?.result as { tools?: Array<{ name: string }> })?.tools ?? [];
+    const found = tools.some(
+      (t) => t.name && t.name.toLowerCase().includes(contractLabel.replace(/^e2e-/, '').replace(/-/g, '_')),
+    );
+    expect(found).toBe(false);
+  },
+);
+
+Then(
   'the tool from contract {string} is not listed',
   async ({}, contractLabel: string) => {
     const ctx = (globalThis as Record<string, unknown>).__lastToolListResponse as {

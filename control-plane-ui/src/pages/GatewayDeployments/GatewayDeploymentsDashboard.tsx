@@ -8,6 +8,7 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
+import { StatCard } from '@stoa/shared/components/StatCard';
 import type { GatewayDeployment, DeploymentStatusSummary } from '../../types';
 
 const PAGE_SIZE = 20;
@@ -22,17 +23,6 @@ const statusFilterOptions: { value: string; label: string }[] = [
   { value: 'error', label: 'Error' },
   { value: 'deleting', label: 'Deleting' },
 ];
-
-function StatCard({ label, count, color }: { label: string; count: number; color: string }) {
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-3">
-      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-        {label}
-      </p>
-      <p className={`text-2xl font-bold ${color}`}>{count}</p>
-    </div>
-  );
-}
 
 export function GatewayDeploymentsDashboard() {
   const { isReady } = useAuth();
@@ -174,12 +164,16 @@ export function GatewayDeploymentsDashboard() {
       {/* Status Summary Cards */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <StatCard label="Synced" count={summary.synced} color="text-green-600" />
-          <StatCard label="Pending" count={summary.pending} color="text-yellow-600" />
-          <StatCard label="Drifted" count={summary.drifted} color="text-orange-600" />
-          <StatCard label="Error" count={summary.error} color="text-red-600" />
-          <StatCard label="Syncing" count={summary.syncing} color="text-blue-600" />
-          <StatCard label="Total" count={summary.total} color="text-neutral-900 dark:text-white" />
+          <StatCard label="Synced" value={summary.synced} colorClass="text-green-600" />
+          <StatCard label="Pending" value={summary.pending} colorClass="text-yellow-600" />
+          <StatCard label="Drifted" value={summary.drifted} colorClass="text-orange-600" />
+          <StatCard label="Error" value={summary.error} colorClass="text-red-600" />
+          <StatCard label="Syncing" value={summary.syncing} colorClass="text-blue-600" />
+          <StatCard
+            label="Total"
+            value={summary.total}
+            colorClass="text-neutral-900 dark:text-white"
+          />
         </div>
       )}
 

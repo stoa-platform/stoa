@@ -212,7 +212,8 @@ All AI Factory notifications use `scripts/ai-ops/ai-factory-notify.sh` — a cen
 | `notify_council` | `TICKET TITLE SCORE VERDICT ISSUE_URL [ISSUE_NUM] [MODE] [LOC] [FILES]` | Council report + approve button |
 | `notify_implement` | `TICKET STATUS [PR_NUM] [PR_URL] [ISSUE_NUM] [PIPELINE] [DURATION_SECS] [FILES] [LOC]` | Implementation result |
 | `notify_error` | `WORKFLOW JOB [TICKET] [EXEC_FILE] [DURATION_SECS]` | Vercel-style error with log excerpt + retry button |
-| `notify_scan` | `TOTAL CREATED [CAPPED]` | Autopilot scan summary |
+| `notify_reminder` | `TICKET TITLE ISSUE_URL ISSUE_NUM [SCORE]` | Pending approval reminder with approve button |
+| `notify_scan` | `TOTAL CREATED [CAPPED] [SKIPPED] [PENDING_FILE]` | Autopilot scan summary |
 | `notify_scheduled` | `TASK STATUS [DETAIL]` | Daily/weekly task results |
 | `notify_pr_hygiene` | `TOTAL STALE ABANDONED DRAFT` | PR Hygiene daily report + close button |
 | `push_metrics_pr_hygiene` | `TOTAL STALE ABANDONED DRAFT` | Push PR hygiene gauges to Pushgateway |

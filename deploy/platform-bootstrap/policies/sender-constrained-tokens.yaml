@@ -1,0 +1,132 @@
+# Sender-Constrained Tokens Policy
+# RFC 8705 (mTLS Cert-Bound) + RFC 9449 (DPoP) — CAB-438
+#
+# Prevents token theft and replay by binding access tokens to the
+# client's cryptographic proof (certificate thumbprint or DPoP key).
+#
+# Keycloak 26.x supports both mechanisms natively:
+#   - mTLS: via X.509 client certificate authenticator + cnf.x5t#S256 claim
+#   - DPoP: via DPoP token binding (KC 24+ feature)
+#
+# The gateway validates bindings at runtime (stoa-gateway/src/auth/).
+# This config defines the Keycloak-side setup and gateway policy declaration.
+
+apiVersion: stoa.io/v1
+kind: Policy
+metadata:
+  name: sender-constrained-tokens
+  description: "Sender-Constrained Tokens — mTLS Binding (RFC 8705) + DPoP (RFC 9449)"
+  tags:
+    - security
+    - authentication
+    - zero-trust
+    - rfc-8705
+    - rfc-9449
+
+spec:
+  type: token-binding
+  order: 15
+
+  # --- Mode A: mTLS Cert-Bound Tokens (RFC 8705) ---
+  # For service-to-service (A2A) communication.
+  # Client presents a TLS certificate; Keycloak embeds its SHA-256
+  # thumbprint in the access token as cnf.x5t#S256.
+  # The gateway validates: cert_thumbprint == token.cnf.x5t#S256.
+  mtls:
+    enabled: true
+    clientCertificate:
+      require: conditional  # Required only for confidential clients with tls_client_auth
+      validateChain: true
+      allowedIssuers:
+        - "CN=STOA Internal CA,O=STOA Platform"
+        - "CN=STOA Staging CA,O=STOA Platform"
+      extractFrom: x-forwarded-client-cert  # Envoy/nginx proxy header
+      fallbackHeader: x-ssl-client-cert     # Nginx alternative
+    cnfClaim:
+      field: "x5t#S256"
+      onMismatch: reject  # 401 Unauthorized
+    metrics:
+      matchCounter: stoa_oauth_mtls_cnf_match_total
+      mismatchCounter: stoa_oauth_mtls_cnf_mismatch_total
+      certExpiryGauge: stoa_oauth_mtls_cert_days_until_expiry
+
+  # --- Mode B: DPoP — Demonstrating Proof of Possession (RFC 9449) ---
+  # For browser/SPA clients that cannot use mTLS.
+  # Client generates an ephemeral key pair, signs a DPoP proof JWT,
+  # and sends it in the DPoP header. Keycloak binds the token to the
+  # key via cnf.jkt. Gateway validates the proof.
+  dpop:
+    enabled: true
+    proof:
+      allowedAlgorithms:
+        - ES256   # Recommended — elliptic curve
+        - RS256   # Fallback — RSA
+      maxClockSkew: 60  # seconds
+      validateHtm: true   # HTTP method binding
+      validateHtu: true   # HTTP URI binding
+      validateAth: true   # Access token hash binding
+    replay:
+      # jti (JWT ID) cache prevents proof replay
+      backend: redis
+      ttl: 300  # 5 minutes — matches RFC 9449 recommendation
+      keyPrefix: "stoa:dpop:jti:"
+    cnfClaim:
+      field: jkt
+      onMismatch: reject
+    metrics:
+      validCounter: stoa_oauth_dpop_valid_total
+      replayCounter: stoa_oauth_dpop_replay_detected_total
+      invalidSigCounter: stoa_oauth_dpop_signature_invalid_total
+
+  # --- Selection Logic ---
+  # The gateway selects the binding mode based on the token's cnf claim:
+  #   - cnf.x5t#S256 present → mTLS validation
+  #   - cnf.jkt present → DPoP validation
+  #   - Neither present → standard bearer token (no binding)
+  # A client can use both (belt-and-suspenders) but this is unusual.
+  # require-any: at least one binding (mTLS OR DPoP) MUST be present.
+  # Tokens without cnf claim are rejected. This prevents bearer token theft.
+  # Use 'auto' only during migration (temporary, must be time-boxed).
+  selectionStrategy: require-any  # mtls-only | dpop-only | require-any | auto (migration only)
+
+  # --- Error Responses ---
+  errors:
+    missingProof:
+      status: 401
+      message: "DPoP proof required"
+      header: "DPoP"
+    invalidProof:
+      status: 401
+      message: "Invalid DPoP proof"
+    certMismatch:
+      status: 401
+      message: "Certificate thumbprint does not match token binding"
+    replayDetected:
+      status: 401
+      message: "DPoP proof has already been used"
+
+  # --- Keycloak Configuration Reference ---
+  # These settings must be applied to the Keycloak realm.
+  # Use: deploy/platform-bootstrap/scripts/configure-sender-constrained.sh
+  keycloak:
+    # Enable X.509 client certificate authentication
+    x509Authenticator:
+      enabled: true
+      subjectDnRegex: "(CN=)(.*?)(?:,|$)"
+      matchingMode: SubjectDN
+      userMapping: username
+    # Enable DPoP for the realm
+    dpopBinding:
+      enabled: true
+    # Client-level settings (applied per-client)
+    clientSettings:
+      # For mTLS clients (service accounts):
+      mtlsClient:
+        clientAuthenticatorType: client-x509
+        attributes:
+          "x509.subjectdn": "CN=\\${client_id},O=STOA Platform"
+          "tls.client.certificate.bound.access.tokens": "true"
+      # For DPoP clients (SPAs, CLI):
+      dpopClient:
+        attributes:
+          "dpop.bound.access.tokens": "true"

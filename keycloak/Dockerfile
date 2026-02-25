@@ -18,7 +18,7 @@ FROM quay.io/keycloak/keycloak:26.5.3
 # Copy built providers and themes
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 
-# KC 26 features: token-exchange + persistent sessions (now default)
-ENV KC_FEATURES=token-exchange
+# KC 26 features: token-exchange, DPoP binding (CAB-438), SCIM (CAB-1463)
+ENV KC_FEATURES=token-exchange,dpop
 
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]

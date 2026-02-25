@@ -52,6 +52,34 @@
       }
     ]
   },
+  "clientScopes": [
+    {
+      "name": "stoa-identity",
+      "description": "STOA Identity Governance — product_roles claim for SCIM-based role mapping",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "product-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "product_roles",
+            "claim.name": "product_roles",
+            "jsonType.label": "JSON",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
   "clients": [
     {
       "clientId": "control-plane-api",
@@ -77,8 +105,13 @@
         "acr",
         "profile",
         "roles",
-        "email"
-      ]
+        "email",
+        "stoa-identity"
+      ],
+      "attributes": {
+        "tls.client.certificate.bound.access.tokens": "true",
+        "dpop.bound.access.tokens": "true"
+      }
     },
     {
       "clientId": "control-plane-ui",
@@ -233,6 +266,46 @@
             "id.token.claim": "true",
             "access.token.claim": "true",
             "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "stoa-identity-governance",
+      "name": "STOA Identity Governance",
+      "description": "Identity Governance API — SCIM, DCR, Access Review (CAB-1463)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "identity-governance-dev-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email",
+        "stoa-identity"
+      ],
+      "attributes": {
+        "stoa.managed": "true",
+        "stoa.component": "identity-governance"
+      },
+      "protocolMappers": [
+        {
+          "name": "control-plane-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "control-plane-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
           }
         }
       ]

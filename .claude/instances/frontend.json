@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(vitest:*)",
+      "Bash(eslint:*)",
+      "Bash(prettier:*)",
+      "Bash(tsc:*)",
+      "Bash(curl:*)",
+      "Bash(jq:*)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(test:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(wc:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(diff:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)"
+    ],
+    "deny": [
+      "Edit(/control-plane-api/src/**)",
+      "Write(/control-plane-api/src/**)",
+      "Edit(/stoa-gateway/**)",
+      "Write(/stoa-gateway/**)",
+      "Edit(/e2e/**)",
+      "Write(/e2e/**)",
+      "Edit(/charts/**)",
+      "Write(/charts/**)",
+      "Edit(/k8s/**)",
+      "Write(/k8s/**)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(pytest:*)",
+      "Bash(cargo:*)",
+      "Bash(alembic:*)"
+    ]
+  }
+}

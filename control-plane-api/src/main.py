@@ -77,6 +77,7 @@ from .routers import (
     portal,
     portal_applications,
     quotas,
+    security_posture,
     self_service,
     self_service_logs,
     service_accounts,
@@ -702,6 +703,9 @@ app.include_router(diagnostics.router)
 
 # Data Governance — Source-of-truth matrix + drift detection (CAB-1324)
 app.include_router(data_governance.router)
+
+# Security Posture Dashboard — score, findings, drift, compliance (CAB-1461)
+app.include_router(security_posture.router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

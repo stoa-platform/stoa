@@ -212,7 +212,12 @@ pub async fn handle_sse_post(
 
     // === OAuth 2.1 Auth Challenge (RFC 9728) ===
     // Public methods that don't require authentication
-    let public_methods = ["initialize", "ping", "notifications/initialized"];
+    let public_methods = [
+        "initialize",
+        "ping",
+        "notifications/initialized",
+        "notifications/cancelled",
+    ];
     let has_auth = headers.get(header::AUTHORIZATION).is_some();
 
     if !public_methods.contains(&request.method.as_str()) && !has_auth {
@@ -344,9 +349,19 @@ pub async fn handle_sse_post(
         "prompts/list" => handle_prompts_list(&request),
         "prompts/get" => handle_prompts_get(&request),
         "logging/setLevel" => handle_logging_set_level(&state, &request, &session_id).await,
+        "completion/complete" => handle_completion_complete(&request),
+        "roots/list" => handle_roots_list(&request),
         "notifications/initialized" => {
             // Client notification, no response needed
             debug!("Client initialized notification received");
+            return StatusCode::NO_CONTENT.into_response();
+        }
+        "notifications/cancelled" => {
+            // Client cancelled a previous request — acknowledge silently
+            debug!(
+                request_id = ?request.params.as_ref().and_then(|p| p.get("requestId")),
+                "Client cancelled request notification received"
+            );
             return StatusCode::NO_CONTENT.into_response();
         }
         _ => JsonRpcResponse::error(
@@ -558,7 +573,12 @@ pub async fn process_single_request(
 
     // For batch processing, we need simplified auth check
     // Full auth is handled in the main handler for single requests
-    let public_methods = ["initialize", "ping", "notifications/initialized"];
+    let public_methods = [
+        "initialize",
+        "ping",
+        "notifications/initialized",
+        "notifications/cancelled",
+    ];
     let has_auth = headers.get(header::AUTHORIZATION).is_some();
 
     if !public_methods.contains(&request.method.as_str()) && !has_auth {
@@ -595,8 +615,18 @@ pub async fn process_single_request(
         "prompts/list" => handle_prompts_list(&request),
         "prompts/get" => handle_prompts_get(&request),
         "logging/setLevel" => handle_logging_set_level(state, &request, &session_id).await,
+        "completion/complete" => handle_completion_complete(&request),
+        "roots/list" => handle_roots_list(&request),
         "notifications/initialized" => {
             // No response for notifications
+            JsonRpcResponse::success(None, json!(null))
+        }
+        "notifications/cancelled" => {
+            // Client cancelled a previous request — no meaningful action needed
+            debug!(
+                request_id = ?request.params.as_ref().and_then(|p| p.get("requestId")),
+                "Client cancelled request (batch)"
+            );
             JsonRpcResponse::success(None, json!(null))
         }
         _ => JsonRpcResponse::error(
@@ -892,6 +922,36 @@ fn handle_prompts_get(request: &JsonRpcRequest) -> JsonRpcResponse {
     )
 }
 
+/// `completion/complete` — provide autocompletion suggestions (MCP 2025-03-26)
+///
+/// Returns an empty completion list — STOA has no completable references yet.
+/// Extensible: add completable prompts/resources to provide suggestions here.
+fn handle_completion_complete(request: &JsonRpcRequest) -> JsonRpcResponse {
+    JsonRpcResponse::success(
+        request.id.clone(),
+        json!({
+            "completion": {
+                "values": [],
+                "hasMore": false,
+                "total": 0
+            }
+        }),
+    )
+}
+
+/// `roots/list` — return the list of root URIs the server exposes (MCP 2025-03-26)
+///
+/// Returns an empty roots list — STOA operates as a gateway proxy
+/// and does not expose filesystem-like roots.
+fn handle_roots_list(request: &JsonRpcRequest) -> JsonRpcResponse {
+    JsonRpcResponse::success(
+        request.id.clone(),
+        json!({
+            "roots": []
+        }),
+    )
+}
+
 /// `logging/setLevel` — set the minimum log level for server→client notifications (MCP 2025-03-26)
 ///
 /// Stores the level in session metadata. The gateway will push `notifications/message`
@@ -1177,5 +1237,67 @@ mod tests {
     fn test_sse_query_params_deserialize_without_session() {
         let params: SseQueryParams = serde_json::from_str(r#"{}"#).unwrap();
         assert!(params.session_id.is_none());
+    }
+
+    // === MCP Spec Compliance: completion/complete ===
+
+    #[test]
+    fn test_completion_complete_returns_empty_values() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(42)),
+            method: "completion/complete".to_string(),
+            params: Some(json!({
+                "ref": { "type": "ref/prompt", "name": "test" },
+                "argument": { "name": "arg1", "value": "he" }
+            })),
+        };
+        let resp = handle_completion_complete(&request);
+        assert!(resp.error.is_none());
+        let result = resp.result.unwrap();
+        let completion = result.get("completion").unwrap();
+        assert_eq!(completion["values"], json!([]));
+        assert_eq!(completion["hasMore"], json!(false));
+        assert_eq!(completion["total"], json!(0));
+    }
+
+    #[test]
+    fn test_completion_complete_preserves_request_id() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!("req-99")),
+            method: "completion/complete".to_string(),
+            params: None,
+        };
+        let resp = handle_completion_complete(&request);
+        assert_eq!(resp.id, Some(json!("req-99")));
+    }
+
+    // === MCP Spec Compliance: roots/list ===
+
+    #[test]
+    fn test_roots_list_returns_empty_array() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(7)),
+            method: "roots/list".to_string(),
+            params: None,
+        };
+        let resp = handle_roots_list(&request);
+        assert!(resp.error.is_none());
+        let result = resp.result.unwrap();
+        assert_eq!(result["roots"], json!([]));
+    }
+
+    #[test]
+    fn test_roots_list_preserves_request_id() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!("roots-1")),
+            method: "roots/list".to_string(),
+            params: None,
+        };
+        let resp = handle_roots_list(&request);
+        assert_eq!(resp.id, Some(json!("roots-1")));
     }
 }

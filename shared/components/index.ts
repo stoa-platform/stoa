@@ -12,3 +12,7 @@ export * from './EmptyState';
 export * from './Celebration';
 export * from './StoaLogo';
 export * from './Button';
+export * from './StatCard';
+export * from './TimeRangeSelector';
+export * from './TrendIndicator';
+export * from './ScoreGauge';

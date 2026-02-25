@@ -7,7 +7,6 @@ import {
   CheckCircle,
   XCircle,
   TrendingUp,
-  TrendingDown,
   ExternalLink,
   Zap,
   Shield,
@@ -16,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { StatCard } from '@stoa/shared/components/StatCard';
 import type { AggregatedMetrics, PlatformStatusResponse } from '../../types';
 import { config } from '../../config';
 import { observabilityPath } from '../../utils/navigation';
@@ -59,55 +59,6 @@ function getStatusColor(
   if (value <= threshold.good) return 'text-green-600';
   if (value <= threshold.warning) return 'text-yellow-600';
   return 'text-red-600';
-}
-
-function StatCard({
-  label,
-  value,
-  unit,
-  icon: Icon,
-  trend,
-  colorClass,
-  subtitle,
-}: {
-  label: string;
-  value: string | number;
-  unit?: string;
-  icon: React.ElementType;
-  trend?: 'up' | 'down' | 'stable';
-  colorClass?: string;
-  subtitle?: string;
-}) {
-  const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : null;
-
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4 flex items-start gap-4">
-      <div
-        className={`p-2 rounded-lg ${colorClass?.includes('green') ? 'bg-green-100 dark:bg-green-900/30' : colorClass?.includes('red') ? 'bg-red-100 dark:bg-red-900/30' : colorClass?.includes('yellow') ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}
-      >
-        <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
-      </div>
-      <div className="flex-1">
-        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-          {label}
-        </p>
-        <div className="flex items-baseline gap-1">
-          <p className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}>
-            {value}
-          </p>
-          {unit && <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>}
-          {TrendIcon && (
-            <TrendIcon
-              className={`h-4 w-4 ml-1 ${trend === 'up' ? 'text-red-500' : 'text-green-500'}`}
-            />
-          )}
-        </div>
-        {subtitle && (
-          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function DeploymentItem({ deployment }: { deployment: RecentDeployment }) {

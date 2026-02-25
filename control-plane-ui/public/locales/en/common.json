@@ -40,7 +40,9 @@
     "workflows": "Workflows",
     "audienceGovernance": "Audience Governance",
     "audience": "Audience",
-    "diagnostics": "Diagnostics"
+    "diagnostics": "Diagnostics",
+    "analytics": "Usage Analytics",
+    "securityPosture": "Security Posture"
   },
   "layout": {
     "controlPlane": "Control Plane",

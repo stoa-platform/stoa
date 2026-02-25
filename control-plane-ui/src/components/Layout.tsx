@@ -255,6 +255,12 @@ const navigationSections: NavSection[] = [
         icon: Stethoscope,
         permission: 'apis:read',
       },
+      {
+        name: 'nav.analytics',
+        href: '/analytics',
+        icon: BarChart3,
+        permission: 'apis:read',
+      },
     ],
   },
   {
@@ -266,6 +272,12 @@ const navigationSections: NavSection[] = [
         name: 'nav.auditLog',
         href: '/audit-log',
         icon: ClipboardList,
+        permission: 'audit:read',
+      },
+      {
+        name: 'nav.securityPosture',
+        href: '/security-posture',
+        icon: Shield,
         permission: 'audit:read',
       },
       {

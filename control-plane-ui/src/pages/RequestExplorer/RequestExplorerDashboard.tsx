@@ -9,17 +9,12 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { StatCard } from '@stoa/shared/components/StatCard';
+import { TimeRangeSelector, RANGE_CONFIG } from '@stoa/shared/components/TimeRangeSelector';
+import type { TimeRange } from '@stoa/shared/components/TimeRangeSelector';
 import { usePrometheusQuery, scalarValue, groupByLabel } from '../../hooks/usePrometheus';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
-
-type TimeRange = '1h' | '6h' | '24h';
-
-const RANGE_LABELS: Record<TimeRange, string> = {
-  '1h': '1 hour',
-  '6h': '6 hours',
-  '24h': '24 hours',
-};
 
 /** Status code color mapping */
 const STATUS_COLORS: Record<string, { bg: string; label: string }> = {
@@ -37,52 +32,6 @@ function getErrorRateClass(rate: number): string {
   if (rate < 0.01) return 'text-green-600';
   if (rate < 0.05) return 'text-yellow-600';
   return 'text-red-600';
-}
-
-function StatCard({
-  label,
-  value,
-  unit,
-  icon: Icon,
-  colorClass,
-  subtitle,
-}: {
-  label: string;
-  value: string | number;
-  unit?: string;
-  icon: React.ElementType;
-  colorClass?: string;
-  subtitle?: string;
-}) {
-  const bgClass = colorClass?.includes('green')
-    ? 'bg-green-100 dark:bg-green-900/30'
-    : colorClass?.includes('red')
-      ? 'bg-red-100 dark:bg-red-900/30'
-      : colorClass?.includes('yellow')
-        ? 'bg-yellow-100 dark:bg-yellow-900/30'
-        : 'bg-blue-100 dark:bg-blue-900/30';
-
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4 flex items-start gap-4">
-      <div className={`p-2 rounded-lg ${bgClass}`}>
-        <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-          {label}
-        </p>
-        <div className="flex items-baseline gap-1">
-          <p className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}>
-            {value}
-          </p>
-          {unit && <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>}
-        </div>
-        {subtitle && (
-          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
-        )}
-      </div>
-    </div>
-  );
 }
 
 interface EndpointRow {
@@ -192,21 +141,7 @@ export function RequestExplorerDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg overflow-hidden">
-            {(['1h', '6h', '24h'] as const).map((range) => (
-              <button
-                key={range}
-                onClick={() => setTimeRange(range)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  timeRange === range
-                    ? 'bg-blue-600 text-white'
-                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
-                }`}
-              >
-                {range}
-              </button>
-            ))}
-          </div>
+          <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
           <span className="text-xs text-neutral-400 dark:text-neutral-500">
             {lastRefresh.toLocaleTimeString('fr-FR')}
           </span>
@@ -264,7 +199,7 @@ export function RequestExplorerDashboard() {
               }
               icon={Activity}
               colorClass="text-blue-600"
-              subtitle={`Over ${RANGE_LABELS[timeRange]}`}
+              subtitle={`Over ${RANGE_CONFIG[timeRange].label}`}
             />
             <StatCard
               label="Success Rate (5m)"
@@ -302,7 +237,7 @@ export function RequestExplorerDashboard() {
               value={activeEndpointsVal !== null ? Math.round(activeEndpointsVal).toString() : '--'}
               icon={Globe}
               colorClass="text-blue-600"
-              subtitle={`In last ${RANGE_LABELS[timeRange]}`}
+              subtitle={`In last ${RANGE_CONFIG[timeRange].label}`}
             />
           </div>
 

@@ -1,17 +1,17 @@
 """
-CAB-1104: Audit Trail Router (Scenario 6)
+CAB-1104 / CAB-1475: Audit Trail Router
 
 Provides audit log retrieval and export functionality:
-- List audit entries with filters
+- List audit entries with filters (PostgreSQL primary, OpenSearch fallback)
 - Export to CSV or JSON
 - View security events
 - Tenant isolation enforcement
+- Global summary (cpi-admin only)
 
-Audit events are stored in the event_log table and include:
-- API calls with user, action, resource
-- Authentication events
-- Policy violations
-- Admin operations
+Data sources (priority order):
+1. PostgreSQL audit_events table (compliance-grade, DORA/NIS2 retention)
+2. OpenSearch audit-* index (analytics/search)
+3. In-memory demo data (last resort)
 """
 
 import csv
@@ -23,9 +23,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user, require_tenant_access
+from ..database import get_db
 from ..opensearch.opensearch_integration import OpenSearchService
+from ..services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
 
@@ -128,21 +131,23 @@ def _init_demo_data():
         tenant = tenants[i % len(tenants)]
         user_id, email = users[i % len(users)]
 
-        _demo_audit_entries.append({
-            "id": f"audit-{i:04d}",
-            "timestamp": (now - timedelta(hours=i * 2)).isoformat(),
-            "tenant_id": tenant,
-            "user_id": user_id,
-            "user_email": email,
-            "action": action,
-            "resource_type": res_type,
-            "resource_id": res_id,
-            "status": status,
-            "client_ip": f"192.168.1.{100 + i}",
-            "user_agent": "Mozilla/5.0 (compatible; STOA/1.0)",
-            "details": {"demo": True, "index": i},
-            "request_id": f"req-{i:08x}",
-        })
+        _demo_audit_entries.append(
+            {
+                "id": f"audit-{i:04d}",
+                "timestamp": (now - timedelta(hours=i * 2)).isoformat(),
+                "tenant_id": tenant,
+                "user_id": user_id,
+                "user_email": email,
+                "action": action,
+                "resource_type": res_type,
+                "resource_id": res_id,
+                "status": status,
+                "client_ip": f"192.168.1.{100 + i}",
+                "user_agent": "Mozilla/5.0 (compatible; STOA/1.0)",
+                "details": {"demo": True, "index": i},
+                "request_id": f"req-{i:08x}",
+            }
+        )
 
     # Generate demo security events
     security_events = [
@@ -157,17 +162,19 @@ def _init_demo_data():
         tenant = tenants[i % len(tenants)]
         user_id, _ = users[i % len(users)]
 
-        _demo_security_events.append({
-            "id": f"sec-{i:04d}",
-            "timestamp": (now - timedelta(hours=i * 3)).isoformat(),
-            "tenant_id": tenant,
-            "event_type": event_type,
-            "severity": severity,
-            "user_id": user_id if event_type != "cross_tenant" else "attacker",
-            "client_ip": f"10.0.0.{50 + i}",
-            "description": description,
-            "details": {"demo": True},
-        })
+        _demo_security_events.append(
+            {
+                "id": f"sec-{i:04d}",
+                "timestamp": (now - timedelta(hours=i * 3)).isoformat(),
+                "tenant_id": tenant,
+                "event_type": event_type,
+                "severity": severity,
+                "user_id": user_id if event_type != "cross_tenant" else "attacker",
+                "client_ip": f"10.0.0.{50 + i}",
+                "description": description,
+                "details": {"demo": True},
+            }
+        )
 
 
 # =============================================================================
@@ -185,28 +192,60 @@ async def list_audit_entries(
     status: str | None = Query(default=None, description="Filter by status"),
     start_date: datetime | None = Query(default=None, description="Start date (ISO 8601)"),
     end_date: datetime | None = Query(default=None, description="End date (ISO 8601)"),
+    search: str | None = Query(default=None, description="Search in path/resource"),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> AuditListResponse:
     """
     List audit entries for a tenant.
 
     Returns paginated audit log entries with optional filters.
-    Only entries for the specified tenant are returned.
+    Data sources: PostgreSQL (primary) -> OpenSearch -> demo data.
     """
-    # Try OpenSearch first (real audit data from AuditMiddleware)
+    # 1. Try PostgreSQL (compliance-grade source of truth)
+    try:
+        audit_svc = AuditService(db)
+        events, total = await audit_svc.list_events(
+            tenant_id,
+            page=page,
+            page_size=page_size,
+            action=action,
+            outcome=status,
+            start_date=start_date,
+            end_date=end_date,
+            search=search,
+        )
+        if total > 0 or page > 1:
+            return AuditListResponse(
+                entries=[_pg_event_to_entry(e) for e in events],
+                total=total,
+                page=page,
+                page_size=page_size,
+                has_more=(page * page_size) < total,
+            )
+    except Exception as e:
+        logger.warning(f"PostgreSQL audit query failed: {e}")
+
+    # 2. Try OpenSearch (analytics/search)
     service = OpenSearchService.get_instance()
     if service.client:
         try:
             result = await _query_opensearch_audit(
-                service.client, tenant_id, page, page_size,
-                action=action, status=status, start_date=start_date, end_date=end_date,
+                service.client,
+                tenant_id,
+                page,
+                page_size,
+                action=action,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
             )
             if result is not None:
                 return result
         except Exception as e:
             logger.warning(f"OpenSearch query failed, falling back to demo data: {e}")
 
-    # Fallback to demo data
+    # 3. Fallback to demo data
     _init_demo_data()
 
     entries = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
@@ -240,50 +279,75 @@ async def export_audit_csv(
     tenant_id: str,
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
+    limit: int = Query(default=10000, ge=1, le=50000, description="Max rows"),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
     """
     Export audit log entries as CSV.
 
     Returns a CSV file with all audit entries for the tenant.
+    Data source: PostgreSQL (primary) -> demo data fallback.
     """
-    _init_demo_data()
+    # Try PostgreSQL
+    rows: list[dict[str, Any]] = []
+    try:
+        audit_svc = AuditService(db)
+        events = await audit_svc.export_events(
+            tenant_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
+        rows = [_pg_event_to_dict(e) for e in events]
+    except Exception as e:
+        logger.warning(f"PostgreSQL export failed: {e}")
 
-    # Filter entries by tenant
-    entries = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
-
-    # Apply date filters
-    if start_date:
-        entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) >= start_date]
-    if end_date:
-        entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) <= end_date]
+    # Fallback to demo data
+    if not rows:
+        _init_demo_data()
+        rows = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
+        if start_date:
+            rows = [e for e in rows if datetime.fromisoformat(e["timestamp"]) >= start_date]
+        if end_date:
+            rows = [e for e in rows if datetime.fromisoformat(e["timestamp"]) <= end_date]
 
     # Generate CSV
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Header
-    writer.writerow([
-        "ID", "Timestamp", "Tenant", "User ID", "User Email",
-        "Action", "Resource Type", "Resource ID", "Status",
-        "Client IP", "Request ID"
-    ])
+    writer.writerow(
+        [
+            "ID",
+            "Timestamp",
+            "Tenant",
+            "User ID",
+            "User Email",
+            "Action",
+            "Resource Type",
+            "Resource ID",
+            "Status",
+            "Client IP",
+            "Request ID",
+        ]
+    )
 
-    # Data rows
-    for entry in entries:
-        writer.writerow([
-            entry["id"],
-            entry["timestamp"],
-            entry["tenant_id"],
-            entry["user_id"],
-            entry["user_email"],
-            entry["action"],
-            entry["resource_type"],
-            entry["resource_id"],
-            entry["status"],
-            entry["client_ip"],
-            entry["request_id"],
-        ])
+    for entry in rows:
+        writer.writerow(
+            [
+                entry.get("id"),
+                entry.get("timestamp"),
+                entry.get("tenant_id"),
+                entry.get("user_id"),
+                entry.get("user_email"),
+                entry.get("action"),
+                entry.get("resource_type"),
+                entry.get("resource_id"),
+                entry.get("status"),
+                entry.get("client_ip"),
+                entry.get("request_id"),
+            ]
+        )
 
     csv_content = output.getvalue()
 
@@ -291,7 +355,9 @@ async def export_audit_csv(
         content=csv_content,
         media_type="text/csv",
         headers={
-            "Content-Disposition": f'attachment; filename="audit_{tenant_id}_{datetime.now(UTC).strftime("%Y%m%d")}.csv"'
+            "Content-Disposition": (
+                f'attachment; filename="audit_{tenant_id}' f'_{datetime.now(UTC).strftime("%Y%m%d")}.csv"'
+            )
         },
     )
 
@@ -302,38 +368,55 @@ async def export_audit_json(
     tenant_id: str,
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
+    limit: int = Query(default=10000, ge=1, le=50000, description="Max rows"),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
     """
     Export audit log entries as JSON.
 
     Returns a JSON file with all audit entries for the tenant.
+    Data source: PostgreSQL (primary) -> demo data fallback.
     """
-    _init_demo_data()
+    # Try PostgreSQL
+    rows: list[dict[str, Any]] = []
+    try:
+        audit_svc = AuditService(db)
+        events = await audit_svc.export_events(
+            tenant_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
+        rows = [_pg_event_to_dict(e) for e in events]
+    except Exception as e:
+        logger.warning(f"PostgreSQL export failed: {e}")
 
-    # Filter entries by tenant
-    entries = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
-
-    # Apply date filters
-    if start_date:
-        entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) >= start_date]
-    if end_date:
-        entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) <= end_date]
+    # Fallback to demo data
+    if not rows:
+        _init_demo_data()
+        rows = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
+        if start_date:
+            rows = [e for e in rows if datetime.fromisoformat(e["timestamp"]) >= start_date]
+        if end_date:
+            rows = [e for e in rows if datetime.fromisoformat(e["timestamp"]) <= end_date]
 
     export_data = {
         "tenant_id": tenant_id,
         "exported_at": datetime.now(UTC).isoformat(),
-        "total_entries": len(entries),
-        "entries": entries,
+        "total_entries": len(rows),
+        "entries": rows,
     }
 
-    json_content = json.dumps(export_data, indent=2)
+    json_content = json.dumps(export_data, indent=2, default=str)
 
     return Response(
         content=json_content,
         media_type="application/json",
         headers={
-            "Content-Disposition": f'attachment; filename="audit_{tenant_id}_{datetime.now(UTC).strftime("%Y%m%d")}.json"'
+            "Content-Disposition": (
+                f'attachment; filename="audit_{tenant_id}' f'_{datetime.now(UTC).strftime("%Y%m%d")}.json"'
+            )
         },
     )
 
@@ -361,8 +444,11 @@ async def get_security_events(
     if service.client:
         try:
             result = await _query_opensearch_security(
-                service.client, tenant_id, limit,
-                severity=severity, event_type=event_type,
+                service.client,
+                tenant_id,
+                limit,
+                severity=severity,
+                event_type=event_type,
             )
             if result is not None:
                 return result
@@ -405,37 +491,36 @@ async def test_tenant_isolation(
 
     Attempts to access another tenant's data and returns whether
     it was blocked (expected behavior for proper isolation).
-
-    This endpoint is for demo/testing purposes to show that
-    cross-tenant access is properly blocked.
     """
-    # Check if user is trying to access different tenant
     if tenant_id != target_tenant:
-        # This should be blocked by @require_tenant_access decorator
-        # But for demo, we show the isolation working
         logger.warning(
             f"Cross-tenant access attempt: {tenant_id} -> {target_tenant}",
-            extra={"user_id": user.id, "source_tenant": tenant_id, "target_tenant": target_tenant},
+            extra={
+                "user_id": user.id,
+                "source_tenant": tenant_id,
+                "target_tenant": target_tenant,
+            },
         )
 
-        # Record security event
-        _demo_security_events.append({
-            "id": f"sec-{len(_demo_security_events):04d}",
-            "timestamp": datetime.now(UTC).isoformat(),
-            "tenant_id": tenant_id,
-            "event_type": "cross_tenant",
-            "severity": "critical",
-            "user_id": user.id,
-            "client_ip": "demo",
-            "description": f"Cross-tenant access attempt from {tenant_id} to {target_tenant}",
-            "details": {"target_tenant": target_tenant, "blocked": True},
-        })
+        _demo_security_events.append(
+            {
+                "id": f"sec-{len(_demo_security_events):04d}",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "tenant_id": tenant_id,
+                "event_type": "cross_tenant",
+                "severity": "critical",
+                "user_id": user.id,
+                "client_ip": "demo",
+                "description": (f"Cross-tenant access attempt from {tenant_id} to {target_tenant}"),
+                "details": {"target_tenant": target_tenant, "blocked": True},
+            }
+        )
 
         raise HTTPException(
             status_code=403,
             detail={
                 "error": "tenant_isolation_violation",
-                "message": f"Access denied: Cannot access tenant '{target_tenant}' from tenant '{tenant_id}'",
+                "message": (f"Access denied: Cannot access tenant '{target_tenant}'" f" from tenant '{tenant_id}'"),
                 "source_tenant": tenant_id,
                 "target_tenant": target_tenant,
                 "blocked": True,
@@ -452,11 +537,13 @@ async def test_tenant_isolation(
 @router.get("/global/summary")
 async def get_global_audit_summary(
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Get global audit summary (cpi-admin only).
 
     Returns aggregated audit statistics across all tenants.
+    Data source: PostgreSQL (primary) -> demo data fallback.
     """
     if "cpi-admin" not in user.roles:
         raise HTTPException(
@@ -464,29 +551,41 @@ async def get_global_audit_summary(
             detail="Only cpi-admin can access global audit summary",
         )
 
+    # Try PostgreSQL
+    try:
+        audit_svc = AuditService(db)
+        summary = await audit_svc.get_summary()
+        if summary["total"] > 0:
+            return {
+                "total_audit_entries": summary["total"],
+                "by_outcome": summary["by_outcome"],
+                "by_action": summary["by_action"],
+                "generated_at": datetime.now(UTC).isoformat(),
+                "source": "postgresql",
+            }
+    except Exception as e:
+        logger.warning(f"PostgreSQL summary failed: {e}")
+
+    # Fallback to demo data
     _init_demo_data()
 
-    # Aggregate stats
     total_entries = len(_demo_audit_entries)
     total_security = len(_demo_security_events)
 
-    # Count by tenant
-    by_tenant = {}
+    by_tenant: dict[str, int] = {}
     for entry in _demo_audit_entries:
         tenant = entry["tenant_id"]
         by_tenant[tenant] = by_tenant.get(tenant, 0) + 1
 
-    # Count by action
-    by_action = {}
+    by_action: dict[str, int] = {}
     for entry in _demo_audit_entries:
-        action = entry["action"]
-        by_action[action] = by_action.get(action, 0) + 1
+        action_key = entry["action"]
+        by_action[action_key] = by_action.get(action_key, 0) + 1
 
-    # Security severity counts
-    security_by_severity = {"info": 0, "warning": 0, "critical": 0}
+    security_by_severity: dict[str, int] = {"info": 0, "warning": 0, "critical": 0}
     for event in _demo_security_events:
-        severity = event["severity"]
-        security_by_severity[severity] = security_by_severity.get(severity, 0) + 1
+        sev = event["severity"]
+        security_by_severity[sev] = security_by_severity.get(sev, 0) + 1
 
     return {
         "total_audit_entries": total_entries,
@@ -495,6 +594,52 @@ async def get_global_audit_summary(
         "entries_by_action": by_action,
         "security_by_severity": security_by_severity,
         "generated_at": datetime.now(UTC).isoformat(),
+        "source": "demo",
+    }
+
+
+# =============================================================================
+# PostgreSQL -> Response Converters
+# =============================================================================
+
+
+def _pg_event_to_entry(event: Any) -> AuditEntry:
+    """Convert a PostgreSQL AuditEvent model to the router AuditEntry schema."""
+    return AuditEntry(
+        id=event.id,
+        timestamp=event.created_at,
+        tenant_id=event.tenant_id,
+        user_id=event.actor_id,
+        user_email=event.actor_email,
+        action=event.action,
+        resource_type=event.resource_type,
+        resource_id=event.resource_id,
+        status=event.outcome,
+        client_ip=event.client_ip,
+        user_agent=event.user_agent,
+        details=event.details,
+        request_id=event.correlation_id,
+    )
+
+
+def _pg_event_to_dict(event: Any) -> dict[str, Any]:
+    """Convert a PostgreSQL AuditEvent model to a flat dict for export."""
+    return {
+        "id": event.id,
+        "timestamp": event.created_at.isoformat() if event.created_at else None,
+        "tenant_id": event.tenant_id,
+        "user_id": event.actor_id,
+        "user_email": event.actor_email,
+        "action": event.action,
+        "resource_type": event.resource_type,
+        "resource_id": event.resource_id,
+        "status": event.outcome,
+        "client_ip": event.client_ip,
+        "request_id": event.correlation_id,
+        "method": event.method,
+        "path": event.path,
+        "status_code": event.status_code,
+        "duration_ms": event.duration_ms,
     }
 
 
@@ -544,21 +689,23 @@ async def _query_opensearch_audit(
     entries = []
     for hit in hits.get("hits", []):
         src = hit["_source"]
-        entries.append(AuditEntry(
-            id=src.get("event_id", hit["_id"]),
-            timestamp=src.get("@timestamp", datetime.now(UTC).isoformat()),
-            tenant_id=src.get("actor", {}).get("tenant_id", tenant_id),
-            user_id=src.get("actor", {}).get("id"),
-            user_email=src.get("actor", {}).get("email"),
-            action=src.get("action", "unknown"),
-            resource_type=src.get("resource", {}).get("type", "unknown"),
-            resource_id=src.get("resource", {}).get("id"),
-            status=src.get("outcome", "unknown"),
-            client_ip=src.get("actor", {}).get("ip_address"),
-            user_agent=src.get("actor", {}).get("user_agent"),
-            details=src.get("details"),
-            request_id=src.get("correlation_id"),
-        ))
+        entries.append(
+            AuditEntry(
+                id=src.get("event_id", hit["_id"]),
+                timestamp=src.get("@timestamp", datetime.now(UTC).isoformat()),
+                tenant_id=src.get("actor", {}).get("tenant_id", tenant_id),
+                user_id=src.get("actor", {}).get("id"),
+                user_email=src.get("actor", {}).get("email"),
+                action=src.get("action", "unknown"),
+                resource_type=src.get("resource", {}).get("type", "unknown"),
+                resource_id=src.get("resource", {}).get("id"),
+                status=src.get("outcome", "unknown"),
+                client_ip=src.get("actor", {}).get("ip_address"),
+                user_agent=src.get("actor", {}).get("user_agent"),
+                details=src.get("details"),
+                request_id=src.get("correlation_id"),
+            )
+        )
 
     return AuditListResponse(
         entries=entries,
@@ -605,17 +752,19 @@ async def _query_opensearch_security(
         src = hit["_source"]
         et = src.get("event_type", "unknown")
         summary[et] = summary.get(et, 0) + 1
-        events.append(SecurityEvent(
-            id=src.get("event_id", hit["_id"]),
-            timestamp=src.get("@timestamp", datetime.now(UTC).isoformat()),
-            tenant_id=src.get("actor", {}).get("tenant_id", tenant_id),
-            event_type=et,
-            severity=src.get("severity", "info"),
-            user_id=src.get("actor", {}).get("id"),
-            client_ip=src.get("actor", {}).get("ip_address"),
-            description=src.get("action", ""),
-            details=src.get("details"),
-        ))
+        events.append(
+            SecurityEvent(
+                id=src.get("event_id", hit["_id"]),
+                timestamp=src.get("@timestamp", datetime.now(UTC).isoformat()),
+                tenant_id=src.get("actor", {}).get("tenant_id", tenant_id),
+                event_type=et,
+                severity=src.get("severity", "info"),
+                user_id=src.get("actor", {}).get("id"),
+                client_ip=src.get("actor", {}).get("ip_address"),
+                description=src.get("action", ""),
+                details=src.get("details"),
+            )
+        )
 
     return SecurityEventsResponse(
         events=events,

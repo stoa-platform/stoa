@@ -1,4 +1,5 @@
 """Database session management for Control-Plane API"""
+
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -20,6 +21,7 @@ def _get_engine():
     global _engine
     if _engine is None:
         from src.config import settings
+
         _engine = create_async_engine(
             settings.DATABASE_URL,
             pool_size=settings.DATABASE_POOL_SIZE,
@@ -41,6 +43,18 @@ def _get_session_factory():
             autoflush=False,
         )
     return _async_session_local
+
+
+def get_async_session_factory() -> async_sessionmaker | None:
+    """Get the session factory for use outside FastAPI dependency injection.
+
+    Returns None if the engine hasn't been initialized yet.
+    Used by audit middleware for PG dual-write (CAB-1475).
+    """
+    try:
+        return _get_session_factory()
+    except Exception:
+        return None
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

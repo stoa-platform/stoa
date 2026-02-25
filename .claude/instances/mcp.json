@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(cargo:*)",
+      "Bash(rustup:*)",
+      "Bash(curl:*)",
+      "Bash(jq:*)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(test:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(wc:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(diff:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)"
+    ],
+    "deny": [
+      "Edit(/control-plane-ui/**)",
+      "Write(/control-plane-ui/**)",
+      "Edit(/portal/**)",
+      "Write(/portal/**)",
+      "Edit(/e2e/**)",
+      "Write(/e2e/**)",
+      "Edit(/control-plane-api/src/**)",
+      "Write(/control-plane-api/src/**)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(npm:*)",
+      "Bash(pytest:*)",
+      "Bash(alembic:*)"
+    ]
+  }
+}

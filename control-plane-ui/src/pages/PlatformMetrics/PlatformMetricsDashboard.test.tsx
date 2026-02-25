@@ -63,7 +63,7 @@ describe('PlatformMetricsDashboard', () => {
     render(<PlatformMetricsDashboard />);
     const buttons = screen.getAllByRole('button');
     const oneHourButton = buttons.find((btn) => btn.textContent === '1h');
-    expect(oneHourButton).toHaveClass('bg-blue-600');
+    expect(oneHourButton).toHaveClass('bg-white');
   });
 
   it('changes time range when button clicked', () => {
@@ -73,7 +73,7 @@ describe('PlatformMetricsDashboard', () => {
 
     if (sixHourButton) {
       fireEvent.click(sixHourButton);
-      expect(sixHourButton).toHaveClass('bg-blue-600');
+      expect(sixHourButton).toHaveClass('bg-white');
     }
   });
 

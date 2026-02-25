@@ -36,16 +36,33 @@ Use the description directly. Proceed without Linear context.
 
 Analyze the feature and map to STOA components:
 
-| Component | Path | Linear Label ID | Tech |
-|-----------|------|-----------------|------|
-| **cp-api** | `control-plane-api/` | `3d9dcfcc-2578-447f-ab94-0b00b73022f0` | Python, FastAPI |
-| **cp-ui** | `control-plane-ui/` | `1c4d11ff-da26-466d-a2ac-e49786bac927` | React, Console |
-| **portal** | `portal/` | `df33f1d3-bb93-463d-bf60-7d602a6add10` | React, Portal |
-| **gateway** | `stoa-gateway/` | `b14f839d-cde8-4fee-9f1c-894431143b35` | Rust, axum |
-| **operator** | `stoa-operator/` | _(create if needed)_ | Python, kopf |
-| **e2e** | `e2e/` | _(create if needed)_ | Playwright |
-| **docs** | `stoa-docs` (separate repo) | `8a23f909-d1fb-45be-9516-4e33a72998e1` | Docusaurus |
-| **infra** | `charts/`, `k8s/` | `ad81cb7f-31a7-4b9c-ac1f-fe0827bfea03` | Helm, K8s |
+| Component | Path | Linear Label ID | Tech | Instance Label |
+|-----------|------|-----------------|------|----------------|
+| **cp-api** | `control-plane-api/` | `3d9dcfcc-2578-447f-ab94-0b00b73022f0` | Python, FastAPI | `instance:backend` |
+| **cp-ui** | `control-plane-ui/` | `1c4d11ff-da26-466d-a2ac-e49786bac927` | React, Console | `instance:frontend` |
+| **portal** | `portal/` | `df33f1d3-bb93-463d-bf60-7d602a6add10` | React, Portal | `instance:frontend` |
+| **gateway** | `stoa-gateway/` | `b14f839d-cde8-4fee-9f1c-894431143b35` | Rust, axum | `instance:mcp` |
+| **operator** | `stoa-operator/` | _(create if needed)_ | Python, kopf | `instance:backend` |
+| **e2e** | `e2e/` | _(create if needed)_ | Playwright | `instance:qa` |
+| **docs** | `stoa-docs` (separate repo) | `8a23f909-d1fb-45be-9516-4e33a72998e1` | Docusaurus | `instance:backend` |
+| **infra** | `charts/`, `k8s/` | `ad81cb7f-31a7-4b9c-ac1f-fe0827bfea03` | Helm, K8s | `instance:backend` |
+| **keycloak** | `keycloak/`, OAuth/IAM | _(use auth label)_ | Keycloak | `instance:auth` |
+
+### Instance Dispatch Mapping
+
+Each sub-issue is tagged with an `instance:*` label for automatic dispatch to parallel tmux windows.
+See `.claude/rules/instance-dispatch.md` for the full mapping and cross-component rules.
+
+| Instance Label | Components | tmux Window | Scope |
+|---|---|---|---|
+| `instance:backend` | cp-api, operator, infra, docs | Window 2 (BACKEND) | `control-plane-api/`, `charts/`, `k8s/` |
+| `instance:frontend` | cp-ui, portal, shared | Window 3 (FRONTEND) | `control-plane-ui/`, `portal/`, `shared/` |
+| `instance:auth` | keycloak, IAM | Window 4 (AUTH) | `keycloak/`, OAuth configs |
+| `instance:mcp` | gateway | Window 5 (MCP) | `stoa-gateway/` |
+| `instance:qa` | e2e | Window 6 (QA) | `e2e/` |
+
+**Cross-component rule**: If a sub-issue touches 2+ instances, assign the "lead" instance label
+(the one with the most LOC) and add `depends:instance:<other>` in the description.
 
 For each component, check:
 1. Does this feature require changes in this component?
@@ -122,7 +139,7 @@ linear.create_issue(
   parentId: "<parent-issue-id>",
   estimate: <component-specific points>,
   priority: <inherit from parent>,
-  labels: [<component label>, <type label>, "flow-ready"],
+  labels: [<component label>, <instance label>, <type label>, "flow-ready"],
   state: "Todo"
 )
 ```
@@ -352,6 +369,16 @@ Next steps:
 | flow-ready | `6692a52b-126d-4fce-b480-3fac19751ecb` |
 | mega-ticket | `97f7371c-8ac3-44e6-a0a0-412e81bc959e` |
 | needs-split | `768f96b2-69f0-4ed3-83de-538f657dd001` |
+
+## Instance Label IDs (cached — for parallel dispatch)
+
+| Instance | Label ID |
+|----------|----------|
+| `instance:backend` | `b60c32eb-3374-4a53-a487-b409bfed2d61` |
+| `instance:frontend` | `e9434a2f-f313-4223-a042-598185718c7b` |
+| `instance:auth` | `c4bb2546-7bbc-45d9-b5ab-384fd7065d48` |
+| `instance:mcp` | `19497340-8712-45d0-8728-a77c96c592a7` |
+| `instance:qa` | `00ba65ee-81e3-40e8-b2d2-38f340617b2f` |
 
 ## Linear IDs (cached)
 

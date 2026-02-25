@@ -1,6 +1,7 @@
 """FastAPI authentication dependencies.
 
 CAB-330: Enhanced debug logging for authentication troubleshooting.
+CAB-438: Sender-constrained token validation (RFC 8705/9449).
 """
 
 import httpx
@@ -11,6 +12,7 @@ from pydantic import BaseModel
 
 from ..config import settings
 from ..logging_config import bind_request_context, get_logger
+from .sender_constrained import validate_sender_constrained_token
 
 logger = get_logger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -128,7 +130,9 @@ async def get_current_user(
         # after all clients have migrated (target: Q2 2026).
         legacy_audiences = {"control-plane-ui", "stoa-portal"}
         primary_audience = {settings.KEYCLOAK_CLIENT_ID}
-        if any(aud in legacy_audiences for aud in token_aud) and not any(aud in primary_audience for aud in token_aud):
+        if any(aud in legacy_audiences for aud in token_aud) and not any(
+            aud in primary_audience for aud in token_aud
+        ):
             logger.warning(
                 "DEPRECATION: Token uses legacy audience, migrate to Audience Mapper",
                 token_aud=token_aud,
@@ -137,12 +141,37 @@ async def get_current_user(
                 migration_deadline="Q2 2026",
             )
 
+        # --- Sender-Constrained Token Validation (CAB-438) ---
+        request_headers = {k.lower(): v for k, v in request.headers.items()}
+        sc_result = validate_sender_constrained_token(
+            token_payload=payload,
+            access_token=token,
+            headers=request_headers,
+            http_method=request.method,
+            http_uri=str(request.url),
+        )
+        if not sc_result.valid:
+            logger.warning(
+                "Sender-constrained validation failed",
+                mode=sc_result.mode,
+                error=sc_result.error,
+                azp=payload.get("azp"),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=sc_result.error,
+            )
+
         email = payload.get("email", "")
         username = payload.get("preferred_username", "")
         roles = payload.get("realm_access", {}).get("roles", [])
         # Handle tenant_id as either string or list (from group membership mapper)
         raw_tenant_id = payload.get("tenant_id")
-        tenant_id = (raw_tenant_id[0] if raw_tenant_id else None) if isinstance(raw_tenant_id, list) else raw_tenant_id
+        tenant_id = (
+            (raw_tenant_id[0] if raw_tenant_id else None)
+            if isinstance(raw_tenant_id, list)
+            else raw_tenant_id
+        )
 
         # Get user ID from 'sub' claim, with fallback to email or username
         # Some Keycloak configurations may not include 'sub' in certain token types
@@ -179,7 +208,10 @@ async def get_current_user(
                 typ=payload.get("typ"),
                 azp=payload.get("azp"),
             )
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token: missing user ID")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: missing user ID",
+            )
 
         return User(
             id=user_id,
@@ -195,7 +227,9 @@ async def get_current_user(
             error=str(e),
             error_type=type(e).__name__,
         )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e!s}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e!s}"
+        )
     except httpx.HTTPError as e:
         logger.error(
             "Failed to fetch Keycloak public key",
@@ -204,5 +238,6 @@ async def get_current_user(
             realm=settings.KEYCLOAK_REALM,
         )
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authentication service unavailable"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable",
         )

@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(black:*)",
+      "Bash(mypy:*)",
+      "Bash(alembic:*)",
+      "Bash(curl:*)",
+      "Bash(jq:*)",
+      "Bash(kubectl:*)",
+      "Bash(helm:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(test:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(wc:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(diff:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)"
+    ],
+    "deny": [
+      "Edit(/portal/**)",
+      "Write(/portal/**)",
+      "Edit(/stoa-gateway/src/**)",
+      "Write(/stoa-gateway/src/**)",
+      "Edit(/control-plane-ui/src/**)",
+      "Write(/control-plane-ui/src/**)",
+      "Edit(/e2e/**)",
+      "Write(/e2e/**)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)"
+    ]
+  }
+}

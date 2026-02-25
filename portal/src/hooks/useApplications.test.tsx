@@ -10,6 +10,7 @@ import {
   useApplications,
   useApplication,
   useCreateApplication,
+  useUpdateApplication,
   useDeleteApplication,
   useRegenerateSecret,
 } from './useApplications';
@@ -58,6 +59,23 @@ describe('useApplications', () => {
     expect(result.current.data?.items).toHaveLength(1);
     expect(applicationsService.listApplications).toHaveBeenCalledWith(undefined);
   });
+
+  it('should pass params to listApplications', async () => {
+    vi.mocked(applicationsService.listApplications).mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 0,
+    } as any);
+
+    const params = { page: 2, status: 'active' as const };
+    const { result } = renderHook(() => useApplications(params), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(applicationsService.listApplications).toHaveBeenCalledWith(params);
+  });
 });
 
 describe('useApplication', () => {
@@ -99,6 +117,32 @@ describe('useCreateApplication', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.id).toBe('app-2');
+  });
+});
+
+describe('useUpdateApplication', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should update an application', async () => {
+    vi.mocked(applicationsService.updateApplication).mockResolvedValueOnce({
+      id: 'app-1',
+      name: 'Updated App',
+    } as any);
+
+    const { result } = renderHook(() => useUpdateApplication('app-1'), {
+      wrapper: createWrapper(),
+    });
+
+    result.current.mutate({ name: 'Updated App' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(applicationsService.updateApplication).toHaveBeenCalledWith('app-1', {
+      name: 'Updated App',
+    });
+    expect(result.current.data?.name).toBe('Updated App');
   });
 });
 

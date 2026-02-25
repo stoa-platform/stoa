@@ -10,10 +10,12 @@ import {
   useWebhooks,
   useWebhook,
   useCreateWebhook,
+  useUpdateWebhook,
   useDeleteWebhook,
   useTestWebhook,
   useWebhookEventTypes,
   useWebhookDeliveries,
+  useRetryDelivery,
 } from './useWebhooks';
 
 vi.mock('../services/webhooks', () => ({
@@ -120,6 +122,34 @@ describe('useCreateWebhook', () => {
   });
 });
 
+describe('useUpdateWebhook', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should update a webhook', async () => {
+    vi.mocked(webhooksService.updateWebhook).mockResolvedValueOnce({
+      id: 'wh-1',
+      url: 'https://updated.com',
+    } as any);
+
+    const { result } = renderHook(() => useUpdateWebhook(), { wrapper: createWrapper() });
+
+    result.current.mutate({
+      tenantId: 'acme',
+      webhookId: 'wh-1',
+      data: { url: 'https://updated.com' } as any,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(webhooksService.updateWebhook).toHaveBeenCalledWith('acme', 'wh-1', {
+      url: 'https://updated.com',
+    });
+    expect(result.current.data?.url).toBe('https://updated.com');
+  });
+});
+
 describe('useDeleteWebhook', () => {
   it('should delete a webhook', async () => {
     vi.mocked(webhooksService.deleteWebhook).mockResolvedValueOnce(undefined);
@@ -147,6 +177,10 @@ describe('useTestWebhook', () => {
 });
 
 describe('useWebhookDeliveries', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('should fetch deliveries for a webhook', async () => {
     vi.mocked(webhooksService.getDeliveries).mockResolvedValueOnce({
       items: [{ id: 'd-1' }],
@@ -159,5 +193,33 @@ describe('useWebhookDeliveries', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.items).toHaveLength(1);
+  });
+
+  it('should not fetch when ids are undefined', () => {
+    const { result } = renderHook(() => useWebhookDeliveries(undefined, undefined), {
+      wrapper: createWrapper(),
+    });
+    expect(result.current.fetchStatus).toBe('idle');
+  });
+});
+
+describe('useRetryDelivery', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should retry a failed delivery', async () => {
+    vi.mocked(webhooksService.retryDelivery).mockResolvedValueOnce({
+      id: 'd-1',
+      status: 'success',
+    } as any);
+
+    const { result } = renderHook(() => useRetryDelivery(), { wrapper: createWrapper() });
+
+    result.current.mutate({ tenantId: 'acme', webhookId: 'wh-1', deliveryId: 'd-1' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(webhooksService.retryDelivery).toHaveBeenCalledWith('acme', 'wh-1', 'd-1');
   });
 });

@@ -107,7 +107,7 @@ linear.create_issue(
   assignee: "0543749d-ecde-4edf-aec1-6f372aafafce",
   estimate: <fibonacci points>,
   priority: <1=Urgent, 2=High, 3=Normal, 4=Low>,
-  labels: [<type label>, <priority label>, "hlfh:validated", "council:ticket-go|fix"],
+  labels: [<type label>, <priority label>, "hlfh:validated", "council:ticket-go|fix", "instance:<detected-instance>"],
   state: "Todo"
 )
 ```

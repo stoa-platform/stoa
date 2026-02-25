@@ -132,6 +132,7 @@ journal.md
 
 # Database dumps (may contain PII)
 *.sql
+!hegemon/tools/state/schema.sql
 *.dump
 *.db
 *.sqlite

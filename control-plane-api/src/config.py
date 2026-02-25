@@ -186,6 +186,11 @@ class Settings(BaseSettings):
     LOG_DEBUG_SQL_RESULTS: bool = False
     LOG_DEBUG_SQL_TRANSACTIONS: bool = False
 
+    # Sender-Constrained Tokens (CAB-438 — RFC 8705 mTLS + RFC 9449 DPoP)
+    SENDER_CONSTRAINED_ENABLED: bool = False  # Enable in staging/prod after migration
+    SENDER_CONSTRAINED_STRATEGY: str = "auto"  # auto | require-any | mtls-only | dpop-only
+    SENDER_CONSTRAINED_DPOP_MAX_CLOCK_SKEW: int = 60  # seconds
+
     # Logging - Auth Debug
     LOG_DEBUG_AUTH_TOKENS: bool = False
     LOG_DEBUG_AUTH_HEADERS: bool = False

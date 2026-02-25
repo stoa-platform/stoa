@@ -220,6 +220,18 @@ pub static TOKEN_BUDGET_EXCEEDED_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_token_budget_exceeded_total metric")
 });
 
+// === DPoP Metrics (CAB-438, RFC 9449) ===
+
+/// Counter of DPoP proof validations by result (valid, invalid_signature, expired, replay, etc.)
+pub static DPOP_VALIDATIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_dpop_validations_total",
+        "Total DPoP proof validations by result",
+        &["result"]
+    )
+    .expect("Failed to create stoa_dpop_validations_total metric")
+});
+
 // === Fallback Metrics (CAB-708) ===
 
 /// Counter of fallback chain attempts (primary tool failed, trying fallbacks).
@@ -447,6 +459,13 @@ pub fn record_federation_request(sub_account_id: &str, master_account_id: &str, 
         .inc();
 }
 
+// === DPoP metrics helpers ===
+
+/// Record a DPoP validation outcome.
+pub fn record_dpop_validation(result: &str) {
+    DPOP_VALIDATIONS_TOTAL.with_label_values(&[result]).inc();
+}
+
 // === mTLS metrics helpers ===
 
 /// Record an mTLS validation outcome.
@@ -531,6 +550,7 @@ pub fn init_all_metrics() {
     Lazy::force(&MTLS_BINDING_CHECKS_TOTAL);
     Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
     Lazy::force(&FEDERATION_REQUESTS_TOTAL);
+    Lazy::force(&DPOP_VALIDATIONS_TOTAL);
 }
 
 /// Get the total number of MCP tool calls across all labels.

@@ -8,6 +8,7 @@
 
 pub mod api_key;
 pub mod claims;
+pub mod dpop;
 pub mod jwt;
 pub mod middleware;
 pub mod mtls;

@@ -246,6 +246,12 @@ pub struct Config {
     #[serde(default)]
     pub mtls: MtlsConfig,
 
+    // === DPoP Sender-Constrained Tokens (CAB-438, RFC 9449) ===
+    /// DPoP configuration (nested struct, STOA_DPOP_ prefix)
+    /// Env: STOA_DPOP_ENABLED, STOA_DPOP_REQUIRED, etc.
+    #[serde(default)]
+    pub dpop: crate::auth::dpop::DpopConfig,
+
     // === Quota Enforcement (Phase 4: CAB-1121) ===
     /// Enable per-consumer quota enforcement
     /// Env: STOA_QUOTA_ENFORCEMENT_ENABLED
@@ -786,6 +792,7 @@ impl Default for Config {
             kafka_cns_topics: default_kafka_cns_topics(),
             kafka_cns_consumer_group: default_kafka_cns_consumer_group(),
             mtls: MtlsConfig::default(),
+            dpop: crate::auth::dpop::DpopConfig::default(),
             quota_enforcement_enabled: false,
             quota_sync_interval_secs: default_quota_sync_interval(),
             quota_default_rate_per_minute: default_quota_rate_per_minute(),

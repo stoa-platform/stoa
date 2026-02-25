@@ -66,20 +66,77 @@ If a ticket touches multiple instances:
 | `e2e/**` | `instance:qa` |
 | `stoa-docs` (separate repo) | `instance:backend` |
 
+## Permission Enforcement (CAB-1481)
+
+Each instance has a deny list preventing cross-scope file edits and unauthorized commands.
+
+### Mechanism
+
+Two layers of enforcement:
+1. **PreToolUse hook** (`pre-instance-scope.sh`) — reads `STOA_INSTANCE` env var, blocks denied operations at runtime
+2. **Instance settings files** (`.claude/instances/<role>.json`) — define deny rules per role
+
+### Usage
+
+```bash
+# Standalone session (any terminal)
+export STOA_INSTANCE=backend && claude
+
+# stoa-parallel (automatic per window)
+stoa-parallel  # each window gets STOA_INSTANCE=<role>
+
+# Clear instance scope
+unset STOA_INSTANCE
+```
+
+### Deny Matrix
+
+| Instance | Denied Paths (Edit/Write) | Denied Commands |
+|----------|--------------------------|-----------------|
+| backend | `/portal/`, `/stoa-gateway/src/`, `/control-plane-ui/src/`, `/e2e/` | `rm -rf`, `sudo` |
+| frontend | `/control-plane-api/src/`, `/stoa-gateway/`, `/e2e/`, `/charts/`, `/k8s/` | `rm -rf`, `sudo`, `pytest`, `cargo`, `alembic` |
+| auth | `/portal/src/`, `/stoa-gateway/src/`, `/control-plane-ui/src/`, `/e2e/` | `rm -rf`, `sudo`, `npm`, `cargo`, `pytest`, `alembic` |
+| mcp | `/control-plane-ui/`, `/portal/`, `/e2e/`, `/control-plane-api/src/` | `rm -rf`, `sudo`, `npm`, `pytest`, `alembic` |
+| qa | `/control-plane-api/src/`, `/control-plane-ui/src/`, `/portal/src/`, `/stoa-gateway/src/`, `/charts/`, `/k8s/` | `rm -rf`, `sudo`, `cargo`, `alembic`, `terraform` |
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `.claude/instances/backend.json` | Backend instance deny rules |
+| `.claude/instances/frontend.json` | Frontend instance deny rules |
+| `.claude/instances/auth.json` | Auth instance deny rules |
+| `.claude/instances/mcp.json` | MCP/Gateway instance deny rules |
+| `.claude/instances/qa.json` | QA instance deny rules |
+| `.claude/hooks/pre-instance-scope.sh` | PreToolUse hook enforcing scope |
+| `.claude/hooks/stop-slack-notify.sh` | Stop hook sending Slack session summary |
+
+## Slack Session Notifications
+
+When `SLACK_WEBHOOK_URL` is set, each Claude session sends a Slack notification on Stop with:
+- Instance role and branch name
+- Last 3 commits
+- Open PR status (if any)
+- Uncommitted file count
+- "Waiting for next instruction" footer
+
+Set `SLACK_WEBHOOK_URL` in your shell profile or `.claude/settings.local.json` env section.
+
 ## tmux Layout (`stoa-parallel`)
 
 ```
 Session: stoa
-├── Window 0: MONITOR    (htop + watchdog)
-├── Window 1: ORCHESTRE  (user coordination terminal)
-├── Window 2: BACKEND    (Claude — instance:backend)
-├── Window 3: FRONTEND   (Claude — instance:frontend)
-├── Window 4: AUTH       (Claude — instance:auth)
-├── Window 5: MCP        (Claude — instance:mcp)
-└── Window 6: QA         (Claude — instance:qa)
++-- Window 0: MONITOR    (htop + watchdog)
++-- Window 1: ORCHESTRE  (user coordination terminal)
++-- Window 2: BACKEND    (STOA_INSTANCE=backend)
++-- Window 3: FRONTEND   (STOA_INSTANCE=frontend)
++-- Window 4: AUTH       (STOA_INSTANCE=auth)
++-- Window 5: MCP        (STOA_INSTANCE=mcp)
++-- Window 6: QA         (STOA_INSTANCE=qa)
 ```
 
 Each Claude instance at startup:
+- `STOA_INSTANCE` env var set -> hook enforces deny rules
 - Session startup mechanism loads context automatically (memory.md, plan.md, CLAUDE.md)
 - Startup prompt includes: instance role, scope exclusif, max 5 tickets from Linear cycle
 - Linear filter: `list_issues(labels: ['instance:<role>'], cycle: current)`

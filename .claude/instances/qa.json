@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(pytest:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(vitest:*)",
+      "Bash(playwright:*)",
+      "Bash(curl:*)",
+      "Bash(jq:*)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(test:*)",
+      "Bash(mkdir:*)",
+      "Bash(wc:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(diff:*)"
+    ],
+    "deny": [
+      "Edit(/control-plane-api/src/**)",
+      "Write(/control-plane-api/src/**)",
+      "Edit(/control-plane-ui/src/**)",
+      "Write(/control-plane-ui/src/**)",
+      "Edit(/portal/src/**)",
+      "Write(/portal/src/**)",
+      "Edit(/stoa-gateway/src/**)",
+      "Write(/stoa-gateway/src/**)",
+      "Edit(/charts/**)",
+      "Write(/charts/**)",
+      "Edit(/k8s/**)",
+      "Write(/k8s/**)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(cargo:*)",
+      "Bash(alembic:*)",
+      "Bash(terraform *)"
+    ]
+  }
+}

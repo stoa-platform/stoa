@@ -114,6 +114,9 @@ const defaultUsage = {
   ],
 };
 
+// Locale-agnostic regex: matches any digit-group separator (comma, space, NBSP, period)
+const sep = '[\\s\\u00a0,.]?';
+
 function renderComponent() {
   return renderWithProviders(<FederationAccountDetail />, {
     route: '/federation/accounts/master-1',
@@ -200,7 +203,7 @@ describe('FederationAccountDetail', () => {
   it('renders usage total requests', async () => {
     renderComponent();
     await waitFor(() => {
-      expect(screen.getByText('1,234')).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(`1${sep}234`))).toBeInTheDocument();
     });
   });
 

@@ -5,7 +5,6 @@
 PRAGMA journal_mode=WAL;
 PRAGMA busy_timeout=10000;
 
--- Active Claude Code sessions (TTL managed by cleanup command)
 CREATE TABLE IF NOT EXISTS sessions (
     instance_id  TEXT PRIMARY KEY,
     project      TEXT NOT NULL,
@@ -21,7 +20,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at   TEXT NOT NULL
 );
 
--- Milestone history (append-only audit trail)
 CREATE TABLE IF NOT EXISTS milestones (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     ticket       TEXT NOT NULL,
@@ -34,7 +32,6 @@ CREATE TABLE IF NOT EXISTS milestones (
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Phase/ticket claims (replaces .claude/claims/*.json)
 CREATE TABLE IF NOT EXISTS claims (
     id           TEXT PRIMARY KEY,
     ticket       TEXT NOT NULL,

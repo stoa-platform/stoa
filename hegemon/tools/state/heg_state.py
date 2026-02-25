@@ -23,6 +23,9 @@ import platform
 import sqlite3
 import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -35,6 +38,137 @@ VALID_STEPS = [
 ]
 VALID_ROLES = ["interactive", "backend", "frontend", "auth", "mcp", "qa"]
 VALID_SOURCES = ["local", "ci-l1", "ci-l3", "ci-l3.5"]
+
+# ── Remote sync (PocketBase) ─────────────────────────────────────
+
+REMOTE_URL = os.environ.get("HEGEMON_REMOTE_URL")  # e.g., https://state.gostoa.dev
+REMOTE_EMAIL = os.environ.get("HEGEMON_REMOTE_EMAIL", "admin@gostoa.dev")
+REMOTE_PASSWORD = os.environ.get("HEGEMON_REMOTE_PASSWORD")
+TOKEN_CACHE_FILE = Path.home() / ".hegemon" / ".pb_token"
+
+_token_cache: dict = {"token": None, "expires": 0.0}
+
+
+def _remote_enabled() -> bool:
+    return bool(REMOTE_URL and REMOTE_PASSWORD)
+
+
+def _remote_auth() -> str | None:
+    """Get PocketBase admin auth token. Cached in memory + file."""
+    if not _remote_enabled():
+        return None
+
+    # Memory cache
+    if _token_cache["token"] and time.time() < _token_cache["expires"]:
+        return _token_cache["token"]
+
+    # File cache (for cross-process reuse by hooks)
+    if TOKEN_CACHE_FILE.exists():
+        try:
+            cached = json.loads(TOKEN_CACHE_FILE.read_text())
+            if cached.get("expires", 0) > time.time():
+                _token_cache["token"] = cached["token"]
+                _token_cache["expires"] = cached["expires"]
+                return cached["token"]
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Fresh auth
+    try:
+        data = json.dumps({"identity": REMOTE_EMAIL, "password": REMOTE_PASSWORD}).encode()
+        req = urllib.request.Request(
+            f"{REMOTE_URL}/api/admins/auth-with-password",
+            data=data,
+            headers={"Content-Type": "application/json"},
+        )
+        resp = urllib.request.urlopen(req, timeout=5)
+        result = json.loads(resp.read())
+        token = result["token"]
+        expires = time.time() + 7200  # 2h (PB admin tokens last 14d, but refresh often)
+
+        _token_cache["token"] = token
+        _token_cache["expires"] = expires
+
+        # Persist for hooks
+        TOKEN_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        TOKEN_CACHE_FILE.write_text(json.dumps({"token": token, "expires": expires}))
+
+        return token
+    except Exception:
+        return None
+
+
+def _remote_push(collection: str, data: dict) -> None:
+    """Create a record in PocketBase. Best-effort."""
+    token = _remote_auth()
+    if not token:
+        return
+    try:
+        body = json.dumps(data).encode()
+        req = urllib.request.Request(
+            f"{REMOTE_URL}/api/collections/{collection}/records",
+            data=body,
+            headers={"Content-Type": "application/json", "Authorization": token},
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass  # best-effort, SQLite is primary
+
+
+def _remote_upsert(collection: str, filter_field: str, filter_value: str, data: dict) -> None:
+    """Upsert: find by filter field, update or create."""
+    token = _remote_auth()
+    if not token:
+        return
+    try:
+        encoded_filter = urllib.parse.quote(f'{filter_field}="{filter_value}"')
+        req = urllib.request.Request(
+            f"{REMOTE_URL}/api/collections/{collection}/records?filter={encoded_filter}&perPage=1",
+            headers={"Authorization": token},
+        )
+        resp = urllib.request.urlopen(req, timeout=5)
+        result = json.loads(resp.read())
+
+        if result.get("totalItems", 0) > 0:
+            pb_id = result["items"][0]["id"]
+            body = json.dumps(data).encode()
+            req = urllib.request.Request(
+                f"{REMOTE_URL}/api/collections/{collection}/records/{pb_id}",
+                data=body,
+                headers={"Content-Type": "application/json", "Authorization": token},
+                method="PATCH",
+            )
+            urllib.request.urlopen(req, timeout=5)
+        else:
+            _remote_push(collection, data)
+    except Exception:
+        pass
+
+
+def _remote_delete(collection: str, filter_field: str, filter_value: str) -> None:
+    """Delete a record by filter. Best-effort."""
+    token = _remote_auth()
+    if not token:
+        return
+    try:
+        encoded_filter = urllib.parse.quote(f'{filter_field}="{filter_value}"')
+        req = urllib.request.Request(
+            f"{REMOTE_URL}/api/collections/{collection}/records?filter={encoded_filter}&perPage=1",
+            headers={"Authorization": token},
+        )
+        resp = urllib.request.urlopen(req, timeout=5)
+        result = json.loads(resp.read())
+
+        if result.get("totalItems", 0) > 0:
+            pb_id = result["items"][0]["id"]
+            req = urllib.request.Request(
+                f"{REMOTE_URL}/api/collections/{collection}/records/{pb_id}",
+                headers={"Authorization": token},
+                method="DELETE",
+            )
+            urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
 
 
 def _now() -> str:
@@ -90,6 +224,19 @@ def cmd_start(args: argparse.Namespace) -> None:
     conn.close()
     print(f"Session started: {instance_id} → {args.ticket or '(no ticket)'}")
 
+    # Remote sync
+    _remote_upsert("sessions", "instance_id", instance_id, {
+        "instance_id": instance_id, "project": project, "role": role,
+        "ticket": args.ticket or "", "branch": args.branch or "",
+        "step": "claimed", "host": _hostname(), "source": args.source or "local",
+        "pid": os.getpid(), "started_at": now, "updated_at": now,
+    })
+    if args.ticket:
+        _remote_push("milestones", {
+            "ticket": args.ticket, "step": "claimed",
+            "instance_id": instance_id, "project": project, "event_at": now,
+        })
+
 
 def cmd_step(args: argparse.Namespace) -> None:
     if args.step not in VALID_STEPS:
@@ -129,6 +276,21 @@ def cmd_step(args: argparse.Namespace) -> None:
     pr_info = f" (PR #{args.pr})" if args.pr else ""
     sha_info = f" [{args.sha[:7]}]" if args.sha else ""
     print(f"{args.ticket} → {args.step}{pr_info}{sha_info}")
+
+    # Remote sync
+    if args.step == "done":
+        _remote_delete("sessions", "ticket", args.ticket)
+    else:
+        _remote_upsert("sessions", "ticket", args.ticket, {
+            "step": args.step, "pr": args.pr or 0,
+            "updated_at": now,
+        })
+    _remote_push("milestones", {
+        "ticket": args.ticket, "step": args.step,
+        "instance_id": row["instance_id"], "project": row["project"],
+        "pr": args.pr or 0, "sha": args.sha or "", "detail": args.detail or "",
+        "event_at": now,
+    })
 
 
 def cmd_pause(args: argparse.Namespace) -> None:
@@ -263,6 +425,15 @@ def cmd_claim(args: argparse.Namespace) -> None:
     # Dual-write: also create .claude/claims/ JSON for backward compatibility
     _dual_write_claim_json(args, instance_id, now)
 
+    # Remote sync
+    _remote_upsert("claims", "claim_id", claim_id, {
+        "claim_id": claim_id, "ticket": args.ticket,
+        "phase": args.phase, "mega_id": args.mega or "",
+        "owner": instance_id, "pid": os.getpid(),
+        "host": _hostname(), "branch": args.branch or "",
+        "claimed_at": now,
+    })
+
 
 def cmd_release(args: argparse.Namespace) -> None:
     now = _now()
@@ -285,6 +456,11 @@ def cmd_release(args: argparse.Namespace) -> None:
     conn.commit()
     conn.close()
     print(f"Released: {claim_id}")
+
+    # Remote sync
+    _remote_upsert("claims", "claim_id", claim_id, {
+        "owner": "", "pid": 0, "completed_at": now,
+    })
 
 
 def cmd_claims(args: argparse.Namespace) -> None:
@@ -395,6 +571,88 @@ def _dual_write_claim_json(args: argparse.Namespace, instance_id: str, now: str)
         "completed_at": None,
     }
     claim_file.write_text(json.dumps(data, indent=2) + "\n")
+
+
+# ── Remote query ──────────────────────────────────────────────────
+
+
+def cmd_remote_ls(args: argparse.Namespace) -> None:
+    """List sessions from PocketBase remote."""
+    if not _remote_enabled():
+        print("Remote not configured. Set HEGEMON_REMOTE_URL + HEGEMON_REMOTE_PASSWORD.", file=sys.stderr)
+        sys.exit(1)
+
+    token = _remote_auth()
+    if not token:
+        print("Failed to authenticate with PocketBase.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        params = "perPage=50&sort=-updated_at"
+        if args.project:
+            params += f'&filter=project="{args.project}"'
+        req = urllib.request.Request(
+            f"{REMOTE_URL}/api/collections/sessions/records?{params}",
+            headers={"Authorization": token},
+        )
+        resp = urllib.request.urlopen(req, timeout=10)
+        result = json.loads(resp.read())
+    except Exception as e:
+        print(f"Remote query failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    items = result.get("items", [])
+    if not items:
+        print("No remote sessions.")
+        return
+
+    print(f"Remote sessions ({REMOTE_URL}):")
+    print(f"{'INSTANCE':<20} {'ROLE':<12} {'TICKET':<12} {'STEP':<14} {'PR':<6} {'SOURCE':<8} {'UPDATED':<20}")
+    print("─" * 92)
+    for r in items:
+        pr = str(r.get("pr", 0)) if r.get("pr") else "—"
+        print(f"{r.get('instance_id','?'):<20} {r.get('role','?'):<12} {r.get('ticket','—'):<12} {r.get('step','?'):<14} {pr:<6} {r.get('source','?'):<8} {r.get('updated_at','?'):<20}")
+
+
+def cmd_sync(args: argparse.Namespace) -> None:
+    """Full sync: push all local sessions + claims to PocketBase."""
+    if not _remote_enabled():
+        print("Remote not configured. Set HEGEMON_REMOTE_URL + HEGEMON_REMOTE_PASSWORD.", file=sys.stderr)
+        sys.exit(1)
+
+    conn = _connect()
+
+    # Sync sessions
+    sessions = conn.execute("SELECT * FROM sessions").fetchall()
+    synced = 0
+    for s in sessions:
+        _remote_upsert("sessions", "instance_id", s["instance_id"], {
+            "instance_id": s["instance_id"], "project": s["project"],
+            "role": s["role"], "ticket": s["ticket"] or "",
+            "branch": s["branch"] or "", "step": s["step"],
+            "pr": s["pr"] or 0, "host": s["host"] or "",
+            "source": s["source"], "pid": s["pid"] or 0,
+            "started_at": s["started_at"], "updated_at": s["updated_at"],
+        })
+        synced += 1
+
+    # Sync active claims
+    claims = conn.execute(
+        "SELECT * FROM claims WHERE completed_at IS NULL"
+    ).fetchall()
+    claims_synced = 0
+    for c in claims:
+        _remote_upsert("claims", "claim_id", c["id"], {
+            "claim_id": c["id"], "ticket": c["ticket"],
+            "phase": c["phase"], "mega_id": c["mega_id"] or "",
+            "owner": c["owner"] or "", "pid": c["pid"] or 0,
+            "host": c["host"] or "", "branch": c["branch"] or "",
+            "deps": c["deps"] or "", "claimed_at": c["claimed_at"] or "",
+        })
+        claims_synced += 1
+
+    conn.close()
+    print(f"Synced to {REMOTE_URL}: {synced} sessions, {claims_synced} claims")
 
 
 # ── Import existing claims ────────────────────────────────────────
@@ -527,6 +785,13 @@ def main() -> None:
     p = sub.add_parser("import-claims", help="Import .claude/claims/*.json into SQLite")
     p.add_argument("--path", default=".claude/claims")
 
+    # remote-ls
+    p = sub.add_parser("remote-ls", help="List sessions from PocketBase remote")
+    p.add_argument("--project", "-p")
+
+    # sync
+    p = sub.add_parser("sync", help="Full sync: push local state to PocketBase")
+
     args = parser.parse_args()
 
     commands = {
@@ -543,6 +808,8 @@ def main() -> None:
         "init-mega": cmd_init_mega,
         "cleanup": cmd_cleanup,
         "import-claims": cmd_import_claims,
+        "remote-ls": cmd_remote_ls,
+        "sync": cmd_sync,
     }
     commands[args.command](args)
 

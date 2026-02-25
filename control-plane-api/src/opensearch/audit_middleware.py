@@ -41,6 +41,7 @@ correlation_id_ctx: ContextVar[str] = ContextVar("correlation_id", default="")
 
 class EventCategory(StrEnum):
     """Audit event categories."""
+
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
     DATA_ACCESS = "data_access"
@@ -52,6 +53,7 @@ class EventCategory(StrEnum):
 
 class EventSeverity(StrEnum):
     """Audit event severity levels."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -112,14 +114,15 @@ class AuditLogger:
         doc = event.model_dump(by_alias=True, exclude_none=True)
         doc["@timestamp"] = doc["@timestamp"].isoformat()
 
-        self.buffer.append({
-            "_index": self.index_alias,
-            "_source": doc,
-        })
+        self.buffer.append(
+            {
+                "_index": self.index_alias,
+                "_source": doc,
+            }
+        )
 
         # Flush if buffer is full or interval exceeded
-        if len(self.buffer) >= self.buffer_size or \
-           (time.time() - self._last_flush) > self.flush_interval:
+        if len(self.buffer) >= self.buffer_size or (time.time() - self._last_flush) > self.flush_interval:
             await self.flush()
 
     async def flush(self) -> None:
@@ -231,6 +234,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             return self._audit_logger
         try:
             from .opensearch_integration import OpenSearchService
+
             service = OpenSearchService.get_instance()
             return service.audit_logger
         except Exception:
@@ -252,10 +256,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Generate/extract correlation ID
-        correlation_id = request.headers.get(
-            "X-Correlation-ID",
-            str(uuid.uuid4())
-        )
+        correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
         correlation_id_ctx.set(correlation_id)
 
         # Extract actor from JWT
@@ -311,16 +312,88 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 tags=self._get_tags(request),
             )
 
-            # Log asynchronously (non-blocking)
+            # Log to OpenSearch (non-blocking)
             try:
                 await self.audit_logger.log(event)
             except Exception as e:
-                logger.error(f"Failed to log audit event: {e}")
+                logger.error(f"Failed to log audit event to OpenSearch: {e}")
+
+            # Dual-write mutating requests to PostgreSQL (CAB-1475)
+            if request.method in self.MODIFICATION_METHODS:
+                try:
+                    resource = self._extract_resource(request)
+                    await self._write_pg_audit(
+                        tenant_id=actor.get("tenant_id", "unknown"),
+                        actor_id=actor.get("id"),
+                        actor_email=actor.get("email"),
+                        actor_type=actor.get("type", "user"),
+                        action=event_type,
+                        method=request.method,
+                        path=request.url.path,
+                        resource_type=resource.get("type", "unknown"),
+                        resource_id=resource.get("id"),
+                        outcome=outcome,
+                        status_code=response.status_code,
+                        client_ip=actor.get("ip_address"),
+                        user_agent=actor.get("user_agent"),
+                        correlation_id=correlation_id,
+                        duration_ms=round(latency_ms),
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to dual-write audit event to PG: {e}")
 
         # Add correlation ID to response
         response.headers["X-Correlation-ID"] = correlation_id
 
         return response
+
+    async def _write_pg_audit(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: str | None,
+        actor_email: str | None,
+        actor_type: str,
+        action: str,
+        method: str,
+        path: str,
+        resource_type: str,
+        resource_id: str | None,
+        outcome: str,
+        status_code: int | None,
+        client_ip: str | None,
+        user_agent: str | None,
+        correlation_id: str | None,
+        duration_ms: int | None,
+    ) -> None:
+        """Write audit event to PostgreSQL (separate session, non-blocking)."""
+        from ..database import get_async_session_factory
+        from ..services.audit_service import AuditService
+
+        session_factory = get_async_session_factory()
+        if not session_factory:
+            return
+
+        async with session_factory() as session:
+            service = AuditService(session)
+            await service.record_event(
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                actor_email=actor_email,
+                actor_type=actor_type,
+                action=action,
+                method=method,
+                path=path,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                outcome=outcome,
+                status_code=status_code,
+                client_ip=client_ip,
+                user_agent=user_agent,
+                correlation_id=correlation_id,
+                duration_ms=duration_ms,
+            )
+            await session.commit()
 
     async def _extract_actor(self, request: Request) -> dict:
         """Extract actor information from request."""
@@ -332,21 +405,25 @@ class AuditMiddleware(BaseHTTPMiddleware):
         # Extract from JWT if available
         if hasattr(request.state, "user"):
             user = request.state.user
-            actor.update({
-                "id": user.get("sub"),
-                "email": user.get("email"),
-                "name": user.get("name"),
-                "type": "user",
-                "tenant_id": user.get("tenant_id"),
-            })
+            actor.update(
+                {
+                    "id": user.get("sub"),
+                    "email": user.get("email"),
+                    "name": user.get("name"),
+                    "type": "user",
+                    "tenant_id": user.get("tenant_id"),
+                }
+            )
         elif hasattr(request.state, "api_key"):
             api_key = request.state.api_key
-            actor.update({
-                "id": api_key.get("id"),
-                "name": api_key.get("name"),
-                "type": "api_key",
-                "tenant_id": api_key.get("tenant_id"),
-            })
+            actor.update(
+                {
+                    "id": api_key.get("id"),
+                    "name": api_key.get("name"),
+                    "type": "api_key",
+                    "tenant_id": api_key.get("tenant_id"),
+                }
+            )
         else:
             actor["type"] = "anonymous"
 
@@ -377,9 +454,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         return resource
 
-    def _classify_request(
-        self, request: Request
-    ) -> tuple[str, EventCategory]:
+    def _classify_request(self, request: Request) -> tuple[str, EventCategory]:
         """Classify request into event type and category."""
         method = request.method
         path = request.url.path
@@ -468,10 +543,14 @@ async def log_audit_event(
             "type": "user",
         },
         tenant_id=tenant_id,
-        resource={
-            "type": resource_type,
-            "id": resource_id,
-        } if resource_type else None,
+        resource=(
+            {
+                "type": resource_type,
+                "id": resource_id,
+            }
+            if resource_type
+            else None
+        ),
         outcome=outcome,
         details=details,
         changes=changes,

@@ -28,6 +28,9 @@ const mockBudget: TokenBudgetStatus = {
   usage_percent: 15,
 };
 
+// Locale-agnostic regex: matches any digit-group separator (comma, space, NBSP, period)
+const sep = '[\\s\\u00a0,.]?';
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
@@ -44,8 +47,8 @@ describe('TokenUsageWidget', () => {
   it('renders budget usage when data is loaded', async () => {
     renderWithProviders(<TokenUsageWidget />);
     expect(await screen.findByTestId('token-usage-widget')).toBeInTheDocument();
-    expect(screen.getByText(/1,500/)).toBeInTheDocument();
-    expect(screen.getByText(/10,000/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`1${sep}500`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`10${sep}000`))).toBeInTheDocument();
   });
 
   it('shows green indicator when usage < 60%', async () => {
@@ -103,8 +106,8 @@ describe('TokenUsageWidget', () => {
       remaining: 876544,
     });
     renderWithProviders(<TokenUsageWidget />);
-    expect(await screen.findByText(/123,456/)).toBeInTheDocument();
-    expect(screen.getByText(/1,000,000/)).toBeInTheDocument();
+    expect(await screen.findByText(new RegExp(`123${sep}456`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`1${sep}000${sep}000`))).toBeInTheDocument();
   });
 
   it('displays correct percentage', async () => {

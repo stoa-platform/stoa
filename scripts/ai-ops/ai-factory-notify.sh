@@ -7,6 +7,7 @@
 #   notify_council    — Council validation report with approve button
 #   notify_implement  — Implementation success/failure/ask with PR + metrics
 #   notify_error      — Vercel-style error with log excerpt + retry button
+#   notify_reminder   — Reminder for pending approval with approve button
 #   notify_scan       — Autopilot scan summary with candidate count
 #   notify_scheduled  — Daily/weekly task results with key metrics
 #   notify_plan       — Stage 2 plan validation result
@@ -490,10 +491,56 @@ notify_error() {
   }"
 }
 
-# notify_scan TOTAL_ELIGIBLE CREATED [CAPPED]
+# notify_reminder TICKET_ID TITLE ISSUE_URL ISSUE_NUM [SCORE]
+# Sends a reminder Slack notification for a pending issue awaiting /go approval.
+# Used when the autopilot scan finds an existing issue that hasn't been approved yet.
+notify_reminder() {
+  local TICKET_ID="${1:?}" TITLE="${2:?}" ISSUE_URL="${3:-}" ISSUE_NUM="${4:-}" SCORE="${5:-}"
+  local LINEAR_LINK="$(_linear_url "$TICKET_ID")"
+
+  local ESCAPED_TITLE
+  ESCAPED_TITLE=$(_escape_json "$TITLE")
+
+  # Build approve button (same as notify_council)
+  local APPROVE_BTN_URL
+  APPROVE_BTN_URL=$(_approve_url "$ISSUE_NUM" "$ISSUE_URL")
+  local BTN_TEXT="Review \\u0026 Approve"
+  if [ -n "${N8N_WEBHOOK:-}" ] && [ -n "${HMAC_SECRET:-}" ] && [ -n "$ISSUE_NUM" ]; then
+    BTN_TEXT="Approve \\u0026 Start"
+  fi
+
+  local SCORE_LINE=""
+  [ -n "$SCORE" ] && SCORE_LINE=" — ${SCORE}/10"
+
+  _send_slack "{
+    \"blocks\": [
+      {
+        \"type\": \"section\",
+        \"text\": {
+          \"type\": \"mrkdwn\",
+          \"text\": \":bell: *Reminder: ${TICKET_ID}${SCORE_LINE} awaiting approval*\n${ESCAPED_TITLE}\n\n<${LINEAR_LINK}|Linear> | <${ISSUE_URL}|Issue #${ISSUE_NUM}>\"
+        },
+        \"accessory\": {
+          \"type\": \"button\",
+          \"text\": {\"type\": \"plain_text\", \"text\": \"${BTN_TEXT}\"},
+          \"url\": \"${APPROVE_BTN_URL:-$ISSUE_URL}\",
+          \"style\": \"primary\"
+        }
+      },
+      {
+        \"type\": \"context\",
+        \"elements\": [{\"type\": \"mrkdwn\", \"text\": \"STOA AI Factory | Autopilot Reminder | $(date -u +%H:%M) UTC\"}]
+      }
+    ]
+  }"
+}
+
+# notify_scan TOTAL_ELIGIBLE CREATED [CAPPED] [SKIPPED] [PENDING_FILE]
 # Autopilot scan summary notification.
+# SKIPPED: number of candidates skipped (issue already exists)
+# PENDING_FILE: path to file with pending issue links (one per line)
 notify_scan() {
-  local TOTAL="${1:-0}" CREATED="${2:-0}" CAPPED="${3:-false}"
+  local TOTAL="${1:-0}" CREATED="${2:-0}" CAPPED="${3:-false}" SKIPPED="${4:-0}" PENDING_FILE="${5:-}"
   local RUN_LINK="$(_run_url)"
 
   local MSG=""
@@ -501,15 +548,27 @@ notify_scan() {
     MSG=":pause_button: Autopilot scan skipped — daily velocity cap reached."
   elif [ "$TOTAL" = "0" ]; then
     MSG=":inbox_tray: Autopilot scan complete — no eligible tickets in backlog."
-  elif [ "$CREATED" = "0" ]; then
-    MSG=":mag: Autopilot scan — ${TOTAL} eligible tickets found (dry run, no issues created)."
-  else
+  elif [ "$CREATED" -gt 0 ] 2>/dev/null; then
     MSG=":sunrise: Autopilot scan complete — ${CREATED}/${TOTAL} candidates dispatched. <${RUN_LINK}|Details>"
+  elif [ "$SKIPPED" -gt 0 ] 2>/dev/null; then
+    MSG=":bell: Autopilot scan — ${SKIPPED} candidate(s) pending approval (reminders sent). <${RUN_LINK}|Details>"
+  else
+    MSG=":mag: Autopilot scan — ${TOTAL} eligible, 0 passed Council threshold (>= 8.0). <${RUN_LINK}|Details>"
+  fi
+
+  # Append pending issue links if available
+  local PENDING_BLOCK=""
+  if [ -n "$PENDING_FILE" ] && [ -f "$PENDING_FILE" ] && [ -s "$PENDING_FILE" ]; then
+    local PENDING_CONTENT
+    PENDING_CONTENT=$(cat "$PENDING_FILE" | tr -d '\n' | sed 's/\\n$//')
+    if [ -n "$PENDING_CONTENT" ]; then
+      PENDING_BLOCK=",{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"Pending: ${PENDING_CONTENT}\"}]}"
+    fi
   fi
 
   _send_slack "{
     \"blocks\": [
-      {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"${MSG}\"}},
+      {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"${MSG}\"}}${PENDING_BLOCK},
       {\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"STOA AI Factory | Autopilot Scan | $(date -u +%H:%M) UTC\"}]}
     ]
   }"

@@ -252,9 +252,15 @@ jobs:
             # Dedup guard: skip if GitHub issue already exists for this ticket
             EXISTING_ISSUE=$(gh issue list --label "$TICKET_ID" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
             if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
-              echo "Issue #${EXISTING_ISSUE} already exists for ${TICKET_ID} — skipping"
+              echo "Issue #${EXISTING_ISSUE} already exists for ${TICKET_ID} — sending reminder"
               SKIPPED=$((SKIPPED + 1))
               EXISTING_LINKS="${EXISTING_LINKS}• <https://github.com/stoa-platform/stoa/issues/${EXISTING_ISSUE}|#${EXISTING_ISSUE}> ${TICKET_ID} — ${TITLE}\n"
+
+              # Send reminder notification with approve button
+              source scripts/ai-ops/ai-factory-notify.sh
+              ISSUE_URL="https://github.com/stoa-platform/stoa/issues/${EXISTING_ISSUE}"
+              REMINDER_TS=$(notify_reminder "$TICKET_ID" "$TITLE" "$ISSUE_URL" "$EXISTING_ISSUE" "$SCORE")
+              _react_slack "bell" "$REMINDER_TS"
               continue
             fi
 
@@ -385,7 +391,7 @@ jobs:
           elif [ "$DRY" = "true" ]; then
             SCAN_TS=$(notify_scan "$TOTAL" "0")
           else
-            SCAN_TS=$(notify_scan "$TOTAL" "$CREATED" "" "$SKIPPED")
+            SCAN_TS=$(notify_scan "$TOTAL" "$CREATED" "" "$SKIPPED" "/tmp/existing-issues.txt")
           fi
           _react_slack "satellite_antenna" "$SCAN_TS"
 

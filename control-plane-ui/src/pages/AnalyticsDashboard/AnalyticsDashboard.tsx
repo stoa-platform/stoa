@@ -8,6 +8,9 @@ import {
   Clock,
   AlertTriangle,
   Zap,
+  ChevronDown,
+  ChevronUp,
+  ArrowUpDown,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
@@ -29,11 +32,21 @@ import type { TopAPI } from '../../services/api';
 const AUTO_REFRESH_INTERVAL = 30_000;
 const ACTIVE_TENANT_KEY = 'stoa-active-tenant';
 
+type SortField = 'calls' | 'errors' | 'latency';
+
 interface ErrorCategory {
   category: string;
   count: number;
   percentage: number;
   avg_duration_ms: number;
+}
+
+interface ConsumerUsage {
+  consumer_id: string;
+  name: string;
+  calls: number;
+  error_rate: number;
+  avg_latency_ms: number;
 }
 
 const ERROR_CATEGORY_COLORS: Record<string, string> = {
@@ -49,8 +62,11 @@ export function AnalyticsDashboard() {
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
   const [topApis, setTopApis] = useState<TopAPI[]>([]);
   const [errorCategories, setErrorCategories] = useState<ErrorCategory[]>([]);
+  const [consumerUsage, setConsumerUsage] = useState<ConsumerUsage[]>([]);
   const [loading, setLoading] = useState(true);
   const [_error, setError] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('calls');
+  const [expandedTool, setExpandedTool] = useState<string | null>(null);
 
   const tenantId = localStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || 'default';
   const rangeCfg = RANGE_CONFIG[timeRange];
@@ -90,6 +106,52 @@ export function AnalyticsDashboard() {
   // Top tools by label
   const topToolsQuery = usePrometheusQuery(
     `topk(10, sum by (tool) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}"}[${timeRange}])))`,
+    AUTO_REFRESH_INTERVAL
+  );
+
+  // Per-tool error counts (for sort-by-errors)
+  const topToolsErrors = usePrometheusQuery(
+    `sum by (tool) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}",status="error"}[${timeRange}]))`,
+    AUTO_REFRESH_INTERVAL
+  );
+
+  // Per-tool avg latency (for sort-by-latency)
+  const topToolsLatency = usePrometheusQuery(
+    `sum by (tool) (rate(stoa_mcp_tool_duration_seconds_sum{tenant="${tenantId}"}[5m])) / sum by (tool) (rate(stoa_mcp_tool_duration_seconds_count{tenant="${tenantId}"}[5m]))`,
+    AUTO_REFRESH_INTERVAL
+  );
+
+  // Expanded tool detail: p50/p95/p99 latency
+  const expandedToolP50 = usePrometheusQuery(
+    expandedTool
+      ? `histogram_quantile(0.5, sum by (le) (rate(stoa_mcp_tool_duration_seconds_bucket{tenant="${tenantId}",tool="${expandedTool}"}[5m])))`
+      : '',
+    expandedTool ? AUTO_REFRESH_INTERVAL : 0
+  );
+  const expandedToolP95 = usePrometheusQuery(
+    expandedTool
+      ? `histogram_quantile(0.95, sum by (le) (rate(stoa_mcp_tool_duration_seconds_bucket{tenant="${tenantId}",tool="${expandedTool}"}[5m])))`
+      : '',
+    expandedTool ? AUTO_REFRESH_INTERVAL : 0
+  );
+  const expandedToolP99 = usePrometheusQuery(
+    expandedTool
+      ? `histogram_quantile(0.99, sum by (le) (rate(stoa_mcp_tool_duration_seconds_bucket{tenant="${tenantId}",tool="${expandedTool}"}[5m])))`
+      : '',
+    expandedTool ? AUTO_REFRESH_INTERVAL : 0
+  );
+
+  // Consumer usage (top 10 by calls)
+  const consumerCallsQuery = usePrometheusQuery(
+    `topk(10, sum by (consumer_id) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}"}[${timeRange}])))`,
+    AUTO_REFRESH_INTERVAL
+  );
+  const consumerErrorsQuery = usePrometheusQuery(
+    `sum by (consumer_id) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}",status="error"}[${timeRange}]))`,
+    AUTO_REFRESH_INTERVAL
+  );
+  const consumerLatencyQuery = usePrometheusQuery(
+    `sum by (consumer_id) (rate(stoa_mcp_tool_duration_seconds_sum{tenant="${tenantId}"}[5m])) / sum by (consumer_id) (rate(stoa_mcp_tool_duration_seconds_count{tenant="${tenantId}"}[5m]))`,
     AUTO_REFRESH_INTERVAL
   );
 
@@ -135,6 +197,16 @@ export function AnalyticsDashboard() {
     callsTrend.refetch();
     latencyTrend.refetch();
     topToolsQuery.refetch();
+    topToolsErrors.refetch();
+    topToolsLatency.refetch();
+    consumerCallsQuery.refetch();
+    consumerErrorsQuery.refetch();
+    consumerLatencyQuery.refetch();
+    if (expandedTool) {
+      expandedToolP50.refetch();
+      expandedToolP95.refetch();
+      expandedToolP99.refetch();
+    }
     loadApiData();
   };
 
@@ -144,11 +216,46 @@ export function AnalyticsDashboard() {
   const activeConsumersVal = scalarValue(activeConsumers.data);
 
   const topToolsCalls = groupByLabel(topToolsQuery.data, 'tool');
-  const topToolsList = Object.entries(topToolsCalls)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10)
-    .map(([tool, calls]) => ({ name: tool, calls }));
-  const maxToolCalls = topToolsList[0]?.calls || 1;
+  const topToolsErrorMap = groupByLabel(topToolsErrors.data, 'tool');
+  const topToolsLatencyMap = groupByLabel(topToolsLatency.data, 'tool');
+
+  const enrichedTools = Object.entries(topToolsCalls)
+    .map(([tool, calls]) => ({
+      name: tool,
+      calls,
+      errors: topToolsErrorMap[tool] || 0,
+      latency: topToolsLatencyMap[tool] || 0,
+    }))
+    .sort((a, b) => {
+      if (sortField === 'errors') return b.errors - a.errors;
+      if (sortField === 'latency') return b.latency - a.latency;
+      return b.calls - a.calls;
+    })
+    .slice(0, 10);
+  const maxToolCalls = enrichedTools[0]?.calls || 1;
+
+  // Build consumer usage from Prometheus results
+  const consumerCallsMap = groupByLabel(consumerCallsQuery.data, 'consumer_id');
+  const consumerErrorsMap = groupByLabel(consumerErrorsQuery.data, 'consumer_id');
+  const consumerLatencyMap = groupByLabel(consumerLatencyQuery.data, 'consumer_id');
+
+  useEffect(() => {
+    const ids = Object.keys(consumerCallsMap);
+    if (ids.length === 0) return;
+    const usage: ConsumerUsage[] = ids.map((id) => {
+      const calls = consumerCallsMap[id] || 0;
+      const errors = consumerErrorsMap[id] || 0;
+      return {
+        consumer_id: id,
+        name: id,
+        calls,
+        error_rate: calls > 0 ? errors / calls : 0,
+        avg_latency_ms: (consumerLatencyMap[id] || 0) * 1000,
+      };
+    });
+    usage.sort((a, b) => b.calls - a.calls);
+    setConsumerUsage(usage);
+  }, [consumerCallsQuery.data, consumerErrorsQuery.data, consumerLatencyQuery.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prometheusAvailable = !totalCalls.error;
   const isInitialLoading = loading && !prometheusAvailable;
@@ -341,36 +448,116 @@ export function AnalyticsDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Top Tools */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
-                Top Tools ({timeRange})
-              </h2>
-              {topToolsList.length > 0 ? (
-                <div className="space-y-3">
-                  {topToolsList.map((tool, i) => (
-                    <div key={tool.name} className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
-                        {i + 1}
-                      </span>
-                      <Cpu className="h-4 w-4 text-neutral-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
-                            {tool.name}
-                          </span>
-                          <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-2">
-                            {tool.calls >= 1000
-                              ? `${(tool.calls / 1000).toFixed(1)}K`
-                              : Math.round(tool.calls)}{' '}
-                            calls
-                          </span>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                  Top Tools ({timeRange})
+                </h2>
+                <div className="flex items-center gap-1" role="group" aria-label="Sort tools by">
+                  {(['calls', 'errors', 'latency'] as SortField[]).map((field) => (
+                    <button
+                      key={field}
+                      onClick={() => setSortField(field)}
+                      className={`px-2 py-1 text-xs rounded ${
+                        sortField === field
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-medium'
+                          : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700'
+                      }`}
+                      aria-label={`Sort by ${field}`}
+                    >
+                      <ArrowUpDown className="h-3 w-3 inline mr-1" />
+                      {field}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {enrichedTools.length > 0 ? (
+                <div className="space-y-2">
+                  {enrichedTools.map((tool, i) => (
+                    <div key={tool.name}>
+                      <button
+                        onClick={() =>
+                          setExpandedTool(expandedTool === tool.name ? null : tool.name)
+                        }
+                        className="w-full flex items-center gap-3 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 rounded transition-colors text-left"
+                        aria-expanded={expandedTool === tool.name}
+                        aria-label={`Tool ${tool.name}`}
+                      >
+                        <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
+                          {i + 1}
+                        </span>
+                        {expandedTool === tool.name ? (
+                          <ChevronUp className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
+                              {tool.name}
+                            </span>
+                            <div className="flex items-center gap-3 ml-2">
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {tool.calls >= 1000
+                                  ? `${(tool.calls / 1000).toFixed(1)}K`
+                                  : Math.round(tool.calls)}{' '}
+                                calls
+                              </span>
+                              {tool.errors > 0 && (
+                                <span className="text-xs text-red-500">
+                                  {Math.round(tool.errors)} err
+                                </span>
+                              )}
+                              {tool.latency > 0 && (
+                                <span className="text-xs text-amber-600 dark:text-amber-400">
+                                  {Math.round(tool.latency * 1000)}ms
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="w-full bg-neutral-100 dark:bg-neutral-700 rounded-full h-1.5">
+                            <div
+                              className="bg-blue-500 h-1.5 rounded-full transition-all"
+                              style={{ width: `${(tool.calls / maxToolCalls) * 100}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full bg-neutral-100 dark:bg-neutral-700 rounded-full h-1.5">
-                          <div
-                            className="bg-blue-500 h-1.5 rounded-full transition-all"
-                            style={{ width: `${(tool.calls / maxToolCalls) * 100}%` }}
-                          />
+                      </button>
+                      {expandedTool === tool.name && (
+                        <div
+                          className="ml-12 mt-2 mb-3 p-3 bg-neutral-50 dark:bg-neutral-700/30 rounded-lg"
+                          data-testid="tool-detail-panel"
+                        >
+                          <h4 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase mb-2">
+                            Latency Percentiles
+                          </h4>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="text-center">
+                              <p className="text-xs text-neutral-400 dark:text-neutral-500">p50</p>
+                              <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                                {scalarValue(expandedToolP50.data) !== null
+                                  ? `${Math.round(scalarValue(expandedToolP50.data)! * 1000)}ms`
+                                  : '--'}
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-neutral-400 dark:text-neutral-500">p95</p>
+                              <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                                {scalarValue(expandedToolP95.data) !== null
+                                  ? `${Math.round(scalarValue(expandedToolP95.data)! * 1000)}ms`
+                                  : '--'}
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-neutral-400 dark:text-neutral-500">p99</p>
+                              <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                                {scalarValue(expandedToolP99.data) !== null
+                                  ? `${Math.round(scalarValue(expandedToolP99.data)! * 1000)}ms`
+                                  : '--'}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -468,6 +655,84 @@ export function AnalyticsDashboard() {
                 />
               )}
             </div>
+          </div>
+
+          {/* Consumer Activity Table */}
+          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                  Consumer Activity
+                </h2>
+                <p className="text-xs text-neutral-400 dark:text-neutral-500">
+                  Top consumers by usage ({timeRange})
+                </p>
+              </div>
+              <Users className="h-5 w-5 text-neutral-400" />
+            </div>
+            {consumerUsage.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-200 dark:border-neutral-700">
+                      <th className="text-left py-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
+                        Consumer
+                      </th>
+                      <th className="text-right py-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
+                        Calls
+                      </th>
+                      <th className="text-right py-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
+                        Error Rate
+                      </th>
+                      <th className="text-right py-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
+                        Avg Latency
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consumerUsage.map((c) => (
+                      <tr
+                        key={c.consumer_id}
+                        className="border-b border-neutral-100 dark:border-neutral-700/50 hover:bg-neutral-50 dark:hover:bg-neutral-700/30"
+                      >
+                        <td className="py-2 px-2">
+                          <span className="font-medium text-neutral-900 dark:text-white">
+                            {c.name}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-right text-neutral-700 dark:text-neutral-300">
+                          {c.calls >= 1000
+                            ? `${(c.calls / 1000).toFixed(1)}K`
+                            : Math.round(c.calls)}
+                        </td>
+                        <td className="py-2 px-2 text-right">
+                          <span
+                            className={
+                              c.error_rate > 0.05
+                                ? 'text-red-600 dark:text-red-400 font-medium'
+                                : c.error_rate > 0.01
+                                  ? 'text-yellow-600 dark:text-yellow-400'
+                                  : 'text-green-600 dark:text-green-400'
+                            }
+                          >
+                            {(c.error_rate * 100).toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-right text-neutral-700 dark:text-neutral-300">
+                          {Math.round(c.avg_latency_ms)}ms
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState
+                title="No consumer data"
+                description="Consumer activity will appear here once consumers start making API calls."
+                illustration={<Users className="h-12 w-12" />}
+              />
+            )}
           </div>
         </>
       )}

@@ -50,6 +50,9 @@ subtle = "2"                                 # Timing-safe comparison for finger
 base64 = "0.22"                              # Base64url decode for RFC 8705 thumbprints
 ipnet = "2"                                  # CIDR matching for trusted proxies
 
+# === Sender-Constrained Tokens — DPoP (CAB-438, RFC 9449) ===
+sha2 = "0.10"                                # SHA-256 for DPoP access token hash (ath claim)
+
 # === Guardrails: PII + Injection Detection (CAB-707) ===
 regex = "1"
 notify = "8"

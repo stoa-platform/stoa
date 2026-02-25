@@ -1,0 +1,39 @@
+# PocketBase — HEGEMON Agent State Store Remote Tier
+# VPS: 51.254.139.205 (shared with n8n + Healthchecks)
+# URL: state.gostoa.dev (Caddy TLS via shared-proxy network)
+#
+# Usage:
+#   cp .env.template .env   # fill PB_ADMIN_PASSWORD
+#   docker compose up -d
+#
+# Health: curl http://localhost:8090/api/health
+
+services:
+  pocketbase:
+    image: elestio/pocketbase:latest
+    container_name: pocketbase
+    restart: unless-stopped
+    command: ["serve", "--http=0.0.0.0:8090"]
+    volumes:
+      - pb_data:/pb/pb_data
+    environment:
+      PB_ADMIN_EMAIL: ${PB_ADMIN_EMAIL:-admin@gostoa.dev}
+      PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:?Set PB_ADMIN_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:8090:8090"
+    networks:
+      - shared-proxy
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  shared-proxy:
+    external: true
+
+volumes:
+  pb_data:

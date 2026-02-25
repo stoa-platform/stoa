@@ -15,10 +15,10 @@ describe('AuditLog', () => {
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
-  it('renders title and coming soon card', () => {
+  it('renders title and audit log content', () => {
     render(<AuditLog />);
     expect(screen.getByText('Audit Log')).toBeInTheDocument();
-    expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+    expect(screen.getByText(/Total Events/i)).toBeInTheDocument();
   });
 
   // 4-persona coverage

@@ -95,3 +95,24 @@ spec:
             multivalued: "true"
             id.token.claim: "true"
             access.token.claim: "true"
+
+    # Identity Governance scope (CAB-1463)
+    # Includes product_roles claim derived from SCIM group membership
+    - name: stoa-identity
+      description: "STOA Identity Governance — product_roles claim"
+      protocol: openid-connect
+      attributes:
+        include.in.token.scope: "true"
+        display.on.consent.screen: "false"
+      protocolMappers:
+        - name: product_roles
+          protocol: openid-connect
+          protocolMapper: oidc-usermodel-attribute-mapper
+          config:
+            user.attribute: product_roles
+            claim.name: product_roles
+            jsonType.label: JSON
+            multivalued: "true"
+            id.token.claim: "true"
+            access.token.claim: "true"
+            userinfo.token.claim: "true"

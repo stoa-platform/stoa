@@ -1,0 +1,161 @@
+# SCIM Groups → Product Roles Matrix
+# CAB-1463 Phase 1 — Identity Governance
+#
+# This file is the Git-versioned source of truth for SCIM group → role mapping.
+# The identity governance service reads this matrix to:
+#   1. Configure Keycloak Protocol Mappers for the `product_roles` JWT claim
+#   2. Map enterprise IdP SCIM groups to STOA realm roles
+#   3. Detect drift between IdP groups and gateway RBAC bindings
+#
+# Format: SCIM group names are case-insensitive for matching.
+# Wildcards (*) match any suffix (e.g., "stoa-*-admin" matches "stoa-acme-admin").
+
+apiVersion: stoa.io/v1
+kind: RolesMatrix
+metadata:
+  name: stoa-roles-matrix
+  description: "SCIM group to product_roles claim mapping"
+  version: "1.0.0"
+  tags:
+    - identity
+    - governance
+    - rbac
+    - scim
+
+spec:
+  # --- Keycloak Realm ---
+  realm: stoa
+
+  # --- JWT Claim Configuration ---
+  # The `product_roles` claim is a JSON array embedded in the access token.
+  # It complements the existing `roles` claim (realm roles) with fine-grained
+  # product-level permissions derived from SCIM group membership.
+  jwtClaim:
+    name: product_roles
+    type: JSON
+    multivalued: true
+    includeIn:
+      accessToken: true
+      idToken: true
+      userinfo: true
+
+  # --- SCIM Group → Role Mappings ---
+  # Each mapping binds an enterprise IdP SCIM group to a set of STOA product roles.
+  # Multiple groups can map to the same role (union).
+  # A user in multiple groups gets the union of all mapped roles.
+  mappings:
+    # --- Platform Administration ---
+    - scimGroup: "stoa-platform-admins"
+      description: "Full platform administrators"
+      productRoles:
+        - cpi-admin
+      realmRoles:
+        - cpi-admin
+      scopes:
+        - stoa:admin
+        - stoa:write
+        - stoa:read
+
+    # --- Tenant Administration (wildcard per tenant) ---
+    - scimGroup: "stoa-*-admins"
+      description: "Tenant administrators (wildcard: stoa-{tenant}-admins)"
+      productRoles:
+        - tenant-admin
+      realmRoles:
+        - tenant-admin
+      scopes:
+        - stoa:write
+        - stoa:read
+      tenantExtraction:
+        # Extract tenant ID from group name: stoa-{tenant}-admins
+        pattern: "^stoa-(.+)-admins$"
+        captureGroup: 1
+
+    # --- DevOps / API Deployers ---
+    - scimGroup: "stoa-*-devops"
+      description: "DevOps engineers (wildcard: stoa-{tenant}-devops)"
+      productRoles:
+        - devops
+      realmRoles:
+        - devops
+      scopes:
+        - stoa:write
+        - stoa:read
+      tenantExtraction:
+        pattern: "^stoa-(.+)-devops$"
+        captureGroup: 1
+
+    # --- API Consumers / Viewers ---
+    - scimGroup: "stoa-*-viewers"
+      description: "Read-only viewers (wildcard: stoa-{tenant}-viewers)"
+      productRoles:
+        - viewer
+      realmRoles:
+        - viewer
+      scopes:
+        - stoa:read
+      tenantExtraction:
+        pattern: "^stoa-(.+)-viewers$"
+        captureGroup: 1
+
+    # --- MCP Tool Operators ---
+    - scimGroup: "stoa-mcp-operators"
+      description: "MCP tool execution permissions"
+      productRoles:
+        - mcp-operator
+      realmRoles:
+        - devops
+      scopes:
+        - stoa:read
+        - stoa:write
+      additionalClaims:
+        mcp_access: "true"
+
+    # --- Service Accounts (machine-to-machine) ---
+    - scimGroup: "stoa-service-accounts"
+      description: "Automated service accounts (CI/CD, monitoring)"
+      productRoles:
+        - service-account
+      realmRoles:
+        - devops
+      scopes:
+        - stoa:read
+        - stoa:write
+      constraints:
+        requireClientCredentials: true
+        maxTokenLifespan: 300  # 5 minutes
+
+  # --- Reconciliation Rules ---
+  reconciliation:
+    # Schedule: daily at 06:00 UTC (K8s CronJob)
+    schedule: "0 6 * * *"
+    # What to do when drift is detected
+    onDrift:
+      mode: create_ticket   # create_ticket | auto_reconcile | alert_only
+      severity: warning
+      alertChannels:
+        - slack
+        - email
+    # Stale account detection
+    staleAccounts:
+      thresholdDays: 90     # Flag accounts inactive for 90+ days
+      action: flag           # flag | disable | delete
+
+  # --- Access Review Configuration ---
+  accessReview:
+    # Quarterly campaigns (NIS2/DORA compliance)
+    schedule: quarterly
+    # Scope: which mappings are subject to review
+    scope:
+      - cpi-admin           # Always reviewed — highest privilege
+      - tenant-admin        # Reviewed per tenant
+      - service-account     # Reviewed for orphaned accounts
+    # Reviewer assignment
+    reviewers:
+      primary: owner         # The resource owner
+      fallback: security-team
+    # SLA for review completion
+    sla:
+      reminderDays: [14, 7, 3, 1]
+      escalationDays: 21
+      autoRevokeAfterDays: 30  # Auto-revoke if not certified after 30 days

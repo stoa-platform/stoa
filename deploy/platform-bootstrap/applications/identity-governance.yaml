@@ -1,0 +1,72 @@
+# Identity Governance API — OAuth2 Application
+# CAB-1463 — SCIM Provisioning, DCR Automation, Access Review
+#
+# Confidential client for the identity governance service.
+# Used by the reconciliation CronJob and the SCIM inbound endpoints.
+apiVersion: stoa.io/v1
+kind: Application
+metadata:
+  name: stoa-identity-governance
+  description: "Identity Governance API — SCIM, DCR, Access Review"
+  tags:
+    - platform
+    - backend
+    - identity
+    - governance
+
+spec:
+  displayName: STOA Identity Governance
+  type: service
+  public: false
+
+  # OAuth2 Configuration (matches Keycloak client)
+  oauth2:
+    clientId: stoa-identity-governance
+    grantTypes:
+      - client_credentials   # For CronJob and service-to-service
+    serviceAccountsEnabled: true
+    # Token endpoint auth: client_secret for now, tls_client_auth later (CAB-438)
+    tokenEndpointAuthMethod: client_secret_basic
+
+  # Service Account Roles (least privilege — CAB-438 security review)
+  # Only manage-users + view-realm. NO manage-clients/manage-realm to prevent
+  # privilege escalation if this service account is compromised.
+  serviceAccountRoles:
+    client:
+      - realm-management:
+          - manage-users       # SCIM user provisioning
+          - view-realm         # Read realm config for reconciliation
+
+  # API access
+  subscriptions:
+    - apiName: Control-Plane-API
+      version: "2.0"
+      scopes:
+        - stoa:admin
+        - stoa:write
+        - stoa:read
+      internal: true
+
+  # Keycloak Admin API access (for user/client management)
+  directAccess:
+    enabled: true
+    endpoints:
+      - name: keycloak-admin
+        url: https://auth.${BASE_DOMAIN}/admin/realms/stoa
+      - name: control-plane-api
+        url: https://api.${BASE_DOMAIN}
+
+  # Rate limits (moderate — batch operations)
+  rateLimit:
+    requests: 1000
+    window: 60
+
+  # Permissions
+  permissions:
+    - manage-users
+    - manage-clients
+    - manage-roles
+    - manage-scim
+    - run-reconciliation
+    - run-access-review
+    - export-audit-trail

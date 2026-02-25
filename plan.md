@@ -110,9 +110,8 @@
   - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO (PRs #456, #463, #469)
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
-- [~] CAB-1457: [api] Billing models + migration + service (5 pts, P2)
-
-### Done (61)
+### Done (62)
+- [x] CAB-1457: [api] Billing models + migration + service (5 pts, P2) — PR #1000
 - [x] CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts) — 14 PRs (#996–#1074)
 - [x] CAB-1451: [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974
 - [x] CAB-1452: [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008

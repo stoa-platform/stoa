@@ -1,0 +1,160 @@
+# SCIM Provider Configuration
+# CAB-1463 Phase 1 — Identity Governance
+#
+# Configures Keycloak as a SCIM consumer, receiving user/group provisioning
+# from enterprise Identity Providers (Azure AD, Okta, Google Workspace, etc.).
+#
+# Keycloak 26.x supports SCIM 2.0 via the built-in User Federation provider
+# or the keycloak-scim-bridge extension.
+#
+# This config defines the SCIM endpoints, attribute mappings, and group
+# handling that the identity governance service enforces.
+
+apiVersion: stoa.io/v1
+kind: ScimProvider
+metadata:
+  name: stoa-scim-provider
+  description: "SCIM 2.0 inbound provisioning for enterprise IdP federation"
+  tags:
+    - identity
+    - scim
+    - federation
+    - provisioning
+
+spec:
+  # --- SCIM 2.0 Endpoints ---
+  # These are exposed by the STOA Identity Governance API (not Keycloak directly).
+  # The API validates requests, maps attributes, and syncs to Keycloak.
+  endpoints:
+    users: /api/v1/scim/v2/Users
+    groups: /api/v1/scim/v2/Groups
+    schemas: /api/v1/scim/v2/Schemas
+    resourceTypes: /api/v1/scim/v2/ResourceTypes
+    serviceProviderConfig: /api/v1/scim/v2/ServiceProviderConfig
+    bulk: /api/v1/scim/v2/Bulk
+
+  # --- Authentication ---
+  # SCIM endpoints require a bearer token from the enterprise IdP.
+  # The token is validated against the DCR-registered client.
+  authentication:
+    type: bearer
+    tokenValidation:
+      issuer: dynamic   # Validated per-tenant IdP configuration
+      audience: stoa-scim-api
+      requiredScopes:
+        - scim:users
+        - scim:groups
+
+  # --- User Attribute Mapping ---
+  # Maps SCIM Core User schema (RFC 7643) to Keycloak user attributes.
+  userMapping:
+    # Required attributes
+    userName: username
+    name:
+      givenName: firstName
+      familyName: lastName
+    emails:
+      primary: email
+    active: enabled
+
+    # Custom STOA attributes (mapped to Keycloak user attributes)
+    extensions:
+      "urn:stoa:scim:schemas:1.0:User":
+        tenant_id:
+          keycloakAttribute: tenant
+          required: true
+        department:
+          keycloakAttribute: department
+          required: false
+        cost_center:
+          keycloakAttribute: cost_center
+          required: false
+
+  # --- Group Mapping ---
+  # SCIM groups are mapped to Keycloak realm roles and the roles-matrix.
+  groupMapping:
+    # The display name of the SCIM group is matched against roles-matrix.yaml
+    matchField: displayName
+    rolesMatrixRef: stoa-roles-matrix
+    # When a group is provisioned that doesn't match the roles-matrix:
+    unmatchedGroupAction: ignore  # ignore | create_keycloak_group | reject
+
+    # Group membership changes trigger:
+    onMemberAdd:
+      - assignRealmRoles      # From roles-matrix mapping
+      - assignProductRoles    # Into product_roles claim
+      - auditLog              # Immutable audit entry
+    onMemberRemove:
+      - revokeRealmRoles
+      - revokeProductRoles
+      - auditLog
+      - checkActiveSession    # Optionally revoke active tokens
+
+  # --- Provisioning Behavior ---
+  provisioning:
+    # User lifecycle
+    createUsers: true          # Create KC users from SCIM
+    updateUsers: true          # Update KC users from SCIM
+    deleteUsers: false         # Never delete — deactivate only
+    deactivateOnDelete: true   # SCIM DELETE → KC user disabled
+
+    # Group lifecycle
+    createGroups: false        # Groups are defined in roles-matrix, not created dynamically
+    updateGroups: true         # Update membership only
+    deleteGroups: false        # Never delete groups
+
+    # Conflict resolution
+    conflictResolution:
+      existingUser: merge      # merge | skip | overwrite
+      existingGroup: merge
+
+    # Protected attributes — NEVER overwritten by SCIM merge (security guard)
+    # These attributes are managed exclusively by the identity governance service.
+    protectedAttributes:
+      - product_roles          # Derived from roles-matrix.yaml, not SCIM payload
+      - realmRoles             # Managed via roles-matrix mapping, not direct SCIM
+      - is_admin               # Platform-level flag, admin-only
+      - stoa_managed           # Internal tracking attribute
+
+    # Batch provisioning
+    bulk:
+      maxOperations: 1000
+      maxPayloadSize: 1048576  # 1 MB
+
+  # --- Multi-Tenant Isolation ---
+  # Each tenant has its own SCIM endpoint with tenant-scoped data.
+  multiTenant:
+    enabled: true
+    tenantHeader: X-Tenant-ID
+    isolation: strict          # Users can only see/modify their own tenant's data
+    tenantDiscovery:
+      # Tenant is extracted from the SCIM bearer token's tenant_id claim
+      source: token_claim
+      claimName: tenant_id
+
+  # --- Keycloak User Federation Provider ---
+  # Reference config for the Keycloak SCIM federation provider.
+  # Applied by: deploy/platform-bootstrap/scripts/configure-product-roles-mapper.sh
+  keycloak:
+    # Protocol Mapper: product_roles claim
+    protocolMapper:
+      name: product-roles-mapper
+      protocol: openid-connect
+      protocolMapper: oidc-usermodel-attribute-mapper
+      config:
+        user.attribute: product_roles
+        claim.name: product_roles
+        jsonType.label: JSON
+        multivalued: "true"
+        id.token.claim: "true"
+        access.token.claim: "true"
+        userinfo.token.claim: "true"
+
+    # Client Scope: stoa-identity
+    clientScope:
+      name: stoa-identity
+      description: "STOA Identity Governance scope — includes product_roles claim"
+      protocol: openid-connect
+      attributes:
+        include.in.token.scope: "true"
+        display.on.consent.screen: "false"

@@ -36,6 +36,8 @@ configMapGenerator:
       - applications/stoa-portal.yaml
       - applications/control-plane-ui.yaml
       - applications/mcp-gateway.yaml
+      - applications/identity-governance.yaml
+      - applications/dcr-service-account-template.yaml
 
   - name: platform-policy-configs
     files:
@@ -43,10 +45,20 @@ configMapGenerator:
       - policies/rate-limit-standard.yaml
       - policies/cors-platform.yaml
       - policies/logging-standard.yaml
+      - policies/sender-constrained-tokens.yaml
+      - policies/dcr-policy.yaml
 
   - name: platform-scope-configs
     files:
       - scopes/stoa-scopes.yaml
+
+  - name: platform-rbac-configs
+    files:
+      - rbac/roles-matrix.yaml
+
+  - name: platform-scim-configs
+    files:
+      - scim/scim-provider.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

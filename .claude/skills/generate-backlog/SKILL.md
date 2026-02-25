@@ -34,6 +34,16 @@ Target: $ARGUMENTS
 | `roadmap:community` | `2de713f1-47a9-49a0-9e84-a7bd947eb707` |
 | `roadmap:observability` | `d4ce6487-92fe-4f12-a5f3-8d682e03623f` |
 
+### Instance Label IDs (parallel dispatch)
+
+| Label | ID | Components |
+|-------|-----|-----------|
+| `instance:backend` | `b60c32eb-3374-4a53-a487-b409bfed2d61` | cp-api, operator, infra, docs |
+| `instance:frontend` | `e9434a2f-f313-4223-a042-598185718c7b` | cp-ui, portal, shared |
+| `instance:auth` | `c4bb2546-7bbc-45d9-b5ab-384fd7065d48` | keycloak, IAM |
+| `instance:mcp` | `19497340-8712-45d0-8728-a77c96c592a7` | stoa-gateway |
+| `instance:qa` | `00ba65ee-81e3-40e8-b2d2-38f340617b2f` | e2e, tests |
+
 ## Step 0: Determine Mode
 
 | Argument | Mode | Description |
@@ -129,20 +139,23 @@ Instead, GROUP all raw findings into 8-15 MEGA tickets by component + theme.
 
 Group findings into MEGAs using this matrix:
 
-| Component | Theme | MEGA Title Pattern | Target Estimate |
-|-----------|-------|--------------------|-----------------|
-| `control-plane-api` | `platform` | "API Test Coverage & Quality MEGA" | 21-34 pts |
-| `control-plane-api` | `platform` | "API Feature Completion MEGA" (from TODOs) | 21-34 pts |
-| `stoa-gateway` | `gateway` | "Gateway Test Coverage & Quality MEGA" | 21-34 pts |
-| `stoa-gateway` | `gateway` | "Gateway Feature Completion MEGA" (from TODOs) | 21-34 pts |
-| `portal` | `dx` | "Portal Test Coverage & UX Completion MEGA" | 21-34 pts |
-| `control-plane-ui` | `dx` | "Console Test Coverage & UX Completion MEGA" | 21-34 pts |
-| `e2e` | `dx` | "E2E Test Expansion — Unblock @wip Features MEGA" | 13-21 pts |
-| `k8s/charts` | `platform` | "K8s Production Hardening MEGA" (HPA, PDB, NetworkPolicy) | 13-21 pts |
-| `all` | `dx` | "Developer Experience MEGA" (READMEs, .env, DX tooling) | 13-21 pts |
-| `docs` | `community` | "Documentation & Content MEGA" | 13-21 pts |
-| `all` | `platform` | "Tech Debt Cleanup MEGA" (lint suppressions, refactoring) | 13-21 pts |
-| roadmap items | varies | "Roadmap: <Phase Name> MEGA" | 21-55 pts |
+| Component | Theme | MEGA Title Pattern | Target Estimate | Instance |
+|-----------|-------|--------------------|-----------------|----------|
+| `control-plane-api` | `platform` | "API Test Coverage & Quality MEGA" | 21-34 pts | `instance:backend` |
+| `control-plane-api` | `platform` | "API Feature Completion MEGA" (from TODOs) | 21-34 pts | `instance:backend` |
+| `stoa-gateway` | `gateway` | "Gateway Test Coverage & Quality MEGA" | 21-34 pts | `instance:mcp` |
+| `stoa-gateway` | `gateway` | "Gateway Feature Completion MEGA" (from TODOs) | 21-34 pts | `instance:mcp` |
+| `portal` | `dx` | "Portal Test Coverage & UX Completion MEGA" | 21-34 pts | `instance:frontend` |
+| `control-plane-ui` | `dx` | "Console Test Coverage & UX Completion MEGA" | 21-34 pts | `instance:frontend` |
+| `e2e` | `dx` | "E2E Test Expansion — Unblock @wip Features MEGA" | 13-21 pts | `instance:qa` |
+| `k8s/charts` | `platform` | "K8s Production Hardening MEGA" (HPA, PDB, NetworkPolicy) | 13-21 pts | `instance:backend` |
+| `all` | `dx` | "Developer Experience MEGA" (READMEs, .env, DX tooling) | 13-21 pts | _(lead component)_ |
+| `docs` | `community` | "Documentation & Content MEGA" | 13-21 pts | `instance:backend` |
+| `all` | `platform` | "Tech Debt Cleanup MEGA" (lint suppressions, refactoring) | 13-21 pts | _(lead component)_ |
+| roadmap items | varies | "Roadmap: <Phase Name> MEGA" | 21-55 pts | _(lead component)_ |
+
+**Instance tagging rule**: Every MEGA gets an `instance:*` label based on its primary component.
+For multi-component MEGAs (marked "lead component"), use the component with the most LOC impact.
 
 ### Grouping Rules
 
@@ -253,7 +266,7 @@ linear.create_issue(
   assignee: "0543749d-ecde-4edf-aec1-6f372aafafce",
   estimate: <pts from Step 3>,
   priority: 3,
-  labels: ["roadmap:<theme>"],
+  labels: ["roadmap:<theme>", "instance:<lead-instance>"],
   state: "Backlog"
 )
 ```

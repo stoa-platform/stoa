@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-26 (C9: 830pts scope, 830pts done (100%), 68 code issues closed + 5 MEGAs closed)
+> Last sync: 2026-02-26 (C9: 1189pts scope, 843pts done, 64/85 issues closed — estimate inflation from Linear re-scoring)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 830 pts | **Done**: 830 pts (100%) | **Issues**: 68 code + 5 MEGAs closed
+**Scope**: 1189 pts (re-scored) | **Done**: 843 pts (71%) | **Issues**: 64/85 closed (21 Duplicate from backlog trim)
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content + HEGEMON Foundation
 
 ### In Progress
@@ -191,6 +191,7 @@
 - [x] CAB-1513: stoa-parallel v2 — PocketBase + approve-once (13 pts) — PR #1114
 - [x] CAB-1482: PocketBase remote tier + sync (5 pts) — PRs #1098, #1099, #1110
 - [x] CAB-1481: Progressive Permission Allowlist (3 pts) — PR #1102
+- [x] CAB-1480: Instance-Based Ticket Dispatch (13 pts)
 
 **Security & Protocol**:
 - [x] CAB-438: Sender-Constrained Tokens W4+W5 — DPoP + Security Dashboard — PRs #1101, #1103
@@ -199,9 +200,14 @@
 **Test Coverage**:
 - [x] CAB-1479: API Router Test Audit P3-P5 — PRs #1095, #1096, #1105 (50 tests)
 
-**Other completed**:
+**Metering & Chargeback (CAB-508)**:
+- [x] CAB-508: [MEGA] AI Tools Metering & Chargeback (21 pts)
 - [x] CAB-1457: [api] Billing models + migration (5 pts) — PR #1000
+- [x] CAB-1458: [api] Metering consumer + billing API endpoints (5 pts)
+- [x] CAB-1459: [e2e] Metering & chargeback integration tests (3 pts)
 - [x] CAB-1456: [gateway] Metering enrichment (5 pts) — PR #998
+
+**Other completed**:
 - [x] CAB-1460: Scheduled Blog Publishing (5 pts) — PR #1053
 - [x] CAB-402: Policy Drift Monitoring (5 pts) — PR #1059
 - [x] CAB-1384: Landing i18n FR+EN (8 pts) — stoa-web
@@ -259,6 +265,7 @@
 
 **Scope**: 193 pts | **Theme**: Kill the Backlog — v1.0 Foundation
 **Council batch**: 15 tickets evaluated, 9 Go (>=8.0), 3 Fix (6.0-7.9), 3 Redo (<6.0 → deferred)
+**Linear status**: All tickets "Backlog" — activate to "Todo" when cycle starts (Mar 2)
 
 ### Todo
 

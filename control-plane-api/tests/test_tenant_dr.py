@@ -20,6 +20,7 @@ from src.schemas.tenant_dr import (
     ImportMode,
     ImportResult,
     TenantExportResponse,
+    TenantImportRequest,
 )
 
 # ============ Schema Tests ============
@@ -549,3 +550,512 @@ class TestExportEndpoint:
         """
         response = client_as_cpi_admin.get("/v1/tenants/non-existent/export")
         assert response.status_code in (404, 500)
+
+
+# ============ Import Service Tests ============
+
+
+def _make_archive(
+    tenant_id: str = "source-tenant",
+    backend_apis: list | None = None,
+    contracts: list | None = None,
+    consumers: list | None = None,
+    plans: list | None = None,
+    subscriptions: list | None = None,
+    policies: list | None = None,
+    skills: list | None = None,
+    webhooks: list | None = None,
+    mcp_servers: list | None = None,
+) -> TenantExportResponse:
+    """Helper to create a minimal export archive for import tests."""
+    return TenantExportResponse(
+        metadata=ExportMetadata(
+            exported_at=datetime.now(UTC),
+            tenant_id=tenant_id,
+            tenant_name="Source Tenant",
+        ),
+        backend_apis=backend_apis or [],
+        contracts=contracts or [],
+        consumers=consumers or [],
+        plans=plans or [],
+        subscriptions=subscriptions or [],
+        policies=policies or [],
+        skills=skills or [],
+        webhooks=webhooks or [],
+        external_mcp_servers=mcp_servers or [],
+    )
+
+
+class TestTenantImportService:
+    """Tests for the import service using mocked DB session."""
+
+    @pytest.fixture
+    def mock_db(self):
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        return db
+
+    @pytest.fixture
+    def tenant_id(self):
+        return "target-tenant"
+
+    def _mock_tenant(self, tenant_id: str) -> MagicMock:
+        t = MagicMock()
+        t.id = tenant_id
+        t.name = "Target Tenant"
+        return t
+
+    def _mock_execute_sequence(self, mock_db, results: list):
+        """Set up mock_db.execute to return results in sequence."""
+        mock_results = []
+        for item in results:
+            mr = MagicMock()
+            mr.scalar_one_or_none.return_value = item
+            if item and not isinstance(item, MagicMock):
+                mr.scalar_one.return_value = item
+            mock_results.append(mr)
+        mock_db.execute.side_effect = mock_results
+
+    @pytest.mark.asyncio
+    async def test_import_tenant_not_found(self, mock_db):
+        """Import should raise ValueError for non-existent target tenant."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        request = TenantImportRequest(archive=_make_archive())
+        service = TenantImportService(mock_db)
+        with pytest.raises(ValueError, match="not found"):
+            await service.import_tenant("non-existent", request)
+
+    @pytest.mark.asyncio
+    async def test_import_empty_archive(self, mock_db, tenant_id):
+        """Import of empty archive should succeed with zero counts."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = self._mock_tenant(tenant_id)
+        mock_db.execute.return_value = tenant_result
+
+        request = TenantImportRequest(archive=_make_archive())
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.tenant_id == tenant_id
+        assert result.dry_run is False
+        assert len(result.errors) == 0
+        assert sum(result.created.values()) == 0
+
+    @pytest.mark.asyncio
+    async def test_import_backend_apis_created(self, mock_db, tenant_id):
+        """Import should create new backend APIs."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            backend_apis=[
+                ExportedBackendApi(id=uuid.uuid4(), name="api-1", backend_url="https://api1.example.com"),
+                ExportedBackendApi(id=uuid.uuid4(), name="api-2", backend_url="https://api2.example.com"),
+            ]
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        # Sequence: tenant lookup, then 2 existence checks (both None = not found)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        not_found = MagicMock()
+        not_found.scalar_one_or_none.return_value = None
+
+        mock_db.execute.side_effect = [tenant_result, not_found, not_found]
+
+        request = TenantImportRequest(archive=archive)
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.created.get("backend_apis") == 2
+        assert mock_db.add.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_import_skip_existing(self, mock_db, tenant_id):
+        """Skip mode should not overwrite existing resources."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            backend_apis=[
+                ExportedBackendApi(id=uuid.uuid4(), name="existing-api"),
+            ]
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        # API already exists
+        existing = MagicMock()
+        existing.scalar_one_or_none.return_value = MagicMock()
+
+        mock_db.execute.side_effect = [tenant_result, existing]
+
+        request = TenantImportRequest(archive=archive, mode=ImportMode(conflict_resolution="skip"))
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.skipped.get("backend_apis") == 1
+        assert result.created.get("backend_apis", 0) == 0
+        # No db.add calls for skipped resources
+        assert mock_db.add.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_import_fail_on_conflict(self, mock_db, tenant_id):
+        """Fail mode should report error on conflict."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            backend_apis=[
+                ExportedBackendApi(id=uuid.uuid4(), name="existing-api"),
+            ]
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        existing = MagicMock()
+        existing.scalar_one_or_none.return_value = MagicMock()
+
+        mock_db.execute.side_effect = [tenant_result, existing]
+
+        request = TenantImportRequest(archive=archive, mode=ImportMode(conflict_resolution="fail"))
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is False
+        assert len(result.errors) == 1
+        assert "existing-api" in result.errors[0]
+
+    @pytest.mark.asyncio
+    async def test_import_overwrite_existing(self, mock_db, tenant_id):
+        """Overwrite mode should update existing resources."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            backend_apis=[
+                ExportedBackendApi(
+                    id=uuid.uuid4(),
+                    name="existing-api",
+                    display_name="Updated Name",
+                    backend_url="https://new-url.com",
+                ),
+            ]
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        # First check: API exists
+        existing_obj = MagicMock()
+        existing_check = MagicMock()
+        existing_check.scalar_one_or_none.return_value = existing_obj
+
+        # Second query for overwrite: fetch the object to update
+        overwrite_result = MagicMock()
+        overwrite_result.scalar_one.return_value = existing_obj
+
+        mock_db.execute.side_effect = [tenant_result, existing_check, overwrite_result]
+
+        request = TenantImportRequest(archive=archive, mode=ImportMode(conflict_resolution="overwrite"))
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.skipped.get("backend_apis") == 1
+        # Overwrite should modify the object's attributes
+        assert existing_obj.display_name == "Updated Name"
+        assert existing_obj.backend_url == "https://new-url.com"
+
+    @pytest.mark.asyncio
+    async def test_import_dry_run(self, mock_db, tenant_id):
+        """Dry-run mode should validate without creating resources."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            backend_apis=[
+                ExportedBackendApi(id=uuid.uuid4(), name="new-api"),
+            ],
+            plans=[
+                ExportedPlan(id=uuid.uuid4(), slug="gold", name="Gold Plan"),
+            ],
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        not_found = MagicMock()
+        not_found.scalar_one_or_none.return_value = None
+
+        mock_db.execute.side_effect = [tenant_result, not_found, not_found]
+
+        request = TenantImportRequest(archive=archive, mode=ImportMode(dry_run=True))
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.dry_run is True
+        assert result.created.get("backend_apis") == 1
+        assert result.created.get("plans") == 1
+        # No actual DB writes in dry-run
+        assert mock_db.add.call_count == 0
+        mock_db.flush.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_import_subscriptions_skipped(self, mock_db, tenant_id):
+        """Subscriptions should always be skipped (API keys excluded from export)."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            subscriptions=[
+                ExportedSubscription(
+                    id=uuid.uuid4(),
+                    application_id="app-1",
+                    application_name="My App",
+                    subscriber_email="dev@test.com",
+                    api_id="api-1",
+                    status="active",
+                ),
+            ]
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+        mock_db.execute.return_value = tenant_result
+
+        request = TenantImportRequest(archive=archive)
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.skipped.get("subscriptions") == 1
+        assert result.created.get("subscriptions", 0) == 0
+
+    @pytest.mark.asyncio
+    async def test_import_contracts_with_bindings(self, mock_db, tenant_id):
+        """Import should create contracts with their protocol bindings."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            contracts=[
+                ExportedContract(
+                    id=uuid.uuid4(),
+                    name="payment-service",
+                    version="2.0.0",
+                    status="published",
+                    bindings=[
+                        {"protocol": "rest", "enabled": True, "endpoint": "/api/v1"},
+                        {"protocol": "mcp", "enabled": True, "tool_name": "create_payment"},
+                    ],
+                ),
+            ]
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        not_found = MagicMock()
+        not_found.scalar_one_or_none.return_value = None
+
+        mock_db.execute.side_effect = [tenant_result, not_found]
+
+        request = TenantImportRequest(archive=archive)
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.created.get("contracts") == 1
+        # 1 contract + 2 bindings = 3 db.add calls
+        assert mock_db.add.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_import_mcp_servers_with_tools(self, mock_db, tenant_id):
+        """Import should create MCP servers with their tools."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            mcp_servers=[
+                ExportedExternalMcpServer(
+                    id=uuid.uuid4(),
+                    name="linear",
+                    base_url="https://mcp.linear.app/sse",
+                    tools=[
+                        {"name": "create_issue", "description": "Create issue"},
+                        {"name": "list_issues", "description": "List issues"},
+                    ],
+                ),
+            ]
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        not_found = MagicMock()
+        not_found.scalar_one_or_none.return_value = None
+
+        mock_db.execute.side_effect = [tenant_result, not_found]
+
+        request = TenantImportRequest(archive=archive)
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.created.get("external_mcp_servers") == 1
+        # 1 server + 2 tools = 3 db.add calls
+        assert mock_db.add.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_import_multiple_resource_types(self, mock_db, tenant_id):
+        """Import should handle multiple resource types in one archive."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            backend_apis=[ExportedBackendApi(id=uuid.uuid4(), name="api-1")],
+            plans=[ExportedPlan(id=uuid.uuid4(), slug="free", name="Free")],
+            consumers=[
+                ExportedConsumer(
+                    id=uuid.uuid4(), external_id="c-1", name="Consumer 1", email="c1@test.com", status="active"
+                )
+            ],
+            policies=[
+                ExportedPolicy(id=uuid.uuid4(), name="rate-limit-1", policy_type="rate_limit", config={"rpm": 100})
+            ],
+            skills=[ExportedSkill(id=uuid.uuid4(), name="summarize", scope="tenant")],
+            webhooks=[
+                ExportedWebhook(
+                    id=uuid.uuid4(),
+                    name="events",
+                    url="https://hooks.example.com",
+                    events=["subscription.created"],
+                )
+            ],
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        not_found = MagicMock()
+        not_found.scalar_one_or_none.return_value = None
+
+        # tenant + 6 existence checks (all not found)
+        mock_db.execute.side_effect = [tenant_result] + [not_found] * 6
+
+        request = TenantImportRequest(archive=archive)
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.created.get("backend_apis") == 1
+        assert result.created.get("plans") == 1
+        assert result.created.get("consumers") == 1
+        assert result.created.get("policies") == 1
+        assert result.created.get("skills") == 1
+        assert result.created.get("webhooks") == 1
+        assert mock_db.add.call_count == 6
+
+    @pytest.mark.asyncio
+    async def test_import_mixed_skip_and_create(self, mock_db, tenant_id):
+        """Import with some existing and some new resources."""
+        from src.services.tenant_dr_service import TenantImportService
+
+        archive = _make_archive(
+            backend_apis=[
+                ExportedBackendApi(id=uuid.uuid4(), name="existing-api"),
+                ExportedBackendApi(id=uuid.uuid4(), name="new-api"),
+            ]
+        )
+
+        tenant = self._mock_tenant(tenant_id)
+        tenant_result = MagicMock()
+        tenant_result.scalar_one_or_none.return_value = tenant
+
+        exists = MagicMock()
+        exists.scalar_one_or_none.return_value = MagicMock()
+
+        not_found = MagicMock()
+        not_found.scalar_one_or_none.return_value = None
+
+        mock_db.execute.side_effect = [tenant_result, exists, not_found]
+
+        request = TenantImportRequest(archive=archive, mode=ImportMode(conflict_resolution="skip"))
+        service = TenantImportService(mock_db)
+        result = await service.import_tenant(tenant_id, request)
+
+        assert result.success is True
+        assert result.created.get("backend_apis") == 1
+        assert result.skipped.get("backend_apis") == 1
+
+
+# ============ Import Endpoint Tests ============
+
+
+class TestImportEndpoint:
+    """Tests for the POST /v1/tenants/{tenant_id}/import endpoint."""
+
+    def test_import_requires_cpi_admin(self, client_as_other_tenant):
+        """Non-admin users cannot import."""
+        payload = {
+            "archive": {
+                "metadata": {
+                    "export_version": "1.0",
+                    "exported_at": "2026-03-01T10:00:00Z",
+                    "tenant_id": "source",
+                },
+                "backend_apis": [],
+                "contracts": [],
+                "consumers": [],
+                "plans": [],
+                "subscriptions": [],
+                "policies": [],
+                "skills": [],
+                "webhooks": [],
+                "external_mcp_servers": [],
+            },
+            "mode": {"conflict_resolution": "skip", "dry_run": True},
+        }
+        response = client_as_other_tenant.post("/v1/tenants/acme/import", json=payload)
+        assert response.status_code == 403
+
+    def test_import_endpoint_exists(self, client_as_cpi_admin):
+        """Import endpoint should be reachable (not 404/405)."""
+        payload = {
+            "archive": {
+                "metadata": {
+                    "export_version": "1.0",
+                    "exported_at": "2026-03-01T10:00:00Z",
+                    "tenant_id": "source",
+                },
+                "backend_apis": [],
+                "contracts": [],
+                "consumers": [],
+                "plans": [],
+                "subscriptions": [],
+                "policies": [],
+                "skills": [],
+                "webhooks": [],
+                "external_mcp_servers": [],
+            },
+            "mode": {"conflict_resolution": "skip", "dry_run": True},
+        }
+        response = client_as_cpi_admin.post("/v1/tenants/test-tenant/import", json=payload)
+        # Should not be 404 (route exists) or 405 (method allowed)
+        # May be 200 (mock DB returns truthy) or 500 (mock DB issues)
+        assert response.status_code not in (404, 405)

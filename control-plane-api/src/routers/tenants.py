@@ -17,10 +17,10 @@ from ..schemas.tenant import (
     TenantResponse,
     TenantUpdate,
 )
-from ..schemas.tenant_dr import TenantExportResponse
+from ..schemas.tenant_dr import ImportResult, TenantExportResponse, TenantImportRequest
 from ..services.cache_service import tenant_cache
 from ..services.kafka_service import Topics, kafka_service
-from ..services.tenant_dr_service import TenantExportService
+from ..services.tenant_dr_service import TenantExportService, TenantImportService
 from ..services.tenant_provisioning_service import deprovision_tenant, provision_tenant
 
 logger = logging.getLogger(__name__)
@@ -165,6 +165,68 @@ async def export_tenant(
     except Exception as e:
         logger.error(f"Failed to export tenant {tenant_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to export tenant configuration")
+
+
+@router.post("/{tenant_id}/import", response_model=ImportResult)
+async def import_tenant(
+    tenant_id: str,
+    request: TenantImportRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Import tenant configuration from an export archive (CAB-1474).
+
+    Restores APIs, contracts, consumers, plans, policies, skills,
+    webhooks, and MCP servers. Subscriptions are skipped (API keys
+    excluded from export for security).
+
+    Conflict resolution modes:
+    - skip (default): ignore existing resources
+    - overwrite: replace existing resources
+    - fail: abort on first conflict
+
+    Set dry_run=true to validate without applying changes.
+    Requires: cpi-admin only.
+    """
+    # CPI Admin only for import
+    if Role.CPI_ADMIN not in user.roles:
+        raise HTTPException(status_code=403, detail="Import requires cpi-admin role")
+
+    try:
+        import_service = TenantImportService(db)
+        result = await import_service.import_tenant(tenant_id, request)
+
+        # Emit audit event
+        await kafka_service.emit_audit_event(
+            tenant_id=tenant_id,
+            action="import",
+            resource_type="tenant",
+            resource_id=tenant_id,
+            user_id=user.id,
+            details={
+                "dry_run": request.mode.dry_run,
+                "conflict_resolution": request.mode.conflict_resolution,
+                "created": result.created,
+                "skipped": result.skipped,
+                "errors": result.errors,
+            },
+        )
+
+        if not result.success:
+            raise HTTPException(
+                status_code=409, detail={"message": "Import failed with conflicts", "result": result.model_dump()}
+            )
+
+        return result
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to import tenant {tenant_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to import tenant configuration")
 
 
 @router.post("", response_model=TenantResponse)

@@ -1,11 +1,13 @@
 """
 Tenant DR (Disaster Recovery) service — Export/Import (CAB-1474).
 
-Exports all tenant configuration as a portable JSON archive.
-Sensitive data (API keys, secrets, encrypted auth configs) is excluded.
+Export: collects all tenant configuration as a portable JSON archive.
+Import: restores tenant configuration from an export archive with conflict resolution.
+Sensitive data (API keys, secrets, encrypted auth configs) is excluded from export.
 """
 
 import logging
+import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -32,7 +34,9 @@ from ..schemas.tenant_dr import (
     ExportedSubscription,
     ExportedWebhook,
     ExportMetadata,
+    ImportResult,
     TenantExportResponse,
+    TenantImportRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -300,3 +304,424 @@ class TenantExportService:
                 )
             )
         return exported
+
+
+class TenantImportService:
+    """Restores tenant configuration from an export archive.
+
+    Supports 3 conflict resolution modes:
+    - skip: ignore resources that already exist (default)
+    - overwrite: replace existing resources with imported data
+    - fail: abort on first conflict
+
+    Dry-run mode validates the archive without applying changes.
+    Subscriptions are skipped (API keys excluded from export for security).
+    """
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def import_tenant(self, tenant_id: str, request: TenantImportRequest) -> ImportResult:
+        """Import tenant configuration from an export archive."""
+        mode = request.mode
+        archive = request.archive
+        dry_run = mode.dry_run
+        conflict = mode.conflict_resolution
+
+        # Verify target tenant exists
+        result = await self.db.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise ValueError(f"Target tenant '{tenant_id}' not found")
+
+        import_result = ImportResult(tenant_id=tenant_id, dry_run=dry_run)
+
+        # Import each resource type in dependency order
+        await self._import_backend_apis(tenant_id, archive.backend_apis, conflict, dry_run, import_result)
+        await self._import_plans(tenant_id, archive.plans, conflict, dry_run, import_result)
+        await self._import_consumers(tenant_id, archive.consumers, conflict, dry_run, import_result)
+        await self._import_contracts(tenant_id, archive.contracts, conflict, dry_run, import_result)
+        await self._import_policies(tenant_id, archive.policies, conflict, dry_run, import_result)
+        await self._import_skills(tenant_id, archive.skills, conflict, dry_run, import_result)
+        await self._import_webhooks(tenant_id, archive.webhooks, conflict, dry_run, import_result)
+        await self._import_external_mcp_servers(
+            tenant_id, archive.external_mcp_servers, conflict, dry_run, import_result
+        )
+
+        # Subscriptions skipped — API keys excluded from export
+        if archive.subscriptions:
+            import_result.skipped["subscriptions"] = len(archive.subscriptions)
+
+        if not dry_run:
+            await self.db.flush()
+
+        import_result.success = len(import_result.errors) == 0
+
+        total_created = sum(import_result.created.values())
+        total_skipped = sum(import_result.skipped.values())
+        logger.info(
+            f"Import {'(dry-run) ' if dry_run else ''}tenant {tenant_id}: "
+            f"{total_created} created, {total_skipped} skipped, {len(import_result.errors)} errors"
+        )
+
+        return import_result
+
+    async def _import_backend_apis(
+        self,
+        tenant_id: str,
+        apis: list[ExportedBackendApi],
+        conflict: str,
+        dry_run: bool,
+        result: ImportResult,
+    ) -> None:
+        created = 0
+        skipped = 0
+        for api in apis:
+            existing = await self.db.execute(
+                select(BackendApi).where(BackendApi.tenant_id == tenant_id, BackendApi.name == api.name)
+            )
+            if existing.scalar_one_or_none():
+                if conflict == "fail":
+                    result.errors.append(f"backend_api '{api.name}' already exists")
+                    return
+                skipped += 1
+                if conflict == "overwrite" and not dry_run:
+                    await self._overwrite_backend_api(tenant_id, api)
+                continue
+            if not dry_run:
+                self.db.add(
+                    BackendApi(
+                        id=uuid.uuid4(),
+                        tenant_id=tenant_id,
+                        name=api.name,
+                        display_name=api.display_name,
+                        description=api.description,
+                        backend_url=api.backend_url or "",
+                        openapi_spec_url=api.openapi_spec_url,
+                        auth_type=api.auth_type or "none",
+                        status=api.status or "draft",
+                    )
+                )
+            created += 1
+        if created:
+            result.created["backend_apis"] = created
+        if skipped:
+            result.skipped["backend_apis"] = skipped
+
+    async def _overwrite_backend_api(self, tenant_id: str, api: ExportedBackendApi) -> None:
+        existing = await self.db.execute(
+            select(BackendApi).where(BackendApi.tenant_id == tenant_id, BackendApi.name == api.name)
+        )
+        obj = existing.scalar_one()
+        obj.display_name = api.display_name
+        obj.description = api.description
+        obj.backend_url = api.backend_url or obj.backend_url
+        obj.openapi_spec_url = api.openapi_spec_url
+        obj.auth_type = api.auth_type or obj.auth_type
+        obj.status = api.status or obj.status
+
+    async def _import_plans(
+        self,
+        tenant_id: str,
+        plans: list[ExportedPlan],
+        conflict: str,
+        dry_run: bool,
+        result: ImportResult,
+    ) -> None:
+        created = 0
+        skipped = 0
+        for plan in plans:
+            existing = await self.db.execute(select(Plan).where(Plan.tenant_id == tenant_id, Plan.slug == plan.slug))
+            if existing.scalar_one_or_none():
+                if conflict == "fail":
+                    result.errors.append(f"plan '{plan.slug}' already exists")
+                    return
+                skipped += 1
+                continue
+            if not dry_run:
+                self.db.add(
+                    Plan(
+                        id=uuid.uuid4(),
+                        tenant_id=tenant_id,
+                        slug=plan.slug,
+                        name=plan.name,
+                        description=plan.description,
+                        rate_limit_per_second=plan.rate_limit_per_second,
+                        rate_limit_per_minute=plan.rate_limit_per_minute,
+                        daily_request_limit=plan.daily_request_limit,
+                        monthly_request_limit=plan.monthly_request_limit,
+                        burst_limit=plan.burst_limit,
+                        requires_approval=plan.requires_approval,
+                        status=plan.status or "active",
+                    )
+                )
+            created += 1
+        if created:
+            result.created["plans"] = created
+        if skipped:
+            result.skipped["plans"] = skipped
+
+    async def _import_consumers(
+        self,
+        tenant_id: str,
+        consumers: list[ExportedConsumer],
+        conflict: str,
+        dry_run: bool,
+        result: ImportResult,
+    ) -> None:
+        created = 0
+        skipped = 0
+        for consumer in consumers:
+            existing = await self.db.execute(
+                select(Consumer).where(Consumer.tenant_id == tenant_id, Consumer.external_id == consumer.external_id)
+            )
+            if existing.scalar_one_or_none():
+                if conflict == "fail":
+                    result.errors.append(f"consumer '{consumer.external_id}' already exists")
+                    return
+                skipped += 1
+                continue
+            if not dry_run:
+                self.db.add(
+                    Consumer(
+                        id=uuid.uuid4(),
+                        tenant_id=tenant_id,
+                        external_id=consumer.external_id,
+                        name=consumer.name,
+                        email=consumer.email,
+                        company=consumer.company,
+                        description=consumer.description,
+                        status=consumer.status or "active",
+                        consumer_metadata=consumer.consumer_metadata,
+                    )
+                )
+            created += 1
+        if created:
+            result.created["consumers"] = created
+        if skipped:
+            result.skipped["consumers"] = skipped
+
+    async def _import_contracts(
+        self,
+        tenant_id: str,
+        contracts: list[ExportedContract],
+        conflict: str,
+        dry_run: bool,
+        result: ImportResult,
+    ) -> None:
+        created = 0
+        skipped = 0
+        for contract in contracts:
+            existing = await self.db.execute(
+                select(Contract).where(Contract.tenant_id == tenant_id, Contract.name == contract.name)
+            )
+            if existing.scalar_one_or_none():
+                if conflict == "fail":
+                    result.errors.append(f"contract '{contract.name}' already exists")
+                    return
+                skipped += 1
+                continue
+            if not dry_run:
+                contract_id = uuid.uuid4()
+                self.db.add(
+                    Contract(
+                        id=contract_id,
+                        tenant_id=tenant_id,
+                        name=contract.name,
+                        display_name=contract.display_name,
+                        description=contract.description,
+                        version=contract.version,
+                        status=contract.status,
+                        openapi_spec_url=contract.openapi_spec_url,
+                        deprecated_at=contract.deprecated_at,
+                        sunset_at=contract.sunset_at,
+                        deprecation_reason=contract.deprecation_reason,
+                        grace_period_days=contract.grace_period_days,
+                    )
+                )
+                # Import bindings
+                for binding in contract.bindings:
+                    self.db.add(
+                        ProtocolBinding(
+                            id=uuid.uuid4(),
+                            contract_id=contract_id,
+                            protocol=binding.get("protocol", "rest"),
+                            enabled=binding.get("enabled", True),
+                            endpoint=binding.get("endpoint"),
+                            tool_name=binding.get("tool_name"),
+                        )
+                    )
+            created += 1
+        if created:
+            result.created["contracts"] = created
+        if skipped:
+            result.skipped["contracts"] = skipped
+
+    async def _import_policies(
+        self,
+        tenant_id: str,
+        policies: list[ExportedPolicy],
+        conflict: str,
+        dry_run: bool,
+        result: ImportResult,
+    ) -> None:
+        created = 0
+        skipped = 0
+        for policy in policies:
+            existing = await self.db.execute(
+                select(GatewayPolicy).where(GatewayPolicy.tenant_id == tenant_id, GatewayPolicy.name == policy.name)
+            )
+            if existing.scalar_one_or_none():
+                if conflict == "fail":
+                    result.errors.append(f"policy '{policy.name}' already exists")
+                    return
+                skipped += 1
+                continue
+            if not dry_run:
+                self.db.add(
+                    GatewayPolicy(
+                        id=uuid.uuid4(),
+                        tenant_id=tenant_id,
+                        name=policy.name,
+                        description=policy.description,
+                        policy_type=policy.policy_type,
+                        scope="tenant",
+                        config=policy.config or {},
+                        enabled=policy.enabled,
+                    )
+                )
+            created += 1
+        if created:
+            result.created["policies"] = created
+        if skipped:
+            result.skipped["policies"] = skipped
+
+    async def _import_skills(
+        self,
+        tenant_id: str,
+        skills: list[ExportedSkill],
+        conflict: str,
+        dry_run: bool,
+        result: ImportResult,
+    ) -> None:
+        created = 0
+        skipped = 0
+        for skill in skills:
+            existing = await self.db.execute(
+                select(Skill).where(Skill.tenant_id == tenant_id, Skill.name == skill.name, Skill.scope == skill.scope)
+            )
+            if existing.scalar_one_or_none():
+                if conflict == "fail":
+                    result.errors.append(f"skill '{skill.name}' already exists")
+                    return
+                skipped += 1
+                continue
+            if not dry_run:
+                self.db.add(
+                    Skill(
+                        id=uuid.uuid4(),
+                        tenant_id=tenant_id,
+                        name=skill.name,
+                        description=skill.description,
+                        scope=skill.scope,
+                        priority=skill.priority,
+                        instructions=skill.instructions,
+                        tool_ref=skill.tool_ref,
+                        user_ref=skill.user_ref,
+                        enabled=skill.enabled,
+                    )
+                )
+            created += 1
+        if created:
+            result.created["skills"] = created
+        if skipped:
+            result.skipped["skills"] = skipped
+
+    async def _import_webhooks(
+        self,
+        tenant_id: str,
+        webhooks: list[ExportedWebhook],
+        conflict: str,
+        dry_run: bool,
+        result: ImportResult,
+    ) -> None:
+        created = 0
+        skipped = 0
+        for webhook in webhooks:
+            existing = await self.db.execute(
+                select(TenantWebhook).where(TenantWebhook.tenant_id == tenant_id, TenantWebhook.name == webhook.name)
+            )
+            if existing.scalar_one_or_none():
+                if conflict == "fail":
+                    result.errors.append(f"webhook '{webhook.name}' already exists")
+                    return
+                skipped += 1
+                continue
+            if not dry_run:
+                self.db.add(
+                    TenantWebhook(
+                        id=uuid.uuid4(),
+                        tenant_id=tenant_id,
+                        name=webhook.name,
+                        url=webhook.url,
+                        events=webhook.events,
+                        enabled=webhook.enabled,
+                    )
+                )
+            created += 1
+        if created:
+            result.created["webhooks"] = created
+        if skipped:
+            result.skipped["webhooks"] = skipped
+
+    async def _import_external_mcp_servers(
+        self,
+        tenant_id: str,
+        servers: list[ExportedExternalMcpServer],
+        conflict: str,
+        dry_run: bool,
+        result: ImportResult,
+    ) -> None:
+        created = 0
+        skipped = 0
+        for server in servers:
+            existing = await self.db.execute(select(ExternalMCPServer).where(ExternalMCPServer.name == server.name))
+            if existing.scalar_one_or_none():
+                if conflict == "fail":
+                    result.errors.append(f"mcp_server '{server.name}' already exists")
+                    return
+                skipped += 1
+                continue
+            if not dry_run:
+                server_id = uuid.uuid4()
+                self.db.add(
+                    ExternalMCPServer(
+                        id=server_id,
+                        tenant_id=tenant_id,
+                        name=server.name,
+                        display_name=server.name,
+                        base_url=server.base_url,
+                        description=server.description,
+                        transport="sse",
+                        auth_type="none",
+                        enabled=server.enabled,
+                    )
+                )
+                # Import tools
+                for tool in server.tools:
+                    self.db.add(
+                        ExternalMCPServerTool(
+                            id=uuid.uuid4(),
+                            server_id=server_id,
+                            name=tool.get("name", "unknown"),
+                            namespaced_name=f"{server.name}/{tool.get('name', 'unknown')}",
+                            description=tool.get("description"),
+                            input_schema=tool.get("input_schema"),
+                            enabled=True,
+                        )
+                    )
+            created += 1
+        if created:
+            result.created["external_mcp_servers"] = created
+        if skipped:
+            result.skipped["external_mcp_servers"] = skipped

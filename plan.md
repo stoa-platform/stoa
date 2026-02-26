@@ -229,6 +229,9 @@
 - [x] CAB-1348: v2 Linux Native — CANCELLED (tokio-uring incompatible)
 - [x] +30 smaller tickets (veille, deps, CI fixes, docs, sub-issues of MEGAs above)
 
+**AI Factory**:
+- [x] Token Optimization H24 — PR #1163 (globs scoping 17 rules, heg-state brief/tickets/council-cache, SessionStart hook, n8n Linear→PB pipeline)
+
 ### Todo
 
 **Remaining code** (26 pts):

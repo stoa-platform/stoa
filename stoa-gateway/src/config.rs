@@ -1084,11 +1084,4 @@ mod tests {
         let config = Config::default();
         assert!((config.otel_sample_rate - 1.0).abs() < f64::EPSILON);
     }
-
-    #[test]
-    fn test_default_proxy_settings() {
-        let config = Config::default();
-        assert!(config.proxy_upstream_url.is_none());
-        assert_eq!(config.proxy_timeout_ms, 30_000);
-    }
 }

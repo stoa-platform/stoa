@@ -101,7 +101,7 @@
 
 ## Cycle 9 (Feb 23–Mar 1) — CURRENT
 
-**Scope**: 835 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 806 pts (97%) | **Velocity**: 61 issues done + 14 CAB-1448 PRs
+**Scope**: 835 pts (C9 committed, excl. Backlog/Canceled/Dup) | **Done**: 827 pts (99%) | **Velocity**: 62 issues done + 14 CAB-1448 PRs
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content
 
 ### In Progress
@@ -111,6 +111,7 @@
   - ✅ Production validated: 23/23 PASS, GO in 5s
   - [ ] Repetitions + video backup (human-only)
 ### Done (62)
+- [x] CAB-1475: [MEGA] Audit Trail Export & Webhook Delivery (21 pts) — PR #1094 (PG dual-write, AuditService, migration 044)
 - [x] CAB-1457: [api] Billing models + migration + service (5 pts, P2) — PR #1000
 - [x] CAB-1448: [MEGA] API Router Test Coverage Blitz (21 pts) — 14 PRs (#996–#1074)
 - [x] CAB-1451: [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974

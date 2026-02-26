@@ -73,6 +73,7 @@
 - ✅ CAB-1485 Access Review Dashboard (5 pts) — PR #1132 (42 tests)
 - ✅ CAB-1495 LLM Cost Dashboard (5 pts) — PR #1133 (48 tests)
 - ✅ CAB-1486/1498/1499/1500 Wave 3 E2E Features — PR #1134 (22 scenarios, 8 files)
+- ✅ CAB-1528 Security Scanner Tests (3 pts) — PR #1158 (HEGEMON autonomous dispatch, 35 tests + CI fixes: rule_name→title, OpenAPI snapshot)
 - ✅ +30 smaller tickets (chat agent, i18n, deps, CI fixes, docs)
 
 ### Cycle 8 (Feb 16-22) — CLOSED (1305 pts, 88 issues, 186 pts/day)
@@ -140,7 +141,7 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
 - HEGEMON daemon **v8** on worker-1 (207.180.246.92) — polling 60s, 5/5 workers healthy
   - v8: Opus-only (Sonnet can't handle 40K rules), turn budgets 40/50/60/75, env setup hints, turn budget directive
-  - Validated: CAB-1528 → PR #1158 (35 tests, 3 bugs found, 73 turns, $2.24, 22m38s)
+  - Validated: CAB-1528 → PR #1158 merged (35 tests, 3 bugs found, 73 turns, $2.24, 22m38s, CI fix: rule_name @property→title column)
   - SSH key: `~/.ssh/id_ed25519_stoa` (not default ed25519)
   - API quota hit 2026-02-26 (resets 2026-03-01). Opus works but budget needs monitoring
   - **CI/CD deploy workflow**: PR #1159 merged. GitHub secrets set (`HEGEMON_SSH_PRIVATE_KEY`, `HEGEMON_VPS_HOST`)

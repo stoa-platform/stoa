@@ -74,13 +74,12 @@ jobs:
           mkdir -p ~/.ssh
           printenv SSH_PRIVATE_KEY > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keygen -l -f ~/.ssh/id_ed25519
           printf "Host hegemon-vps\n  HostName %s\n  User hegemon\n  IdentityFile ~/.ssh/id_ed25519\n  StrictHostKeyChecking accept-new\n" "$VPS_HOST" > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
       - name: Stop service
         run: |
-          ssh -vvv hegemon-vps "sudo systemctl stop hegemon 2>/dev/null || true; pkill -f 'hegemon --config' 2>/dev/null || true; sleep 1"
+          ssh hegemon-vps "sudo systemctl stop hegemon 2>/dev/null || true; sleep 1"
 
       - name: Deploy binary
         run: |

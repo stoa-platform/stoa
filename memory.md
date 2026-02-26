@@ -88,6 +88,9 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 
 ### Cycle 10 — Kill the Backlog (193 pts, 13 tickets, Mar 2-8)
 
+**AI Factory**:
+- ✅ Token Optimization H24 — PR #1163 (globs scoping 17 rules, heg-state brief/tickets/council-cache, SessionStart hook, n8n Linear→PB pipeline)
+
 **BACKEND** (Pane 2, ~73 pts) — ALL DONE (73/73 pts):
 - ✅ CAB-1350: UAC Spec v1.0 (13 pts) — PR #1146
 - ✅ CAB-1335: UAC Transformer Service (21 pts) — PR #1148

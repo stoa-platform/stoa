@@ -116,10 +116,10 @@ pub async fn mcp_capabilities(State(state): State<AppState>) -> impl IntoRespons
             },
             resources: ResourcesCapability {
                 subscribe: false,
-                list_changed: false,
+                list_changed: true, // REST + SSE endpoints now active
             },
             prompts: PromptsCapability {
-                list_changed: false,
+                list_changed: true, // REST + SSE endpoints now active
             },
             logging: LoggingCapability {},
             notifications: Some(NotificationsCapability {

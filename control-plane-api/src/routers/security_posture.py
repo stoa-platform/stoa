@@ -1,4 +1,4 @@
-"""Security Posture Dashboard endpoints (CAB-1461).
+"""Security Posture Dashboard endpoints (CAB-1461, CAB-438).
 
 Provides REST API for:
 - Security score (0-100) per tenant
@@ -7,6 +7,7 @@ Provides REST API for:
 - Golden state drift detection
 - Compliance scoring (DORA, NIS2)
 - Secrets health tracking
+- Token binding status (DPoP / mTLS)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
 from ..auth.rbac import require_tenant_access
+from ..config import settings
 from ..database import get_db
 from ..schemas.security_posture import (
     FindingSeverity,
@@ -188,3 +190,60 @@ async def get_secrets_health(
 ):
     """Check secrets health via Infisical (graceful degradation)."""
     return await security_scanner_service.get_secrets_health(tenant_id)
+
+
+# --- Token Binding (CAB-438) ---
+
+
+@router.get("/{tenant_id}/token-binding")
+@require_tenant_access
+async def get_token_binding_status(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Get token binding configuration and status (DPoP / mTLS).
+
+    Returns the current sender-constrained token strategy and
+    a summary of binding modes available for this tenant.
+    """
+    strategy = settings.SENDER_CONSTRAINED_STRATEGY
+
+    strategies_info = {
+        "auto": {
+            "label": "Auto (Migration)",
+            "description": "Unbound tokens accepted. DPoP and mTLS validated when present.",
+            "dpop_enforced": False,
+            "mtls_enforced": False,
+        },
+        "require-any": {
+            "label": "Require Any Binding",
+            "description": "Tokens must be bound via either DPoP or mTLS.",
+            "dpop_enforced": True,
+            "mtls_enforced": True,
+        },
+        "mtls-only": {
+            "label": "mTLS Only",
+            "description": "Tokens must be certificate-bound (RFC 8705).",
+            "dpop_enforced": False,
+            "mtls_enforced": True,
+        },
+        "dpop-only": {
+            "label": "DPoP Only",
+            "description": "Tokens must include DPoP proof (RFC 9449).",
+            "dpop_enforced": True,
+            "mtls_enforced": False,
+        },
+    }
+
+    info = strategies_info.get(strategy, strategies_info["auto"])
+
+    return {
+        "strategy": strategy,
+        "label": info["label"],
+        "description": info["description"],
+        "dpop_enforced": info["dpop_enforced"],
+        "mtls_enforced": info["mtls_enforced"],
+        "dpop_available": True,
+        "mtls_available": True,
+        "replay_protection": strategy != "auto",
+    }

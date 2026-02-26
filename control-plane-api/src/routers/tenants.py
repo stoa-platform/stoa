@@ -17,8 +17,10 @@ from ..schemas.tenant import (
     TenantResponse,
     TenantUpdate,
 )
+from ..schemas.tenant_dr import TenantExportResponse
 from ..services.cache_service import tenant_cache
 from ..services.kafka_service import Topics, kafka_service
+from ..services.tenant_dr_service import TenantExportService
 from ..services.tenant_provisioning_service import deprovision_tenant, provision_tenant
 
 logger = logging.getLogger(__name__)
@@ -121,6 +123,48 @@ async def get_provisioning_status(
         kc_group_id=tenant.kc_group_id,
         provisioning_attempts=tenant.provisioning_attempts or 0,
     )
+
+
+@router.get("/{tenant_id}/export", response_model=TenantExportResponse)
+async def export_tenant(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Export tenant configuration as a portable JSON archive (CAB-1474).
+
+    Returns all tenant resources (APIs, contracts, consumers, plans,
+    subscriptions, policies, skills, webhooks, MCP servers).
+    Sensitive data (API keys, secrets) is excluded.
+
+    Requires: tenant-admin (own tenant) or cpi-admin (any tenant).
+    """
+    # Access control: own tenant or admin
+    if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    try:
+        export_service = TenantExportService(db)
+        archive = await export_service.export_tenant(tenant_id)
+
+        # Emit audit event
+        await kafka_service.emit_audit_event(
+            tenant_id=tenant_id,
+            action="export",
+            resource_type="tenant",
+            resource_id=tenant_id,
+            user_id=user.id,
+            details={"resource_counts": archive.metadata.resource_counts},
+        )
+
+        return archive
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to export tenant {tenant_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to export tenant configuration")
 
 
 @router.post("", response_model=TenantResponse)

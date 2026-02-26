@@ -41,6 +41,12 @@ workers:
 slack:
   webhook_url: "${SLACK_WEBHOOK_URL}"
 
+# Notification hardening: throttle, digest, retry cap.
+notification:
+  health_cooldown: "1h"    # Min interval between health alerts per worker (default: 1h)
+  digest_interval: "30m"   # Buffer non-critical events, flush as single message (default: 30m)
+  max_retries: 3           # Max dispatch retries per ticket before giving up (default: 3)
+
 # Timeout per estimate (story points). Progressive per Council adjustment.
 timeouts:
   1: "10m"

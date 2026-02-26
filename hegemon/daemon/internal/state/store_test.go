@@ -116,6 +116,52 @@ func TestGetActiveDispatches(t *testing.T) {
 	}
 }
 
+func TestRetryCount(t *testing.T) {
+	s := newTestStore(t)
+
+	// Initial count is 0.
+	count, err := s.GetRetryCount("CAB-100")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("initial count = %d, want 0", count)
+	}
+
+	// Increment.
+	count, err = s.IncrRetryCount("CAB-100")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("count after 1st incr = %d, want 1", count)
+	}
+
+	// Increment again.
+	count, err = s.IncrRetryCount("CAB-100")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Errorf("count after 2nd incr = %d, want 2", count)
+	}
+
+	// Different ticket is independent.
+	count, _ = s.GetRetryCount("CAB-200")
+	if count != 0 {
+		t.Errorf("CAB-200 count = %d, want 0", count)
+	}
+
+	// Reset.
+	if err := s.ResetRetryCount("CAB-100"); err != nil {
+		t.Fatal(err)
+	}
+	count, _ = s.GetRetryCount("CAB-100")
+	if count != 0 {
+		t.Errorf("count after reset = %d, want 0", count)
+	}
+}
+
 func TestIsTicketActiveOnlyActiveStatuses(t *testing.T) {
 	s := newTestStore(t)
 

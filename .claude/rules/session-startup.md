@@ -20,25 +20,32 @@ Before reading state files, check for crashed sessions and log this session:
    - If checkpoint has `pr_number`, run `gh pr view <pr_number> --json state` — if MERGED, auto-close (not a real crash)
    - Otherwise report to user: "Previous session crashed mid-task [TASK] at step [STEP]. Resume or abandon?"
    - Follow `.claude/rules/crash-recovery.md` protocol
-4. **Generate instance identity** (for multi-terminal coordination):
+4. **Instance identity**: The SessionStart hook (`session-init.sh`) auto-generates `STOA_INSTANCE_ID` via env file.
+   If `$STOA_INSTANCE_ID` is set, use it. Otherwise generate manually:
    ```
    Instance ID: t<N>-<R> where N = epoch seconds mod 100000, R = 4 hex chars (random)
-   Example: t48217-a3f2
    ```
-   Generated once per session. Used in claim files and operations.log.
-   Old format `t<mod 10000>` collides every ~2.8h with 4+ instances. New format: ~1/6.5B collision probability.
 5. If no crash detected → **log this session immediately**:
    ```
    Append to operations.log: SESSION-START | task=<TASK> branch=<BRANCH> instance=<ID>
    ```
    This MUST happen before any other work. It is the anchor for crash recovery.
 
-## Step 1 — Read State Files
+## Step 1 — Read State (Optimized)
 
-Read these 2 files **in this order** to understand current context:
+The SessionStart hook generates `.claude/session-brief.json` from HEGEMON state store.
 
-1. **`memory.md`** (repo root) — active sprint, CI status, decisions, known issues
-2. **`plan.md`** (repo root) — cycle-driven sprint view (synced from Linear via `/sync-plan`)
+1. **IF** `.claude/session-brief.json` exists AND is < 5 min old:
+   - Read the brief (~500 tokens) — contains cycle tickets, active claims, recent milestones, active sessions
+   - Skip full `memory.md` + `plan.md` read (saves 5-13K tokens)
+2. **ELSE** (fallback — state.db absent or brief stale):
+   - Read `memory.md` (repo root) — active sprint, CI status, decisions, known issues
+   - Read `plan.md` (repo root) — cycle-driven sprint view (synced from Linear via `/sync-plan`)
+3. **IF** task has CAB-XXXX ID AND brief has ticket summary:
+   - Use summary from brief (~50 tokens vs 800 tokens MCP call)
+   - Only call `linear.get_issue()` MCP for full DoD when entering verification phase
+4. **ELSE**:
+   - Call `linear.get_issue()` as before (backward compatible)
 
 Private memory (`~/.claude/projects/.../memory/MEMORY.md`) is auto-loaded by Claude Code.
 

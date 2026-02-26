@@ -1,6 +1,8 @@
 ---
-description: K8s deployment manifests and CI deploy workflows checklist
-globs: "**/k8s/**,**/*-ci.yml,.github/workflows/reusable-k8s-deploy.yml"
+globs:
+  - "k8s/**"
+  - "deploy/**"
+  - "charts/**"
 ---
 
 # K8s Deployment Checklist

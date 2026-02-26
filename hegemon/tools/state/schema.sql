@@ -52,3 +52,30 @@ CREATE INDEX IF NOT EXISTS idx_milestones_ticket ON milestones(ticket);
 CREATE INDEX IF NOT EXISTS idx_milestones_created ON milestones(created_at);
 CREATE INDEX IF NOT EXISTS idx_claims_owner ON claims(owner);
 CREATE INDEX IF NOT EXISTS idx_claims_mega ON claims(mega_id);
+
+CREATE TABLE IF NOT EXISTS tickets (
+    id           TEXT PRIMARY KEY,     -- CAB-1350
+    title        TEXT,
+    status       TEXT,                 -- Todo, InProgress, Done, Blocked
+    estimate     INTEGER,
+    priority     INTEGER,
+    component    TEXT,
+    summary      TEXT,                 -- 1-2 lines (not full description)
+    dod_items    TEXT,                 -- JSON array of DoD criteria
+    parent_id    TEXT,                 -- MEGA parent (CAB-1290)
+    cycle        TEXT,                 -- current, next, backlog
+    updated_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS council_cache (
+    ticket_id    TEXT PRIMARY KEY,
+    score        REAL,
+    verdict      TEXT,                 -- Go/Fix/Redo
+    personas     TEXT,                 -- JSON {chucky: 8, oss_killer: 9, ...}
+    ticket_hash  TEXT,                 -- sha256(title + description)
+    evaluated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
+CREATE INDEX IF NOT EXISTS idx_tickets_cycle ON tickets(cycle);
+CREATE INDEX IF NOT EXISTS idx_tickets_parent ON tickets(parent_id);

@@ -33,6 +33,7 @@ pub mod shadow;
 pub mod skills;
 pub mod state;
 pub mod telemetry;
+pub mod trace_context;
 pub mod uac;
 
 use axum::{
@@ -415,12 +416,17 @@ pub fn build_router(state: AppState) -> Router {
         }
     };
 
+    // W3C Trace Context: extract incoming traceparent header into request extensions.
+    // Runs BEFORE access_log so trace_id is available for structured logging.
+    let with_trace_ctx =
+        mode_router.layer(axum::middleware::from_fn(trace_context::trace_context_middleware));
+
     // Access log: structured JSON for every request (shipped to OpenSearch via Fluent Bit).
     // Runs after auth so tenant_id/consumer_id are available from extensions.
     let with_access_log = if access_log_enabled {
-        mode_router.layer(axum::middleware::from_fn(access_log::access_log_middleware))
+        with_trace_ctx.layer(axum::middleware::from_fn(access_log::access_log_middleware))
     } else {
-        mode_router
+        with_trace_ctx
     };
 
     // Security headers: outermost layer, applied AFTER all routes are registered.

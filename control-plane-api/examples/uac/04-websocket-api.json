@@ -1,0 +1,43 @@
+{
+  "name": "trading-feed",
+  "version": "3.0.0",
+  "tenant_id": "fintech-co",
+  "display_name": "Real-Time Trading Feed",
+  "description": "WebSocket streaming feed for real-time market data and trade execution.",
+  "classification": "VVH",
+  "endpoints": [
+    {
+      "path": "/ws/market-data",
+      "methods": ["GET"],
+      "backend_url": "wss://trading.fintech-co.internal/market-data",
+      "operation_id": "stream_market_data",
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": { "type": "string" },
+          "price": { "type": "number" },
+          "volume": { "type": "integer" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    {
+      "path": "/ws/trades",
+      "methods": ["GET", "POST"],
+      "backend_url": "wss://trading.fintech-co.internal/trades",
+      "operation_id": "stream_trades",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": { "type": "string" },
+          "action": { "type": "string", "enum": ["buy", "sell"] },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "price_limit": { "type": "number" }
+        },
+        "required": ["symbol", "action", "quantity"]
+      }
+    }
+  ],
+  "required_policies": ["rate-limit", "auth-jwt", "mtls", "audit-logging", "data-encryption", "geo-restriction"],
+  "status": "published"
+}

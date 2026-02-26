@@ -1,0 +1,43 @@
+{
+  "name": "notification-service",
+  "version": "1.0.0",
+  "tenant_id": "fintech-co",
+  "display_name": "Notification Service",
+  "description": "gRPC notification service for email, SMS, and push notifications.",
+  "classification": "VVH",
+  "endpoints": [
+    {
+      "path": "/notifications/send",
+      "methods": ["POST"],
+      "backend_url": "grpc://notifications.fintech-co.internal:9090",
+      "operation_id": "send_notification",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "channel": { "type": "string", "enum": ["email", "sms", "push"] },
+          "recipient": { "type": "string" },
+          "subject": { "type": "string" },
+          "body": { "type": "string" },
+          "priority": { "type": "string", "enum": ["low", "normal", "high", "critical"] }
+        },
+        "required": ["channel", "recipient", "body"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "notification_id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["queued", "sent", "failed"] },
+          "sent_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    {
+      "path": "/notifications/{id}/status",
+      "methods": ["GET"],
+      "backend_url": "grpc://notifications.fintech-co.internal:9090",
+      "operation_id": "get_notification_status"
+    }
+  ],
+  "required_policies": ["rate-limit", "auth-jwt", "mtls", "audit-logging", "data-encryption", "geo-restriction"],
+  "status": "published"
+}

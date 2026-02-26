@@ -1,0 +1,93 @@
+{
+  "name": "document-ai",
+  "version": "1.0.0",
+  "tenant_id": "enterprise-corp",
+  "display_name": "Document AI Tools",
+  "description": "AI-powered document processing: OCR, classification, summarization, and entity extraction.",
+  "classification": "VH",
+  "endpoints": [
+    {
+      "path": "/documents/classify",
+      "methods": ["POST"],
+      "backend_url": "https://ai.enterprise-corp.internal/classify",
+      "operation_id": "classify_document",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string", "description": "Document text content" },
+          "categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Target classification categories"
+          }
+        },
+        "required": ["content"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "category": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "reasoning": { "type": "string" }
+        }
+      }
+    },
+    {
+      "path": "/documents/summarize",
+      "methods": ["POST"],
+      "backend_url": "https://ai.enterprise-corp.internal/summarize",
+      "operation_id": "summarize_document",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string" },
+          "max_length": { "type": "integer", "minimum": 50, "maximum": 5000 },
+          "language": { "type": "string", "default": "en" }
+        },
+        "required": ["content"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "summary": { "type": "string" },
+          "key_points": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    {
+      "path": "/documents/extract-entities",
+      "methods": ["POST"],
+      "backend_url": "https://ai.enterprise-corp.internal/extract",
+      "operation_id": "extract_entities",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string" },
+          "entity_types": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["person", "organization", "date", "amount", "location"] }
+          }
+        },
+        "required": ["content"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "value": { "type": "string" },
+                "confidence": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "required_policies": ["rate-limit", "auth-jwt", "mtls", "audit-logging"],
+  "status": "published"
+}

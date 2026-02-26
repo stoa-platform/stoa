@@ -42,9 +42,7 @@ class TestMonitoringRouter:
     def test_list_transactions_filter_by_api_name(self, app_with_tenant_admin):
         """GET /transactions?api_name=X filters results."""
         with TestClient(app_with_tenant_admin) as client:
-            response = client.get(
-                "/v1/monitoring/transactions?limit=200&api_name=customer-api"
-            )
+            response = client.get("/v1/monitoring/transactions?limit=200&api_name=customer-api")
 
         assert response.status_code == 200
         data = response.json()
@@ -54,9 +52,7 @@ class TestMonitoringRouter:
     def test_list_transactions_filter_by_status(self, app_with_tenant_admin):
         """GET /transactions?status=error filters by status."""
         with TestClient(app_with_tenant_admin) as client:
-            response = client.get(
-                "/v1/monitoring/transactions?limit=200&status=error"
-            )
+            response = client.get("/v1/monitoring/transactions?limit=200&status=error")
 
         assert response.status_code == 200
         data = response.json()
@@ -73,9 +69,16 @@ class TestMonitoringRouter:
         if data["transactions"]:
             tx = data["transactions"][0]
             required_fields = [
-                "id", "trace_id", "api_name", "method", "path",
-                "status_code", "status", "started_at",
-                "total_duration_ms", "spans_count",
+                "id",
+                "trace_id",
+                "api_name",
+                "method",
+                "path",
+                "status_code",
+                "status",
+                "started_at",
+                "total_duration_ms",
+                "spans_count",
             ]
             for field in required_fields:
                 assert field in tx, f"Missing field: {field}"
@@ -126,6 +129,20 @@ class TestMonitoringRouter:
         data = response.json()
         assert data["tenant_id"] == "acme"
 
+    def test_get_transaction_stats_unauthenticated_401(self, app):
+        """Unauthenticated requests to stats endpoint return 401."""
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get("/v1/monitoring/transactions/stats")
+
+        assert response.status_code in (401, 403)
+
+    def test_get_transaction_detail_unauthenticated_401(self, app):
+        """Unauthenticated requests to detail endpoint return 401."""
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get("/v1/monitoring/transactions/tx-000001-1234")
+
+        assert response.status_code in (401, 403)
+
     def test_list_transactions_unauthenticated_401(self, app):
         """Unauthenticated requests to monitoring endpoints return 401."""
         with TestClient(app, raise_server_exceptions=False) as client:
@@ -133,3 +150,92 @@ class TestMonitoringRouter:
 
         # Without auth override, get_current_user raises 401
         assert response.status_code in (401, 403)
+
+    # ============== CPI Admin access ==============
+
+    def test_list_transactions_cpi_admin_access(self, app_with_cpi_admin):
+        """CPI admin can access monitoring transactions."""
+        with TestClient(app_with_cpi_admin) as client:
+            response = client.get("/v1/monitoring/transactions")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "transactions" in data
+        assert "total" in data
+
+    # ============== Filter combinations ==============
+
+    def test_list_transactions_ignores_unknown_query_params(self, app_with_tenant_admin):
+        """GET /transactions ignores unknown query params (method not a filter)."""
+        with TestClient(app_with_tenant_admin) as client:
+            response = client.get("/v1/monitoring/transactions?limit=10&method=GET")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["transactions"], list)
+        # method is not a supported filter; transactions have mixed methods
+        if data["transactions"]:
+            assert "method" in data["transactions"][0]
+
+    def test_list_transactions_combined_filters(self, app_with_tenant_admin):
+        """GET /transactions with status + api_name filters applies both."""
+        with TestClient(app_with_tenant_admin) as client:
+            response = client.get("/v1/monitoring/transactions?limit=200&status=success&api_name=customer-api")
+
+        assert response.status_code == 200
+        data = response.json()
+        for tx in data["transactions"]:
+            assert tx["status"] == "success"
+            assert tx["api_name"] == "customer-api"
+
+    # ============== Stats value validation ==============
+
+    def test_get_transaction_stats_values_are_non_negative(self, app_with_tenant_admin):
+        """Stats values should be non-negative numbers."""
+        with TestClient(app_with_tenant_admin) as client:
+            response = client.get("/v1/monitoring/transactions/stats")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_requests"] >= 0
+        assert data["success_count"] >= 0
+        assert data["error_count"] >= 0
+        assert data["avg_latency_ms"] >= 0
+        assert data["p95_latency_ms"] >= 0
+        # success + error + timeout should equal total
+        assert data["success_count"] + data["error_count"] + data.get("timeout_count", 0) == data["total_requests"]
+
+    def test_get_transaction_stats_by_api_is_dict(self, app_with_tenant_admin):
+        """Stats by_api field returns nested dicts with per-API metrics."""
+        with TestClient(app_with_tenant_admin) as client:
+            response = client.get("/v1/monitoring/transactions/stats")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["by_api"], dict)
+        for api_name, api_stats in data["by_api"].items():
+            assert isinstance(api_name, str)
+            assert isinstance(api_stats, dict)
+            assert "total" in api_stats
+            assert "success" in api_stats
+            assert "errors" in api_stats
+            assert api_stats["total"] >= 0
+
+    # ============== Detail endpoint validation ==============
+
+    def test_get_transaction_detail_span_fields(self, app_with_tenant_admin):
+        """Transaction detail spans have all required fields."""
+        with TestClient(app_with_tenant_admin) as client:
+            response = client.get("/v1/monitoring/transactions/tx-000001-1234")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["spans"]) > 0
+        for span in data["spans"]:
+            assert "name" in span
+            assert "service" in span
+            assert "start_offset_ms" in span
+            assert "duration_ms" in span
+            assert "status" in span
+            assert isinstance(span["duration_ms"], int)
+            assert span["duration_ms"] >= 0

@@ -21,6 +21,7 @@ import json
 import os
 import platform
 import sqlite3
+import ssl
 import sys
 import time
 import urllib.error
@@ -49,12 +50,21 @@ TOKEN_CACHE_FILE = Path.home() / ".hegemon" / ".pb_token"
 _token_cache: dict = {"token": None, "expires": 0.0}
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """Create SSL context with certifi CA bundle (macOS Python needs this)."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
 def _remote_enabled() -> bool:
     return bool(REMOTE_URL and REMOTE_PASSWORD)
 
 
 def _remote_auth() -> str | None:
-    """Get PocketBase admin auth token. Cached in memory + file."""
+    """Get PocketBase superuser auth token. Cached in memory + file."""
     if not _remote_enabled():
         return None
 
@@ -73,18 +83,18 @@ def _remote_auth() -> str | None:
         except (json.JSONDecodeError, KeyError):
             pass
 
-    # Fresh auth
+    # Fresh auth (PocketBase v0.23+ uses _superusers collection)
     try:
         data = json.dumps({"identity": REMOTE_EMAIL, "password": REMOTE_PASSWORD}).encode()
         req = urllib.request.Request(
-            f"{REMOTE_URL}/api/admins/auth-with-password",
+            f"{REMOTE_URL}/api/collections/_superusers/auth-with-password",
             data=data,
             headers={"Content-Type": "application/json"},
         )
-        resp = urllib.request.urlopen(req, timeout=5)
+        resp = urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         result = json.loads(resp.read())
         token = result["token"]
-        expires = time.time() + 7200  # 2h (PB admin tokens last 14d, but refresh often)
+        expires = time.time() + 7200  # 2h (PB tokens last 14d, but refresh often)
 
         _token_cache["token"] = token
         _token_cache["expires"] = expires
@@ -110,7 +120,7 @@ def _remote_push(collection: str, data: dict) -> None:
             data=body,
             headers={"Content-Type": "application/json", "Authorization": token},
         )
-        urllib.request.urlopen(req, timeout=5)
+        urllib.request.urlopen(req, timeout=5, context=_ssl_context())
     except Exception:
         pass  # best-effort, SQLite is primary
 
@@ -126,7 +136,7 @@ def _remote_upsert(collection: str, filter_field: str, filter_value: str, data: 
             f"{REMOTE_URL}/api/collections/{collection}/records?filter={encoded_filter}&perPage=1",
             headers={"Authorization": token},
         )
-        resp = urllib.request.urlopen(req, timeout=5)
+        resp = urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         result = json.loads(resp.read())
 
         if result.get("totalItems", 0) > 0:
@@ -138,7 +148,7 @@ def _remote_upsert(collection: str, filter_field: str, filter_value: str, data: 
                 headers={"Content-Type": "application/json", "Authorization": token},
                 method="PATCH",
             )
-            urllib.request.urlopen(req, timeout=5)
+            urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         else:
             _remote_push(collection, data)
     except Exception:
@@ -156,7 +166,7 @@ def _remote_delete(collection: str, filter_field: str, filter_value: str) -> Non
             f"{REMOTE_URL}/api/collections/{collection}/records?filter={encoded_filter}&perPage=1",
             headers={"Authorization": token},
         )
-        resp = urllib.request.urlopen(req, timeout=5)
+        resp = urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         result = json.loads(resp.read())
 
         if result.get("totalItems", 0) > 0:
@@ -166,10 +176,9 @@ def _remote_delete(collection: str, filter_field: str, filter_value: str) -> Non
                 headers={"Authorization": token},
                 method="DELETE",
             )
-            urllib.request.urlopen(req, timeout=5)
+            urllib.request.urlopen(req, timeout=5, context=_ssl_context())
     except Exception:
         pass
-
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

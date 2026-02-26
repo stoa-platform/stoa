@@ -1,0 +1,198 @@
+name: Gateway Performance Gate
+
+# Advisory performance regression check on PRs touching stoa-gateway.
+# NOT a required check — informational only (can be promoted later).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'stoa-gateway/**'
+  push:
+    branches: [main]
+    paths:
+      - 'stoa-gateway/**'
+
+concurrency:
+  group: perf-gate-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BASELINE_DIR: /tmp/perf-baseline
+  PR_RESULTS_DIR: /tmp/perf-pr-results
+
+jobs:
+  # On push to main: capture baseline for future PR comparisons
+  capture-baseline:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            stoa-gateway/target/
+          key: perf-gate-${{ runner.os }}-cargo-${{ hashFiles('stoa-gateway/Cargo.lock') }}
+          restore-keys: |
+            perf-gate-${{ runner.os }}-cargo-
+
+      - name: Install k6
+        run: |
+          curl -sL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz | tar xzf -
+          sudo mv k6-v0.54.0-linux-amd64/k6 /usr/local/bin/
+
+      - name: Build gateway (release)
+        working-directory: stoa-gateway
+        run: cargo build --release
+
+      - name: Run baseline capture
+        env:
+          GATEWAY_PORT: '8090'
+        run: |
+          chmod +x scripts/traffic/arena/capture-baseline.sh
+          scripts/traffic/arena/capture-baseline.sh \
+            stoa-gateway/target/release/stoa-gateway \
+            "$BASELINE_DIR"
+
+      - name: Upload baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-baseline-${{ github.sha }}
+          path: ${{ env.BASELINE_DIR }}/
+          retention-days: 30
+
+  # On PR: benchmark PR branch and compare against main baseline
+  pr-benchmark:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            stoa-gateway/target/
+          key: perf-gate-${{ runner.os }}-cargo-${{ hashFiles('stoa-gateway/Cargo.lock') }}
+          restore-keys: |
+            perf-gate-${{ runner.os }}-cargo-
+
+      - name: Install k6
+        run: |
+          curl -sL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz | tar xzf -
+          sudo mv k6-v0.54.0-linux-amd64/k6 /usr/local/bin/
+
+      - name: Build gateway (release)
+        working-directory: stoa-gateway
+        run: cargo build --release
+
+      # Try to download baseline from the most recent main push
+      - name: Download baseline artifact
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: perf-baseline-.*
+          name_is_regexp: true
+          branch: main
+          workflow: gateway-perf-gate.yml
+          path: ${{ env.BASELINE_DIR }}
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Run PR benchmark
+        env:
+          GATEWAY_PORT: '8091'
+        run: |
+          chmod +x scripts/traffic/arena/pr-benchmark.sh
+          scripts/traffic/arena/pr-benchmark.sh \
+            stoa-gateway/target/release/stoa-gateway \
+            "$BASELINE_DIR" \
+            "$PR_RESULTS_DIR"
+        continue-on-error: true
+        id: benchmark
+
+      - name: Upload PR results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-pr-results-${{ github.event.pull_request.number }}
+          path: ${{ env.PR_RESULTS_DIR }}/
+          retention-days: 14
+
+      - name: Post PR comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = `${process.env.PR_RESULTS_DIR}/regression-report.json`;
+
+            let body = '## Performance Regression Report\n\n';
+
+            if (!fs.existsSync(reportPath)) {
+              body += '> No baseline available for comparison. First run on main will establish the baseline.\n';
+            } else {
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              const verdict = report.overall_verdict;
+              const icon = verdict === 'PASS' ? ':white_check_mark:' : verdict === 'WARN' ? ':warning:' : ':x:';
+
+              body += `**Overall: ${icon} ${verdict}**\n\n`;
+              body += `| Scenario | Baseline p95 | PR p95 | Delta | Verdict |\n`;
+              body += `|----------|-------------|--------|-------|----------|\n`;
+
+              for (const s of report.scenarios) {
+                const vIcon = s.verdict === 'PASS' ? ':white_check_mark:' : s.verdict === 'WARN' ? ':warning:' : ':x:';
+                body += `| ${s.scenario} | ${s.baseline_p95_ms} ms | ${s.pr_p95_ms} ms | ${s.regression_pct > 0 ? '+' : ''}${s.regression_pct}% | ${vIcon} ${s.verdict} |\n`;
+              }
+
+              body += `\nThresholds: WARN >${report.thresholds.warn_pct}%, FAIL >${report.thresholds.fail_pct}%\n`;
+            }
+
+            body += '\n---\n*Advisory check — does not block merge.*';
+
+            // Find and update existing comment or create new
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Performance Regression Report')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

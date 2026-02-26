@@ -225,7 +225,7 @@ class SecurityScannerService:
                 scanner=scanner,
                 severity=raw.get("severity", "info").lower(),
                 rule_id=raw.get("rule_id", raw.get("id", "unknown")),
-                rule_name=raw.get("rule_name", raw.get("title", "Unknown rule")),
+                title=raw.get("rule_name", raw.get("title", "Unknown rule")),
                 resource_type=raw.get("resource_type"),
                 resource_name=raw.get("resource_name", raw.get("resource")),
                 description=raw.get("description"),
@@ -342,7 +342,7 @@ class SecurityScannerService:
 
         # Get current open findings indexed by rule_id
         findings_result = await db.execute(
-            select(SecurityFinding.rule_id, SecurityFinding.rule_name, SecurityFinding.severity)
+            select(SecurityFinding.rule_id, SecurityFinding.title, SecurityFinding.severity)
             .where(
                 SecurityFinding.tenant_id == tenant_id,
                 SecurityFinding.status == "open",
@@ -361,7 +361,7 @@ class SecurityScannerService:
                 drifts.append(
                     DriftAlert(
                         rule_id=rule_id,
-                        rule_name=actual.rule_name,
+                        rule_name=actual.title,
                         expected_status=expected_status,
                         actual_status="open",
                         severity=FindingSeverity(actual.severity),

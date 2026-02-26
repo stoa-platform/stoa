@@ -1,6 +1,8 @@
 ---
-description: Secrets management strategy — Infisical self-hosted. Consult when adding/modifying credentials or env vars.
-globs: "deploy/**,k8s/**,charts/**,.env*,**/secrets*"
+globs:
+  - "deploy/**"
+  - "terraform/**"
+  - ".infisical.json"
 ---
 
 # Secrets Management
@@ -10,7 +12,7 @@ globs: "deploy/**,k8s/**,charts/**,.env*,**/secrets*"
 ```
 Infisical (self-hosted, source of truth — all environments)
        │
-       ├── prod/     → Production secrets (Cloudflare, Hetzner, OVH)
+       ├── prod/     → Production secrets (Cloudflare, Contabo, Hetzner, OVH)
        ├── staging/  → Staging secrets
        └── dev/      → Development secrets
 ```
@@ -27,12 +29,16 @@ Infisical (self-hosted, source of truth — all environments)
 | Env | Path | Secret | Purpose |
 |-----|------|--------|---------|
 | `prod` | `/cloudflare` | `API_TOKEN` | Cloudflare DNS API (DNS Edit scope) |
+| `prod` | `/cloudflare` | `CF_ACCESS_CLIENT_ID` | Cloudflare Access Service Token ID |
+| `prod` | `/cloudflare` | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access Service Token Secret |
+| `prod` | `/contabo` | `VPS_ROOT_PASSWORD` | Root password for 5 HEGEMON VPS (SSH root disabled — console/VNC only) |
 | `prod` | `/hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API |
 | `prod` | `/ovh` | `OVH_APPLICATION_KEY` | OVH API key |
 | `prod` | `/ovh` | `OVH_APPLICATION_SECRET` | OVH API secret |
 | `prod` | `/ovh` | `OVH_CONSUMER_KEY` | OVH consumer key |
 | `prod` | `/ovh` | `OVH_CLOUD_PROJECT_ID` | OVH project ID |
 | `prod` | `/ovh` | `OVH_OPENSTACK_PASSWORD` | OVH OpenStack password |
+| `prod` | `/ovh` | `VPS_STOA_PASSWORD` | Root password for OVH VPS fleet (Kong, Gravitee, n8n, etc.) |
 
 ## Authentication
 

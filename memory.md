@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-26 (C10 planned: 193pts, 13 tickets, 5 panes — Kill the Backlog)
+> Derniere MAJ: 2026-02-26 (C10 in progress: BACKEND ALL DONE 73/73pts)
 
 ## ✅ DONE
 
@@ -88,26 +88,26 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 
 ### Cycle 10 — Kill the Backlog (193 pts, 13 tickets, Mar 2-8)
 
-**BACKEND** (Pane 2, ~73 pts):
-- CAB-1350: UAC Spec v1.0 (13 pts) — Council 9.00 Go
-- CAB-1335: UAC Transformer Service (21 pts) — Council 8.00 Go
-- CAB-1349: Contract Transformer (8 pts) — Council 8.25 Go
-- CAB-1474: Enterprise DR & Recovery (21 pts) — Council 7.50 Fix
-- CAB-1311: GTM Strategy AI part (5 pts) — Council 6.50 Fix
-- CAB-1496: Benchmark Methodology (5 pts, sub CAB-1443)
+**BACKEND** (Pane 2, ~73 pts) — ALL DONE (73/73 pts):
+- ✅ CAB-1350: UAC Spec v1.0 (13 pts) — PR #1146
+- ✅ CAB-1335: UAC Transformer Service (21 pts) — PR #1148
+- ✅ CAB-1349: Contract Transformer (8 pts) — PR #1147
+- ✅ CAB-1474: Enterprise DR & Recovery (21 pts) — PRs #1152 (export), #1155 (import)
+- ✅ CAB-1311: GTM Strategy AI part (5 pts) — PR #1157
+- ✅ CAB-1496: Benchmark Methodology (5 pts) — stoa-docs PR #85
 
 **FRONTEND** (Pane 3, ~86 pts):
-- CAB-1453: Portal V2 Self-Service (21 pts) — Council 8.50 Go
-- CAB-1454: Console Admin Complete (21 pts) — Council 8.25 Go
-- CAB-1470: Portal Advanced Features (21 pts) — Council 8.25 Go
-- CAB-1476: E2E Test Hardening R2 (21 pts) — Council 8.00 Go
-- CAB-1471: Dashboard Polish (2 pts)
+- ✅ CAB-1453: Portal V2 Self-Service (21 pts) — PR #1154
+- CAB-1454: Console Admin Complete (21 pts) — in progress
+- CAB-1470: Portal Advanced Features (21 pts) — todo
+- CAB-1476: E2E Test Hardening R2 (21 pts) — todo
+- CAB-1471: Dashboard Polish (2 pts) — todo
 
 **MCP** (Pane 5, 21 pts):
-- CAB-1455: Gateway Live Reload (21 pts) — Council 8.00 Go
+- ✅ CAB-1455: Gateway Live Reload (21 pts) — PR #1153
 
 **QA** (Pane 6, 13 pts):
-- CAB-1477: Cross-Component Integration Tests (13 pts) — Council 8.00 Go
+- ✅ CAB-1477: Cross-Component Integration Tests (13 pts) — PR #1156
 
 ## 📋 NEXT
 
@@ -135,8 +135,13 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330 gateway tests
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
-- HEGEMON daemon DEPLOYED on worker-1 (207.180.246.92) — systemd `hegemon.service`, polling 60s, 5/5 workers healthy
-  - Fixes: Linear GraphQL ID!/String! types, tilde expansion, prompt-file SSH, auto-reset failed tickets (commit ec31d378)
+- HEGEMON daemon **v8** on worker-1 (207.180.246.92) — polling 60s, 5/5 workers healthy
+  - v8: Opus-only (Sonnet can't handle 40K rules), turn budgets 40/50/60/75, env setup hints, turn budget directive
+  - Validated: CAB-1528 → PR #1158 (35 tests, 3 bugs found, 73 turns, $2.24, 22m38s)
+  - SSH key: `~/.ssh/id_ed25519_stoa` (not default ed25519)
+  - API quota hit 2026-02-26 (resets 2026-03-01). Opus works but budget needs monitoring
+  - **CI/CD deploy workflow**: PR #1159 merged. GitHub secrets set (`HEGEMON_SSH_PRIVATE_KEY`, `HEGEMON_VPS_HOST`)
+  - **TODO (from desktop)**: replace GitHub secret `HEGEMON_SSH_PRIVATE_KEY` with `~/.ssh/id_ed25519_stoa` (the key authorized on VPS), then trigger `workflow_dispatch`. Generated key `~/.ssh/hegemon_deploy` on laptop is NOT authorized on VPS — delete it or add its pub key to VPS
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

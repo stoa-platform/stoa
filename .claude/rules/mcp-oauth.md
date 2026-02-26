@@ -1,6 +1,7 @@
 ---
-description: MCP OAuth 2.1 flow — discovery chain, DCR scope stripping, mTLS bypass, PKCE patch
-globs: "stoa-gateway/src/oauth/**,stoa-gateway/tests/**/oauth*"
+globs:
+  - "stoa-gateway/src/oauth/**"
+  - "stoa-gateway/src/auth/**"
 ---
 
 # MCP OAuth 2.1 Flow — Critical Patterns

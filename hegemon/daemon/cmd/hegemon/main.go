@@ -65,7 +65,11 @@ func newDaemon(cfg *config.Config) (*daemon, error) {
 	}
 
 	hostname, _ := os.Hostname()
-	rep := reporter.New(cfg.Slack.WebhookURL, lc, hostname)
+	rep := reporter.New(
+		cfg.Slack.WebhookURL, lc, hostname,
+		cfg.Notification.HealthCooldown.Duration,
+		cfg.Notification.DigestInterval.Duration,
+	)
 	sched := scheduler.New(cfg.Workers, store)
 	exec := worker.New(cfg.Repo.Path, cfg.Repo.Branch)
 
@@ -105,6 +109,7 @@ func (d *daemon) run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			log.Println("Shutdown signal received, draining...")
+			d.reporter.Stop() // Flush digest buffer before final notification.
 			d.reporter.NotifyDaemonStopped()
 			d.wg.Wait()
 			log.Println("Shutdown complete")
@@ -151,6 +156,12 @@ func (d *daemon) pollAndDispatch(ctx context.Context) {
 
 		active, _ := d.state.IsTicketActive(issue.Identifier)
 		if active {
+			continue
+		}
+
+		// Retry cap: skip tickets that have failed too many times.
+		retries, _ := d.state.GetRetryCount(issue.Identifier)
+		if retries >= d.cfg.Notification.MaxRetries {
 			continue
 		}
 
@@ -226,10 +237,17 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 			d.reporter.LinearUpdateBlocked(issue.ID, fmt.Sprintf("Timeout after %s", timeout))
 		} else {
 			d.state.CompleteDispatch(dispatchID, "failed", raw, 0, errMsg)
-			d.reporter.NotifyError(issue.Identifier, issue.Title, errMsg, duration)
-			// Reset ticket to Todo so it can be retried.
-			if resetErr := d.linear.UpdateIssueState(issue.ID, "Todo"); resetErr != nil {
-				log.Printf("WARN reset %s to Todo: %v", issue.Identifier, resetErr)
+			// Increment retry count and check if exhausted.
+			retryCount, _ := d.state.IncrRetryCount(issue.Identifier)
+			if retryCount >= d.cfg.Notification.MaxRetries {
+				d.reporter.NotifyRetriesExhausted(issue.Identifier, issue.Title, retryCount)
+				d.reporter.LinearUpdateBlocked(issue.ID, fmt.Sprintf("Failed %d times, retries exhausted: %s", retryCount, errMsg))
+			} else {
+				d.reporter.NotifyError(issue.Identifier, issue.Title, errMsg, duration)
+				// Reset ticket to Todo so it can be retried.
+				if resetErr := d.linear.UpdateIssueState(issue.ID, "Todo"); resetErr != nil {
+					log.Printf("WARN reset %s to Todo: %v", issue.Identifier, resetErr)
+				}
 			}
 		}
 		log.Printf("FAIL %s on %s after %s: %v", issue.Identifier, w.Name, duration.Round(time.Second), err)
@@ -246,6 +264,7 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 	d.state.CompleteDispatch(dispatchID, status, raw, result.PRNumber, "")
 
 	if status == "completed" {
+		d.state.ResetRetryCount(issue.Identifier)
 		d.reporter.NotifyCompleted(issue.Identifier, issue.Title, result, duration)
 		d.reporter.LinearUpdateDone(issue.ID, result, duration)
 		log.Printf("DONE %s on %s — PR #%d (%s)", issue.Identifier, w.Name, result.PRNumber, duration.Round(time.Second))
@@ -254,8 +273,15 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 		d.reporter.LinearUpdateBlocked(issue.ID, result.Summary)
 		log.Printf("BLOCKED %s on %s: %s", issue.Identifier, w.Name, result.Summary)
 	} else {
-		d.reporter.NotifyError(issue.Identifier, issue.Title, result.Summary, duration)
-		d.reporter.LinearUpdateBlocked(issue.ID, result.Summary)
+		// Result-based failure (Claude returned status=failed).
+		retryCount, _ := d.state.IncrRetryCount(issue.Identifier)
+		if retryCount >= d.cfg.Notification.MaxRetries {
+			d.reporter.NotifyRetriesExhausted(issue.Identifier, issue.Title, retryCount)
+			d.reporter.LinearUpdateBlocked(issue.ID, fmt.Sprintf("Failed %d times: %s", retryCount, result.Summary))
+		} else {
+			d.reporter.NotifyError(issue.Identifier, issue.Title, result.Summary, duration)
+			d.reporter.LinearUpdateBlocked(issue.ID, result.Summary)
+		}
 		log.Printf("FAILED %s on %s: %s", issue.Identifier, w.Name, result.Summary)
 	}
 }

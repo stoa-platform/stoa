@@ -81,6 +81,16 @@ export function LLMCostDashboard() {
     fetchData();
   };
 
+  const handleDeleteProvider = async (providerId: string) => {
+    if (!confirm('Are you sure you want to delete this provider?')) return;
+    try {
+      await apiService.delete(`/v1/tenants/${tenantId}/llm/providers/${providerId}`);
+      setProviders((prev) => prev.filter((p) => p.id !== providerId));
+    } catch {
+      alert('Failed to delete provider');
+    }
+  };
+
   const activeProviders = providers.filter((p) => p.status === 'active').length;
   const rateLimitedProviders = providers.filter((p) => p.status === 'rate_limited').length;
 
@@ -278,6 +288,7 @@ export function LLMCostDashboard() {
                   {canManageProviders && (
                     <td className="whitespace-nowrap px-6 py-4">
                       <button
+                        onClick={() => handleDeleteProvider(provider.id)}
                         className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                         data-testid={`delete-provider-${provider.id}`}
                       >

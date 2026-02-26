@@ -1,4 +1,5 @@
 """API Monitoring endpoints for transaction tracking and analytics."""
+
 import logging
 import random
 from datetime import datetime, timedelta
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/v1/monitoring", tags=["Monitoring"])
 # =============================================================================
 # MODELS
 # =============================================================================
+
 
 class TransactionSpan(BaseModel):
     name: str
@@ -75,6 +77,7 @@ class APITransactionStats(BaseModel):
 # DEMO DATA GENERATOR
 # =============================================================================
 
+
 def generate_demo_transactions(count: int = 50, tenant_id: str | None = None) -> list[APITransactionSummary]:
     """Generate realistic demo transaction data."""
     apis = [
@@ -108,10 +111,7 @@ def generate_demo_transactions(count: int = 50, tenant_id: str | None = None) ->
         method = random.choices(methods, weights=method_weights)[0]
 
         # Select status based on weights
-        status_choice = random.choices(
-            status_configs,
-            weights=[s[2] for s in status_configs]
-        )[0]
+        status_choice = random.choices(status_configs, weights=[s[2] for s in status_configs])[0]
         status_code, status, _ = status_choice
 
         # Random time within last hour
@@ -129,18 +129,20 @@ def generate_demo_transactions(count: int = 50, tenant_id: str | None = None) ->
         tx_id = f"tx-{i:06d}-{random.randint(1000, 9999)}"
         trace_id = f"trace-{random.randint(100000, 999999)}"
 
-        transactions.append(APITransactionSummary(
-            id=tx_id,
-            trace_id=trace_id,
-            api_name=api["name"],
-            method=method,
-            path=random.choice(api["paths"]),
-            status_code=status_code,
-            status=status,
-            started_at=started_at.isoformat() + "Z",
-            total_duration_ms=latency,
-            spans_count=random.randint(3, 8),
-        ))
+        transactions.append(
+            APITransactionSummary(
+                id=tx_id,
+                trace_id=trace_id,
+                api_name=api["name"],
+                method=method,
+                path=random.choice(api["paths"]),
+                status_code=status_code,
+                status=status,
+                started_at=started_at.isoformat() + "Z",
+                total_duration_ms=latency,
+                spans_count=random.randint(3, 8),
+            )
+        )
 
     # Sort by time, most recent first
     transactions.sort(key=lambda x: x.started_at, reverse=True)
@@ -172,14 +174,16 @@ def generate_transaction_detail(tx_id: str, tenant_id: str = "demo") -> APITrans
         duration = random.randint(min_ms, max_ms)
         span_status = "error" if is_error and name == "backend_call" else "success"
 
-        spans.append(TransactionSpan(
-            name=name,
-            service=service,
-            start_offset_ms=current_offset,
-            duration_ms=duration,
-            status=span_status,
-            metadata={"processed": True}
-        ))
+        spans.append(
+            TransactionSpan(
+                name=name,
+                service=service,
+                start_offset_ms=current_offset,
+                duration_ms=duration,
+                status=span_status,
+                metadata={"processed": True},
+            )
+        )
         current_offset += duration
 
     total_duration = current_offset
@@ -255,6 +259,7 @@ def generate_stats() -> APITransactionStats:
 # ENDPOINTS
 # =============================================================================
 
+
 @router.get("/transactions")
 async def list_transactions(
     limit: int = Query(50, ge=1, le=200),
@@ -284,6 +289,7 @@ async def list_transactions(
     return {
         "transactions": [t.model_dump() for t in transactions],
         "total": len(transactions),
+        "demo_mode": True,
     }
 
 
@@ -296,7 +302,7 @@ async def get_transaction_stats(
 
     Returns aggregated metrics about API calls.
     """
-    return generate_stats().model_dump()
+    return {**generate_stats().model_dump(), "demo_mode": True}
 
 
 @router.get("/transactions/{transaction_id}")
@@ -311,4 +317,4 @@ async def get_transaction(
     """
     tenant_id = user.tenant_id or "demo"
     transaction = generate_transaction_detail(transaction_id, tenant_id)
-    return transaction.model_dump()
+    return {**transaction.model_dump(), "demo_mode": True}

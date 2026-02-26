@@ -140,6 +140,8 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
   - Validated: CAB-1528 → PR #1158 (35 tests, 3 bugs found, 73 turns, $2.24, 22m38s)
   - SSH key: `~/.ssh/id_ed25519_stoa` (not default ed25519)
   - API quota hit 2026-02-26 (resets 2026-03-01). Opus works but budget needs monitoring
+  - **CI/CD deploy workflow**: PR #1159 merged. GitHub secrets set (`HEGEMON_SSH_PRIVATE_KEY`, `HEGEMON_VPS_HOST`)
+  - **TODO (from desktop)**: replace GitHub secret `HEGEMON_SSH_PRIVATE_KEY` with `~/.ssh/id_ed25519_stoa` (the key authorized on VPS), then trigger `workflow_dispatch`. Generated key `~/.ssh/hegemon_deploy` on laptop is NOT authorized on VPS — delete it or add its pub key to VPS
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

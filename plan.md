@@ -186,6 +186,7 @@
 - [x] CAB-1493: Public Benchmark Methodology (3 pts) — PR #1123
 
 **HEGEMON & Ops**:
+- [x] CAB-1519: HEGEMON Phase 2 — Go Daemon Orchestrator (21 pts) — PR #1135
 - [x] CAB-1514: [MEGA] HEGEMON Runtime VPS (13 pts) — PRs #1118, #1119
 - [x] CAB-1513: stoa-parallel v2 — PocketBase + approve-once (13 pts) — PR #1114
 - [x] CAB-1482: PocketBase remote tier + sync (5 pts) — PRs #1098, #1099, #1110
@@ -225,7 +226,6 @@
 ### Todo
 
 **Remaining code** (26 pts):
-- [ ] CAB-1519: feat(ops): HEGEMON Phase 2 — Go Daemon Orchestrator (21 pts) — Council 8.00/10
 - [ ] CAB-1443: [MEGA] CI Performance Gates (21 pts) — 2/3 subs done, CAB-1496 remains
   - [ ] CAB-1496: [docs] Benchmark Methodology & Results Publication (5 pts)
 

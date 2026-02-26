@@ -53,6 +53,7 @@ from .mcp_subscription import (
     MCPToolAccess,
     MCPToolAccessStatus,
 )
+from .oauth_client import OAuthClient, OAuthClientStatus
 from .plan import Plan, PlanStatus
 from .portal_application import PortalApplication, PortalAppStatus
 from .prospect_event import EventType, ProspectEvent

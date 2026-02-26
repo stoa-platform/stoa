@@ -251,7 +251,12 @@ jobs:
 
       - name: Write Job Summary
         if: always()
+        env:
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           write_job_summary "${{ matrix.ticket }}" "${{ job.status }}" "" "sonnet-4-5" "L5-implement" \
             "$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))"
+          push_state_milestone "${{ matrix.ticket }}" "impl-${{ job.status }}"

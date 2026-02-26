@@ -985,3 +985,98 @@ EOJSON
 
   curl -sf -X POST -H "Content-Type: application/json" -d "$payload" "$SLACK_WEBHOOK" >/dev/null 2>&1 || true
 }
+
+# ── PocketBase State Push (HEGEMON Agent State Store) ───────────────────────
+# Best-effort: all calls silently no-op if HEGEMON_REMOTE_URL is unset.
+# Requires: HEGEMON_REMOTE_URL, HEGEMON_REMOTE_PASSWORD (secrets)
+# Optional: HEGEMON_REMOTE_EMAIL (defaults to admin@gostoa.dev)
+
+_PB_TOKEN=""
+
+_pb_auth() {
+  if [ -n "$_PB_TOKEN" ]; then echo "$_PB_TOKEN"; return 0; fi
+  if [ -z "${HEGEMON_REMOTE_URL:-}" ] || [ -z "${HEGEMON_REMOTE_PASSWORD:-}" ]; then return 1; fi
+  local email="${HEGEMON_REMOTE_EMAIL:-admin@gostoa.dev}"
+  local resp
+  resp=$(curl -sf --max-time 5 -X POST \
+    "${HEGEMON_REMOTE_URL}/api/collections/_superusers/auth-with-password" \
+    -H "Content-Type: application/json" \
+    -d "{\"identity\":\"${email}\",\"password\":\"${HEGEMON_REMOTE_PASSWORD}\"}" 2>/dev/null) || return 1
+  _PB_TOKEN=$(echo "$resp" | jq -r '.token // empty' 2>/dev/null)
+  [ -n "$_PB_TOKEN" ] && echo "$_PB_TOKEN" || return 1
+}
+
+# push_state_session INSTANCE_ID STEP [TICKET] [BRANCH] [PR] [ROLE] [SOURCE]
+push_state_session() {
+  local instance_id="${1:?}" step="${2:?}"
+  local ticket="${3:-}" branch="${4:-}" pr="${5:-}" role="${6:-ci}" source_tag="${7:-gha}"
+  local token now host
+  token=$(_pb_auth) || return 0
+  now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  host="${GITHUB_REPOSITORY:-stoa-platform/stoa}"
+  local payload
+  payload=$(jq -nc \
+    --arg iid "$instance_id" --arg proj "stoa" --arg role "$role" \
+    --arg ticket "$ticket" --arg branch "$branch" --arg step "$step" \
+    --arg pr "$pr" --arg host "$host" --arg source "$source_tag" \
+    --arg pid "${GITHUB_RUN_ID:-0}" --arg now "$now" \
+    '{instance_id:$iid, project:$proj, role:$role, ticket:$ticket,
+      branch:$branch, step:$step, pr:(if $pr == "" then null else ($pr|tonumber) end),
+      host:$host, source:$source, pid:($pid|tonumber),
+      started_at:$now, updated_at:$now}')
+  # Upsert: find existing by instance_id, update or create
+  local existing
+  existing=$(curl -sf --max-time 5 \
+    "${HEGEMON_REMOTE_URL}/api/collections/sessions/records?filter=instance_id='${instance_id}'" \
+    -H "Authorization: ${token}" 2>/dev/null \
+    | jq -r '.items[0].id // empty' 2>/dev/null) || true
+  if [ -n "$existing" ]; then
+    curl -sf --max-time 5 -X PATCH \
+      "${HEGEMON_REMOTE_URL}/api/collections/sessions/records/${existing}" \
+      -H "Content-Type: application/json" -H "Authorization: ${token}" \
+      -d "$(echo "$payload" | jq -c '{step,pr,updated_at,branch,ticket}')" \
+      >/dev/null 2>&1 || true
+  else
+    curl -sf --max-time 5 -X POST \
+      "${HEGEMON_REMOTE_URL}/api/collections/sessions/records" \
+      -H "Content-Type: application/json" -H "Authorization: ${token}" \
+      -d "$payload" >/dev/null 2>&1 || true
+  fi
+}
+
+# push_state_milestone TICKET STEP [INSTANCE_ID] [PR] [SHA] [DETAIL]
+push_state_milestone() {
+  local ticket="${1:?}" step="${2:?}"
+  local instance_id="${3:-gha-${GITHUB_RUN_ID:-0}}" pr="${4:-}" sha="${5:-}" detail="${6:-}"
+  local token now
+  token=$(_pb_auth) || return 0
+  now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  local payload
+  payload=$(jq -nc \
+    --arg ticket "$ticket" --arg step "$step" --arg iid "$instance_id" \
+    --arg proj "stoa" --arg pr "$pr" --arg sha "$sha" \
+    --arg detail "$detail" --arg now "$now" \
+    '{ticket:$ticket, step:$step, instance_id:$iid, project:$proj,
+      pr:(if $pr == "" then null else ($pr|tonumber) end),
+      sha:$sha, detail:$detail, event_at:$now}')
+  curl -sf --max-time 5 -X POST \
+    "${HEGEMON_REMOTE_URL}/api/collections/milestones/records" \
+    -H "Content-Type: application/json" -H "Authorization: ${token}" \
+    -d "$payload" >/dev/null 2>&1 || true
+}
+
+# push_state_cleanup INSTANCE_ID
+push_state_cleanup() {
+  local instance_id="${1:?}"
+  local token existing
+  token=$(_pb_auth) || return 0
+  existing=$(curl -sf --max-time 5 \
+    "${HEGEMON_REMOTE_URL}/api/collections/sessions/records?filter=instance_id='${instance_id}'" \
+    -H "Authorization: ${token}" 2>/dev/null \
+    | jq -r '.items[0].id // empty' 2>/dev/null) || true
+  if [ -n "$existing" ]; then
+    curl -sf --max-time 5 -X DELETE \
+      "${HEGEMON_REMOTE_URL}/api/collections/sessions/records/${existing}" \
+      -H "Authorization: ${token}" >/dev/null 2>&1 || true
+  fi
+}

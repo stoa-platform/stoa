@@ -3,11 +3,11 @@
 Covers: /v1/traces (list, get, stats, live, timeline, demo)
 """
 
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-
 
 SVC_PATH = "src.routers.traces.TraceService"
 
@@ -40,8 +40,9 @@ def _make_trace(**overrides):
     mock.status.value = overrides.get("status_value", "success")
 
     # Mock created_at
-    from datetime import datetime, timezone
-    mock.created_at = datetime(2026, 2, 24, tzinfo=timezone.utc)
+    from datetime import datetime
+
+    mock.created_at = datetime(2026, 2, 24, tzinfo=UTC)
 
     mock.to_summary.return_value = {
         "id": defaults["id"],
@@ -68,9 +69,8 @@ class TestListTraces:
         mock_svc = MagicMock()
         mock_svc.list_recent = AsyncMock(return_value=[trace])
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get("/v1/traces")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -82,9 +82,8 @@ class TestListTraces:
         mock_svc = MagicMock()
         mock_svc.list_recent = AsyncMock(return_value=[])
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get("/v1/traces?tenant_id=acme&status=success&limit=10")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces?tenant_id=acme&status=success&limit=10")
 
         assert resp.status_code == 200
         assert resp.json()["total"] == 0
@@ -93,9 +92,8 @@ class TestListTraces:
         """Invalid status returns 400."""
         mock_svc = MagicMock()
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get("/v1/traces?status=bogus")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces?status=bogus")
 
         assert resp.status_code == 400
 
@@ -109,9 +107,8 @@ class TestGetTrace:
         mock_svc = MagicMock()
         mock_svc.get = AsyncMock(return_value=trace)
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get(f"/v1/traces/{trace.id}")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get(f"/v1/traces/{trace.id}")
 
         assert resp.status_code == 200
 
@@ -120,9 +117,8 @@ class TestGetTrace:
         mock_svc = MagicMock()
         mock_svc.get = AsyncMock(return_value=None)
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get("/v1/traces/nonexistent-id")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces/nonexistent-id")
 
         assert resp.status_code == 404
 
@@ -133,13 +129,10 @@ class TestTraceStats:
     def test_stats_success(self, app_with_cpi_admin, mock_db_session):
         """Get trace statistics."""
         mock_svc = MagicMock()
-        mock_svc.get_stats = AsyncMock(
-            return_value={"total": 100, "success": 85, "failed": 15}
-        )
+        mock_svc.get_stats = AsyncMock(return_value={"total": 100, "success": 85, "failed": 15})
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get("/v1/traces/stats")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces/stats")
 
         assert resp.status_code == 200
         assert resp.json()["total"] == 100
@@ -154,9 +147,8 @@ class TestLiveTraces:
         mock_svc = MagicMock()
         mock_svc.list_recent = AsyncMock(return_value=[trace])
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get("/v1/traces/live")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces/live")
 
         assert resp.status_code == 200
         assert resp.json()["count"] == 1
@@ -183,9 +175,8 @@ class TestTraceTimeline:
         mock_svc = MagicMock()
         mock_svc.get = AsyncMock(return_value=trace)
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get(f"/v1/traces/{trace.id}/timeline")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get(f"/v1/traces/{trace.id}/timeline")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -198,9 +189,8 @@ class TestTraceTimeline:
         mock_svc = MagicMock()
         mock_svc.get = AsyncMock(return_value=None)
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.get("/v1/traces/nonexistent/timeline")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces/nonexistent/timeline")
 
         assert resp.status_code == 404
 
@@ -217,11 +207,132 @@ class TestDemoTrace:
         mock_svc.complete = AsyncMock()
         mock_svc.get = AsyncMock(return_value=mock_trace)
 
-        with patch(SVC_PATH, return_value=mock_svc):
-            with TestClient(app_with_cpi_admin) as client:
-                resp = client.post("/v1/traces/demo")
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.post("/v1/traces/demo")
 
         assert resp.status_code == 200
         data = resp.json()
         assert data["created"] is True
         assert "trace_id" in data
+
+    def test_create_demo_traces_batch(self, app_with_cpi_admin, mock_db_session):
+        """POST /v1/traces/demo/batch creates multiple demo traces."""
+        mock_trace = _make_trace()
+        mock_svc = MagicMock()
+        mock_svc.create = AsyncMock(return_value=mock_trace)
+        mock_svc.add_step = AsyncMock()
+        mock_svc.complete = AsyncMock()
+        mock_svc.get = AsyncMock(return_value=mock_trace)
+
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.post("/v1/traces/demo/batch?count=3")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 3
+        assert len(data["traces"]) == 3
+
+    def test_create_demo_traces_batch_default_count(self, app_with_cpi_admin, mock_db_session):
+        """POST /v1/traces/demo/batch defaults to count=10."""
+        mock_trace = _make_trace()
+        mock_svc = MagicMock()
+        mock_svc.create = AsyncMock(return_value=mock_trace)
+        mock_svc.add_step = AsyncMock()
+        mock_svc.complete = AsyncMock()
+        mock_svc.get = AsyncMock(return_value=mock_trace)
+
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.post("/v1/traces/demo/batch")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 10
+        assert len(data["traces"]) == 10
+
+
+class TestListTracesEmpty:
+    """Tests for empty trace list scenarios."""
+
+    def test_list_traces_empty_result(self, app_with_cpi_admin, mock_db_session):
+        """List traces returns empty list when no traces exist."""
+        mock_svc = MagicMock()
+        mock_svc.list_recent = AsyncMock(return_value=[])
+
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 0
+        assert data["traces"] == []
+
+
+class TestTraceTimelineShape:
+    """Tests for timeline response structure validation."""
+
+    def test_timeline_step_has_required_fields(self, app_with_cpi_admin, mock_db_session):
+        """Timeline steps include all expected fields."""
+        trace = _make_trace(
+            steps=[
+                {
+                    "name": "api_call",
+                    "status": "success",
+                    "started_at": "2026-02-24T10:00:00",
+                    "completed_at": "2026-02-24T10:00:02",
+                    "duration_ms": 120,
+                    "error": None,
+                    "details": {"method": "POST", "path": "/v1/apis"},
+                },
+                {
+                    "name": "gateway_sync",
+                    "status": "success",
+                    "started_at": "2026-02-24T10:00:02",
+                    "completed_at": "2026-02-24T10:00:03",
+                    "duration_ms": 80,
+                    "error": None,
+                    "details": {},
+                },
+            ]
+        )
+        mock_svc = MagicMock()
+        mock_svc.get = AsyncMock(return_value=trace)
+
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get(f"/v1/traces/{trace.id}/timeline")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["timeline"]) == 2
+        step = data["timeline"][0]
+        assert step["name"] == "api_call"
+        assert step["status"] == "success"
+        assert "started_at" in step
+        assert "completed_at" in step
+        assert step["duration_ms"] == 120
+
+    def test_timeline_includes_trace_metadata(self, app_with_cpi_admin, mock_db_session):
+        """Timeline response includes trace-level metadata."""
+        trace = _make_trace(
+            steps=[
+                {
+                    "name": "step1",
+                    "status": "success",
+                    "started_at": "2026-02-24T10:00:00",
+                    "completed_at": "2026-02-24T10:00:01",
+                    "duration_ms": 50,
+                    "error": None,
+                    "details": {},
+                },
+            ]
+        )
+        mock_svc = MagicMock()
+        mock_svc.get = AsyncMock(return_value=trace)
+
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get(f"/v1/traces/{trace.id}/timeline")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "trace_id" in data
+        assert "total_duration_ms" in data
+        assert data["total_duration_ms"] == 450  # from _make_trace defaults

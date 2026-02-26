@@ -160,3 +160,78 @@ class TestGetOperationsMetrics:
         assert response.status_code == 200
         data = response.json()
         assert data["active_alerts"] == 0
+
+    def test_metrics_devops_role_can_access(self, app):
+        """Devops role should be allowed (200) for operations metrics."""
+        from fastapi.testclient import TestClient
+
+        from src.auth.dependencies import get_current_user
+        from src.database import get_db
+
+        mock_user_devops = type(
+            "User",
+            (),
+            {
+                "id": "devops-user-001",
+                "email": "devops@test.com",
+                "username": "devops-user",
+                "roles": ["devops"],
+                "tenant_id": "acme",
+            },
+        )()
+
+        async def override_get_current_user():
+            return mock_user_devops
+
+        async def override_get_db():
+            yield AsyncMock()
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+        app.dependency_overrides[get_db] = override_get_db
+
+        try:
+            with TestClient(app) as client, patch("src.routers.operations.prometheus_client") as mock_client:
+                mock_client.is_enabled = False
+                response = client.get("/v1/operations/metrics")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "error_rate" in data
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_metrics_tenant_admin_forbidden(self, app):
+        """Tenant-admin role should be forbidden (403) from operations metrics."""
+        from fastapi.testclient import TestClient
+
+        from src.auth.dependencies import get_current_user
+        from src.database import get_db
+
+        mock_user_tenant_admin = type(
+            "User",
+            (),
+            {
+                "id": "tenant-admin-001",
+                "email": "admin@tenant.com",
+                "username": "tenant-admin",
+                "roles": ["tenant-admin"],
+                "tenant_id": "acme",
+            },
+        )()
+
+        async def override_get_current_user():
+            return mock_user_tenant_admin
+
+        async def override_get_db():
+            yield AsyncMock()
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+        app.dependency_overrides[get_db] = override_get_db
+
+        try:
+            with TestClient(app) as client:
+                response = client.get("/v1/operations/metrics")
+
+            assert response.status_code == 403
+        finally:
+            app.dependency_overrides.clear()

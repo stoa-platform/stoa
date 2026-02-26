@@ -47,11 +47,18 @@ func (e *Executor) Execute(ctx context.Context, w *config.WorkerConfig, ticketID
 	maxTurns := turnsForEstimate(estimate)
 	prompt := buildPrompt(ticketID, title, description)
 
+	// Write prompt to a temp file on the remote, then run claude with it.
+	// This avoids shell quoting issues with multi-line prompts containing special characters.
+	promptFile := fmt.Sprintf("/tmp/hegemon-prompt-%s.txt", ticketID)
+	if err := e.writeRemoteFile(client, promptFile, prompt); err != nil {
+		return nil, "", fmt.Errorf("write prompt file: %w", err)
+	}
+
 	// Build the remote command.
 	// bash -l sources .profile which loads Infisical secrets.
 	cmd := fmt.Sprintf(
-		`bash -l -c 'cd %s && git checkout %s && git pull --ff-only && claude -p %s --output-format json --max-turns %d --verbose 2>/dev/null'`,
-		e.repoPath, e.branch, shellQuote(prompt), maxTurns,
+		`bash -l -c 'cd %s && git checkout %s && git pull --ff-only && claude -p "$(cat %s)" --output-format json --max-turns %d --verbose 2>/dev/null; rm -f %s'`,
+		e.repoPath, e.branch, promptFile, maxTurns, promptFile,
 	)
 
 	session, err := client.NewSession()
@@ -132,6 +139,17 @@ func (e *Executor) dialWithTimeout(w *config.WorkerConfig, timeout time.Duration
 
 	addr := fmt.Sprintf("%s:%d", w.Host, w.Port)
 	return ssh.Dial("tcp", addr, cfg)
+}
+
+// writeRemoteFile writes content to a file on the remote host via SSH.
+func (e *Executor) writeRemoteFile(client *ssh.Client, path, content string) error {
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	session.Stdin = bytes.NewReader([]byte(content))
+	return session.Run(fmt.Sprintf("cat > %s", path))
 }
 
 func turnsForEstimate(estimate int) int {

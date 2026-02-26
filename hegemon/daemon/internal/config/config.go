@@ -95,6 +95,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	setDefaults(cfg)
+	expandTildes(cfg)
 	return cfg, nil
 }
 
@@ -128,6 +129,24 @@ func setDefaults(cfg *Config) {
 			cfg.Workers[i].User = "hegemon"
 		}
 	}
+}
+
+func expandTildes(cfg *Config) {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		return
+	}
+	expand := func(s string) string {
+		if len(s) >= 2 && s[:2] == "~/" {
+			return home + s[1:]
+		}
+		return s
+	}
+	for i := range cfg.Workers {
+		cfg.Workers[i].SSHKey = expand(cfg.Workers[i].SSHKey)
+	}
+	cfg.Repo.Path = expand(cfg.Repo.Path)
+	cfg.State.DBPath = expand(cfg.State.DBPath)
 }
 
 // TimeoutForEstimate returns the max execution time for a ticket based on its

@@ -135,16 +135,26 @@ Session: stoa — Single window "workspace" with 7 panes (tiled grid, all visibl
 +------+------+------+
 
 Pane 0: ORCHESTRE  (lead orchestrator, Max billing)
-Pane 1: MONITOR    (htop + watchdog)
+Pane 1: MONITOR    (htop + watchdog, no Claude)
 Pane 2: BACKEND    (STOA_INSTANCE=backend, Max billing)
 Pane 3: FRONTEND   (STOA_INSTANCE=frontend, API billing)
 Pane 4: AUTH       (STOA_INSTANCE=auth, API billing)
-Pane 5: MCP        (STOA_INSTANCE=mcp, Max billing)
+Pane 5: MCP        (STOA_INSTANCE=mcp, API billing)
 Pane 6: QA         (STOA_INSTANCE=qa, API billing)
 ```
 
-Pane borders show role names (static, immune to Claude Code title overrides).
+Pane borders show role names via `pane-border-format` with nested `#{?#{==:#{pane_index},N},...}` conditionals — static labels immune to Claude Code title overrides.
+
 Navigation: `Ctrl+B q` (show numbers + jump), `Ctrl+B z` (zoom toggle), `Ctrl+B o` (cycle).
+
+### tmux Gotchas
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| `no space for new pane` | Detached session needs explicit size | Use `tmux new-session -x 220 -y 60` |
+| Panes don't have Homebrew in PATH | tmux doesn't source `.zprofile` | Explicit `export PATH="/opt/homebrew/bin:..."` to all panes |
+| `send-keys` race condition | Commands queued faster than shell processes | `sleep 2` after PATH export, `sleep 0.3` between env+claude |
+| First-time setup wizard in API panes | `CLAUDE_CONFIG_DIR` points to fresh dir | Pre-populate `.claude.json` with onboarding flags |
 
 Each Claude instance at startup:
 - `STOA_INSTANCE` env var set via `export` -> hook enforces deny rules
@@ -189,12 +199,63 @@ Every instance prompt includes:
 - On PR merge: `linear.update_issue(id, state="Done")` + `linear.create_comment(...)`
 - On block: `linear.update_issue(id, state="Blocked")` + comment
 
-## Billing
+## Billing Split (2 Max + 4 API)
 
-| Window | Default Billing | Rationale |
-|--------|----------------|-----------|
-| BACKEND | Max subscription | Heaviest workload (API + infra) |
-| MCP | Max subscription | Complex Rust code |
-| FRONTEND | API key | UI work, lighter context |
-| AUTH | API key | Narrow scope |
-| QA | API key | Read-heavy, write-light |
+### Default Allocation
+
+| Pane | Role | Billing | Rationale |
+|------|------|---------|-----------|
+| 0 | ORCHESTRE | Max subscription | Lead orchestrator, full repo access |
+| 2 | BACKEND | Max subscription | Heaviest workload (API + infra + tests) |
+| 3 | FRONTEND | API key | UI work, lighter context |
+| 4 | AUTH | API key | Narrow scope |
+| 5 | MCP | API key | Gateway scope (was Max, moved to API after testing) |
+| 6 | QA | API key | Read-heavy, write-light |
+
+Override: `--max-panes=0,2,5` (comma-separated pane indices).
+
+### How Billing Split Works (`CLAUDE_CONFIG_DIR`)
+
+Claude Code always prefers Max subscription over `ANTHROPIC_API_KEY` env var when `~/.claude/.credentials.json` contains valid Max credentials. The ONLY way to force API billing is to prevent the instance from seeing Max credentials.
+
+**Mechanism**: `CLAUDE_CONFIG_DIR` env var overrides the default `~/.claude/` config directory. API-billed panes get `CLAUDE_CONFIG_DIR=/tmp/claude-api-config` — a directory that:
+1. Has `settings.json` + `settings.local.json` (permissions, model config)
+2. Has `CLAUDE.md` (global instructions)
+3. Has a symlink to `~/.claude/projects/` (session persistence)
+4. Has a pre-populated `.claude.json` (onboarding complete, trust accepted, API key pre-approved)
+5. Does **NOT** have `.credentials.json` — so Claude Code falls back to `ANTHROPIC_API_KEY`
+
+Max-billed panes use the default `~/.claude/` directory (which has `.credentials.json` with Max auth).
+
+### Pre-Populated `.claude.json` (Skip Setup Wizard)
+
+Without `.claude.json`, Claude Code runs a 5-step interactive first-time setup wizard (theme → account type → API key → security notice → trust dialog). Navigating this via `tmux send-keys` is fragile. The script pre-populates `.claude.json` with:
+
+```json
+{
+  "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "2.1.59",
+  "customApiKeyResponses": { "approved": ["<last-20-chars-of-key>"] },
+  "projects": {
+    "<each-workspace-dir>": { "hasTrustDialogAccepted": true }
+  }
+}
+```
+
+This skips the wizard entirely — instances go straight to the prompt.
+
+### API Key Resolution Order
+
+1. `--api-key=sk-ant-...` (explicit flag)
+2. `ANTHROPIC_API_KEY` env var (from `.zshrc` or shell)
+3. Infisical vault auto-fetch (`vault.gostoa.dev/prod/anthropic/ANTHROPIC_API_KEY`)
+4. Fallback: all-Max mode (if no key available)
+
+### Critical Gotchas
+
+| Issue | Symptom | Root Cause | Fix |
+|-------|---------|------------|-----|
+| All instances on Max | API panes show `Claude Max` | `~/.claude/.credentials.json` has Max auth, overrides API key | Use `CLAUDE_CONFIG_DIR` for API panes |
+| API panes stuck in wizard | Interactive setup screens | Fresh config dir has no `.claude.json` | Pre-populate `.claude.json` with onboarding flags |
+| Logout affects all instances | After `claude auth logout`, even Max panes go to API | Logout clears `~/.claude/.credentials.json` globally | Never logout; use `CLAUDE_CONFIG_DIR` isolation instead |
+| API key visible in pane | Key shown in `export` command output | Env var set via `send-keys` is visible in scrollback | Accepted risk; panes are local-only |

@@ -613,7 +613,25 @@ jobs:
 
       - name: Record Start Time
         if: steps.verify-council.outputs.validated == 'true'
-        run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+        run: |
+          echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+          echo "HEGEMON_INSTANCE=l1-impl-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+
+      - name: Push State — Implementation Started
+        if: steps.verify-council.outputs.validated == 'true'
+        continue-on-error: true
+        env:
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
+          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
+          push_state_session "$HEGEMON_INSTANCE" "implementing" "$TICKET" "" "" "ci-l1" "gha"
+          push_state_milestone "$TICKET" "impl-started" "$HEGEMON_INSTANCE" "" "" "L1 Issue-to-PR"
 
       - name: Run Implementation
         if: steps.verify-council.outputs.validated == 'true'
@@ -725,6 +743,9 @@ jobs:
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome || 'skipped' }}
           ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-6' }}
           ROUTE_TURNS: ${{ steps.route.outputs.turns || '60' }}
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
@@ -750,6 +771,9 @@ jobs:
           else
             notify_implement "$TICKET" "$STATUS" "" "" "$ISSUE_NUMBER" "L1 Issue-to-PR"
           fi
+          # Push final state milestone + cleanup session
+          push_state_milestone "$TICKET" "impl-${STATUS}" "${HEGEMON_INSTANCE:-l1-impl-${GITHUB_RUN_ID}}" "${PR_NUM:-}" "" "L1 Issue-to-PR, ${DURATION}s"
+          push_state_cleanup "${HEGEMON_INSTANCE:-l1-impl-${GITHUB_RUN_ID}}"
 
       - name: Write Job Summary — Implement
         if: always()

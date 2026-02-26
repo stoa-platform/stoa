@@ -17,6 +17,8 @@ use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::guardrails::{GuardrailPolicyStore, TokenBudgetTracker};
+use crate::llm::config::LlmConfig;
+use crate::llm::router::LlmRouter;
 use crate::mcp::pending_requests::PendingRequestTracker;
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
@@ -106,6 +108,9 @@ pub struct AppState {
     /// Pull-based budget cache for department chargeback enforcement (CAB-1456)
     /// None when budget enforcement is disabled.
     pub budget_cache: Option<Arc<BudgetCache>>,
+    /// LLM provider router for multi-model routing (CAB-1487)
+    /// None when LLM routing is disabled.
+    pub llm_router: Option<Arc<LlmRouter>>,
 }
 
 impl AppState {
@@ -409,6 +414,20 @@ impl AppState {
         let diagnostic_engine = Arc::new(DiagnosticEngine::new(1000));
         tracing::info!("Diagnostic engine initialized (buffer: 1000 reports)");
 
+        // Initialize LLM provider router (CAB-1487)
+        let llm_router = if config.llm_enabled {
+            let llm_config = LlmConfig::default();
+            let router = LlmRouter::from_config(&llm_config);
+            tracing::info!(
+                "LLM provider router enabled (strategy: {:?})",
+                router.strategy()
+            );
+            Some(Arc::new(router))
+        } else {
+            tracing::info!("LLM provider router disabled (STOA_LLM_ENABLED=false)");
+            None
+        };
+
         let start_time = Instant::now();
 
         Self {
@@ -446,6 +465,7 @@ impl AppState {
             prompt_cache,
             diagnostic_engine,
             budget_cache,
+            llm_router,
         }
     }
 

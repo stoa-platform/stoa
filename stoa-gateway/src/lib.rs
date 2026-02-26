@@ -15,6 +15,7 @@ pub mod governance;
 pub mod guardrails;
 pub mod handlers;
 pub mod k8s;
+pub mod llm;
 pub mod mcp;
 pub mod metering;
 pub mod metrics;
@@ -155,6 +156,10 @@ pub fn build_router(state: AppState) -> Router {
             "/diagnostics/:request_id",
             get(handlers::diagnostic::diagnostic_report_handler),
         )
+        // CAB-1487: LLM provider router + cost tracking
+        .route("/llm/route", post(handlers::llm_admin::route_request))
+        .route("/llm/providers", get(handlers::llm_admin::list_providers))
+        .route("/llm/costs", get(handlers::llm_admin::get_costs))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

@@ -1,0 +1,108 @@
+# =============================================================================
+# GitHub Actions: Performance Regression Gate — stoa-gateway
+# =============================================================================
+# Runs a lightweight k6 benchmark on PRs touching stoa-gateway and compares
+# results against the committed baseline. Non-blocking by default — can be
+# added to required checks later once baselines are stable.
+# =============================================================================
+
+name: Performance Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'stoa-gateway/**'
+      - 'scripts/ci/perf-gate.sh'
+      - 'scripts/ci/perf-baseline.sh'
+      - '.perf-baseline/**'
+      - '.github/workflows/perf-gate.yml'
+
+concurrency:
+  group: perf-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  perf-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq
+
+      - name: Install k6
+        run: |
+          curl -sL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz | tar xz
+          sudo mv k6-v0.54.0-linux-amd64/k6 /usr/local/bin/
+          k6 version
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            stoa-gateway/target
+          key: ${{ runner.os }}-cargo-perf-${{ hashFiles('stoa-gateway/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-perf-
+
+      - name: Build gateway (release)
+        run: cd stoa-gateway && cargo build --release
+        env:
+          RUSTFLAGS: ""
+
+      - name: Start gateway
+        run: |
+          cd stoa-gateway
+          ./target/release/stoa-gateway &
+          GATEWAY_PID=$!
+          echo "GATEWAY_PID=$GATEWAY_PID" >> "$GITHUB_ENV"
+
+          # Wait for gateway to be ready (max 30s)
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Gateway ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+          if ! curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+            echo "::error::Gateway failed to start within 30s"
+            exit 1
+          fi
+        env:
+          STOA_GATEWAY__ADMIN_API_TOKEN: "ci-perf-gate-token"
+
+      - name: Run perf gate
+        run: scripts/ci/perf-gate.sh .perf-baseline/gateway.json
+        env:
+          GATEWAY_URL: "http://localhost:8080"
+          K6_SCRIPT: "scripts/traffic/arena/benchmark.js"
+          RUNS: "3"
+
+      - name: Stop gateway
+        if: always()
+        run: |
+          if [ -n "${GATEWAY_PID:-}" ]; then
+            kill "$GATEWAY_PID" 2>/dev/null || true
+          fi
+
+      - name: Post summary
+        if: always()
+        run: |
+          if [ -f "$GITHUB_STEP_SUMMARY" ]; then
+            echo "Performance gate results written to step summary"
+          fi

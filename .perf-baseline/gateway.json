@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "created": "2026-02-26",
+  "gateway_version": "0.1.0",
+  "metrics": {
+    "health_p50_ms": 1.5,
+    "health_p95_ms": 5.0,
+    "sequential_p50_ms": 8.0,
+    "sequential_p95_ms": 25.0,
+    "error_rate": 0.0,
+    "rps_sustained": 500
+  }
+}

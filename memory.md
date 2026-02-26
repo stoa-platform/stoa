@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-24 (C9 830pts scope, 806pts done (97.1%), 61 issues) — all code tasks complete
+> Derniere MAJ: 2026-02-26 (C9 830pts scope, 830pts done (100%), 68 issues) — ALL DONE
 
 ## ✅ DONE
 
@@ -46,6 +46,16 @@
 - ✅ CAB-1337 [MEGA] AI Guardrails V2 (34 pts) — PRs #809, #816, #825
 - ✅ CAB-1301 [MEGA] Gateway API + NetworkPolicy (21 pts) — ALL 3 PHASES DONE
 - ✅ CAB-1398 [MEGA] AI Factory Slack Upgrade (26 pts) — ALL 4 PHASES DONE
+- ✅ CAB-1482 PocketBase remote tier + sync (5 pts) — PRs #1099, #1106 (hegemon state store, SSL fix, Infisical secrets saved)
+- ✅ CAB-1481 Progressive Permission Allowlist (3 pts) — PR #1102 (instance-capture hook + analyze script)
+- ✅ CAB-438 Sender-Constrained Tokens W4 (Token Binding UI) — PR #1101 (security posture dashboard)
+- ✅ CAB-438 Sender-Constrained Tokens W5 (DPoP E2E) — PR #1103 (4 Playwright BDD features)
+- ✅ CAB-1472 MCP Protocol 2025-11-25 (5 pts) — PR #1104 (protocol bump + 9 handler tests, 1330 gw tests)
+- ✅ CAB-1479 P4 API Router Test Audit — PR #1105 (50 tests: monitoring, operations, traces)
+- ✅ CAB-1482 P3 Hegemon Agent State Store — PR #1098
+- ✅ CAB-1475 PG Audit Trail — PR #1094
+- ✅ CAB-1479 P5 E2E Scenarios — PR #1096
+- ✅ CAB-1479 P3 Portal Hook Tests — PR #1095
 - ✅ +30 smaller tickets (chat agent, i18n, deps, CI fixes, docs)
 
 ### Cycle 8 (Feb 16-22) — CLOSED (1305 pts, 88 issues, 186 pts/day)
@@ -74,8 +84,9 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
-- C9 final: 801/830 pts (96.5%), 60 issues. Only human tasks remain
-- Test suite: 5600+ tests, 91% coverage (control-plane-api)
+- C9 final: 830/830 pts (100%), 68 issues. Only demo rehearsal (human-only) remains
+- Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330 gateway tests
+- Session 2026-02-26: 7 PRs merged (#1097-#1105), 3 background agents in parallel worktrees
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

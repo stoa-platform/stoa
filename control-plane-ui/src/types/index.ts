@@ -85,6 +85,9 @@ export interface ApplicationCreate {
 // Consumer types (CAB-864 — mTLS Self-Service)
 export type CertificateStatus = 'active' | 'rotating' | 'revoked' | 'expired';
 
+// Token binding mode (CAB-438 — Sender-Constrained Tokens)
+export type TokenBindingMode = 'mtls' | 'dpop' | 'none';
+
 export interface Consumer {
   id: string;
   tenant_id: string;
@@ -101,6 +104,7 @@ export interface Consumer {
   certificate_not_after?: string;
   last_rotated_at?: string;
   rotation_count?: number;
+  dpop_jkt?: string; // DPoP JWK Thumbprint (RFC 9449) — set when DPoP binding is active
   created_at: string;
   updated_at: string;
 }

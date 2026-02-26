@@ -1,0 +1,52 @@
+{
+  "name": "product-catalog",
+  "version": "2.1.0",
+  "tenant_id": "retail-inc",
+  "display_name": "Product Catalog",
+  "description": "GraphQL-backed product catalog with search and filtering.",
+  "classification": "H",
+  "endpoints": [
+    {
+      "path": "/products",
+      "methods": ["GET"],
+      "backend_url": "https://catalog.retail-inc.internal/graphql",
+      "operation_id": "list_products",
+      "output_schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "price": { "type": "number" },
+            "category": { "type": "string" }
+          }
+        }
+      }
+    },
+    {
+      "path": "/products/{id}",
+      "methods": ["GET", "PUT", "DELETE"],
+      "backend_url": "https://catalog.retail-inc.internal/graphql",
+      "operation_id": "manage_product"
+    },
+    {
+      "path": "/products/search",
+      "methods": ["POST"],
+      "backend_url": "https://catalog.retail-inc.internal/graphql",
+      "operation_id": "search_products",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "category": { "type": "string" },
+          "min_price": { "type": "number" },
+          "max_price": { "type": "number" }
+        },
+        "required": ["query"]
+      }
+    }
+  ],
+  "required_policies": ["rate-limit", "auth-jwt"],
+  "status": "published"
+}

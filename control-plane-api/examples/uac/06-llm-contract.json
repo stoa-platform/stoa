@@ -1,0 +1,44 @@
+{
+  "name": "ai-assistant",
+  "version": "1.0.0",
+  "tenant_id": "saas-startup",
+  "display_name": "AI Assistant Service",
+  "description": "Multi-provider LLM-powered contract with chat, summarize, and embed capabilities.",
+  "classification": "VH",
+  "endpoints": [],
+  "required_policies": ["rate-limit", "auth-jwt", "mtls", "audit-logging"],
+  "status": "published",
+  "llm_config": {
+    "capabilities": [
+      {
+        "capability": "chat",
+        "providers": [
+          {
+            "name": "anthropic",
+            "model": "claude-sonnet-4-5-20250929",
+            "backend_url": "https://api.anthropic.com/v1",
+            "priority": 1
+          },
+          {
+            "name": "openai",
+            "model": "gpt-4o",
+            "backend_url": "https://api.openai.com/v1",
+            "priority": 2
+          }
+        ]
+      },
+      {
+        "capability": "embed",
+        "providers": [
+          {
+            "name": "openai",
+            "model": "text-embedding-3-small",
+            "backend_url": "https://api.openai.com/v1",
+            "priority": 1
+          }
+        ]
+      }
+    ],
+    "default_timeout_ms": 30000
+  }
+}

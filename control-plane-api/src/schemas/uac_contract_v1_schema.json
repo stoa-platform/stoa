@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/uac-contract-v1.schema.json",
+  "title": "UAC Contract v1.0",
+  "description": "Universal API Contract specification. Define Once, Expose Everywhere — a single contract drives REST routes, MCP tools, and protocol bindings across any gateway adapter.",
+  "type": "object",
+  "required": ["name", "version", "tenant_id", "classification", "status"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "description": "Unique contract name within tenant (kebab-case). Must start and end with alphanumeric."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "default": "1.0.0",
+      "description": "Semantic version (e.g. 1.0.0)."
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Owning tenant identifier."
+    },
+    "display_name": {
+      "type": ["string", "null"],
+      "maxLength": 255,
+      "description": "Human-readable display name."
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "Contract description."
+    },
+    "classification": {
+      "$ref": "#/$defs/Classification",
+      "description": "ICT risk classification (DORA-aligned). Determines required security policies."
+    },
+    "endpoints": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Endpoint" },
+      "default": [],
+      "description": "API endpoints exposed by this contract."
+    },
+    "required_policies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Security policies derived from classification (auto-populated)."
+    },
+    "status": {
+      "$ref": "#/$defs/Status",
+      "description": "Contract lifecycle status."
+    },
+    "source_spec_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "URL of the source OpenAPI spec."
+    },
+    "spec_hash": {
+      "type": ["string", "null"],
+      "description": "SHA-256 hash of source spec (first 16 hex chars) for drift detection."
+    },
+    "llm_config": {
+      "oneOf": [
+        { "$ref": "#/$defs/LlmConfig" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Optional LLM backend configuration for AI-powered contracts."
+    }
+  },
+  "additionalProperties": false,
+  "if": {
+    "properties": {
+      "status": { "const": "published" }
+    },
+    "required": ["status"]
+  },
+  "then": {
+    "anyOf": [
+      {
+        "properties": {
+          "endpoints": { "minItems": 1 }
+        }
+      },
+      {
+        "required": ["llm_config"],
+        "properties": {
+          "llm_config": { "$ref": "#/$defs/LlmConfig" }
+        }
+      }
+    ]
+  },
+  "$defs": {
+    "Classification": {
+      "type": "string",
+      "enum": ["H", "VH", "VVH"],
+      "description": "ICT risk classification (DORA-aligned). H=High (standard), VH=Very High (sensitive), VVH=Very Very High (critical)."
+    },
+    "Status": {
+      "type": "string",
+      "enum": ["draft", "published", "deprecated"],
+      "description": "Contract lifecycle status."
+    },
+    "Endpoint": {
+      "type": "object",
+      "required": ["path", "methods", "backend_url"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "URL path pattern (e.g. /payments/{id})."
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+          },
+          "minItems": 1,
+          "description": "Allowed HTTP methods."
+        },
+        "backend_url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Backend URL to proxy requests to."
+        },
+        "operation_id": {
+          "type": ["string", "null"],
+          "description": "OpenAPI operationId (used for MCP tool naming)."
+        },
+        "input_schema": {
+          "type": ["object", "null"],
+          "description": "JSON Schema for request body validation."
+        },
+        "output_schema": {
+          "type": ["object", "null"],
+          "description": "JSON Schema for response body."
+        }
+      },
+      "additionalProperties": false
+    },
+    "LlmConfig": {
+      "type": "object",
+      "required": ["capabilities"],
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/LlmCapability" },
+          "minItems": 1,
+          "description": "LLM capabilities exposed by this contract."
+        },
+        "default_timeout_ms": {
+          "type": ["integer", "null"],
+          "minimum": 1000,
+          "maximum": 300000,
+          "description": "Default timeout for LLM calls in milliseconds."
+        }
+      },
+      "additionalProperties": false
+    },
+    "LlmCapability": {
+      "type": "object",
+      "required": ["capability", "providers"],
+      "properties": {
+        "capability": {
+          "type": "string",
+          "enum": ["chat", "summarize", "embed", "classify", "extract", "generate"],
+          "description": "Type of LLM capability."
+        },
+        "providers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/LlmProvider" },
+          "minItems": 1,
+          "description": "LLM providers for this capability (ordered by priority)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "LlmProvider": {
+      "type": "object",
+      "required": ["name", "model", "backend_url", "priority"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Provider name (e.g. anthropic, openai)."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model identifier (e.g. claude-sonnet-4-5-20250929)."
+        },
+        "backend_url": {
+          "type": "string",
+          "minLength": 1,
+          "format": "uri",
+          "description": "Provider API base URL."
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Priority (1=highest). Used for failover ordering."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

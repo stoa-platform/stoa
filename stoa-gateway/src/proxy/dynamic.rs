@@ -200,6 +200,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         resolve_credential_header(&state, &route.id, credential.as_ref()).await
     };
 
+    // CAB-1455 Phase 2: extract incoming W3C trace context (injected by
+    // trace_context_middleware) so we propagate the same trace_id to backends.
+    let trace_ctx = request
+        .extensions()
+        .get::<crate::trace_context::RequestTraceContext>()
+        .cloned();
+
     // Save headers only if retry might be needed (idempotent methods with
     // retryable responses). Deferred clone avoids HeaderMap copy on every
     // request — only pays the cost when retry actually happens. (CAB-1332)
@@ -211,8 +218,14 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     };
 
     let upstream_start = std::time::Instant::now();
-    let mut response =
-        forward_request(request, &method, &target_url, resolved_header.as_ref()).await;
+    let mut response = forward_request(
+        request,
+        &method,
+        &target_url,
+        resolved_header.as_ref(),
+        trace_ctx.as_ref(),
+    )
+    .await;
 
     // Retry transient errors on idempotent methods (CAB-362)
     if is_retryable_status(response.status()) {
@@ -234,8 +247,14 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
                     "Retrying transient upstream error"
                 );
                 tokio::time::sleep(delay).await;
-                response =
-                    retry_forward(&method, &target_url, headers, resolved_header.as_ref()).await;
+                response = retry_forward(
+                    &method,
+                    &target_url,
+                    headers,
+                    resolved_header.as_ref(),
+                    trace_ctx.as_ref(),
+                )
+                .await;
                 if !is_retryable_status(response.status()) {
                     break;
                 }
@@ -280,6 +299,7 @@ async fn forward_request(
     method: &Method,
     target_url: &str,
     resolved_header: Option<&(String, String)>,
+    trace_ctx: Option<&crate::trace_context::RequestTraceContext>,
 ) -> Response {
     let client = get_proxy_client();
     let headers = request.headers().clone();
@@ -305,7 +325,7 @@ async fn forward_request(
     // Inject W3C traceparent header for distributed tracing propagation.
     // This allows downstream services (Control-Plane API, backends) to
     // correlate their spans with the gateway's trace.
-    req_builder = inject_traceparent(req_builder);
+    req_builder = inject_traceparent(req_builder, trace_ctx);
 
     // Inject RFC 9110 §7.6.3 Via header for hop detection (CAB-1316 Phase 2)
     req_builder = req_builder.header("Via", hop_detection::build_via_value());
@@ -427,6 +447,7 @@ async fn retry_forward(
     target_url: &str,
     headers: &HeaderMap<HeaderValue>,
     resolved_header: Option<&(String, String)>,
+    trace_ctx: Option<&crate::trace_context::RequestTraceContext>,
 ) -> Response {
     let client = get_proxy_client();
     let mut builder = match *method {
@@ -440,7 +461,7 @@ async fn retry_forward(
         }
     };
     builder = copy_headers(builder, headers);
-    builder = inject_traceparent(builder);
+    builder = inject_traceparent(builder, trace_ctx);
 
     // BYOK: inject resolved credential header (CAB-1250 + CAB-1317)
     if let Some((name, value)) = resolved_header {
@@ -523,9 +544,15 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
 /// When OTel is active (CAB-1374), propagates the current OTel span context
 /// so downstream services share the same trace_id (visible in Tempo/Grafana).
 ///
-/// Fallback (OTel disabled): generates random traceparent using thread-local
-/// SmallRng to avoid `getrandom()` syscalls per request.
-fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+/// CAB-1455 Phase 2: when an incoming RequestTraceContext is provided,
+/// propagates the same trace_id with a fresh span_id (new hop in the chain).
+///
+/// Fallback (OTel disabled, no incoming context): generates random traceparent
+/// using thread-local SmallRng to avoid `getrandom()` syscalls per request.
+fn inject_traceparent(
+    builder: reqwest::RequestBuilder,
+    incoming_ctx: Option<&crate::trace_context::RequestTraceContext>,
+) -> reqwest::RequestBuilder {
     #[cfg(feature = "otel")]
     {
         if crate::telemetry::is_otel_active() {
@@ -546,7 +573,25 @@ fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuild
         }
     }
 
-    // Fallback: random traceparent (no OTel)
+    // CAB-1455 Phase 2: propagate incoming trace_id with a fresh span_id so
+    // the entire distributed trace chain shares one trace_id.
+    if let Some(ctx) = incoming_ctx {
+        let traceparent = TRACE_RNG.with(|rng| {
+            let mut rng = rng.borrow_mut();
+            let mut span_bytes = [0u8; 8];
+            rng.fill(&mut span_bytes);
+            let mut buf = String::with_capacity(55);
+            buf.push_str("00-");
+            buf.push_str(&ctx.trace_id);
+            buf.push('-');
+            hex_encode_into(&span_bytes, &mut buf);
+            buf.push_str("-01");
+            buf
+        });
+        return builder.header("traceparent", traceparent);
+    }
+
+    // Fallback: random traceparent (no OTel, no incoming context)
     // Optimized: single 24-byte RNG fill + direct hex write into pre-sized
     // buffer. Avoids 2 separate String allocations. (CAB-1332)
     let traceparent = TRACE_RNG.with(|rng| {
@@ -637,7 +682,7 @@ mod tests {
     fn test_traceparent_format() {
         let client = reqwest::Client::new();
         let builder = client.get("http://example.com");
-        let builder = inject_traceparent(builder);
+        let builder = inject_traceparent(builder, None);
         // Build request to inspect headers
         let req = builder.build().expect("build request");
         let tp = req
@@ -710,8 +755,8 @@ mod tests {
     fn test_traceparent_uniqueness() {
         let client = reqwest::Client::new();
 
-        let b1 = inject_traceparent(client.get("http://example.com"));
-        let b2 = inject_traceparent(client.get("http://example.com"));
+        let b1 = inject_traceparent(client.get("http://example.com"), None);
+        let b2 = inject_traceparent(client.get("http://example.com"), None);
 
         let r1 = b1.build().expect("build");
         let r2 = b2.build().expect("build");
@@ -720,5 +765,69 @@ mod tests {
         let tp2 = r2.headers().get("traceparent").unwrap().to_str().unwrap();
 
         assert_ne!(tp1, tp2, "each request should get a unique traceparent");
+    }
+
+    #[test]
+    fn test_traceparent_propagation_preserves_trace_id() {
+        let incoming = crate::trace_context::RequestTraceContext {
+            trace_id: "4bf92f3577b34da6a3ce929d0e0e4736".to_string(),
+            parent_span_id: "00f067aa0ba902b7".to_string(),
+            traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_string(),
+        };
+
+        let client = reqwest::Client::new();
+        let builder = inject_traceparent(client.get("http://example.com"), Some(&incoming));
+        let req = builder.build().expect("build request");
+        let tp = req
+            .headers()
+            .get("traceparent")
+            .expect("traceparent header")
+            .to_str()
+            .expect("valid string");
+
+        let parts: Vec<&str> = tp.split('-').collect();
+        assert_eq!(parts.len(), 4);
+        assert_eq!(parts[0], "00", "version preserved");
+        assert_eq!(
+            parts[1], "4bf92f3577b34da6a3ce929d0e0e4736",
+            "trace_id must be propagated from incoming context"
+        );
+        assert_eq!(parts[2].len(), 16, "span_id is 16 hex chars");
+        assert_ne!(
+            parts[2], "00f067aa0ba902b7",
+            "span_id must differ from incoming (new hop)"
+        );
+        assert_eq!(parts[3], "01", "flags sampled");
+    }
+
+    #[test]
+    fn test_traceparent_propagation_unique_span_ids() {
+        let incoming = crate::trace_context::RequestTraceContext {
+            trace_id: "abcdef1234567890abcdef1234567890".to_string(),
+            parent_span_id: "1111111111111111".to_string(),
+            traceparent: "00-abcdef1234567890abcdef1234567890-1111111111111111-01".to_string(),
+        };
+
+        let client = reqwest::Client::new();
+        let b1 = inject_traceparent(client.get("http://example.com"), Some(&incoming));
+        let b2 = inject_traceparent(client.get("http://example.com"), Some(&incoming));
+
+        let r1 = b1.build().expect("build");
+        let r2 = b2.build().expect("build");
+
+        let tp1 = r1.headers().get("traceparent").unwrap().to_str().unwrap();
+        let tp2 = r2.headers().get("traceparent").unwrap().to_str().unwrap();
+
+        let span1 = tp1.split('-').nth(2).unwrap();
+        let span2 = tp2.split('-').nth(2).unwrap();
+
+        // Same trace_id for both
+        assert_eq!(
+            tp1.split('-').nth(1).unwrap(),
+            tp2.split('-').nth(1).unwrap(),
+            "both should share the same trace_id"
+        );
+        // Different span_ids
+        assert_ne!(span1, span2, "each call must generate a unique span_id");
     }
 }

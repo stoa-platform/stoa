@@ -11,6 +11,7 @@ import {
   Activity,
   Briefcase,
   Server,
+  Store,
   LucideIcon,
 } from 'lucide-react';
 import { config } from '../../config';
@@ -42,6 +43,13 @@ const sections: NavSection[] = [
   {
     title: 'Discover',
     items: [
+      {
+        name: 'Marketplace',
+        href: '/marketplace',
+        icon: Store,
+        enabled: config.features.enableMarketplace,
+        scope: 'stoa:catalog:read',
+      },
       {
         name: 'API Catalog',
         href: '/apis',

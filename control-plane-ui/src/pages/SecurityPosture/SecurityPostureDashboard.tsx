@@ -9,6 +9,8 @@ import {
   Eye,
   FileWarning,
   ExternalLink,
+  Fingerprint,
+  Key,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
@@ -45,6 +47,17 @@ interface DriftItem {
   entity_name: string;
   drift_type: string;
   detected_at: string;
+}
+
+interface TokenBindingStatus {
+  strategy: string;
+  label: string;
+  description: string;
+  dpop_enforced: boolean;
+  mtls_enforced: boolean;
+  dpop_available: boolean;
+  mtls_available: boolean;
+  replay_protection: boolean;
 }
 
 const SEVERITY_CONFIG: Record<SeverityLevel, { bg: string; text: string; label: string }> = {
@@ -107,6 +120,7 @@ export function SecurityPostureDashboard() {
   const [findings, setFindings] = useState<SecurityFinding[]>([]);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [driftItems, setDriftItems] = useState<DriftItem[]>([]);
+  const [tokenBinding, setTokenBinding] = useState<TokenBindingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterSeverity, setFilterSeverity] = useState<SeverityLevel | 'all'>('all');
@@ -115,7 +129,7 @@ export function SecurityPostureDashboard() {
 
   const loadData = useCallback(async () => {
     try {
-      const [securityRes, driftRes] = await Promise.all([
+      const [securityRes, driftRes, tokenBindingRes] = await Promise.all([
         apiService
           .get<{
             events: SecurityEvent[];
@@ -128,6 +142,9 @@ export function SecurityPostureDashboard() {
             total: number;
           }>('/v1/admin/governance/drift')
           .catch(() => ({ data: { items: [], total: 0 } })),
+        apiService
+          .get<TokenBindingStatus>(`/v1/security/${tenantId}/token-binding`)
+          .catch(() => ({ data: null as TokenBindingStatus | null })),
       ]);
 
       // Map security events to findings for display
@@ -145,6 +162,7 @@ export function SecurityPostureDashboard() {
       setFindings(mappedFindings);
       setEvents(securityRes.data.events);
       setDriftItems(driftRes.data.items || []);
+      setTokenBinding(tokenBindingRes.data);
       setError(null);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load security data');
@@ -310,7 +328,14 @@ export function SecurityPostureDashboard() {
                 </h2>
                 <div className="space-y-2">
                   {[
-                    { label: 'mTLS enforcement', pass: criticalCount === 0 },
+                    {
+                      label: 'mTLS enforcement',
+                      pass: tokenBinding?.mtls_enforced ?? criticalCount === 0,
+                    },
+                    {
+                      label: 'DPoP token binding',
+                      pass: tokenBinding?.dpop_enforced ?? false,
+                    },
                     { label: 'Auth policy active', pass: authFailures < 50 },
                     { label: 'No config drift', pass: driftItems.length === 0 },
                     { label: 'Audit logging enabled', pass: true },
@@ -400,6 +425,97 @@ export function SecurityPostureDashboard() {
               )}
             </div>
           </div>
+
+          {/* Token Binding Status (CAB-438) */}
+          {tokenBinding && (
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Fingerprint className="h-5 w-5 text-indigo-500" />
+                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                    Token Binding
+                  </h2>
+                </div>
+                <span
+                  className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    tokenBinding.strategy === 'auto'
+                      ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                      : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                  }`}
+                >
+                  {tokenBinding.label}
+                </span>
+              </div>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+                {tokenBinding.description}
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  {
+                    icon: Key,
+                    label: 'DPoP (RFC 9449)',
+                    active: tokenBinding.dpop_enforced,
+                    available: tokenBinding.dpop_available,
+                  },
+                  {
+                    icon: Lock,
+                    label: 'mTLS (RFC 8705)',
+                    active: tokenBinding.mtls_enforced,
+                    available: tokenBinding.mtls_available,
+                  },
+                  {
+                    icon: Shield,
+                    label: 'Replay Protection',
+                    active: tokenBinding.replay_protection,
+                    available: true,
+                  },
+                  {
+                    icon: Fingerprint,
+                    label: 'Sender Constraint',
+                    active: tokenBinding.dpop_enforced || tokenBinding.mtls_enforced,
+                    available: true,
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`flex items-center gap-2 p-3 rounded-lg border ${
+                      item.active
+                        ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
+                        : item.available
+                          ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
+                          : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900'
+                    }`}
+                  >
+                    <item.icon
+                      className={`h-4 w-4 flex-shrink-0 ${
+                        item.active
+                          ? 'text-green-500'
+                          : item.available
+                            ? 'text-yellow-500'
+                            : 'text-neutral-400'
+                      }`}
+                    />
+                    <div>
+                      <div className="text-xs font-medium text-neutral-900 dark:text-white">
+                        {item.label}
+                      </div>
+                      <div
+                        className={`text-xs ${
+                          item.active
+                            ? 'text-green-600 dark:text-green-400'
+                            : item.available
+                              ? 'text-yellow-600 dark:text-yellow-400'
+                              : 'text-neutral-500'
+                        }`}
+                      >
+                        {item.active ? 'Enforced' : item.available ? 'Available' : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Drift Detection */}
           {driftItems.length > 0 && (

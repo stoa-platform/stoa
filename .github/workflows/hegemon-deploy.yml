@@ -1,0 +1,106 @@
+# =============================================================================
+# GitHub Actions: HEGEMON Daemon Deploy
+# =============================================================================
+# Cross-compile Go binary → SCP to VPS → restart systemd service
+# Config stays on VPS (env vars expanded at runtime by Go daemon)
+# =============================================================================
+
+name: HEGEMON Daemon Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'hegemon/daemon/**'
+      - '.github/workflows/hegemon-deploy.yml'
+
+  workflow_dispatch:
+
+concurrency:
+  group: hegemon-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: hegemon/daemon/go.sum
+
+      - name: Build binary
+        working-directory: hegemon/daemon
+        run: |
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o hegemon ./cmd/hegemon/
+          ls -lh hegemon
+          file hegemon
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hegemon-binary
+          path: hegemon/daemon/hegemon
+          retention-days: 7
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 5
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hegemon-binary
+
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HEGEMON_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.HEGEMON_VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy binary
+        env:
+          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
+        run: |
+          chmod +x hegemon
+          scp -o StrictHostKeyChecking=accept-new hegemon "hegemon@${VPS_HOST}:/home/hegemon/hegemon/hegemon"
+
+      - name: Restart service
+        env:
+          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
+        run: |
+          ssh "hegemon@${VPS_HOST}" "sudo systemctl restart hegemon"
+
+      - name: Verify service
+        env:
+          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
+        run: |
+          sleep 3
+          ssh "hegemon@${VPS_HOST}" "sudo systemctl is-active hegemon"
+
+  notify:
+    name: Notify
+    needs: [build, deploy]
+    if: always()
+    uses: ./.github/workflows/reusable-notify.yml
+    with:
+      component: HEGEMON Daemon
+      ci-result: ${{ needs.build.result }}
+      deploy-result: ${{ needs.deploy.result }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

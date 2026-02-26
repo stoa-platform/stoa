@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-26 (C10 in progress: BACKEND ALL DONE 73/73pts)
+> Derniere MAJ: 2026-02-26 (C10 in progress: BACKEND 73/73, FRONTEND 3/5 done 63/86pts)
 
 ## ✅ DONE
 
@@ -102,8 +102,8 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 
 **FRONTEND** (Pane 3, ~86 pts):
 - ✅ CAB-1453: Portal V2 Self-Service (21 pts) — PR #1154
-- CAB-1454: Console Admin Complete (21 pts) — in progress
-- CAB-1470: Portal Advanced Features (21 pts) — todo
+- ✅ CAB-1454: Console Admin Complete (21 pts) — PR #1175
+- ✅ CAB-1470: Portal Advanced Features (21 pts) — PR #1176 (5 features: notifications, audit log, favorites, rate limits, API compare; 26 files, 53 tests, +2124 LOC)
 - CAB-1476: E2E Test Hardening R2 (21 pts) — todo
 - CAB-1471: Dashboard Polish (2 pts) — todo
 
@@ -138,24 +138,13 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - C10 planned: 193 pts, 13 tickets, 5 panes (Council batch: 9 Go, 3 Fix, 3 Redo deferred)
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330 gateway tests
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
-- Session 2026-02-26 (laptop): HEGEMON deploy verified, PRs #1165/#1168 merged, full laptop bootstrap (3 tiers)
-- **Disk alert**: gravitee-vps was 100% full (11GB Docker container log truncated → 87%). Needs log rotation config
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
 - HEGEMON daemon **v8** on worker-1 (207.180.246.92) — polling 60s, 5/5 workers healthy
   - v8: Opus-only (Sonnet can't handle 40K rules), turn budgets 40/50/60/75, env setup hints, turn budget directive
   - Validated: CAB-1528 → PR #1158 merged (35 tests, 3 bugs found, 73 turns, $2.24, 22m38s, CI fix: rule_name @property→title column)
   - SSH key: `~/.ssh/id_ed25519_stoa` (not default ed25519)
   - API quota hit 2026-02-26 (resets 2026-03-01). Opus works but budget needs monitoring
-  - **CI/CD deploy workflow**: PR #1159 merged, tested, all 3 jobs green (build→deploy→notify)
-- **Laptop setup** (2026-02-26):
-  - SSH key: `~/.ssh/id_ed25519_stoa_laptop` (ed25519) — distributed to all 4 VPS (kong, gravitee, n8n, hegemon)
-  - Infisical Machine Identity: `stoa-cli-laptop` (ID: `b15fc1ca-508c-413f-8d67-617c4415f5da`)
-    - Client ID: `2a30b39b...` in `~/.zprofile`, secret in macOS Keychain
-    - Helper scripts: `~/.local/bin/infisical-token`, `~/.local/bin/infisical-rotate-secret`
-  - Cloudflare Access on `vault.gostoa.dev`: proxy enabled, Access app + 2 policies (service token + admin email)
-    - Service token `stoa-infisical-cli` — creds in Infisical `/cloudflare/CF_ACCESS_*` + `~/.zprofile` + all 4 VPS `~/.env.hegemon`
-    - CF API token upgraded (DNS+Access) — stored in Infisical `/cloudflare/API_TOKEN`
-  - distribute-ssh-key.sh nounset fix: PR #1168 merged
+  - **CI/CD deploy workflow**: WORKING. PRs #1171 (fresh SSH key), #1173 (printenv), #1174 (pkill self-match fix). Full pipeline: Build 25s → Deploy 22s → Verify active
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

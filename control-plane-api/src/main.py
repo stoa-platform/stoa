@@ -64,6 +64,7 @@ from .routers import (
     gateway_policies,
     git,
     health,
+    llm_budget,
     mcp_gitops,
     mcp_policy_proxy,
     mcp_proxy,
@@ -669,6 +670,9 @@ app.include_router(gateway_internal.router)
 app.include_router(billing_internal.router)
 # Billing CRUD API for tenant admins (CAB-1458)
 app.include_router(billing.router)
+
+# LLM Budget & Provider Config (CAB-1491)
+app.include_router(llm_budget.router)
 
 # Environments (ADR-040 — Born GitOps)
 app.include_router(environments.router)

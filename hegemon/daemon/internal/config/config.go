@@ -10,14 +10,15 @@ import (
 
 // Config is the root configuration for the HEGEMON daemon.
 type Config struct {
-	Linear      LinearConfig            `yaml:"linear"`
-	Workers     []WorkerConfig          `yaml:"workers"`
-	Slack       SlackConfig             `yaml:"slack"`
-	Timeouts    map[int]CustomDuration  `yaml:"timeouts"`
-	HealthCheck HealthCheckConfig       `yaml:"health_check"`
-	State       StateConfig             `yaml:"state"`
-	Log         LogConfig               `yaml:"log"`
-	Repo        RepoConfig              `yaml:"repo"`
+	Linear        LinearConfig            `yaml:"linear"`
+	Workers       []WorkerConfig          `yaml:"workers"`
+	Slack         SlackConfig             `yaml:"slack"`
+	Notification  NotificationConfig      `yaml:"notification"`
+	Timeouts      map[int]CustomDuration  `yaml:"timeouts"`
+	HealthCheck   HealthCheckConfig       `yaml:"health_check"`
+	State         StateConfig             `yaml:"state"`
+	Log           LogConfig               `yaml:"log"`
+	Repo          RepoConfig              `yaml:"repo"`
 }
 
 type LinearConfig struct {
@@ -37,6 +38,12 @@ type WorkerConfig struct {
 
 type SlackConfig struct {
 	WebhookURL string `yaml:"webhook_url"`
+}
+
+type NotificationConfig struct {
+	HealthCooldown CustomDuration `yaml:"health_cooldown"`
+	DigestInterval CustomDuration `yaml:"digest_interval"`
+	MaxRetries     int            `yaml:"max_retries"`
 }
 
 type HealthCheckConfig struct {
@@ -114,6 +121,15 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Log.MaxAgeDays == 0 {
 		cfg.Log.MaxAgeDays = 7
+	}
+	if cfg.Notification.HealthCooldown.Duration == 0 {
+		cfg.Notification.HealthCooldown.Duration = time.Hour
+	}
+	if cfg.Notification.DigestInterval.Duration == 0 {
+		cfg.Notification.DigestInterval.Duration = 30 * time.Minute
+	}
+	if cfg.Notification.MaxRetries == 0 {
+		cfg.Notification.MaxRetries = 3
 	}
 	if cfg.Repo.Path == "" {
 		cfg.Repo.Path = "~/stoa"

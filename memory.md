@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-26 (C9 830pts scope, 830pts done (100%), 68 issues) — ALL DONE
+> Derniere MAJ: 2026-02-26 (C9 830pts scope, 830pts done (100%), 68 issues + 5 MEGAs closed) — ALL DONE
 
 ## ✅ DONE
 
@@ -57,7 +57,22 @@
 - ✅ CAB-1479 P5 E2E Scenarios — PR #1096
 - ✅ CAB-1479 P3 Portal Hook Tests — PR #1095
 - ✅ CAB-1514 [MEGA] HEGEMON Runtime VPS (13 pts) — PRs #1118, #1119 (8 scripts, 2 runbooks, 18-pt verify, OVH VPS-1 €4.49/mo)
+- ✅ CAB-1519 HEGEMON Phase 2 Go Daemon (21 pts) — PR #1135 (10MB binary, Linear→SSH→claude -p, 11 tests, Council 8.0/10)
 - ✅ CAB-1513 stoa-parallel v2 (13 pts) — PR #1114 (7 windows, approve-once, PocketBase claims, Linear auto-status, ORCHESTRE enrichi)
+- ✅ CAB-1483 SCIM→Roles + DCR Onboarding (5 pts) — PR #1113
+- ✅ CAB-1490 Perf Regression Gate (3 pts) — PR #1121
+- ✅ CAB-1492 Security Scanner CronJob (5 pts) — PR #1122
+- ✅ CAB-1493 Public Benchmark Methodology (3 pts) — PR #1123
+- ✅ CAB-1489 Security Scanner Tests (3 pts) — PR #1124
+- ✅ CAB-1487 LLM Provider Router + Cost (5 pts) — PR #1125
+- ✅ CAB-1491 LLM Budget Service + API (5 pts) — PR #1126
+- ✅ CAB-1488 Proxy Mode Tests (3 pts) — PR #1128
+- ✅ CAB-1494 Shadow Mode Tests (3 pts) — PR #1129
+- ✅ CAB-1497 Security Posture Dashboard (5 pts) — PR #1130
+- ✅ CAB-1484 SCIM↔Gateway Reconciliation (5 pts) — PR #1131
+- ✅ CAB-1485 Access Review Dashboard (5 pts) — PR #1132 (42 tests)
+- ✅ CAB-1495 LLM Cost Dashboard (5 pts) — PR #1133 (48 tests)
+- ✅ CAB-1486/1498/1499/1500 Wave 3 E2E Features — PR #1134 (22 scenarios, 8 files)
 - ✅ +30 smaller tickets (chat agent, i18n, deps, CI fixes, docs)
 
 ### Cycle 8 (Feb 16-22) — CLOSED (1305 pts, 88 issues, 186 pts/day)
@@ -88,7 +103,8 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - Demo MVP: mardi 17 mars 2026
 - C9 final: 830/830 pts (100%), 68 issues. Only demo rehearsal (human-only) remains
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330 gateway tests
-- Session 2026-02-26: 8 PRs merged (#1097-#1105, #1110), 3 background agents in parallel worktrees
+- Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
+- HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

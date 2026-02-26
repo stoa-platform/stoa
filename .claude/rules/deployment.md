@@ -1,6 +1,8 @@
 ---
-description: Deployment, Helm, Terraform, and migration rules
-globs: "charts/**,deploy/**,terraform/**,**/alembic/**"
+globs:
+  - "deploy/**"
+  - "charts/**"
+  - "terraform/**"
 ---
 
 # Deployment & Infrastructure

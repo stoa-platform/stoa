@@ -1,6 +1,7 @@
 ---
-description: Python code style rules for control-plane-api, mcp-gateway, cli, landing-api
-globs: "**/*.py"
+globs:
+  - "control-plane-api/**"
+  - "cli/**"
 ---
 
 # Python Code Style

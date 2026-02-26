@@ -105,6 +105,15 @@ export default defineConfig({
       },
       testMatch: /gateway-(access|mtls|uac|federation|credential|dpop|mcp)/,
     },
+
+    // Cross-component integration tests (API-only, no browser)
+    {
+      name: 'integration',
+      use: {
+        baseURL: process.env.STOA_API_URL || 'https://api.gostoa.dev',
+      },
+      testMatch: /integration-/,
+    },
   ],
 
   // Global setup/teardown if needed

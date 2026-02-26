@@ -16,6 +16,7 @@
     "test:critical": "bddgen && playwright test --grep @critical",
     "test:rpo": "bddgen && playwright test --grep @rpo",
     "test:demo": "bddgen && playwright test --grep @demo",
+    "test:integration": "bddgen && playwright test --project=integration",
     "test:ttftc": "bddgen && playwright test --project=ttftc",
     "report": "playwright show-report reports/html",
     "test:audit": "bddgen && playwright test --reporter=json,html && node scripts/generate-audit.js",

@@ -9,22 +9,32 @@
 | `provision.sh` | Local | OVH API info + manual ordering guide |
 | `setup-base.sh <IP>` | Local → root@VPS | OS hardening, packages, swap |
 | `setup-claude.sh <IP>` | Local → hegemon@VPS | Claude CLI, Node, git, watchdog |
+| `setup-state.sh <IP>` | Local → hegemon@VPS | heg-state, PocketBase, Slack, agent service |
+| `verify.sh <IP>` | Local | 18-point post-setup validation |
+| `notify.sh` | VPS (source) | Slack notification functions |
+| `hegemon-start.sh` | VPS (systemd) | tmux session initialization |
+| `hegemon-agent.service` | VPS (systemd) | Auto-start agent on boot |
 
 ## Quick Setup
 
 ```bash
 # 1. Order VPS on OVH Manager (VPS-1, Debian 12, GRA)
-# 2. Run setup
+# 2. Run setup (3 scripts, in order)
 export VPS_IP=<ip>
 ./deploy/vps/hegemon/setup-base.sh $VPS_IP
 ./deploy/vps/hegemon/setup-claude.sh $VPS_IP
+./deploy/vps/hegemon/setup-state.sh $VPS_IP
 
 # 3. Fill secrets on VPS
 ssh hegemon@$VPS_IP
-vim ~/.env.hegemon  # ANTHROPIC_API_KEY, SLACK_WEBHOOK_URL
+vim ~/.env.hegemon  # ANTHROPIC_API_KEY, SLACK_WEBHOOK_URL, HEGEMON_REMOTE_PASSWORD
 
-# 4. Verify
-ssh hegemon@$VPS_IP 'claude --version && tmux -V && git --version'
+# 4. Verify (18 automated checks)
+./deploy/vps/hegemon/verify.sh $VPS_IP
+
+# 5. Start agent
+ssh hegemon@$VPS_IP 'sudo systemctl start hegemon-agent'
+ssh hegemon@$VPS_IP 'tmux -L hegemon attach -t hegemon'
 ```
 
 ## Spec

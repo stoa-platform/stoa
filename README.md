@@ -170,6 +170,19 @@ stoa/
 | [stoa-quickstart](https://github.com/stoa-platform/stoa-quickstart) | Self-hosted quickstart |
 | [stoactl](https://github.com/stoa-platform/stoactl) | CLI tool (Go) |
 
+## Benchmark
+
+STOA includes an open benchmark suite (**Gateway Arena**) that continuously measures gateway performance across proxy throughput and AI-native capabilities (MCP, guardrails, governance).
+
+- **Methodology**: [docs/BENCHMARK-METHODOLOGY.md](docs/BENCHMARK-METHODOLOGY.md) — scoring formula, scenarios, statistical method
+- **Latest Results**: [docs/BENCHMARK-RESULTS.md](docs/BENCHMARK-RESULTS.md) — scores for STOA, Kong, and Gravitee
+
+Quick local run (requires [k6](https://grafana.com/docs/k6/latest/set-up/install-k6/) + Docker):
+
+```bash
+./scripts/traffic/arena/run-local.sh http://localhost:8080
+```
+
 ## Documentation
 
 - **Docs**: [docs.gostoa.dev](https://docs.gostoa.dev)

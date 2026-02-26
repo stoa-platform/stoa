@@ -1349,3 +1349,61 @@ export interface FederationBulkRevokeResponse {
   already_revoked: number;
   total: number;
 }
+
+// CAB-1454: Admin Users Management
+export type AdminUserStatus = 'active' | 'suspended' | 'pending';
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  roles: string[];
+  tenant_id: string | null;
+  tenant_name: string | null;
+  status: AdminUserStatus;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface AdminUserListResponse {
+  data: AdminUser[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+// CAB-1454: Platform Settings
+export type SettingCategory = 'general' | 'security' | 'gateway' | 'notifications';
+
+export interface PlatformSetting {
+  key: string;
+  value: string;
+  category: SettingCategory;
+  description: string;
+  editable: boolean;
+  updated_at: string;
+}
+
+export interface PlatformSettingsResponse {
+  settings: PlatformSetting[];
+  total: number;
+}
+
+// CAB-1454: RBAC Role Management
+export interface RolePermission {
+  name: string;
+  description: string;
+}
+
+export interface RoleDefinition {
+  name: string;
+  display_name: string;
+  description: string;
+  permissions: RolePermission[];
+  user_count: number;
+}
+
+export interface RoleListResponse {
+  roles: RoleDefinition[];
+  total: number;
+}

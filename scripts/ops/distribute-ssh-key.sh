@@ -84,7 +84,7 @@ if [ -f "$HEGEMON_WORKERS_FILE" ]; then
   done < "$HEGEMON_WORKERS_FILE"
 fi
 
-ALL_HOSTS=("${VPS_FLEET[@]}" "${EXTRA_HOSTS[@]}")
+ALL_HOSTS=("${VPS_FLEET[@]}" ${EXTRA_HOSTS[@]+"${EXTRA_HOSTS[@]}"})
 
 success=0
 fail=0

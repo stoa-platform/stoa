@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-26 (C9 830pts scope, 830pts done (100%), 68 issues + 5 MEGAs closed) — ALL DONE
+> Derniere MAJ: 2026-02-26 (C10 planned: 193pts, 13 tickets, 5 panes — Kill the Backlog)
 
 ## ✅ DONE
 
@@ -86,14 +86,43 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 23/23 PASS, GO in 5s
 - [ ] Repetitions + video backup (human-only)
 
+### Cycle 10 — Kill the Backlog (193 pts, 13 tickets, Mar 2-8)
+
+**BACKEND** (Pane 2, ~73 pts):
+- CAB-1350: UAC Spec v1.0 (13 pts) — Council 9.00 Go
+- CAB-1335: UAC Transformer Service (21 pts) — Council 8.00 Go
+- CAB-1349: Contract Transformer (8 pts) — Council 8.25 Go
+- CAB-1474: Enterprise DR & Recovery (21 pts) — Council 7.50 Fix
+- CAB-1311: GTM Strategy AI part (5 pts) — Council 6.50 Fix
+- CAB-1496: Benchmark Methodology (5 pts, sub CAB-1443)
+
+**FRONTEND** (Pane 3, ~86 pts):
+- CAB-1453: Portal V2 Self-Service (21 pts) — Council 8.50 Go
+- CAB-1454: Console Admin Complete (21 pts) — Council 8.25 Go
+- CAB-1470: Portal Advanced Features (21 pts) — Council 8.25 Go
+- CAB-1476: E2E Test Hardening R2 (21 pts) — Council 8.00 Go
+- CAB-1471: Dashboard Polish (2 pts)
+
+**MCP** (Pane 5, 21 pts):
+- CAB-1455: Gateway Live Reload (21 pts) — Council 8.00 Go
+
+**QA** (Pane 6, 13 pts):
+- CAB-1477: Cross-Component Integration Tests (13 pts) — Council 8.00 Go
+
 ## 📋 NEXT
 
+**Human-only (post-demo)**:
 CAB-1132: Business Model Validation — Post Demo (8 pts, P1)
 CAB-1126: Demo Video (8 pts, P2)
 CAB-1125: Video Punchline AI Factory (8 pts, P2)
 CAB-1127: Dual-Track Content (5 pts, P2)
 CAB-1124: Modele ESN Partner (5 pts, P2)
 CAB-1128: Design Partner Communication (3 pts, P2)
+
+**Deferred (Council Redo)**:
+CAB-1473: WASM Plugin System (21 pts) — Council 5.00 → post-v1.0
+CAB-1462: Error Snapshot v2 (21 pts) — Council 5.75 → descope
+CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 
 ## 🚫 BLOCKED
 
@@ -102,6 +131,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
 - C9 final: 830/830 pts (100%), 68 issues. Only demo rehearsal (human-only) remains
+- C10 planned: 193 pts, 13 tickets, 5 panes (Council batch: 9 Go, 3 Fix, 3 Redo deferred)
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330 gateway tests
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets

@@ -141,6 +141,38 @@ Each Claude instance at startup:
 - Startup prompt includes: instance role, scope exclusif, max 5 tickets from Linear cycle
 - Linear filter: `list_issues(labels: ['instance:<role>'], cycle: current)`
 
+## Shared State via PocketBase (CAB-1513)
+
+PocketBase (`state.gostoa.dev`) replaces `.claude/claims/*.json` as the shared state store for parallel instances.
+
+### Protocol (every instance MUST follow)
+
+| Action | Command | Effect |
+|--------|---------|--------|
+| **Start work** | `heg-state start --ticket CAB-XXXX --role <role> --branch feat/...` | Registers session + claims ticket in PocketBase |
+| **Step progress** | `heg-state step CAB-XXXX pr-created --pr 578` | Updates step in PocketBase |
+| **Complete** | `heg-state done CAB-XXXX` | Marks done in PocketBase + releases claim |
+| **List sessions** | `heg-state remote-ls` | Shows all active sessions + claims (ORCHESTRE uses this) |
+
+### Fallback
+
+If PocketBase is unreachable (`state.gostoa.dev` down), `heg-state` falls back to local SQLite (`~/.hegemon/state.db`). All operations continue — remote sync resumes when connectivity returns.
+
+### ORCHESTRE Visibility
+
+ORCHESTRE polls `heg-state remote-ls` to see all instance states and updates tmux window names:
+```bash
+# ORCHESTRE can rename windows based on active claims
+tmux rename-window -t "stoa:BACKEND" "BACKEND:CAB-1350"
+```
+
+### Linear Auto-Status (MANDATORY)
+
+Every instance prompt includes:
+- On ticket start: `linear.update_issue(id, state="In Progress")`
+- On PR merge: `linear.update_issue(id, state="Done")` + `linear.create_comment(...)`
+- On block: `linear.update_issue(id, state="Blocked")` + comment
+
 ## Billing
 
 | Window | Default Billing | Rationale |

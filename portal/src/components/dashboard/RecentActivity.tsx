@@ -87,7 +87,10 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-700">
       <div className="px-5 py-4 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
-        <h2 className="font-semibold text-neutral-900 dark:text-white">Recent Activity</h2>
+        <div className="flex items-center gap-2">
+          <Activity className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+          <h2 className="font-semibold text-neutral-900 dark:text-white">Recent Activity</h2>
+        </div>
         <Link
           to="/usage"
           className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
@@ -130,7 +133,9 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
                     {item.title}
                   </p>
                   {item.description && (
-                    <p className="text-xs text-neutral-500 truncate">{item.description}</p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                      {item.description}
+                    </p>
                   )}
                 </div>
                 <span className="text-xs text-neutral-400 whitespace-nowrap">

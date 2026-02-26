@@ -1,0 +1,65 @@
+# CAB-1492: Prometheus alert rules for security scanner
+# Fires alerts when security scores are critically low or scans fail.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: security-scanner-alerts
+  namespace: stoa-system
+  labels:
+    app: security-scanner
+    component: security
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: security-scanner
+      rules:
+        - alert: SecurityScoreCritical
+          expr: security_score < 50
+          for: 1h
+          labels:
+            severity: critical
+            component: security-scanner
+          annotations:
+            summary: "Security score below 50 for tenant {{ $labels.tenant_id }}"
+            description: >-
+              Tenant {{ $labels.tenant_id }} has a security score of
+              {{ $value }} (threshold: 50). Investigate open findings
+              via the Security Posture dashboard.
+            runbook_url: "https://docs.gostoa.dev/reference/troubleshooting#security-score"
+
+        - alert: SecurityScoreWarning
+          expr: security_score < 70 and security_score >= 50
+          for: 6h
+          labels:
+            severity: warning
+            component: security-scanner
+          annotations:
+            summary: "Security score below 70 for tenant {{ $labels.tenant_id }}"
+            description: >-
+              Tenant {{ $labels.tenant_id }} has a security score of
+              {{ $value }} (warning threshold: 70). Review open findings.
+
+        - alert: SecurityScanFailed
+          expr: increase(security_scan_failures_total[6h]) > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: security-scanner
+          annotations:
+            summary: "Security scan failed in the last 6 hours"
+            description: >-
+              At least one security scan has failed. Check the
+              security-scanner CronJob logs for details.
+
+        - alert: SecurityScanStale
+          expr: time() - security_scan_last_success_timestamp > 86400
+          for: 30m
+          labels:
+            severity: warning
+            component: security-scanner
+          annotations:
+            summary: "No successful security scan in the last 24 hours"
+            description: >-
+              The security scanner has not completed a successful run
+              in over 24 hours. Verify the CronJob is running.

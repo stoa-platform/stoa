@@ -1,0 +1,130 @@
+# CAB-1492: Security Scanner CronJob
+# Periodically triggers security scans for all tenants via the Control Plane API.
+# Runs every 6 hours. Pushes results to Prometheus via /metrics endpoint.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: security-scanner
+  namespace: stoa-system
+  labels:
+    app: security-scanner
+    component: security
+    environment: production
+spec:
+  schedule: "0 */6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: security-scanner
+            component: security
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: scanner
+              image: curlimages/curl:8.5.0
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  API_URL="http://control-plane-api.stoa-system.svc:8000"
+                  AUTH_HEADER=""
+                  if [ -n "${SERVICE_TOKEN:-}" ]; then
+                    AUTH_HEADER="Authorization: Bearer $SERVICE_TOKEN"
+                  fi
+
+                  echo "=== Security Scanner CronJob ==="
+                  echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                  echo "API: $API_URL"
+                  echo ""
+
+                  # Fetch tenant list
+                  echo "[1/2] Fetching tenants..."
+                  if [ -n "$AUTH_HEADER" ]; then
+                    TENANTS=$(curl -sf --max-time 30 "$API_URL/v1/tenants" \
+                      -H "$AUTH_HEADER" \
+                      -H "Content-Type: application/json" | jq -r '.[].id // empty' 2>/dev/null)
+                  else
+                    TENANTS=$(curl -sf --max-time 30 "$API_URL/v1/tenants" \
+                      -H "Content-Type: application/json" | jq -r '.[].id // empty' 2>/dev/null)
+                  fi
+
+                  if [ -z "$TENANTS" ]; then
+                    echo "  No tenants found or API unreachable. Exiting."
+                    exit 0
+                  fi
+
+                  TOTAL=0
+                  SUCCESS=0
+                  FAIL=0
+
+                  # Trigger scan for each tenant
+                  echo "[2/2] Triggering scans..."
+                  for tenant in $TENANTS; do
+                    TOTAL=$((TOTAL + 1))
+                    echo "  Scanning tenant: $tenant"
+                    if [ -n "$AUTH_HEADER" ]; then
+                      RESULT=$(curl -sf --max-time 60 -X POST \
+                        "$API_URL/v1/security/$tenant/scans?scanner=scheduled-cronjob" \
+                        -H "$AUTH_HEADER" \
+                        -H "Content-Type: application/json" 2>&1) && {
+                        SUCCESS=$((SUCCESS + 1))
+                        echo "    OK: $RESULT"
+                      } || {
+                        FAIL=$((FAIL + 1))
+                        echo "    FAILED: $tenant"
+                      }
+                    else
+                      RESULT=$(curl -sf --max-time 60 -X POST \
+                        "$API_URL/v1/security/$tenant/scans?scanner=scheduled-cronjob" \
+                        -H "Content-Type: application/json" 2>&1) && {
+                        SUCCESS=$((SUCCESS + 1))
+                        echo "    OK: $RESULT"
+                      } || {
+                        FAIL=$((FAIL + 1))
+                        echo "    FAILED: $tenant"
+                      }
+                    fi
+                  done
+
+                  echo ""
+                  echo "=== Summary ==="
+                  echo "Total: $TOTAL | Success: $SUCCESS | Failed: $FAIL"
+
+                  if [ "$FAIL" -gt 0 ]; then
+                    echo "WARNING: $FAIL scan(s) failed"
+                    exit 1
+                  fi
+              env:
+                - name: SERVICE_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: scanner-service-token
+                      key: token
+                      optional: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi

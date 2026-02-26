@@ -46,7 +46,7 @@
 - ✅ CAB-1337 [MEGA] AI Guardrails V2 (34 pts) — PRs #809, #816, #825
 - ✅ CAB-1301 [MEGA] Gateway API + NetworkPolicy (21 pts) — ALL 3 PHASES DONE
 - ✅ CAB-1398 [MEGA] AI Factory Slack Upgrade (26 pts) — ALL 4 PHASES DONE
-- ✅ CAB-1482 PocketBase remote tier + sync (5 pts) — PRs #1099, #1106 (hegemon state store, SSL fix, Infisical secrets saved)
+- ✅ CAB-1482 PocketBase remote tier + sync (5 pts) — PRs #1098, #1099, #1110 (hegemon state store, SSL fix, CI deep integration)
 - ✅ CAB-1481 Progressive Permission Allowlist (3 pts) — PR #1102 (instance-capture hook + analyze script)
 - ✅ CAB-438 Sender-Constrained Tokens W4 (Token Binding UI) — PR #1101 (security posture dashboard)
 - ✅ CAB-438 Sender-Constrained Tokens W5 (DPoP E2E) — PR #1103 (4 Playwright BDD features)
@@ -86,7 +86,7 @@ CAB-1128: Design Partner Communication (3 pts, P2)
 - Demo MVP: mardi 17 mars 2026
 - C9 final: 830/830 pts (100%), 68 issues. Only demo rehearsal (human-only) remains
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330 gateway tests
-- Session 2026-02-26: 7 PRs merged (#1097-#1105), 3 background agents in parallel worktrees
+- Session 2026-02-26: 8 PRs merged (#1097-#1105, #1110), 3 background agents in parallel worktrees
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

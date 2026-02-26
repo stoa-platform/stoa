@@ -68,6 +68,29 @@ export function AccessReviewDashboard() {
     fetchClients();
   };
 
+  const handleApprove = async (clientId: string) => {
+    try {
+      await apiService.post(`/v1/oauth-clients/${clientId}/approve`);
+      setClients((prev) =>
+        prev.map((c) => (c.id === clientId ? { ...c, status: 'active' as const } : c))
+      );
+    } catch {
+      alert('Failed to approve client');
+    }
+  };
+
+  const handleRevoke = async (clientId: string) => {
+    if (!confirm('Are you sure you want to revoke this OAuth client?')) return;
+    try {
+      await apiService.delete(`/v1/oauth-clients/${clientId}`);
+      setClients((prev) =>
+        prev.map((c) => (c.id === clientId ? { ...c, status: 'revoked' as const } : c))
+      );
+    } catch {
+      alert('Failed to revoke client');
+    }
+  };
+
   const activeCount = clients.filter((c) => c.status === 'active').length;
   const revokedCount = clients.filter((c) => c.status === 'revoked').length;
   const pendingCount = clients.filter((c) => c.status === 'pending_review').length;
@@ -194,6 +217,7 @@ export function AccessReviewDashboard() {
                       <div className="flex gap-2">
                         {client.status === 'pending_review' && (
                           <button
+                            onClick={() => handleApprove(client.id)}
                             className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
                             data-testid={`approve-${client.id}`}
                           >
@@ -203,6 +227,7 @@ export function AccessReviewDashboard() {
                         )}
                         {client.status === 'active' && (
                           <button
+                            onClick={() => handleRevoke(client.id)}
                             className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                             data-testid={`revoke-${client.id}`}
                           >

@@ -56,6 +56,8 @@
 - ✅ CAB-1475 PG Audit Trail — PR #1094
 - ✅ CAB-1479 P5 E2E Scenarios — PR #1096
 - ✅ CAB-1479 P3 Portal Hook Tests — PR #1095
+- ✅ CAB-1514 [MEGA] HEGEMON Runtime VPS (13 pts) — PRs #1118, #1119 (8 scripts, 2 runbooks, 18-pt verify, OVH VPS-1 €4.49/mo)
+- ✅ CAB-1513 stoa-parallel v2 (13 pts) — PR #1114 (7 windows, approve-once, PocketBase claims, Linear auto-status, ORCHESTRE enrichi)
 - ✅ +30 smaller tickets (chat agent, i18n, deps, CI fixes, docs)
 
 ### Cycle 8 (Feb 16-22) — CLOSED (1305 pts, 88 issues, 186 pts/day)

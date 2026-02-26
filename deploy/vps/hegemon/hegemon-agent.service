@@ -1,0 +1,17 @@
+[Unit]
+Description=HEGEMON Agent — Claude Code tmux session
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=hegemon
+Environment=HOME=/home/hegemon
+ExecStart=/home/hegemon/.local/bin/hegemon-start.sh
+ExecStop=/usr/bin/tmux -L hegemon kill-session -t hegemon
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

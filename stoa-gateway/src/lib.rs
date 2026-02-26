@@ -15,6 +15,7 @@ pub mod governance;
 pub mod guardrails;
 pub mod handlers;
 pub mod k8s;
+pub mod llm;
 pub mod mcp;
 pub mod metering;
 pub mod metrics;

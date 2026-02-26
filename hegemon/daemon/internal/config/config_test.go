@@ -158,8 +158,10 @@ workers: []
 	if cfg.State.DBPath != "./hegemon.db" {
 		t.Errorf("default db_path = %q, want %q", cfg.State.DBPath, "./hegemon.db")
 	}
-	if cfg.Repo.Path != "~/stoa" {
-		t.Errorf("default repo.path = %q, want %q", cfg.Repo.Path, "~/stoa")
+	home, _ := os.UserHomeDir()
+	wantRepoPath := home + "/stoa"
+	if cfg.Repo.Path != wantRepoPath {
+		t.Errorf("default repo.path = %q, want %q", cfg.Repo.Path, wantRepoPath)
 	}
 	if cfg.Log.MaxAgeDays != 7 {
 		t.Errorf("default max_age_days = %d, want 7", cfg.Log.MaxAgeDays)

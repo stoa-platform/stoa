@@ -67,37 +67,38 @@ jobs:
           name: hegemon-binary
 
       - name: Install SSH key
+        env:
+          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.HEGEMON_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.HEGEMON_VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          cat >> ~/.ssh/config <<SSHEOF
+          Host hegemon-vps
+            HostName ${VPS_HOST}
+            User hegemon
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking accept-new
+          SSHEOF
+          chmod 600 ~/.ssh/config
 
       - name: Stop service
-        env:
-          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
         run: |
-          ssh "hegemon@${VPS_HOST}" "sudo systemctl stop hegemon 2>/dev/null || true; pkill -f 'hegemon --config' 2>/dev/null || true; sleep 1"
+          ssh hegemon-vps "sudo systemctl stop hegemon 2>/dev/null || true; pkill -f 'hegemon --config' 2>/dev/null || true; sleep 1"
 
       - name: Deploy binary
-        env:
-          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
         run: |
           chmod +x hegemon
-          scp -o StrictHostKeyChecking=accept-new hegemon "hegemon@${VPS_HOST}:/home/hegemon/hegemon/hegemon"
+          scp hegemon hegemon-vps:/home/hegemon/hegemon/hegemon
 
       - name: Start service
-        env:
-          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
         run: |
-          ssh "hegemon@${VPS_HOST}" "sudo systemctl start hegemon"
+          ssh hegemon-vps "sudo systemctl start hegemon"
 
       - name: Verify service
-        env:
-          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
         run: |
           sleep 3
-          ssh "hegemon@${VPS_HOST}" "sudo systemctl is-active hegemon"
+          ssh hegemon-vps "sudo systemctl is-active hegemon"
 
   notify:
     name: Notify

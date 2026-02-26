@@ -189,7 +189,7 @@ class DiagnosticService:
         network_path: NetworkPath | None = None
         try:
             async with httpx.AsyncClient(
-                timeout=5.0, verify=False  # noqa: S501
+                timeout=5.0, verify=False  # nosec B501 # noqa: S501 — internal diagnostics
             ) as client:
                 resp = await client.get(health_url)
                 http_ms = (time.monotonic() - http_start) * 1000

@@ -1,6 +1,8 @@
 ---
-description: SEO content generation — blog templates, hub & spoke model, editorial calendar, quality gates
-globs: "docs/**,blog/**"
+globs:
+  - "blog/**"
+  - "docs/**"
+  - "*.mdx"
 ---
 
 # SEO Content & Community Strategy

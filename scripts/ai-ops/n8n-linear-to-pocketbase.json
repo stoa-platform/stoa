@@ -1,0 +1,238 @@
+{
+  "name": "STOA — Linear Ticket Sync → PocketBase",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linear-ticket-sync",
+        "responseMode": "onReceived",
+        "responseCode": 200
+      },
+      "id": "webhook-trigger",
+      "name": "Linear Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "linear-ticket-sync"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "filter-issue-update",
+              "leftValue": "={{ $json.body.type }}",
+              "rightValue": "Issue",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "filter-action",
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "update",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-issue-update",
+      "name": "Filter: Issue Updates",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract ticket fields from Linear webhook payload\nconst body = $input.first().json.body;\nconst data = body.data || {};\nconst updatedFrom = body.updatedFrom || {};\n\n// Only process meaningful changes\nconst statusChanged = !!updatedFrom.stateId;\nconst titleChanged = !!updatedFrom.title;\nconst estimateChanged = updatedFrom.estimate !== undefined;\nconst parentChanged = updatedFrom.parentId !== undefined;\n\nif (!statusChanged && !titleChanged && !estimateChanged && !parentChanged) {\n  return [];  // Skip — no relevant field changed\n}\n\n// Map Linear status name to our canonical values\nconst statusMap = {\n  'Backlog': 'Todo',\n  'Todo': 'Todo',\n  'In Progress': 'InProgress',\n  'In Review': 'InProgress',\n  'Done': 'Done',\n  'Canceled': 'Done',\n  'Blocked': 'Blocked'\n};\n\nconst statusName = data.state?.name || 'Todo';\n\n// Detect component from labels\nconst labels = (data.labels || []).map(l => l.name);\nlet component = '';\nif (labels.some(l => l.includes('instance:backend'))) component = 'api';\nelse if (labels.some(l => l.includes('instance:frontend'))) component = 'ui';\nelse if (labels.some(l => l.includes('instance:mcp'))) component = 'gateway';\nelse if (labels.some(l => l.includes('instance:auth'))) component = 'auth';\nelse if (labels.some(l => l.includes('instance:qa'))) component = 'e2e';\n\n// Detect cycle\nconst cycle = data.cycle?.name?.toLowerCase().includes('current') ? 'current' :\n              data.cycle?.name?.toLowerCase().includes('next') ? 'next' : 'backlog';\n\n// Build summary (first 200 chars of description)\nconst desc = data.description || '';\nconst summary = desc.substring(0, 200).replace(/\\n/g, ' ').trim();\n\nreturn [{\n  json: {\n    ticket_id: data.identifier || '',\n    title: data.title || '',\n    status: statusMap[statusName] || statusName,\n    estimate: data.estimate || 0,\n    priority: data.priority || 3,\n    component: component,\n    summary: summary,\n    parent_id: data.parent?.identifier || '',\n    cycle: cycle,\n    updated_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "extract-fields",
+      "name": "Extract Ticket Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.POCKETBASE_URL }}/api/collections/tickets/records",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=ticket_id=\"{{ $json.ticket_id }}\""
+            },
+            {
+              "name": "perPage",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.POCKETBASE_ADMIN_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "check-existing",
+      "name": "Check Existing Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has-existing",
+              "leftValue": "={{ $json.totalItems }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "route-upsert",
+      "name": "Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.POCKETBASE_URL }}/api/collections/tickets/records/{{ $('Check Existing Record').item.json.items[0].id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.POCKETBASE_ADMIN_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ticket_id: $('Extract Ticket Fields').item.json.ticket_id, title: $('Extract Ticket Fields').item.json.title, status: $('Extract Ticket Fields').item.json.status, estimate: $('Extract Ticket Fields').item.json.estimate, priority: $('Extract Ticket Fields').item.json.priority, component: $('Extract Ticket Fields').item.json.component, summary: $('Extract Ticket Fields').item.json.summary, parent_id: $('Extract Ticket Fields').item.json.parent_id, cycle: $('Extract Ticket Fields').item.json.cycle, updated_at: $('Extract Ticket Fields').item.json.updated_at }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "update-record",
+      "name": "Update Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.POCKETBASE_URL }}/api/collections/tickets/records",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.POCKETBASE_ADMIN_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ticket_id: $('Extract Ticket Fields').item.json.ticket_id, title: $('Extract Ticket Fields').item.json.title, status: $('Extract Ticket Fields').item.json.status, estimate: $('Extract Ticket Fields').item.json.estimate, priority: $('Extract Ticket Fields').item.json.priority, component: $('Extract Ticket Fields').item.json.component, summary: $('Extract Ticket Fields').item.json.summary, parent_id: $('Extract Ticket Fields').item.json.parent_id, cycle: $('Extract Ticket Fields').item.json.cycle, updated_at: $('Extract Ticket Fields').item.json.updated_at }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "create-record",
+      "name": "Create Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 400]
+    }
+  ],
+  "connections": {
+    "Linear Webhook": {
+      "main": [
+        [{ "node": "Filter: Issue Updates", "type": "main", "index": 0 }]
+      ]
+    },
+    "Filter: Issue Updates": {
+      "main": [
+        [{ "node": "Extract Ticket Fields", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Ticket Fields": {
+      "main": [
+        [{ "node": "Check Existing Record", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Existing Record": {
+      "main": [
+        [{ "node": "Exists?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Exists?": {
+      "main": [
+        [{ "node": "Update Record", "type": "main", "index": 0 }],
+        [{ "node": "Create Record", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "notes": "## STOA — Linear Ticket Sync to PocketBase\n\nSyncs Linear issue updates to PocketBase `tickets` collection for HEGEMON session briefs.\n\n### Required env vars (n8n):\n- `POCKETBASE_URL`: e.g., https://state.gostoa.dev\n- `POCKETBASE_ADMIN_TOKEN`: PocketBase admin auth token\n\n### Setup:\n1. Create `tickets` collection in PocketBase with fields: ticket_id (text), title (text), status (text), estimate (number), priority (number), component (text), summary (text), parent_id (text), cycle (text), updated_at (text)\n2. Configure Linear webhook pointing to n8n: POST https://n8n.gostoa.dev/webhook/linear-ticket-sync\n3. Set POCKETBASE_URL and POCKETBASE_ADMIN_TOKEN in n8n env vars\n4. Activate workflow"
+  }
+}

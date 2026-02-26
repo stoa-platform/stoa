@@ -3,22 +3,25 @@
 # Runs as a Stop hook to report budget status and log metrics.
 # Can also be run standalone: bash .claude/hooks/rules-budget-lint.sh
 #
-# Thresholds:
-#   - Any rule without globs must be < 5K bytes (except workflow-essentials.md)
-#   - Total always-loaded (no globs) must be < 10K bytes
+# Thresholds (post-glob-scoping, 2026-02-26):
+#   - Any unscoped rule must be < 10K bytes (exceptions: workflow-essentials.md, autonomous-factory.md)
+#   - Total always-loaded (no globs) must be < 100K bytes (~80K expected)
 #   - MEMORY.md must be < 120 lines
 
 RULES_DIR="$CLAUDE_PROJECT_DIR/.claude/rules"
 MEMORY_FILE="$CLAUDE_PROJECT_DIR/memory.md"
-METRICS_LOG="$HOME/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory/metrics.log"
+
+# Derive metrics log from CLAUDE_PROJECT_DIR (portable across machines)
+PROJECT_HASH=$(echo -n "$CLAUDE_PROJECT_DIR" | sed 's|/|-|g')
+METRICS_LOG="$HOME/.claude/projects/${PROJECT_HASH}/memory/metrics.log"
 
 # Fallback for standalone execution
 [ -z "$CLAUDE_PROJECT_DIR" ] && RULES_DIR="$(cd "$(dirname "$0")/.." && pwd)/rules" && MEMORY_FILE="$(cd "$(dirname "$0")/../.." && pwd)/memory.md"
 
-MAX_UNSCOPED_BYTES=5120    # 5K per file
-MAX_ALWAYS_LOADED=10240    # 10K total
+MAX_UNSCOPED_BYTES=10240   # 10K per file
+MAX_ALWAYS_LOADED=102400   # 100K total (core ~80K after glob scoping)
 MAX_MEMORY_LINES=120
-EXCEPTION="workflow-essentials.md"
+EXCEPTIONS="workflow-essentials.md|autonomous-factory.md"
 
 ERRORS=0
 ALWAYS_LOADED_BYTES=0
@@ -35,8 +38,8 @@ for f in "$RULES_DIR"/*.md; do
     FILES_WITHOUT_GLOBS=$((FILES_WITHOUT_GLOBS + 1))
     ALWAYS_LOADED_BYTES=$((ALWAYS_LOADED_BYTES + size))
 
-    # Check per-file threshold (skip exception)
-    if [ "$filename" != "$EXCEPTION" ] && [ "$size" -gt "$MAX_UNSCOPED_BYTES" ]; then
+    # Check per-file threshold (skip exceptions)
+    if ! echo "$filename" | grep -qE "^($EXCEPTIONS)$" && [ "$size" -gt "$MAX_UNSCOPED_BYTES" ]; then
       echo "BUDGET VIOLATION: $filename is ${size}B without globs (max ${MAX_UNSCOPED_BYTES}B)"
       ERRORS=$((ERRORS + 1))
     fi

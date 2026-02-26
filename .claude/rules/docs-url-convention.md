@@ -1,6 +1,7 @@
 ---
-description: URL conventions for documentation — 3 zones (marketing, code blocks, YAML config)
-globs: "docs/**,blog/**,**/docs/**"
+globs:
+  - "docs/**"
+  - "blog/**"
 ---
 
 # Documentation URL Convention

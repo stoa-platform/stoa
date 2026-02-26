@@ -1,5 +1,7 @@
 ---
-globs: scripts/ai-ops/n8n-*, .github/workflows/*n8n*, .github/workflows/*linear*, .github/workflows/*autopilot*
+globs:
+  - "scripts/ai-ops/n8n-*"
+  - ".github/workflows/claude-*"
 ---
 
 # n8n API — Programmatic Workflow Management

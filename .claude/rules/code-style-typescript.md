@@ -1,6 +1,7 @@
 ---
-description: TypeScript/React code style for control-plane-ui and portal
-globs: "**/*.{ts,tsx}"
+globs:
+  - "control-plane-ui/**"
+  - "portal/**"
 ---
 
 # TypeScript / React Code Style

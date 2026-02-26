@@ -1,9 +1,7 @@
 ---
-description: Multi-instance coordination protocol for safe parallel execution on MEGA tickets. Claim files prevent race conditions.
 globs:
-  - ".claude/**"
-  - "plan.md"
-  - "memory.md"
+  - ".claude/claims/**"
+  - "hegemon/**"
 ---
 
 # Phase Ownership — Multi-Instance Coordination Protocol

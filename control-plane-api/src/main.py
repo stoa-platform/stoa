@@ -105,6 +105,7 @@ from .routers.mcp_admin import (
     admin_servers_router as mcp_admin_servers_router,
     admin_subscriptions_router as mcp_admin_subscriptions_router,
 )
+from .routers.oauth_clients import router as oauth_clients_router
 from .routers.portal import internal_router as portal_internal_router
 from .routers.tenant_mcp_servers import router as tenant_mcp_servers_router
 from .services import (
@@ -706,6 +707,9 @@ app.include_router(data_governance.router)
 
 # Security Posture Dashboard — score, findings, drift, compliance (CAB-1461)
 app.include_router(security_posture.router)
+
+# OAuth Client DCR — SCIM→Roles protocol mapper + identity governance (CAB-1483)
+app.include_router(oauth_clients_router)
 
 # Self-service tenant signup (CAB-1315) — public, rate-limited
 app.include_router(self_service.router)

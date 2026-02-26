@@ -14,6 +14,7 @@ pub mod elicitation;
 pub mod handlers;
 pub mod pending_requests;
 pub mod protocol;
+pub mod resources;
 pub mod session;
 pub mod sse;
 pub mod tools;

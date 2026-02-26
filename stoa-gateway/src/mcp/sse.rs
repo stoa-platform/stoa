@@ -346,6 +346,7 @@ pub async fn handle_sse_post(
         "tools/call" => handle_tools_call(&state, &request, &ctx, &session_id).await,
         "resources/list" => handle_resources_list(&state, &request).await,
         "resources/read" => handle_resources_read(&state, &request).await,
+        "resources/templates/list" => handle_resources_templates_list(&request),
         "prompts/list" => handle_prompts_list(&request),
         "prompts/get" => handle_prompts_get(&request),
         "logging/setLevel" => handle_logging_set_level(&state, &request, &session_id).await,
@@ -612,6 +613,7 @@ pub async fn process_single_request(
         "tools/call" => handle_tools_call(state, &request, &ctx, &session_id).await,
         "resources/list" => handle_resources_list(state, &request).await,
         "resources/read" => handle_resources_read(state, &request).await,
+        "resources/templates/list" => handle_resources_templates_list(&request),
         "prompts/list" => handle_prompts_list(&request),
         "prompts/get" => handle_prompts_get(&request),
         "logging/setLevel" => handle_logging_set_level(state, &request, &session_id).await,
@@ -889,6 +891,24 @@ async fn handle_resources_list(state: &AppState, request: &JsonRpcRequest) -> Js
         .collect();
     let result = json!({ "resources": resources });
     JsonRpcResponse::success(request.id.clone(), result)
+}
+
+/// `resources/templates/list` — return URI templates for parameterized resource access (MCP 2025-11-25)
+///
+/// Returns the `stoa://tools/{name}` template for dynamic tool lookup.
+fn handle_resources_templates_list(request: &JsonRpcRequest) -> JsonRpcResponse {
+    JsonRpcResponse::success(
+        request.id.clone(),
+        json!({
+            "resourceTemplates": [{
+                "uriTemplate": "stoa://tools/{name}",
+                "name": "Tool Definition",
+                "title": "STOA Tool Definition",
+                "description": "Access tool definitions by name. Returns JSON schema and metadata.",
+                "mimeType": "application/json"
+            }]
+        }),
+    )
 }
 
 /// `prompts/list` — return list of server-defined prompt templates (MCP 2025-03-26)

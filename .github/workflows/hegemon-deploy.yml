@@ -69,16 +69,18 @@ jobs:
       - name: Install SSH key
         env:
           VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.HEGEMON_SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.HEGEMON_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          printenv SSH_PRIVATE_KEY > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -l -f ~/.ssh/id_ed25519
           printf "Host hegemon-vps\n  HostName %s\n  User hegemon\n  IdentityFile ~/.ssh/id_ed25519\n  StrictHostKeyChecking accept-new\n" "$VPS_HOST" > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
       - name: Stop service
         run: |
-          ssh hegemon-vps "sudo systemctl stop hegemon 2>/dev/null || true; pkill -f 'hegemon --config' 2>/dev/null || true; sleep 1"
+          ssh -vvv hegemon-vps "sudo systemctl stop hegemon 2>/dev/null || true; pkill -f 'hegemon --config' 2>/dev/null || true; sleep 1"
 
       - name: Deploy binary
         run: |

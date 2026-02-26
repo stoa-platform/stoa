@@ -267,7 +267,7 @@ impl NativeTool {
             "platform": "STOA",
             "gateway": "stoa-gateway (Rust)",
             "version": env!("CARGO_PKG_VERSION"),
-            "mcp_protocol": "2025-03-26",
+            "mcp_protocol": "2025-11-25",
             "features": [
                 "MCP SSE Transport",
                 "OAuth 2.1 (RFC 9728)",

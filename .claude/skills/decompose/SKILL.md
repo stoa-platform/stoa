@@ -139,10 +139,27 @@ linear.create_issue(
   parentId: "<parent-issue-id>",
   estimate: <component-specific points>,
   priority: <inherit from parent>,
-  labels: [<component label>, <instance label>, <type label>, "flow-ready"],
+  labels: [<component label>, <resolved instance label ID>, <type label>, "flow-ready"],
   state: "Todo"
 )
 ```
+
+### Instance Label Auto-Resolution (MANDATORY)
+
+Every sub-issue MUST receive an `instance:*` label. Resolve from the component using this table:
+
+| Component | Instance Label ID to add |
+|-----------|--------------------------|
+| `cp-api`, `operator`, `infra`, `docs` | `b60c32eb-3374-4a53-a487-b409bfed2d61` (`instance:backend`) |
+| `cp-ui`, `portal` | `e9434a2f-f313-4223-a042-598185718c7b` (`instance:frontend`) |
+| `keycloak` | `c4bb2546-7bbc-45d9-b5ab-384fd7065d48` (`instance:auth`) |
+| `gateway` | `19497340-8712-45d0-8728-a77c96c592a7` (`instance:mcp`) |
+| `e2e` | `00ba65ee-81e3-40e8-b2d2-38f340617b2f` (`instance:qa`) |
+
+**Rules**:
+- Never create a sub-issue without an instance label — the parallel dispatch system depends on it
+- Cross-component sub-issues get the lead instance label (most LOC impact)
+- E2E sub-issues ALWAYS get `instance:qa` regardless of what they test
 
 ### Sub-Issue Title Convention
 

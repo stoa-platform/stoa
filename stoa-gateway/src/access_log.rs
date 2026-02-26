@@ -11,6 +11,7 @@ use axum::{extract::Request, middleware::Next, response::Response};
 use std::time::Instant;
 
 use crate::telemetry::extract_trace_id;
+use crate::trace_context::RequestTraceContext;
 
 /// Paths to skip from access logging (noisy health/metrics endpoints).
 const SKIP_PATHS: &[&str] = &[
@@ -54,13 +55,20 @@ pub async fn access_log_middleware(request: Request, next: Next) -> Response {
         .map(|c| c.0.clone())
         .unwrap_or_default();
 
+    // Extract trace_id from incoming traceparent header (CAB-1455 Phase 2).
+    // Priority: incoming traceparent > OTel span context > "-"
+    let trace_id_from_header = request
+        .extensions()
+        .get::<RequestTraceContext>()
+        .map(|ctx| ctx.trace_id.clone());
+
     let start = Instant::now();
     let response = next.run(request).await;
     let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
     let status = response.status().as_u16();
 
-    // Extract trace_id from OTel span context when available (CAB-1374)
-    let trace_id = extract_trace_id();
+    // Use incoming trace_id if present, else fall back to OTel span context
+    let trace_id = trace_id_from_header.unwrap_or_else(extract_trace_id);
 
     tracing::info!(
         target: "access_log",

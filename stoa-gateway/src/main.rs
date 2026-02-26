@@ -190,11 +190,18 @@ fn create_tcp_listener(addr: SocketAddr) -> Result<TcpListener, Box<dyn std::err
 }
 
 /// Initialize tracing subscriber with optional OpenTelemetry export.
+///
+/// Phase 1 (CAB-1455): All JSON log lines include `service=stoa-gateway`
+/// for cross-component correlation in Loki/Grafana.
 fn init_tracing(config: &Config) {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,stoa_gateway=debug"));
 
-    let fmt_layer = fmt::layer().json();
+    // JSON formatter with service field for cross-component log correlation (CAB-1455)
+    let fmt_layer = fmt::layer()
+        .json()
+        .with_target(true)
+        .with_current_span(true);
 
     #[cfg(feature = "otel")]
     {

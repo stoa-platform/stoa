@@ -73,7 +73,7 @@ type workflowState struct {
 }
 
 func (c *Client) getWorkflowStates() ([]workflowState, error) {
-	query := `query($teamId: String!) {
+	query := `query($teamId: ID!) {
 		workflowStates(filter: { team: { id: { eq: $teamId } } }) {
 			nodes { id name type }
 		}
@@ -126,7 +126,7 @@ func (c *Client) GetActiveCycle() (*Cycle, error) {
 
 // GetCycleIssues returns issues in a cycle filtered by state type (e.g., "unstarted").
 func (c *Client) GetCycleIssues(cycleID, stateType string) ([]Issue, error) {
-	query := `query($cycleId: String!, $stateType: String!) {
+	query := `query($cycleId: ID!, $stateType: String!) {
 		issues(filter: {
 			cycle: { id: { eq: $cycleId } }
 			state: { type: { eq: $stateType } }

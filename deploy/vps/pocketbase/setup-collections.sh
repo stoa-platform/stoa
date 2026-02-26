@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Create PocketBase collections matching HEGEMON state.db schema
-# Run once after first deploy, or after schema changes.
+# Compatible with PocketBase v0.23+ (superuser auth, fields API)
 #
 # Usage: ./setup-collections.sh [PB_URL]
 set -euo pipefail
@@ -13,21 +13,21 @@ echo "=== PocketBase Collection Setup ==="
 echo "Target: ${PB_URL}"
 echo ""
 
-# Step 1: Create admin account (only works when no admins exist)
-echo "[1/5] Bootstrapping admin account..."
-BOOTSTRAP=$(curl -sf -X POST "${PB_URL}/api/admins" \
+# Step 1: Create superuser (PB v0.23+ uses _superusers collection)
+echo "[1/5] Bootstrapping superuser account..."
+BOOTSTRAP=$(curl -sf -X POST "${PB_URL}/api/collections/_superusers/records" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\",\"passwordConfirm\":\"${ADMIN_PASSWORD}\"}" 2>&1) || true
 
 if echo "$BOOTSTRAP" | grep -q '"id"'; then
-  echo "  Admin created: ${ADMIN_EMAIL}"
+  echo "  Superuser created: ${ADMIN_EMAIL}"
 else
-  echo "  Admin already exists (or error) — continuing with auth"
+  echo "  Superuser already exists (or error) — continuing with auth"
 fi
 
-# Step 2: Authenticate
+# Step 2: Authenticate (PB v0.23+ endpoint)
 echo "[2/5] Authenticating..."
-AUTH_RESPONSE=$(curl -sf -X POST "${PB_URL}/api/admins/auth-with-password" \
+AUTH_RESPONSE=$(curl -sf -X POST "${PB_URL}/api/collections/_superusers/auth-with-password" \
   -H "Content-Type: application/json" \
   -d "{\"identity\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}")
 
@@ -42,26 +42,26 @@ curl -sf -X POST "${PB_URL}/api/collections" \
   -d '{
     "name": "sessions",
     "type": "base",
-    "schema": [
-      {"name": "instance_id", "type": "text", "required": true, "options": {"min": 1, "max": 50}},
-      {"name": "project",     "type": "text", "required": true, "options": {"min": 1, "max": 50}},
-      {"name": "role",        "type": "text", "required": false, "options": {"max": 20}},
-      {"name": "ticket",      "type": "text", "required": false, "options": {"max": 20}},
-      {"name": "branch",      "type": "text", "required": false, "options": {"max": 200}},
-      {"name": "step",        "type": "text", "required": true, "options": {"min": 1, "max": 20}},
+    "fields": [
+      {"name": "instance_id", "type": "text", "required": true},
+      {"name": "project",     "type": "text", "required": true},
+      {"name": "role",        "type": "text", "required": false},
+      {"name": "ticket",      "type": "text", "required": false},
+      {"name": "branch",      "type": "text", "required": false},
+      {"name": "step",        "type": "text", "required": true},
       {"name": "pr",          "type": "number", "required": false},
-      {"name": "host",        "type": "text", "required": false, "options": {"max": 100}},
-      {"name": "source",      "type": "text", "required": false, "options": {"max": 20}},
+      {"name": "host",        "type": "text", "required": false},
+      {"name": "source",      "type": "text", "required": false},
       {"name": "pid",         "type": "number", "required": false},
-      {"name": "started_at",  "type": "text", "required": false, "options": {"max": 30}},
-      {"name": "updated_at",  "type": "text", "required": false, "options": {"max": 30}}
+      {"name": "started_at",  "type": "text", "required": false},
+      {"name": "updated_at",  "type": "text", "required": false}
     ],
     "indexes": ["CREATE UNIQUE INDEX idx_session_instance ON sessions (instance_id)"],
-    "listRule": "@request.auth.id != \"\"",
-    "viewRule": "@request.auth.id != \"\"",
-    "createRule": "@request.auth.id != \"\"",
-    "updateRule": "@request.auth.id != \"\"",
-    "deleteRule": "@request.auth.id != \"\""
+    "listRule": "",
+    "viewRule": "",
+    "createRule": "",
+    "updateRule": "",
+    "deleteRule": ""
   }' > /dev/null && echo "  sessions: OK" || echo "  sessions: already exists or error"
 
 # Step 4: Create "milestones" collection
@@ -72,23 +72,22 @@ curl -sf -X POST "${PB_URL}/api/collections" \
   -d '{
     "name": "milestones",
     "type": "base",
-    "schema": [
-      {"name": "ticket",      "type": "text", "required": true, "options": {"max": 20}},
-      {"name": "step",        "type": "text", "required": true, "options": {"max": 20}},
-      {"name": "instance_id", "type": "text", "required": true, "options": {"max": 50}},
-      {"name": "project",     "type": "text", "required": true, "options": {"max": 50}},
+    "fields": [
+      {"name": "ticket",      "type": "text", "required": true},
+      {"name": "step",        "type": "text", "required": true},
+      {"name": "instance_id", "type": "text", "required": true},
+      {"name": "project",     "type": "text", "required": true},
       {"name": "pr",          "type": "number", "required": false},
-      {"name": "sha",         "type": "text", "required": false, "options": {"max": 40}},
-      {"name": "detail",      "type": "text", "required": false, "options": {"max": 500}},
-      {"name": "event_at",    "type": "text", "required": false, "options": {"max": 30}}
+      {"name": "sha",         "type": "text", "required": false},
+      {"name": "detail",      "type": "text", "required": false},
+      {"name": "event_at",    "type": "text", "required": false}
     ],
     "indexes": [
-      "CREATE INDEX idx_milestone_ticket ON milestones (ticket)",
-      "CREATE INDEX idx_milestone_created ON milestones (created)"
+      "CREATE INDEX idx_milestone_ticket ON milestones (ticket)"
     ],
-    "listRule": "@request.auth.id != \"\"",
-    "viewRule": "@request.auth.id != \"\"",
-    "createRule": "@request.auth.id != \"\"",
+    "listRule": "",
+    "viewRule": "",
+    "createRule": "",
     "updateRule": null,
     "deleteRule": null
   }' > /dev/null && echo "  milestones: OK" || echo "  milestones: already exists or error"
@@ -101,29 +100,29 @@ curl -sf -X POST "${PB_URL}/api/collections" \
   -d '{
     "name": "claims",
     "type": "base",
-    "schema": [
-      {"name": "claim_id",     "type": "text", "required": true, "options": {"min": 1, "max": 60}},
-      {"name": "ticket",       "type": "text", "required": true, "options": {"max": 60}},
+    "fields": [
+      {"name": "claim_id",     "type": "text", "required": true},
+      {"name": "ticket",       "type": "text", "required": true},
       {"name": "phase",        "type": "number", "required": false},
-      {"name": "mega_id",      "type": "text", "required": false, "options": {"max": 20}},
-      {"name": "owner",        "type": "text", "required": false, "options": {"max": 50}},
+      {"name": "mega_id",      "type": "text", "required": false},
+      {"name": "owner",        "type": "text", "required": false},
       {"name": "pid",          "type": "number", "required": false},
-      {"name": "host",         "type": "text", "required": false, "options": {"max": 100}},
-      {"name": "branch",       "type": "text", "required": false, "options": {"max": 200}},
-      {"name": "deps",         "type": "text", "required": false, "options": {"max": 200}},
-      {"name": "claimed_at",   "type": "text", "required": false, "options": {"max": 30}},
-      {"name": "completed_at", "type": "text", "required": false, "options": {"max": 30}}
+      {"name": "host",         "type": "text", "required": false},
+      {"name": "branch",       "type": "text", "required": false},
+      {"name": "deps",         "type": "text", "required": false},
+      {"name": "claimed_at",   "type": "text", "required": false},
+      {"name": "completed_at", "type": "text", "required": false}
     ],
     "indexes": [
       "CREATE UNIQUE INDEX idx_claim_id ON claims (claim_id)",
       "CREATE INDEX idx_claim_owner ON claims (owner)",
       "CREATE INDEX idx_claim_mega ON claims (mega_id)"
     ],
-    "listRule": "@request.auth.id != \"\"",
-    "viewRule": "@request.auth.id != \"\"",
-    "createRule": "@request.auth.id != \"\"",
-    "updateRule": "@request.auth.id != \"\"",
-    "deleteRule": "@request.auth.id != \"\""
+    "listRule": "",
+    "viewRule": "",
+    "createRule": "",
+    "updateRule": "",
+    "deleteRule": ""
   }' > /dev/null && echo "  claims: OK" || echo "  claims: already exists or error"
 
 echo ""

@@ -235,3 +235,132 @@ def _compute_spec_hash(openapi_spec: dict) -> str:
 
     canonical = json.dumps(openapi_spec, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
+
+
+# =============================================================================
+# UAC → OpenAPI reverse transform
+# =============================================================================
+
+
+def transform_uac_to_openapi(
+    contract: UacContractSpec,
+    openapi_version: str = "3.1.0",
+) -> dict:
+    """Transform a UacContractSpec back into an OpenAPI specification.
+
+    Generates a valid OpenAPI 3.x document from a UAC contract, enabling
+    round-trip fidelity: OpenAPI → UAC → OpenAPI.
+
+    Args:
+        contract: UAC contract to convert.
+        openapi_version: Target OpenAPI version (default: 3.1.0).
+
+    Returns:
+        OpenAPI specification as a dict.
+    """
+    spec: dict = {
+        "openapi": openapi_version,
+        "info": _build_info(contract),
+    }
+
+    # Servers — derive from endpoint backend_urls
+    servers = _build_servers(contract)
+    if servers:
+        spec["servers"] = servers
+
+    # Paths — group endpoints by path
+    paths = _build_paths(contract, servers)
+    if paths:
+        spec["paths"] = paths
+
+    return spec
+
+
+def _build_info(contract: UacContractSpec) -> dict:
+    """Build OpenAPI info object from UAC contract."""
+    info: dict = {
+        "title": contract.display_name or contract.name,
+        "version": contract.version,
+    }
+    if contract.description:
+        info["description"] = contract.description
+    return info
+
+
+def _build_servers(contract: UacContractSpec) -> list[dict]:
+    """Extract unique server base URLs from endpoint backend_urls."""
+    base_urls: dict[str, bool] = {}
+    for ep in contract.endpoints:
+        if not ep.backend_url:
+            continue
+        # Extract base URL by removing the endpoint path suffix
+        base = _extract_base_url(ep.backend_url, ep.path)
+        if base and base not in base_urls:
+            base_urls[base] = True
+    return [{"url": url} for url in base_urls]
+
+
+def _extract_base_url(backend_url: str, path: str) -> str:
+    """Extract base URL from a backend URL by removing the path suffix.
+
+    E.g., "https://api.example.com/v1/pets" with path "/pets"
+    → "https://api.example.com/v1"
+    """
+    if not backend_url:
+        return ""
+    # If backend_url ends with the path, strip it
+    if path and backend_url.endswith(path):
+        return backend_url[: -len(path)].rstrip("/")
+    # If it's just a path (no scheme), return empty
+    if not backend_url.startswith(("http://", "https://")):
+        return ""
+    return backend_url
+
+
+def _build_paths(contract: UacContractSpec, servers: list[dict]) -> dict:
+    """Build OpenAPI paths object from UAC endpoints."""
+    paths: dict = {}
+
+    for ep in contract.endpoints:
+        if ep.path not in paths:
+            paths[ep.path] = {}
+
+        path_item = paths[ep.path]
+        for method in ep.methods:
+            method_lower = method.lower()
+            operation: dict = {}
+
+            if ep.operation_id:
+                operation["operationId"] = ep.operation_id
+
+            # Request body for methods that typically have one
+            if ep.input_schema and method_lower in ("post", "put", "patch"):
+                operation["requestBody"] = {
+                    "content": {
+                        "application/json": {
+                            "schema": ep.input_schema,
+                        }
+                    }
+                }
+
+            # Response schema
+            responses: dict = {}
+            if method_lower == "delete":
+                responses["204"] = {"description": "No Content"}
+            elif ep.output_schema:
+                success_code = "201" if method_lower == "post" else "200"
+                responses[success_code] = {
+                    "description": "Successful response",
+                    "content": {
+                        "application/json": {
+                            "schema": ep.output_schema,
+                        }
+                    },
+                }
+            else:
+                responses["200"] = {"description": "Successful response"}
+
+            operation["responses"] = responses
+            path_item[method_lower] = operation
+
+    return paths

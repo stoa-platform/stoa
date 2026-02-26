@@ -5,6 +5,10 @@
 # If set, loads deny rules from .claude/instances/<role>.json and blocks
 # Edit/Write on denied paths + Bash commands matching deny patterns.
 #
+# Supports two modes via INSTANCE_MODE env var:
+#   deny  (default) — blocks operations matching deny list
+#   allow           — only permits operations matching allowlist
+#
 # Works for any Claude session:
 #   export STOA_INSTANCE=backend && claude   # standalone
 #   stoa-parallel                             # sets per-window
@@ -20,6 +24,10 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 INSTANCE_FILE="$PROJECT_DIR/.claude/instances/${STOA_INSTANCE}.json"
+ALLOWLIST_FILE="$PROJECT_DIR/.claude/instances/${STOA_INSTANCE}-allowlist.json"
+
+# Mode: deny (default) or allow
+MODE="${INSTANCE_MODE:-deny}"
 
 if [[ ! -f "$INSTANCE_FILE" ]]; then
   exit 0
@@ -85,6 +93,45 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
       fi
     fi
   done < <(jq -r '.permissions.deny[]? // empty' "$INSTANCE_FILE" 2>/dev/null | grep '^Bash(')
+fi
+
+# --- Allowlist mode: only permit operations in the allowlist ---
+if [[ "$MODE" == "allow" && -f "$ALLOWLIST_FILE" ]]; then
+  if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
+    FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
+    REL_PATH="${FILE_PATH#"$PROJECT_DIR"}"
+    ALLOWED=false
+    while IFS= read -r pattern; do
+      [[ -z "$pattern" ]] && continue
+      allow_path=$(echo "$pattern" | sed -n 's/^[^(]*(\/\(.*\)\*\*)/\/\1/p')
+      if [[ -n "$allow_path" && "$REL_PATH" == "$allow_path"* ]]; then
+        ALLOWED=true
+        break
+      fi
+    done < <(jq -r '.permissions.allow[]? // empty' "$ALLOWLIST_FILE" 2>/dev/null | grep -E "^(Edit|Write)\(")
+    if [[ "$ALLOWED" == "false" ]]; then
+      echo "BLOCKED by allowlist:${STOA_INSTANCE} — ${TOOL_NAME} on ${REL_PATH} not in allowlist." >&2
+      exit 2
+    fi
+  fi
+
+  if [[ "$TOOL_NAME" == "Bash" ]]; then
+    COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+    ALLOWED=false
+    while IFS= read -r pattern; do
+      [[ -z "$pattern" ]] && continue
+      inner=$(echo "$pattern" | sed -n 's/^Bash(\(.*\))/\1/p')
+      cmd_prefix=$(echo "$inner" | sed 's/[[:space:]:]*\*$//')
+      if [[ -n "$cmd_prefix" && ("$COMMAND" == "$cmd_prefix"* || "$COMMAND" == *" $cmd_prefix"*) ]]; then
+        ALLOWED=true
+        break
+      fi
+    done < <(jq -r '.permissions.allow[]? // empty' "$ALLOWLIST_FILE" 2>/dev/null | grep '^Bash(')
+    if [[ "$ALLOWED" == "false" ]]; then
+      echo "BLOCKED by allowlist:${STOA_INSTANCE} — Bash command not in allowlist." >&2
+      exit 2
+    fi
+  fi
 fi
 
 exit 0

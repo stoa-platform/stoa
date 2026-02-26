@@ -64,7 +64,7 @@ def _remote_enabled() -> bool:
 
 
 def _remote_auth() -> str | None:
-    """Get PocketBase admin auth token. Cached in memory + file."""
+    """Get PocketBase superuser auth token. Cached in memory + file."""
     if not _remote_enabled():
         return None
 
@@ -83,7 +83,7 @@ def _remote_auth() -> str | None:
         except (json.JSONDecodeError, KeyError):
             pass
 
-    # Fresh auth
+    # Fresh auth (PocketBase v0.23+ uses _superusers collection)
     try:
         data = json.dumps({"identity": REMOTE_EMAIL, "password": REMOTE_PASSWORD}).encode()
         req = urllib.request.Request(
@@ -94,7 +94,7 @@ def _remote_auth() -> str | None:
         resp = urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         result = json.loads(resp.read())
         token = result["token"]
-        expires = time.time() + 7200  # 2h (PB admin tokens last 14d, but refresh often)
+        expires = time.time() + 7200  # 2h (PB tokens last 14d, but refresh often)
 
         _token_cache["token"] = token
         _token_cache["expires"] = expires
@@ -179,7 +179,6 @@ def _remote_delete(collection: str, filter_field: str, filter_value: str) -> Non
             urllib.request.urlopen(req, timeout=5, context=_ssl_context())
     except Exception:
         pass
-
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -605,7 +604,7 @@ def cmd_remote_ls(args: argparse.Namespace) -> None:
             f"{REMOTE_URL}/api/collections/sessions/records?{params}",
             headers={"Authorization": token},
         )
-        resp = urllib.request.urlopen(req, timeout=10, context=_ssl_context())
+        resp = urllib.request.urlopen(req, timeout=10)
         result = json.loads(resp.read())
     except Exception as e:
         print(f"Remote query failed: {e}", file=sys.stderr)

@@ -5,7 +5,7 @@ expression: json
 ---
 {
   "activeSessions": 0,
-  "protocolVersion": "2025-03-26",
+  "protocolVersion": "2025-11-25",
   "status": "healthy",
   "tools": 0
 }

@@ -231,9 +231,10 @@
 **Scope**: 0 pts committed | **Theme**: TBD (post-demo planning)
 
 ### Todo
-(empty — no tickets committed to C10 yet)
+- [ ] CAB-1513: feat(ops): stoa-parallel v2 — PocketBase claims, approve-once, orchestrateur enrichi (13 pts) — Council 8.50/10
 
 ### Backlog (in cycle, not committed)
+- CAB-1350: [MEGA] UAC Specification v1.0 — Universal API Contract Standard (13 pts, P3)
 - CAB-384: [Phase 17] AI Gateway — LLM Cost Optimization (21 pts, P2)
 - CAB-173: [JALON] v1.0 GA — Mi-Mai 2026 (2 pts, P1)
 

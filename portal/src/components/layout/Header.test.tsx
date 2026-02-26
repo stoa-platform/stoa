@@ -10,7 +10,7 @@ import { renderWithProviders, createAuthMock } from '../../test/helpers';
 vi.mock('../../config', () => ({
   config: {
     services: { console: { url: 'https://console.example.com' } },
-    features: { enableI18n: false },
+    features: { enableI18n: false, enableNotifications: true },
   },
 }));
 
@@ -24,6 +24,10 @@ vi.mock('@stoa/shared/components/ThemeToggle', () => ({
 
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => createAuthMock('tenant-admin'),
+}));
+
+vi.mock('../../hooks/useNotifications', () => ({
+  useUnreadCount: () => ({ data: 0 }),
 }));
 
 describe('Header', () => {

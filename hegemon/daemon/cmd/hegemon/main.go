@@ -166,6 +166,8 @@ func (d *daemon) pollAndDispatch(ctx context.Context) {
 
 	if dispatched > 0 {
 		log.Printf("Poll: dispatched %d tickets from cycle %s", dispatched, cycle.Name)
+	} else {
+		log.Printf("Poll: no dispatchable tickets in cycle %s (%d issues scanned)", cycle.Name, len(issues))
 	}
 }
 
@@ -225,7 +227,10 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 		} else {
 			d.state.CompleteDispatch(dispatchID, "failed", raw, 0, errMsg)
 			d.reporter.NotifyError(issue.Identifier, issue.Title, errMsg, duration)
-			d.reporter.LinearUpdateBlocked(issue.ID, errMsg)
+			// Reset ticket to Todo so it can be retried.
+			if resetErr := d.linear.UpdateIssueState(issue.ID, "Todo"); resetErr != nil {
+				log.Printf("WARN reset %s to Todo: %v", issue.Identifier, resetErr)
+			}
 		}
 		log.Printf("FAIL %s on %s after %s: %v", issue.Identifier, w.Name, duration.Round(time.Second), err)
 		return

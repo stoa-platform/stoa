@@ -31,9 +31,13 @@ from src.models.gateway_instance import (
 from src.schemas.contract import (
     BindingsListResponse,
     ContractCreate,
+    ContractDeprecationInfo,
     ContractListResponse,
     ContractResponse,
     ContractUpdate,
+    ContractVersionsResponse,
+    ContractVersionSummary,
+    DeprecateContractRequest,
     DisableBindingResponse,
     EnableBindingRequest,
     EnableBindingResponse,
@@ -156,6 +160,31 @@ def _generate_endpoint_info(contract: Contract, protocol: ProtocolType) -> dict:
     }
 
 
+def _contract_to_response(
+    contract: Contract, bindings: list[ProtocolBinding]
+) -> ContractResponse:
+    """Convert Contract model + bindings to response schema."""
+    return ContractResponse(
+        id=contract.id,
+        tenant_id=contract.tenant_id,
+        name=contract.name,
+        display_name=contract.display_name,
+        description=contract.description,
+        version=contract.version,
+        status=contract.status,
+        openapi_spec_url=contract.openapi_spec_url,
+        deprecated_at=contract.deprecated_at,
+        sunset_at=contract.sunset_at,
+        replacement_contract_id=contract.replacement_contract_id,
+        deprecation_reason=contract.deprecation_reason,
+        grace_period_days=contract.grace_period_days,
+        created_at=contract.created_at,
+        updated_at=contract.updated_at,
+        created_by=contract.created_by,
+        bindings=[_binding_to_response(b) for b in bindings],
+    )
+
+
 def _binding_to_response(
     binding: ProtocolBinding, traffic_24h: int | None = None
 ) -> ProtocolBindingResponse:
@@ -237,20 +266,7 @@ async def create_contract(
         user_id=user.id,
     )
 
-    return ContractResponse(
-        id=contract.id,
-        tenant_id=contract.tenant_id,
-        name=contract.name,
-        display_name=contract.display_name,
-        description=contract.description,
-        version=contract.version,
-        status=contract.status,
-        openapi_spec_url=contract.openapi_spec_url,
-        created_at=contract.created_at,
-        updated_at=contract.updated_at,
-        created_by=contract.created_by,
-        bindings=[_binding_to_response(b) for b in bindings],
-    )
+    return _contract_to_response(contract, bindings)
 
 
 @router.get("", response_model=ContractListResponse)
@@ -299,22 +315,7 @@ async def list_contracts(
     items = []
     for contract in contracts:
         bindings = await _get_or_create_default_bindings(db, contract)
-        items.append(
-            ContractResponse(
-                id=contract.id,
-                tenant_id=contract.tenant_id,
-                name=contract.name,
-                display_name=contract.display_name,
-                description=contract.description,
-                version=contract.version,
-                status=contract.status,
-                openapi_spec_url=contract.openapi_spec_url,
-                created_at=contract.created_at,
-                updated_at=contract.updated_at,
-                created_by=contract.created_by,
-                bindings=[_binding_to_response(b) for b in bindings],
-            )
-        )
+        items.append(_contract_to_response(contract, bindings))
 
     response = ContractListResponse(
         items=items, total=total, page=page, page_size=page_size
@@ -354,6 +355,11 @@ async def get_contract(
         version=contract.version,
         status=contract.status,
         openapi_spec_url=contract.openapi_spec_url,
+        deprecated_at=contract.deprecated_at,
+        sunset_at=contract.sunset_at,
+        replacement_contract_id=contract.replacement_contract_id,
+        deprecation_reason=contract.deprecation_reason,
+        grace_period_days=contract.grace_period_days,
         created_at=contract.created_at,
         updated_at=contract.updated_at,
         created_by=contract.created_by,
@@ -403,20 +409,7 @@ async def update_contract(
         user_id=user.id,
     )
 
-    return ContractResponse(
-        id=contract.id,
-        tenant_id=contract.tenant_id,
-        name=contract.name,
-        display_name=contract.display_name,
-        description=contract.description,
-        version=contract.version,
-        status=contract.status,
-        openapi_spec_url=contract.openapi_spec_url,
-        created_at=contract.created_at,
-        updated_at=contract.updated_at,
-        created_by=contract.created_by,
-        bindings=[_binding_to_response(b) for b in bindings],
-    )
+    return _contract_to_response(contract, bindings)
 
 
 @router.delete("/{contract_id}", status_code=204)
@@ -446,6 +439,199 @@ async def delete_contract(
         contract_id=str(contract_id),
         tenant_id=tenant_id,
         user_id=user.id,
+    )
+
+
+# ============ Lifecycle Endpoints (CAB-1335) ============
+
+
+@router.post("/{contract_id}/deprecate", response_model=ContractDeprecationInfo)
+async def deprecate_contract(
+    contract_id: uuid.UUID,
+    request: DeprecateContractRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Deprecate a published contract with optional sunset date.
+
+    Sets the contract status to 'deprecated' and records deprecation metadata
+    including reason, sunset date (RFC 8594), and optional replacement contract.
+    """
+    from src.services.contract_lifecycle_service import (
+        deprecate_contract as _deprecate,
+    )
+
+    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    contract = result.scalar_one_or_none()
+
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    if not _has_tenant_access(user, contract.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this contract")
+
+    try:
+        contract = await _deprecate(
+            db=db,
+            contract=contract,
+            reason=request.reason,
+            sunset_at=request.sunset_at,
+            replacement_contract_id=request.replacement_contract_id,
+            grace_period_days=request.grace_period_days,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Invalidate cache
+    await contract_cache.delete_by_prefix(f"contracts:{contract.tenant_id}")
+
+    logger.info(
+        "Contract deprecated via API",
+        contract_id=str(contract_id),
+        user_id=user.id,
+    )
+
+    return ContractDeprecationInfo(
+        contract_id=contract.id,
+        contract_name=contract.name,
+        version=contract.version,
+        status=contract.status,
+        deprecated_at=contract.deprecated_at,
+        sunset_at=contract.sunset_at,
+        replacement_contract_id=contract.replacement_contract_id,
+        deprecation_reason=contract.deprecation_reason,
+        grace_period_days=contract.grace_period_days,
+        is_sunset=contract.is_sunset,
+    )
+
+
+@router.post("/{contract_id}/reactivate", response_model=ContractResponse)
+async def reactivate_contract(
+    contract_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reactivate a deprecated contract (undo deprecation).
+
+    Only allowed if the sunset date has not passed.
+    """
+    from src.services.contract_lifecycle_service import (
+        reactivate_contract as _reactivate,
+    )
+
+    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    contract = result.scalar_one_or_none()
+
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    if not _has_tenant_access(user, contract.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this contract")
+
+    try:
+        contract = await _reactivate(db=db, contract=contract)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Invalidate cache
+    await contract_cache.delete_by_prefix(f"contracts:{contract.tenant_id}")
+
+    bindings = await _get_or_create_default_bindings(db, contract)
+
+    return _contract_to_response(contract, bindings)
+
+
+@router.get("/{contract_id}/deprecation", response_model=ContractDeprecationInfo)
+async def get_deprecation_info(
+    contract_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get deprecation details for a contract."""
+    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    contract = result.scalar_one_or_none()
+
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    if not _has_tenant_access(user, contract.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this contract")
+
+    return ContractDeprecationInfo(
+        contract_id=contract.id,
+        contract_name=contract.name,
+        version=contract.version,
+        status=contract.status,
+        deprecated_at=contract.deprecated_at,
+        sunset_at=contract.sunset_at,
+        replacement_contract_id=contract.replacement_contract_id,
+        deprecation_reason=contract.deprecation_reason,
+        grace_period_days=contract.grace_period_days,
+        is_sunset=contract.is_sunset,
+    )
+
+
+@router.get(
+    "/by-name/{contract_name}/versions",
+    response_model=ContractVersionsResponse,
+)
+async def list_contract_versions(
+    contract_name: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List all versions of a contract by name.
+
+    Returns version history including deprecation status, ordered by creation date
+    (latest first).
+    """
+    from src.services.contract_lifecycle_service import (
+        get_active_version,
+        list_versions,
+    )
+
+    tenant_id = user.tenant_id
+    if not tenant_id and "cpi-admin" not in (user.roles or []):
+        raise HTTPException(status_code=400, detail="User must belong to a tenant")
+
+    # For admin, we need a tenant context — use the first matching contract's tenant
+    if not tenant_id:
+        result = await db.execute(
+            select(Contract).where(Contract.name == contract_name).limit(1)
+        )
+        first = result.scalar_one_or_none()
+        if not first:
+            raise HTTPException(status_code=404, detail=f"No contract found with name '{contract_name}'")
+        tenant_id = first.tenant_id
+
+    versions = await list_versions(db, tenant_id, contract_name)
+    if not versions:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No contract found with name '{contract_name}'",
+        )
+
+    active = await get_active_version(db, tenant_id, contract_name)
+
+    return ContractVersionsResponse(
+        contract_name=contract_name,
+        tenant_id=tenant_id,
+        versions=[
+            ContractVersionSummary(
+                id=c.id,
+                version=c.version,
+                status=c.status,
+                created_at=c.created_at,
+                deprecated_at=c.deprecated_at,
+                sunset_at=c.sunset_at,
+            )
+            for c in versions
+        ],
+        latest_version=active.version if active else None,
+        active_count=sum(1 for c in versions if c.status == "published"),
     )
 
 

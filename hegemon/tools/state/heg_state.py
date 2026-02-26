@@ -604,7 +604,7 @@ def cmd_remote_ls(args: argparse.Namespace) -> None:
             f"{REMOTE_URL}/api/collections/sessions/records?{params}",
             headers={"Authorization": token},
         )
-        resp = urllib.request.urlopen(req, timeout=10, context=_ssl_context())
+        resp = urllib.request.urlopen(req, timeout=10)
         result = json.loads(resp.read())
     except Exception as e:
         print(f"Remote query failed: {e}", file=sys.stderr)

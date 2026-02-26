@@ -52,6 +52,7 @@ import {
   Share2,
   Sparkles,
   Stethoscope,
+  Settings,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -291,6 +292,41 @@ const navigationSections: NavSection[] = [
         href: '/audience-governance',
         icon: Users,
         permission: 'apis:update',
+      },
+    ],
+  },
+  {
+    title: 'nav.admin',
+    items: [
+      {
+        name: 'nav.prospects',
+        href: '/admin/prospects',
+        icon: Sparkles,
+        permission: 'admin:platform',
+      },
+      {
+        name: 'nav.accessRequests',
+        href: '/admin/access-requests',
+        icon: KeyRound,
+        permission: 'admin:platform',
+      },
+      {
+        name: 'nav.users',
+        href: '/admin/users',
+        icon: Users,
+        permission: 'admin:platform',
+      },
+      {
+        name: 'nav.platformSettings',
+        href: '/admin/settings',
+        icon: Settings,
+        permission: 'admin:platform',
+      },
+      {
+        name: 'nav.roles',
+        href: '/admin/roles',
+        icon: Shield,
+        permission: 'admin:platform',
       },
     ],
   },

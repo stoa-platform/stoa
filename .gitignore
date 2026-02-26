@@ -143,6 +143,10 @@ backups/
 .claude/claims/*.json
 .claude/claims/*.lock
 
+# Instance usage captures (machine-local, progressive allowlist data)
+.claude/instances/*-captured.jsonl
+.claude/instances/*-allowlist.json
+
 # Competitive watch signals (JSONL, ephemeral, machine-local)
 .claude/watch/signals-*.jsonl
 

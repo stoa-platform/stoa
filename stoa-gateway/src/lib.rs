@@ -45,6 +45,10 @@ use handlers::admin;
 use mcp::{
     discovery::{mcp_capabilities, mcp_discovery, mcp_health},
     handlers::{mcp_rest_tools_invoke, mcp_rest_tools_list, mcp_tools_call, mcp_tools_list},
+    resources::{
+        mcp_completion_complete, mcp_prompts_get, mcp_prompts_list, mcp_resources_list,
+        mcp_resources_read, mcp_resources_templates_list,
+    },
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
     ws::handle_ws_upgrade,
 };
@@ -219,6 +223,16 @@ pub fn build_router(state: AppState) -> Router {
                 // MCP Tools (JSON-RPC style)
                 .route("/mcp/tools/list", post(mcp_tools_list))
                 .route("/mcp/tools/call", post(mcp_tools_call))
+                // MCP Resources, Prompts, Completion (REST — CAB-1472)
+                .route("/mcp/resources/list", post(mcp_resources_list))
+                .route("/mcp/resources/read", post(mcp_resources_read))
+                .route(
+                    "/mcp/resources/templates/list",
+                    post(mcp_resources_templates_list),
+                )
+                .route("/mcp/prompts/list", post(mcp_prompts_list))
+                .route("/mcp/prompts/get", post(mcp_prompts_get))
+                .route("/mcp/completion/complete", post(mcp_completion_complete))
                 // MCP v1 REST API (demo + simple HTTP clients)
                 .route("/mcp/v1/tools", get(mcp_rest_tools_list))
                 .route("/mcp/v1/tools/invoke", post(mcp_rest_tools_invoke))

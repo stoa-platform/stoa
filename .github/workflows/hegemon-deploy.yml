@@ -73,6 +73,12 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.HEGEMON_VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
+      - name: Stop service
+        env:
+          VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
+        run: |
+          ssh "hegemon@${VPS_HOST}" "sudo systemctl stop hegemon 2>/dev/null || true; pkill -f 'hegemon --config' 2>/dev/null || true; sleep 1"
+
       - name: Deploy binary
         env:
           VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
@@ -80,11 +86,11 @@ jobs:
           chmod +x hegemon
           scp -o StrictHostKeyChecking=accept-new hegemon "hegemon@${VPS_HOST}:/home/hegemon/hegemon/hegemon"
 
-      - name: Restart service
+      - name: Start service
         env:
           VPS_HOST: ${{ secrets.HEGEMON_VPS_HOST }}
         run: |
-          ssh "hegemon@${VPS_HOST}" "sudo systemctl restart hegemon"
+          ssh "hegemon@${VPS_HOST}" "sudo systemctl start hegemon"
 
       - name: Verify service
         env:

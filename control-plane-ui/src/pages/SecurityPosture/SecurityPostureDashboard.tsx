@@ -167,6 +167,38 @@ export function SecurityPostureDashboard() {
 
   const canManageFindings = hasPermission('admin:servers');
 
+  const handleAcknowledgeAll = async () => {
+    const openItems = findings.filter((f) => f.status === 'open');
+    if (openItems.length === 0) return;
+    if (!confirm(`Resolve all ${openItems.length} open findings?`)) return;
+    try {
+      await Promise.all(
+        openItems.map((f) => apiService.post(`/v1/security/${tenantId}/findings/${f.id}/resolve`))
+      );
+      setFindings((prev) => prev.map((f) => ({ ...f, status: 'resolved' as const })));
+    } catch {
+      setError('Failed to resolve some findings');
+    }
+  };
+
+  const handleSuppressLow = async () => {
+    const lowFindings = findings.filter((f) => f.status === 'open' && f.severity === 'low');
+    if (lowFindings.length === 0) return;
+    if (!confirm(`Suppress ${lowFindings.length} low-severity findings?`)) return;
+    try {
+      await Promise.all(
+        lowFindings.map((f) => apiService.post(`/v1/security/${tenantId}/findings/${f.id}/resolve`))
+      );
+      setFindings((prev) =>
+        prev.map((f) =>
+          f.severity === 'low' && f.status === 'open' ? { ...f, status: 'suppressed' as const } : f
+        )
+      );
+    } catch {
+      setError('Failed to suppress low findings');
+    }
+  };
+
   const loadData = useCallback(async () => {
     try {
       const [securityRes, driftRes, tokenBindingRes, scansRes, cronJobRes] = await Promise.all([
@@ -747,11 +779,17 @@ export function SecurityPostureDashboard() {
                 Quick Actions
               </h2>
               <div className="flex flex-wrap gap-3">
-                <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                <button
+                  onClick={handleAcknowledgeAll}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+                >
                   <Ban className="h-4 w-4" />
                   Acknowledge All
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                <button
+                  onClick={handleSuppressLow}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+                >
                   <EyeOff className="h-4 w-4" />
                   Suppress Low
                 </button>

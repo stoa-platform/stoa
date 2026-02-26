@@ -11,7 +11,7 @@ use serde_json::json;
 use crate::state::AppState;
 
 /// MCP Protocol Version (latest supported)
-pub const MCP_PROTOCOL_VERSION: &str = "2025-03-26";
+pub const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 
 /// Server info for discovery
 #[derive(Debug, Serialize)]
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_protocol_version() {
-        assert_eq!(MCP_PROTOCOL_VERSION, "2025-03-26");
+        assert_eq!(MCP_PROTOCOL_VERSION, "2025-11-25");
     }
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
         };
 
         let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["server"]["protocolVersion"], "2025-03-26");
+        assert_eq!(json["server"]["protocolVersion"], "2025-11-25");
         assert_eq!(json["endpoints"]["sse"], "/mcp/sse");
         assert_eq!(json["endpoints"]["tools_list"], "/mcp/tools/list");
         assert_eq!(json["endpoints"]["tools_call"], "/mcp/tools/call");
@@ -219,7 +219,7 @@ mod tests {
         };
 
         let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["protocolVersion"], "2025-03-26");
+        assert_eq!(json["protocolVersion"], "2025-11-25");
         assert_eq!(json["capabilities"]["tools"]["listChanged"], false);
         assert_eq!(json["capabilities"]["resources"]["subscribe"], false);
         assert_eq!(json["serverInfo"]["name"], "STOA Gateway");
@@ -256,7 +256,7 @@ mod tests {
         let info = ServerInfo {
             name: "test".to_string(),
             version: "1.0".to_string(),
-            protocol_version: "2025-03-26".to_string(),
+            protocol_version: "2025-11-25".to_string(),
         };
         let json = serde_json::to_value(&info).unwrap();
         // protocolVersion is camelCase via #[serde(rename)]

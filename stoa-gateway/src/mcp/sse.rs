@@ -89,17 +89,18 @@ pub const INVALID_PARAMS: i32 = -32602;
 pub const INTERNAL_ERROR: i32 = -32603;
 
 // ============================================
-// MCP Protocol Version Negotiation (2025-03-26)
+// MCP Protocol Version Negotiation (2025-11-25)
 // ============================================
 
 /// Supported MCP protocol versions (newest first)
 const SUPPORTED_VERSIONS: &[&str] = &[
-    "2025-03-26", // Latest - full annotations, outputSchema, elicitation
+    "2025-11-25", // Latest draft - Claude.ai sends this version
+    "2025-03-26", // Stable - full annotations, outputSchema, elicitation
     "2024-11-05", // Previous stable - backward compat
 ];
 
 /// Default protocol version (returned when client doesn't specify)
-const DEFAULT_PROTOCOL_VERSION: &str = "2025-03-26";
+const DEFAULT_PROTOCOL_VERSION: &str = "2025-11-25";
 
 /// Negotiate the highest mutually supported protocol version
 ///
@@ -1141,20 +1142,21 @@ mod tests {
     fn test_negotiate_version_unknown() {
         // Unknown version → returns latest
         let result = negotiate_protocol_version(Some("2099-01-01"));
-        assert_eq!(result, "2025-03-26");
+        assert_eq!(result, "2025-11-25");
     }
 
     #[test]
     fn test_negotiate_version_none() {
         // No version → returns default (latest)
         let result = negotiate_protocol_version(None);
-        assert_eq!(result, "2025-03-26");
+        assert_eq!(result, "2025-11-25");
     }
 
     #[test]
     fn test_supported_versions_order() {
         // Latest version should be first
-        assert_eq!(SUPPORTED_VERSIONS[0], "2025-03-26");
+        assert_eq!(SUPPORTED_VERSIONS[0], "2025-11-25");
+        assert!(SUPPORTED_VERSIONS.contains(&"2025-03-26"));
         assert!(SUPPORTED_VERSIONS.contains(&"2024-11-05"));
     }
 
@@ -1299,5 +1301,119 @@ mod tests {
         };
         let resp = handle_roots_list(&request);
         assert_eq!(resp.id, Some(json!("roots-1")));
+    }
+
+    // === MCP Spec Compliance: ping ===
+
+    #[test]
+    fn test_ping_returns_empty_object() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(1)),
+            method: "ping".to_string(),
+            params: None,
+        };
+        let resp = handle_ping(&request);
+        assert!(resp.error.is_none());
+        assert_eq!(resp.result.unwrap(), json!({}));
+    }
+
+    #[test]
+    fn test_ping_preserves_request_id() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!("ping-42")),
+            method: "ping".to_string(),
+            params: None,
+        };
+        let resp = handle_ping(&request);
+        assert_eq!(resp.id, Some(json!("ping-42")));
+    }
+
+    // === MCP Spec Compliance: prompts/list ===
+
+    #[test]
+    fn test_prompts_list_returns_empty_array() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(10)),
+            method: "prompts/list".to_string(),
+            params: None,
+        };
+        let resp = handle_prompts_list(&request);
+        assert!(resp.error.is_none());
+        let result = resp.result.unwrap();
+        assert_eq!(result["prompts"], json!([]));
+    }
+
+    #[test]
+    fn test_prompts_list_preserves_request_id() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!("prompts-1")),
+            method: "prompts/list".to_string(),
+            params: None,
+        };
+        let resp = handle_prompts_list(&request);
+        assert_eq!(resp.id, Some(json!("prompts-1")));
+    }
+
+    // === MCP Spec Compliance: prompts/get ===
+
+    #[test]
+    fn test_prompts_get_returns_not_found() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(11)),
+            method: "prompts/get".to_string(),
+            params: Some(json!({"name": "my-prompt"})),
+        };
+        let resp = handle_prompts_get(&request);
+        assert!(resp.error.is_some());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, -32002);
+        assert!(err.message.contains("my-prompt"));
+    }
+
+    #[test]
+    fn test_prompts_get_missing_name_uses_unknown() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(12)),
+            method: "prompts/get".to_string(),
+            params: None,
+        };
+        let resp = handle_prompts_get(&request);
+        assert!(resp.error.is_some());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, -32002);
+        assert!(err.message.contains("<unknown>"));
+    }
+
+    #[test]
+    fn test_prompts_get_preserves_request_id() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!("prompt-req-1")),
+            method: "prompts/get".to_string(),
+            params: Some(json!({"name": "test"})),
+        };
+        let resp = handle_prompts_get(&request);
+        assert_eq!(resp.id, Some(json!("prompt-req-1")));
+    }
+
+    // === MCP Spec Compliance: 2025-11-25 version ===
+
+    #[test]
+    fn test_negotiate_version_2025_11_25() {
+        let result = negotiate_protocol_version(Some("2025-11-25"));
+        assert_eq!(result, "2025-11-25");
+    }
+
+    #[test]
+    fn test_negotiate_empty_string_returns_default() {
+        // Empty string is not a valid version, treated as unknown
+        let result = negotiate_protocol_version(Some(""));
+        assert_eq!(result, DEFAULT_PROTOCOL_VERSION);
     }
 }

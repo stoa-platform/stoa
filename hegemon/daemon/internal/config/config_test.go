@@ -166,4 +166,44 @@ workers: []
 	if cfg.Log.MaxAgeDays != 7 {
 		t.Errorf("default max_age_days = %d, want 7", cfg.Log.MaxAgeDays)
 	}
+	if cfg.Notification.HealthCooldown.Duration != time.Hour {
+		t.Errorf("default health_cooldown = %v, want 1h", cfg.Notification.HealthCooldown.Duration)
+	}
+	if cfg.Notification.DigestInterval.Duration != 30*time.Minute {
+		t.Errorf("default digest_interval = %v, want 30m", cfg.Notification.DigestInterval.Duration)
+	}
+	if cfg.Notification.MaxRetries != 3 {
+		t.Errorf("default max_retries = %d, want 3", cfg.Notification.MaxRetries)
+	}
+}
+
+func TestNotificationConfigOverrides(t *testing.T) {
+	yaml := `
+linear:
+  api_key: "k"
+  team_id: "t"
+workers: []
+notification:
+  health_cooldown: "2h"
+  digest_interval: "15m"
+  max_retries: 5
+`
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Notification.HealthCooldown.Duration != 2*time.Hour {
+		t.Errorf("health_cooldown = %v, want 2h", cfg.Notification.HealthCooldown.Duration)
+	}
+	if cfg.Notification.DigestInterval.Duration != 15*time.Minute {
+		t.Errorf("digest_interval = %v, want 15m", cfg.Notification.DigestInterval.Duration)
+	}
+	if cfg.Notification.MaxRetries != 5 {
+		t.Errorf("max_retries = %d, want 5", cfg.Notification.MaxRetries)
+	}
 }

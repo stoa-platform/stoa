@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-26 (C10 planned: 193pts, 13 tickets, 5 panes — Kill the Backlog)
+> Derniere MAJ: 2026-02-26 (C10 in progress: BACKEND ALL DONE 73/73pts)
 
 ## ✅ DONE
 
@@ -88,26 +88,26 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 
 ### Cycle 10 — Kill the Backlog (193 pts, 13 tickets, Mar 2-8)
 
-**BACKEND** (Pane 2, ~73 pts):
-- CAB-1350: UAC Spec v1.0 (13 pts) — Council 9.00 Go
-- CAB-1335: UAC Transformer Service (21 pts) — Council 8.00 Go
-- CAB-1349: Contract Transformer (8 pts) — Council 8.25 Go
-- CAB-1474: Enterprise DR & Recovery (21 pts) — Council 7.50 Fix
-- CAB-1311: GTM Strategy AI part (5 pts) — Council 6.50 Fix
-- CAB-1496: Benchmark Methodology (5 pts, sub CAB-1443)
+**BACKEND** (Pane 2, ~73 pts) — ALL DONE (73/73 pts):
+- ✅ CAB-1350: UAC Spec v1.0 (13 pts) — PR #1146
+- ✅ CAB-1335: UAC Transformer Service (21 pts) — PR #1148
+- ✅ CAB-1349: Contract Transformer (8 pts) — PR #1147
+- ✅ CAB-1474: Enterprise DR & Recovery (21 pts) — PRs #1152 (export), #1155 (import)
+- ✅ CAB-1311: GTM Strategy AI part (5 pts) — PR #1157
+- ✅ CAB-1496: Benchmark Methodology (5 pts) — stoa-docs PR #85
 
 **FRONTEND** (Pane 3, ~86 pts):
-- CAB-1453: Portal V2 Self-Service (21 pts) — Council 8.50 Go
-- CAB-1454: Console Admin Complete (21 pts) — Council 8.25 Go
-- CAB-1470: Portal Advanced Features (21 pts) — Council 8.25 Go
-- CAB-1476: E2E Test Hardening R2 (21 pts) — Council 8.00 Go
-- CAB-1471: Dashboard Polish (2 pts)
+- ✅ CAB-1453: Portal V2 Self-Service (21 pts) — PR #1154
+- CAB-1454: Console Admin Complete (21 pts) — in progress
+- CAB-1470: Portal Advanced Features (21 pts) — todo
+- CAB-1476: E2E Test Hardening R2 (21 pts) — todo
+- CAB-1471: Dashboard Polish (2 pts) — todo
 
 **MCP** (Pane 5, 21 pts):
-- CAB-1455: Gateway Live Reload (21 pts) — Council 8.00 Go
+- ✅ CAB-1455: Gateway Live Reload (21 pts) — PR #1153
 
 **QA** (Pane 6, 13 pts):
-- CAB-1477: Cross-Component Integration Tests (13 pts) — Council 8.00 Go
+- ✅ CAB-1477: Cross-Component Integration Tests (13 pts) — PR #1156
 
 ## 📋 NEXT
 

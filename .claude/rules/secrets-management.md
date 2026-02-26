@@ -12,9 +12,14 @@ globs:
 ```
 Infisical (self-hosted, source of truth — all environments)
        │
-       ├── prod/     → Production secrets (Cloudflare, Hetzner, OVH)
+       ├── prod/     → Production secrets (Cloudflare, Contabo, Hetzner, OVH)
        ├── staging/  → Staging secrets
        └── dev/      → Development secrets
+
+Access layers:
+  Layer 1: Cloudflare Access (Service Token or email OTP)
+  Layer 2: Infisical Machine Identity (Client ID + Secret → JWT)
+  Layer 3: RBAC (project role: admin/member)
 ```
 
 - **Infisical** = centralized secrets manager, replaces Vault + AWS SM + ESO (decommissioned Feb 2026)
@@ -29,12 +34,16 @@ Infisical (self-hosted, source of truth — all environments)
 | Env | Path | Secret | Purpose |
 |-----|------|--------|---------|
 | `prod` | `/cloudflare` | `API_TOKEN` | Cloudflare DNS API (DNS Edit scope) |
+| `prod` | `/cloudflare` | `CF_ACCESS_CLIENT_ID` | Cloudflare Access Service Token ID |
+| `prod` | `/cloudflare` | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access Service Token Secret |
+| `prod` | `/contabo` | `VPS_ROOT_PASSWORD` | Root password for 5 HEGEMON VPS (SSH root disabled — console/VNC only) |
 | `prod` | `/hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API |
 | `prod` | `/ovh` | `OVH_APPLICATION_KEY` | OVH API key |
 | `prod` | `/ovh` | `OVH_APPLICATION_SECRET` | OVH API secret |
 | `prod` | `/ovh` | `OVH_CONSUMER_KEY` | OVH consumer key |
 | `prod` | `/ovh` | `OVH_CLOUD_PROJECT_ID` | OVH project ID |
 | `prod` | `/ovh` | `OVH_OPENSTACK_PASSWORD` | OVH OpenStack password |
+| `prod` | `/ovh` | `VPS_STOA_PASSWORD` | Root password for OVH VPS fleet (Kong, Gravitee, n8n, etc.) |
 
 ## Authentication
 
@@ -202,6 +211,53 @@ Both scripts use macOS Keychain for secure secret storage — no plaintext files
 | `CODECOV_TOKEN` | Coverage upload | Codecov reporting |
 
 > Note: `AWS_ROLE_ARN` removed — AWS decommissioned Feb 2026.
+
+## Cloudflare Access (Network Layer)
+
+`vault.gostoa.dev` is protected by Cloudflare Access (Zero Trust). All API calls must include Service Token headers.
+
+### Env Vars (required on every device + VPS)
+
+| Variable | Where to Set | Purpose |
+|----------|-------------|---------|
+| `CF_ACCESS_CLIENT_ID` | `~/.zprofile` + VPS `~/.env.hegemon` | Service Token ID |
+| `CF_ACCESS_CLIENT_SECRET` | `~/.zprofile` + VPS `~/.env.hegemon` | Service Token Secret |
+
+### How Scripts Use It
+
+All scripts source `scripts/ops/vps-inventory.sh` which reads CF env vars. The `infisical_curl` helper auto-adds CF headers when set. **Backward compatible**: empty vars = no headers sent.
+
+### Setup / Rotation
+
+```bash
+./scripts/ops/setup-cloudflare-access.sh              # Full setup
+./scripts/ops/setup-cloudflare-access.sh --dry-run     # Preview
+./scripts/ops/setup-cloudflare-access.sh --status      # Check current state
+```
+
+See `docs/runbooks/multi-device-access.md` — Tier 3 for full procedure.
+
+## Multi-Device Access
+
+Each device has independent credentials for SSH and Infisical. See `docs/runbooks/multi-device-access.md` for the full runbook.
+
+| Layer | Per-Device | Shared |
+|-------|-----------|--------|
+| SSH | Ed25519 key (`id_ed25519_stoa_<device>`) | — |
+| Infisical | Machine Identity (`stoa-cli-<device>`) | — |
+| CF Access | — | Service Token (`stoa-infisical-cli`) |
+
+### Helper Scripts
+
+| Script | Location | Purpose |
+|--------|----------|---------|
+| `distribute-ssh-key.sh` | `scripts/ops/` | Add/remove SSH key across VPS fleet |
+| `setup-cloudflare-access.sh` | `scripts/ops/` | Cloudflare Access setup + Service Token |
+| `vps-inventory.sh` | `scripts/ops/` | Centralized VPS fleet inventory (sourced by all scripts) |
+
+### Device Revocation
+
+If a device is lost: revoke SSH key (`distribute-ssh-key.sh --remove`), delete Machine Identity in Infisical UI. Service Token stays valid for other devices.
 
 ## Infrastructure
 

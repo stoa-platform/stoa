@@ -257,10 +257,39 @@
 
 ## Cycle 10 (Mar 2–8) — NEXT
 
-**Scope**: 0 pts committed | **Theme**: TBD (post-demo planning)
+**Scope**: 193 pts | **Theme**: Kill the Backlog — v1.0 Foundation
+**Council batch**: 15 tickets evaluated, 9 Go (>=8.0), 3 Fix (6.0-7.9), 3 Redo (<6.0 → deferred)
 
-### Backlog (in cycle, not committed)
-- CAB-1350: [MEGA] UAC Specification v1.0 — Universal API Contract Standard (13 pts, P3)
+### Todo
+
+**W1 — Foundation (Day 1-2)**:
+- [ ] CAB-1350: [MEGA] UAC Specification v1.0 (13 pts) — Council 9.00 Go | `instance:backend`
+- [ ] CAB-1349: Contract Transformer — OpenAPI only (8 pts) — Council 8.25 Go | `instance:backend`
+- [ ] CAB-1455: [MEGA] Gateway Live Reload + Config Sync (21 pts) — Council 8.00 Go | `instance:mcp`
+
+**W2 — Core v1.0 (Day 2-4)**:
+- [ ] CAB-1335: [MEGA] UAC Transformer Service (21 pts) — Council 8.00 Go | `instance:backend`
+- [ ] CAB-1453: [MEGA] Portal V2 — Self-Service + Marketplace (21 pts) — Council 8.50 Go | `instance:frontend`
+- [ ] CAB-1454: [MEGA] Console Administration Complete (21 pts) — Council 8.25 Go | `instance:frontend`
+
+**W3 — Enterprise + Quality (Day 3-5)**:
+- [ ] CAB-1474: [MEGA] Enterprise DR & Recovery (21 pts) — Council 7.50 Fix → decompose | `instance:backend`
+- [ ] CAB-1470: [MEGA] Portal Advanced Features (21 pts) — Council 8.25 Go | `instance:frontend`
+- [ ] CAB-1476: [MEGA] E2E Test Hardening R2 (21 pts) — Council 8.00 Go | `instance:frontend`
+- [ ] CAB-1477: [MEGA] Cross-Component Integration Tests (13 pts) — Council 8.00 Go | `instance:qa`
+
+**W4 — Polish + GTM (Day 5-6)**:
+- [ ] CAB-1471: Dashboard Polish (2 pts) | `instance:frontend`
+- [ ] CAB-1311: [MEGA] GTM Strategy & Licensing — AI part (5 pts) — Council 6.50 Fix | `instance:backend`
+- [ ] CAB-1496: Benchmark Methodology & Results Publication (5 pts, sub of CAB-1443) | `instance:backend`
+
+### Deferred (Council Redo — post-v1.0)
+- CAB-1473: WASM Plugin System (21 pts) — Council 5.00 Redo → 3-4x underestimated, post-v1.0
+- CAB-1462: Error Snapshot v2 (21 pts) — Council 5.75 Redo → scope too large, descope to P1
+- CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 Redo → needs spec first
+
+### Backlog
+- CAB-1449: SDK Generation (5 pts reduced) — Council 6.00 Fix → docs-only, not v1.0 critical
 - CAB-173: [JALON] v1.0 GA — Mi-Mai 2026 (2 pts, P1)
 
 ---
@@ -270,8 +299,10 @@
 | Date | Event | Gate |
 |------|-------|------|
 | Dim 22 fev | Cycle 8 closed | 1305 pts, 88 issues |
+| Dim 1 mars | Cycle 9 closed | 830 pts, 68+ issues, ALL DONE |
+| Lun 2 mars | Cycle 10 starts | 193 pts, 13 tickets, 5 panes |
 | Mar 17 mars | DEMO DAY | 5 min live + "ESB is Dead" |
-| Dim 1 mars | Cycle 9 ends | 830 pts, 68+ issues, ALL DONE |
+| Dim 8 mars | Cycle 10 ends | Kill the Backlog target |
 
 ## KPIs Demo
 

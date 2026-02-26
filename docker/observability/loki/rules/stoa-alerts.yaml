@@ -1,5 +1,6 @@
 # STOA Platform Alerting Rules for Loki
 # CAB-330: Centralized logging alerting
+# CAB-1455: Added stoa-gateway alerts for cross-component observability
 #
 # These rules are evaluated by Loki Ruler and send alerts to Alertmanager
 
@@ -35,7 +36,7 @@ groups:
           summary: "Critical error rate - 5xx errors detected"
           description: "Server error rate is {{ $value | printf \"%.2f\" }} errors/sec"
 
-      # MCP Gateway errors
+      # MCP Gateway errors (legacy Python gateway)
       - alert: MCPGatewayErrors
         expr: |
           sum(rate({component="mcp-gateway", level="error"} [5m])) > 0.2
@@ -46,6 +47,30 @@ groups:
         annotations:
           summary: "Errors detected in MCP Gateway"
           description: "Error rate is {{ $value | printf \"%.2f\" }} errors/sec"
+
+      # STOA Gateway errors (Rust gateway)
+      - alert: StoaGatewayErrors
+        expr: |
+          sum(rate({component="stoa-gateway", level="error"} [5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: stoa-gateway
+        annotations:
+          summary: "Errors detected in STOA Gateway"
+          description: "Error rate is {{ $value | printf \"%.2f\" }} errors/sec"
+
+      # STOA Gateway critical errors (5xx responses)
+      - alert: StoaGatewayCriticalErrors
+        expr: |
+          sum(rate({component="stoa-gateway"} |= "status" | json | status >= 500 [5m])) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          service: stoa-gateway
+        annotations:
+          summary: "Critical error rate in STOA Gateway - 5xx responses"
+          description: "Server error rate is {{ $value | printf \"%.2f\" }} errors/sec"
 
   # ============================================================================
   # Authentication Alerts
@@ -89,13 +114,25 @@ groups:
           summary: "Cannot connect to Keycloak"
           description: "Control-Plane API cannot fetch Keycloak public key. All authentications will fail."
 
+      # Gateway auth failures (JWT/API key validation)
+      - alert: GatewayAuthFailures
+        expr: |
+          sum(rate({component="stoa-gateway"} |~ "auth.*failed|unauthorized|invalid.*token|api_key.*invalid" [5m])) > 0.3
+        for: 3m
+        labels:
+          severity: warning
+          service: stoa-gateway
+        annotations:
+          summary: "High auth failure rate in STOA Gateway"
+          description: "Auth failures: {{ $value | printf \"%.2f\" }}/sec. Check for expired tokens or misconfigured API keys."
+
   # ============================================================================
   # Performance Alerts
   # ============================================================================
   - name: stoa-performance-alerts
     interval: 1m
     rules:
-      # Slow requests detected
+      # Slow requests detected (Control-Plane API)
       - alert: SlowRequests
         expr: |
           sum(rate({component="control-plane-api"} |= "slow_request" [5m])) > 0.1
@@ -118,6 +155,18 @@ groups:
         annotations:
           summary: "Very slow requests detected (>5s)"
           description: "Requests taking over 5 seconds detected. Check for database or external service issues."
+
+      # STOA Gateway slow requests (proxy latency)
+      - alert: GatewaySlowRequests
+        expr: |
+          sum(rate({component="stoa-gateway"} | json | duration_ms > 2000 [5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: stoa-gateway
+        annotations:
+          summary: "Slow requests in STOA Gateway (>2s)"
+          description: "Rate of slow requests: {{ $value | printf \"%.2f\" }}/sec. Check backend connectivity or circuit breaker state."
 
   # ============================================================================
   # External Service Alerts
@@ -173,6 +222,18 @@ groups:
           summary: "API Gateway connection errors"
           description: "Errors communicating with API Gateway"
 
+      # STOA Gateway Control Plane connectivity
+      - alert: GatewayControlPlaneError
+        expr: |
+          sum(rate({component="stoa-gateway"} |~ "control.plane|CP unreachable|registration failed" |= "error" [5m])) > 0
+        for: 3m
+        labels:
+          severity: warning
+          service: stoa-gateway
+        annotations:
+          summary: "STOA Gateway cannot reach Control Plane"
+          description: "Gateway-to-CP communication errors detected. Tool sync and heartbeat may be impacted."
+
   # ============================================================================
   # Tenant-specific Alerts
   # ============================================================================
@@ -199,7 +260,7 @@ groups:
       # Unusual log volume (potential log flood)
       - alert: HighLogVolume
         expr: |
-          sum(rate({component=~"control-plane-api|mcp-gateway"} [5m])) > 100
+          sum(rate({component=~"control-plane-api|mcp-gateway|stoa-gateway"} [5m])) > 100
         for: 10m
         labels:
           severity: warning
@@ -207,8 +268,8 @@ groups:
           summary: "Unusually high log volume"
           description: "Log rate: {{ $value | printf \"%.0f\" }} logs/sec. Check for debug logging left enabled or log flooding."
 
-      # No logs (service might be down)
-      - alert: NoLogs
+      # No logs from Control-Plane API (service might be down)
+      - alert: NoLogsControlPlane
         expr: |
           sum(rate({component="control-plane-api"} [5m])) == 0
         for: 5m
@@ -218,3 +279,15 @@ groups:
         annotations:
           summary: "No logs from Control-Plane API"
           description: "No logs received for 5 minutes. Service might be down."
+
+      # No logs from STOA Gateway (service might be down)
+      - alert: NoLogsGateway
+        expr: |
+          sum(rate({component="stoa-gateway"} [5m])) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: stoa-gateway
+        annotations:
+          summary: "No logs from STOA Gateway"
+          description: "No logs received for 5 minutes. Gateway might be down."

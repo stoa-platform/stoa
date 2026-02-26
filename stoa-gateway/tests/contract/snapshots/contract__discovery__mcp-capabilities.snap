@@ -27,10 +27,10 @@ expression: json
       "listChanged": true
     }
   },
-  "protocolVersion": "2025-03-26",
+  "protocolVersion": "2025-11-25",
   "serverInfo": {
     "name": "STOA Gateway",
-    "protocolVersion": "2025-03-26",
+    "protocolVersion": "2025-11-25",
     "version": "0.1.0"
   }
 }

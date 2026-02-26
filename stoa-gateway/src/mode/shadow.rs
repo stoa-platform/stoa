@@ -1620,4 +1620,501 @@ mod tests {
         // confidence = 0.9 * 1.0 + 0.1 = 1.0 (clamped)
         assert!((confidence - 1.0).abs() < 0.01);
     }
+
+    // ===== NEW TESTS: Coverage gap fillers (CAB-1494) =====
+
+    #[test]
+    fn test_service_new_initializes_empty_state() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let svc = make_service(50);
+            let status = svc.status().await;
+            assert_eq!(status.transactions_captured, 0);
+            assert_eq!(status.patterns_detected, 0);
+            assert_eq!(status.uacs_generated, 0);
+            assert_eq!(status.min_requests_threshold, 50);
+            assert!(!status.ready_for_generation);
+        });
+    }
+
+    #[test]
+    fn test_service_new_has_no_git_client() {
+        let svc = make_service(100);
+        assert!(svc.git_client.is_none());
+    }
+
+    #[test]
+    fn test_status_not_ready_below_threshold() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let svc = make_service(10);
+            // Capture 5 transactions (below threshold of 10)
+            for i in 0..5 {
+                svc.capture(make_tx(&format!("tx-{i}"), "GET", "/api/items", 200, 50))
+                    .await;
+            }
+            let status = svc.status().await;
+            assert_eq!(status.transactions_captured, 5);
+            assert!(!status.ready_for_generation);
+        });
+    }
+
+    #[tokio::test]
+    async fn test_auto_trigger_analysis_at_threshold() {
+        let svc = make_service(5);
+        // Capture exactly min_requests_for_uac transactions to trigger analysis
+        for i in 0..5 {
+            svc.capture(make_tx(
+                &format!("tx-{i}"),
+                "GET",
+                "/api/users/123",
+                200,
+                30,
+            ))
+            .await;
+        }
+        let status = svc.status().await;
+        assert_eq!(status.transactions_captured, 5);
+        assert!(status.ready_for_generation);
+        // Patterns should be populated after auto-trigger
+        assert!(status.patterns_detected > 0);
+    }
+
+    #[tokio::test]
+    async fn test_generate_uac_stores_in_list() {
+        let svc = make_service(2);
+        svc.capture(make_tx("tx-1", "GET", "/api/items", 200, 10))
+            .await;
+        svc.capture(make_tx("tx-2", "POST", "/api/items", 201, 20))
+            .await;
+
+        // Generate a UAC
+        let uac = svc
+            .generate_uac("Test API", "https://api.example.com")
+            .await;
+        assert!(uac.is_some());
+
+        // Verify it was stored
+        let status = svc.status().await;
+        assert_eq!(status.uacs_generated, 1);
+
+        // Generate another UAC
+        let uac2 = svc
+            .generate_uac("Test API v2", "https://api2.example.com")
+            .await;
+        assert!(uac2.is_some());
+        let status2 = svc.status().await;
+        assert_eq!(status2.uacs_generated, 2);
+    }
+
+    #[tokio::test]
+    async fn test_generate_uac_metadata_fields() {
+        let svc = make_service(2);
+        svc.capture(make_tx("tx-1", "GET", "/api/data", 200, 10))
+            .await;
+        svc.capture(make_tx("tx-2", "GET", "/api/data", 200, 20))
+            .await;
+
+        let uac = svc
+            .generate_uac("Metadata API", "https://meta.example.com")
+            .await
+            .unwrap();
+
+        assert_eq!(uac.api_name, "Metadata API");
+        assert_eq!(uac.api_id, "metadata-api-api");
+        assert_eq!(uac.base_url, "https://meta.example.com");
+        assert_eq!(uac.version, "v1");
+        assert_eq!(uac.metadata.transactions_analyzed, 2);
+        assert!(uac.metadata.endpoints_detected > 0);
+        assert!(!uac.metadata.generator_version.is_empty());
+        assert!(uac.metadata.confidence > 0.0);
+        assert!(uac.metadata.confidence <= 1.0);
+    }
+
+    #[tokio::test]
+    async fn test_generate_uac_auth_from_bearer_pattern() {
+        let svc = make_service(2);
+        svc.capture(make_tx_with_auth("tx-1", "Bearer token123"))
+            .await;
+        svc.capture(make_tx_with_auth("tx-2", "Bearer token456"))
+            .await;
+
+        let uac = svc
+            .generate_uac("Auth API", "https://auth.example.com")
+            .await
+            .unwrap();
+
+        assert_eq!(uac.auth.auth_type, "bearer");
+    }
+
+    #[tokio::test]
+    async fn test_generate_uac_auth_from_api_key_pattern() {
+        let svc = make_service(2);
+        // Create transactions with X-API-Key header instead of Authorization: Bearer
+        let mut tx1 = make_tx("tx-1", "GET", "/api/items", 200, 10);
+        tx1.request.headers.remove("authorization");
+        tx1.request
+            .headers
+            .insert("x-api-key".to_string(), "key-abc".to_string());
+        let mut tx2 = make_tx("tx-2", "GET", "/api/items", 200, 12);
+        tx2.request.headers.remove("authorization");
+        tx2.request
+            .headers
+            .insert("x-api-key".to_string(), "key-def".to_string());
+
+        svc.capture(tx1).await;
+        svc.capture(tx2).await;
+
+        let uac = svc
+            .generate_uac("Key API", "https://key.example.com")
+            .await
+            .unwrap();
+
+        assert_eq!(uac.auth.auth_type, "api_key");
+    }
+
+    #[tokio::test]
+    async fn test_generate_uac_default_auth_when_none() {
+        let svc = make_service(2);
+        // Create transactions without any auth headers
+        let mut tx1 = make_tx("tx-1", "GET", "/api/public", 200, 10);
+        tx1.request.headers.remove("authorization");
+        let mut tx2 = make_tx("tx-2", "GET", "/api/public", 200, 12);
+        tx2.request.headers.remove("authorization");
+
+        svc.capture(tx1).await;
+        svc.capture(tx2).await;
+
+        let uac = svc
+            .generate_uac("Public API", "https://pub.example.com")
+            .await
+            .unwrap();
+
+        // Default auth_type when no auth pattern detected
+        assert_eq!(uac.auth.auth_type, "bearer");
+    }
+
+    #[test]
+    fn test_normalize_path_mixed_uuid_and_numeric() {
+        let svc = make_service(100);
+        let normalized = svc.normalize_path(
+            "GET",
+            "/api/tenants/550e8400-e29b-41d4-a716-446655440000/items/42/details",
+        );
+        assert_eq!(normalized, "GET /api/tenants/{uuid}/items/{id}/details");
+    }
+
+    #[test]
+    fn test_normalize_path_consecutive_ids() {
+        let svc = make_service(100);
+        let normalized = svc.normalize_path("GET", "/api/123/456");
+        assert_eq!(normalized, "GET /api/{id}/{id}");
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_no_auth() {
+        let tx = make_tx("tx-1", "GET", "/api/items", 200, 10);
+        let mut no_auth_tx = tx;
+        no_auth_tx.request.headers.remove("authorization");
+        let txs: Vec<&CapturedTransaction> = vec![&no_auth_tx];
+        let svc = make_service(100);
+        let pattern = svc
+            .build_endpoint_pattern("GET /api/items", &txs)
+            .expect("pattern should be Some");
+        assert!(pattern.auth_type.is_none());
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_multiple_response_schemas() {
+        let tx_200 = make_tx("tx-1", "GET", "/api/items", 200, 10);
+        let mut tx_404 = make_tx("tx-2", "GET", "/api/items", 404, 5);
+        tx_404.response.body = Some(serde_json::json!({"error": "not found"}));
+
+        let txs: Vec<&CapturedTransaction> = vec![&tx_200, &tx_404];
+        let svc = make_service(100);
+        let pattern = svc
+            .build_endpoint_pattern("GET /api/items", &txs)
+            .expect("pattern should be Some");
+
+        // Should have schemas for both 200 and 404
+        assert!(pattern.response_schemas.contains_key(&200));
+        assert!(pattern.response_schemas.contains_key(&404));
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_p95_latency() {
+        // 20 transactions with varied latencies to test p95 calculation
+        let mut txs = Vec::new();
+        for i in 0..20 {
+            txs.push(make_tx(
+                &format!("tx-{i}"),
+                "GET",
+                "/api/fast",
+                200,
+                (i + 1) * 10, // 10, 20, 30, ..., 200
+            ));
+        }
+        let tx_refs: Vec<&CapturedTransaction> = txs.iter().collect();
+        let svc = make_service(100);
+        let pattern = svc
+            .build_endpoint_pattern("GET /api/fast", &tx_refs)
+            .expect("pattern should be Some");
+
+        // Average should be ~105
+        assert!(pattern.avg_latency_ms > 90 && pattern.avg_latency_ms < 120);
+        // P95 should be near 190 (95th percentile of 10..200)
+        assert!(pattern.p95_latency_ms >= 180);
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_error_rate() {
+        let tx_ok = make_tx("tx-1", "GET", "/api/items", 200, 10);
+        let tx_ok2 = make_tx("tx-2", "GET", "/api/items", 200, 10);
+        let tx_ok3 = make_tx("tx-3", "GET", "/api/items", 200, 10);
+        let tx_err = make_tx("tx-4", "GET", "/api/items", 500, 10);
+
+        let txs: Vec<&CapturedTransaction> = vec![&tx_ok, &tx_ok2, &tx_ok3, &tx_err];
+        let svc = make_service(100);
+        let pattern = svc
+            .build_endpoint_pattern("GET /api/items", &txs)
+            .expect("pattern should be Some");
+
+        // 1 error out of 4 = 0.25
+        assert!((pattern.error_rate - 0.25).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_confidence_with_high_error_rate() {
+        let mut patterns = HashMap::new();
+        patterns.insert(
+            "GET /api".to_string(),
+            EndpointPattern {
+                method: "GET".to_string(),
+                path_pattern: "/api".to_string(),
+                query_params: vec![],
+                request_schema: None,
+                response_schemas: HashMap::new(),
+                content_types: vec![],
+                sample_count: 100,
+                avg_latency_ms: 10,
+                p95_latency_ms: 20,
+                error_rate: 0.8, // 80% errors
+                detected_rate_limit: None,
+                auth_type: None,
+            },
+        );
+
+        let confidence = ShadowService::calculate_confidence(&patterns, 100);
+        // base = 0.5 + 0.4 * 1.0 = 0.9
+        // error_penalty = 1.0 - (0.8 * 0.5) = 0.6
+        // schema_bonus = 0.0
+        // confidence = 0.9 * 0.6 + 0.0 = 0.54
+        assert!((confidence - 0.54).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_confidence_empty_patterns() {
+        let patterns: HashMap<String, EndpointPattern> = HashMap::new();
+        let confidence = ShadowService::calculate_confidence(&patterns, 50);
+        // base = 0.5 + 0.4 * 0.5 = 0.7
+        // avg_error_rate = 0.0 (empty patterns)
+        // error_penalty = 1.0
+        // schema_bonus = 0.0
+        // confidence = 0.7 * 1.0 + 0.0 = 0.7
+        assert!((confidence - 0.7).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_query_param_optional_detection() {
+        // 10 transactions, but param only appears in 5 of them (50% < 80% threshold)
+        let mut txs = Vec::new();
+        for i in 0..10 {
+            if i < 5 {
+                txs.push(make_tx_with_params(
+                    &format!("tx-{i}"),
+                    "/api/search",
+                    vec![("q", "test")],
+                ));
+            } else {
+                txs.push(make_tx_with_params(
+                    &format!("tx-{i}"),
+                    "/api/search",
+                    vec![],
+                ));
+            }
+        }
+        let tx_refs: Vec<&CapturedTransaction> = txs.iter().collect();
+        let params = ShadowService::extract_query_param_patterns(&tx_refs);
+
+        // The "q" param should be marked as NOT required (only 50% < 80%)
+        let q_param = params.iter().find(|p| p.name == "q");
+        assert!(q_param.is_some());
+        assert!(!q_param.unwrap().required);
+    }
+
+    #[test]
+    fn test_query_param_required_detection() {
+        // 10 transactions, param appears in 9 of them (90% > 80% threshold)
+        let mut txs = Vec::new();
+        for i in 0..10 {
+            if i < 9 {
+                txs.push(make_tx_with_params(
+                    &format!("tx-{i}"),
+                    "/api/search",
+                    vec![("q", "test")],
+                ));
+            } else {
+                txs.push(make_tx_with_params(
+                    &format!("tx-{i}"),
+                    "/api/search",
+                    vec![],
+                ));
+            }
+        }
+        let tx_refs: Vec<&CapturedTransaction> = txs.iter().collect();
+        let params = ShadowService::extract_query_param_patterns(&tx_refs);
+
+        let q_param = params.iter().find(|p| p.name == "q");
+        assert!(q_param.is_some());
+        assert!(q_param.unwrap().required);
+    }
+
+    #[test]
+    fn test_infer_param_type_mixed_values() {
+        // Mix of valid UUIDs and non-UUIDs => falls through to string
+        let values = vec![
+            "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            "not-a-uuid".to_string(),
+        ];
+        let result = ShadowService::infer_param_type(&values);
+        assert_eq!(result, "string");
+    }
+
+    #[test]
+    fn test_infer_param_type_empty() {
+        let values: Vec<String> = vec![];
+        let result = ShadowService::infer_param_type(&values);
+        assert_eq!(result, "string");
+    }
+
+    #[test]
+    fn test_rate_limit_only_remaining_header() {
+        // Only x-ratelimit-remaining present (no limit or reset)
+        let tx = make_tx_with_rate_headers("tx-1", 200, vec![("x-ratelimit-remaining", "95")]);
+        let txs: Vec<&CapturedTransaction> = vec![&tx];
+        let rate_limit = ShadowService::detect_rate_limit(&txs);
+
+        assert!(rate_limit.is_some());
+        let rl = rate_limit.unwrap();
+        // Defaults when only remaining header present
+        assert_eq!(rl.limit, 100); // default
+        assert_eq!(rl.window_secs, 60); // default
+        assert!((rl.confidence - 0.7).abs() < 0.01); // headers only
+    }
+
+    #[test]
+    fn test_rate_limit_alternative_header_names() {
+        // Use ratelimit-limit (without x- prefix)
+        let tx = make_tx_with_rate_headers(
+            "tx-1",
+            200,
+            vec![("ratelimit-limit", "500"), ("ratelimit-reset", "120")],
+        );
+        let txs: Vec<&CapturedTransaction> = vec![&tx];
+        let rate_limit = ShadowService::detect_rate_limit(&txs);
+
+        assert!(rate_limit.is_some());
+        let rl = rate_limit.unwrap();
+        assert_eq!(rl.limit, 500);
+        assert_eq!(rl.window_secs, 120);
+    }
+
+    #[test]
+    fn test_generate_operation_id_empty_path() {
+        let svc = make_service(100);
+        let op_id = svc.generate_operation_id("GET", "/");
+        assert_eq!(op_id, "get");
+    }
+
+    #[test]
+    fn test_generate_operation_id_strips_path_params() {
+        let svc = make_service(100);
+        let op_id = svc.generate_operation_id("DELETE", "/api/{id}/comments/{uuid}");
+        // Path params (starting with {) are filtered out
+        assert_eq!(op_id, "delete_api_comments");
+    }
+
+    #[test]
+    fn test_infer_schema_nested_object() {
+        let value = serde_json::json!({
+            "user": {
+                "name": "Alice",
+                "age": 30
+            }
+        });
+        let svc = make_service(100);
+        let schema = svc.infer_schema(&value);
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["user"]["type"] == "object");
+        assert!(schema["properties"]["user"]["properties"]["name"]["type"] == "string");
+        assert!(schema["properties"]["user"]["properties"]["age"]["type"] == "integer");
+    }
+
+    #[test]
+    fn test_infer_schema_array_of_objects() {
+        let value = serde_json::json!([{"id": 1}, {"id": 2}]);
+        let svc = make_service(100);
+        let schema = svc.infer_schema(&value);
+        assert_eq!(schema["type"], "array");
+        assert_eq!(schema["items"]["type"], "object");
+    }
+
+    #[test]
+    fn test_infer_schema_boolean() {
+        let value = serde_json::json!(true);
+        let svc = make_service(100);
+        let schema = svc.infer_schema(&value);
+        assert_eq!(schema["type"], "boolean");
+    }
+
+    #[tokio::test]
+    async fn test_export_uac_yaml_valid_format() {
+        let svc = make_service(2);
+        svc.capture(make_tx("tx-1", "GET", "/api/items", 200, 10))
+            .await;
+        svc.capture(make_tx("tx-2", "GET", "/api/items", 200, 15))
+            .await;
+
+        let uac = svc
+            .generate_uac("YAML Test", "https://yaml.example.com")
+            .await
+            .unwrap();
+        let yaml = svc.export_uac_yaml(&uac).await;
+
+        // YAML should be non-empty and contain key fields
+        assert!(!yaml.is_empty());
+        assert!(yaml.contains("api_name"));
+        assert!(yaml.contains("YAML Test"));
+        assert!(yaml.contains("yaml.example.com"));
+        assert!(yaml.contains("endpoints"));
+    }
+
+    #[tokio::test]
+    async fn test_analyze_patterns_distinct_methods_same_path() {
+        let svc = make_service(4);
+        svc.capture(make_tx("tx-1", "GET", "/api/items", 200, 10))
+            .await;
+        svc.capture(make_tx("tx-2", "POST", "/api/items", 201, 20))
+            .await;
+        svc.capture(make_tx("tx-3", "GET", "/api/items", 200, 12))
+            .await;
+        svc.capture(make_tx("tx-4", "POST", "/api/items", 201, 18))
+            .await;
+
+        // Analysis was auto-triggered at threshold (4)
+        let patterns = svc.patterns.read().await;
+        // GET /api/items and POST /api/items should be separate patterns
+        assert!(patterns.contains_key("GET /api/items"));
+        assert!(patterns.contains_key("POST /api/items"));
+    }
 }

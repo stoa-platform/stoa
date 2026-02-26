@@ -51,6 +51,15 @@ const AdminProspects = lazy(() =>
 const AdminAccessRequests = lazy(() =>
   import('./pages/AdminAccessRequests').then((m) => ({ default: m.AdminAccessRequests }))
 );
+const AdminUsers = lazy(() =>
+  import('./pages/AdminUsers').then((m) => ({ default: m.AdminUsers }))
+);
+const AdminSettings = lazy(() =>
+  import('./pages/AdminSettings').then((m) => ({ default: m.AdminSettings }))
+);
+const AdminRoles = lazy(() =>
+  import('./pages/AdminRoles').then((m) => ({ default: m.AdminRoles }))
+);
 const GatewayStatus = lazy(() => import('./pages/GatewayStatus'));
 const GatewayRegistry = lazy(() => gatewaysModule().then((m) => ({ default: m.GatewayList })));
 const GatewayModes = lazy(() =>
@@ -425,6 +434,9 @@ function ProtectedRoutes() {
                 <Route path="/business" element={<BusinessDashboard />} />
                 <Route path="/admin/prospects" element={<AdminProspects />} />
                 <Route path="/admin/access-requests" element={<AdminAccessRequests />} />
+                <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/settings" element={<AdminSettings />} />
+                <Route path="/admin/roles" element={<AdminRoles />} />
                 {/* Native observability dashboards (replace iframe embeds) */}
                 <Route path="/observability" element={<PlatformMetrics />} />
                 <Route path="/observability/grafana" element={<GrafanaEmbed />} />

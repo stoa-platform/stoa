@@ -33,6 +33,10 @@ import type {
   WorkflowTemplateListResponse,
   WorkflowListResponse,
   AccessRequestListResponse,
+  AdminUserListResponse,
+  PlatformSettingsResponse,
+  PlatformSetting,
+  RoleListResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -789,6 +793,44 @@ class ApiService {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/metering`, {
       params: { days },
     });
+    return data;
+  }
+
+  // =========================================================================
+  // Admin Users Management (CAB-1454)
+  // =========================================================================
+
+  async getAdminUsers(params: {
+    role?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<AdminUserListResponse> {
+    const { data } = await this.client.get('/v1/admin/users', { params });
+    return data;
+  }
+
+  // =========================================================================
+  // Platform Settings (CAB-1454)
+  // =========================================================================
+
+  async getPlatformSettings(params?: { category?: string }): Promise<PlatformSettingsResponse> {
+    const { data } = await this.client.get('/v1/admin/settings', { params });
+    return data;
+  }
+
+  async updatePlatformSetting(key: string, value: string): Promise<PlatformSetting> {
+    const { data } = await this.client.put(`/v1/admin/settings/${key}`, { value });
+    return data;
+  }
+
+  // =========================================================================
+  // RBAC Roles (CAB-1454)
+  // =========================================================================
+
+  async getAdminRoles(): Promise<RoleListResponse> {
+    const { data } = await this.client.get('/v1/admin/roles');
     return data;
   }
 }

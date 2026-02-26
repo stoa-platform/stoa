@@ -135,8 +135,11 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330 gateway tests
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
-- HEGEMON daemon DEPLOYED on worker-1 (207.180.246.92) — systemd `hegemon.service`, polling 60s, 5/5 workers healthy
-  - Fixes: Linear GraphQL ID!/String! types, tilde expansion, prompt-file SSH, auto-reset failed tickets (commit ec31d378)
+- HEGEMON daemon **v8** on worker-1 (207.180.246.92) — polling 60s, 5/5 workers healthy
+  - v8: Opus-only (Sonnet can't handle 40K rules), turn budgets 40/50/60/75, env setup hints, turn budget directive
+  - Validated: CAB-1528 → PR #1158 (35 tests, 3 bugs found, 73 turns, $2.24, 22m38s)
+  - SSH key: `~/.ssh/id_ed25519_stoa` (not default ed25519)
+  - API quota hit 2026-02-26 (resets 2026-03-01). Opus works but budget needs monitoring
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day

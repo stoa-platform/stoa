@@ -549,7 +549,7 @@ class TestDetectDrift:
         baseline_result = MagicMock()
         baseline_result.scalar_one_or_none.return_value = baseline
 
-        finding_row = MagicMock(rule_id="CVE-1", rule_name="Test", severity="high")
+        finding_row = MagicMock(rule_id="CVE-1", title="Test", severity="high")
         findings_result = MagicMock()
         findings_result.all.return_value = [finding_row]
 
@@ -568,7 +568,7 @@ class TestDetectDrift:
         baseline_result = MagicMock()
         baseline_result.scalar_one_or_none.return_value = baseline
 
-        finding_row = MagicMock(rule_id="CVE-1", rule_name="Regression Bug", severity="high")
+        finding_row = MagicMock(rule_id="CVE-1", title="Regression Bug", severity="high")
         findings_result = MagicMock()
         findings_result.all.return_value = [finding_row]
 
@@ -590,8 +590,8 @@ class TestDetectDrift:
         baseline_result.scalar_one_or_none.return_value = baseline
 
         rows = [
-            MagicMock(rule_id="CVE-1", rule_name="Bug1", severity="critical"),
-            MagicMock(rule_id="CVE-3", rule_name="Bug3", severity="low"),
+            MagicMock(rule_id="CVE-1", title="Bug1", severity="critical"),
+            MagicMock(rule_id="CVE-3", title="Bug3", severity="low"),
         ]
         findings_result = MagicMock()
         findings_result.all.return_value = rows

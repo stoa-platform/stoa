@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS worker_status (
     last_error TEXT
 );
 
+CREATE TABLE IF NOT EXISTS retry_counts (
+    ticket_id TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    last_failed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_dispatches_ticket ON dispatches(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_dispatches_status ON dispatches(status);
 `
@@ -156,6 +162,36 @@ func (s *Store) GetWorkerStatus(name string) (string, error) {
 		return "unknown", nil
 	}
 	return status, err
+}
+
+// GetRetryCount returns the number of failed dispatch attempts for a ticket.
+func (s *Store) GetRetryCount(ticketID string) (int, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COALESCE(count, 0) FROM retry_counts WHERE ticket_id = ?`, ticketID).Scan(&count)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return count, err
+}
+
+// IncrRetryCount increments the retry counter for a ticket.
+func (s *Store) IncrRetryCount(ticketID string) (int, error) {
+	_, err := s.db.Exec(
+		`INSERT INTO retry_counts (ticket_id, count, last_failed_at)
+		 VALUES (?, 1, datetime('now'))
+		 ON CONFLICT(ticket_id) DO UPDATE SET count = count + 1, last_failed_at = datetime('now')`,
+		ticketID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return s.GetRetryCount(ticketID)
+}
+
+// ResetRetryCount clears the retry counter for a ticket (on success).
+func (s *Store) ResetRetryCount(ticketID string) error {
+	_, err := s.db.Exec(`DELETE FROM retry_counts WHERE ticket_id = ?`, ticketID)
+	return err
 }
 
 // GetActiveDispatches returns all dispatches currently in progress.

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     VERSION: str = "2.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "production"  # dev, staging, production
+    STOA_EDITION: str = "community"  # community, standard, enterprise (Open Core model)
 
     # Base domain for URL construction
     BASE_DOMAIN: str = _BASE_DOMAIN

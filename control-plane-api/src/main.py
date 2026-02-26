@@ -85,6 +85,7 @@ from .routers import (
     service_accounts,
     skills,
     subscriptions,
+    system,
     tenant_webhooks,
     tenants,
     traces,
@@ -636,6 +637,9 @@ app.include_router(onboarding_admin.router)
 
 # Platform Status (GitOps Observability - CAB-654)
 app.include_router(platform.router)
+
+# System Info (Edition, License, Features - CAB-1311)
+app.include_router(system.router)
 
 # Catalog Admin (CAB-682 - Catalog Cache Sync)
 app.include_router(catalog_admin.router)

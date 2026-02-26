@@ -1,0 +1,55 @@
+{
+  "name": "payment-service",
+  "version": "1.0.0",
+  "tenant_id": "acme-corp",
+  "display_name": "Payment Service",
+  "description": "Process credit card payments and refunds via REST API.",
+  "classification": "VH",
+  "endpoints": [
+    {
+      "path": "/payments",
+      "methods": ["GET", "POST"],
+      "backend_url": "https://backend.acme.com/v1/payments",
+      "operation_id": "list_payments",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "amount": { "type": "number", "minimum": 0.01 },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "description": { "type": "string" }
+        },
+        "required": ["amount", "currency"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+          "amount": { "type": "number" }
+        }
+      }
+    },
+    {
+      "path": "/payments/{id}",
+      "methods": ["GET"],
+      "backend_url": "https://backend.acme.com/v1/payments",
+      "operation_id": "get_payment"
+    },
+    {
+      "path": "/payments/{id}/refund",
+      "methods": ["POST"],
+      "backend_url": "https://backend.acme.com/v1/payments",
+      "operation_id": "refund_payment",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "required_policies": ["rate-limit", "auth-jwt", "mtls", "audit-logging"],
+  "status": "published",
+  "source_spec_url": "https://specs.acme.com/payment-service/openapi.json",
+  "spec_hash": "a1b2c3d4e5f67890"
+}

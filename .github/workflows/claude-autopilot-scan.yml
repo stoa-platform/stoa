@@ -405,6 +405,11 @@ jobs:
 
       - name: Write Job Summary
         if: always()
+        env:
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           write_job_summary "autopilot-scan" "${{ steps.council.outcome || 'skipped' }}" "" "" "autopilot-scan"
+          push_state_milestone "autopilot-scan" "scan-${{ steps.council.outcome || 'skipped' }}"

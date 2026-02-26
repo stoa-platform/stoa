@@ -389,7 +389,21 @@ jobs:
           echo "Routed: ${ESTIMATE:-0}pt Ship → ${MODEL}, ${TURNS} turns"
 
       - name: Record Start Time
-        run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+        run: |
+          echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+          echo "HEGEMON_INSTANCE=l3-fast-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+
+      - name: Push State — Implementation Started
+        continue-on-error: true
+        env:
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          TICKET="${{ github.event.client_payload.ticket_id }}"
+          push_state_session "$HEGEMON_INSTANCE" "implementing" "$TICKET" "" "" "ci-l3" "gha"
+          push_state_milestone "$TICKET" "impl-started" "$HEGEMON_INSTANCE" "" "" "L3 Ship fast-path"
 
       - name: Notify Slack — Implementation Starting
         continue-on-error: true
@@ -487,10 +501,16 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           SLACK_THREAD_TS: ${{ needs.council.outputs.slack_thread_ts }}
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           PR_NUM="${{ steps.detect-partial.outputs.pr_num }}"
           _reply_slack "$SLACK_THREAD_TS" "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\":rocket: PR #${PR_NUM} created — CI running\"}}]}"
+          TICKET="${{ github.event.client_payload.ticket_id }}"
+          push_state_milestone "$TICKET" "pr-created" "$HEGEMON_INSTANCE" "$PR_NUM"
+          push_state_session "$HEGEMON_INSTANCE" "pr-created" "$TICKET" "" "$PR_NUM"
 
       # Close the loop: find PR, close issue, update Linear, notify Slack
       - name: Close the Loop
@@ -580,6 +600,9 @@ jobs:
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
           N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           TICKET="${{ github.event.client_payload.ticket_id }}"
@@ -615,6 +638,9 @@ jobs:
             push_metrics_error "linear-dispatch" "implement-fast" "$TICKET"
             _react_slack "x" "$SLACK_THREAD_TS"
           fi
+          # Push final state milestone + cleanup session
+          push_state_milestone "$TICKET" "impl-${STATUS}" "$HEGEMON_INSTANCE" "${PR_NUM:-}" "" "L3 Ship fast-path, ${DURATION}s"
+          push_state_cleanup "$HEGEMON_INSTANCE"
 
       - name: Write Job Summary — Ship Fast Path
         if: always()
@@ -977,7 +1003,24 @@ jobs:
 
       - name: Record Start Time
         if: steps.verify.outputs.valid == 'true'
-        run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+        run: |
+          echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+          echo "HEGEMON_INSTANCE=l3-impl-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+
+      - name: Push State — Implementation Started
+        if: steps.verify.outputs.valid == 'true'
+        continue-on-error: true
+        env:
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+        run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+          TICKET_ID=$(gh issue view "${{ github.event.issue.number }}" --json labels --jq \
+            '[.labels[].name | select(test("^CAB-[0-9]+$"))][0] // empty' 2>/dev/null || echo "")
+          TICKET="${TICKET_ID:-Issue-${{ github.event.issue.number }}}"
+          push_state_session "$HEGEMON_INSTANCE" "implementing" "$TICKET" "" "" "ci-l3" "gha"
+          push_state_milestone "$TICKET" "impl-started" "$HEGEMON_INSTANCE" "" "" "L3 Pipeline"
 
       - name: Notify Slack — Implementation Starting
         if: steps.verify.outputs.valid == 'true'
@@ -1090,10 +1133,15 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           SLACK_THREAD_TS: ${{ env.SLACK_THREAD_TS }}
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           PR_NUM="${{ steps.detect-partial.outputs.pr_num }}"
           _reply_slack "$SLACK_THREAD_TS" "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\":rocket: PR #${PR_NUM} created — CI running\"}}]}"
+          push_state_milestone "${TICKET_ID:-}" "pr-created" "$HEGEMON_INSTANCE" "$PR_NUM"
+          push_state_session "$HEGEMON_INSTANCE" "pr-created" "${TICKET_ID:-}" "" "$PR_NUM"
 
       # ----- Close the Loop (post-merge feedback) -----
       # After implementation: find merged PR, close GitHub issue, update Linear, notify Slack
@@ -1256,6 +1304,9 @@ jobs:
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
           N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           STATUS="${{ steps.claude.outcome || 'skipped' }}"
@@ -1299,6 +1350,9 @@ jobs:
             push_metrics_error "linear-dispatch" "implement" "$TICKET"
             _react_slack "x" "$SLACK_THREAD_TS"
           fi
+          # Push final state milestone + cleanup session
+          push_state_milestone "$TICKET" "impl-${STATUS}" "$HEGEMON_INSTANCE" "${PR_NUM:-}" "" "L3 Pipeline, ${DURATION}s"
+          push_state_cleanup "$HEGEMON_INSTANCE"
 
           write_job_summary "$TICKET" "$STATUS" "${PR_NUM:-}" \
             "$MODEL" "implement" "$DURATION"

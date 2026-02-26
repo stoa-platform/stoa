@@ -52,6 +52,11 @@ jobs:
 
       - name: Write Job Summary
         if: always()
+        env:
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           write_job_summary "interactive-${{ github.event.issue.number || github.event.pull_request.number }}" "complete" "" "sonnet-4-5" "interactive"
+          push_state_milestone "interactive-${{ github.event.issue.number || github.event.pull_request.number }}" "complete"

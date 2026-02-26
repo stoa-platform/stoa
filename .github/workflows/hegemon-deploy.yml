@@ -73,13 +73,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.HEGEMON_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          cat >> ~/.ssh/config <<SSHEOF
-          Host hegemon-vps
-            HostName ${VPS_HOST}
-            User hegemon
-            IdentityFile ~/.ssh/id_ed25519
-            StrictHostKeyChecking accept-new
-          SSHEOF
+          printf "Host hegemon-vps\n  HostName %s\n  User hegemon\n  IdentityFile ~/.ssh/id_ed25519\n  StrictHostKeyChecking accept-new\n" "$VPS_HOST" > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
       - name: Stop service

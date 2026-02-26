@@ -33,7 +33,12 @@ KC_REALM="${KEYCLOAK_REALM:-stoa}"
 KC_ADMIN_USER="${KC_ADMIN_USER:-admin}"
 KC_ADMIN_PASSWORD="${KC_ADMIN_PASSWORD:-}"
 INFISICAL_PROJECT_ID="97972ffc-990b-4d28-9c4d-0664d217f03b"
+INFISICAL_URL="${INFISICAL_URL:-https://vault.gostoa.dev}"
 GH_REPO="stoa-platform/stoa"
+
+# Cloudflare Access headers (empty = no CF Access, backward compatible)
+CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
+CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}"
 DRY_RUN=false
 NO_INFISICAL=false
 
@@ -159,12 +164,20 @@ store_infisical() {
     return
   fi
 
-  # Fallback: curl API (works with Infisical Cloud, not self-hosted)
+  # Fallback: curl API (works with Infisical Cloud and self-hosted)
+  # Build CF Access headers if configured
+  local -a cf_headers=()
+  if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
+    cf_headers+=(-H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}")
+    cf_headers+=(-H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
+  fi
+
   local http_code
   http_code=$(curl -sf -o /dev/null -w '%{http_code}' \
-    -X POST "https://vault.gostoa.dev/api/v3/secrets/raw" \
+    -X POST "${INFISICAL_URL}/api/v3/secrets/raw" \
     -H "Authorization: Bearer ${INFISICAL_TOKEN}" \
     -H "Content-Type: application/json" \
+    "${cf_headers[@]}" \
     -d "$(jq -n \
       --arg wid "$INFISICAL_PROJECT_ID" \
       --arg env "prod" \
@@ -179,9 +192,10 @@ store_infisical() {
   elif [ "$http_code" = "400" ] || [ "$http_code" = "409" ]; then
     # Secret exists, update it
     http_code=$(curl -sf -o /dev/null -w '%{http_code}' \
-      -X PATCH "https://vault.gostoa.dev/api/v3/secrets/raw/${key}" \
+      -X PATCH "${INFISICAL_URL}/api/v3/secrets/raw/${key}" \
       -H "Authorization: Bearer ${INFISICAL_TOKEN}" \
       -H "Content-Type: application/json" \
+      "${cf_headers[@]}" \
       -d "$(jq -n \
         --arg wid "$INFISICAL_PROJECT_ID" \
         --arg env "prod" \

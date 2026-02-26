@@ -900,3 +900,48 @@ export interface PublishContractResponse {
   created_at: string;
   updated_at: string;
 }
+
+// ---- Marketplace ----
+
+export type MarketplaceItemType = 'api' | 'mcp-server';
+
+export interface MarketplaceItem {
+  id: string;
+  type: MarketplaceItemType;
+  name: string;
+  displayName: string;
+  description: string;
+  category: string;
+  tags: string[];
+  status: string;
+  version?: string;
+  featured?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  api?: API;
+  mcpServer?: MCPServer;
+}
+
+export interface MarketplaceCategory {
+  id: string;
+  name: string;
+  icon?: string;
+  count: number;
+}
+
+export interface MarketplaceFilters {
+  search?: string;
+  type?: MarketplaceItemType | 'all';
+  category?: string;
+  status?: string;
+  tags?: string[];
+  page?: number;
+  pageSize?: number;
+}
+
+export interface MarketplaceStats {
+  totalAPIs: number;
+  totalMCPServers: number;
+  totalItems: number;
+  categories: MarketplaceCategory[];
+}

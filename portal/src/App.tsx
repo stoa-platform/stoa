@@ -66,6 +66,9 @@ const OnboardingWizardPage = lazy(() =>
 const CredentialMappingsPage = lazy(() =>
   import('./pages/credential-mappings').then((m) => ({ default: m.CredentialMappingsPage }))
 );
+const MarketplacePage = lazy(() =>
+  import('./pages/marketplace').then((m) => ({ default: m.MarketplacePage }))
+);
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -436,6 +439,16 @@ function AppContent() {
               element={
                 <ProtectedRoute permission="apps:read">
                   <WorkspacePage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Marketplace - unified discovery */}
+            <Route
+              path="/marketplace"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <MarketplacePage />
                 </ProtectedRoute>
               }
             />

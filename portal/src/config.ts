@@ -74,6 +74,7 @@ export const config = {
     enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
     enableGateways: import.meta.env.VITE_ENABLE_GATEWAYS !== 'false',
     enableI18n: import.meta.env.VITE_ENABLE_I18N !== 'false',
+    enableMarketplace: import.meta.env.VITE_ENABLE_MARKETPLACE !== 'false',
   },
 
   // API Testing Configuration

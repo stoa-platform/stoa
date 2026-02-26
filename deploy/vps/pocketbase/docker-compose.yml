@@ -1,10 +1,14 @@
 # PocketBase — HEGEMON Agent State Store Remote Tier
 # VPS: 51.254.139.205 (shared with n8n + Healthchecks)
-# URL: state.gostoa.dev (Caddy TLS via shared-proxy network)
+# URL: state.gostoa.dev (Traefik TLS via Let's Encrypt)
 #
-# Usage:
-#   cp .env.template .env   # fill PB_ADMIN_PASSWORD
-#   docker compose up -d
+# This file is a REFERENCE for the PocketBase service definition.
+# PocketBase runs inside the n8n docker-compose stack (~/n8n/docker-compose.yml).
+# Copy the 'pocketbase' service block into n8n's docker-compose.yml.
+#
+# IMPORTANT: Do NOT set 'command:' — the elestio image entrypoint already
+# includes 'serve --http=0.0.0.0:8090'. Adding command causes double 'serve'
+# which PocketBase interprets as a domain name, enabling unwanted TLS.
 #
 # Health: curl http://localhost:8090/api/health
 
@@ -13,16 +17,20 @@ services:
     image: elestio/pocketbase:latest
     container_name: pocketbase
     restart: unless-stopped
-    command: ["serve", "--http=0.0.0.0:8090"]
+    # No command override — entrypoint already has: serve --http=0.0.0.0:8090 --dir=/pb_data
     volumes:
       - pb_data:/pb/pb_data
-    environment:
-      PB_ADMIN_EMAIL: ${PB_ADMIN_EMAIL:-admin@gostoa.dev}
-      PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:?Set PB_ADMIN_PASSWORD in .env}
+    env_file:
+      - /opt/pocketbase/.env
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pocketbase.rule=Host(`state.gostoa.dev`)
+      - traefik.http.routers.pocketbase.tls=true
+      - traefik.http.routers.pocketbase.entrypoints=web,websecure
+      - traefik.http.routers.pocketbase.tls.certresolver=mytlschallenge
+      - traefik.http.services.pocketbase.loadbalancer.server.port=8090
     ports:
       - "127.0.0.1:8090:8090"
-    networks:
-      - shared-proxy
     security_opt:
       - no-new-privileges:true
     healthcheck:
@@ -30,10 +38,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-networks:
-  shared-proxy:
-    external: true
 
 volumes:
   pb_data:

@@ -179,6 +179,11 @@ class ContractResponse(BaseModel):
     version: str
     status: str
     openapi_spec_url: str | None = None
+    deprecated_at: datetime | None = None
+    sunset_at: datetime | None = None
+    replacement_contract_id: str | None = None
+    deprecation_reason: str | None = None
+    grace_period_days: int | None = None
     created_at: datetime
     updated_at: datetime
     created_by: str | None = None
@@ -253,3 +258,74 @@ class TenantToolsResponse(BaseModel):
     tenant_id: str
     tools: list[McpToolDefinition]
     total: int
+
+
+# ============ Contract Lifecycle Schemas (CAB-1335) ============
+
+
+class DeprecateContractRequest(BaseModel):
+    """Request to deprecate a contract with sunset information."""
+
+    reason: str = Field(..., min_length=1, max_length=1000, description="Deprecation reason")
+    sunset_at: datetime | None = Field(
+        None,
+        description="When the contract will be fully removed (RFC 8594 Sunset header)",
+    )
+    replacement_contract_id: UUID | None = Field(
+        None,
+        description="ID of the replacement contract (if any)",
+    )
+    grace_period_days: int | None = Field(
+        None, ge=0, le=730, description="Grace period in days before sunset"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "reason": "Replaced by v2 with improved authentication flow",
+                "sunset_at": "2026-06-01T00:00:00Z",
+                "replacement_contract_id": "660e8400-e29b-41d4-a716-446655440001",
+                "grace_period_days": 90,
+            }
+        }
+    )
+
+
+class ContractDeprecationInfo(BaseModel):
+    """Deprecation details for a contract."""
+
+    contract_id: UUID
+    contract_name: str
+    version: str
+    status: str
+    deprecated_at: datetime | None = None
+    sunset_at: datetime | None = None
+    replacement_contract_id: str | None = None
+    deprecation_reason: str | None = None
+    grace_period_days: int | None = None
+    is_sunset: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractVersionSummary(BaseModel):
+    """Summary of a contract version for version listing."""
+
+    id: UUID
+    version: str
+    status: str
+    created_at: datetime
+    deprecated_at: datetime | None = None
+    sunset_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractVersionsResponse(BaseModel):
+    """List of all versions for a contract name."""
+
+    contract_name: str
+    tenant_id: str
+    versions: list[ContractVersionSummary]
+    latest_version: str | None = None
+    active_count: int = 0

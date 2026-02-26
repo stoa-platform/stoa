@@ -16,6 +16,7 @@ from sqlalchemy import (
     Enum as SQLEnum,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
 )
@@ -62,6 +63,13 @@ class Contract(Base):
     openapi_spec_url = Column(String(512), nullable=True)
     schema_hash = Column(String(64), nullable=True)  # For detecting schema changes
 
+    # Deprecation / lifecycle (CAB-1335)
+    deprecated_at = Column(DateTime, nullable=True)
+    sunset_at = Column(DateTime, nullable=True)
+    replacement_contract_id = Column(String(36), nullable=True)
+    deprecation_reason = Column(Text, nullable=True)
+    grace_period_days = Column(Integer, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(
@@ -78,6 +86,18 @@ class Contract(Base):
         Index("ix_contracts_tenant_name", "tenant_id", "name"),
         Index("ix_contracts_tenant_status", "tenant_id", "status"),
     )
+
+    @property
+    def is_deprecated(self) -> bool:
+        """Check if contract is deprecated."""
+        return self.status == "deprecated"
+
+    @property
+    def is_sunset(self) -> bool:
+        """Check if contract has passed its sunset date."""
+        if not self.sunset_at:
+            return False
+        return datetime.utcnow() >= self.sunset_at
 
     def __repr__(self):
         return f"<Contract {self.tenant_id}/{self.name}:{self.version}>"

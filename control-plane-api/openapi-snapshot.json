@@ -3029,6 +3029,98 @@
         "title": "ContractCreate",
         "type": "object"
       },
+      "ContractDeprecationInfo": {
+        "description": "Deprecation details for a contract.",
+        "properties": {
+          "contract_id": {
+            "format": "uuid",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "contract_name": {
+            "title": "Contract Name",
+            "type": "string"
+          },
+          "deprecated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecated At"
+          },
+          "deprecation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecation Reason"
+          },
+          "grace_period_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Period Days"
+          },
+          "is_sunset": {
+            "default": false,
+            "title": "Is Sunset",
+            "type": "boolean"
+          },
+          "replacement_contract_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Contract Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "sunset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sunset At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "contract_id",
+          "contract_name",
+          "version",
+          "status"
+        ],
+        "title": "ContractDeprecationInfo",
+        "type": "object"
+      },
       "ContractListResponse": {
         "description": "Paginated list of contracts.",
         "properties": {
@@ -3100,6 +3192,29 @@
             ],
             "title": "Created By"
           },
+          "deprecated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecated At"
+          },
+          "deprecation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecation Reason"
+          },
           "description": {
             "anyOf": [
               {
@@ -3122,6 +3237,17 @@
             ],
             "title": "Display Name"
           },
+          "grace_period_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Period Days"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -3142,9 +3268,32 @@
             ],
             "title": "Openapi Spec Url"
           },
+          "replacement_contract_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Contract Id"
+          },
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "sunset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sunset At"
           },
           "tenant_id": {
             "title": "Tenant Id",
@@ -3244,6 +3393,104 @@
           }
         },
         "title": "ContractUpdate",
+        "type": "object"
+      },
+      "ContractVersionSummary": {
+        "description": "Summary of a contract version for version listing.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deprecated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecated At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "sunset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sunset At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "created_at"
+        ],
+        "title": "ContractVersionSummary",
+        "type": "object"
+      },
+      "ContractVersionsResponse": {
+        "description": "List of all versions for a contract name.",
+        "properties": {
+          "active_count": {
+            "default": 0,
+            "title": "Active Count",
+            "type": "integer"
+          },
+          "contract_name": {
+            "title": "Contract Name",
+            "type": "string"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ContractVersionSummary"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_name",
+          "tenant_id",
+          "versions"
+        ],
+        "title": "ContractVersionsResponse",
         "type": "object"
       },
       "ConversionFunnel": {
@@ -4672,6 +4919,69 @@
         "title": "DeploymentStatusUpdate",
         "type": "object"
       },
+      "DeprecateContractRequest": {
+        "description": "Request to deprecate a contract with sunset information.",
+        "example": {
+          "grace_period_days": 90,
+          "reason": "Replaced by v2 with improved authentication flow",
+          "replacement_contract_id": "660e8400-e29b-41d4-a716-446655440001",
+          "sunset_at": "2026-06-01T00:00:00Z"
+        },
+        "properties": {
+          "grace_period_days": {
+            "anyOf": [
+              {
+                "maximum": 730.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Grace period in days before sunset",
+            "title": "Grace Period Days"
+          },
+          "reason": {
+            "description": "Deprecation reason",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "replacement_contract_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ID of the replacement contract (if any)",
+            "title": "Replacement Contract Id"
+          },
+          "sunset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the contract will be fully removed (RFC 8594 Sunset header)",
+            "title": "Sunset At"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DeprecateContractRequest",
+        "type": "object"
+      },
       "DiagnosticCategory": {
         "description": "Root cause categories for diagnostic classification.",
         "enum": [
@@ -4989,46 +5299,65 @@
         "title": "DocsSearchResult",
         "type": "object"
       },
-      "DriftItem": {
-        "description": "A single drifted item within an entity type.",
+      "DriftReport": {
+        "description": "Full drift report comparing SCIM state with gateway consumers.",
+        "example": {
+          "checked_at": "2026-02-26T12:00:00Z",
+          "drift_items": [
+            {
+              "client_name": "acme-billing-service",
+              "detail": "Client exists in SCIM but not provisioned in gateway",
+              "drift_type": "missing_in_gateway",
+              "gateway_roles": [],
+              "scim_roles": [
+                "api:read",
+                "billing:admin"
+              ]
+            }
+          ],
+          "in_sync": false,
+          "tenant_id": "tenant-acme",
+          "total_gateway_consumers": 4,
+          "total_scim_clients": 5
+        },
         "properties": {
-          "detail": {
-            "title": "Detail",
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
             "type": "string"
           },
-          "drift_type": {
-            "description": "orphan | stale | desync | error",
-            "title": "Drift Type",
+          "drift_items": {
+            "items": {
+              "$ref": "#/components/schemas/src__schemas__reconciliation__DriftItem"
+            },
+            "title": "Drift Items",
+            "type": "array"
+          },
+          "in_sync": {
+            "title": "In Sync",
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
             "type": "string"
           },
-          "entity_id": {
-            "title": "Entity Id",
-            "type": "string"
+          "total_gateway_consumers": {
+            "title": "Total Gateway Consumers",
+            "type": "integer"
           },
-          "entity_name": {
-            "title": "Entity Name",
-            "type": "string"
-          },
-          "last_sync_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Sync At"
+          "total_scim_clients": {
+            "title": "Total Scim Clients",
+            "type": "integer"
           }
         },
         "required": [
-          "entity_id",
-          "entity_name",
-          "drift_type",
-          "detail"
+          "tenant_id",
+          "checked_at",
+          "in_sync",
+          "total_scim_clients",
+          "total_gateway_consumers"
         ],
-        "title": "DriftItem",
+        "title": "DriftReport",
         "type": "object"
       },
       "DriftReportResponse": {
@@ -5072,6 +5401,16 @@
           "error"
         ],
         "title": "DriftStatus",
+        "type": "string"
+      },
+      "DriftType": {
+        "description": "Type of drift between SCIM and gateway.",
+        "enum": [
+          "missing_in_gateway",
+          "orphaned_in_gateway",
+          "role_mismatch"
+        ],
+        "title": "DriftType",
         "type": "string"
       },
       "EnableBindingRequest": {
@@ -5162,7 +5501,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/DriftItem"
+              "$ref": "#/components/schemas/src__schemas__data_governance__DriftItem"
             },
             "title": "Items",
             "type": "array"
@@ -8735,6 +9074,289 @@
           "tools"
         ],
         "title": "ListToolsResponse",
+        "type": "object"
+      },
+      "LlmBudgetCreate": {
+        "description": "Schema for creating an LLM budget.",
+        "properties": {
+          "alert_threshold_pct": {
+            "default": 80,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Alert Threshold Pct",
+            "type": "integer"
+          },
+          "monthly_limit_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Monthly Limit Usd"
+          }
+        },
+        "required": [
+          "monthly_limit_usd"
+        ],
+        "title": "LlmBudgetCreate",
+        "type": "object"
+      },
+      "LlmBudgetResponse": {
+        "description": "Schema for LLM budget response.",
+        "properties": {
+          "alert_threshold_pct": {
+            "title": "Alert Threshold Pct",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_spend_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current Spend Usd",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_over_budget": {
+            "title": "Is Over Budget",
+            "type": "boolean"
+          },
+          "monthly_limit_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Monthly Limit Usd",
+            "type": "string"
+          },
+          "remaining_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Remaining Usd",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "usage_pct": {
+            "title": "Usage Pct",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "monthly_limit_usd",
+          "current_spend_usd",
+          "alert_threshold_pct",
+          "usage_pct",
+          "remaining_usd",
+          "is_over_budget",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LlmBudgetResponse",
+        "type": "object"
+      },
+      "LlmBudgetUpdate": {
+        "description": "Schema for updating an LLM budget (all fields optional).",
+        "properties": {
+          "alert_threshold_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Threshold Pct"
+          },
+          "monthly_limit_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Limit Usd"
+          }
+        },
+        "title": "LlmBudgetUpdate",
+        "type": "object"
+      },
+      "LlmProviderCreate": {
+        "description": "Schema for creating an LLM provider configuration.",
+        "properties": {
+          "cost_per_input_token": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Cost Per Input Token"
+          },
+          "cost_per_output_token": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Cost Per Output Token"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "provider_name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Provider Name",
+            "type": "string"
+          },
+          "status": {
+            "default": "active",
+            "pattern": "^(active|inactive|rate_limited)$",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_name"
+        ],
+        "title": "LlmProviderCreate",
+        "type": "object"
+      },
+      "LlmProviderResponse": {
+        "description": "Schema for LLM provider response.",
+        "properties": {
+          "cost_per_input_token": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Per Input Token",
+            "type": "string"
+          },
+          "cost_per_output_token": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Per Output Token",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "provider_name": {
+            "title": "Provider Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "provider_name",
+          "display_name",
+          "default_model",
+          "cost_per_input_token",
+          "cost_per_output_token",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LlmProviderResponse",
         "type": "object"
       },
       "LogEntry": {
@@ -13886,6 +14508,148 @@
         "title": "ReconcileResult",
         "type": "object"
       },
+      "ReconciliationAction": {
+        "description": "Action taken during reconciliation.",
+        "enum": [
+          "provisioned",
+          "deprovisioned",
+          "updated_roles",
+          "skipped",
+          "failed"
+        ],
+        "title": "ReconciliationAction",
+        "type": "string"
+      },
+      "ReconciliationActionResult": {
+        "description": "Result of a single reconciliation action.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ReconciliationAction"
+          },
+          "client_name": {
+            "title": "Client Name",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_name",
+          "action",
+          "detail"
+        ],
+        "title": "ReconciliationActionResult",
+        "type": "object"
+      },
+      "ReconciliationResult": {
+        "description": "Result of a full reconciliation run.",
+        "properties": {
+          "actions_failed": {
+            "title": "Actions Failed",
+            "type": "integer"
+          },
+          "actions_taken": {
+            "title": "Actions Taken",
+            "type": "integer"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationActionResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "started_at",
+          "completed_at",
+          "success",
+          "actions_taken",
+          "actions_failed"
+        ],
+        "title": "ReconciliationResult",
+        "type": "object"
+      },
+      "ReconciliationStatus": {
+        "description": "Current reconciliation status for a tenant.",
+        "properties": {
+          "drift_count": {
+            "default": 0,
+            "title": "Drift Count",
+            "type": "integer"
+          },
+          "in_sync": {
+            "default": true,
+            "title": "In Sync",
+            "type": "boolean"
+          },
+          "last_check": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Check"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_sync": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id"
+        ],
+        "title": "ReconciliationStatus",
+        "type": "object"
+      },
       "RegenerateSecretResponse": {
         "description": "Response for regenerate secret.",
         "properties": {
@@ -15417,6 +16181,48 @@
         ],
         "title": "SortOrder",
         "type": "string"
+      },
+      "SpendSummaryResponse": {
+        "description": "Summary of current spend vs budget.",
+        "properties": {
+          "current_spend_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current Spend Usd",
+            "type": "string"
+          },
+          "is_over_budget": {
+            "title": "Is Over Budget",
+            "type": "boolean"
+          },
+          "monthly_limit_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Monthly Limit Usd",
+            "type": "string"
+          },
+          "remaining_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Remaining Usd",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "usage_pct": {
+            "title": "Usage Pct",
+            "type": "number"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "monthly_limit_usd",
+          "current_spend_usd",
+          "remaining_usd",
+          "usage_pct",
+          "is_over_budget"
+        ],
+        "title": "SpendSummaryResponse",
+        "type": "object"
       },
       "StalledUserResponse": {
         "description": "User who started but hasn't completed onboarding.",
@@ -19752,6 +20558,96 @@
           "started_at"
         ],
         "title": "SyncStatusResponse",
+        "type": "object"
+      },
+      "src__schemas__data_governance__DriftItem": {
+        "description": "A single drifted item within an entity type.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "drift_type": {
+            "description": "orphan | stale | desync | error",
+            "title": "Drift Type",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_name": {
+            "title": "Entity Name",
+            "type": "string"
+          },
+          "last_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync At"
+          }
+        },
+        "required": [
+          "entity_id",
+          "entity_name",
+          "drift_type",
+          "detail"
+        ],
+        "title": "DriftItem",
+        "type": "object"
+      },
+      "src__schemas__reconciliation__DriftItem": {
+        "description": "A single drift entry between SCIM and gateway state.",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_name": {
+            "title": "Client Name",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "drift_type": {
+            "$ref": "#/components/schemas/DriftType"
+          },
+          "gateway_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gateway Roles",
+            "type": "array"
+          },
+          "scim_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scim Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "drift_type",
+          "client_name",
+          "detail"
+        ],
+        "title": "DriftItem",
         "type": "object"
       },
       "src__schemas__workflow__AuditListResponse": {
@@ -26833,6 +27729,54 @@
         ]
       }
     },
+    "/v1/contracts/by-name/{contract_name}/versions": {
+      "get": {
+        "description": "List all versions of a contract by name.\n\nReturns version history including deprecation status, ordered by creation date\n(latest first).",
+        "operationId": "list_contract_versions_v1_contracts_by_name__contract_name__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_name",
+            "required": true,
+            "schema": {
+              "title": "Contract Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractVersionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Contract Versions",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
     "/v1/contracts/{contract_id}": {
       "delete": {
         "description": "Delete a contract and all its bindings.",
@@ -27142,6 +28086,114 @@
         ]
       }
     },
+    "/v1/contracts/{contract_id}/deprecate": {
+      "post": {
+        "description": "Deprecate a published contract with optional sunset date.\n\nSets the contract status to 'deprecated' and records deprecation metadata\nincluding reason, sunset date (RFC 8594), and optional replacement contract.",
+        "operationId": "deprecate_contract_v1_contracts__contract_id__deprecate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeprecateContractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDeprecationInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deprecate Contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/contracts/{contract_id}/deprecation": {
+      "get": {
+        "description": "Get deprecation details for a contract.",
+        "operationId": "get_deprecation_info_v1_contracts__contract_id__deprecation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDeprecationInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Deprecation Info",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
     "/v1/contracts/{contract_id}/mcp-tools": {
       "get": {
         "description": "List all generated MCP tools for a contract.",
@@ -27235,6 +28287,55 @@
           }
         ],
         "summary": "Generate MCP tools from UAC contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/contracts/{contract_id}/reactivate": {
+      "post": {
+        "description": "Reactivate a deprecated contract (undo deprecation).\n\nOnly allowed if the sunset date has not passed.",
+        "operationId": "reactivate_contract_v1_contracts__contract_id__reactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reactivate Contract",
         "tags": [
           "Contracts"
         ]
@@ -38764,6 +39865,373 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/llm/budget": {
+      "get": {
+        "description": "Get the LLM budget for a tenant.",
+        "operationId": "get_budget_v1_tenants__tenant_id__llm_budget_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Budget",
+        "tags": [
+          "LLM Budget & Providers"
+        ]
+      },
+      "post": {
+        "description": "Create an LLM budget for a tenant (one per tenant).",
+        "operationId": "create_budget_v1_tenants__tenant_id__llm_budget_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmBudgetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Budget",
+        "tags": [
+          "LLM Budget & Providers"
+        ]
+      },
+      "put": {
+        "description": "Update the LLM budget configuration for a tenant.",
+        "operationId": "update_budget_v1_tenants__tenant_id__llm_budget_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmBudgetUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Budget",
+        "tags": [
+          "LLM Budget & Providers"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/llm/providers": {
+      "get": {
+        "description": "List all LLM provider configurations for a tenant.",
+        "operationId": "list_providers_v1_tenants__tenant_id__llm_providers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LlmProviderResponse"
+                  },
+                  "title": "Response List Providers V1 Tenants  Tenant Id  Llm Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Providers",
+        "tags": [
+          "LLM Budget & Providers"
+        ]
+      },
+      "post": {
+        "description": "Create a new LLM provider configuration for a tenant.",
+        "operationId": "create_provider_v1_tenants__tenant_id__llm_providers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmProviderCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmProviderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Provider",
+        "tags": [
+          "LLM Budget & Providers"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/llm/providers/{provider_id}": {
+      "delete": {
+        "description": "Delete an LLM provider configuration.",
+        "operationId": "delete_provider_v1_tenants__tenant_id__llm_providers__provider_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Provider",
+        "tags": [
+          "LLM Budget & Providers"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/llm/spend": {
+      "get": {
+        "description": "Get current LLM spend summary for a tenant.",
+        "operationId": "get_spend_summary_v1_tenants__tenant_id__llm_spend_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpendSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Spend Summary",
+        "tags": [
+          "LLM Budget & Providers"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/mcp-servers": {
       "get": {
         "description": "List MCP servers registered by this tenant.",
@@ -39303,6 +40771,135 @@
         "summary": "Get Provisioning Status",
         "tags": [
           "Tenants"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/reconciliation/drift": {
+      "get": {
+        "description": "Check drift between SCIM clients and gateway consumers.",
+        "operationId": "check_drift_v1_tenants__tenant_id__reconciliation_drift_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Drift",
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/reconciliation/status": {
+      "get": {
+        "description": "Get current reconciliation status for a tenant.",
+        "operationId": "get_status_v1_tenants__tenant_id__reconciliation_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/reconciliation/sync": {
+      "post": {
+        "description": "Trigger reconciliation \u2014 sync SCIM state to gateway.",
+        "operationId": "trigger_reconciliation_v1_tenants__tenant_id__reconciliation_sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger Reconciliation",
+        "tags": [
+          "reconciliation"
         ]
       }
     },

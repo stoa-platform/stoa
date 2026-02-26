@@ -1,0 +1,67 @@
+# HEGEMON Daemon Configuration
+# Copy to config.yaml and fill in values.
+# Env vars are expanded: ${VAR_NAME}
+
+linear:
+  api_key: "${LINEAR_API_KEY}"
+  team_id: "624a9948-a160-4e47-aba5-7f9404d23506"  # CAB-ING
+  poll_interval: "60s"
+
+workers:
+  - name: worker-1
+    host: "207.180.246.92"
+    user: hegemon
+    ssh_key: "~/.ssh/id_ed25519"
+    roles: [backend]
+
+  - name: worker-2
+    host: "207.180.255.223"
+    user: hegemon
+    ssh_key: "~/.ssh/id_ed25519"
+    roles: [frontend]
+
+  - name: worker-3
+    host: "164.68.121.123"
+    user: hegemon
+    ssh_key: "~/.ssh/id_ed25519"
+    roles: [mcp]
+
+  - name: worker-4
+    host: "167.86.115.51"
+    user: hegemon
+    ssh_key: "~/.ssh/id_ed25519"
+    roles: [auth]
+
+  - name: worker-5
+    host: "144.91.73.37"
+    user: hegemon
+    ssh_key: "~/.ssh/id_ed25519"
+    roles: [qa]
+
+slack:
+  webhook_url: "${SLACK_WEBHOOK_URL}"
+
+# Timeout per estimate (story points). Progressive per Council adjustment.
+timeouts:
+  1: "10m"
+  2: "10m"
+  3: "15m"
+  5: "30m"
+  8: "45m"
+  13: "60m"
+  21: "90m"
+
+health_check:
+  interval: "120s"
+  ssh_timeout: "10s"
+
+state:
+  db_path: "./hegemon.db"
+
+repo:
+  path: "~/stoa"
+  branch: "main"
+
+log:
+  level: "info"
+  max_age_days: 7

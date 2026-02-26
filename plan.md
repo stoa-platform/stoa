@@ -232,8 +232,8 @@
 ### Todo
 
 **Remaining code** (26 pts):
-- [ ] CAB-1443: [MEGA] CI Performance Gates (21 pts) — 2/3 subs done, CAB-1496 remains
-  - [ ] CAB-1496: [docs] Benchmark Methodology & Results Publication (5 pts)
+- [x] CAB-1443: [MEGA] CI Performance Gates (21 pts) — 3/3 subs done
+  - [x] CAB-1496: [docs] Benchmark Methodology & Results Publication (5 pts) — stoa-docs PR #85
 
 **Strategy/Comm — HUMAN ONLY** (37 pts):
 - [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1)
@@ -246,7 +246,7 @@
 ### Backlog — Legacy (triaged 2026-02-24)
 
 *Keep (demo/launch prerequisites):*
-- CAB-1311: [MEGA] GTM Strategy & Licensing (13 pts) — unblocks post-demo execution
+- ~~CAB-1311: [MEGA] GTM Strategy & Licensing (13 pts) — AI part done (PR #1157), human-only parts remain~~
 
 *Deferred (post-launch, Q2+):*
 - CAB-1308: [MEGA] Resource Lifecycle Management (34 pts) — operational maturity, not launch-critical
@@ -270,25 +270,25 @@
 ### Todo
 
 **W1 — Foundation (Day 1-2)**:
-- [ ] CAB-1350: [MEGA] UAC Specification v1.0 (13 pts) — Council 9.00 Go | `instance:backend`
-- [ ] CAB-1349: Contract Transformer — OpenAPI only (8 pts) — Council 8.25 Go | `instance:backend`
-- [ ] CAB-1455: [MEGA] Gateway Live Reload + Config Sync (21 pts) — Council 8.00 Go | `instance:mcp`
+- [x] CAB-1350: [MEGA] UAC Specification v1.0 (13 pts) — PR #1146 | `instance:backend`
+- [x] CAB-1349: Contract Transformer — OpenAPI only (8 pts) — PR #1147 | `instance:backend`
+- [x] CAB-1455: [MEGA] Gateway Live Reload + Config Sync (21 pts) — PR #1153 | `instance:mcp`
 
 **W2 — Core v1.0 (Day 2-4)**:
-- [ ] CAB-1335: [MEGA] UAC Transformer Service (21 pts) — Council 8.00 Go | `instance:backend`
-- [ ] CAB-1453: [MEGA] Portal V2 — Self-Service + Marketplace (21 pts) — Council 8.50 Go | `instance:frontend`
+- [x] CAB-1335: [MEGA] UAC Transformer Service (21 pts) — PR #1148 | `instance:backend`
+- [x] CAB-1453: [MEGA] Portal V2 — Self-Service + Marketplace (21 pts) — PR #1154 | `instance:frontend`
 - [ ] CAB-1454: [MEGA] Console Administration Complete (21 pts) — Council 8.25 Go | `instance:frontend`
 
 **W3 — Enterprise + Quality (Day 3-5)**:
-- [ ] CAB-1474: [MEGA] Enterprise DR & Recovery (21 pts) — Council 7.50 Fix → decompose | `instance:backend`
+- [x] CAB-1474: [MEGA] Enterprise DR & Recovery (21 pts) — PRs #1152 (export), #1155 (import) | `instance:backend`
 - [ ] CAB-1470: [MEGA] Portal Advanced Features (21 pts) — Council 8.25 Go | `instance:frontend`
 - [ ] CAB-1476: [MEGA] E2E Test Hardening R2 (21 pts) — Council 8.00 Go | `instance:frontend`
-- [ ] CAB-1477: [MEGA] Cross-Component Integration Tests (13 pts) — Council 8.00 Go | `instance:qa`
+- [x] CAB-1477: [MEGA] Cross-Component Integration Tests (13 pts) — PR #1156 | `instance:qa`
 
 **W4 — Polish + GTM (Day 5-6)**:
 - [ ] CAB-1471: Dashboard Polish (2 pts) | `instance:frontend`
-- [ ] CAB-1311: [MEGA] GTM Strategy & Licensing — AI part (5 pts) — Council 6.50 Fix | `instance:backend`
-- [ ] CAB-1496: Benchmark Methodology & Results Publication (5 pts, sub of CAB-1443) | `instance:backend`
+- [x] CAB-1311: [MEGA] GTM Strategy & Licensing — AI part (5 pts) — PR #1157 | `instance:backend`
+- [x] CAB-1496: Benchmark Methodology & Results Publication (5 pts, sub of CAB-1443) — stoa-docs PR #85 | `instance:backend`
 
 ### Deferred (Council Redo — post-v1.0)
 - CAB-1473: WASM Plugin System (21 pts) — Council 5.00 Redo → 3-4x underestimated, post-v1.0

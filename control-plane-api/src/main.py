@@ -78,6 +78,7 @@ from .routers import (
     portal,
     portal_applications,
     quotas,
+    reconciliation,
     security_posture,
     self_service,
     self_service_logs,
@@ -711,6 +712,9 @@ app.include_router(data_governance.router)
 
 # Security Posture Dashboard — score, findings, drift, compliance (CAB-1461)
 app.include_router(security_posture.router)
+
+# SCIM↔Gateway Reconciliation — drift detection + sync (CAB-1484)
+app.include_router(reconciliation.router)
 
 # OAuth Client DCR — SCIM→Roles protocol mapper + identity governance (CAB-1483)
 app.include_router(oauth_clients_router)

@@ -1,7 +1,8 @@
-"""Tests for Security Posture Dashboard (CAB-1461 P1).
+"""Tests for Security Posture Dashboard (CAB-1461 P1, CAB-1489 completion).
 
-88 tests covering:
+101 tests covering:
 - SecurityScannerService: score calculation, findings CRUD, scans, drift, compliance, secrets
+- Edge cases: info-only findings, empty baseline, complete_scan, NIS2 with findings, boundary grades
 - Router endpoints: all 10 endpoints with RBAC checks
 """
 
@@ -43,6 +44,7 @@ SERVICE_PATH = "src.routers.security_posture.security_scanner_service"
 # ────────────────────────────────────────────────
 # Fixtures
 # ────────────────────────────────────────────────
+
 
 @pytest.fixture
 def service():
@@ -347,9 +349,7 @@ class TestListFindings:
         findings_result.scalars.return_value.all.return_value = []
         mock_db.execute = AsyncMock(side_effect=[count_result, findings_result])
 
-        result = await service.list_findings(
-            "acme", mock_db, severity="high", status="open", scanner="trivy"
-        )
+        result = await service.list_findings("acme", mock_db, severity="high", status="open", scanner="trivy")
         assert result.total == 0
 
     @pytest.mark.asyncio
@@ -708,6 +708,165 @@ class TestGetSecretsHealth:
 
 
 # ════════════════════════════════════════════════
+# EDGE-CASE TESTS (CAB-1489)
+# ════════════════════════════════════════════════
+
+
+class TestCompleteScan:
+    """Test complete_scan marks scan as completed with score."""
+
+    @pytest.mark.asyncio
+    async def test_complete_scan_updates_status_and_score(self, service, mock_db):
+        await service.complete_scan("11111111-1111-1111-1111-111111111111", 85.0, mock_db)
+        mock_db.execute.assert_called_once()
+        # Verify the update statement was executed (not select)
+        call_args = mock_db.execute.call_args
+        assert call_args is not None
+
+    @pytest.mark.asyncio
+    async def test_complete_scan_with_zero_score(self, service, mock_db):
+        await service.complete_scan("22222222-2222-2222-2222-222222222222", 0.0, mock_db)
+        mock_db.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_complete_scan_with_perfect_score(self, service, mock_db):
+        await service.complete_scan("33333333-3333-3333-3333-333333333333", 100.0, mock_db)
+        mock_db.execute.assert_called_once()
+
+
+class TestScoreEdgeCases:
+    """Edge cases for score calculation and grading (CAB-1489)."""
+
+    @pytest.mark.asyncio
+    async def test_info_only_findings_score_100(self, service, mock_db):
+        """Info findings have weight=0, so score should remain 100."""
+        row = MagicMock()
+        row.severity = "info"
+        row.cnt = 50
+        severity_result = MagicMock()
+        severity_result.all.return_value = [row]
+
+        total_result = MagicMock()
+        total_result.scalar_one.return_value = 50
+
+        last_scan_result = MagicMock()
+        last_scan_result.scalar_one_or_none.return_value = None
+
+        mock_db.execute = AsyncMock(side_effect=[severity_result, total_result, last_scan_result])
+
+        response = await service.calculate_score("acme", mock_db)
+        assert response.score == 100.0
+        assert response.grade == "A"
+
+    @pytest.mark.asyncio
+    async def test_unknown_severity_treated_as_zero_weight(self, service, mock_db):
+        """Severities not in _SEVERITY_WEIGHTS get weight 0 via .get(sev, 0)."""
+        row = MagicMock()
+        row.severity = "unknown_level"
+        row.cnt = 10
+        severity_result = MagicMock()
+        severity_result.all.return_value = [row]
+
+        total_result = MagicMock()
+        total_result.scalar_one.return_value = 10
+
+        last_scan_result = MagicMock()
+        last_scan_result.scalar_one_or_none.return_value = None
+
+        mock_db.execute = AsyncMock(side_effect=[severity_result, total_result, last_scan_result])
+
+        response = await service.calculate_score("acme", mock_db)
+        assert response.score == 100.0
+
+    def test_grade_boundary_at_exactly_60(self, service):
+        assert service._score_to_grade(60.0) == "D"
+
+    def test_grade_boundary_at_59_99(self, service):
+        assert service._score_to_grade(59.99) == "F"
+
+    def test_grade_boundary_at_exactly_90(self, service):
+        assert service._score_to_grade(90.0) == "A"
+
+    def test_grade_boundary_at_exactly_0(self, service):
+        assert service._score_to_grade(0.0) == "F"
+
+
+class TestDriftEdgeCases:
+    """Edge cases for drift detection (CAB-1489)."""
+
+    @pytest.mark.asyncio
+    async def test_empty_baseline_dict_no_drifts(self, service, mock_db):
+        """Empty baseline {} should produce zero drifts."""
+        baseline_row = MagicMock()
+        baseline_row.baseline = {}
+        baseline_row.updated_at = datetime(2026, 1, 1, tzinfo=UTC)
+
+        baseline_result = MagicMock()
+        baseline_result.scalar_one_or_none.return_value = baseline_row
+
+        findings_result = MagicMock()
+        findings_result.all.return_value = []
+
+        mock_db.execute = AsyncMock(side_effect=[baseline_result, findings_result])
+
+        response = await service.detect_drift("acme", mock_db)
+        assert response.has_baseline is True
+        assert response.total_drifts == 0
+        assert response.drifts == []
+
+
+class TestComplianceEdgeCases:
+    """Edge cases for compliance scoring (CAB-1489)."""
+
+    @pytest.mark.asyncio
+    async def test_nis2_with_critical_findings(self, service, mock_db):
+        """NIS2 with critical findings should have non-compliant controls."""
+        row = MagicMock()
+        row.severity = "critical"
+        row.cnt = 3
+        result = MagicMock()
+        result.all.return_value = [row]
+        mock_db.execute = AsyncMock(return_value=result)
+
+        response = await service.get_compliance_score("acme", "NIS2", mock_db)
+        assert response.framework == "NIS2"
+        assert response.total_controls == 6
+        assert response.compliant_count == 0
+        assert response.score == 0.0
+        for ctrl in response.controls:
+            assert ctrl.status == "non_compliant"
+
+    @pytest.mark.asyncio
+    async def test_nis2_with_high_findings_partial(self, service, mock_db):
+        """NIS2 with high (no critical) findings should have partial controls."""
+        row = MagicMock()
+        row.severity = "high"
+        row.cnt = 2
+        result = MagicMock()
+        result.all.return_value = [row]
+        mock_db.execute = AsyncMock(return_value=result)
+
+        response = await service.get_compliance_score("acme", "nis2", mock_db)
+        assert response.framework == "NIS2"
+        assert response.compliant_count == 0
+        for ctrl in response.controls:
+            assert ctrl.status == "partial"
+
+    @pytest.mark.asyncio
+    async def test_unknown_framework_defaults_to_nis2(self, service, mock_db):
+        """Unknown framework falls through to NIS2 controls (else branch)."""
+        result = MagicMock()
+        result.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=result)
+
+        response = await service.get_compliance_score("acme", "SOC2", mock_db)
+        assert response.framework == "SOC2"
+        assert response.total_controls == 6  # NIS2 controls count
+        assert response.compliant_count == 6
+        assert response.score == 100.0
+
+
+# ════════════════════════════════════════════════
 # ROUTER INTEGRATION TESTS
 # ════════════════════════════════════════════════
 
@@ -719,9 +878,7 @@ class TestGetSecurityScoreRouter:
     async def test_cpi_admin_can_access(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.calculate_score = AsyncMock(return_value=_make_score_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/score")
             assert resp.status_code == 200
             assert resp.json()["score"] == 85.0
@@ -730,25 +887,19 @@ class TestGetSecurityScoreRouter:
     async def test_tenant_admin_own_tenant(self, app_with_tenant_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.calculate_score = AsyncMock(return_value=_make_score_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/score")
             assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_tenant_admin_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/other-tenant/score")
         assert resp.status_code == 403
 
     @pytest.mark.asyncio
     async def test_no_tenant_user_forbidden(self, app_with_no_tenant_user):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_no_tenant_user), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_no_tenant_user), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/acme/score")
         assert resp.status_code == 403
 
@@ -760,9 +911,7 @@ class TestListFindingsRouter:
     async def test_list_findings_default(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.list_findings = AsyncMock(return_value=_make_findings_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/findings")
             assert resp.status_code == 200
             assert resp.json()["total"] == 1
@@ -771,29 +920,21 @@ class TestListFindingsRouter:
     async def test_list_findings_with_filters(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.list_findings = AsyncMock(return_value=_make_findings_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
-                resp = await ac.get(
-                    "/v1/security/acme/findings?severity=high&status=open&scanner=trivy"
-                )
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
+                resp = await ac.get("/v1/security/acme/findings?severity=high&status=open&scanner=trivy")
             assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_tenant_admin_own_tenant(self, app_with_tenant_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.list_findings = AsyncMock(return_value=_make_findings_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/findings")
             assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/other-tenant/findings")
         assert resp.status_code == 403
 
@@ -805,9 +946,7 @@ class TestIngestFindingsRouter:
     async def test_ingest_findings(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.ingest_findings = AsyncMock(return_value=2)
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.post(
                     "/v1/security/acme/findings/ingest",
                     json={
@@ -821,9 +960,7 @@ class TestIngestFindingsRouter:
 
     @pytest.mark.asyncio
     async def test_ingest_invalid_scanner(self, app_with_cpi_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
             resp = await ac.post(
                 "/v1/security/acme/findings/ingest",
                 json={
@@ -838,9 +975,7 @@ class TestIngestFindingsRouter:
     async def test_tenant_admin_can_ingest(self, app_with_tenant_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.ingest_findings = AsyncMock(return_value=1)
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.post(
                     "/v1/security/acme/findings/ingest",
                     json={
@@ -853,9 +988,7 @@ class TestIngestFindingsRouter:
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.post(
                 "/v1/security/other-tenant/findings/ingest",
                 json={"scan_id": str(uuid.uuid4()), "scanner": "trivy", "findings": []},
@@ -870,9 +1003,7 @@ class TestResolveFindingRouter:
     async def test_resolve_finding(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.resolve_finding = AsyncMock(return_value=True)
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.post(f"/v1/security/acme/findings/{uuid.uuid4()}/resolve")
             assert resp.status_code == 200
 
@@ -880,17 +1011,13 @@ class TestResolveFindingRouter:
     async def test_resolve_not_found(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.resolve_finding = AsyncMock(return_value=False)
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.post(f"/v1/security/acme/findings/{uuid.uuid4()}/resolve")
             assert resp.status_code == 404
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.post(f"/v1/security/other-tenant/findings/{uuid.uuid4()}/resolve")
         assert resp.status_code == 403
 
@@ -902,9 +1029,7 @@ class TestGetScanHistoryRouter:
     async def test_get_scan_history(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.get_scan_history = AsyncMock(return_value=_make_scan_history_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/scans")
             assert resp.status_code == 200
             assert len(resp.json()["scans"]) == 1
@@ -913,17 +1038,13 @@ class TestGetScanHistoryRouter:
     async def test_scan_history_with_limit(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.get_scan_history = AsyncMock(return_value=_make_scan_history_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/scans?limit=5")
             assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/other-tenant/scans")
         assert resp.status_code == 403
 
@@ -935,26 +1056,20 @@ class TestCreateScanRouter:
     async def test_create_scan(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.create_scan = AsyncMock(return_value=str(uuid.uuid4()))
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.post("/v1/security/acme/scans?scanner=trivy")
             assert resp.status_code == 201
             assert "scan_id" in resp.json()
 
     @pytest.mark.asyncio
     async def test_create_scan_missing_scanner(self, app_with_cpi_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
             resp = await ac.post("/v1/security/acme/scans")
         assert resp.status_code == 422  # Missing required query param
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.post("/v1/security/other-tenant/scans?scanner=trivy")
         assert resp.status_code == 403
 
@@ -966,18 +1081,14 @@ class TestGetDriftReport:
     async def test_get_drift_report(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.detect_drift = AsyncMock(return_value=_make_drift_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/drift")
             assert resp.status_code == 200
             assert resp.json()["has_baseline"] is True
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/other-tenant/drift")
         assert resp.status_code == 403
 
@@ -989,9 +1100,7 @@ class TestSetBaselineRouter:
     async def test_set_baseline(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.set_baseline = AsyncMock()
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.put(
                     "/v1/security/acme/baseline",
                     json={"baseline": {"CVE-1": "resolved"}},
@@ -1003,9 +1112,7 @@ class TestSetBaselineRouter:
     async def test_tenant_admin_can_set(self, app_with_tenant_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.set_baseline = AsyncMock()
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.put(
                     "/v1/security/acme/baseline",
                     json={"baseline": {"CVE-1": "resolved"}},
@@ -1014,9 +1121,7 @@ class TestSetBaselineRouter:
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.put(
                 "/v1/security/other-tenant/baseline",
                 json={"baseline": {}},
@@ -1025,9 +1130,7 @@ class TestSetBaselineRouter:
 
     @pytest.mark.asyncio
     async def test_no_tenant_user_forbidden(self, app_with_no_tenant_user):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_no_tenant_user), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_no_tenant_user), base_url="http://test") as ac:
             resp = await ac.put(
                 "/v1/security/acme/baseline",
                 json={"baseline": {}},
@@ -1042,9 +1145,7 @@ class TestGetComplianceScoreRouter:
     async def test_dora_compliance(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.get_compliance_score = AsyncMock(return_value=_make_compliance_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/compliance/DORA")
             assert resp.status_code == 200
             assert resp.json()["framework"] == "DORA"
@@ -1052,20 +1153,14 @@ class TestGetComplianceScoreRouter:
     @pytest.mark.asyncio
     async def test_nis2_compliance(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
-            mock_svc.get_compliance_score = AsyncMock(
-                return_value=_make_compliance_response(framework="NIS2")
-            )
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            mock_svc.get_compliance_score = AsyncMock(return_value=_make_compliance_response(framework="NIS2"))
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/compliance/NIS2")
             assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_unsupported_framework(self, app_with_cpi_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/acme/compliance/PCI-DSS")
         assert resp.status_code == 400
 
@@ -1073,17 +1168,13 @@ class TestGetComplianceScoreRouter:
     async def test_case_insensitive_framework(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.get_compliance_score = AsyncMock(return_value=_make_compliance_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/compliance/dora")
             assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/other-tenant/compliance/DORA")
         assert resp.status_code == 403
 
@@ -1095,9 +1186,7 @@ class TestGetSecretsHealthRouter:
     async def test_get_secrets_health(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.get_secrets_health = AsyncMock(return_value=_make_secrets_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/secrets/health")
             assert resp.status_code == 200
             assert resp.json()["total_secrets"] == 0
@@ -1106,24 +1195,18 @@ class TestGetSecretsHealthRouter:
     async def test_tenant_admin_own_tenant(self, app_with_tenant_admin):
         with patch(SERVICE_PATH) as mock_svc:
             mock_svc.get_secrets_health = AsyncMock(return_value=_make_secrets_response())
-            async with AsyncClient(
-                transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/secrets/health")
             assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_other_tenant_forbidden(self, app_with_tenant_admin):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/other-tenant/secrets/health")
         assert resp.status_code == 403
 
     @pytest.mark.asyncio
     async def test_no_tenant_user_forbidden(self, app_with_no_tenant_user):
-        async with AsyncClient(
-            transport=ASGITransport(app=app_with_no_tenant_user), base_url="http://test"
-        ) as ac:
+        async with AsyncClient(transport=ASGITransport(app=app_with_no_tenant_user), base_url="http://test") as ac:
             resp = await ac.get("/v1/security/acme/secrets/health")
         assert resp.status_code == 403

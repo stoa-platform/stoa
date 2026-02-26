@@ -21,6 +21,7 @@ import json
 import os
 import platform
 import sqlite3
+import ssl
 import sys
 import time
 import urllib.error
@@ -47,6 +48,15 @@ REMOTE_PASSWORD = os.environ.get("HEGEMON_REMOTE_PASSWORD")
 TOKEN_CACHE_FILE = Path.home() / ".hegemon" / ".pb_token"
 
 _token_cache: dict = {"token": None, "expires": 0.0}
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """Create SSL context with certifi CA bundle (macOS Python needs this)."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
 
 
 def _remote_enabled() -> bool:
@@ -77,11 +87,11 @@ def _remote_auth() -> str | None:
     try:
         data = json.dumps({"identity": REMOTE_EMAIL, "password": REMOTE_PASSWORD}).encode()
         req = urllib.request.Request(
-            f"{REMOTE_URL}/api/admins/auth-with-password",
+            f"{REMOTE_URL}/api/collections/_superusers/auth-with-password",
             data=data,
             headers={"Content-Type": "application/json"},
         )
-        resp = urllib.request.urlopen(req, timeout=5)
+        resp = urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         result = json.loads(resp.read())
         token = result["token"]
         expires = time.time() + 7200  # 2h (PB admin tokens last 14d, but refresh often)
@@ -110,7 +120,7 @@ def _remote_push(collection: str, data: dict) -> None:
             data=body,
             headers={"Content-Type": "application/json", "Authorization": token},
         )
-        urllib.request.urlopen(req, timeout=5)
+        urllib.request.urlopen(req, timeout=5, context=_ssl_context())
     except Exception:
         pass  # best-effort, SQLite is primary
 
@@ -126,7 +136,7 @@ def _remote_upsert(collection: str, filter_field: str, filter_value: str, data: 
             f"{REMOTE_URL}/api/collections/{collection}/records?filter={encoded_filter}&perPage=1",
             headers={"Authorization": token},
         )
-        resp = urllib.request.urlopen(req, timeout=5)
+        resp = urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         result = json.loads(resp.read())
 
         if result.get("totalItems", 0) > 0:
@@ -138,7 +148,7 @@ def _remote_upsert(collection: str, filter_field: str, filter_value: str, data: 
                 headers={"Content-Type": "application/json", "Authorization": token},
                 method="PATCH",
             )
-            urllib.request.urlopen(req, timeout=5)
+            urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         else:
             _remote_push(collection, data)
     except Exception:
@@ -156,7 +166,7 @@ def _remote_delete(collection: str, filter_field: str, filter_value: str) -> Non
             f"{REMOTE_URL}/api/collections/{collection}/records?filter={encoded_filter}&perPage=1",
             headers={"Authorization": token},
         )
-        resp = urllib.request.urlopen(req, timeout=5)
+        resp = urllib.request.urlopen(req, timeout=5, context=_ssl_context())
         result = json.loads(resp.read())
 
         if result.get("totalItems", 0) > 0:
@@ -166,7 +176,7 @@ def _remote_delete(collection: str, filter_field: str, filter_value: str) -> Non
                 headers={"Authorization": token},
                 method="DELETE",
             )
-            urllib.request.urlopen(req, timeout=5)
+            urllib.request.urlopen(req, timeout=5, context=_ssl_context())
     except Exception:
         pass
 
@@ -595,7 +605,7 @@ def cmd_remote_ls(args: argparse.Namespace) -> None:
             f"{REMOTE_URL}/api/collections/sessions/records?{params}",
             headers={"Authorization": token},
         )
-        resp = urllib.request.urlopen(req, timeout=10)
+        resp = urllib.request.urlopen(req, timeout=10, context=_ssl_context())
         result = json.loads(resp.read())
     except Exception as e:
         print(f"Remote query failed: {e}", file=sys.stderr)

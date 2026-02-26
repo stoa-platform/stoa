@@ -6300,6 +6300,804 @@
         "title": "ExecutionStatusEnum",
         "type": "string"
       },
+      "ExportMetadata": {
+        "description": "Metadata about the export archive.",
+        "properties": {
+          "export_version": {
+            "default": "1.0",
+            "title": "Export Version",
+            "type": "string"
+          },
+          "exported_at": {
+            "format": "date-time",
+            "title": "Exported At",
+            "type": "string"
+          },
+          "resource_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Resource Counts",
+            "type": "object"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tenant_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Name"
+          }
+        },
+        "required": [
+          "exported_at",
+          "tenant_id"
+        ],
+        "title": "ExportMetadata",
+        "type": "object"
+      },
+      "ExportedBackendApi": {
+        "description": "Backend API in export format.",
+        "properties": {
+          "auth_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Type"
+          },
+          "backend_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Url"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "openapi_spec_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Spec Url"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ExportedBackendApi",
+        "type": "object"
+      },
+      "ExportedConsumer": {
+        "description": "Consumer in export format.",
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "consumer_metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Metadata"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "external_id",
+          "name",
+          "email",
+          "status"
+        ],
+        "title": "ExportedConsumer",
+        "type": "object"
+      },
+      "ExportedContract": {
+        "description": "Contract (UAC) in export format.",
+        "properties": {
+          "bindings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Bindings",
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "deprecated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecated At"
+          },
+          "deprecation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecation Reason"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "grace_period_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Period Days"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "openapi_spec_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Spec Url"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "sunset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sunset At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "status"
+        ],
+        "title": "ExportedContract",
+        "type": "object"
+      },
+      "ExportedExternalMcpServer": {
+        "description": "External MCP server in export format (auth config excluded).",
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_url"
+        ],
+        "title": "ExportedExternalMcpServer",
+        "type": "object"
+      },
+      "ExportedPlan": {
+        "description": "Subscription plan in export format.",
+        "properties": {
+          "burst_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Burst Limit"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "daily_request_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Request Limit"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "monthly_request_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Request Limit"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rate_limit_per_minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Per Minute"
+          },
+          "rate_limit_per_second": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Per Second"
+          },
+          "requires_approval": {
+            "default": false,
+            "title": "Requires Approval",
+            "type": "boolean"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "title": "ExportedPlan",
+        "type": "object"
+      },
+      "ExportedPolicy": {
+        "description": "Gateway policy in export format.",
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "policy_type": {
+            "title": "Policy Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "policy_type"
+        ],
+        "title": "ExportedPolicy",
+        "type": "object"
+      },
+      "ExportedSkill": {
+        "description": "Skill in export format.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "priority": {
+            "default": 50,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "tool_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Ref"
+          },
+          "user_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Ref"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope"
+        ],
+        "title": "ExportedSkill",
+        "type": "object"
+      },
+      "ExportedSubscription": {
+        "description": "Subscription in export format (no API keys \u2014 secrets excluded).",
+        "properties": {
+          "api_id": {
+            "title": "Api Id",
+            "type": "string"
+          },
+          "api_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Name"
+          },
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "application_name": {
+            "title": "Application Name",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subscriber_email": {
+            "title": "Subscriber Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "application_name",
+          "subscriber_email",
+          "api_id",
+          "status"
+        ],
+        "title": "ExportedSubscription",
+        "type": "object"
+      },
+      "ExportedWebhook": {
+        "description": "Webhook config in export format (secret excluded).",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "url"
+        ],
+        "title": "ExportedWebhook",
+        "type": "object"
+      },
       "ExternalLinks": {
         "description": "External tool URLs for quick access.",
         "properties": {
@@ -17816,6 +18614,104 @@
           "owner_email"
         ],
         "title": "TenantCreate",
+        "type": "object"
+      },
+      "TenantExportResponse": {
+        "description": "Full tenant export archive.",
+        "example": {
+          "backend_apis": [],
+          "consumers": [],
+          "contracts": [],
+          "external_mcp_servers": [],
+          "metadata": {
+            "export_version": "1.0",
+            "exported_at": "2026-03-01T10:00:00Z",
+            "resource_counts": {
+              "backend_apis": 5,
+              "consumers": 10,
+              "contracts": 3
+            },
+            "tenant_id": "acme-corp",
+            "tenant_name": "Acme Corporation"
+          },
+          "plans": [],
+          "policies": [],
+          "skills": [],
+          "subscriptions": [],
+          "webhooks": []
+        },
+        "properties": {
+          "backend_apis": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedBackendApi"
+            },
+            "title": "Backend Apis",
+            "type": "array"
+          },
+          "consumers": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedConsumer"
+            },
+            "title": "Consumers",
+            "type": "array"
+          },
+          "contracts": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedContract"
+            },
+            "title": "Contracts",
+            "type": "array"
+          },
+          "external_mcp_servers": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedExternalMcpServer"
+            },
+            "title": "External Mcp Servers",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ExportMetadata"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedPlan"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedPolicy"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedSkill"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedSubscription"
+            },
+            "title": "Subscriptions",
+            "type": "array"
+          },
+          "webhooks": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedWebhook"
+            },
+            "title": "Webhooks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "metadata"
+        ],
+        "title": "TenantExportResponse",
         "type": "object"
       },
       "TenantMCPServerCreate": {
@@ -38146,6 +39042,54 @@
         "summary": "Get Execution Detail",
         "tags": [
           "Execution Logs"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/export": {
+      "get": {
+        "description": "Export tenant configuration as a portable JSON archive (CAB-1474).\n\nReturns all tenant resources (APIs, contracts, consumers, plans,\nsubscriptions, policies, skills, webhooks, MCP servers).\nSensitive data (API keys, secrets) is excluded.\n\nRequires: tenant-admin (own tenant) or cpi-admin (any tenant).",
+        "operationId": "export_tenant_v1_tenants__tenant_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantExportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Tenant",
+        "tags": [
+          "Tenants"
         ]
       }
     },

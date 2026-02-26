@@ -36,7 +36,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DB_PATH = Path(os.environ.get("HEGEMON_STATE_DB", Path.home() / ".hegemon" / "state.db"))
-SCHEMA_PATH = Path(__file__).parent / "schema.sql"
+SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
 VALID_STEPS = [
     "claimed", "coding", "pr-created", "ci-green", "ci-failed",

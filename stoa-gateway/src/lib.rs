@@ -418,8 +418,9 @@ pub fn build_router(state: AppState) -> Router {
 
     // W3C Trace Context: extract incoming traceparent header into request extensions.
     // Runs BEFORE access_log so trace_id is available for structured logging.
-    let with_trace_ctx =
-        mode_router.layer(axum::middleware::from_fn(trace_context::trace_context_middleware));
+    let with_trace_ctx = mode_router.layer(axum::middleware::from_fn(
+        trace_context::trace_context_middleware,
+    ));
 
     // Access log: structured JSON for every request (shipped to OpenSearch via Fluent Bit).
     // Runs after auth so tenant_id/consumer_id are available from extensions.

@@ -221,7 +221,11 @@ mod tests {
                 "/test",
                 get(|request: Request| async move {
                     let has_ctx = request.extensions().get::<RequestTraceContext>().is_some();
-                    if has_ctx { "found" } else { "missing" }
+                    if has_ctx {
+                        "found"
+                    } else {
+                        "missing"
+                    }
                 }),
             )
             .layer(axum::middleware::from_fn(trace_context_middleware));
@@ -250,7 +254,11 @@ mod tests {
                 "/test",
                 get(|request: Request| async move {
                     let has_ctx = request.extensions().get::<RequestTraceContext>().is_some();
-                    if has_ctx { "found" } else { "missing" }
+                    if has_ctx {
+                        "found"
+                    } else {
+                        "missing"
+                    }
                 }),
             )
             .layer(axum::middleware::from_fn(trace_context_middleware));
@@ -274,7 +282,11 @@ mod tests {
                 "/test",
                 get(|request: Request| async move {
                     let has_ctx = request.extensions().get::<RequestTraceContext>().is_some();
-                    if has_ctx { "found" } else { "missing" }
+                    if has_ctx {
+                        "found"
+                    } else {
+                        "missing"
+                    }
                 }),
             )
             .layer(axum::middleware::from_fn(trace_context_middleware));

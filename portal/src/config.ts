@@ -75,6 +75,11 @@ export const config = {
     enableGateways: import.meta.env.VITE_ENABLE_GATEWAYS !== 'false',
     enableI18n: import.meta.env.VITE_ENABLE_I18N !== 'false',
     enableMarketplace: import.meta.env.VITE_ENABLE_MARKETPLACE !== 'false',
+    enableNotifications: import.meta.env.VITE_ENABLE_NOTIFICATIONS !== 'false',
+    enableAuditLog: import.meta.env.VITE_ENABLE_AUDIT_LOG !== 'false',
+    enableFavorites: import.meta.env.VITE_ENABLE_FAVORITES !== 'false',
+    enableRateLimits: import.meta.env.VITE_ENABLE_RATE_LIMITS !== 'false',
+    enableAPIComparison: import.meta.env.VITE_ENABLE_API_COMPARISON !== 'false',
   },
 
   // API Testing Configuration

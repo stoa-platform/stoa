@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Menu, Bell, User, LogOut, ExternalLink } from 'lucide-react';
 import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useAuth } from '../../contexts/AuthContext';
 import { config } from '../../config';
+import { useUnreadCount } from '../../hooks/useNotifications';
 import { LanguageToggle } from './LanguageToggle';
 
 interface HeaderProps {
@@ -13,8 +14,11 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const { data: unreadData } = useUnreadCount();
+  const unreadCount = unreadData ?? 0;
 
   // Close user menu on outside click
   useEffect(() => {
@@ -78,12 +82,20 @@ export function Header({ onMenuClick }: HeaderProps) {
           {config.features.enableI18n && <LanguageToggle />}
 
           {/* Notifications */}
-          <button
-            className="p-2.5 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md relative transition-colors"
-            aria-label="Notifications"
-          >
-            <Bell className="h-5 w-5" aria-hidden="true" />
-          </button>
+          {config.features.enableNotifications && (
+            <button
+              onClick={() => navigate('/notifications')}
+              className="p-2.5 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md relative transition-colors"
+              aria-label="Notifications"
+            >
+              <Bell className="h-5 w-5" aria-hidden="true" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* User menu */}
           <div className="relative" ref={userMenuRef}>

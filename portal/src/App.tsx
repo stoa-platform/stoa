@@ -69,6 +69,23 @@ const CredentialMappingsPage = lazy(() =>
 const MarketplacePage = lazy(() =>
   import('./pages/marketplace').then((m) => ({ default: m.MarketplacePage }))
 );
+const NotificationsPage = lazy(() =>
+  import('./pages/notifications/NotificationsPage').then((m) => ({
+    default: m.NotificationsPage,
+  }))
+);
+const AuditLogPage = lazy(() =>
+  import('./pages/audit-log/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
+);
+const FavoritesPage = lazy(() =>
+  import('./pages/favorites/FavoritesPage').then((m) => ({ default: m.FavoritesPage }))
+);
+const RateLimitsPage = lazy(() =>
+  import('./pages/rate-limits/RateLimitsPage').then((m) => ({ default: m.RateLimitsPage }))
+);
+const APIComparePage = lazy(() =>
+  import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
+);
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -613,6 +630,42 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:subscriptions:write">
                   <WebhooksPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Notifications (CAB-1470) */}
+            <Route path="/notifications" element={<NotificationsPage />} />
+
+            {/* Audit Log (CAB-1470) */}
+            <Route
+              path="/audit-log"
+              element={
+                <ProtectedRoute permission="audit:read">
+                  <AuditLogPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Favorites (CAB-1470) */}
+            <Route path="/favorites" element={<FavoritesPage />} />
+
+            {/* Rate Limits (CAB-1470) */}
+            <Route
+              path="/rate-limits"
+              element={
+                <ProtectedRoute scope="stoa:metrics:read">
+                  <RateLimitsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* API Compare (CAB-1470) */}
+            <Route
+              path="/api-compare"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <APIComparePage />
                 </ProtectedRoute>
               }
             />

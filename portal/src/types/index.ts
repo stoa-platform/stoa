@@ -945,3 +945,132 @@ export interface MarketplaceStats {
   totalItems: number;
   categories: MarketplaceCategory[];
 }
+
+// ---------------------------------------------------------------------------
+// Notifications (CAB-1470)
+// ---------------------------------------------------------------------------
+
+export type NotificationType =
+  | 'api_update'
+  | 'subscription_expiry'
+  | 'key_rotation'
+  | 'system_alert'
+  | 'usage_threshold';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+  link?: string;
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[];
+  total: number;
+  unread_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Audit Log (CAB-1470)
+// ---------------------------------------------------------------------------
+
+export type AuditAction =
+  | 'api.subscribed'
+  | 'api.unsubscribed'
+  | 'key.created'
+  | 'key.rotated'
+  | 'key.revoked'
+  | 'app.created'
+  | 'app.updated'
+  | 'app.deleted'
+  | 'login'
+  | 'logout';
+
+export interface AuditLogEntry {
+  id: string;
+  action: AuditAction;
+  resource_type: string;
+  resource_id: string;
+  resource_name: string;
+  actor_name: string;
+  actor_email: string;
+  details: string;
+  ip_address: string;
+  timestamp: string;
+}
+
+export interface AuditLogFilters {
+  action?: AuditAction;
+  resource_type?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface AuditLogResponse {
+  entries: AuditLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+// ---------------------------------------------------------------------------
+// Favorites / Bookmarks (CAB-1470)
+// ---------------------------------------------------------------------------
+
+export type FavoriteType = 'api' | 'mcp_server';
+
+export interface Favorite {
+  id: string;
+  item_type: FavoriteType;
+  item_id: string;
+  item_name: string;
+  item_description: string;
+  added_at: string;
+}
+
+export interface FavoritesResponse {
+  favorites: Favorite[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Rate Limit Dashboard (CAB-1470)
+// ---------------------------------------------------------------------------
+
+export interface RateLimitStatus {
+  api_id: string;
+  api_name: string;
+  subscription_id: string;
+  plan_name: string;
+  limit: number;
+  used: number;
+  remaining: number;
+  reset_at: string;
+  period: 'minute' | 'hour' | 'day';
+}
+
+export interface RateLimitsResponse {
+  rate_limits: RateLimitStatus[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// API Comparison (CAB-1470)
+// ---------------------------------------------------------------------------
+
+export interface APIComparisonField {
+  label: string;
+  values: Record<string, string | boolean | number>;
+}
+
+export interface APIComparisonResult {
+  api_ids: string[];
+  api_names: Record<string, string>;
+  fields: APIComparisonField[];
+}

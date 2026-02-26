@@ -12,6 +12,11 @@ import {
   Briefcase,
   Server,
   Store,
+  Star,
+  Bell,
+  FileText,
+  Gauge,
+  GitCompareArrows,
   LucideIcon,
 } from 'lucide-react';
 import { config } from '../../config';
@@ -64,6 +69,13 @@ const sections: NavSection[] = [
         enabled: config.features.enableMCPTools,
         scope: 'stoa:catalog:read',
       },
+      {
+        name: 'Compare APIs',
+        href: '/api-compare',
+        icon: GitCompareArrows,
+        enabled: config.features.enableAPIComparison,
+        scope: 'stoa:catalog:read',
+      },
     ],
   },
   {
@@ -107,6 +119,18 @@ const sections: NavSection[] = [
         enabled: config.features.enableSubscriptions,
         scope: 'stoa:subscriptions:write',
       },
+      {
+        name: 'Favorites',
+        href: '/favorites',
+        icon: Star,
+        enabled: config.features.enableFavorites,
+      },
+      {
+        name: 'Notifications',
+        href: '/notifications',
+        icon: Bell,
+        enabled: config.features.enableNotifications,
+      },
     ],
   },
   {
@@ -118,6 +142,20 @@ const sections: NavSection[] = [
         icon: Server,
         enabled: config.features.enableGateways,
         scope: 'stoa:admin',
+      },
+      {
+        name: 'Audit Log',
+        href: '/audit-log',
+        icon: FileText,
+        enabled: config.features.enableAuditLog,
+        permission: 'audit:read',
+      },
+      {
+        name: 'Rate Limits',
+        href: '/rate-limits',
+        icon: Gauge,
+        enabled: config.features.enableRateLimits,
+        scope: 'stoa:metrics:read',
       },
     ],
   },

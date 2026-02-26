@@ -5413,6 +5413,16 @@
         "title": "DriftType",
         "type": "string"
       },
+      "Edition": {
+        "description": "Platform edition \u2014 Open Core model.\n\ncommunity: Free, Apache 2.0 licensed, self-hosted\nstandard: Commercial add-ons (SSO, audit, SLA)\nenterprise: Full platform (federation, WASM plugins, premium support)",
+        "enum": [
+          "community",
+          "standard",
+          "enterprise"
+        ],
+        "title": "Edition",
+        "type": "string"
+      },
       "EnableBindingRequest": {
         "description": "Request to enable a protocol binding.",
         "example": {
@@ -7913,6 +7923,93 @@
         "title": "FacetsResponse",
         "type": "object"
       },
+      "FeatureFlags": {
+        "description": "Features available per edition.",
+        "properties": {
+          "ai_guardrails": {
+            "default": false,
+            "title": "Ai Guardrails",
+            "type": "boolean"
+          },
+          "api_catalog": {
+            "default": true,
+            "title": "Api Catalog",
+            "type": "boolean"
+          },
+          "audit_trail": {
+            "default": false,
+            "title": "Audit Trail",
+            "type": "boolean"
+          },
+          "custom_policies": {
+            "default": false,
+            "title": "Custom Policies",
+            "type": "boolean"
+          },
+          "developer_portal": {
+            "default": true,
+            "title": "Developer Portal",
+            "type": "boolean"
+          },
+          "mcp_federation": {
+            "default": false,
+            "title": "Mcp Federation",
+            "type": "boolean"
+          },
+          "mcp_gateway": {
+            "default": true,
+            "title": "Mcp Gateway",
+            "type": "boolean"
+          },
+          "multi_cloud_adapters": {
+            "default": false,
+            "title": "Multi Cloud Adapters",
+            "type": "boolean"
+          },
+          "openapi_to_mcp": {
+            "default": true,
+            "title": "Openapi To Mcp",
+            "type": "boolean"
+          },
+          "rate_limiting": {
+            "default": true,
+            "title": "Rate Limiting",
+            "type": "boolean"
+          },
+          "rbac": {
+            "default": true,
+            "title": "Rbac",
+            "type": "boolean"
+          },
+          "sla_monitoring": {
+            "default": false,
+            "title": "Sla Monitoring",
+            "type": "boolean"
+          },
+          "sso_oidc": {
+            "default": false,
+            "title": "Sso Oidc",
+            "type": "boolean"
+          },
+          "tenant_export_import": {
+            "default": false,
+            "title": "Tenant Export Import",
+            "type": "boolean"
+          },
+          "wasm_plugins": {
+            "default": false,
+            "title": "Wasm Plugins",
+            "type": "boolean"
+          },
+          "webhook_delivery": {
+            "default": false,
+            "title": "Webhook Delivery",
+            "type": "boolean"
+          }
+        },
+        "title": "FeatureFlags",
+        "type": "object"
+      },
       "FederationBulkRevokeResponse": {
         "description": "Response schema for bulk sub-account revocation.",
         "properties": {
@@ -9359,6 +9456,26 @@
         "title": "ImportAPIResponse",
         "type": "object"
       },
+      "ImportMode": {
+        "description": "Configuration for import behavior.",
+        "properties": {
+          "conflict_resolution": {
+            "default": "skip",
+            "description": "How to handle conflicts: skip, overwrite, or fail",
+            "pattern": "^(skip|overwrite|fail)$",
+            "title": "Conflict Resolution",
+            "type": "string"
+          },
+          "dry_run": {
+            "default": false,
+            "description": "Validate without applying changes",
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "ImportMode",
+        "type": "object"
+      },
       "ImportPreviewResponse": {
         "description": "Preview of a single API to be imported.",
         "properties": {
@@ -9396,6 +9513,51 @@
           "reason"
         ],
         "title": "ImportPreviewResponse",
+        "type": "object"
+      },
+      "ImportResult": {
+        "description": "Result of an import operation.",
+        "properties": {
+          "created": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Created",
+            "type": "object"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "skipped": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Skipped",
+            "type": "object"
+          },
+          "success": {
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id"
+        ],
+        "title": "ImportResult",
         "type": "object"
       },
       "ImportResultResponse": {
@@ -9763,6 +9925,29 @@
           "rotation_count"
         ],
         "title": "KeyRotationResponse",
+        "type": "object"
+      },
+      "LicenseInfo": {
+        "description": "License metadata.",
+        "properties": {
+          "edition": {
+            "$ref": "#/components/schemas/Edition"
+          },
+          "license_type": {
+            "title": "License Type",
+            "type": "string"
+          },
+          "license_url": {
+            "default": "https://github.com/stoa-platform/stoa/blob/main/LICENSE",
+            "title": "License Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "edition",
+          "license_type"
+        ],
+        "title": "LicenseInfo",
         "type": "object"
       },
       "ListCategoriesResponse": {
@@ -18169,6 +18354,53 @@
         "title": "SyncTypeEnum",
         "type": "string"
       },
+      "SystemInfoResponse": {
+        "description": "Platform system information \u2014 public endpoint.",
+        "properties": {
+          "docs_url": {
+            "default": "https://docs.gostoa.dev",
+            "title": "Docs Url",
+            "type": "string"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "features": {
+            "$ref": "#/components/schemas/FeatureFlags"
+          },
+          "license": {
+            "$ref": "#/components/schemas/LicenseInfo"
+          },
+          "platform": {
+            "default": "STOA Platform",
+            "title": "Platform",
+            "type": "string"
+          },
+          "repository": {
+            "default": "https://github.com/stoa-platform/stoa",
+            "title": "Repository",
+            "type": "string"
+          },
+          "tagline": {
+            "default": "The European Agent Gateway",
+            "title": "Tagline",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "environment",
+          "license",
+          "features"
+        ],
+        "title": "SystemInfoResponse",
+        "type": "object"
+      },
       "TTLExtendRequest": {
         "description": "Schema for requesting a TTL extension on a subscription.",
         "example": {
@@ -18712,6 +18944,22 @@
           "metadata"
         ],
         "title": "TenantExportResponse",
+        "type": "object"
+      },
+      "TenantImportRequest": {
+        "description": "Request to import tenant data from an export archive.",
+        "properties": {
+          "archive": {
+            "$ref": "#/components/schemas/TenantExportResponse"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode"
+          }
+        },
+        "required": [
+          "archive"
+        ],
+        "title": "TenantImportRequest",
         "type": "object"
       },
       "TenantMCPServerCreate": {
@@ -36207,6 +36455,28 @@
         ]
       }
     },
+    "/v1/system/info": {
+      "get": {
+        "description": "Return platform system information.\n\nPublic endpoint \u2014 no authentication required.\nExposes version, edition, license, and available features.",
+        "operationId": "get_system_info_v1_system_info_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemInfoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get System Info",
+        "tags": [
+          "System"
+        ]
+      }
+    },
     "/v1/tenants": {
       "get": {
         "description": "List tenants from database.\n\n- CPI Admin: See all tenants\n- Others: See only their own tenant",
@@ -40806,6 +41076,64 @@
         "summary": "Get Tree",
         "tags": [
           "Git"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/import": {
+      "post": {
+        "description": "Import tenant configuration from an export archive (CAB-1474).\n\nRestores APIs, contracts, consumers, plans, policies, skills,\nwebhooks, and MCP servers. Subscriptions are skipped (API keys\nexcluded from export for security).\n\nConflict resolution modes:\n- skip (default): ignore existing resources\n- overwrite: replace existing resources\n- fail: abort on first conflict\n\nSet dry_run=true to validate without applying changes.\nRequires: cpi-admin only.",
+        "operationId": "import_tenant_v1_tenants__tenant_id__import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Import Tenant",
+        "tags": [
+          "Tenants"
         ]
       }
     },

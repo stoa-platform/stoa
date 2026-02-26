@@ -549,7 +549,7 @@ class TestDetectDrift:
         baseline_result = MagicMock()
         baseline_result.scalar_one_or_none.return_value = baseline
 
-        finding_row = MagicMock(rule_id="CVE-1", rule_name="Test", severity="high")
+        finding_row = MagicMock(rule_id="CVE-1", title="Test", severity="high")
         findings_result = MagicMock()
         findings_result.all.return_value = [finding_row]
 

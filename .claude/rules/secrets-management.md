@@ -1,6 +1,8 @@
 ---
-description: Secrets management strategy — Infisical self-hosted. Consult when adding/modifying credentials or env vars.
-globs: "deploy/**,k8s/**,charts/**,.env*,**/secrets*"
+globs:
+  - "deploy/**"
+  - "terraform/**"
+  - ".infisical.json"
 ---
 
 # Secrets Management

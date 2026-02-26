@@ -14,6 +14,12 @@ Usage:
     heg-state release CAB-1350 [--phase 1]
     heg-state claims [MEGA-ID]
     heg-state cleanup --stale 2h
+    heg-state brief  [--project stoa]
+    heg-state ticket-upsert CAB-1350 --title "..." --status InProgress [--estimate 5] [--component gateway]
+    heg-state ticket-ls [--cycle current] [--status InProgress] [--component gateway]
+    heg-state ticket-sync --from-remote
+    heg-state council-cache CAB-1350 --score 8.5 --verdict Go --hash abc123
+    heg-state council-check CAB-1350 --hash abc123
 """
 
 import argparse
@@ -185,16 +191,10 @@ def _connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=10000")
-    if not _tables_exist(conn):
-        conn.executescript(SCHEMA_PATH.read_text())
+    # Always run schema — all statements use IF NOT EXISTS so this is
+    # idempotent and handles migrations (new tables added to schema.sql).
+    conn.executescript(SCHEMA_PATH.read_text())
     return conn
-
-
-def _tables_exist(conn: sqlite3.Connection) -> bool:
-    row = conn.execute(
-        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='sessions'"
-    ).fetchone()
-    return row[0] > 0
 
 
 # ── Session commands ──────────────────────────────────────────────
@@ -705,6 +705,234 @@ def cmd_import_claims(args: argparse.Namespace) -> None:
     print(f"Imported {imported} claims from {claims_dir}")
 
 
+# ── Ticket commands ───────────────────────────────────────────────
+
+
+def cmd_ticket_upsert(args: argparse.Namespace) -> None:
+    now = _now()
+    conn = _connect()
+    conn.execute(
+        """INSERT OR REPLACE INTO tickets
+           (id, title, status, estimate, priority, component, summary, dod_items, parent_id, cycle, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (args.ticket, args.title, args.status, args.estimate, args.priority,
+         args.component, args.summary, args.dod, args.parent, args.cycle, now),
+    )
+    conn.commit()
+    conn.close()
+    print(f"Ticket upserted: {args.ticket} ({args.status or '?'})")
+
+    # Remote sync
+    _remote_upsert("tickets", "ticket_id", args.ticket, {
+        "ticket_id": args.ticket, "title": args.title or "",
+        "status": args.status or "", "estimate": args.estimate or 0,
+        "priority": args.priority or 0, "component": args.component or "",
+        "summary": args.summary or "", "dod_items": args.dod or "[]",
+        "parent_id": args.parent or "", "cycle": args.cycle or "",
+        "updated_at": now,
+    })
+
+
+def cmd_ticket_ls(args: argparse.Namespace) -> None:
+    conn = _connect()
+    query = "SELECT * FROM tickets WHERE 1=1"
+    params: list = []
+
+    if args.cycle:
+        query += " AND cycle=?"
+        params.append(args.cycle)
+    if args.status:
+        query += " AND status=?"
+        params.append(args.status)
+    if args.component:
+        query += " AND component=?"
+        params.append(args.component)
+
+    query += " ORDER BY priority ASC, id ASC"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    if not rows:
+        print("No tickets found.")
+        return
+
+    print(f"{'ID':<14} {'STATUS':<14} {'EST':<5} {'PRI':<5} {'COMPONENT':<12} {'CYCLE':<10} {'TITLE'}")
+    print("-" * 90)
+    for r in rows:
+        est = str(r["estimate"]) if r["estimate"] else "-"
+        pri = str(r["priority"]) if r["priority"] else "-"
+        component = r["component"] or "-"
+        cycle = r["cycle"] or "-"
+        title = (r["title"] or "")[:40]
+        print(f"{r['id']:<14} {r['status'] or '-':<14} {est:<5} {pri:<5} {component:<12} {cycle:<10} {title}")
+
+
+def cmd_ticket_sync(args: argparse.Namespace) -> None:
+    """Pull all records from PocketBase tickets collection into local SQLite."""
+    if not _remote_enabled():
+        print("Remote not configured. Set HEGEMON_REMOTE_URL + HEGEMON_REMOTE_PASSWORD.", file=sys.stderr)
+        sys.exit(1)
+
+    token = _remote_auth()
+    if not token:
+        print("Failed to authenticate with PocketBase.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        page = 1
+        total_synced = 0
+        conn = _connect()
+
+        while True:
+            req = urllib.request.Request(
+                f"{REMOTE_URL}/api/collections/tickets/records?perPage=100&page={page}",
+                headers={"Authorization": token},
+            )
+            resp = urllib.request.urlopen(req, timeout=10)
+            result = json.loads(resp.read())
+            items = result.get("items", [])
+
+            if not items:
+                break
+
+            for item in items:
+                conn.execute(
+                    """INSERT OR REPLACE INTO tickets
+                       (id, title, status, estimate, priority, component, summary, dod_items, parent_id, cycle, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (item.get("ticket_id", item.get("id", "")),
+                     item.get("title", ""),
+                     item.get("status", ""),
+                     item.get("estimate"),
+                     item.get("priority"),
+                     item.get("component", ""),
+                     item.get("summary", ""),
+                     item.get("dod_items", "[]"),
+                     item.get("parent_id", ""),
+                     item.get("cycle", ""),
+                     item.get("updated_at", _now())),
+                )
+                total_synced += 1
+
+            if len(items) < 100:
+                break
+            page += 1
+
+        conn.commit()
+        conn.close()
+        print(f"Synced {total_synced} tickets from {REMOTE_URL}")
+
+    except Exception as e:
+        print(f"Remote sync failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+# ── Council cache commands ────────────────────────────────────────
+
+
+def cmd_council_cache(args: argparse.Namespace) -> None:
+    now = _now()
+    conn = _connect()
+    conn.execute(
+        """INSERT OR REPLACE INTO council_cache
+           (ticket_id, score, verdict, personas, ticket_hash, evaluated_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (args.ticket, args.score, args.verdict, args.personas, args.hash, now),
+    )
+    conn.commit()
+    conn.close()
+    print(f"Council cached: {args.ticket} → {args.score}/10 {args.verdict}")
+
+    # Remote sync
+    _remote_upsert("council_cache", "ticket_id", args.ticket, {
+        "ticket_id": args.ticket, "score": args.score,
+        "verdict": args.verdict, "personas": args.personas or "{}",
+        "ticket_hash": args.hash or "", "evaluated_at": now,
+    })
+
+
+def cmd_council_check(args: argparse.Namespace) -> None:
+    conn = _connect()
+    row = conn.execute(
+        "SELECT score, verdict, evaluated_at FROM council_cache WHERE ticket_id=? AND ticket_hash=?",
+        (args.ticket, args.hash),
+    ).fetchone()
+    conn.close()
+
+    if row:
+        result = {
+            "hit": True,
+            "score": row["score"],
+            "verdict": row["verdict"],
+            "evaluated_at": row["evaluated_at"],
+        }
+    else:
+        result = {"hit": False}
+
+    print(json.dumps(result))
+
+
+# ── Brief command ─────────────────────────────────────────────────
+
+
+def cmd_brief(args: argparse.Namespace) -> None:
+    project = args.project or os.environ.get("HEGEMON_PROJECT", "stoa")
+    conn = _connect()
+
+    # Active sessions for this host
+    sessions = conn.execute(
+        "SELECT instance_id, role, ticket, step, pr FROM sessions WHERE host=? AND project=?",
+        (_hostname(), project),
+    ).fetchall()
+
+    # Non-done tickets in current/next cycles (limit 20)
+    tickets = conn.execute(
+        "SELECT id, title, status, estimate, component, summary FROM tickets WHERE status != 'Done' AND cycle IN ('current', 'next') ORDER BY priority ASC, id ASC LIMIT 20",
+    ).fetchall()
+
+    # Active claims
+    claims = conn.execute(
+        "SELECT id, ticket, owner, phase FROM claims WHERE owner IS NOT NULL AND completed_at IS NULL",
+    ).fetchall()
+
+    # Recent milestones (last 24h, limit 10)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    milestones = conn.execute(
+        "SELECT ticket, step, pr, created_at FROM milestones WHERE created_at > ? ORDER BY created_at DESC LIMIT 10",
+        (cutoff,),
+    ).fetchall()
+
+    conn.close()
+
+    brief = {
+        "generated_at": _now(),
+        "project": project,
+        "sessions": [
+            {"instance_id": s["instance_id"], "role": s["role"],
+             "ticket": s["ticket"], "step": s["step"], "pr": s["pr"]}
+            for s in sessions
+        ],
+        "tickets": [
+            {"id": t["id"], "title": t["title"], "status": t["status"],
+             "estimate": t["estimate"], "component": t["component"],
+             "summary": t["summary"]}
+            for t in tickets
+        ],
+        "claims": [
+            {"id": c["id"], "ticket": c["ticket"], "owner": c["owner"],
+             "phase": c["phase"]}
+            for c in claims
+        ],
+        "recent_milestones": [
+            {"ticket": m["ticket"], "step": m["step"], "pr": m["pr"],
+             "created_at": m["created_at"]}
+            for m in milestones
+        ],
+    }
+
+    print(json.dumps(brief, indent=2))
+
+
 # ── Main ──────────────────────────────────────────────────────────
 
 
@@ -792,6 +1020,45 @@ def main() -> None:
     # sync
     p = sub.add_parser("sync", help="Full sync: push local state to PocketBase")
 
+    # brief
+    p = sub.add_parser("brief", help="Compact JSON summary of current state")
+    p.add_argument("--project", "-p")
+
+    # ticket-upsert
+    p = sub.add_parser("ticket-upsert", help="Create or update a ticket")
+    p.add_argument("ticket")
+    p.add_argument("--title", required=True)
+    p.add_argument("--status", required=True)
+    p.add_argument("--estimate", type=int)
+    p.add_argument("--priority", type=int)
+    p.add_argument("--component")
+    p.add_argument("--summary")
+    p.add_argument("--dod", help="JSON array of DoD criteria")
+    p.add_argument("--parent")
+    p.add_argument("--cycle")
+
+    # ticket-ls
+    p = sub.add_parser("ticket-ls", help="List tickets with optional filters")
+    p.add_argument("--cycle")
+    p.add_argument("--status")
+    p.add_argument("--component")
+
+    # ticket-sync
+    p = sub.add_parser("ticket-sync", help="Pull tickets from PocketBase into local SQLite")
+
+    # council-cache
+    p = sub.add_parser("council-cache", help="Cache a council evaluation result")
+    p.add_argument("ticket")
+    p.add_argument("--score", type=float, required=True)
+    p.add_argument("--verdict", required=True, choices=["Go", "Fix", "Redo"])
+    p.add_argument("--hash", required=True, help="sha256(title + description)")
+    p.add_argument("--personas", help="JSON object {persona: score}")
+
+    # council-check
+    p = sub.add_parser("council-check", help="Check council cache for a ticket")
+    p.add_argument("ticket")
+    p.add_argument("--hash", required=True, help="sha256(title + description)")
+
     args = parser.parse_args()
 
     commands = {
@@ -810,6 +1077,12 @@ def main() -> None:
         "import-claims": cmd_import_claims,
         "remote-ls": cmd_remote_ls,
         "sync": cmd_sync,
+        "brief": cmd_brief,
+        "ticket-upsert": cmd_ticket_upsert,
+        "ticket-ls": cmd_ticket_ls,
+        "ticket-sync": cmd_ticket_sync,
+        "council-cache": cmd_council_cache,
+        "council-check": cmd_council_check,
     }
     commands[args.command](args)
 

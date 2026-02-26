@@ -1,6 +1,6 @@
 ---
-description: Rust code style for stoa-gateway
-globs: "stoa-gateway/**/*.rs"
+globs:
+  - "stoa-gateway/**"
 ---
 
 # Rust Code Style

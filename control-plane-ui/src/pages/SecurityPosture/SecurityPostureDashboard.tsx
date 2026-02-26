@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   RefreshCw,
   Shield,
@@ -11,6 +11,14 @@ import {
   ExternalLink,
   Fingerprint,
   Key,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown,
+  Ban,
+  EyeOff,
+  Ticket,
+  Timer,
+  Activity,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
@@ -22,6 +30,8 @@ const AUTO_REFRESH_INTERVAL = 30_000;
 const ACTIVE_TENANT_KEY = 'stoa-active-tenant';
 
 type SeverityLevel = 'critical' | 'high' | 'medium' | 'low';
+type SortField = 'severity' | 'category';
+type SortDirection = 'asc' | 'desc';
 
 interface SecurityFinding {
   id: string;
@@ -60,6 +70,23 @@ interface TokenBindingStatus {
   replay_protection: boolean;
 }
 
+interface SecurityScan {
+  id: string;
+  scan_type: string;
+  status: 'completed' | 'failed' | 'running';
+  started_at: string;
+  completed_at: string | null;
+  findings_count: number;
+  duration_seconds: number | null;
+}
+
+interface CronJobStatus {
+  status: 'active' | 'paused' | 'degraded';
+  last_run: string | null;
+  next_run: string | null;
+  last_duration_seconds: number | null;
+}
+
 const SEVERITY_CONFIG: Record<SeverityLevel, { bg: string; text: string; label: string }> = {
   critical: {
     bg: 'bg-red-100 dark:bg-red-900/30',
@@ -81,6 +108,13 @@ const SEVERITY_CONFIG: Record<SeverityLevel, { bg: string; text: string; label: 
     text: 'text-blue-700 dark:text-blue-400',
     label: 'Low',
   },
+};
+
+const SEVERITY_ORDER: Record<SeverityLevel, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
 };
 
 function SeverityBadge({ severity }: { severity: SeverityLevel }) {
@@ -116,20 +150,26 @@ function computeSecurityScore(
 }
 
 export function SecurityPostureDashboard() {
-  const { user, isReady } = useAuth();
+  const { user, isReady, hasPermission } = useAuth();
   const [findings, setFindings] = useState<SecurityFinding[]>([]);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [driftItems, setDriftItems] = useState<DriftItem[]>([]);
   const [tokenBinding, setTokenBinding] = useState<TokenBindingStatus | null>(null);
+  const [scans, setScans] = useState<SecurityScan[]>([]);
+  const [cronJobStatus, setCronJobStatus] = useState<CronJobStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterSeverity, setFilterSeverity] = useState<SeverityLevel | 'all'>('all');
+  const [sortField, setSortField] = useState<SortField>('severity');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const tenantId = localStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || 'default';
 
+  const canManageFindings = hasPermission('admin:servers');
+
   const loadData = useCallback(async () => {
     try {
-      const [securityRes, driftRes, tokenBindingRes] = await Promise.all([
+      const [securityRes, driftRes, tokenBindingRes, scansRes, cronJobRes] = await Promise.all([
         apiService
           .get<{
             events: SecurityEvent[];
@@ -145,6 +185,12 @@ export function SecurityPostureDashboard() {
         apiService
           .get<TokenBindingStatus>(`/v1/security/${tenantId}/token-binding`)
           .catch(() => ({ data: null as TokenBindingStatus | null })),
+        apiService
+          .get<{ scans: SecurityScan[] }>(`/v1/security/${tenantId}/scans`)
+          .catch(() => ({ data: { scans: [] } })),
+        apiService
+          .get<CronJobStatus>(`/v1/security/${tenantId}/cronjob-status`)
+          .catch(() => ({ data: null as CronJobStatus | null })),
       ]);
 
       // Map security events to findings for display
@@ -163,6 +209,8 @@ export function SecurityPostureDashboard() {
       setEvents(securityRes.data.events);
       setDriftItems(driftRes.data.items || []);
       setTokenBinding(tokenBindingRes.data);
+      setScans(scansRes.data.scans || []);
+      setCronJobStatus(cronJobRes.data);
       setError(null);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load security data');
@@ -185,12 +233,44 @@ export function SecurityPostureDashboard() {
   const openFindings = findings.filter((f) => f.status === 'open');
   const criticalCount = openFindings.filter((f) => f.severity === 'critical').length;
   const highCount = openFindings.filter((f) => f.severity === 'high').length;
+  const mediumCount = openFindings.filter((f) => f.severity === 'medium').length;
+  const lowCount = openFindings.filter((f) => f.severity === 'low').length;
   const authFailures = events.find((e) => e.event_type === 'auth_failure')?.count || 0;
 
   const filteredFindings =
     filterSeverity === 'all'
       ? openFindings
       : openFindings.filter((f) => f.severity === filterSeverity);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedFindings = useMemo(() => {
+    return [...filteredFindings].sort((a, b) => {
+      const multiplier = sortDirection === 'asc' ? 1 : -1;
+      if (sortField === 'severity') {
+        return (SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) * multiplier;
+      }
+      return a.category.localeCompare(b.category) * multiplier;
+    });
+  }, [filteredFindings, sortField, sortDirection]);
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 inline opacity-40" />;
+    }
+    return sortDirection === 'asc' ? (
+      <ChevronUp className="h-3 w-3 ml-1 inline" />
+    ) : (
+      <ChevronDown className="h-3 w-3 ml-1 inline" />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -290,6 +370,33 @@ export function SecurityPostureDashboard() {
             />
           </div>
 
+          {/* Severity Breakdown Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {(
+              [
+                { level: 'critical' as SeverityLevel, count: criticalCount },
+                { level: 'high' as SeverityLevel, count: highCount },
+                { level: 'medium' as SeverityLevel, count: mediumCount },
+                { level: 'low' as SeverityLevel, count: lowCount },
+              ] as const
+            ).map(({ level, count }) => {
+              const cfg = SEVERITY_CONFIG[level];
+              return (
+                <div
+                  key={level}
+                  data-testid={`severity-card-${level}`}
+                  className={`rounded-lg border p-4 ${cfg.bg} border-opacity-50`}
+                >
+                  <div className={`text-xs font-medium uppercase ${cfg.text}`}>{cfg.label}</div>
+                  <div className={`text-2xl font-bold mt-1 ${cfg.text}`}>{count}</div>
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                    open findings
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
           {/* Score + Findings Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Security Score Gauge */}
@@ -376,19 +483,31 @@ export function SecurityPostureDashboard() {
                   </select>
                 </div>
               </div>
-              {filteredFindings.length > 0 ? (
+              {sortedFindings.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase border-b border-neutral-100 dark:border-neutral-700">
                         <th className="px-4 py-3">Finding</th>
-                        <th className="px-4 py-3">Severity</th>
-                        <th className="px-4 py-3">Category</th>
+                        <th
+                          className="px-4 py-3 cursor-pointer select-none"
+                          onClick={() => toggleSort('severity')}
+                        >
+                          Severity
+                          <SortIcon field="severity" />
+                        </th>
+                        <th
+                          className="px-4 py-3 cursor-pointer select-none"
+                          onClick={() => toggleSort('category')}
+                        >
+                          Category
+                          <SortIcon field="category" />
+                        </th>
                         <th className="px-4 py-3 text-right">Occurrences</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-50 dark:divide-neutral-700">
-                      {filteredFindings.map((finding) => (
+                      {sortedFindings.map((finding) => (
                         <tr
                           key={finding.id}
                           className="hover:bg-neutral-50 dark:hover:bg-neutral-750"
@@ -513,6 +632,133 @@ export function SecurityPostureDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Scan History Timeline */}
+          {scans.length > 0 && (
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Activity className="h-5 w-5 text-blue-500" />
+                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                  Scan History
+                </h2>
+              </div>
+              <div className="space-y-3">
+                {scans.slice(0, 10).map((scan) => (
+                  <div
+                    key={scan.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-neutral-100 dark:border-neutral-700"
+                  >
+                    <div className="flex items-center gap-3">
+                      {scan.status === 'completed' ? (
+                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      ) : scan.status === 'failed' ? (
+                        <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                      ) : (
+                        <Timer className="h-4 w-4 text-yellow-500 flex-shrink-0 animate-pulse" />
+                      )}
+                      <div>
+                        <span className="text-sm font-medium text-neutral-900 dark:text-white">
+                          {scan.scan_type}
+                        </span>
+                        <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-2">
+                          {new Date(scan.started_at).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                        {scan.findings_count} findings
+                      </span>
+                      {scan.duration_seconds != null && (
+                        <span className="text-xs text-neutral-400">{scan.duration_seconds}s</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* CronJob Status Indicator */}
+          {cronJobStatus && (
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Timer className="h-5 w-5 text-purple-500" />
+                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                    Scan Schedule
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    data-testid="cronjob-status-dot"
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      cronJobStatus.status === 'active'
+                        ? 'bg-green-500'
+                        : cronJobStatus.status === 'degraded'
+                          ? 'bg-yellow-500'
+                          : 'bg-neutral-400'
+                    }`}
+                  />
+                  <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 capitalize">
+                    {cronJobStatus.status}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-neutral-500 dark:text-neutral-400">Last Run</span>
+                  <div className="font-medium text-neutral-900 dark:text-white mt-0.5">
+                    {cronJobStatus.last_run
+                      ? new Date(cronJobStatus.last_run).toLocaleString()
+                      : 'Never'}
+                    {cronJobStatus.last_duration_seconds != null && (
+                      <span className="text-xs text-neutral-400 ml-1">
+                        ({cronJobStatus.last_duration_seconds}s)
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-neutral-500 dark:text-neutral-400">Next Scheduled</span>
+                  <div className="font-medium text-neutral-900 dark:text-white mt-0.5">
+                    {cronJobStatus.next_run
+                      ? new Date(cronJobStatus.next_run).toLocaleString()
+                      : 'Not scheduled'}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-neutral-500 dark:text-neutral-400">Status</span>
+                  <div className="font-medium text-neutral-900 dark:text-white mt-0.5 capitalize">
+                    {cronJobStatus.status}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Actions (RBAC-gated) */}
+          {canManageFindings && openFindings.length > 0 && (
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-3">
+                Quick Actions
+              </h2>
+              <div className="flex flex-wrap gap-3">
+                <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                  <Ban className="h-4 w-4" />
+                  Acknowledge All
+                </button>
+                <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                  <EyeOff className="h-4 w-4" />
+                  Suppress Low
+                </button>
+                <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                  <Ticket className="h-4 w-4" />
+                  Create Ticket
+                </button>
               </div>
             </div>
           )}

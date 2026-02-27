@@ -425,6 +425,12 @@ impl ToolRegistry {
             .insert(tenant_id.to_string(), std::time::Instant::now());
     }
 
+    /// Check if tools have ever been loaded for a tenant (CAB-1558).
+    /// Returns true if cache exists (even if stale), false if never loaded.
+    pub fn has_been_loaded(&self, tenant_id: &str) -> bool {
+        self.tenant_loaded_at.read().contains_key(tenant_id)
+    }
+
     /// Get the age of the tool cache for a tenant (None if never loaded).
     pub fn tenant_cache_age(&self, tenant_id: &str) -> Option<std::time::Duration> {
         self.tenant_loaded_at
@@ -822,6 +828,18 @@ mod tests {
     fn test_tenant_cache_age_none_when_never_loaded() {
         let registry = ToolRegistry::new();
         assert!(registry.tenant_cache_age("ghost").is_none());
+    }
+
+    #[test]
+    fn test_has_been_loaded() {
+        let registry = ToolRegistry::new();
+        // Never loaded → false
+        assert!(!registry.has_been_loaded("acme"));
+        // After mark_loaded → true
+        registry.mark_loaded("acme");
+        assert!(registry.has_been_loaded("acme"));
+        // Different tenant → still false
+        assert!(!registry.has_been_loaded("other-tenant"));
     }
 
     // === Alias Tests (CAB-606) ===

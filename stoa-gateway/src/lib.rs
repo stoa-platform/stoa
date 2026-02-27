@@ -54,7 +54,7 @@ use mcp::{
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
     ws::handle_ws_upgrade,
 };
-use proxy::dynamic_proxy;
+use proxy::{dynamic_proxy, llm_proxy_handler};
 use state::AppState;
 
 /// Build the Axum router with all routes.
@@ -264,6 +264,9 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/mcp/ws", get(handle_ws_upgrade))
                 // MCP Event Polling Fallback (CAB-1179)
                 .route("/mcp/events", get(poll_events))
+                // LLM API Proxy (CAB-1568: STOA Dogfood) — before fallback
+                .route("/v1/messages", post(llm_proxy_handler))
+                .route("/v1/messages/count_tokens", post(llm_proxy_handler))
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)

@@ -451,6 +451,32 @@ pub struct Config {
     /// Env: STOA_LLM_ROUTER_DEFAULT_STRATEGY, STOA_LLM_ROUTER_BUDGET_LIMIT_USD
     #[serde(default)]
     pub llm_router: LlmRouterConfig,
+
+    // === LLM Proxy (CAB-1568: STOA Dogfood) ===
+    /// Enable the LLM API proxy (passthrough to upstream LLM provider).
+    /// Env: STOA_LLM_PROXY_ENABLED
+    #[serde(default)]
+    pub llm_proxy_enabled: bool,
+
+    /// Upstream LLM API base URL.
+    /// Env: STOA_LLM_PROXY_UPSTREAM_URL
+    #[serde(default = "default_llm_proxy_upstream_url")]
+    pub llm_proxy_upstream_url: String,
+
+    /// Real API key for the upstream LLM provider.
+    /// Env: STOA_LLM_PROXY_API_KEY
+    #[serde(default)]
+    pub llm_proxy_api_key: Option<String>,
+
+    /// Timeout in seconds for upstream LLM calls (default: 300).
+    /// Env: STOA_LLM_PROXY_TIMEOUT_SECS
+    #[serde(default = "default_llm_proxy_timeout_secs")]
+    pub llm_proxy_timeout_secs: u64,
+
+    /// Control Plane URL for usage recording (defaults to control_plane_url).
+    /// Env: STOA_LLM_PROXY_METERING_URL
+    #[serde(default)]
+    pub llm_proxy_metering_url: Option<String>,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -783,6 +809,14 @@ fn default_llm_timeout_ms() -> u64 {
     30_000
 }
 
+fn default_llm_proxy_upstream_url() -> String {
+    "https://api.anthropic.com".to_string()
+}
+
+fn default_llm_proxy_timeout_secs() -> u64 {
+    300
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -873,6 +907,11 @@ impl Default for Config {
             llm_enabled: false,
             llm_default_timeout_ms: default_llm_timeout_ms(),
             llm_router: LlmRouterConfig::default(),
+            llm_proxy_enabled: false,
+            llm_proxy_upstream_url: default_llm_proxy_upstream_url(),
+            llm_proxy_api_key: None,
+            llm_proxy_timeout_secs: default_llm_proxy_timeout_secs(),
+            llm_proxy_metering_url: None,
         }
     }
 }

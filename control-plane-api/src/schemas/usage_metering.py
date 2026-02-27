@@ -35,6 +35,19 @@ class UsageSummaryListResponse(BaseModel):
     offset: int
 
 
+class UsageRecordRequest(BaseModel):
+    """Gateway-submitted usage event (CAB-1568: LLM proxy metering)."""
+
+    tenant_id: str = Field(..., description="Tenant ID from API key validation")
+    subscription_id: str = Field(..., description="Subscription ID from API key validation")
+    endpoint: str = Field(default="/v1/messages", description="API endpoint called")
+    request_count: int = Field(default=1, ge=0, description="Number of requests")
+    total_tokens: int = Field(default=0, ge=0, description="Total tokens (input + output)")
+    input_tokens: int = Field(default=0, ge=0, description="Input tokens")
+    output_tokens: int = Field(default=0, ge=0, description="Output tokens")
+    total_latency_ms: int = Field(default=0, ge=0, description="Request latency in ms")
+
+
 class UsageDetailResponse(BaseModel):
     """Detailed usage breakdown for a specific API."""
 

@@ -1,15 +1,24 @@
 """Usage metering router — aggregated API usage endpoints (CAB-1334 Phase 1)."""
 
+import logging
 import uuid
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import User
 from src.auth.rbac import require_role
+from src.config import settings
 from src.database import get_db
-from src.schemas.usage_metering import UsageDetailResponse, UsageSummaryListResponse
+from src.schemas.usage_metering import (
+    UsageDetailResponse,
+    UsageRecordRequest,
+    UsageSummaryListResponse,
+)
 from src.services.usage_metering import UsageMeteringService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/usage", tags=["Usage Metering"])
 
@@ -66,3 +75,45 @@ async def get_usage_details(
     if result is None:
         raise HTTPException(status_code=404, detail="No usage data found for this API")
     return result
+
+
+@router.post("/record", status_code=201)
+async def record_usage(
+    payload: UsageRecordRequest,
+    x_api_key: str = Header(..., alias="X-API-Key"),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Record usage from a STOA gateway (CAB-1568: LLM proxy metering).
+
+    Authenticated via X-API-Key header (control plane API key).
+    Called by gateways after proxying LLM API requests.
+    """
+    valid_keys = settings.gateway_api_keys_list
+    if not valid_keys or x_api_key not in valid_keys:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    service = UsageMeteringService(db)
+    now = datetime.now(UTC)
+
+    # Use subscription_id as a deterministic api_id (UUID5 from namespace + subscription)
+    api_id = uuid.uuid5(uuid.NAMESPACE_URL, f"llm-proxy:{payload.subscription_id}")
+
+    await service.record_usage(
+        tenant_id=payload.tenant_id,
+        api_id=api_id,
+        period="daily",
+        period_start=now.replace(hour=0, minute=0, second=0, microsecond=0),
+        request_count=payload.request_count,
+        total_latency_ms=payload.total_latency_ms,
+        total_tokens=payload.total_tokens,
+    )
+    await db.commit()
+
+    logger.info(
+        "Usage recorded: tenant=%s, subscription=%s, tokens=%d",
+        payload.tenant_id,
+        payload.subscription_id,
+        payload.total_tokens,
+    )
+
+    return {"status": "recorded", "tenant_id": payload.tenant_id, "total_tokens": payload.total_tokens}

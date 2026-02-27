@@ -196,7 +196,7 @@ alembic upgrade head
 
 ## Git Workflow
 
-- **Branch naming**: `feat/CAB-XXXX-description`, `fix/CAB-XXXX-description`
+- **Branch naming**: `feat/issue-123-description`, `fix/issue-456-description`
 - **Commit format**: `type(scope): description` (commitlint enforced)
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`
 - **Scopes**: `api`, `ui`, `portal`, `gateway`, `helm`, `ci`, `docs`, `deps`

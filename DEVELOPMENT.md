@@ -160,6 +160,6 @@ Each component has a `.env.example` with all available settings. Required vars f
 ## Further Reading
 
 - Component READMEs: `control-plane-api/README.md`, `control-plane-ui/README.md`, etc.
-- CI quality gates: `.claude/rules/ci-quality-gates.md`
-- Git workflow: `.claude/rules/git-workflow.md`
+- CI pipeline: see [GitHub Actions workflows](.github/workflows/) for CI configuration
+- Git workflow: see [CONTRIBUTING.md](CONTRIBUTING.md) for branch and commit conventions
 - Architecture decisions: [docs.gostoa.dev/architecture/adr](https://docs.gostoa.dev/docs/architecture/adr)

@@ -222,12 +222,13 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
   <img src="https://contrib.rocks/image?repo=stoa-platform/stoa" alt="Contributors" />
 </a>
 
-## Community
+## Community & Support
 
 - [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions) — questions, ideas, show & tell
 - [Discord](https://discord.gg/j8tHSSes) — real-time chat
 - [Documentation](https://docs.gostoa.dev) — guides, ADRs, API reference
 - [Status Page](https://status.gostoa.dev) — platform uptime monitoring
+- [Support](SUPPORT.md) — how to get help and report issues
 
 ## License
 

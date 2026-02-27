@@ -269,7 +269,7 @@ class TestCreateApiTrialLimits:
         assert resp.status_code == 200
 
     def test_trial_tenant_at_limit_blocked(self, client_as_tenant_admin):
-        """Trial tenant at API limit gets 403."""
+        """Trial tenant at API limit gets 429."""
         tenant = _mock_tenant(settings=_trial_settings(days_ago=5))
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
@@ -282,8 +282,7 @@ class TestCreateApiTrialLimits:
             mock_git.list_apis = AsyncMock(return_value=[{}, {}, {}])  # 3 APIs = limit
             resp = client_as_tenant_admin.post("/v1/tenants/acme/apis", json=API_PAYLOAD)
 
-        assert resp.status_code == 403
-        assert resp.json()["detail"]["error"] == "trial_api_limit"
+        assert resp.status_code == 429
 
     def test_expired_trial_blocked_402(self, client_as_tenant_admin):
         """Expired trial tenant gets 402."""

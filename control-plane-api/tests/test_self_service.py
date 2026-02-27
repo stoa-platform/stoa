@@ -1,5 +1,5 @@
 """
-Tests for Self-Service Signup Router — CAB-1315.
+Tests for Self-Service Signup Router — CAB-1315, CAB-1541.
 
 Target: public endpoints for tenant self-service signup + status polling.
 Tests: 12 test cases covering signup, idempotency, validation, and status.
@@ -21,6 +21,7 @@ def _make_tenant(
     provisioning_status="pending",
     owner_email="owner@example.com",
     updated_at=None,
+    plan="trial",
 ):
     """Create a mock Tenant for self-service tests."""
     tenant = MagicMock(spec=Tenant)
@@ -28,7 +29,7 @@ def _make_tenant(
     tenant.name = name
     tenant.status = status
     tenant.provisioning_status = provisioning_status
-    tenant.settings = {"owner_email": owner_email}
+    tenant.settings = {"owner_email": owner_email, "plan": plan}
     tenant.updated_at = updated_at or datetime(2025, 1, 1, tzinfo=UTC)
     return tenant
 
@@ -58,15 +59,24 @@ def self_service_app(app, mock_db_session):
 class TestSelfServiceSignup:
     """Test POST /v1/self-service/tenants."""
 
+    def _mock_signup_response(self, tenant_id="my-company", status="provisioning", plan="trial"):
+        from src.schemas.self_service import SelfServiceSignupResponse
+
+        return SelfServiceSignupResponse(
+            tenant_id=tenant_id,
+            status=status,
+            plan=plan,
+            poll_url=f"/v1/self-service/tenants/{tenant_id}/status",
+        )
+
     def test_signup_new_tenant_returns_202(self, self_service_app, mock_db_session):
         """New tenant signup returns 202 with provisioning status."""
-        mock_repo = MagicMock()
-        mock_repo.get_by_id = AsyncMock(return_value=None)
-        mock_repo.create = AsyncMock()
-
         with (
-            patch("src.routers.self_service.TenantRepository", return_value=mock_repo),
-            patch("src.routers.self_service.provision_tenant", new_callable=AsyncMock),
+            patch(
+                "src.routers.self_service.signup_tenant",
+                new_callable=AsyncMock,
+                return_value=self._mock_signup_response(),
+            ),
             TestClient(self_service_app) as client,
         ):
             response = client.post(
@@ -82,17 +92,17 @@ class TestSelfServiceSignup:
         data = response.json()
         assert data["tenant_id"] == "my-company"
         assert data["status"] == "provisioning"
+        assert data["plan"] == "trial"
         assert "/v1/self-service/tenants/my-company/status" in data["poll_url"]
 
     def test_signup_response_does_not_include_email(self, self_service_app, mock_db_session):
         """Response MUST NOT include owner_email (PII protection)."""
-        mock_repo = MagicMock()
-        mock_repo.get_by_id = AsyncMock(return_value=None)
-        mock_repo.create = AsyncMock()
-
         with (
-            patch("src.routers.self_service.TenantRepository", return_value=mock_repo),
-            patch("src.routers.self_service.provision_tenant", new_callable=AsyncMock),
+            patch(
+                "src.routers.self_service.signup_tenant",
+                new_callable=AsyncMock,
+                return_value=self._mock_signup_response(),
+            ),
             TestClient(self_service_app) as client,
         ):
             response = client.post(
@@ -110,14 +120,12 @@ class TestSelfServiceSignup:
 
     def test_signup_existing_ready_returns_200(self, self_service_app, mock_db_session):
         """Existing READY tenant → idempotent 200 response."""
-        existing = _make_tenant(
-            provisioning_status=TenantProvisioningStatus.READY.value,
-        )
-        mock_repo = MagicMock()
-        mock_repo.get_by_id = AsyncMock(return_value=existing)
-
         with (
-            patch("src.routers.self_service.TenantRepository", return_value=mock_repo),
+            patch(
+                "src.routers.self_service.signup_tenant",
+                new_callable=AsyncMock,
+                return_value=self._mock_signup_response(status="ready"),
+            ),
             TestClient(self_service_app) as client,
         ):
             response = client.post(
@@ -129,20 +137,17 @@ class TestSelfServiceSignup:
                 },
             )
 
-        # Still 202 status code (router doesn't change it), but status field is "ready"
         data = response.json()
         assert data["status"] == "ready"
 
     def test_signup_existing_provisioning_returns_202(self, self_service_app, mock_db_session):
         """Existing PROVISIONING tenant → idempotent 202 with current status."""
-        existing = _make_tenant(
-            provisioning_status=TenantProvisioningStatus.PROVISIONING.value,
-        )
-        mock_repo = MagicMock()
-        mock_repo.get_by_id = AsyncMock(return_value=existing)
-
         with (
-            patch("src.routers.self_service.TenantRepository", return_value=mock_repo),
+            patch(
+                "src.routers.self_service.signup_tenant",
+                new_callable=AsyncMock,
+                return_value=self._mock_signup_response(status=TenantProvisioningStatus.PROVISIONING.value),
+            ),
             TestClient(self_service_app) as client,
         ):
             response = client.post(
@@ -183,13 +188,12 @@ class TestSelfServiceSignup:
 
     def test_signup_with_company_field(self, self_service_app, mock_db_session):
         """Optional company field is accepted."""
-        mock_repo = MagicMock()
-        mock_repo.get_by_id = AsyncMock(return_value=None)
-        mock_repo.create = AsyncMock()
-
         with (
-            patch("src.routers.self_service.TenantRepository", return_value=mock_repo),
-            patch("src.routers.self_service.provision_tenant", new_callable=AsyncMock),
+            patch(
+                "src.routers.self_service.signup_tenant",
+                new_callable=AsyncMock,
+                return_value=self._mock_signup_response(),
+            ),
             TestClient(self_service_app) as client,
         ):
             response = client.post(
@@ -204,15 +208,14 @@ class TestSelfServiceSignup:
 
         assert response.status_code == 202
 
-    def test_signup_fires_provisioning_task(self, self_service_app, mock_db_session):
-        """Signup triggers async provisioning task."""
-        mock_repo = MagicMock()
-        mock_repo.get_by_id = AsyncMock(return_value=None)
-        mock_repo.create = AsyncMock()
-
+    def test_signup_calls_signup_tenant_service(self, self_service_app, mock_db_session):
+        """Signup delegates to signup_tenant service."""
         with (
-            patch("src.routers.self_service.TenantRepository", return_value=mock_repo),
-            patch("src.routers.self_service.provision_tenant", new_callable=AsyncMock) as mock_provision,
+            patch(
+                "src.routers.self_service.signup_tenant",
+                new_callable=AsyncMock,
+                return_value=self._mock_signup_response(),
+            ) as mock_signup,
             TestClient(self_service_app) as client,
         ):
             client.post(
@@ -224,12 +227,7 @@ class TestSelfServiceSignup:
                 },
             )
 
-        # provision_tenant is called via asyncio.create_task, which may run in background
-        # We verify it was called with correct args
-        mock_provision.assert_called_once()
-        call_kwargs = mock_provision.call_args
-        assert call_kwargs.kwargs["tenant_id"] == "my-company"
-        assert call_kwargs.kwargs["owner_email"] == "owner@example.com"
+        mock_signup.assert_awaited_once()
 
 
 class TestSelfServiceStatus:
@@ -253,6 +251,7 @@ class TestSelfServiceStatus:
         data = response.json()
         assert data["tenant_id"] == "my-company"
         assert data["provisioning_status"] == "provisioning"
+        assert data["plan"] == "trial"
 
     def test_status_ready_includes_ready_at(self, self_service_app, mock_db_session):
         """READY tenant includes ready_at timestamp."""

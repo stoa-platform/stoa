@@ -147,6 +147,43 @@ Pane borders show role names via `pane-border-format` with nested `#{?#{==:#{pan
 
 Navigation: `Ctrl+B q` (show numbers + jump), `Ctrl+B z` (zoom toggle), `Ctrl+B o` (cycle).
 
+### ORCHESTRE Rules (Pane 0 — MANDATORY)
+
+The orchestrator is a **dispatcher**, not an implementer. These rules prevent context overflow.
+
+#### What ORCHESTRE does
+- Read state (brief, memory.md, plan.md)
+- Dispatch tickets to instances via `stoa-dispatch`
+- Monitor progress via `heg-state remote-ls`
+- Verify post-merge CD status
+- Update state files (memory.md, plan.md)
+- Run `/sync-plan`, `/fill-cycle`, `/council`
+
+#### What ORCHESTRE NEVER does
+- Create feature branches
+- Write or edit code files (src/, tests/, etc.)
+- Run test suites (pytest, vitest, cargo test)
+- Create PRs
+- Stay on the same conversation for more than ~20 turns
+
+#### Context Management
+- `/compact` every **10 turns** or at **40% context** — whichever comes first
+- `/clear` between each dispatch cycle (dispatch → verify → clear → next)
+- Delegate ALL codebase exploration to `Explore` subagents
+- If context reaches 60%: STOP, update state files, `/clear`, start fresh cycle
+
+#### Dispatch Cycle Pattern
+```
+1. Read session-brief.json (or memory.md + plan.md)
+2. Check instance states: heg-state remote-ls
+3. Dispatch 1-3 tickets to available instances
+4. /clear
+5. (new turn) Check progress, verify completed PRs
+6. Update state files if needed
+7. /clear
+8. Repeat
+```
+
 ### tmux Gotchas
 
 | Issue | Cause | Fix |

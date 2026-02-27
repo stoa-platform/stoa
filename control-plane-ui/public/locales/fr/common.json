@@ -42,7 +42,8 @@
     "audience": "Audience",
     "diagnostics": "Diagnostics",
     "analytics": "Analytique d'usage",
-    "securityPosture": "Posture de securite"
+    "securityPosture": "Posture de securite",
+    "proxyOwner": "Propriétaire de proxy"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",

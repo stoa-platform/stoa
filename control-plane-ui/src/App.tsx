@@ -154,6 +154,11 @@ const AnalyticsDashboard = lazy(() =>
   import('./pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard }))
 );
 
+// CAB-1545: Proxy Owner Dashboard
+const ProxyOwnerDashboard = lazy(() =>
+  import('./pages/ProxyOwner').then((m) => ({ default: m.ProxyOwnerDashboard }))
+);
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -463,6 +468,7 @@ function ProtectedRoutes() {
                 {/* Wave 1: Dashboard pages */}
                 <Route path="/security-posture" element={<SecurityPostureDashboard />} />
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
+                <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
               </Routes>
             </Suspense>
           )}

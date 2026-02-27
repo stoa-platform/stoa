@@ -1,0 +1,94 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gateway-arena-verify
+  namespace: stoa-system
+  labels:
+    app: gateway-arena-verify
+    environment: production
+    layer: verify
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: gateway-arena-verify
+        spec:
+          imagePullSecrets:
+            - name: ghcr-pull-secret
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 12345
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: verify
+              image: ghcr.io/stoa-platform/arena-bench:0.1.0
+              command:
+                - bash
+                - /scripts/run-arena-verify.sh
+              env:
+                - name: PUSHGATEWAY_URL
+                  value: "http://pushgateway.monitoring.svc:9091"
+                - name: TIMEOUT
+                  value: "5"
+                - name: ARENA_INSTANCE
+                  value: "k8s"
+                - name: HEALTHCHECKS_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: arena-verify-config
+                      key: healthchecks-url
+                      optional: true
+                - name: OIDC_CLIENT_ID
+                  value: "stoa-healthcheck"
+                - name: OIDC_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: arena-verify-config
+                      key: oidc-client-secret
+                      optional: true
+                - name: OIDC_TOKEN_URL
+                  value: "http://keycloak.stoa-system.svc:8080/realms/stoa/protocol/openid-connect/token"
+                - name: ENDPOINTS
+                  value: |
+                    {
+                      "api": "http://control-plane-api.stoa-system.svc:8000",
+                      "gateway": "http://stoa-gateway.stoa-system.svc:8080",
+                      "auth": "http://keycloak.stoa-system.svc:8080"
+                    }
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: 64Mi
+                limits:
+                  cpu: "200m"
+                  memory: 128Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: gateway-arena-scripts
+                defaultMode: 0755
+            - name: tmp
+              emptyDir: {}

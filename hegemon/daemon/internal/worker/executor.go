@@ -22,6 +22,7 @@ type Result struct {
 	FilesChanged int     `json:"files_changed"`
 	Summary      string  `json:"summary"`
 	CostUSD      float64 `json:"cost_usd"`
+	RateLimited  bool    `json:"-"` // true if 429/529 detected in output (not serialized)
 }
 
 // Executor runs Claude CLI on remote workers via SSH.
@@ -59,9 +60,10 @@ func (e *Executor) Execute(ctx context.Context, w *config.WorkerConfig, ticketID
 	// bash -l sources .profile which loads Infisical secrets (ANTHROPIC_API_KEY, GH_TOKEN).
 	// --dangerously-skip-permissions: workers are sandboxed fleet, bypasses all permission checks
 	// including PreToolUse hooks (pre-instance-scope.sh blocks Bash otherwise).
-	// --model: route to Opus for complex tickets (>5pts), Sonnet for small ones.
+	// --model: route to Haiku for <=3pts, Opus for everything else (v2 routing).
+	// stderr is captured (not silenced) to detect rate-limit signals (429/529).
 	cmd := fmt.Sprintf(
-		`bash -l -c 'cd %s && git checkout %s && git pull --ff-only && claude -p "$(cat %s)" --output-format json --dangerously-skip-permissions --model %s --max-turns %d --verbose 2>/dev/null; rm -f %s'`,
+		`bash -l -c 'cd %s && git checkout %s && git pull --ff-only && claude -p "$(cat %s)" --output-format json --dangerously-skip-permissions --model %s --max-turns %d --verbose 2>&1; rm -f %s'`,
 		e.repoPath, e.branch, promptFile, model, maxTurns, promptFile,
 	)
 
@@ -157,26 +159,26 @@ func (e *Executor) writeRemoteFile(client *ssh.Client, path, content string) err
 }
 
 // modelForEstimate selects claude model based on ticket complexity.
-// All STOA tickets use Opus: the codebase has 40K tokens of rules that saturate
-// Sonnet's context, causing it to spend all turns reading without writing.
-// Sonnet 3pt attempt: $2.91 wasted (31 turns, 0 output). Opus resolves in 5-15 turns.
+// v2 Opus-first routing: Haiku for small tasks (<=3pts), Opus for everything else.
+// Sonnet removed from autonomous mode: 44% of sessions >1h, same tasks <15min with Opus.
+// Haiku for <=3pts: structural changes that don't need deep reasoning, 80% cheaper.
 func modelForEstimate(estimate int) string {
-	// Always Opus for STOA — Sonnet can't handle the rule density.
-	// Keep the estimate param for future per-repo routing.
-	_ = estimate
+	if estimate <= 3 {
+		return "haiku"
+	}
 	return "opus"
 }
 
 func turnsForEstimate(estimate int) int {
 	switch {
 	case estimate <= 3:
-		return 40
+		return 20 // Haiku: small tasks, tight budget
 	case estimate <= 5:
-		return 50
+		return 30 // Opus: standard tasks
 	case estimate <= 8:
-		return 60
+		return 40 // Opus: complex tasks
 	default:
-		return 75
+		return 50 // Opus: MEGA tasks
 	}
 }
 
@@ -238,6 +240,10 @@ func parseResult(raw string) (*Result, error) {
 		if strings.Contains(raw, "Not logged in") || strings.Contains(raw, "authentication_failed") {
 			return &Result{Status: "failed", Summary: "Claude CLI not authenticated on worker"}, nil
 		}
+		// Check for rate-limit errors (429/529).
+		if isRateLimited(raw) {
+			return &Result{Status: "failed", Summary: "API rate limit hit (429/529)", RateLimited: true}, nil
+		}
 		// Try legacy single-object parse.
 		return parseLegacyResult(raw)
 	}
@@ -267,6 +273,7 @@ func parseResult(raw string) (*Result, error) {
 			if items[i].IsError {
 				r.Status = "failed"
 				r.Summary = truncate(items[i].Result, 200)
+				r.RateLimited = isRateLimited(items[i].Result)
 			} else {
 				// Try to extract our structured JSON from the result text.
 				if parsed := extractResultJSON(items[i].Result); parsed != nil {
@@ -317,6 +324,27 @@ func extractResultJSON(text string) *Result {
 		}
 	}
 	return nil
+}
+
+// isRateLimited checks raw output for API rate-limit signals (429/529 status codes,
+// overloaded errors, or quota exhaustion messages from Claude CLI stderr).
+func isRateLimited(raw string) bool {
+	patterns := []string{
+		"429",              // Too Many Requests
+		"529",              // Overloaded
+		"rate_limit",       // Anthropic rate limit error type
+		"overloaded",       // Anthropic overloaded error
+		"quota",            // Quota exhaustion
+		"credit balance",   // Account billing issue
+		"RateLimitError",   // SDK error class
+	}
+	lower := strings.ToLower(raw)
+	for _, p := range patterns {
+		if strings.Contains(lower, strings.ToLower(p)) {
+			return true
+		}
+	}
+	return false
 }
 
 func truncate(s string, maxLen int) string {

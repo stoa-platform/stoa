@@ -797,6 +797,26 @@ class KeycloakService:
         logger.info(f"Deleted service account {client_uuid}")
         return True
 
+    # Tenant realm provisioning (CAB-1547)
+    async def create_realm(self, realm_name: str, display_name: str) -> str:
+        """Create a Keycloak realm for a tenant.
+
+        Returns the realm name on success.
+        Raises RuntimeError if Keycloak is not connected.
+        """
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        realm_payload = {
+            "realm": realm_name,
+            "displayName": display_name,
+            "enabled": True,
+        }
+
+        self._admin.create_realm(realm_payload)
+        logger.info("Created Keycloak realm '%s' for tenant '%s'", realm_name, display_name)
+        return realm_name
+
     # Tenant setup
     async def setup_tenant_group(self, tenant_id: str, tenant_name: str) -> str:
         """Create a Keycloak group for the tenant"""

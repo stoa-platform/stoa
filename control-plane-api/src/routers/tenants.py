@@ -14,12 +14,15 @@ from ..repositories.tenant import TenantRepository
 from ..schemas.tenant import (
     TenantCreate,
     TenantProvisioningStatusResponse,
+    TenantProvisionRequest,
+    TenantProvisionResponse,
     TenantResponse,
     TenantUpdate,
 )
 from ..schemas.tenant_dr import ImportResult, TenantExportResponse, TenantImportRequest
 from ..services.cache_service import tenant_cache
 from ..services.kafka_service import Topics, kafka_service
+from ..services.keycloak_service import keycloak_service
 from ..services.tenant_dr_service import TenantExportService, TenantImportService
 from ..services.tenant_provisioning_service import deprovision_tenant, provision_tenant
 
@@ -123,6 +126,87 @@ async def get_provisioning_status(
         kc_group_id=tenant.kc_group_id,
         provisioning_attempts=tenant.provisioning_attempts or 0,
     )
+
+
+@router.post("/provision", response_model=TenantProvisionResponse, status_code=201)
+@require_permission(Permission.TENANTS_CREATE)
+async def provision_tenant_endpoint(
+    request: TenantProvisionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Provision a new tenant with Keycloak realm (CAB-1547).
+
+    Idempotent: returns existing tenant if already provisioned.
+    Creates DB record + Keycloak realm synchronously.
+    CPI Admin only.
+    """
+    tenant_id = request.name.lower().replace(" ", "-")
+    realm_name = tenant_id
+
+    repo = TenantRepository(db)
+
+    # Idempotent: return existing tenant if already provisioned
+    existing = await repo.get_by_id(tenant_id)
+    if existing:
+        return TenantProvisionResponse(
+            tenant_id=existing.id,
+            realm_name=realm_name,
+            provisioning_status=existing.provisioning_status or "ready",
+        )
+
+    try:
+        # Create DB record first
+        tenant = Tenant(
+            id=tenant_id,
+            name=request.display_name,
+            description=request.description,
+            status=TenantStatus.ACTIVE.value,
+            provisioning_status=TenantProvisioningStatus.PROVISIONING.value,
+            settings={"owner_email": request.owner_email},
+        )
+        tenant = await repo.create(tenant)
+
+        # Create Keycloak realm
+        await keycloak_service.create_realm(realm_name=realm_name, display_name=request.display_name)
+
+        # Mark provisioning as ready
+        tenant.provisioning_status = TenantProvisioningStatus.READY.value
+        tenant = await repo.update(tenant)
+
+        # Emit audit event
+        await kafka_service.emit_audit_event(
+            tenant_id=tenant_id,
+            action="provision",
+            resource_type="tenant",
+            resource_id=tenant_id,
+            user_id=user.id,
+            details={"realm_name": realm_name},
+        )
+
+        logger.info("Provisioned tenant %s with realm %s by %s", tenant_id, realm_name, user.username)
+
+        return TenantProvisionResponse(
+            tenant_id=tenant_id,
+            realm_name=realm_name,
+            provisioning_status=TenantProvisioningStatus.READY.value,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Mark provisioning as failed in DB if tenant was created
+        try:
+            tenant_record = await repo.get_by_id(tenant_id)
+            if tenant_record:
+                tenant_record.provisioning_status = TenantProvisioningStatus.FAILED.value
+                tenant_record.provisioning_error = str(e)
+                await repo.update(tenant_record)
+        except Exception:
+            logger.warning("Failed to update provisioning status for %s", tenant_id)
+        logger.error("Failed to provision tenant %s: %s", tenant_id, e)
+        raise HTTPException(status_code=500, detail=f"Provisioning failed: {e!s}")
 
 
 @router.get("/{tenant_id}/export", response_model=TenantExportResponse)

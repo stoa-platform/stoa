@@ -30,6 +30,13 @@ OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-stoa-healthcheck}"
 OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET:-}"
 OIDC_TOKEN_URL="${OIDC_TOKEN_URL:-}"
 SCENARIOS="ent_mcp_discovery ent_mcp_toolcall ent_auth_chain ent_policy_eval ent_guardrails ent_quota_burst ent_resilience ent_governance"
+WORK_DIR="/tmp/arena-enterprise"
+
+log_json() {
+  local ts
+  ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  echo "{\"time\":\"${ts}\",\"level\":\"INFO\",\"msg\":$1}"
+}
 
 # ---------------------------------------------------------------------------
 # JWT Auto-Fetch: if ARENA_JWT is empty but OIDC credentials are available,
@@ -53,13 +60,6 @@ if [ -z "$ARENA_JWT" ] && [ -n "$OIDC_CLIENT_SECRET" ] && [ -n "$OIDC_TOKEN_URL"
     log_json "\"WARNING: JWT fetch failed — auth scenarios will use unauthenticated mode: ${ERROR_MSG}\""
   fi
 fi
-WORK_DIR="/tmp/arena-enterprise"
-
-log_json() {
-  local ts
-  ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  echo "{\"time\":\"${ts}\",\"level\":\"INFO\",\"msg\":$1}"
-}
 
 log_json "\"Arena Enterprise orchestrator starting (Layer 1)\""
 

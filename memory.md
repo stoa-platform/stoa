@@ -7,6 +7,9 @@
 > Full history: 1305+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
+### Cycle 12 (Feb 27+)
+- ✅ CAB-1552: Lazy MCP Discovery + ADR-051 (5 pts) — PR #1209 (LazyMcpDiscovery struct, moka cache, 10 tests)
+
 ### Cycle 11 (Feb 27) — 152/152 pts, 8 tickets, 9 PRs, 3h wall clock
 - ✅ CAB-1539: Portal Unit Tests (21 pts) — PR #1181 (15 untested components)
 - ✅ CAB-1523: E2E @wip DPoP & MCP Scenarios (13 pts) — PR #1182 (7 DPoP + 1 MCP resource)
@@ -147,6 +150,6 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - Velocity C9: 830 pts / 68 issues
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day
-- ADR numbering: stoa-docs owns 001-050. Next: **ADR-051**
+- ADR numbering: stoa-docs owns 001-051. Next: **ADR-052**
 - docs.gostoa.dev = 41+ articles, all 8 migration spokes published
 - Veille system: L1 weekly, L2 monthly, L3 quarterly

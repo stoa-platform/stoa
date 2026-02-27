@@ -249,3 +249,92 @@ class TestGatewayImportService:
 
         # Adapter disconnect should still be called (finally block)
         mock_adapter.disconnect.assert_awaited_once()
+
+    async def test_gateway_not_found(self):
+        """Import with invalid gateway ID → ValueError."""
+        from src.services.gateway_import_service import GatewayImportService
+
+        mock_db = AsyncMock()
+
+        mock_gw_repo = MagicMock()
+        mock_gw_repo.get_by_id = AsyncMock(return_value=None)
+
+        mock_deploy_repo = MagicMock()
+
+        with patch(
+            "src.services.gateway_import_service.GatewayInstanceRepository",
+            return_value=mock_gw_repo,
+        ), patch(
+            "src.services.gateway_import_service.GatewayDeploymentRepository",
+            return_value=mock_deploy_repo,
+        ):
+            svc = GatewayImportService(mock_db)
+            with pytest.raises(ValueError, match="not found"):
+                await svc.import_from_gateway(uuid4())
+
+    async def test_preview_gateway_not_found(self):
+        """Preview with invalid gateway ID → ValueError."""
+        from src.services.gateway_import_service import GatewayImportService
+
+        mock_db = AsyncMock()
+
+        mock_gw_repo = MagicMock()
+        mock_gw_repo.get_by_id = AsyncMock(return_value=None)
+
+        mock_deploy_repo = MagicMock()
+
+        with patch(
+            "src.services.gateway_import_service.GatewayInstanceRepository",
+            return_value=mock_gw_repo,
+        ), patch(
+            "src.services.gateway_import_service.GatewayDeploymentRepository",
+            return_value=mock_deploy_repo,
+        ):
+            svc = GatewayImportService(mock_db)
+            with pytest.raises(ValueError, match="not found"):
+                await svc.preview_import(uuid4())
+
+    async def test_import_records_details(self):
+        """Verify import result includes details for each API."""
+        from src.services.gateway_import_service import GatewayImportService
+
+        mock_db = AsyncMock()
+        mock_db.flush = AsyncMock()
+        mock_db.commit = AsyncMock()
+
+        gateway = self._make_gateway()
+
+        mock_adapter = MagicMock()
+        mock_adapter.connect = AsyncMock()
+        mock_adapter.disconnect = AsyncMock()
+        mock_adapter.list_apis = AsyncMock(return_value=[
+            {"id": "new-1", "name": "New API", "tenant_id": "acme"},
+        ])
+
+        mock_execute_result = MagicMock()
+        mock_execute_result.scalar_one_or_none.return_value = None
+        mock_db.execute = AsyncMock(return_value=mock_execute_result)
+
+        mock_gw_repo = MagicMock()
+        mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
+
+        mock_deploy_repo = MagicMock()
+        mock_deploy_repo.create = AsyncMock(side_effect=lambda d: d)
+
+        with patch(
+            "src.services.gateway_import_service.GatewayInstanceRepository",
+            return_value=mock_gw_repo,
+        ), patch(
+            "src.services.gateway_import_service.GatewayDeploymentRepository",
+            return_value=mock_deploy_repo,
+        ), patch(
+            "src.services.gateway_import_service.AdapterRegistry"
+        ) as mock_registry:
+            mock_registry.create.return_value = mock_adapter
+
+            svc = GatewayImportService(mock_db)
+            result = await svc.import_from_gateway(gateway.id)
+
+        assert len(result.details) == 1
+        assert result.details[0].action == "create"
+        assert result.details[0].api_name == "New API"

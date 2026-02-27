@@ -18,7 +18,10 @@
 //! - **Activity tracking**: Monitor last activity per session
 //! - **Attestation**: Require periodic re-attestation
 //! - **Alerts**: Notify on zombie session detection
-
-#![allow(dead_code)]
+//!
+//! # Tests
+//!
+//! Inline tests in `zombie.rs` (28 tests covering lifecycle, attestation,
+//! revocation, zombie detection, reaping, stats, and config defaults).
 
 pub mod zombie;

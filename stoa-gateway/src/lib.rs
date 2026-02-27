@@ -147,7 +147,16 @@ pub fn build_router(state: AppState) -> Router {
                 .post(admin::skills_upsert)
                 .delete(admin::skills_delete),
         )
-        .route("/skills/:id", get(admin::skills_get_by_id))
+        // CAB-1551: Skills health (literal path before parametric :id)
+        .route("/skills/health", get(admin::skills_health_all))
+        .route(
+            "/skills/:id",
+            get(admin::skills_get_by_id)
+                .put(admin::skills_update)
+                .delete(admin::skills_delete_by_id),
+        )
+        .route("/skills/:id/health", get(admin::skills_health))
+        .route("/skills/:id/health/reset", post(admin::skills_health_reset))
         // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
         .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
         // CAB-1316: Per-request diagnostic report + aggregated summary

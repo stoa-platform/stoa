@@ -15,6 +15,7 @@ pub mod dynamic_tool;
 pub mod native_tool;
 pub mod proxy_tool;
 pub mod stoa_tools;
+pub mod validation;
 
 use crate::uac::Action;
 
@@ -291,11 +292,27 @@ impl ToolRegistry {
         }
     }
 
-    /// Register a tool
+    /// Register a tool, rejecting it if validation fails (CAB-1551).
+    ///
+    /// Invalid tools are logged with a warning and silently dropped.
+    /// Use [`try_register`] if you need the validation errors.
     pub fn register(&self, tool: Arc<dyn Tool>) {
+        if let Err(e) = validation::validate_tool(tool.as_ref()) {
+            tracing::warn!(tool = %e.tool_name, errors = %e, "Rejecting invalid tool");
+            return;
+        }
         let name = tool.name().to_string();
         tracing::info!(tool = %name, action = ?tool.required_action(), "Registering MCP tool");
         self.tools.write().insert(name, tool);
+    }
+
+    /// Register a tool, returning validation errors if the definition is malformed (CAB-1551).
+    pub fn try_register(&self, tool: Arc<dyn Tool>) -> Result<(), validation::ValidationErrors> {
+        validation::validate_tool(tool.as_ref())?;
+        let name = tool.name().to_string();
+        tracing::info!(tool = %name, action = ?tool.required_action(), "Registering MCP tool");
+        self.tools.write().insert(name, tool);
+        Ok(())
     }
 
     /// Register an alias from an old tool name to a new canonical name (CAB-606).

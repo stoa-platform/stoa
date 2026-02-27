@@ -4,12 +4,13 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=forking
+Type=simple
 User=hegemon
 Environment=HOME=/home/hegemon
+Environment=TERM=xterm-256color
+Environment=LANG=en_US.UTF-8
 ExecStart=/home/hegemon/.local/bin/hegemon-start.sh
 ExecStop=/usr/bin/tmux -L hegemon kill-session -t hegemon
-RemainAfterExit=yes
 Restart=on-failure
 RestartSec=30
 

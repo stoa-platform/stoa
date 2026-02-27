@@ -7,7 +7,9 @@
 #   hegemon_notify "started" "CAB-1350" "Working on traceparent injection"
 #   hegemon_notify "done" "CAB-1350" "PR #578 merged"
 #   hegemon_notify "error" "CAB-1350" "CI failed: clippy warning"
-set -euo pipefail
+# NOTE: no "set -euo pipefail" here — this file is sourced from .bashrc.
+# Setting -e in a sourced script bleeds into the interactive shell and kills
+# it on the first non-zero return code.
 
 # Resolve env
 : "${SLACK_WEBHOOK_URL:=}"

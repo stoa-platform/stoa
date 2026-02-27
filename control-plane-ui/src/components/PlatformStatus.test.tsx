@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+import { createAuthMock, type PersonaRole } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
 
 // Mock hooks
 const mockRefetch = vi.fn();
@@ -9,6 +11,10 @@ const mockMutateAsync = vi.fn();
 vi.mock('../hooks/usePlatformStatus', () => ({
   usePlatformStatus: vi.fn(),
   useSyncComponent: vi.fn(),
+}));
+
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: vi.fn(),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -73,6 +79,7 @@ const mockStatus = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   mockUseSyncComponent.mockReturnValue({
     mutateAsync: mockMutateAsync,
     isPending: false,
@@ -216,4 +223,53 @@ describe('PlatformStatus', () => {
     renderComponent();
     expect(screen.getByText('Checking Status...')).toBeInTheDocument();
   });
+
+  // CAB-1553: 4-persona RBAC tests for dashboard widgets
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      beforeEach(() => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        mockUsePlatformStatus.mockReturnValue({
+          data: mockStatus,
+          isLoading: false,
+          error: null,
+          refetch: mockRefetch,
+        } as any);
+      });
+
+      it('sees platform status heading and components', () => {
+        renderComponent();
+        expect(screen.getByText('Platform Status')).toBeInTheDocument();
+        expect(screen.getByText('STOA Gateway')).toBeInTheDocument();
+        expect(screen.getByText('Control Plane API')).toBeInTheDocument();
+      });
+
+      if (role === 'viewer') {
+        it('does not see Sync Now button', () => {
+          renderComponent();
+          expect(screen.queryByText('Sync Now')).not.toBeInTheDocument();
+        });
+
+        it('does not see external links', () => {
+          renderComponent();
+          expect(screen.queryByText('ArgoCD')).not.toBeInTheDocument();
+          expect(screen.queryByText('Grafana')).not.toBeInTheDocument();
+        });
+      } else {
+        it('sees Sync Now button for OutOfSync components', () => {
+          renderComponent();
+          expect(screen.getByText('Sync Now')).toBeInTheDocument();
+        });
+
+        it('sees external links', () => {
+          renderComponent();
+          expect(screen.getByText('ArgoCD')).toBeInTheDocument();
+          expect(screen.getByText('Grafana')).toBeInTheDocument();
+          expect(screen.getByText('Prometheus')).toBeInTheDocument();
+          expect(screen.getByText('Logs')).toBeInTheDocument();
+        });
+      }
+    }
+  );
 });

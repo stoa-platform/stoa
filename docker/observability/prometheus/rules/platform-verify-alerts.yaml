@@ -1,0 +1,135 @@
+# Platform Verification Alerting Rules (Arena Layer 2)
+#
+# Monitors platform health via CUJ (Critical User Journey) results
+# pushed to Pushgateway by the gateway-arena-verify CronJob.
+#
+# CUJs tested every 15 min:
+#   1. api_health   — API + Gateway + Keycloak /health endpoints
+#   2. auth_flow    — OIDC token → authenticated API call
+#   3. mcp_discovery — MCP capabilities + tools/list
+#
+# Usage:
+#   kubectl apply -f docker/observability/prometheus/rules/platform-verify-alerts.yaml
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: platform-verify-alerts
+  namespace: stoa-system
+  labels:
+    app: stoa-platform
+    prometheus: stoa
+    role: alerting-rules
+spec:
+  groups:
+    # ======================================================================
+    # Recording Rules
+    # ======================================================================
+    - name: platform-verify-recording
+      interval: 1m
+      rules:
+        # Overall platform health ratio (0-1)
+        - record: platform:verify_health:ratio
+          expr: |
+            platform_verify_overall_score
+            / clamp_min(platform_verify_total, 1)
+
+        # CUJ availability over 1h (proportion of passing runs)
+        - record: platform:cuj_availability_1h:ratio
+          expr: |
+            avg_over_time(platform_verify_cuj_status[1h])
+
+    # ======================================================================
+    # Alert Rules
+    # ======================================================================
+    - name: platform-verify-alerts
+      rules:
+        # Any CUJ failing for 2+ consecutive runs (30 min at 15-min interval)
+        - alert: PlatformCUJFailing
+          expr: |
+            platform_verify_cuj_status == 0
+          for: 30m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Platform CUJ {{ $labels.cuj }} failing for 30+ minutes"
+            description: >
+              Critical User Journey "{{ $labels.cuj }}" has been failing
+              for at least 2 consecutive verification runs.
+              Check component health and recent deployments.
+
+        # Verification CronJob not running (stale metrics)
+        - alert: PlatformVerifyStale
+          expr: |
+            (time() - platform_verify_last_run_timestamp) > 1200
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Platform verification not running (last run >20 min ago)"
+            description: >
+              The gateway-arena-verify CronJob has not reported results
+              for {{ $value | humanizeDuration }}. The CronJob may be
+              failing silently or the Pushgateway connection is broken.
+
+        # Degraded state: at least one CUJ passing but not all
+        - alert: PlatformDegraded
+          expr: |
+            platform_verify_overall_score > 0
+              and platform_verify_overall_score < platform_verify_total
+          for: 45m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Platform degraded: {{ $value }}/{{ printf `platform_verify_total` | query | first | value }} CUJs passing"
+            description: >
+              Some platform CUJs are passing but not all. The platform is
+              partially functional. Check which CUJs are failing via the
+              Platform Health dashboard.
+
+        # Auth flow specifically failing (common after Keycloak restarts)
+        - alert: PlatformAuthFlowDown
+          expr: |
+            platform_verify_cuj_status{cuj="auth_flow"} == 0
+          for: 15m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Auth flow CUJ failing — Keycloak may be down or misconfigured"
+            description: >
+              The OIDC token acquisition + authenticated API call is failing.
+              Check Keycloak pod status, realm configuration, and the
+              stoa-healthcheck client credentials.
+
+        # MCP discovery failing (gateway issue)
+        - alert: PlatformMCPDown
+          expr: |
+            platform_verify_cuj_status{cuj="mcp_discovery"} == 0
+          for: 15m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "MCP Discovery CUJ failing — Gateway MCP endpoints unreachable"
+            description: >
+              /mcp/capabilities or /mcp/tools/list is not responding correctly.
+              Check stoa-gateway pod status and MCP configuration.
+
+        # CUJ latency spike (any CUJ taking >3s)
+        - alert: PlatformCUJSlow
+          expr: |
+            platform_verify_cuj_duration_seconds > 3
+          for: 30m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "CUJ {{ $labels.cuj }} taking {{ $value | humanize }}s (>3s threshold)"
+            description: >
+              The {{ $labels.cuj }} journey is responding slowly.
+              This may indicate resource pressure, network issues,
+              or degraded backend performance.

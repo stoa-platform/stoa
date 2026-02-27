@@ -9,16 +9,23 @@ globs:
 
 ## Overview
 
-Continuous comparative benchmarking: 5 gateways (3 K8s co-located + 2 VPS co-located) across STOA, Kong, and Gravitee.
-**Engine**: k6 (replaced Python requests in Feb 2026, PR #438).
-**Methodology**: Median of 5 runs (1 discarded as warm-up), CI95 confidence intervals.
-K8s CronJob runs every 30 min on OVH K8s (3 gateways). VPS sidecars run on host cron (1 gateway each).
-Metrics pushed to Pushgateway, visualized in Grafana.
+Three-layer continuous verification system:
+
+| Layer | Purpose | Frequency | Engine |
+|-------|---------|-----------|--------|
+| **L0 — Proxy Baseline** | Raw throughput, burst, latency | 30 min | k6 |
+| **L1 — Enterprise AI Readiness** | 8 MCP dimensions | 1 hour | k6 |
+| **L2 — Platform Verification** | 3 CUJs (health, auth, MCP) | 15 min | curl/bash |
+
+**L0/L1 Engine**: k6 (replaced Python requests in Feb 2026, PR #438).
+**L0/L1 Methodology**: Median of 5 runs (1 discarded as warm-up), CI95 confidence intervals.
+**L2 Engine**: curl-based CUJs, pass/fail + duration. Dead man's switch via Healthchecks.
+All layers push to Pushgateway, visualized in Grafana.
 
 ## Architecture
 
 ```
-K8s CronJob (OVH MKS, every 30 min):
+K8s CronJob (OVH MKS, every 30 min — L0):
   run-arena.sh (orchestrator)
     └── For each K8s gateway (3):
         └── For each run (5):
@@ -28,7 +35,14 @@ K8s CronJob (OVH MKS, every 30 min):
     └── Reads JSON summaries → median → score → CI95 → Prometheus text
     └── curl → Pushgateway
 
-VPS Sidecar (host cron, every 30 min):
+K8s CronJob (OVH MKS, every 15 min — L2):
+  run-arena-verify.sh (platform verifier)
+    └── CUJ 1: API Health Chain (curl /health on API + Gateway + Keycloak)
+    └── CUJ 2: Auth Flow (OIDC token → authenticated API call)
+    └── CUJ 3: MCP Discovery→Call (/mcp/capabilities → /mcp/tools/list)
+    └── Results → Pushgateway + Healthchecks ping
+
+VPS Sidecar (host cron, every 30 min — L0):
   Same image + scripts, benchmarks 1 local gateway
   Pushes to https://pushgateway.gostoa.dev (IP-whitelisted)
 ```
@@ -258,6 +272,92 @@ Any gateway can participate in Layer 1:
 
 The benchmark is fair: same k6 scenarios, same scoring formula, same CI95 methodology.
 
+## Layer 2: Platform Continuous Verification
+
+Continuous CUJ (Critical User Journey) testing — verifies the platform works end-to-end every 15 minutes.
+Unlike L0/L1 which measure performance, L2 answers: "Does the platform work right now?"
+
+### 3 CUJs
+
+| # | CUJ | What It Tests | Pass Criteria |
+|---|-----|---------------|---------------|
+| 1 | API Health Chain | `/health` on API, Gateway, Keycloak | All 3 return 2xx |
+| 2 | Auth Flow | OIDC client_credentials → authenticated API call | Token obtained + API returns 2xx/3xx |
+| 3 | MCP Discovery→Call | `GET /mcp/capabilities` + `POST /mcp/tools/list` | Both return 2xx with valid JSON |
+
+### Prerequisites
+
+- K8s Secret `arena-verify-config` in `stoa-system` namespace:
+  - `oidc-client-secret`: Keycloak `stoa-healthcheck` client secret
+  - `healthchecks-url`: Healthchecks ping URL (e.g., `https://hc.gostoa.dev/ping/<UUID>`)
+- Keycloak client `stoa-healthcheck` (confidential, client_credentials grant, stoa realm)
+
+### Layer 2 Key Files
+
+| File | Purpose |
+|------|---------|
+| `scripts/traffic/arena/run-arena-verify.sh` | CUJ verification script (curl-based) |
+| `k8s/arena/cronjob-verify.yaml` | CronJob manifest (every 15 min) |
+| `docker/observability/prometheus/rules/platform-verify-alerts.yaml` | PrometheusRule (6 alerts) |
+| `docker/observability/grafana/dashboards/platform-health.json` | Grafana dashboard |
+
+### Layer 2 Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `platform_verify_cuj_status` | gauge | CUJ pass (1) or fail (0), label: `cuj` |
+| `platform_verify_cuj_duration_seconds` | gauge | CUJ execution duration, label: `cuj` |
+| `platform_verify_overall_score` | gauge | Number of CUJs passing (0-3) |
+| `platform_verify_total` | gauge | Total number of CUJs (3) |
+| `platform_verify_last_run_timestamp` | gauge | Unix timestamp of last run |
+| `platform:verify_health:ratio` | recording | Overall health ratio (0-1) |
+| `platform:cuj_availability_1h:ratio` | recording | Per-CUJ 1h rolling availability |
+
+### Layer 2 Alerts
+
+| Alert | Condition | Duration | Severity |
+|-------|-----------|----------|----------|
+| `PlatformCUJFailing` | Any CUJ status == 0 | 30m | critical |
+| `PlatformVerifyStale` | Last run > 20 min ago | 5m | warning |
+| `PlatformDegraded` | Some but not all CUJs passing | 45m | warning |
+| `PlatformAuthFlowDown` | Auth CUJ == 0 | 15m | critical |
+| `PlatformMCPDown` | MCP CUJ == 0 | 15m | critical |
+| `PlatformCUJSlow` | Any CUJ duration > 3s | 30m | warning |
+
+### Deploy Layer 2
+
+```bash
+# 1. Create Keycloak client (manual — see DoD)
+# 2. Create K8s secret
+kubectl create secret generic arena-verify-config \
+  --from-literal=oidc-client-secret=<SECRET> \
+  --from-literal=healthchecks-url=https://hc.gostoa.dev/ping/<UUID> \
+  -n stoa-system
+
+# 3. Update ConfigMap (add verify script)
+kubectl create configmap gateway-arena-scripts \
+  --from-file=scripts/traffic/arena/benchmark.js \
+  --from-file=scripts/traffic/arena/benchmark-enterprise.js \
+  --from-file=scripts/traffic/arena/run-arena.sh \
+  --from-file=scripts/traffic/arena/run-arena-enterprise.sh \
+  --from-file=scripts/traffic/arena/run-arena.py \
+  --from-file=scripts/traffic/arena/run-arena-enterprise.py \
+  --from-file=scripts/traffic/arena/run-arena-verify.sh \
+  -n stoa-system --dry-run=client -o yaml | kubectl apply -f -
+
+# 4. Apply CronJob + PrometheusRule
+kubectl apply -f k8s/arena/cronjob-verify.yaml
+kubectl apply -f docker/observability/prometheus/rules/platform-verify-alerts.yaml
+
+# 5. Provision Grafana dashboard
+# Copy platform-health.json to Grafana provisioning path
+
+# 6. Manual test
+kubectl create job --from=cronjob/gateway-arena-verify verify-test -n stoa-system
+kubectl logs -n stoa-system -l job-name=verify-test --follow
+kubectl delete job verify-test -n stoa-system
+```
+
 ## Manual Run
 
 ```bash
@@ -270,4 +370,9 @@ kubectl delete job arena-manual -n stoa-system
 kubectl create job --from=cronjob/gateway-arena-enterprise arena-ent-manual -n stoa-system
 kubectl logs -n stoa-system -l job-name=arena-ent-manual --follow
 kubectl delete job arena-ent-manual -n stoa-system
+
+# Layer 2 (platform verify) — one-off verification
+kubectl create job --from=cronjob/gateway-arena-verify verify-manual -n stoa-system
+kubectl logs -n stoa-system -l job-name=verify-manual --follow
+kubectl delete job verify-manual -n stoa-system
 ```

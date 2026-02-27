@@ -47,6 +47,10 @@ export interface TaxonomyResponse {
 
 export interface ExecutionParams {
   status?: string;
+  error_category?: string;
+  api_name?: string;
+  date_from?: string;
+  date_to?: string;
   page?: number;
   page_size?: number;
 }
@@ -64,6 +68,10 @@ export const executionsService = {
         page: params?.page || 1,
         page_size: params?.page_size || 20,
         status: params?.status,
+        error_category: params?.error_category,
+        api_name: params?.api_name,
+        date_from: params?.date_from,
+        date_to: params?.date_to,
       },
     });
     return response.data;

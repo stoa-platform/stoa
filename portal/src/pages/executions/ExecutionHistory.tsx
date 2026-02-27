@@ -1,7 +1,7 @@
 /**
- * Execution History Page — Portal read-only consumer view (CAB-1318)
+ * Execution History Page — Portal read-only consumer view (CAB-1318, CAB-1554)
  *
- * Shows execution logs, error breakdown, and status filtering.
+ * Shows execution logs, error breakdown, and multi-filter controls.
  */
 
 import { useState } from 'react';
@@ -16,23 +16,42 @@ const STATUS_COLORS: Record<string, string> = {
 const CATEGORY_LABELS: Record<string, string> = {
   auth: 'Auth',
   rate_limit: 'Rate Limit',
-  backend: 'Backend',
-  timeout: 'Timeout',
+  upstream: 'Upstream',
   validation: 'Validation',
+  internal: 'Internal',
+  timeout: 'Timeout',
 };
 
 export function ExecutionHistoryPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [apiNameFilter, setApiNameFilter] = useState<string>('');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
 
   const { data: executions, isLoading } = useExecutions({
     page,
     page_size: 20,
     status: statusFilter || undefined,
+    error_category: categoryFilter || undefined,
+    api_name: apiNameFilter || undefined,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
   });
   const { data: taxonomy } = useExecutionTaxonomy();
 
   const totalPages = executions ? Math.ceil(executions.total / executions.page_size) : 0;
+  const hasActiveFilters = statusFilter || categoryFilter || apiNameFilter || dateFrom || dateTo;
+
+  function clearFilters() {
+    setStatusFilter('');
+    setCategoryFilter('');
+    setApiNameFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  }
 
   return (
     <div className="space-y-6">
@@ -72,8 +91,8 @@ export function ExecutionHistoryPage() {
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-end">
         <select
           value={statusFilter}
           onChange={(e) => {
@@ -88,6 +107,66 @@ export function ExecutionHistoryPage() {
           <option value="error">Error</option>
           <option value="timeout">Timeout</option>
         </select>
+
+        <select
+          value={categoryFilter}
+          onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-neutral-900 dark:text-white"
+          aria-label="Filter by error type"
+        >
+          <option value="">All Error Types</option>
+          {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="text"
+          value={apiNameFilter}
+          onChange={(e) => {
+            setApiNameFilter(e.target.value);
+            setPage(1);
+          }}
+          placeholder="API name..."
+          className="rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-neutral-900 dark:text-white"
+          aria-label="Filter by API name"
+        />
+
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => {
+            setDateFrom(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-neutral-900 dark:text-white"
+          aria-label="Date from"
+        />
+
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => {
+            setDateTo(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm px-3 py-2 text-neutral-900 dark:text-white"
+          aria-label="Date to"
+        />
+
+        {hasActiveFilters && (
+          <button
+            onClick={clearFilters}
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Executions Table */}

@@ -47,3 +47,23 @@ class TestEncryptDecryptRoundTrip:
         encrypted = enc_mod.encrypt_auth_config(original)
         decrypted = enc_mod.decrypt_auth_config(encrypted)
         assert decrypted == original
+
+    def test_empty_dict(self):
+        original = {}
+        encrypted = enc_mod.encrypt_auth_config(original)
+        decrypted = enc_mod.decrypt_auth_config(encrypted)
+        assert decrypted == original
+
+    def test_unicode_values(self):
+        original = {"key": "clé-secrète-日本語", "note": "émojis: 🔑🔐"}
+        encrypted = enc_mod.encrypt_auth_config(original)
+        decrypted = enc_mod.decrypt_auth_config(encrypted)
+        assert decrypted == original
+
+    def test_same_input_different_ciphertexts(self):
+        """Fernet uses a random IV, so same plaintext → different ciphertext each time."""
+        data = {"secret": "fixed-value"}
+        e1 = enc_mod.encrypt_auth_config(data)
+        e2 = enc_mod.encrypt_auth_config(data)
+        assert e1 != e2
+        assert enc_mod.decrypt_auth_config(e1) == enc_mod.decrypt_auth_config(e2)

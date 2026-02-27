@@ -5,6 +5,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import (
     Permission,
@@ -14,6 +15,8 @@ from ..auth import (
     require_tenant_access,
     require_writable_environment,
 )
+from ..database import get_db
+from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
 from ..services.git_service import git_service
 from ..services.kafka_service import kafka_service
@@ -134,7 +137,9 @@ async def get_api(tenant_id: str, api_id: str, user: User = Depends(get_current_
 @router.post("", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_CREATE)
 @require_tenant_access
-async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_current_user)):
+async def create_api(
+    tenant_id: str, api: APICreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
     """
     Create a new API in GitLab and emit event.
 
@@ -142,6 +147,17 @@ async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_cu
     - tenants/{tenant_id}/apis/{api_name}/api.yaml
     - tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)
     """
+    # Check tenant API limit (CAB-1549)
+    from ..routers.tenants import get_tenant_limits
+
+    repo = TenantRepository(db)
+    tenant = await repo.get_by_id(tenant_id)
+    if tenant:
+        max_apis, _ = get_tenant_limits(tenant)
+        current_apis = await git_service.list_apis(tenant_id)
+        if len(current_apis) >= max_apis:
+            raise HTTPException(status_code=429, detail=f"API limit reached ({max_apis})")
+
     api_id = str(uuid.uuid4())
 
     # Check if portal:published tag is present for portal_promoted status

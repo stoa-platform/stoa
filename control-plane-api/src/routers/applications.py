@@ -6,8 +6,11 @@ from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
+from ..database import get_db
+from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
 from ..services.keycloak_service import keycloak_service
 
@@ -106,8 +109,21 @@ async def get_application(tenant_id: str, app_id: str, user: User = Depends(get_
 @router.post("", response_model=ApplicationResponse, status_code=201)
 @require_permission(Permission.APPS_CREATE)
 @require_tenant_access
-async def create_application(tenant_id: str, app: ApplicationCreate, user: User = Depends(get_current_user)):
+async def create_application(
+    tenant_id: str, app: ApplicationCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
     """Create a new application (Keycloak client)."""
+    # Check tenant application limit (CAB-1549)
+    from ..routers.tenants import get_tenant_limits
+
+    repo = TenantRepository(db)
+    tenant = await repo.get_by_id(tenant_id)
+    if tenant:
+        _, max_apps = get_tenant_limits(tenant)
+        current_apps = await keycloak_service.get_clients(tenant_id)
+        if len(current_apps) >= max_apps:
+            raise HTTPException(status_code=429, detail=f"Application limit reached ({max_apps})")
+
     from datetime import datetime
 
     result = await keycloak_service.create_client(

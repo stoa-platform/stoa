@@ -18,15 +18,20 @@ from ..schemas.tenant import (
     TenantProvisionResponse,
     TenantResponse,
     TenantUpdate,
+    TenantUsageResponse,
 )
 from ..schemas.tenant_dr import ImportResult, TenantExportResponse, TenantImportRequest
 from ..services.cache_service import tenant_cache
+from ..services.git_service import git_service
 from ..services.kafka_service import Topics, kafka_service
 from ..services.keycloak_service import keycloak_service
 from ..services.tenant_dr_service import TenantExportService, TenantImportService
 from ..services.tenant_provisioning_service import deprovision_tenant, provision_tenant
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_MAX_APIS = 10
+DEFAULT_MAX_APPLICATIONS = 20
 
 router = APIRouter(prefix="/v1/tenants", tags=["Tenants"])
 
@@ -46,6 +51,54 @@ def _tenant_to_response(tenant: Tenant, api_count: int = 0, app_count: int = 0) 
         application_count=app_count,
         created_at=tenant.created_at.isoformat() if tenant.created_at else None,
         updated_at=tenant.updated_at.isoformat() if tenant.updated_at else None,
+    )
+
+
+def get_tenant_limits(tenant: Tenant) -> tuple[int, int]:
+    """Return (max_apis, max_applications) from tenant settings or defaults."""
+    settings = tenant.settings or {}
+    return (
+        settings.get("max_apis", DEFAULT_MAX_APIS),
+        settings.get("max_applications", DEFAULT_MAX_APPLICATIONS),
+    )
+
+
+@router.get("/{tenant_id}/usage", response_model=TenantUsageResponse)
+async def get_tenant_usage(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get tenant resource usage and limits."""
+    if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    repo = TenantRepository(db)
+    tenant = await repo.get_by_id(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    max_apis, max_apps = get_tenant_limits(tenant)
+
+    api_count = 0
+    app_count = 0
+    try:
+        apis = await git_service.list_apis(tenant_id)
+        api_count = len(apis)
+    except Exception:
+        logger.warning("Failed to count APIs for tenant %s", tenant_id)
+    try:
+        apps = await keycloak_service.get_clients(tenant_id)
+        app_count = len(apps)
+    except Exception:
+        logger.warning("Failed to count applications for tenant %s", tenant_id)
+
+    return TenantUsageResponse(
+        tenant_id=tenant_id,
+        api_count=api_count,
+        max_apis=max_apis,
+        application_count=app_count,
+        max_applications=max_apps,
     )
 
 
@@ -422,9 +475,12 @@ async def update_tenant(
             tenant.name = updates["display_name"]
         if "description" in updates:
             tenant.description = updates["description"]
-        if "owner_email" in updates:
+
+        settings_keys = {"owner_email", "max_apis", "max_applications"}
+        settings_updates = {k: updates[k] for k in settings_keys if k in updates}
+        if settings_updates:
             settings = tenant.settings or {}
-            settings["owner_email"] = updates["owner_email"]
+            settings.update(settings_updates)
             tenant.settings = settings
 
         tenant = await repo.update(tenant)

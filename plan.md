@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-26 (C9: 1189pts scope, 843pts done, 64/85 issues closed — estimate inflation from Linear re-scoring)
+> Last sync: 2026-02-27 (C11 COMPLETE: 152/152 pts, 9 PRs, 3h wall clock)
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -99,7 +99,7 @@
 
 ---
 
-## Cycle 9 (Feb 23–Mar 1) — CURRENT
+## Cycle 9 (Feb 23–Mar 1) — CLOSED
 
 **Scope**: 1189 pts (re-scored) | **Done**: 843 pts (71%) | **Issues**: 64/85 closed (21 Duplicate from backlog trim)
 **Theme**: Post-Demo + Product Roadmap + MEGA Sprint + Community Content + HEGEMON Foundation
@@ -264,32 +264,31 @@
 
 ---
 
-## Cycle 10 (Mar 2–8) — NEXT
+## Cycle 10 (Mar 2–8) — CLOSED
 
-**Scope**: 193 pts | **Theme**: Kill the Backlog — v1.0 Foundation
-**Council batch**: 15 tickets evaluated, 9 Go (>=8.0), 3 Fix (6.0-7.9), 3 Redo (<6.0 → deferred)
-**Linear status**: All tickets "Backlog" — activate to "Todo" when cycle starts (Mar 2)
+**Scope**: 193 pts | **Done**: 193 pts (100%) | **Issues**: 13/13 closed
+**Theme**: Kill the Backlog — v1.0 Foundation
 
-### Todo
+### Done (13 issues)
 
-**W1 — Foundation (Day 1-2)**:
+**W1 — Foundation**:
 - [x] CAB-1350: [MEGA] UAC Specification v1.0 (13 pts) — PR #1146 | `instance:backend`
 - [x] CAB-1349: Contract Transformer — OpenAPI only (8 pts) — PR #1147 | `instance:backend`
 - [x] CAB-1455: [MEGA] Gateway Live Reload + Config Sync (21 pts) — PR #1153 | `instance:mcp`
 
-**W2 — Core v1.0 (Day 2-4)**:
+**W2 — Core v1.0**:
 - [x] CAB-1335: [MEGA] UAC Transformer Service (21 pts) — PR #1148 | `instance:backend`
 - [x] CAB-1453: [MEGA] Portal V2 — Self-Service + Marketplace (21 pts) — PR #1154 | `instance:frontend`
-- [ ] CAB-1454: [MEGA] Console Administration Complete (21 pts) — Council 8.25 Go | `instance:frontend`
+- [x] CAB-1454: [MEGA] Console Administration Complete (21 pts) — PR #1175 | `instance:frontend`
 
-**W3 — Enterprise + Quality (Day 3-5)**:
-- [x] CAB-1474: [MEGA] Enterprise DR & Recovery (21 pts) — PRs #1152 (export), #1155 (import) | `instance:backend`
-- [ ] CAB-1470: [MEGA] Portal Advanced Features (21 pts) — Council 8.25 Go | `instance:frontend`
-- [ ] CAB-1476: [MEGA] E2E Test Hardening R2 (21 pts) — Council 8.00 Go | `instance:frontend`
+**W3 — Enterprise + Quality**:
+- [x] CAB-1474: [MEGA] Enterprise DR & Recovery (21 pts) — PRs #1152, #1155 | `instance:backend`
+- [x] CAB-1470: [MEGA] Portal Advanced Features (21 pts) — PR #1176 | `instance:frontend`
+- [x] CAB-1476: [MEGA] E2E Test Hardening R2 (21 pts) — PR #1179 | `instance:frontend`
 - [x] CAB-1477: [MEGA] Cross-Component Integration Tests (13 pts) — PR #1156 | `instance:qa`
 
-**W4 — Polish + GTM (Day 5-6)**:
-- [ ] CAB-1471: Dashboard Polish (2 pts) | `instance:frontend`
+**W4 — Polish + GTM**:
+- [x] CAB-1471: Dashboard Polish (2 pts) — PR #1180 | `instance:frontend`
 - [x] CAB-1311: [MEGA] GTM Strategy & Licensing — AI part (5 pts) — PR #1157 | `instance:backend`
 - [x] CAB-1496: Benchmark Methodology & Results Publication (5 pts, sub of CAB-1443) — stoa-docs PR #85 | `instance:backend`
 
@@ -304,15 +303,41 @@
 
 ---
 
+## Cycle 11 (Feb 27) — CLOSED
+
+**Scope**: 152 pts | **Done**: 152 pts (100%) | **Issues**: 8/8 closed | **PRs**: 9 merged | **Wall clock**: 3h
+**Theme**: Test Coverage + Gateway Skills + OSS Launch Readiness
+**Dispatch**: 4 parallel instances (BACKEND 76pts, FRONTEND 42pts, MCP 21pts, QA 13pts)
+
+### Done (8 issues, 9 PRs)
+
+**Backend** (76 pts):
+- [x] CAB-1526: API Router Test Coverage (13 pts) — PR #1183 (64 tests, 3 routers) | `instance:backend`
+- [x] CAB-1538: API Service Layer Tests (21 pts) — PR #1187 (34 tests, 4 service modules) | `instance:backend`
+- [x] CAB-1541: Self-Service Signup Service (21 pts) — PR #1190 | `instance:backend`
+- [x] CAB-1540: OSS Launch Readiness (21 pts) — PR #1191 (SUPPORT.md, CONTRIBUTORS.md) | `instance:backend`
+
+**Frontend** (42 pts):
+- [x] CAB-1539: Portal Unit Tests (21 pts) — PR #1181 (15 untested components) | `instance:frontend`
+- [x] CAB-1545: PermissionGate + ProxyOwner Dashboard (21 pts) — PR #1184 | `instance:frontend`
+
+**MCP** (21 pts):
+- [x] CAB-1542: Gateway Skills + Proxy Hardening + Auto-RCA (21 pts) — PRs #1188, #1189 | `instance:mcp`
+
+**QA** (13 pts):
+- [x] CAB-1523: E2E @wip DPoP & MCP Scenarios (13 pts) — PR #1182 (7 DPoP + 1 MCP resource) | `instance:qa`
+
+---
+
 ## Milestones
 
 | Date | Event | Gate |
 |------|-------|------|
 | Dim 22 fev | Cycle 8 closed | 1305 pts, 88 issues |
-| Dim 1 mars | Cycle 9 closed | 830 pts, 68+ issues, ALL DONE |
-| Lun 2 mars | Cycle 10 starts | 193 pts, 13 tickets, 5 panes |
+| Dim 1 mars | Cycle 9 closed | 830 pts, 68+ issues |
+| Dim 8 mars | Cycle 10 closed | 193 pts, 13 tickets, 100% |
+| Jeu 27 fev | Cycle 11 closed | 152 pts, 8 tickets, 9 PRs, 3h |
 | Mar 17 mars | DEMO DAY | 5 min live + "ESB is Dead" |
-| Dim 8 mars | Cycle 10 ends | Kill the Backlog target |
 
 ## KPIs Demo
 

@@ -232,6 +232,29 @@ pub static DPOP_VALIDATIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_dpop_validations_total metric")
 });
 
+// === Tool Discovery Metrics (CAB-1558) ===
+
+/// Histogram of tool discovery (CP sync) durations in seconds, per tenant and outcome.
+pub static TOOL_DISCOVERY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_tool_discovery_duration_seconds",
+        "Duration of tool discovery calls to control plane",
+        &["tenant", "result"],
+        vec![0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+    )
+    .expect("Failed to create stoa_tool_discovery_duration_seconds metric")
+});
+
+/// Counter of tool discovery failures per tenant.
+pub static TOOL_DISCOVERY_FAILURES_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_tool_discovery_failures_total",
+        "Total tool discovery failures (CP unreachable or error)",
+        &["tenant"]
+    )
+    .expect("Failed to create stoa_tool_discovery_failures_total metric")
+});
+
 // === Fallback Metrics (CAB-708) ===
 
 /// Counter of fallback chain attempts (primary tool failed, trying fallbacks).
@@ -428,6 +451,20 @@ pub fn record_token_budget_exceeded(tenant: &str) {
         .inc();
 }
 
+// === Tool discovery metrics helpers ===
+
+/// Record a tool discovery attempt with duration and result.
+pub fn record_tool_discovery(tenant: &str, result: &str, duration_secs: f64) {
+    TOOL_DISCOVERY_DURATION
+        .with_label_values(&[tenant, result])
+        .observe(duration_secs);
+    if result != "success" {
+        TOOL_DISCOVERY_FAILURES_TOTAL
+            .with_label_values(&[tenant])
+            .inc();
+    }
+}
+
 // === Fallback metrics helpers ===
 
 /// Record a fallback chain attempt for a tool.
@@ -543,6 +580,8 @@ pub fn init_all_metrics() {
     Lazy::force(&GUARDRAILS_CONTENT_FILTERED);
     Lazy::force(&TOKEN_BUDGET_TOKENS_TOTAL);
     Lazy::force(&TOKEN_BUDGET_EXCEEDED_TOTAL);
+    Lazy::force(&TOOL_DISCOVERY_DURATION);
+    Lazy::force(&TOOL_DISCOVERY_FAILURES_TOTAL);
     Lazy::force(&FALLBACK_ATTEMPTS);
     Lazy::force(&FALLBACK_EXHAUSTED);
     Lazy::force(&UPSTREAM_LATENCY);

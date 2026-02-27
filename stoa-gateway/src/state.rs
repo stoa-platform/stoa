@@ -32,6 +32,7 @@ use crate::resilience::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, FallbackChain,
 };
 use crate::routes::{PolicyRegistry, RouteRegistry};
+use crate::skills::health::SkillHealthTracker;
 use crate::skills::resolver::SkillResolver;
 use crate::telemetry::deploy::DeployProgressEmitter;
 use crate::uac::cache::VersionedPolicyCache;
@@ -89,6 +90,8 @@ pub struct AppState {
     pub classification_enforcer: Option<Arc<ClassificationEnforcer>>,
     /// Skill resolver for CSS cascade context injection (CAB-1314)
     pub skill_resolver: Arc<SkillResolver>,
+    /// Per-skill health tracker with circuit breaker (CAB-1551)
+    pub skill_health: Arc<SkillHealthTracker>,
     /// Federation allow-list cache for sub-account routing (CAB-1362)
     pub federation_cache: Arc<FederationCache>,
     /// Per-tenant token budget tracker (CAB-1337 Phase 2)
@@ -324,6 +327,15 @@ impl AppState {
             "Skill resolver initialized"
         );
 
+        // Initialize skill health tracker with circuit breaker (CAB-1551)
+        let skill_cb_config = CircuitBreakerConfig {
+            failure_threshold: config.cb_failure_threshold,
+            reset_timeout: std::time::Duration::from_secs(config.cb_reset_timeout_secs),
+            success_threshold: config.cb_success_threshold,
+            ..CircuitBreakerConfig::default()
+        };
+        let skill_health = Arc::new(SkillHealthTracker::new(skill_cb_config));
+
         // Initialize federation cache (CAB-1362)
         let federation_cache = Arc::new(FederationCache::new(
             config.federation_cache_ttl_secs,
@@ -457,6 +469,7 @@ impl AppState {
             contract_registry,
             classification_enforcer,
             skill_resolver,
+            skill_health,
             federation_cache,
             token_budget,
             guardrail_policy_store: Arc::new(GuardrailPolicyStore::new()),

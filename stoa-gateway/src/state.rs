@@ -116,6 +116,9 @@ pub struct AppState {
     pub admin_token_cache: moka::sync::Cache<String, String>,
     /// Lazy MCP discovery with cache-first upstream probing (CAB-1552)
     pub mcp_discovery: Arc<crate::mcp::lazy_discovery::LazyMcpDiscovery>,
+    /// Pre-serialized MCP capabilities JSON (CAB-1558 arena optimization).
+    /// Built once at startup — avoids per-request serde + allocation overhead.
+    pub capabilities_json: Vec<u8>,
 }
 
 impl AppState {
@@ -450,6 +453,12 @@ impl AppState {
             circuit_breakers.clone(),
         ));
 
+        // Pre-serialize MCP capabilities JSON at startup (CAB-1558 arena optimization).
+        // The response body is constant — only the X-MCP-Tool-Count header varies per request.
+        let capabilities_json =
+            serde_json::to_vec(&crate::mcp::discovery::build_capabilities_response())
+                .expect("capabilities response must serialize");
+
         let start_time = Instant::now();
 
         Self {
@@ -491,6 +500,7 @@ impl AppState {
             http_client,
             admin_token_cache,
             mcp_discovery,
+            capabilities_json,
         }
     }
 

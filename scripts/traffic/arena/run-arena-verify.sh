@@ -108,10 +108,11 @@ cuj_api_health() {
 
 # ---------------------------------------------------------------------------
 # CUJ 2: Auth Flow
-# Get OIDC token via client_credentials → call API with Bearer token
+# Get OIDC token via client_credentials → validate via introspection
 # ---------------------------------------------------------------------------
 cuj_auth_flow() {
   local token_url="${OIDC_TOKEN_URL:-${AUTH_URL}/realms/stoa/protocol/openid-connect/token}"
+  local introspect_url="${token_url%/token}/token/introspect"
   local client_id="${OIDC_CLIENT_ID:-stoa-healthcheck}"
   local client_secret="${OIDC_CLIENT_SECRET:-}"
 
@@ -121,7 +122,7 @@ cuj_auth_flow() {
     return 1
   fi
 
-  # Get token
+  # Step 1: Get token via client_credentials grant
   local token_response
   token_response=$(curl -s --max-time "$TIMEOUT" \
     -d "grant_type=client_credentials" \
@@ -138,15 +139,24 @@ cuj_auth_flow() {
     return 1
   fi
 
-  # Call API with token
-  local code
-  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TIMEOUT" \
-    -H "Authorization: Bearer ${access_token}" \
-    "${API_URL}/v1/health" 2>&1)
+  # Step 2: Validate token via Keycloak introspection endpoint
+  local introspect_response
+  introspect_response=$(curl -s --max-time "$TIMEOUT" \
+    -d "token=${access_token}" \
+    -d "client_id=${client_id}" \
+    -d "client_secret=${client_secret}" \
+    "$introspect_url" 2>&1)
 
-  [ "$code" -ge 200 ] && [ "$code" -lt 400 ] || { echo "$code"; return 1; }
+  local active
+  active=$(echo "$introspect_response" | jq -r '.active // empty')
 
-  echo "$code"
+  if [ "$active" != "true" ]; then
+    echo "introspect_failed: $(echo "$introspect_response" | head -c 200)" >&2
+    echo "0"
+    return 1
+  fi
+
+  echo "200"
 }
 
 # ---------------------------------------------------------------------------
@@ -242,7 +252,7 @@ if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
   CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
 fi
 
-HTTP_CODE=$(curl -s -o "$WORK_DIR/push_response.txt" -w "%{http_code}" -X PUT \
+HTTP_CODE=$(curl -s -o "$WORK_DIR/push_response.txt" -w "%{http_code}" --max-time 10 -X PUT \
   --data-binary @"$METRICS_FILE" \
   -H "Content-Type: text/plain" $CURL_AUTH "$PUSH_URL" 2>/dev/null)
 [ -z "$HTTP_CODE" ] && HTTP_CODE="000"

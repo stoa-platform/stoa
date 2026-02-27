@@ -17,6 +17,8 @@ import json
 import math
 import os
 import sys
+import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 # t-distribution critical values for 95% CI (two-tailed, alpha=0.05)
@@ -276,6 +278,55 @@ def main() -> None:
     # Leaderboard to stderr
     leaderboard.sort(key=lambda x: x["enterprise_score"], reverse=True)
     print(json.dumps({"event": "enterprise_leaderboard", "ranking": leaderboard}), file=sys.stderr)
+
+    # Export to OpenSearch for long-term retention (CAB-1558)
+    export_to_opensearch(leaderboard)
+
+
+def export_to_opensearch(leaderboard: list[dict]) -> None:
+    """Export arena scores to OpenSearch for long-term retention.
+
+    Each run creates one document per gateway in the 'arena-scores' index.
+    Uses stdlib urllib only (no requests/httpx dependency).
+    Env vars:
+      OPENSEARCH_URL — OpenSearch base URL (default: http://opensearch.stoa-system.svc:9200)
+      OPENSEARCH_ENABLED — set to "false" to skip export (default: true)
+    """
+    if os.environ.get("OPENSEARCH_ENABLED", "true").lower() == "false":
+        return
+
+    base_url = os.environ.get(
+        "OPENSEARCH_URL", "http://opensearch.stoa-system.svc:9200"
+    )
+    index = "arena-scores"
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    for entry in leaderboard:
+        doc = {
+            "@timestamp": timestamp,
+            "layer": "enterprise",
+            "gateway": entry["gateway"],
+            "enterprise_score": entry["enterprise_score"],
+            "stddev": entry["stddev"],
+            "ci95_lower": float(entry["ci95"].strip("[]").split(",")[0]),
+            "ci95_upper": float(entry["ci95"].strip("[]").split(",")[1]),
+            "dimensions": entry["dimensions"],
+        }
+        try:
+            payload = json.dumps(doc).encode("utf-8")
+            req = urllib.request.Request(
+                f"{base_url}/{index}/_doc",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                resp.read()
+        except Exception as e:
+            print(
+                f'{{"opensearch_export_error":"{entry["gateway"]}","{e}"}}',
+                file=sys.stderr,
+            )
 
 
 if __name__ == "__main__":

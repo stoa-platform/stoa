@@ -106,6 +106,11 @@ pub struct AppState {
     /// Pull-based budget cache for department chargeback enforcement (CAB-1456)
     /// None when budget enforcement is disabled.
     pub budget_cache: Option<Arc<BudgetCache>>,
+    /// Shared HTTP client with connection pooling (CAB-1542)
+    /// Replaces per-request client creation in OAuth proxy and readiness check.
+    pub http_client: reqwest::Client,
+    /// TTL-cached Keycloak admin tokens keyed by "admin:{realm}" (CAB-1542)
+    pub admin_token_cache: moka::sync::Cache<String, String>,
 }
 
 impl AppState {
@@ -409,6 +414,19 @@ impl AppState {
         let diagnostic_engine = Arc::new(DiagnosticEngine::new(1000));
         tracing::info!("Diagnostic engine initialized (buffer: 1000 reports)");
 
+        // Shared HTTP client with connection pooling (CAB-1542)
+        let http_client = reqwest::Client::builder()
+            .pool_max_idle_per_host(20)
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_default();
+
+        // Keycloak admin token cache: 4-min TTL, max 64 entries (CAB-1542)
+        let admin_token_cache = moka::sync::Cache::builder()
+            .max_capacity(64)
+            .time_to_live(std::time::Duration::from_secs(240))
+            .build();
+
         let start_time = Instant::now();
 
         Self {
@@ -446,6 +464,8 @@ impl AppState {
             prompt_cache,
             diagnostic_engine,
             budget_cache,
+            http_client,
+            admin_token_cache,
         }
     }
 

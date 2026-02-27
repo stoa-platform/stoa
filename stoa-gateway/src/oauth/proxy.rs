@@ -47,10 +47,7 @@ pub async fn token_proxy(
 
     debug!(url = %token_url, "Proxying token request to Keycloak");
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .unwrap();
+    let client = &state.http_client;
 
     // Forward content-type from original request (axum HeaderMap uses http 1.x)
     let content_type = headers
@@ -139,10 +136,7 @@ pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<V
         }
     }
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .unwrap();
+    let client = &state.http_client;
 
     // Step 1: Forward DCR to Keycloak
     let dcr_resp = match client
@@ -190,7 +184,16 @@ pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<V
 
     // Step 2: Patch to public client with PKCE (if admin password configured)
     if let Some(ref admin_password) = config.keycloak_admin_password {
-        match patch_public_client(&client, keycloak_url, realm, admin_password, &dcr_body).await {
+        match patch_public_client(
+            client,
+            &state.admin_token_cache,
+            keycloak_url,
+            realm,
+            admin_password,
+            &dcr_body,
+        )
+        .await
+        {
             Ok(()) => {
                 info!(client_id = %client_id, "Client patched to public + PKCE S256");
             }
@@ -214,25 +217,20 @@ pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<V
     (status, Json(dcr_body)).into_response()
 }
 
-/// Patch a Keycloak client to be public (no client_secret) with PKCE S256.
-///
-/// Steps:
-/// 1. Get admin token via Resource Owner Password Grant
-/// 2. Find the client by clientId
-/// 3. PUT client config with publicClient=true + pkce.code.challenge.method=S256
-async fn patch_public_client(
+/// Fetch a Keycloak admin token, using the moka cache for TTL-based reuse.
+/// On cache miss, performs ROPG against Keycloak master realm.
+async fn fetch_admin_token(
     client: &reqwest::Client,
+    cache: &moka::sync::Cache<String, String>,
     keycloak_url: &str,
-    realm: &str,
     admin_password: &str,
-    dcr_body: &Value,
-) -> Result<(), String> {
-    let client_id_str = dcr_body
-        .get("client_id")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing client_id in DCR response")?;
+) -> Result<String, String> {
+    let cache_key = format!("admin:{}", keycloak_url);
 
-    // 1. Get admin token
+    if let Some(token) = cache.get(&cache_key) {
+        return Ok(token);
+    }
+
     let admin_token_url = format!(
         "{}/realms/master/protocol/openid-connect/token",
         keycloak_url
@@ -259,10 +257,37 @@ async fn patch_public_client(
         .json()
         .await
         .map_err(|e| format!("Parse admin token: {}", e))?;
-    let admin_token = token_data
+    let token = token_data
         .get("access_token")
         .and_then(|v| v.as_str())
-        .ok_or("Missing access_token in admin response")?;
+        .ok_or("Missing access_token in admin response")?
+        .to_string();
+
+    cache.insert(cache_key, token.clone());
+    Ok(token)
+}
+
+/// Patch a Keycloak client to be public (no client_secret) with PKCE S256.
+///
+/// Steps:
+/// 1. Get admin token (cached with TTL, retry on 401)
+/// 2. Find the client by clientId
+/// 3. PUT client config with publicClient=true + pkce.code.challenge.method=S256
+async fn patch_public_client(
+    client: &reqwest::Client,
+    token_cache: &moka::sync::Cache<String, String>,
+    keycloak_url: &str,
+    realm: &str,
+    admin_password: &str,
+    dcr_body: &Value,
+) -> Result<(), String> {
+    let client_id_str = dcr_body
+        .get("client_id")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing client_id in DCR response")?;
+
+    // 1. Get admin token (cached)
+    let admin_token = fetch_admin_token(client, token_cache, keycloak_url, admin_password).await?;
 
     // 2. Find client by clientId
     let clients_url = format!(
@@ -272,10 +297,28 @@ async fn patch_public_client(
 
     let clients_resp = client
         .get(&clients_url)
-        .header("Authorization", format!("Bearer {}", admin_token))
+        .header("Authorization", format!("Bearer {}", &admin_token))
         .send()
         .await
         .map_err(|e| format!("Client lookup failed: {}", e))?;
+
+    // Retry on 401: evict cached token and re-fetch
+    if clients_resp.status().as_u16() == 401 {
+        debug!("Admin token expired (401) — evicting cache and retrying");
+        let cache_key = format!("admin:{}", keycloak_url);
+        token_cache.invalidate(&cache_key);
+        let fresh_token =
+            fetch_admin_token(client, token_cache, keycloak_url, admin_password).await?;
+        return patch_client_inner(
+            client,
+            keycloak_url,
+            realm,
+            &fresh_token,
+            client_id_str,
+            dcr_body,
+        )
+        .await;
+    }
 
     let clients: Vec<Value> = clients_resp
         .json()
@@ -312,7 +355,7 @@ async fn patch_public_client(
 
     let patch_resp = client
         .put(&update_url)
-        .header("Authorization", format!("Bearer {}", admin_token))
+        .header("Authorization", format!("Bearer {}", &admin_token))
         .json(&patch_body)
         .send()
         .await
@@ -322,6 +365,83 @@ async fn patch_public_client(
     if !patch_status.is_success() {
         let body = patch_resp.text().await.unwrap_or_default();
         return Err(format!("Client patch returned {}: {}", patch_status, body));
+    }
+
+    Ok(())
+}
+
+/// Inner helper for client patching after token refresh (retry path).
+async fn patch_client_inner(
+    client: &reqwest::Client,
+    keycloak_url: &str,
+    realm: &str,
+    admin_token: &str,
+    client_id_str: &str,
+    _dcr_body: &Value,
+) -> Result<(), String> {
+    let clients_url = format!(
+        "{}/admin/realms/{}/clients?clientId={}",
+        keycloak_url, realm, client_id_str
+    );
+
+    let clients_resp = client
+        .get(&clients_url)
+        .header("Authorization", format!("Bearer {}", admin_token))
+        .send()
+        .await
+        .map_err(|e| format!("Client lookup failed (retry): {}", e))?;
+
+    if !clients_resp.status().is_success() {
+        let body = clients_resp.text().await.unwrap_or_default();
+        return Err(format!("Client lookup failed on retry: {}", body));
+    }
+
+    let clients: Vec<Value> = clients_resp
+        .json()
+        .await
+        .map_err(|e| format!("Parse clients (retry): {}", e))?;
+
+    let kc_client = clients
+        .first()
+        .ok_or_else(|| format!("Client '{}' not found in Keycloak (retry)", client_id_str))?;
+
+    let internal_id = kc_client
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing internal id (retry)")?;
+
+    let update_url = format!(
+        "{}/admin/realms/{}/clients/{}",
+        keycloak_url, realm, internal_id
+    );
+
+    let mut patch_body = kc_client.clone();
+    if let Some(obj) = patch_body.as_object_mut() {
+        obj.insert("publicClient".to_string(), json!(true));
+        obj.remove("clientSecret");
+        obj.remove("secret");
+
+        let attrs = obj.entry("attributes").or_insert_with(|| json!({}));
+        if let Some(attrs_obj) = attrs.as_object_mut() {
+            attrs_obj.insert("pkce.code.challenge.method".to_string(), json!("S256"));
+        }
+    }
+
+    let patch_resp = client
+        .put(&update_url)
+        .header("Authorization", format!("Bearer {}", admin_token))
+        .json(&patch_body)
+        .send()
+        .await
+        .map_err(|e| format!("Client patch failed (retry): {}", e))?;
+
+    let patch_status = patch_resp.status();
+    if !patch_status.is_success() {
+        let body = patch_resp.text().await.unwrap_or_default();
+        return Err(format!(
+            "Client patch returned {} (retry): {}",
+            patch_status, body
+        ));
     }
 
     Ok(())

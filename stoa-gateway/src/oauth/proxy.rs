@@ -15,6 +15,7 @@ use axum::{
 use serde_json::{json, Value};
 use tracing::{debug, error, info, warn};
 
+use crate::proxy::hardening::{build_via_value, with_keycloak_resilience};
 use crate::state::AppState;
 
 /// POST /oauth/token
@@ -47,52 +48,57 @@ pub async fn token_proxy(
 
     debug!(url = %token_url, "Proxying token request to Keycloak");
 
-    let client = &state.http_client;
+    let client = state.http_client.clone();
+    let via_value = build_via_value();
 
     // Forward content-type from original request (axum HeaderMap uses http 1.x)
     let content_type = headers
         .get("content-type")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("application/x-www-form-urlencoded");
-
-    let resp = match client
-        .post(&token_url)
-        .header("content-type", content_type)
-        .body(body.to_vec())
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            error!(error = %e, "Failed to proxy token request to Keycloak");
-            return (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"error": "server_error", "error_description": "Identity provider unreachable"})),
-            )
-                .into_response();
-        }
-    };
-
-    // reqwest 0.12 shares http 1.0 StatusCode with axum — no conversion needed
-    let status = resp.status();
-
-    // Extract content-type from reqwest response before consuming body
-    let resp_content_type = resp
-        .headers()
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("application/json")
+        .unwrap_or("application/x-www-form-urlencoded")
         .to_string();
 
-    let body = resp.bytes().await.unwrap_or_default();
+    // Wrap the Keycloak call with circuit breaker + retry
+    let result = with_keycloak_resilience(&state.circuit_breakers, "oauth-token", || {
+        let c = client.clone();
+        let url = token_url.clone();
+        let ct = content_type.clone();
+        let b = body.clone();
+        let via = via_value.clone();
+        async move {
+            c.post(&url)
+                .header("content-type", ct)
+                .header("Via", via)
+                .body(b.to_vec())
+                .send()
+                .await
+                .map_err(|e| e.to_string())
+        }
+    })
+    .await;
 
-    // Build axum response
-    let mut response = (status, body).into_response();
-    if let Ok(ct_val) = resp_content_type.parse() {
-        response.headers_mut().insert("content-type", ct_val);
+    match result {
+        Ok(resp) => {
+            let status = resp.status();
+            let resp_content_type = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/json")
+                .to_string();
+            let body = resp.bytes().await.unwrap_or_default();
+            let mut response = (status, body).into_response();
+            if let Ok(ct_val) = resp_content_type.parse() {
+                response.headers_mut().insert("content-type", ct_val);
+            }
+            response
+        }
+        Err((status, msg)) => (
+            status,
+            Json(json!({"error": "server_error", "error_description": msg})),
+        )
+            .into_response(),
     }
-
-    response
 }
 
 /// POST /oauth/register
@@ -136,22 +142,33 @@ pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<V
         }
     }
 
-    let client = &state.http_client;
+    let client = state.http_client.clone();
+    let via_value = build_via_value();
 
-    // Step 1: Forward DCR to Keycloak
-    let dcr_resp = match client
-        .post(&dcr_url)
-        .header("content-type", "application/json")
-        .json(&cleaned_payload)
-        .send()
-        .await
+    // Step 1: Forward DCR to Keycloak with circuit breaker + retry
+    let dcr_resp = match with_keycloak_resilience(&state.circuit_breakers, "oauth-register", || {
+        let c = client.clone();
+        let url = dcr_url.clone();
+        let payload = cleaned_payload.clone();
+        let via = via_value.clone();
+        async move {
+            c.post(&url)
+                .header("content-type", "application/json")
+                .header("Via", via)
+                .json(&payload)
+                .send()
+                .await
+                .map_err(|e| e.to_string())
+        }
+    })
+    .await
     {
-        Ok(r) => r,
-        Err(e) => {
-            error!(error = %e, "Failed to proxy DCR request to Keycloak");
+        Ok(resp) => resp,
+        Err((status, msg)) => {
+            error!(error = %msg, "Failed to proxy DCR request to Keycloak");
             return (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"error": "server_error", "error_description": "Identity provider unreachable"})),
+                status,
+                Json(json!({"error": "server_error", "error_description": msg})),
             )
                 .into_response();
         }
@@ -185,7 +202,7 @@ pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<V
     // Step 2: Patch to public client with PKCE (if admin password configured)
     if let Some(ref admin_password) = config.keycloak_admin_password {
         match patch_public_client(
-            client,
+            &client,
             &state.admin_token_cache,
             keycloak_url,
             realm,

@@ -21,6 +21,8 @@ use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
 use crate::mcp::tools::ToolContext;
+use crate::proxy::hardening::with_cp_resilience_generic;
+use crate::resilience::CircuitBreakerRegistry;
 
 /// A tool definition fetched from the Control Plane
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +104,8 @@ pub struct ToolProxyClient {
     base_url: String,
     oidc: Option<OidcConfig>,
     token_cache: Arc<RwLock<Option<CachedToken>>>,
+    /// Per-upstream circuit breaker registry for CP resilience (CAB-1542 Phase 2).
+    cb_registry: Option<Arc<CircuitBreakerRegistry>>,
 }
 
 impl ToolProxyClient {
@@ -119,7 +123,14 @@ impl ToolProxyClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             oidc,
             token_cache: Arc::new(RwLock::new(None)),
+            cb_registry: None,
         }
+    }
+
+    /// Enable circuit breaker + retry for CP operations (CAB-1542 Phase 2).
+    pub fn with_circuit_breakers(mut self, registry: Arc<CircuitBreakerRegistry>) -> Self {
+        self.cb_registry = Some(registry);
+        self
     }
 
     /// Get the base URL for native tools
@@ -200,6 +211,19 @@ impl ToolProxyClient {
     /// 1. If OIDC configured → try GET /v1/mcp/tools (authenticated)
     /// 2. Fallback → GET /v1/mcp/tools (unauthenticated)
     pub async fn discover_tools(&self) -> Result<Vec<RemoteToolDef>, String> {
+        if let Some(ref cb_registry) = self.cb_registry {
+            let this = self.clone();
+            with_cp_resilience_generic(cb_registry, "cp-discover-tools", || {
+                let t = this.clone();
+                async move { t.discover_tools_inner().await }
+            })
+            .await
+        } else {
+            self.discover_tools_inner().await
+        }
+    }
+
+    async fn discover_tools_inner(&self) -> Result<Vec<RemoteToolDef>, String> {
         if self.oidc.is_some() {
             match self.discover_authenticated().await {
                 Ok(tools) => return Ok(tools),
@@ -313,6 +337,30 @@ impl ToolProxyClient {
     /// Identity headers (X-User-Id, X-User-Email, X-User-Roles, X-Tenant-ID)
     /// are forwarded so the CP can enforce per-user policies.
     pub async fn call_tool(
+        &self,
+        tool: &str,
+        args: Value,
+        ctx: &ToolContext,
+    ) -> Result<Value, String> {
+        if let Some(ref cb_registry) = self.cb_registry {
+            let this = self.clone();
+            let tool_name = tool.to_string();
+            let args_owned = args.clone();
+            let ctx_owned = ctx.clone();
+            with_cp_resilience_generic(cb_registry, &format!("cp-call-tool:{}", tool), || {
+                let t = this.clone();
+                let tn = tool_name.clone();
+                let a = args_owned.clone();
+                let c = ctx_owned.clone();
+                async move { t.call_tool_inner(&tn, a, &c).await }
+            })
+            .await
+        } else {
+            self.call_tool_inner(tool, args, ctx).await
+        }
+    }
+
+    async fn call_tool_inner(
         &self,
         tool: &str,
         args: Value,

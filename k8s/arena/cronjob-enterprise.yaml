@@ -78,10 +78,10 @@ spec:
                     [
                       {
                         "name": "stoa-k8s",
-                        "target": "http://stoa-gateway.stoa-system.svc:8080",
-                        "mcp_base": "http://stoa-gateway.stoa-system.svc:8080/mcp",
+                        "target": "http://stoa-gateway.stoa-system.svc",
+                        "mcp_base": "http://stoa-gateway.stoa-system.svc/mcp",
                         "mcp_protocol": "stoa",
-                        "health": "http://stoa-gateway.stoa-system.svc:8080/health"
+                        "health": "http://stoa-gateway.stoa-system.svc/health"
                       },
                       {
                         "name": "kong-k8s",

@@ -146,13 +146,20 @@ async def create_api(
     This creates the API definition in the GitOps repository:
     - tenants/{tenant_id}/apis/{api_name}/api.yaml
     - tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)
+
+    Trial tenants are subject to limits (CAB-1549):
+    - Max 3 APIs (configurable via tenant.settings.max_apis)
+    - 402 after 30-day trial expires
     """
-    # Check tenant API limit (CAB-1549)
+    # Trial limits enforcement (CAB-1549)
     from ..routers.tenants import get_tenant_limits
+    from ..services.trial_service import check_trial_expiry
 
     repo = TenantRepository(db)
     tenant = await repo.get_by_id(tenant_id)
     if tenant:
+        settings = tenant.settings or {}
+        check_trial_expiry(settings)
         max_apis, _ = get_tenant_limits(tenant)
         current_apis = await git_service.list_apis(tenant_id)
         if len(current_apis) >= max_apis:

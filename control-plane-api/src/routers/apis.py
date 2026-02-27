@@ -5,6 +5,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import (
     Permission,
@@ -14,9 +15,12 @@ from ..auth import (
     require_tenant_access,
     require_writable_environment,
 )
+from ..database import get_db
+from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
 from ..services.git_service import git_service
 from ..services.kafka_service import kafka_service
+from ..services.trial_service import check_trial_api_limit, check_trial_expiry
 
 logger = logging.getLogger(__name__)
 
@@ -134,14 +138,29 @@ async def get_api(tenant_id: str, api_id: str, user: User = Depends(get_current_
 @router.post("", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_CREATE)
 @require_tenant_access
-async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_current_user)):
+async def create_api(
+    tenant_id: str, api: APICreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
     """
     Create a new API in GitLab and emit event.
 
     This creates the API definition in the GitOps repository:
     - tenants/{tenant_id}/apis/{api_name}/api.yaml
     - tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)
+
+    Trial tenants are subject to limits (CAB-1549):
+    - Max 3 APIs (configurable via tenant.settings.max_apis)
+    - 402 after 30-day trial expires
     """
+    # Trial limits enforcement (CAB-1549)
+    repo = TenantRepository(db)
+    tenant = await repo.get_by_id(tenant_id)
+    if tenant:
+        settings = tenant.settings or {}
+        check_trial_expiry(settings)
+        current_apis = await git_service.list_apis(tenant_id)
+        check_trial_api_limit(settings, len(current_apis))
+
     api_id = str(uuid.uuid4())
 
     # Check if portal:published tag is present for portal_promoted status

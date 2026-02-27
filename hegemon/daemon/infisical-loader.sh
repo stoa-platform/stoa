@@ -49,7 +49,21 @@ _hegemon_load_secrets() {
   fi
 
   # Fetch secrets into env vars (memory only, never disk)
-  export ANTHROPIC_API_KEY=$(_infisical_fetch "/anthropic" "ANTHROPIC_API_KEY")
+  #
+  # Per-worker API key: try /hegemon/<hostname>/ANTHROPIC_API_KEY first,
+  # fallback to shared /anthropic/ANTHROPIC_API_KEY if worker-specific path fails.
+  # This allows 1 API key per worker to avoid single-key quota exhaustion.
+  local _worker_path="/hegemon/$(hostname -s)"
+  local _worker_key
+  _worker_key=$(_infisical_fetch "$_worker_path" "ANTHROPIC_API_KEY")
+  if [ -n "$_worker_key" ]; then
+    export ANTHROPIC_API_KEY="$_worker_key"
+    echo "[hegemon] API key loaded from worker path: $_worker_path"
+  else
+    export ANTHROPIC_API_KEY=$(_infisical_fetch "/anthropic" "ANTHROPIC_API_KEY")
+    echo "[hegemon] API key loaded from shared path: /anthropic (worker path $_worker_path not found)"
+  fi
+
   export SLACK_WEBHOOK_URL=$(_infisical_fetch "/n8n" "SLACK_WEBHOOK_URL")
   export HEGEMON_REMOTE_PASSWORD=$(_infisical_fetch "/pocketbase" "PB_ADMIN_PASSWORD")
   export HEGEMON_REMOTE_URL="https://state.gostoa.dev"

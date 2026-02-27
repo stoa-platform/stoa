@@ -254,6 +254,19 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 		return
 	}
 
+	// Rate-limit detection: if the result indicates a 429/529, apply backoff + alert.
+	if result.RateLimited {
+		d.scheduler.RecordRateLimit(w.Name)
+		qs := d.scheduler.GetQuotaState(w.Name)
+		if qs != nil {
+			d.reporter.NotifyRateLimit(w.Name, qs.HitCount, qs.BackoffAt)
+			log.Printf("RATE-LIMIT %s on %s — backoff until %s (hit #%d)", issue.Identifier, w.Name, qs.BackoffAt.UTC().Format("15:04"), qs.HitCount)
+		}
+	} else {
+		// Successful execution clears any backoff state.
+		d.scheduler.ClearRateLimit(w.Name)
+	}
+
 	status := "completed"
 	if result.Status == "blocked" {
 		status = "blocked"

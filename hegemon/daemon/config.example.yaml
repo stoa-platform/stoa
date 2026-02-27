@@ -13,30 +13,35 @@ workers:
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [backend]
+    infisical_secret_path: "/hegemon/worker-1"  # Per-worker API key (fallback: /anthropic)
 
   - name: worker-2
     host: "207.180.255.223"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [frontend]
+    infisical_secret_path: "/hegemon/worker-2"
 
   - name: worker-3
     host: "164.68.121.123"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [mcp]
+    infisical_secret_path: "/hegemon/worker-3"
 
   - name: worker-4
     host: "167.86.115.51"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [auth]
+    infisical_secret_path: "/hegemon/worker-4"
 
   - name: worker-5
     host: "144.91.73.37"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [qa]
+    infisical_secret_path: "/hegemon/worker-5"
 
 slack:
   webhook_url: "${SLACK_WEBHOOK_URL}"

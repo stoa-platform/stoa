@@ -114,6 +114,8 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     /// TTL-cached Keycloak admin tokens keyed by "admin:{realm}" (CAB-1542)
     pub admin_token_cache: moka::sync::Cache<String, String>,
+    /// Lazy MCP discovery with cache-first upstream probing (CAB-1552)
+    pub mcp_discovery: Arc<crate::mcp::lazy_discovery::LazyMcpDiscovery>,
 }
 
 impl AppState {
@@ -441,6 +443,13 @@ impl AppState {
             .time_to_live(std::time::Duration::from_secs(240))
             .build();
 
+        // Lazy MCP discovery: cache-first upstream probing (CAB-1552)
+        let mcp_discovery = Arc::new(crate::mcp::lazy_discovery::LazyMcpDiscovery::new(
+            &config,
+            http_client.clone(),
+            circuit_breakers.clone(),
+        ));
+
         let start_time = Instant::now();
 
         Self {
@@ -481,6 +490,7 @@ impl AppState {
             budget_cache,
             http_client,
             admin_token_cache,
+            mcp_discovery,
         }
     }
 

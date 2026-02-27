@@ -435,6 +435,17 @@ pub struct Config {
     #[serde(default)]
     pub billing_api_url: Option<String>,
 
+    // === Lazy MCP Discovery (CAB-1552) ===
+    /// TTL in seconds for MCP upstream discovery cache (default: 300 = 5 min)
+    /// Env: STOA_MCP_DISCOVERY_CACHE_TTL_SECS
+    #[serde(default = "default_mcp_discovery_cache_ttl_secs")]
+    pub mcp_discovery_cache_ttl_secs: u64,
+
+    /// Max entries in MCP upstream discovery cache (default: 256)
+    /// Env: STOA_MCP_DISCOVERY_CACHE_MAX_ENTRIES
+    #[serde(default = "default_mcp_discovery_cache_max_entries")]
+    pub mcp_discovery_cache_max_entries: u64,
+
     // === LLM Contracts (CAB-709) ===
     /// Enable LLM contract endpoint expansion (default: false)
     /// Env: STOA_LLM_ENABLED
@@ -805,6 +816,14 @@ fn default_budget_cache_ttl() -> u64 {
     60 // Refresh budget status every 60 seconds
 }
 
+fn default_mcp_discovery_cache_ttl_secs() -> u64 {
+    300 // 5 minutes
+}
+
+fn default_mcp_discovery_cache_max_entries() -> u64 {
+    256
+}
+
 fn default_llm_timeout_ms() -> u64 {
     30_000
 }
@@ -904,6 +923,8 @@ impl Default for Config {
             budget_enforcement_enabled: false,
             budget_cache_ttl_secs: default_budget_cache_ttl(),
             billing_api_url: None,
+            mcp_discovery_cache_ttl_secs: default_mcp_discovery_cache_ttl_secs(),
+            mcp_discovery_cache_max_entries: default_mcp_discovery_cache_max_entries(),
             llm_enabled: false,
             llm_default_timeout_ms: default_llm_timeout_ms(),
             llm_router: LlmRouterConfig::default(),

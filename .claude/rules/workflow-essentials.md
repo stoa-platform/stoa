@@ -77,6 +77,19 @@ description: Core behavioral rules — Ship/Show/Ask, DoD, State Machine, Operat
 3. **CI noise = P0** — Red `main` blocks ALL new work. Fix CI before starting any feature. `/ci-fix` has priority over backlog.
 4. **Multi-env gate** — DoD requires 3 proofs: local tests pass, CI pipeline green, staging/prod pod healthy.
 
+### MEGA Close Gate (titles containing `[MEGA]`)
+
+A MEGA ticket CANNOT be marked Done unless ALL of these are true:
+
+| # | Gate | Verification |
+|---|------|-------------|
+| 1 | Every P0 item has a merged PR | `gh pr list --search "CAB-XXXX" --state merged` returns >= 1 PR per P0 item |
+| 2 | Linear comment maps items → PRs | Completion comment lists each P0 deliverable + its PR number |
+| 3 | Live verification | Target site/endpoint confirmed working (curl, build, or screenshot) |
+| 4 | Sub-tickets closed | All child issues on Linear are Done (not just the parent) |
+
+**If any gate fails**: ticket stays In Progress. Log: `MEGA-GATE-FAIL | task=<ID> missing=<gate_numbers>`
+
 ## Item State Machine (MANDATORY)
 
 ```
@@ -124,6 +137,7 @@ PENDING ──→ CLAIMED ──→ IN_PROGRESS ──→ DONE ──→ ARCHIVE
 | 2 | No DONE in NEXT | `📋 NEXT` section | Zero items with `**DONE**`, `— DONE`, or `~~strikethrough~~` |
 | 3 | Stale `[~]` check | plan.md | Every `[~]` has at least one `[ ]` sub-item remaining |
 | 4 | Cross-file parity | plan.md vs memory.md | `[x]` → `✅ DONE`, `[~]` → `🔴 IN PROGRESS` |
+| 5 | MEGA close gate | Linear MEGAs marked Done this session | All 4 MEGA gates pass (see above) |
 
 ## Operation Logging
 
@@ -170,4 +184,4 @@ Keep under 500 lines. Rotate oldest to `metrics.log.1` (90-day retention).
 - **State files are mandatory** — skipping memory.md update is a workflow violation
 - **Operation log is mandatory** — every session MUST have SESSION-START and SESSION-END
 - **Atomic transitions only** — marking `**DONE**` without moving to `✅ DONE` is forbidden
-- **Session-End State Lint** — 4-check lint before every SESSION-END, no exceptions
+- **Session-End State Lint** — 5-check lint before every SESSION-END, no exceptions

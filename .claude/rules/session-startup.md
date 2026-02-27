@@ -88,6 +88,17 @@ Monitor context window usage throughout the session:
 
 Use `/clear` aggressively between unrelated tasks in the same session.
 
+### Orchestrator Override (STOA_INSTANCE=orchestrator or Pane 0)
+
+The orchestrator has **stricter** context limits because it runs continuously:
+- **Target**: stay under **40% context** (vs 60% for implementation instances)
+- **At 30%**: `/compact` proactively
+- **At 50%**: STOP current cycle, update state files, `/clear`, start fresh
+- **Never open code files** — delegate to Explore subagents or instances
+- **Cycle-based workflow**: each dispatch cycle is a mini-session (dispatch → verify → clear)
+
+See `instance-dispatch.md` → "ORCHESTRE Rules" for the full discipline.
+
 ## Step 4 — Work
 
 Follow the appropriate pattern from `ai-factory.md` (Pattern 3/5/7 for features, Pattern 1/2 for reviews).

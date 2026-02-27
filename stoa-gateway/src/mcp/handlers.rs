@@ -373,17 +373,23 @@ pub async fn mcp_tools_call(
         "Executing MCP tool"
     );
 
-    // Get tool from registry (CAB-1317: sync refresh on cache miss if stale)
+    // Get tool from registry (CAB-1558: skip sync refresh if cache was ever loaded)
     let tool = match state.tool_registry.get(&request.name) {
         Some(t) => t,
         None => {
-            // CAB-1317: If tenant cache is stale, try a synchronous refresh before 404
+            // CAB-1558: Only do sync refresh if tenant was NEVER loaded.
+            // If cache exists (even stale), return 404 immediately — background
+            // stale-while-revalidate handles refresh without blocking the request.
+            // This prevents retry storms under load (3 VUs × 15 iterations = 45
+            // blocking HTTP calls to CP that previously caused p95 > 1s).
             let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
-            if state.tool_registry.is_stale(&auth.tenant_id, ttl) {
+            if !state.tool_registry.has_been_loaded(&auth.tenant_id)
+                && state.tool_registry.is_stale(&auth.tenant_id, ttl)
+            {
                 debug!(
                     tool = %request.name,
                     tenant_id = %auth.tenant_id,
-                    "Tool not found, attempting sync refresh (stale cache)"
+                    "Tool not found, attempting sync refresh (tenant never loaded)"
                 );
                 let _ = refresh_tenant_tools(
                     &state.tool_registry,
@@ -425,7 +431,7 @@ pub async fn mcp_tools_call(
                         .into_response();
                 }
             } else {
-                warn!(tool = %request.name, "Tool not found");
+                warn!(tool = %request.name, "Tool not found (cache loaded, no sync refresh)");
                 metrics::record_tool_call(&request.name, &auth.tenant_id, "not_found", 0.0);
                 emit_metering_event(
                     &state,

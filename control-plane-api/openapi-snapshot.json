@@ -20509,6 +20509,68 @@
         "title": "UsagePeriodStats",
         "type": "object"
       },
+      "UsageRecordRequest": {
+        "description": "Gateway-submitted usage event (CAB-1568: LLM proxy metering).",
+        "properties": {
+          "endpoint": {
+            "default": "/v1/messages",
+            "description": "API endpoint called",
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "input_tokens": {
+            "default": 0,
+            "description": "Input tokens",
+            "minimum": 0.0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "description": "Output tokens",
+            "minimum": 0.0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "request_count": {
+            "default": 1,
+            "description": "Number of requests",
+            "minimum": 0.0,
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "subscription_id": {
+            "description": "Subscription ID from API key validation",
+            "title": "Subscription Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "description": "Tenant ID from API key validation",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "total_latency_ms": {
+            "default": 0,
+            "description": "Request latency in ms",
+            "minimum": 0.0,
+            "title": "Total Latency Ms",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "description": "Total tokens (input + output)",
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subscription_id"
+        ],
+        "title": "UsageRecordRequest",
+        "type": "object"
+      },
       "UsageResponse": {
         "description": "Aggregated usage statistics for all sub-accounts of a master account.",
         "properties": {
@@ -44302,6 +44364,61 @@
         "summary": "Get My Active Subscriptions",
         "tags": [
           "Usage"
+        ]
+      }
+    },
+    "/v1/usage/record": {
+      "post": {
+        "description": "Record usage from a STOA gateway (CAB-1568: LLM proxy metering).\n\nAuthenticated via X-API-Key header (control plane API key).\nCalled by gateways after proxying LLM API requests.",
+        "operationId": "record_usage_v1_usage_record_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsageRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Record Usage V1 Usage Record Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Usage",
+        "tags": [
+          "Usage Metering"
         ]
       }
     },

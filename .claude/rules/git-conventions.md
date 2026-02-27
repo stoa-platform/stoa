@@ -1,6 +1,6 @@
 ---
 description: Git commit, branch, and PR conventions
-globs: ".github/**,*.md"
+globs: ".github/**"
 ---
 
 # Git Conventions

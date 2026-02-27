@@ -22,12 +22,12 @@
 
 | Theme | Progress | Done/Total | Description |
 |-------|----------|------------|-------------|
+| **Security** | 96% | 25/26 | Auth, mTLS, DPoP, RBAC, OWASP |
 | **Community** | 91% | 20/22 | OSS contributions, docs, SEO, i18n |
 | **Observability** | 86% | 6/7 | Monitoring, dashboards, alerts, Arena |
 | **Gateway** | 52% | 22/42 | Modes, adapters, protocols, performance |
 | **DX** | 49% | 24/49 | Onboarding, docs, CLI, quick start |
 | **Platform** | 32% | 30/95 | API, RBAC, multi-tenant, UAC, CRDs |
-| **Security** | -- | 0/0 | Auth, mTLS, DPoP, RBAC, OWASP (label backfill needed) |
 
 ## Current Cycle — Cycle 9 (Feb 23 – Mar 1)
 

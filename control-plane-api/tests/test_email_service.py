@@ -141,3 +141,87 @@ class TestKeyRotationNotification:
             )
         subject = mock_send.call_args[0][1]
         assert "Payment API" in subject
+
+    async def test_rotation_includes_text_body(self, service_enabled):
+        """Rotation email includes a text_body fallback with key details."""
+        mock_server = MagicMock()
+        with patch("smtplib.SMTP", return_value=mock_server):
+            mock_server.__enter__ = MagicMock(return_value=mock_server)
+            mock_server.__exit__ = MagicMock(return_value=False)
+            await service_enabled.send_key_rotation_notification(
+                to_email="dev@test.com",
+                subscription_id="sub-456",
+                api_name="Orders API",
+                application_name="Order App",
+                new_api_key="stoa_sk_orders_key",
+                old_key_expires_at=datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC),
+                grace_period_hours=48,
+            )
+        call_args = mock_server.sendmail.call_args
+        msg_body = call_args[0][2]
+        assert "Orders API" in msg_body
+        assert "stoa_sk_orders_key" in msg_body
+        assert "48" in msg_body
+
+
+# ── Config defaults ──
+
+
+class TestConfigDefaults:
+    async def test_default_smtp_config(self):
+        """Default config values when no env vars set."""
+        with patch.dict("os.environ", {}, clear=False):
+            svc = EmailService()
+        assert svc.smtp_port == 587
+        assert svc.smtp_from == "noreply@gostoa.dev"
+        assert svc.enabled is False
+        assert svc.smtp_tls is True
+
+    async def test_portal_url_from_env(self):
+        """PORTAL_URL env var is read into service."""
+        with patch.dict("os.environ", {"PORTAL_URL": "https://portal.custom.dev"}, clear=False):
+            svc = EmailService()
+        assert svc.portal_url == "https://portal.custom.dev"
+
+
+# ── Error handling ──
+
+
+class TestErrorHandling:
+    async def test_general_exception_returns_false(self):
+        """Any SMTP exception returns False (not just ConnectionRefused)."""
+        env = {
+            "EMAIL_NOTIFICATIONS_ENABLED": "true",
+            "SMTP_HOST": "smtp.test.local",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            svc = EmailService()
+        with patch("smtplib.SMTP", side_effect=OSError("network error")):
+            result = await svc.send_email("user@test.com", "Test", "<p>Hi</p>")
+        assert result is False
+
+    async def test_smtp_timeout_returns_false(self):
+        """Timeout during SMTP connection returns False."""
+        env = {
+            "EMAIL_NOTIFICATIONS_ENABLED": "true",
+            "SMTP_HOST": "smtp.test.local",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            svc = EmailService()
+        with patch("smtplib.SMTP", side_effect=TimeoutError("connection timed out")):
+            result = await svc.send_email("user@test.com", "Test", "<p>Hi</p>")
+        assert result is False
+
+    async def test_rotation_failure_propagates(self, service_enabled):
+        """Key rotation notification returns False when send_email fails."""
+        with patch.object(service_enabled, "send_email", return_value=False):
+            result = await service_enabled.send_key_rotation_notification(
+                to_email="dev@test.com",
+                subscription_id="sub-123",
+                api_name="Failing API",
+                application_name="App",
+                new_api_key="key",
+                old_key_expires_at=datetime(2026, 3, 1, tzinfo=UTC),
+                grace_period_hours=12,
+            )
+        assert result is False

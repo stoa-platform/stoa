@@ -188,6 +188,30 @@ This adds a `Signed-off-by: Your Name <email>` line to your commit. See [CLA.md]
 - **TypeScript:** Use ESLint + Prettier with project config
 - **All:** Keep functions small and focused, write meaningful comments
 
+### License Headers
+
+All source files must include an Apache 2.0 license header with SPDX identifier. A script is provided to check and add headers automatically:
+
+```bash
+# Check for missing headers (CI mode — exits 1 if any missing)
+python scripts/add-license-headers.py --check .
+
+# Preview what would change
+python scripts/add-license-headers.py --dry-run .
+
+# Add headers to all files missing them
+python scripts/add-license-headers.py .
+```
+
+The script supports Python, Rust, TypeScript, JavaScript, Go, Java, Shell, YAML, CSS, SQL, and more. It uses the appropriate comment style for each file type.
+
+Expected header format (Python example):
+
+```python
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+```
+
 ## Testing
 
 ```bash

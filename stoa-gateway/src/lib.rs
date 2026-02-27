@@ -140,12 +140,14 @@ pub fn build_router(state: AppState) -> Router {
         // CAB-1365/1366: Skills admin
         .route("/skills/status", get(admin::skills_status))
         .route("/skills/resolve", get(admin::skills_resolve))
+        .route("/skills/sync", post(admin::skills_sync))
         .route(
             "/skills",
             get(admin::skills_list)
                 .post(admin::skills_upsert)
                 .delete(admin::skills_delete),
         )
+        .route("/skills/:id", get(admin::skills_get_by_id))
         // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
         .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
         // CAB-1316: Per-request diagnostic report + aggregated summary
@@ -170,8 +172,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics))
         .nest("/admin", admin_router)
-        // HTTP metrics middleware: records method, path, status, duration for ALL requests
-        .layer(axum::middleware::from_fn(http_metrics_middleware));
+        // HTTP metrics middleware: records method, path, status, duration for ALL requests.
+        // Also triggers auto-RCA on 5xx responses (CAB-1542 Phase 3).
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            http_metrics_middleware,
+        ));
 
     // Build mTLS layers only when mTLS is enabled (CAB-864, CAB-1359 perf).
     // When disabled, skip the middleware entirely — avoids 2 async fn calls per request.
@@ -440,12 +446,20 @@ pub fn build_router(state: AppState) -> Router {
 // === HTTP Metrics Middleware ===
 
 /// Middleware that records Prometheus metrics for every HTTP request.
+/// On 5xx responses, triggers the diagnostic engine for automatic root-cause analysis (CAB-1542).
 async fn http_metrics_middleware(
+    axum::extract::State(state): axum::extract::State<AppState>,
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     let method = request.method().to_string();
     let path = metrics::normalize_path(request.uri().path());
+    let request_id = request
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
     let start = std::time::Instant::now();
 
     let response = next.run(request).await;
@@ -453,6 +467,35 @@ async fn http_metrics_middleware(
     let duration = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();
     metrics::record_http_request(&method, &path, status, duration);
+
+    // Auto-RCA: trigger diagnostic engine on server errors
+    if status >= 500 {
+        let input = diagnostics::engine::DiagnosticInput {
+            request_id,
+            method: method.clone(),
+            path: path.clone(),
+            status_code: status,
+            error_message: None,
+            hop_headers: diagnostics::hops::HopHeaders::default(),
+            timing: diagnostics::latency::TimingBreakdown {
+                auth_ms: None,
+                policy_eval_ms: None,
+                backend_ms: None,
+                serialization_ms: None,
+                total_ms: duration * 1000.0,
+                checkpoints: Vec::new(),
+            },
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        let _report = state.diagnostic_engine.diagnose(input);
+        tracing::warn!(
+            status = status,
+            path = %path,
+            method = %method,
+            duration_ms = duration * 1000.0,
+            "auto-RCA triggered for 5xx response"
+        );
+    }
 
     response
 }
@@ -472,11 +515,7 @@ async fn ready(
     // Check Control Plane connectivity (non-blocking, short timeout)
     if let Some(cp_url) = &state.config.control_plane_url {
         let health_url = format!("{}/health", cp_url);
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(3))
-            .build()
-            .unwrap_or_default();
-        match client.get(&health_url).send().await {
+        match state.http_client.get(&health_url).send().await {
             Ok(resp) if resp.status().is_success() => {}
             Ok(resp) => {
                 warn!(status = %resp.status(), "Control Plane health check returned non-200");

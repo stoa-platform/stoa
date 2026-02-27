@@ -930,6 +930,71 @@ pub async fn skills_upsert(
         .into_response()
 }
 
+/// GET /admin/skills/:id — get a single skill by key (CAB-1542)
+pub async fn skills_get_by_id(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match state.skill_resolver.get(&id) {
+        Some(s) => Json(SkillAdminEntry {
+            key: s.key,
+            name: s.name,
+            description: s.description,
+            tenant_id: s.tenant_id,
+            scope: s.scope.to_string(),
+            priority: s.priority,
+            instructions: s.instructions,
+            tool_ref: s.tool_ref,
+            user_ref: s.user_ref,
+            enabled: s.enabled,
+        })
+        .into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "skill not found", "key": id})),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /admin/skills/sync — bulk replace all skills (CAB-1542)
+pub async fn skills_sync(
+    State(state): State<AppState>,
+    Json(payload): Json<Vec<SkillUpsertPayload>>,
+) -> impl IntoResponse {
+    use crate::skills::resolver::{SkillScope, StoredSkill};
+
+    let mut skills = Vec::with_capacity(payload.len());
+    for item in payload {
+        let scope = match SkillScope::from_crd(&item.scope) {
+            Some(s) => s,
+            None => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": format!("invalid scope: {}", item.scope), "key": item.key})),
+                )
+                    .into_response();
+            }
+        };
+        skills.push(StoredSkill {
+            key: item.key,
+            name: item.name,
+            description: item.description,
+            tenant_id: item.tenant_id,
+            scope,
+            priority: item.priority.unwrap_or(50),
+            instructions: item.instructions,
+            tool_ref: item.tool_ref,
+            user_ref: item.user_ref,
+            enabled: item.enabled.unwrap_or(true),
+        });
+    }
+
+    let count = skills.len();
+    state.skill_resolver.sync(skills);
+    (StatusCode::OK, Json(serde_json::json!({"synced": count}))).into_response()
+}
+
 /// DELETE /admin/skills?key=X — remove a skill by key (CAB-1366)
 pub async fn skills_delete(
     State(state): State<AppState>,

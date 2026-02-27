@@ -213,6 +213,19 @@ impl SkillResolver {
         result
     }
 
+    /// Look up a single skill by key.
+    pub fn get(&self, key: &str) -> Option<StoredSkill> {
+        self.store.read().iter().find(|s| s.key == key).cloned()
+    }
+
+    /// Bulk sync: replace entire store with the given skills, then invalidate cache.
+    pub fn sync(&self, skills: Vec<StoredSkill>) {
+        let mut store = self.store.write();
+        *store = skills;
+        drop(store);
+        self.invalidate_cache();
+    }
+
     /// Return all stored skills (cloned snapshot).
     pub fn list_all(&self) -> Vec<StoredSkill> {
         self.store.read().clone()

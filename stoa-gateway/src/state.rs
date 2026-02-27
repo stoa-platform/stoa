@@ -172,7 +172,19 @@ impl AppState {
             _ => None,
         };
 
-        let control_plane = Arc::new(ToolProxyClient::new(cp_url, oidc));
+        // Initialize per-upstream circuit breaker registry (CAB-362, wired in CAB-1542 Phase 2)
+        let cb_config = CircuitBreakerConfig {
+            failure_threshold: config.cb_failure_threshold,
+            reset_timeout: std::time::Duration::from_secs(config.cb_reset_timeout_secs),
+            success_threshold: config.cb_success_threshold,
+            ..CircuitBreakerConfig::default()
+        };
+        let circuit_breakers = Arc::new(CircuitBreakerRegistry::new(cb_config));
+        tracing::info!("Per-upstream circuit breaker registry initialized");
+
+        let control_plane = Arc::new(
+            ToolProxyClient::new(cp_url, oidc).with_circuit_breakers(circuit_breakers.clone()),
+        );
         let route_registry = Arc::new(RouteRegistry::new());
         let policy_registry = Arc::new(PolicyRegistry::new());
 
@@ -229,16 +241,6 @@ impl AppState {
             tracing::info!("Zombie detection disabled");
             None
         };
-
-        // Initialize per-upstream circuit breaker registry (CAB-362)
-        let cb_config = CircuitBreakerConfig {
-            failure_threshold: config.cb_failure_threshold,
-            reset_timeout: std::time::Duration::from_secs(config.cb_reset_timeout_secs),
-            success_threshold: config.cb_success_threshold,
-            ..CircuitBreakerConfig::default()
-        };
-        let circuit_breakers = Arc::new(CircuitBreakerRegistry::new(cb_config));
-        tracing::info!("Per-upstream circuit breaker registry initialized");
 
         // Initialize Kafka metering producer (Phase 3: CAB-1105)
         let metering_producer = if config.kafka_enabled {

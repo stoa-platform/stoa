@@ -301,7 +301,23 @@ pub async fn refresh_tools_for_tenant(
     cb: Arc<CircuitBreaker>,
     tenant_id: &str,
 ) -> Result<usize, String> {
-    let defs = discover_with_resilience(cp, &cb).await?;
+    // CAB-1558: Always mark tenant as loaded, even on discovery failure.
+    // Without this, a failed refresh leaves the tenant "never loaded" —
+    // every subsequent request retriggers a synchronous HTTP call to the
+    // control plane, creating a retry storm that tanks p95 latency.
+    // The TTL-based refresh (default 300s) will reattempt later.
+    let defs = match discover_with_resilience(cp, &cb).await {
+        Ok(d) => d,
+        Err(e) => {
+            registry.mark_loaded(tenant_id);
+            tracing::warn!(
+                tenant_id = %tenant_id,
+                error = %e,
+                "Tool discovery failed — marked loaded to prevent retry storm (CAB-1558)"
+            );
+            return Err(e);
+        }
+    };
     let mut new_count = 0;
     for def in &defs {
         if !has_native_implementation(&def.name) && registry.get(&def.name).is_none() {

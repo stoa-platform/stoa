@@ -19756,6 +19756,28 @@
             ],
             "title": "Display Name"
           },
+          "max_apis": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Apis"
+          },
+          "max_applications": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Applications"
+          },
           "owner_email": {
             "anyOf": [
               {
@@ -19769,6 +19791,39 @@
           }
         },
         "title": "TenantUpdate",
+        "type": "object"
+      },
+      "TenantUsageResponse": {
+        "properties": {
+          "api_count": {
+            "default": 0,
+            "title": "Api Count",
+            "type": "integer"
+          },
+          "application_count": {
+            "default": 0,
+            "title": "Application Count",
+            "type": "integer"
+          },
+          "max_apis": {
+            "default": 10,
+            "title": "Max Apis",
+            "type": "integer"
+          },
+          "max_applications": {
+            "default": 20,
+            "title": "Max Applications",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id"
+        ],
+        "title": "TenantUsageResponse",
         "type": "object"
       },
       "TestConnectionResponse": {
@@ -37000,7 +37055,7 @@
         ]
       },
       "post": {
-        "description": "Create a new API in GitLab and emit event.\n\nThis creates the API definition in the GitOps repository:\n- tenants/{tenant_id}/apis/{api_name}/api.yaml\n- tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)",
+        "description": "Create a new API in GitLab and emit event.\n\nThis creates the API definition in the GitOps repository:\n- tenants/{tenant_id}/apis/{api_name}/api.yaml\n- tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)\n\nTrial tenants are subject to limits (CAB-1549):\n- Max 3 APIs (configurable via tenant.settings.max_apis)\n- 402 after 30-day trial expires",
         "operationId": "create_api_v1_tenants__tenant_id__apis_post",
         "parameters": [
           {
@@ -42981,6 +43036,54 @@
         "summary": "Update Skill",
         "tags": [
           "Skills"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/usage": {
+      "get": {
+        "description": "Get tenant resource usage and limits.",
+        "operationId": "get_tenant_usage_v1_tenants__tenant_id__usage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantUsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tenant Usage",
+        "tags": [
+          "Tenants"
         ]
       }
     },

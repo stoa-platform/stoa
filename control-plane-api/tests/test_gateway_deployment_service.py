@@ -302,3 +302,148 @@ class TestGatewayDeploymentService:
         assert state1["api_name"] == "payments"
         assert state1["tenant_id"] == "acme"
         assert state1["activated"] is True
+
+    @pytest.mark.asyncio
+    async def test_undeploy_not_found_raises(self):
+        """ValueError raised when deployment not found."""
+        db = AsyncMock()
+
+        with patch("src.services.gateway_deployment_service.GatewayDeploymentRepository") as MockDeployRepo, \
+             patch("src.services.gateway_deployment_service.GatewayInstanceRepository"):
+
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=None)
+
+            from src.services.gateway_deployment_service import GatewayDeploymentService
+
+            svc = GatewayDeploymentService(db)
+            svc.deploy_repo = mock_deploy_repo
+
+            with pytest.raises(ValueError, match="Deployment not found"):
+                await svc.undeploy(uuid4())
+
+    @pytest.mark.asyncio
+    async def test_force_sync_not_found_raises(self):
+        """ValueError raised when deployment not found for force_sync."""
+        db = AsyncMock()
+
+        with patch("src.services.gateway_deployment_service.GatewayDeploymentRepository") as MockDeployRepo, \
+             patch("src.services.gateway_deployment_service.GatewayInstanceRepository"):
+
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=None)
+
+            from src.services.gateway_deployment_service import GatewayDeploymentService
+
+            svc = GatewayDeploymentService(db)
+            svc.deploy_repo = mock_deploy_repo
+
+            with pytest.raises(ValueError, match="Deployment not found"):
+                await svc.force_sync(uuid4())
+
+    @pytest.mark.asyncio
+    async def test_deploy_invalid_gateway_raises(self):
+        """ValueError raised when gateway instance not found."""
+        db = AsyncMock()
+        catalog = self._make_catalog()
+
+        with patch("src.services.gateway_deployment_service.GatewayDeploymentRepository") as MockDeployRepo, \
+             patch("src.services.gateway_deployment_service.GatewayInstanceRepository") as MockGwRepo, \
+             patch("src.services.gateway_deployment_service.kafka_service"):
+
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_gw_repo = MockGwRepo.return_value
+            mock_gw_repo.get_by_id = AsyncMock(return_value=None)
+
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = catalog
+            db.execute = AsyncMock(return_value=mock_result)
+
+            from src.services.gateway_deployment_service import GatewayDeploymentService
+
+            svc = GatewayDeploymentService(db)
+            svc.deploy_repo = mock_deploy_repo
+            svc.gw_repo = mock_gw_repo
+
+            with pytest.raises(ValueError, match="Gateway instance"):
+                await svc.deploy_api(catalog.id, [uuid4()])
+
+    @pytest.mark.asyncio
+    async def test_build_desired_state_falls_back_to_metadata(self):
+        """build_desired_state uses api_metadata when openapi_spec is None."""
+        catalog = self._make_catalog(
+            openapi_spec=None,
+            api_metadata={"type": "grpc", "service": "payments"},
+        )
+
+        from src.services.gateway_deployment_service import GatewayDeploymentService
+
+        state = GatewayDeploymentService.build_desired_state(catalog)
+
+        assert len(state["spec_hash"]) == 64
+        assert state["api_name"] == "payments"
+
+    @pytest.mark.asyncio
+    async def test_kafka_failure_is_non_fatal(self):
+        """Kafka publish failure is logged as warning, not raised."""
+        db = AsyncMock()
+        catalog = self._make_catalog()
+        gateway = self._make_gateway()
+
+        with patch("src.services.gateway_deployment_service.GatewayDeploymentRepository") as MockDeployRepo, \
+             patch("src.services.gateway_deployment_service.GatewayInstanceRepository") as MockGwRepo, \
+             patch("src.services.gateway_deployment_service.kafka_service") as mock_kafka:
+
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
+            mock_deploy_repo.create = AsyncMock(side_effect=lambda d: d)
+
+            mock_gw_repo = MockGwRepo.return_value
+            mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
+
+            mock_kafka.publish = AsyncMock(side_effect=RuntimeError("Kafka down"))
+
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = catalog
+            db.execute = AsyncMock(return_value=mock_result)
+
+            from src.services.gateway_deployment_service import GatewayDeploymentService
+
+            svc = GatewayDeploymentService(db)
+            svc.deploy_repo = mock_deploy_repo
+            svc.gw_repo = mock_gw_repo
+
+            # Should not raise despite Kafka failure
+            deployments = await svc.deploy_api(catalog.id, [gateway.id])
+            assert len(deployments) == 1
+
+    @pytest.mark.asyncio
+    async def test_undeploy_with_resource_id_emits_kafka(self):
+        """Undeploy with resource_id emits Kafka sync request."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        db = AsyncMock()
+        deployment = self._make_deployment(
+            gateway_resource_id="gw-api-456",
+            sync_status=DeploymentSyncStatus.SYNCED,
+            desired_state={"tenant_id": "acme"},
+        )
+
+        with patch("src.services.gateway_deployment_service.GatewayDeploymentRepository") as MockDeployRepo, \
+             patch("src.services.gateway_deployment_service.GatewayInstanceRepository"), \
+             patch("src.services.gateway_deployment_service.kafka_service") as mock_kafka:
+
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=deployment)
+            mock_deploy_repo.update = AsyncMock(return_value=deployment)
+
+            mock_kafka.publish = AsyncMock()
+
+            from src.services.gateway_deployment_service import GatewayDeploymentService
+
+            svc = GatewayDeploymentService(db)
+            svc.deploy_repo = mock_deploy_repo
+
+            await svc.undeploy(deployment.id)
+
+            mock_kafka.publish.assert_awaited_once()

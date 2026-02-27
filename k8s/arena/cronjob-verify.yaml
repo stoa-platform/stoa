@@ -57,13 +57,13 @@ spec:
                       key: oidc-client-secret
                       optional: true
                 - name: OIDC_TOKEN_URL
-                  value: "http://keycloak.stoa-system.svc:8080/realms/stoa/protocol/openid-connect/token"
+                  value: "http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/token"
                 - name: ENDPOINTS
                   value: |
                     {
-                      "api": "http://control-plane-api.stoa-system.svc:8000",
-                      "gateway": "http://stoa-gateway.stoa-system.svc:8080",
-                      "auth": "http://keycloak.stoa-system.svc:8080"
+                      "api": "http://stoa-control-plane-api.stoa-system.svc",
+                      "gateway": "http://stoa-gateway.stoa-system.svc",
+                      "auth": "http://keycloak.stoa-system.svc"
                     }
               resources:
                 requests:

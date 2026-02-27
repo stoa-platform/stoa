@@ -37,3 +37,16 @@ class TenantProvisioningStatusResponse(BaseModel):
     provisioning_started_at: str | None = None
     kc_group_id: str | None = None
     provisioning_attempts: int = 0
+
+
+class TenantProvisionRequest(BaseModel):
+    name: str
+    display_name: str
+    description: str = ""
+    owner_email: str
+
+
+class TenantProvisionResponse(BaseModel):
+    tenant_id: str
+    realm_name: str
+    provisioning_status: str = "provisioning"

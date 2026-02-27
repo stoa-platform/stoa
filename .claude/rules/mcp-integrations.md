@@ -80,7 +80,10 @@ Completed in PR #XXX (merged to main)
 **Changes**: <1-2 line summary>
 **Files**: <count> files, ~<LOC> LOC
 **Tests**: <pass/fail status>
-**Ship mode**: Ship | Show | Ask
+**CI**: [Pipeline #YYYY](link) — ✅ green
+**E2E**: @smoke pass | N/A (docs-only)
+**Pod**: `<image:tag>` running in stoa-system | N/A (no deploy)
+**Mode**: Ship | Show | Ask
 ```
 
 ## Cloudflare Integration

@@ -192,6 +192,24 @@ stoa-dispatch BACKEND "Travaille sur CAB-1350"
 stoa-dispatch MCP "Quel est ton avancement ?"
 ```
 
+### Council Gate (MANDATORY — added post-C11 audit)
+
+`stoa-dispatch` enforces Council validation before dispatching work to any pane. If the message contains a `CAB-XXXX` ticket ID, the script queries the Linear GraphQL API for `council:ticket-go` or `council:ticket-fix` labels.
+
+| Scenario | Result |
+|----------|--------|
+| Label `council:ticket-go` found | Dispatch proceeds |
+| Label `council:ticket-fix` found | Dispatch proceeds (adjustments applied) |
+| No Council label found | **BLOCKED** — must run `/council` first |
+| `LINEAR_API_KEY` not set | Warning, dispatch proceeds (graceful degradation) |
+| Linear API unreachable | Warning, dispatch proceeds (graceful degradation) |
+
+**Bypass**: `stoa-dispatch --force ROLE "message"` skips the Council check. Use only for emergencies with audit trail.
+
+**Why**: C11 audit (2026-02-27) revealed 8 tickets (152 pts) were dispatched and implemented without Council validation. No Slack notifications, no scoring, no labels. This gate prevents recurrence.
+
+**Requirements**: `LINEAR_API_KEY` env var must be set in the shell (from Infisical or `.zshrc`). Without it, the gate degrades to a warning — dispatch is allowed but unvalidated.
+
 ### Linear Auto-Status (MANDATORY)
 
 Every instance prompt includes:

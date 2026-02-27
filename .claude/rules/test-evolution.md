@@ -41,6 +41,14 @@ beforeEach(() => {
 ### Test Adjacency Rule
 New component = tests in the same PR. No "we'll add tests later".
 
+### E2E Co-Evolution Rule
+Feature/fix tickets MUST include Playwright scenario updates in the same PR:
+- New endpoint → E2E happy path + error case
+- Changed behavior → Update affected `@smoke` or `@critical` scenarios
+- UI change → Update page object + assertions
+
+No "we'll add E2E later" tickets. If E2E infra blocks the PR, tag `@wip` and document in DoD.
+
 ### Detection
 When reviewing a PR, check:
 1. Modified files in `src/pages/` → corresponding `.test.tsx` exists?

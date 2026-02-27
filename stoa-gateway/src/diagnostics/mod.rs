@@ -50,3 +50,57 @@ fn record_diagnostic(category: &ErrorCategory) {
     };
     DIAGNOSTICS_TOTAL.with_label_values(&[label]).inc();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_record_diagnostic_all_categories() {
+        // Verify that record_diagnostic maps every ErrorCategory variant
+        // to a Prometheus label without panicking.
+        let categories = [
+            ErrorCategory::Auth,
+            ErrorCategory::Network,
+            ErrorCategory::Backend,
+            ErrorCategory::Timeout,
+            ErrorCategory::Policy,
+            ErrorCategory::RateLimit,
+            ErrorCategory::Certificate,
+            ErrorCategory::Unknown,
+        ];
+        for category in &categories {
+            record_diagnostic(category);
+        }
+    }
+
+    #[test]
+    fn test_record_diagnostic_increments_counter() {
+        // Record twice for the same category and verify the counter increases.
+        let before = DIAGNOSTICS_TOTAL.with_label_values(&["auth"]).get();
+        record_diagnostic(&ErrorCategory::Auth);
+        record_diagnostic(&ErrorCategory::Auth);
+        let after = DIAGNOSTICS_TOTAL.with_label_values(&["auth"]).get();
+        assert!(after >= before + 2.0);
+    }
+
+    #[test]
+    fn test_reexports_are_accessible() {
+        // Verify all public re-exports from sub-modules are accessible.
+        let _engine = DiagnosticEngine::new(100);
+        let _hop = Hop {
+            name: "test".to_string(),
+            address: None,
+            latency_ms: Some(1.0),
+            hop_type: HopType::Gateway,
+        };
+        let _chain = HopChain {
+            hops: vec![],
+            total_detected: 0,
+            total_latency_ms: None,
+        };
+        let _detector = HopDetector;
+        let _tracker = LatencyTracker::new();
+        let _category = ErrorCategory::Auth;
+    }
+}

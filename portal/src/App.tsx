@@ -86,6 +86,7 @@ const RateLimitsPage = lazy(() =>
 const APIComparePage = lazy(() =>
   import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
 );
+const SignupPage = lazy(() => import('./pages/signup').then((m) => ({ default: m.SignupPage })));
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -439,6 +440,17 @@ function ProtectedRoute({
 
 // Main app content with routes
 function AppContent() {
+  const location = useLocation();
+
+  // Public routes — no auth required (CAB-1548)
+  if (location.pathname === '/signup') {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <SignupPage />
+      </Suspense>
+    );
+  }
+
   return (
     <ProtectedRoute>
       <Layout>

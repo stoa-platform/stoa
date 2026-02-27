@@ -1,11 +1,24 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-26 (C10 in progress: BACKEND 73/73, FRONTEND 3/5 done 63/86pts)
+> Derniere MAJ: 2026-02-27 (C11 COMPLETE: 152/152 pts, 9 PRs, 3h wall clock)
 
 ## ✅ DONE
 
 > Full history: 1305+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
+
+### Cycle 11 (Feb 27) — 152/152 pts, 8 tickets, 9 PRs, 3h wall clock
+- ✅ CAB-1539: Portal Unit Tests (21 pts) — PR #1181 (15 untested components)
+- ✅ CAB-1523: E2E @wip DPoP & MCP Scenarios (13 pts) — PR #1182 (7 DPoP + 1 MCP resource)
+- ✅ CAB-1526: API Router Test Coverage (13 pts) — PR #1183 (64 tests, 3 routers)
+- ✅ CAB-1545: PermissionGate + ProxyOwner Dashboard (21 pts) — PR #1184
+- ✅ CAB-1538: API Service Layer Tests (21 pts) — PR #1187 (34 tests, 4 service modules)
+- ✅ CAB-1542: Gateway Skills + Proxy Hardening + Auto-RCA (21 pts) — PRs #1188, #1189
+- ✅ CAB-1541: Self-Service Signup Service (21 pts) — PR #1190
+- ✅ CAB-1540: OSS Launch Readiness (21 pts) — PR #1191 (SUPPORT.md, CONTRIBUTORS.md)
+
+### Cycle 10 (Mar 2-8) — CLOSED (193/193 pts, 13 tickets, 100%)
+- Full details in completed-tickets.md
 
 ### Cycle 9 (Feb 22+)
 - ✅ CAB-1304 [MEGA] Demo Tenant Automation (13 pts) — PRs #1052, #1056 (seed script, demo router, K8s cronjob, 19 tests)
@@ -87,31 +100,12 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 23/23 PASS, GO in 5s
 - [ ] Repetitions + video backup (human-only)
 
-### Cycle 10 — Kill the Backlog (193 pts, 13 tickets, Mar 2-8)
-
-**AI Factory**:
-- ✅ Token Optimization H24 — PR #1163 (globs scoping 17 rules, heg-state brief/tickets/council-cache, SessionStart hook, n8n Linear→PB pipeline)
-
-**BACKEND** (Pane 2, ~73 pts) — ALL DONE (73/73 pts):
-- ✅ CAB-1350: UAC Spec v1.0 (13 pts) — PR #1146
-- ✅ CAB-1335: UAC Transformer Service (21 pts) — PR #1148
-- ✅ CAB-1349: Contract Transformer (8 pts) — PR #1147
-- ✅ CAB-1474: Enterprise DR & Recovery (21 pts) — PRs #1152 (export), #1155 (import)
-- ✅ CAB-1311: GTM Strategy AI part (5 pts) — PR #1157
-- ✅ CAB-1496: Benchmark Methodology (5 pts) — stoa-docs PR #85
-
-**FRONTEND** (Pane 3, ~86 pts):
-- ✅ CAB-1453: Portal V2 Self-Service (21 pts) — PR #1154
-- ✅ CAB-1454: Console Admin Complete (21 pts) — PR #1175
-- ✅ CAB-1470: Portal Advanced Features (21 pts) — PR #1176 (5 features: notifications, audit log, favorites, rate limits, API compare; 26 files, 53 tests, +2124 LOC)
-- CAB-1476: E2E Test Hardening R2 (21 pts) — todo
-- CAB-1471: Dashboard Polish (2 pts) — todo
-
-**MCP** (Pane 5, 21 pts):
-- ✅ CAB-1455: Gateway Live Reload (21 pts) — PR #1153
-
-**QA** (Pane 6, 13 pts):
-- ✅ CAB-1477: Cross-Component Integration Tests (13 pts) — PR #1156
+### Cycle 11 — COMPLETE (152/152 pts, 8 tickets, 9 PRs, 3h wall clock)
+- Session 2026-02-27: 4 parallel instances (BACKEND, FRONTEND, MCP, QA)
+- BACKEND: 76/76 pts (4 PRs #1183, #1187, #1190, #1191) — 3h08m single session
+- FRONTEND: 42/42 pts (2 PRs #1181, #1184) — ~55min
+- MCP: 21/21 pts (2 PRs #1188, #1189) — ~2h (1 relaunch due to context exhaustion)
+- QA: 13/13 pts (1 PR #1182) — ~30min
 
 ## 📋 NEXT
 
@@ -135,8 +129,10 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
 - C9 final: 830/830 pts (100%), 68 issues. Only demo rehearsal (human-only) remains
-- C10 planned: 193 pts, 13 tickets, 5 panes (Council batch: 9 Go, 3 Fix, 3 Redo deferred)
-- Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330 gateway tests
+- C10 CLOSED: 193/193 pts, 13 tickets, 100%
+- C11 CLOSED: 152/152 pts, 8 tickets, 9 PRs, 3h wall clock, 4 parallel instances
+- Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330+ gateway tests
+- Session 2026-02-27: 9 PRs merged (#1181-#1191), parallel 4-pane dispatch, 152 pts in 3h
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
 - HEGEMON daemon **v8** on worker-1 (207.180.246.92) — polling 60s, 5/5 workers healthy
@@ -146,9 +142,11 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
   - API quota hit 2026-02-26 (resets 2026-03-01). Opus works but budget needs monitoring
   - **CI/CD deploy workflow**: WORKING. PRs #1171 (fresh SSH key), #1173 (printenv), #1174 (pkill self-match fix). Full pipeline: Build 25s → Deploy 22s → Verify active
 - Backlog trim: 106 tickets canceled 2026-02-24
+- Velocity C11: 152 pts / 8 tickets / 3h wall clock (50.7 pts/h parallel throughput)
+- Velocity C10: 193 pts / 13 tickets
+- Velocity C9: 830 pts / 68 issues
 - Velocity C8: 1305 pts / 88 issues / 186 pts/day
 - Velocity C7: 505 pts / 44 issues / 72 pts/day
-- Rolling avg: 129.3 pts/day (C7+C8)
 - ADR numbering: stoa-docs owns 001-050. Next: **ADR-051**
 - docs.gostoa.dev = 41+ articles, all 8 migration spokes published
 - Veille system: L1 weekly, L2 monthly, L3 quarterly

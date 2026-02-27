@@ -14,6 +14,11 @@
 //!
 //! Note: Infrastructure prepared for tool response caching.
 //! Actual integration in SSE handler is a Phase 7 enhancement.
+//!
+//! # Tests
+//!
+//! Inline tests in `prompt.rs`, `semantic.rs`, and `watcher.rs`.
+//! No inline tests here — this module is re-exports only.
 
 pub mod prompt;
 mod semantic;

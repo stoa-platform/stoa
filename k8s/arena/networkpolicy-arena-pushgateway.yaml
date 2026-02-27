@@ -52,3 +52,36 @@ spec:
       ports:
         - port: 9091
           protocol: TCP
+---
+# Allow arena verify pods to push metrics to Pushgateway and ping Healthchecks.
+# Verify CronJob runs every 15 min (CAB-1567).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-arena-verify-egress
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1567
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway-arena-verify
+  policyTypes:
+    - Egress
+  egress:
+    # Pushgateway in monitoring namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: pushgateway
+      ports:
+        - port: 9091
+          protocol: TCP
+    # Healthchecks dead man's switch (external HTTPS)
+    - ports:
+        - port: 443
+          protocol: TCP

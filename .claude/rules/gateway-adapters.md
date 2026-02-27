@@ -1,7 +1,7 @@
 ---
 globs:
   - "control-plane-api/src/adapters/**"
-  - "stoa-gateway/**"
+  - "control-plane-api/tests/test_*_adapter*"
 ---
 
 # Gateway Adapters — Per-Gateway Rules & Tips
@@ -48,29 +48,7 @@ Console → CP API → AdapterRegistry.create(gateway_type) →
 
 ## STOA Gateway (Rust)
 
-### Quick Reference
-- **Admin API**: `POST /admin/apis`, `POST /admin/policies`, `GET /admin/health`
-- **Auth**: Bearer token (`admin_api_token`)
-- **Storage**: In-memory (CP API is source of truth, re-syncs on restart)
-- **Ports**: 8080 (runtime), same port for admin
-
-### Tips
-- Direct CRUD: no state management needed (unlike Kong)
-- `sync_api` and `upsert_policy` are both POST (upsert behavior)
-- `delete_api` returns 404 if not found — treat as success (idempotent)
-- `provision_application` = sync_api + upsert rate-limit policy (two-step)
-- No OIDC/alias/config support — returns `AdapterResult(success=False, error="Not supported")`
-- Gateway modes: `edge-mcp` (current), `sidecar`, `proxy`, `shadow` (ADR-024)
-
-### Gotchas
-- In-memory means all state is lost on restart — CP API must re-sync
-- The `spec_hash` field in sync_api response is used for drift detection
-- `list_applications` always returns `[]` (consumers are CP-managed, not gateway-managed)
-
-### Testing
-```bash
-cd control-plane-api && pytest tests/test_stoa_adapter.py -v
-```
+See `stoa-gateway/src/handlers/admin.rs` for the Rust admin API contract. The Python adapter (`StoaGatewayAdapter`) wraps the admin endpoints.
 
 ---
 

@@ -106,44 +106,15 @@ blog/YYYY-MM-DD-<slug>/diagram.png
 
 Every article belongs to a content pillar. Hubs are comprehensive articles; spokes are focused sub-topics that link back to the hub.
 
-### Pillar 1: API Gateway Migration
+### 3 Pillars
 
-| Role | Article | Status |
-|------|---------|--------|
-| **Hub** | `api-gateway-migration-guide-2026` | Published |
-| Spoke | `webmethods-migration-guide` | Published |
-| Spoke | `mulesoft-migration-open-source-gateway` | Published |
-| Spoke | `datapower-tibco-migration-guide` | Published |
-| Spoke | `apigee-alternative-open-source` | Published |
-| Spoke | `stoa-vs-kong-api-gateway` | Published |
-| Spoke | `axway-api-gateway-migration-open-source` | Published |
-| Spoke | `wso2-api-manager-open-source-alternative` | Published |
-| Spoke | `layer7-ca-api-gateway-migration-stoa` | Published (PR #68) |
+| Pillar | Hub(s) | Spokes | Status |
+|--------|--------|--------|--------|
+| API Gateway Migration | `api-gateway-migration-guide-2026` | 8 spokes (webMethods, MuleSoft, DataPower, Apigee, Kong, Axway, WSO2, Layer7) | All published |
+| MCP & AI Agents | `what-is-mcp-gateway`, `connecting-ai-agents-enterprise-apis` | 3 published + 2 TODO | In progress |
+| Open Source API Management | `open-source-api-gateway-2026` | 7 spokes (sovereignty, DORA, multi-tenant, Apache-2, API keys, security, GitOps) | All published |
 
-### Pillar 2: MCP & AI Agents
-
-| Role | Article | Status |
-|------|---------|--------|
-| **Hub** | `what-is-mcp-gateway` | Published |
-| **Hub** | `connecting-ai-agents-enterprise-apis` | Published |
-| Spoke | `mcp-gateway-quickstart-docker` | Published |
-| Spoke | `esb-is-dead-long-live-mcp` | Published |
-| Spoke | `api-gateway-glossary-2026` | Published |
-| Spoke | MCP protocol deep-dive (architecture) | TODO |
-| Spoke | AI agent security patterns | TODO |
-
-### Pillar 3: Open Source API Management
-
-| Role | Article | Status |
-|------|---------|--------|
-| **Hub** | `open-source-api-gateway-2026` | Published |
-| Spoke | `api-management-europe-sovereignty` | Published |
-| Spoke | `dora-nis2-api-gateway-compliance` | Published |
-| Spoke | `multi-tenant-api-gateway-kubernetes` | Published |
-| Spoke | `why-apache-2-not-bsl` | Published |
-| Spoke | `api-keys-in-git-history` | Published |
-| Spoke | `api-security-checklist-solo-dev` | Published |
-| Spoke | `gitops-in-10-minutes` | Published |
+Full article inventory: see `PLAN-SEO.md` in stoa-docs repo.
 
 ### Linking Rules
 

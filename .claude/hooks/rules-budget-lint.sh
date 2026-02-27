@@ -19,7 +19,7 @@ METRICS_LOG="$HOME/.claude/projects/${PROJECT_HASH}/memory/metrics.log"
 [ -z "$CLAUDE_PROJECT_DIR" ] && RULES_DIR="$(cd "$(dirname "$0")/.." && pwd)/rules" && MEMORY_FILE="$(cd "$(dirname "$0")/../.." && pwd)/memory.md"
 
 MAX_UNSCOPED_BYTES=10240   # 10K per file
-MAX_ALWAYS_LOADED=102400   # 100K total (core ~80K after glob scoping)
+MAX_ALWAYS_LOADED=10240    # 10K (only workflow-essentials.md should be unscoped)
 MAX_MEMORY_LINES=120
 EXCEPTIONS="workflow-essentials.md|autonomous-factory.md"
 

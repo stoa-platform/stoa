@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePlatformStatus, useSyncComponent } from '../hooks/usePlatformStatus';
 import { ComponentStatus } from '../services/api';
 import { observabilityPath, logsPath } from '../utils/navigation';
+import { PermissionGate } from './PermissionGate';
 
 // Status color mappings — light + dark
 const syncStatusColors: Record<string, string> = {
@@ -264,46 +265,48 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
           ))}
         </div>
 
-        {/* External Links */}
-        {status.external_links && (
-          <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-700">
-            <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
-              Quick Links
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={status.external_links.argocd}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
-              >
-                <ExternalLinkIcon className="w-4 h-4" />
-                ArgoCD
-              </a>
-              <button
-                onClick={() => navigate(observabilityPath(status.external_links.grafana))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
-              >
-                <ExternalLinkIcon className="w-4 h-4" />
-                Grafana
-              </button>
-              <button
-                onClick={() => navigate(observabilityPath(status.external_links.prometheus))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
-              >
-                <ExternalLinkIcon className="w-4 h-4" />
-                Prometheus
-              </button>
-              <button
-                onClick={() => navigate(logsPath(status.external_links.logs))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
-              >
-                <ExternalLinkIcon className="w-4 h-4" />
-                Logs
-              </button>
+        {/* External Links — visible to roles with deploy permission (CAB-1553) */}
+        <PermissionGate permission="apis:deploy">
+          {status.external_links && (
+            <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-700">
+              <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
+                Quick Links
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={status.external_links.argocd}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
+                >
+                  <ExternalLinkIcon className="w-4 h-4" />
+                  ArgoCD
+                </a>
+                <button
+                  onClick={() => navigate(observabilityPath(status.external_links.grafana))}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
+                >
+                  <ExternalLinkIcon className="w-4 h-4" />
+                  Grafana
+                </button>
+                <button
+                  onClick={() => navigate(observabilityPath(status.external_links.prometheus))}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
+                >
+                  <ExternalLinkIcon className="w-4 h-4" />
+                  Prometheus
+                </button>
+                <button
+                  onClick={() => navigate(logsPath(status.external_links.logs))}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
+                >
+                  <ExternalLinkIcon className="w-4 h-4" />
+                  Logs
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </PermissionGate>
 
         {/* Last Updated */}
         {lastUpdated && (
@@ -364,20 +367,22 @@ const ComponentCard = memo(function ComponentCard({
           </p>
         )}
         {isOutOfSync && (
-          <button
-            onClick={() => onSync(component.name)}
-            disabled={isSyncing}
-            className="ml-auto px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSyncing ? (
-              <span className="flex items-center gap-1">
-                <RefreshIcon className="w-3 h-3 animate-spin" />
-                Syncing...
-              </span>
-            ) : (
-              'Sync Now'
-            )}
-          </button>
+          <PermissionGate permission="apis:deploy">
+            <button
+              onClick={() => onSync(component.name)}
+              disabled={isSyncing}
+              className="ml-auto px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSyncing ? (
+                <span className="flex items-center gap-1">
+                  <RefreshIcon className="w-3 h-3 animate-spin" />
+                  Syncing...
+                </span>
+              ) : (
+                'Sync Now'
+              )}
+            </button>
+          </PermissionGate>
         )}
       </div>
     </div>

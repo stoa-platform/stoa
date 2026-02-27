@@ -236,6 +236,46 @@ func TestCompletedFailedGoesImmediate(t *testing.T) {
 	}
 }
 
+func TestNotifyRateLimit(t *testing.T) {
+	var mu sync.Mutex
+	var message string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var payload struct {
+			Blocks []struct {
+				Text struct {
+					Text string `json:"text"`
+				} `json:"text"`
+			} `json:"blocks"`
+		}
+		json.Unmarshal(body, &payload)
+		if len(payload.Blocks) > 0 {
+			mu.Lock()
+			message = payload.Blocks[0].Text.Text
+			mu.Unlock()
+		}
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	r := New(srv.URL, nil, "test-host", time.Hour, 0)
+
+	backoffUntil := time.Now().Add(2 * time.Minute)
+	r.NotifyRateLimit("worker-1", 3, backoffUntil)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !strings.Contains(message, "rate limit") {
+		t.Errorf("message should contain 'rate limit', got: %s", message)
+	}
+	if !strings.Contains(message, "worker-1") {
+		t.Errorf("message should contain worker name, got: %s", message)
+	}
+	if !strings.Contains(message, "consecutive: 3") {
+		t.Errorf("message should contain hit count, got: %s", message)
+	}
+}
+
 func TestNoSlackURLNoops(t *testing.T) {
 	r := New("", nil, "test-host", time.Hour, 0)
 

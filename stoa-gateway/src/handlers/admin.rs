@@ -995,7 +995,7 @@ pub async fn skills_sync(
     (StatusCode::OK, Json(serde_json::json!({"synced": count}))).into_response()
 }
 
-/// DELETE /admin/skills?key=X — remove a skill by key (CAB-1366)
+/// DELETE /admin/skills?key=X — remove a skill by key (CAB-1366, legacy)
 pub async fn skills_delete(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<SkillDeleteParams>,
@@ -1004,6 +1004,92 @@ pub async fn skills_delete(
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
+    }
+}
+
+/// PUT /admin/skills/:id — update an existing skill (CAB-1551)
+pub async fn skills_update(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(payload): Json<SkillUpsertPayload>,
+) -> impl IntoResponse {
+    use crate::skills::resolver::{SkillScope, StoredSkill};
+
+    // Verify the skill exists
+    if state.skill_resolver.get(&id).is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "skill not found", "key": id})),
+        )
+            .into_response();
+    }
+
+    let scope = match SkillScope::from_crd(&payload.scope) {
+        Some(s) => s,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": format!("invalid scope: {}", payload.scope)})),
+            )
+                .into_response();
+        }
+    };
+
+    let skill = StoredSkill {
+        key: id.clone(),
+        name: payload.name,
+        description: payload.description,
+        tenant_id: payload.tenant_id,
+        scope,
+        priority: payload.priority.unwrap_or(50),
+        instructions: payload.instructions,
+        tool_ref: payload.tool_ref,
+        user_ref: payload.user_ref,
+        enabled: payload.enabled.unwrap_or(true),
+    };
+
+    state.skill_resolver.upsert(skill);
+    Json(serde_json::json!({"key": id, "updated": true})).into_response()
+}
+
+/// DELETE /admin/skills/:id — remove a skill by path param (CAB-1551)
+pub async fn skills_delete_by_id(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    if state.skill_resolver.remove(&id) {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+/// GET /admin/skills/:id/health — skill health + circuit breaker status (CAB-1551)
+pub async fn skills_health(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    Json(state.skill_health.stats(&id))
+}
+
+/// GET /admin/skills/health — health stats for all tracked skills (CAB-1551)
+pub async fn skills_health_all(State(state): State<AppState>) -> impl IntoResponse {
+    Json(state.skill_health.stats_all())
+}
+
+/// POST /admin/skills/:id/health/reset — reset circuit breaker for a skill (CAB-1551)
+pub async fn skills_health_reset(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    if state.skill_health.reset_circuit_breaker(&id) {
+        Json(serde_json::json!({"key": id, "circuit_state": "closed"})).into_response()
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "no circuit breaker found", "key": id})),
+        )
+            .into_response()
     }
 }
 

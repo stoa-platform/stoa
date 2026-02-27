@@ -126,14 +126,33 @@ describe('Dashboard', () => {
     expect(await screen.findByText('Quick Links')).toBeInTheDocument();
   });
 
-  // 4-persona coverage
+  // CAB-1553: 4-persona widget permission coverage
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',
     (role) => {
-      it('renders the page', async () => {
+      beforeEach(() => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      });
+
+      it('renders the page with welcome card', async () => {
         renderApp('/');
         expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+      });
+
+      it('renders all four quick action cards', async () => {
+        renderApp('/');
+        expect(
+          await screen.findByText('Manage API definitions and deployments')
+        ).toBeInTheDocument();
+        expect(screen.getByText('Browse MCP tools catalog')).toBeInTheDocument();
+        expect(screen.getByText('Manage consumer applications')).toBeInTheDocument();
+        expect(screen.getByText('View deployment history')).toBeInTheDocument();
+      });
+
+      it('renders Getting Started and Quick Links sections', async () => {
+        renderApp('/');
+        expect(await screen.findByText('Getting Started')).toBeInTheDocument();
+        expect(screen.getByText('Quick Links')).toBeInTheDocument();
       });
     }
   );

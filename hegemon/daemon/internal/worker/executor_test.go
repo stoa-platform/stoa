@@ -91,7 +91,7 @@ func TestTurnsForEstimate(t *testing.T) {
 		est  int
 		want int
 	}{
-		{1, 40}, {3, 40}, {5, 50}, {8, 60}, {13, 75}, {21, 75},
+		{1, 20}, {3, 20}, {5, 30}, {8, 40}, {13, 50}, {21, 50},
 	}
 	for _, tt := range tests {
 		got := turnsForEstimate(tt.est)
@@ -102,12 +102,12 @@ func TestTurnsForEstimate(t *testing.T) {
 }
 
 func TestModelForEstimate(t *testing.T) {
-	// All estimates → opus (Sonnet can't handle STOA rule density).
+	// v2 routing: Haiku for <=3pts, Opus for everything else.
 	tests := []struct {
 		est  int
 		want string
 	}{
-		{1, "opus"}, {3, "opus"}, {5, "opus"}, {8, "opus"}, {13, "opus"},
+		{1, "haiku"}, {3, "haiku"}, {4, "opus"}, {5, "opus"}, {8, "opus"}, {13, "opus"},
 	}
 	for _, tt := range tests {
 		got := modelForEstimate(tt.est)
@@ -115,6 +115,50 @@ func TestModelForEstimate(t *testing.T) {
 			t.Errorf("modelForEstimate(%d) = %q, want %q", tt.est, got, tt.want)
 		}
 	}
+}
+
+func TestIsRateLimited(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want bool
+	}{
+		{"error: 429 Too Many Requests", true},
+		{"error: 529 Overloaded", true},
+		{"RateLimitError: rate_limit_exceeded", true},
+		{"API overloaded, please try again", true},
+		{"quota exhausted for this billing period", true},
+		{"insufficient credit balance", true},
+		{"All done. PR #42 created.", false},
+		{"Not logged in. Please run claude login.", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		got := isRateLimited(tt.raw)
+		if got != tt.want {
+			t.Errorf("isRateLimited(%q) = %v, want %v", tt.raw[:min(len(tt.raw), 40)], got, tt.want)
+		}
+	}
+}
+
+func TestParseResultRateLimited(t *testing.T) {
+	raw := "error: 429 Too Many Requests - rate_limit_exceeded"
+	r, err := parseResult(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Status != "failed" {
+		t.Errorf("status = %q, want failed", r.Status)
+	}
+	if !r.RateLimited {
+		t.Error("RateLimited should be true")
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func TestBuildPrompt(t *testing.T) {

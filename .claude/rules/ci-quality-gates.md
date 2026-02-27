@@ -178,6 +178,18 @@ ci → docker → apply-manifest → deploy (rollout restart)
 Components with `apply-manifest`: stoa-gateway, control-plane-ui, portal.
 Exception: control-plane-api (naming mismatch, standalone manifest uses `stoa-control-plane-api`).
 
+## CI Health Policy
+
+**CI noise = P0.** A red `main` branch blocks ALL new feature work across all instances.
+
+| Priority | Action | Who |
+|----------|--------|-----|
+| P0 | Red `main` — fix immediately | Any instance, `/ci-fix` skill |
+| P1 | Flaky test — stabilize or quarantine | Same instance that introduced it |
+| P2 | Non-required check failing | Track in memory.md "CI Known Issues" |
+
+**Rule**: No instance may start a new feature ticket while `main` CI is red. Fix first, then resume.
+
 ## Common CI Failure Patterns
 
 | Pattern | Cause | Fix |

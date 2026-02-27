@@ -93,6 +93,62 @@ class TestQueryLogs:
         mock_pii_masker.mask_dict.assert_called_once()
 
 
+    @pytest.mark.asyncio
+    async def test_status_filter_passthrough(self, svc, mock_loki):
+        """Non-ALL status is forwarded to Loki."""
+        from src.schemas.logs import LogQueryParams, LogStatus
+
+        params = LogQueryParams(limit=10, offset=0, status=LogStatus.ERROR)
+        await svc.query_logs("user-1", "acme", params)
+
+        call_kwargs = mock_loki.get_recent_calls.call_args[1]
+        assert call_kwargs["status"] == LogStatus.ERROR
+
+    @pytest.mark.asyncio
+    async def test_all_status_sends_none(self, svc, mock_loki):
+        """ALL status is converted to None (no filter)."""
+        from src.schemas.logs import LogQueryParams, LogStatus
+
+        params = LogQueryParams(limit=10, offset=0, status=LogStatus.ALL)
+        await svc.query_logs("user-1", "acme", params)
+
+        call_kwargs = mock_loki.get_recent_calls.call_args[1]
+        assert call_kwargs["status"] is None
+
+    @pytest.mark.asyncio
+    async def test_default_lookback(self, svc, mock_loki):
+        """No start/end time uses DEFAULT_LOOKBACK_HOURS."""
+        from src.schemas.logs import LogQueryParams
+        from src.services.consumer_logs_service import DEFAULT_LOOKBACK_HOURS
+
+        params = LogQueryParams(limit=10, offset=0)
+        await svc.query_logs("user-1", "acme", params)
+
+        call_kwargs = mock_loki.get_recent_calls.call_args[1]
+        actual_range = call_kwargs["to_date"] - call_kwargs["from_date"]
+        assert actual_range <= timedelta(hours=DEFAULT_LOOKBACK_HOURS + 0.01)
+
+    @pytest.mark.asyncio
+    async def test_offset_in_response(self, svc, mock_loki):
+        """Offset from params is reflected in response."""
+        from src.schemas.logs import LogQueryParams
+
+        mock_loki.get_recent_calls = AsyncMock(return_value=[_make_log_entry()])
+        params = LogQueryParams(limit=10, offset=5)
+        result = await svc.query_logs("user-1", "acme", params)
+        assert result.offset == 5
+
+    @pytest.mark.asyncio
+    async def test_query_time_ms_positive(self, svc, mock_loki):
+        """Response includes a positive query_time_ms."""
+        from src.schemas.logs import LogQueryParams
+
+        mock_loki.get_recent_calls = AsyncMock(return_value=[_make_log_entry()])
+        params = LogQueryParams(limit=10, offset=0)
+        result = await svc.query_logs("user-1", "acme", params)
+        assert result.query_time_ms >= 0
+
+
 class TestMaskEntry:
     def test_field_remapping(self, svc):
         entry = _make_log_entry()
@@ -100,6 +156,20 @@ class TestMaskEntry:
         assert "request_id" in masked
         assert "duration_ms" in masked
         assert masked["request_id"] == "req-123"
+
+    def test_missing_id_defaults_empty(self, svc):
+        """Entry without 'id' gets empty request_id."""
+        entry = _make_log_entry()
+        del entry["id"]
+        masked = svc._mask_entry(entry)
+        assert masked["request_id"] == ""
+
+    def test_missing_status_defaults_unknown(self, svc):
+        """Entry without 'status' gets 'unknown'."""
+        entry = _make_log_entry()
+        del entry["status"]
+        masked = svc._mask_entry(entry)
+        assert masked["status"] == "unknown"
 
 
 class TestExportCSV:
@@ -118,3 +188,53 @@ class TestExportCSV:
         rows = list(reader)
         assert rows[0] == ["timestamp", "request_id", "tool_id", "tool_name", "status", "latency_ms", "error_message"]
         assert len(rows) == 2  # header + 1 entry
+
+    @pytest.mark.asyncio
+    async def test_export_time_range_capped(self, svc, mock_loki):
+        """Export with > MAX_TIME_RANGE_HOURS gets capped."""
+        now = datetime.now(UTC)
+        await svc.export_csv(
+            user_id="user-1",
+            tenant_id="acme",
+            start_time=now - timedelta(hours=72),
+            end_time=now,
+        )
+
+        call_kwargs = mock_loki.get_recent_calls.call_args[1]
+        actual_range = call_kwargs["to_date"] - call_kwargs["from_date"]
+        assert actual_range <= timedelta(hours=MAX_TIME_RANGE_HOURS)
+
+    @pytest.mark.asyncio
+    async def test_export_multiple_entries(self, svc, mock_loki):
+        """CSV export handles multiple entries."""
+        entries = [_make_log_entry(id=f"req-{i}") for i in range(3)]
+        mock_loki.get_recent_calls = AsyncMock(return_value=entries)
+
+        now = datetime.now(UTC)
+        csv_str = await svc.export_csv(
+            user_id="user-1",
+            tenant_id="acme",
+            start_time=now - timedelta(hours=1),
+            end_time=now,
+        )
+
+        reader = csv.reader(io.StringIO(csv_str))
+        rows = list(reader)
+        assert len(rows) == 4  # header + 3 entries
+
+    @pytest.mark.asyncio
+    async def test_export_empty_logs(self, svc, mock_loki):
+        """CSV export with no logs returns header only."""
+        mock_loki.get_recent_calls = AsyncMock(return_value=[])
+
+        now = datetime.now(UTC)
+        csv_str = await svc.export_csv(
+            user_id="user-1",
+            tenant_id="acme",
+            start_time=now - timedelta(hours=1),
+            end_time=now,
+        )
+
+        reader = csv.reader(io.StringIO(csv_str))
+        rows = list(reader)
+        assert len(rows) == 1  # header only

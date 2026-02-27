@@ -68,6 +68,14 @@ description: Core behavioral rules — Ship/Show/Ask, DoD, State Machine, Operat
 | 2 | Docker build | Image pushed to GHCR |
 | 3 | Pod updated | New image running in `stoa-system` |
 | 4 | ArgoCD synced | Synced + Healthy (if ArgoCD-managed) |
+| 5 | Verification proof | Linear comment includes CI link + E2E + pod status |
+
+### Verification Rules (4 non-negotiable)
+
+1. **No DONE without proof** — Linear completion comment MUST include: CI pipeline link, E2E pass/fail, live pod confirmation. No proof = ticket stays open.
+2. **E2E co-evolves with code** — Feature/fix tickets MUST update Playwright scenarios in the same PR. No separate "test later" tickets.
+3. **CI noise = P0** — Red `main` blocks ALL new work. Fix CI before starting any feature. `/ci-fix` has priority over backlog.
+4. **Multi-env gate** — DoD requires 3 proofs: local tests pass, CI pipeline green, staging/prod pod healthy.
 
 ## Item State Machine (MANDATORY)
 

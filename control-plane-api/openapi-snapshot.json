@@ -19523,6 +19523,57 @@
         "title": "TenantMCPServerUpdate",
         "type": "object"
       },
+      "TenantProvisionRequest": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_email": {
+            "title": "Owner Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "owner_email"
+        ],
+        "title": "TenantProvisionRequest",
+        "type": "object"
+      },
+      "TenantProvisionResponse": {
+        "properties": {
+          "provisioning_status": {
+            "default": "provisioning",
+            "title": "Provisioning Status",
+            "type": "string"
+          },
+          "realm_name": {
+            "title": "Realm Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "realm_name"
+        ],
+        "title": "TenantProvisionResponse",
+        "type": "object"
+      },
       "TenantProvisioningStatusResponse": {
         "properties": {
           "kc_group_id": {
@@ -36656,6 +36707,53 @@
           }
         ],
         "summary": "Create Tenant",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/v1/tenants/provision": {
+      "post": {
+        "description": "Provision a new tenant with Keycloak realm (CAB-1547).\n\nIdempotent: returns existing tenant if already provisioned.\nCreates DB record + Keycloak realm synchronously.\nCPI Admin only.",
+        "operationId": "provision_tenant_endpoint_v1_tenants_provision_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantProvisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantProvisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Provision Tenant Endpoint",
         "tags": [
           "Tenants"
         ]

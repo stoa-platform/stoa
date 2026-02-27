@@ -32,7 +32,6 @@ Feature: Gateway - MCP Resource Discovery (MCP 2025-11-25)
     Then the MCP response status is 404
     And the MCP error contains "not found"
 
-  @wip
   Scenario: Read resource for registered tool returns tool schema
     When I list MCP resources
     And I read the first available MCP resource

@@ -1244,45 +1244,77 @@ jobs:
           if [ -n "$LINEAR_API_KEY" ] && [ -n "$TICKET_ID" ] && [ -n "$PR_NUM" ]; then
             echo "Updating Linear ticket ${TICKET_ID} -> Done"
 
-            # Fetch the "Done" state ID for team CAB-ING
-            DONE_STATE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            # Check if this is a MEGA ticket (has children or title contains [MEGA])
+            MEGA_CHECK=$(curl -s -X POST "https://api.linear.app/graphql" \
               -H "Authorization: ${LINEAR_API_KEY}" \
               -H "Content-Type: application/json" \
-              -d '{"query": "{ workflowStates(filter: { name: { eq: \"Done\" }, team: { key: { eq: \"CAB\" } } }) { nodes { id name } } }"}' \
-              | jq -r '.data.workflowStates.nodes[0].id // empty' 2>/dev/null || echo "")
+              -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id title children { nodes { id state { name } } } } } }\"}" \
+              2>/dev/null || echo "{}")
 
-            if [ -n "$DONE_STATE_ID" ]; then
-              # Fetch issue ID by identifier
-              ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
-                -H "Authorization: ${LINEAR_API_KEY}" \
-                -H "Content-Type: application/json" \
-                -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
-                | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+            CHILDREN_COUNT=$(echo "$MEGA_CHECK" | jq -r '.data.issues.nodes[0].children.nodes | length' 2>/dev/null || echo "0")
+            MEGA_TITLE=$(echo "$MEGA_CHECK" | jq -r '.data.issues.nodes[0].title // ""' 2>/dev/null || echo "")
+            MEGA_ISSUE_ID=$(echo "$MEGA_CHECK" | jq -r '.data.issues.nodes[0].id // empty' 2>/dev/null || echo "")
 
-              if [ -n "$ISSUE_ID" ]; then
-                # Move to Done
-                curl -s -X POST "https://api.linear.app/graphql" \
-                  -H "Authorization: ${LINEAR_API_KEY}" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { stateId: \\\"${DONE_STATE_ID}\\\" }) { success } }\"}" \
-                  > /dev/null 2>&1 || true
+            IS_MEGA=false
+            if [ "$CHILDREN_COUNT" -gt 0 ] || echo "$MEGA_TITLE" | grep -q '\[MEGA\]'; then
+              IS_MEGA=true
+            fi
 
-                # Add completion comment
+            if [ "$IS_MEGA" = "true" ]; then
+              echo "MEGA ticket detected (${TICKET_ID}, ${CHILDREN_COUNT} children) — skipping auto-close"
+              # Post progress comment instead of closing
+              if [ -n "$MEGA_ISSUE_ID" ]; then
                 PR_REF=""
                 [ -n "$PR_NUM" ] && PR_REF="PR [#${PR_NUM}](${PR_URL})"
-                COMMENT_BODY="Completed autonomously via AI Factory L3 pipeline. ${PR_REF}"
+                COMMENT_BODY="Sub-ticket work merged via L3 pipeline. ${PR_REF}. Parent MEGA stays In Progress until all sub-tickets complete."
                 curl -s -X POST "https://api.linear.app/graphql" \
                   -H "Authorization: ${LINEAR_API_KEY}" \
                   -H "Content-Type: application/json" \
-                  -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT_BODY}\\\" }) { success } }\"}" \
+                  -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${MEGA_ISSUE_ID}\\\", body: \\\"${COMMENT_BODY}\\\" }) { success } }\"}" \
                   > /dev/null 2>&1 || true
-
-                echo "Linear ${TICKET_ID} -> Done"
-              else
-                echo "::warning::Could not find Linear issue ID for ${TICKET_ID}"
               fi
             else
-              echo "::warning::Could not find Done state ID for team CAB"
+              # Standalone ticket — proceed with Done mutation
+              # Fetch the "Done" state ID for team CAB-ING
+              DONE_STATE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: ${LINEAR_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d '{"query": "{ workflowStates(filter: { name: { eq: \"Done\" }, team: { key: { eq: \"CAB\" } } }) { nodes { id name } } }"}' \
+                | jq -r '.data.workflowStates.nodes[0].id // empty' 2>/dev/null || echo "")
+
+              if [ -n "$DONE_STATE_ID" ]; then
+                # Fetch issue ID by identifier
+                ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+                  -H "Authorization: ${LINEAR_API_KEY}" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+                  | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+
+                if [ -n "$ISSUE_ID" ]; then
+                  # Move to Done
+                  curl -s -X POST "https://api.linear.app/graphql" \
+                    -H "Authorization: ${LINEAR_API_KEY}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { stateId: \\\"${DONE_STATE_ID}\\\" }) { success } }\"}" \
+                    > /dev/null 2>&1 || true
+
+                  # Add completion comment
+                  PR_REF=""
+                  [ -n "$PR_NUM" ] && PR_REF="PR [#${PR_NUM}](${PR_URL})"
+                  COMMENT_BODY="Completed autonomously via AI Factory L3 pipeline. ${PR_REF}"
+                  curl -s -X POST "https://api.linear.app/graphql" \
+                    -H "Authorization: ${LINEAR_API_KEY}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT_BODY}\\\" }) { success } }\"}" \
+                    > /dev/null 2>&1 || true
+
+                  echo "Linear ${TICKET_ID} -> Done"
+                else
+                  echo "::warning::Could not find Linear issue ID for ${TICKET_ID}"
+                fi
+              else
+                echo "::warning::Could not find Done state ID for team CAB"
+              fi
             fi
           fi
 

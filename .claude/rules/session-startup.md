@@ -130,7 +130,14 @@ After merging a PR for a phase, check if the same MEGA has another unclaimed unb
    - If any check fails → fix it NOW, before proceeding to step 4
    See `ai-workflow.md` → "Session-End State Lint" for full protocol.
 4. **Linear MCP sync** (if task has CAB-XXXX ID):
-   - PR merged → `linear.update_issue(status="Done")` + `linear.create_comment` with PR link
+   - **Standalone ticket** (no parent, no children):
+     PR merged → `linear.update_issue(status="Done")` + `linear.create_comment` with PR link
+   - **Sub-ticket of MEGA** (has parent):
+     PR merged → mark sub-ticket Done, then check ALL sibling sub-tickets via `linear.get_issue(parentId)`.
+     If ALL siblings Done → run `/verify-mega` on parent. If all 5 gates pass → mark parent Done.
+     If not all siblings Done → post comment on parent: "Sub-ticket CAB-XXXX completed (PR #N). X/Y siblings remaining."
+   - **MEGA parent** (has children):
+     NEVER mark Done directly from session-end — always use `/verify-mega CAB-XXXX`
    - Blocked → `linear.update_issue(status="Blocked")` + comment with reason
    - Paused → leave as "In Progress" (no change needed)
 5. **Metrics** — if a PR was merged or CI was fixed this session:

@@ -158,12 +158,15 @@ The orchestrator is a **dispatcher**, not an implementer. These rules prevent co
 - Verify post-merge CD status
 - Update state files (memory.md, plan.md)
 - Run `/sync-plan`, `/fill-cycle`, `/council`
+- Run `/verify-mega` before closing any MEGA ticket
+- Weekly Monday: run `/verify-mega --all-done-7d` to audit recent Done MEGAs
 
 #### What ORCHESTRE NEVER does
 - Create feature branches
 - Write or edit code files (src/, tests/, etc.)
 - Run test suites (pytest, vitest, cargo test)
 - Create PRs
+- Mark a MEGA Done without running `/verify-mega` first
 - Stay on the same conversation for more than ~20 turns
 
 #### Context Management
@@ -174,14 +177,16 @@ The orchestrator is a **dispatcher**, not an implementer. These rules prevent co
 
 #### Dispatch Cycle Pattern
 ```
+0. Before dispatching MEGA sub-tickets: verify parent is decomposed (Gate 0 — children exist)
 1. Read session-brief.json (or memory.md + plan.md)
 2. Check instance states: heg-state remote-ls
 3. Dispatch 1-3 tickets to available instances
 4. /clear
 5. (new turn) Check progress, verify completed PRs
-6. Update state files if needed
-7. /clear
-8. Repeat
+6. For completed MEGA sub-tickets: check if all siblings Done → run /verify-mega on parent
+7. Update state files if needed
+8. /clear
+9. Repeat
 ```
 
 ### tmux Gotchas

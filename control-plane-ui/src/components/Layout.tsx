@@ -211,6 +211,12 @@ const navigationSections: NavSection[] = [
         icon: Sparkles,
         permission: 'apis:read',
       },
+      {
+        name: 'nav.proxyOwner',
+        href: '/proxy-owner',
+        icon: Stethoscope,
+        permission: 'tenants:read',
+      },
     ],
   },
   {

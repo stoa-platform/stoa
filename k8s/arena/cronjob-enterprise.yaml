@@ -48,7 +48,7 @@ spec:
                 - name: PUSHGATEWAY_URL
                   value: "http://pushgateway.monitoring.svc:9091"
                 - name: RUNS
-                  value: "3"
+                  value: "5"
                 - name: DISCARD_FIRST
                   value: "1"
                 - name: TIMEOUT
@@ -57,12 +57,19 @@ spec:
                   value: "/scripts/benchmark-enterprise.js"
                 - name: ARENA_INSTANCE
                   value: "k8s"
-                - name: ARENA_JWT
+                  # OIDC credentials for JWT auto-fetch (reuses L2 verify config)
+                  # If ARENA_JWT is empty, the orchestrator fetches a fresh token
+                  # via client_credentials grant before running benchmarks.
+                - name: OIDC_CLIENT_ID
+                  value: "stoa-healthcheck"
+                - name: OIDC_CLIENT_SECRET
                   valueFrom:
                     secretKeyRef:
-                      name: arena-enterprise-jwt
-                      key: token
+                      name: arena-verify-config
+                      key: oidc-client-secret
                       optional: true
+                - name: OIDC_TOKEN_URL
+                  value: "http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/token"
                   # GATEWAYS: mcp_base is null for gateways without MCP support
                   # Those gateways score 0 on MCP dimensions (not N/A)
                   # target: base URL for warmup + non-MCP scenarios
@@ -91,9 +98,11 @@ spec:
                       }
                     ]
               resources:
+                # Guaranteed QoS: requests == limits (no CPU throttling)
+                # Matches L0 cronjob-prod.yaml to avoid bench runner bottleneck
                 requests:
-                  cpu: "500m"
-                  memory: 256Mi
+                  cpu: "1"
+                  memory: 512Mi
                 limits:
                   cpu: "1"
                   memory: 512Mi

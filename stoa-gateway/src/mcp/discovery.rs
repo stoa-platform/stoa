@@ -104,11 +104,13 @@ pub struct PromptsCapability {
 #[derive(Debug, Serialize)]
 pub struct LoggingCapability {}
 
-/// GET /mcp/capabilities - Detailed server capabilities
-pub async fn mcp_capabilities(State(state): State<AppState>) -> impl IntoResponse {
-    let tool_count = state.tool_registry.count();
-
-    let response = CapabilitiesResponse {
+/// Build the static capabilities response (called once at startup).
+///
+/// The response body is invariant across requests — only the `X-MCP-Tool-Count`
+/// header changes. Pre-serializing avoids per-request String/Vec allocations
+/// and serde overhead (CAB-1558 arena optimization).
+pub fn build_capabilities_response() -> CapabilitiesResponse {
+    CapabilitiesResponse {
         protocol_version: MCP_PROTOCOL_VERSION.to_string(),
         capabilities: Capabilities {
             tools: ToolsCapability {
@@ -138,12 +140,30 @@ pub async fn mcp_capabilities(State(state): State<AppState>) -> impl IntoRespons
             version: env!("CARGO_PKG_VERSION").to_string(),
             protocol_version: MCP_PROTOCOL_VERSION.to_string(),
         },
-    };
+    }
+}
+
+/// GET /mcp/capabilities - Detailed server capabilities
+///
+/// Returns a pre-serialized JSON response (zero per-request allocation).
+/// Only the `X-MCP-Tool-Count` header is computed dynamically.
+pub async fn mcp_capabilities(State(state): State<AppState>) -> impl IntoResponse {
+    let tool_count = state.tool_registry.count();
 
     (
         StatusCode::OK,
-        [("X-MCP-Tool-Count", tool_count.to_string())],
-        Json(response),
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("application/json"),
+            ),
+            (
+                axum::http::HeaderName::from_static("x-mcp-tool-count"),
+                axum::http::HeaderValue::from_str(&tool_count.to_string())
+                    .unwrap_or_else(|_| axum::http::HeaderValue::from_static("0")),
+            ),
+        ],
+        state.capabilities_json.clone(),
     )
 }
 

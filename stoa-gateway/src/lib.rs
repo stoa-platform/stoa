@@ -250,6 +250,8 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/mcp/prompts/list", post(mcp_prompts_list))
                 .route("/mcp/prompts/get", post(mcp_prompts_get))
                 .route("/mcp/completion/complete", post(mcp_completion_complete))
+                // LLM Proxy — transparent Anthropic API proxy (CAB-1568)
+                .route("/v1/messages", post(llm::proxy::llm_proxy_handler))
                 // MCP v1 REST API (demo + simple HTTP clients)
                 .route("/mcp/v1/tools", get(mcp_rest_tools_list))
                 .route("/mcp/v1/tools/invoke", post(mcp_rest_tools_invoke))

@@ -435,6 +435,18 @@ pub struct Config {
     #[serde(default)]
     pub billing_api_url: Option<String>,
 
+    // === LLM Proxy — Dogfood Mode (CAB-1568) ===
+    /// Enable transparent LLM API proxy at `/v1/messages`.
+    /// Each consumer is identified by `x-api-key: stoa_sk_*` header.
+    /// Env: STOA_LLM_PROXY_ENABLED
+    #[serde(default)]
+    pub llm_proxy_enabled: bool,
+
+    /// Upstream LLM API URL (default: https://api.anthropic.com).
+    /// Env: STOA_LLM_PROXY_UPSTREAM_URL
+    #[serde(default)]
+    pub llm_proxy_upstream_url: Option<String>,
+
     // === LLM Contracts (CAB-709) ===
     /// Enable LLM contract endpoint expansion (default: false)
     /// Env: STOA_LLM_ENABLED

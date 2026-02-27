@@ -8,10 +8,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.dependencies import User
 from src.auth.rbac import require_role
 from src.database import get_db
-from src.schemas.usage_metering import UsageDetailResponse, UsageSummaryListResponse
+from src.schemas.usage_metering import (
+    UsageDetailResponse,
+    UsageRecordCreate,
+    UsageRecordResponse,
+    UsageSummaryListResponse,
+)
 from src.services.usage_metering import UsageMeteringService
 
 router = APIRouter(prefix="/v1/usage", tags=["Usage Metering"])
+
+
+@router.post("/record", response_model=UsageRecordResponse, status_code=201)
+async def record_usage(
+    request: UsageRecordCreate,
+    db: AsyncSession = Depends(get_db),
+) -> UsageRecordResponse:
+    """Record LLM proxy usage from the gateway (CAB-1568).
+
+    Called by the STOA Gateway after each proxied LLM request.
+    Upserts into chat_token_usage for daily aggregation.
+    Auth: gateway API key (X-API-Key header validated by middleware).
+    """
+    service = UsageMeteringService(db)
+    return await service.record_llm_usage(request)
 
 
 @router.get("/summary", response_model=UsageSummaryListResponse)

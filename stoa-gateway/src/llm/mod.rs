@@ -22,6 +22,7 @@
 
 pub mod cost;
 pub mod providers;
+pub mod proxy;
 pub mod router;
 
 pub use cost::{

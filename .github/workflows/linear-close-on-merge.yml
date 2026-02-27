@@ -50,14 +50,16 @@ jobs:
             exit 0
           fi
 
-          # Find the issue by identifier
+          # Find the issue by identifier, including children to detect MEGAs
           ISSUE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
             -H "Authorization: $LINEAR_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { id identifier state { name type } } } }\"}")
+            -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { id identifier title state { name type } children { nodes { id identifier state { name } } } } } }\"}")
 
           ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].id // empty')
           CURRENT_STATE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].state.type // empty')
+          ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].title // empty')
+          CHILDREN_COUNT=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].children.nodes | length')
 
           if [ -z "$ISSUE_ID" ]; then
             echo "Issue $TICKET_ID not found in Linear — skipping"
@@ -70,8 +72,27 @@ jobs:
             exit 0
           fi
 
+          # MEGA detection: has children or title contains [MEGA]
+          IS_MEGA=false
+          if [ "$CHILDREN_COUNT" -gt 0 ] || echo "$ISSUE_TITLE" | grep -q '\[MEGA\]'; then
+            IS_MEGA=true
+          fi
+
+          if [ "$IS_MEGA" = "true" ]; then
+            echo "MEGA ticket detected ($TICKET_ID, $CHILDREN_COUNT children) — skipping auto-close"
+            # Post progress comment instead of closing
+            COMMENT_BODY="Sub-ticket work merged in PR #${PR_NUM} ([${PR_TITLE}](${PR_URL})).\n\nParent MEGA stays In Progress until all sub-tickets complete. Use \`/verify-mega ${TICKET_ID}\` to check gate status.\n\n*Auto-detected as MEGA by merge workflow*"
+            COMMENT_MUTATION='mutation { commentCreate(input: { issueId: "'"$ISSUE_ID"'", body: "'"$COMMENT_BODY"'" }) { success } }'
+            curl -s -X POST https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
+            echo "Progress comment added to MEGA $TICKET_ID (not closed)"
+            exit 0
+          fi
+
+          # Standalone ticket — proceed with Done mutation
           # Get the "Done" state ID for the team
-          TEAM_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issueSearch.nodes[0].id // empty')
           DONE_STATE_QUERY='{ workflowStates(filter: { type: { eq: "completed" }, team: { issues: { identifier: { eq: "'"$TICKET_ID"'" } } } }) { nodes { id name } } }'
           DONE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
             -H "Authorization: $LINEAR_API_KEY" \

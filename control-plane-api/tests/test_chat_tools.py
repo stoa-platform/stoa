@@ -167,3 +167,255 @@ class TestListApisHandler:
         data = json.loads(result)
         assert data["total"] == 1
         assert data["apis"][0]["name"] == "Pet Store"
+
+
+# ── Additional handler coverage (CAB-1538) ──
+
+
+class TestGetApiDetailHandler:
+    async def test_returns_api_detail(self):
+        api = MagicMock()
+        api.id = "api-42"
+        api.name = "Payments API"
+        api.version = "2.0"
+        api.description = "Payment processing"
+        api.status = "published"
+        api.category = "finance"
+        api.tenant_id = "tenant-1"
+        api.base_url = "https://api.example.com/payments"
+
+        session = AsyncMock()
+        with patch("src.repositories.catalog.CatalogRepository") as MockRepo:
+            MockRepo.return_value.get_api_by_id = AsyncMock(return_value=api)
+            result = await execute_tool(
+                "get_api_detail",
+                {"tenant_id": "tenant-1", "api_id": "api-42"},
+                session,
+            )
+
+        data = json.loads(result)
+        assert data["id"] == "api-42"
+        assert data["name"] == "Payments API"
+        assert data["version"] == "2.0"
+        assert data["description"] == "Payment processing"
+        assert data["status"] == "published"
+        assert data["base_url"] == "https://api.example.com/payments"
+        assert data["tenant_id"] == "tenant-1"
+
+    async def test_api_not_found_returns_error(self):
+        session = AsyncMock()
+        with patch("src.repositories.catalog.CatalogRepository") as MockRepo:
+            MockRepo.return_value.get_api_by_id = AsyncMock(return_value=None)
+            result = await execute_tool(
+                "get_api_detail",
+                {"tenant_id": "tenant-1", "api_id": "missing-api"},
+                session,
+            )
+
+        data = json.loads(result)
+        assert "error" in data
+        assert data["error"] == "API not found"
+
+    async def test_calls_repo_with_correct_ids(self):
+        session = AsyncMock()
+        with patch("src.repositories.catalog.CatalogRepository") as MockRepo:
+            mock_get = AsyncMock(return_value=None)
+            MockRepo.return_value.get_api_by_id = mock_get
+            await execute_tool(
+                "get_api_detail",
+                {"tenant_id": "t-xyz", "api_id": "a-abc"},
+                session,
+            )
+        mock_get.assert_awaited_once_with(tenant_id="t-xyz", api_id="a-abc")
+
+
+class TestListGatewayInstancesHandler:
+    async def test_formats_instance_list(self):
+        inst = MagicMock()
+        inst.id = "gw-1"
+        inst.name = "kong-prod"
+        inst.display_name = "Kong Production"
+        inst.gateway_type = "kong"
+        inst.status = "online"
+        inst.base_url = "https://kong.example.com"
+
+        session = AsyncMock()
+        with patch("src.repositories.gateway_instance.GatewayInstanceRepository") as MockRepo:
+            MockRepo.return_value.list_all = AsyncMock(return_value=([inst], 1))
+            result = await execute_tool("list_gateway_instances", {}, session)
+
+        data = json.loads(result)
+        assert data["total"] == 1
+        assert len(data["instances"]) == 1
+        assert data["instances"][0]["id"] == "gw-1"
+        assert data["instances"][0]["name"] == "kong-prod"
+        assert data["instances"][0]["display_name"] == "Kong Production"
+        assert data["instances"][0]["gateway_type"] == "kong"
+        assert data["instances"][0]["status"] == "online"
+        assert data["instances"][0]["base_url"] == "https://kong.example.com"
+
+    async def test_empty_instances(self):
+        session = AsyncMock()
+        with patch("src.repositories.gateway_instance.GatewayInstanceRepository") as MockRepo:
+            MockRepo.return_value.list_all = AsyncMock(return_value=([], 0))
+            result = await execute_tool("list_gateway_instances", {}, session)
+
+        data = json.loads(result)
+        assert data["total"] == 0
+        assert data["instances"] == []
+
+    async def test_calls_list_all_with_pagination_defaults(self):
+        session = AsyncMock()
+        with patch("src.repositories.gateway_instance.GatewayInstanceRepository") as MockRepo:
+            mock_list = AsyncMock(return_value=([], 0))
+            MockRepo.return_value.list_all = mock_list
+            await execute_tool("list_gateway_instances", {}, session)
+        mock_list.assert_awaited_once_with(page=1, page_size=50)
+
+
+class TestListDeploymentsHandler:
+    async def test_formats_deployment_list(self):
+        dep = MagicMock()
+        dep.id = "dep-1"
+        dep.api_catalog_id = "api-99"
+        dep.gateway_instance_id = "gw-1"
+        dep.sync_status = "synced"
+
+        session = AsyncMock()
+        with patch("src.repositories.gateway_deployment.GatewayDeploymentRepository") as MockRepo:
+            MockRepo.return_value.list_all = AsyncMock(return_value=([dep], 1))
+            result = await execute_tool("list_deployments", {}, session)
+
+        data = json.loads(result)
+        assert data["total"] == 1
+        assert len(data["deployments"]) == 1
+        assert data["deployments"][0]["id"] == "dep-1"
+        assert data["deployments"][0]["api_catalog_id"] == "api-99"
+        assert data["deployments"][0]["gateway_instance_id"] == "gw-1"
+        assert data["deployments"][0]["sync_status"] == "synced"
+
+    async def test_empty_deployments(self):
+        session = AsyncMock()
+        with patch("src.repositories.gateway_deployment.GatewayDeploymentRepository") as MockRepo:
+            MockRepo.return_value.list_all = AsyncMock(return_value=([], 0))
+            result = await execute_tool("list_deployments", {}, session)
+
+        data = json.loads(result)
+        assert data["total"] == 0
+        assert data["deployments"] == []
+
+    async def test_calls_list_all_with_pagination_defaults(self):
+        session = AsyncMock()
+        with patch("src.repositories.gateway_deployment.GatewayDeploymentRepository") as MockRepo:
+            mock_list = AsyncMock(return_value=([], 0))
+            MockRepo.return_value.list_all = mock_list
+            await execute_tool("list_deployments", {}, session)
+        mock_list.assert_awaited_once_with(page=1, page_size=50)
+
+
+class TestSearchDocsHandler:
+    async def test_returns_search_results(self):
+        result_item = MagicMock()
+        result_item.title = "Getting Started with MCP"
+        result_item.url = "https://docs.gostoa.dev/guides/mcp"
+        result_item.snippet = "MCP protocol enables AI agents..."
+        result_item.category = "guides"
+
+        response = MagicMock()
+        response.query = "mcp protocol"
+        response.total = 1
+        response.results = [result_item]
+
+        mock_service = MagicMock()
+        mock_service.search = AsyncMock(return_value=response)
+
+        session = AsyncMock()
+        with patch(
+            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
+        ):
+            result = await execute_tool(
+                "search_docs", {"query": "mcp protocol"}, session
+            )
+
+        data = json.loads(result)
+        assert data["query"] == "mcp protocol"
+        assert data["total"] == 1
+        assert len(data["results"]) == 1
+        assert data["results"][0]["title"] == "Getting Started with MCP"
+        assert data["results"][0]["url"] == "https://docs.gostoa.dev/guides/mcp"
+        assert data["results"][0]["snippet"] == "MCP protocol enables AI agents..."
+        assert data["results"][0]["category"] == "guides"
+
+    async def test_empty_results(self):
+        response = MagicMock()
+        response.query = "nonexistent topic xyz"
+        response.total = 0
+        response.results = []
+
+        mock_service = MagicMock()
+        mock_service.search = AsyncMock(return_value=response)
+
+        session = AsyncMock()
+        with patch(
+            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
+        ):
+            result = await execute_tool(
+                "search_docs", {"query": "nonexistent topic xyz"}, session
+            )
+
+        data = json.loads(result)
+        assert data["total"] == 0
+        assert data["results"] == []
+
+    async def test_limit_clamped_to_valid_range(self):
+        response = MagicMock()
+        response.query = "api"
+        response.total = 0
+        response.results = []
+
+        mock_service = MagicMock()
+        mock_service.search = AsyncMock(return_value=response)
+
+        session = AsyncMock()
+        with patch(
+            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
+        ):
+            # limit=99 should be clamped to 20
+            await execute_tool("search_docs", {"query": "api", "limit": 99}, session)
+
+        mock_service.search.assert_awaited_once_with(query="api", limit=20)
+
+    async def test_limit_defaults_to_five(self):
+        response = MagicMock()
+        response.query = "gateway"
+        response.total = 0
+        response.results = []
+
+        mock_service = MagicMock()
+        mock_service.search = AsyncMock(return_value=response)
+
+        session = AsyncMock()
+        with patch(
+            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
+        ):
+            await execute_tool("search_docs", {"query": "gateway"}, session)
+
+        mock_service.search.assert_awaited_once_with(query="gateway", limit=5)
+
+    async def test_limit_clamped_minimum_to_one(self):
+        response = MagicMock()
+        response.query = "test"
+        response.total = 0
+        response.results = []
+
+        mock_service = MagicMock()
+        mock_service.search = AsyncMock(return_value=response)
+
+        session = AsyncMock()
+        with patch(
+            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
+        ):
+            # limit=0 should be clamped to 1
+            await execute_tool("search_docs", {"query": "test", "limit": 0}, session)
+
+        mock_service.search.assert_awaited_once_with(query="test", limit=1)

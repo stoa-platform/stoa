@@ -1,14 +1,13 @@
 """Tests for Kafka quota management service"""
 
 import pytest
-from httpx import AsyncClient, HTTPStatusError, Request, Response
+from httpx import HTTPStatusError, Request, Response
 
 from src.services.kafka_quotas import (
     QUOTA_POLICIES,
     KafkaQuotaService,
     TenantTier,
 )
-
 
 _MOCK_ADMIN_URL = "http://mock-redpanda:9644"
 
@@ -60,7 +59,7 @@ async def test_apply_quota_standard_tier(quota_service, monkeypatch):
 
         post = mock_post
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda timeout: MockClient())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
 
     result = await quota_service.apply_quota("test-tenant", TenantTier.STANDARD)
     assert result["success"] is True
@@ -91,7 +90,7 @@ async def test_apply_quota_premium_tier(quota_service, monkeypatch):
 
         post = mock_post
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda timeout: MockClient())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
 
     result = await quota_service.apply_quota("premium-tenant", TenantTier.PREMIUM)
     assert result["success"] is True
@@ -119,7 +118,7 @@ async def test_remove_quota(quota_service, monkeypatch):
 
         delete = mock_delete
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda timeout: MockClient())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
 
     result = await quota_service.remove_quota("test-tenant", TenantTier.STANDARD)
     assert result["success"] is True
@@ -153,7 +152,7 @@ async def test_list_quotas(quota_service, monkeypatch):
 
         get = mock_get
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda timeout: MockClient())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
 
     quotas = await quota_service.list_quotas()
     assert len(quotas) == 1
@@ -177,7 +176,7 @@ async def test_health_check_success(quota_service, monkeypatch):
 
         get = mock_get
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda timeout: MockClient())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
 
     is_healthy = await quota_service.health_check()
     assert is_healthy is True
@@ -199,7 +198,7 @@ async def test_health_check_failure(quota_service, monkeypatch):
 
         get = mock_get
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda timeout: MockClient())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
 
     is_healthy = await quota_service.health_check()
     assert is_healthy is False
@@ -252,7 +251,7 @@ async def test_noisy_neighbor_simulation(quota_service, monkeypatch):
 
         post = mock_post
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda timeout: MockClient())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
 
     # Step 1: Apply quota to "noisy-tenant"
     result = await quota_service.apply_quota("noisy-tenant", TenantTier.STANDARD)
@@ -263,3 +262,87 @@ async def test_noisy_neighbor_simulation(quota_service, monkeypatch):
     # and verifying it gets throttled by Redpanda
     # For now, we verify the quota was created with correct limits
     assert result["client_id"] == "tenant-standard-noisy-tenant"
+
+
+# ── KAFKA_ENABLED=False early return paths (CAB-1538) ──
+
+
+class TestKafkaDisabled:
+    @pytest.mark.asyncio
+    async def test_apply_quota_kafka_disabled(self, quota_service, monkeypatch):
+        monkeypatch.setattr("src.services.kafka_quotas.settings", type("S", (), {"KAFKA_ENABLED": False})())
+        result = await quota_service.apply_quota("tenant-x", TenantTier.STANDARD)
+        assert result == {"success": False, "reason": "kafka_disabled"}
+
+    @pytest.mark.asyncio
+    async def test_remove_quota_kafka_disabled(self, quota_service, monkeypatch):
+        monkeypatch.setattr("src.services.kafka_quotas.settings", type("S", (), {"KAFKA_ENABLED": False})())
+        result = await quota_service.remove_quota("tenant-x", TenantTier.STANDARD)
+        assert result == {"success": False, "reason": "kafka_disabled"}
+
+    @pytest.mark.asyncio
+    async def test_list_quotas_kafka_disabled(self, quota_service, monkeypatch):
+        monkeypatch.setattr("src.services.kafka_quotas.settings", type("S", (), {"KAFKA_ENABLED": False})())
+        result = await quota_service.list_quotas()
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_health_check_kafka_disabled(self, quota_service, monkeypatch):
+        monkeypatch.setattr("src.services.kafka_quotas.settings", type("S", (), {"KAFKA_ENABLED": False})())
+        result = await quota_service.health_check()
+        assert result is False
+
+
+# ── HTTP error propagation paths (CAB-1538) ──
+
+
+class TestHttpErrors:
+    def _make_mock_client(self, method: str, side_effect):
+        class MockClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        setattr(MockClient, method, side_effect)
+        return MockClient
+
+    @pytest.mark.asyncio
+    async def test_apply_quota_http_error_raises(self, quota_service, monkeypatch):
+        req = Request("POST", "http://mock-redpanda:9644")
+
+        async def mock_post(*args, **kwargs):
+            raise HTTPStatusError("500", request=req, response=Response(500, request=req))
+
+        MockClient = self._make_mock_client("post", mock_post)
+        monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
+
+        with pytest.raises(HTTPStatusError):
+            await quota_service.apply_quota("tenant-x", TenantTier.STANDARD)
+
+    @pytest.mark.asyncio
+    async def test_remove_quota_http_error_raises(self, quota_service, monkeypatch):
+        req = Request("DELETE", "http://mock-redpanda:9644")
+
+        async def mock_delete(*args, **kwargs):
+            raise HTTPStatusError("404", request=req, response=Response(404, request=req))
+
+        MockClient = self._make_mock_client("delete", mock_delete)
+        monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
+
+        with pytest.raises(HTTPStatusError):
+            await quota_service.remove_quota("tenant-x", TenantTier.STANDARD)
+
+    @pytest.mark.asyncio
+    async def test_list_quotas_http_error_raises(self, quota_service, monkeypatch):
+        req = Request("GET", "http://mock-redpanda:9644")
+
+        async def mock_get(*args, **kwargs):
+            raise HTTPStatusError("503", request=req, response=Response(503, request=req))
+
+        MockClient = self._make_mock_client("get", mock_get)
+        monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: MockClient())
+
+        with pytest.raises(HTTPStatusError):
+            await quota_service.list_quotas()

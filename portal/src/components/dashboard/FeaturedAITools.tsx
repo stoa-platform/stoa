@@ -78,7 +78,7 @@ export function FeaturedAITools() {
                 <Link
                   key={tool.id || tool.name}
                   to={`/servers/${tool.id || tool.name}`}
-                  className="group flex items-start gap-3 p-3 rounded-lg border border-neutral-100 dark:border-neutral-800 hover:border-primary-200 dark:hover:border-primary-800 hover:bg-primary-50/50 dark:hover:bg-primary-950/30 transition-all"
+                  className="group flex items-start gap-3 p-3 rounded-lg border border-neutral-100 dark:border-neutral-800 hover:border-primary-200 dark:hover:border-primary-800 hover:bg-primary-50/50 dark:hover:bg-primary-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 transition-all"
                 >
                   <div className="p-2 bg-primary-100 dark:bg-primary-900/50 rounded-lg">
                     <CategoryIcon className="h-4 w-4 text-primary-600 dark:text-primary-400" />

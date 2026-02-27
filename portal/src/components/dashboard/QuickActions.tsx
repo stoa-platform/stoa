@@ -133,14 +133,24 @@ export function QuickActions() {
 
           if (action.external) {
             return (
-              <a key={action.title} href={action.href} target="_blank" rel="noopener noreferrer">
+              <a
+                key={action.title}
+                href={action.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950 rounded-xl"
+              >
                 {content}
               </a>
             );
           }
 
           return (
-            <Link key={action.title} to={action.href}>
+            <Link
+              key={action.title}
+              to={action.href}
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950 rounded-xl"
+            >
               {content}
             </Link>
           );

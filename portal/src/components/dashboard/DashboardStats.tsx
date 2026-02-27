@@ -81,6 +81,7 @@ function StatCard({ title, value, subtitle, icon, color, trend, isLoading }: Sta
           >
             {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
             <span>{Math.abs(trend)}%</span>
+            <span className="sr-only">{trend > 0 ? 'increase' : 'decrease'}</span>
           </div>
         )}
       </div>
@@ -90,7 +91,7 @@ function StatCard({ title, value, subtitle, icon, color, trend, isLoading }: Sta
           {typeof value === 'number' ? value.toLocaleString() : value}
         </p>
         <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mt-1">{title}</p>
-        <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-0.5">{subtitle}</p>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{subtitle}</p>
       </div>
     </div>
   );

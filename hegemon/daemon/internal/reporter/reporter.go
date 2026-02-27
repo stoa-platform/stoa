@@ -126,6 +126,16 @@ func (r *Reporter) NotifyRetriesExhausted(ticketID, title string, retries int) {
 	))
 }
 
+// NotifyRateLimit sends a rate-limit alert when a worker hits API quota (immediate, P0).
+// Includes backoff duration and consecutive hit count for operator awareness.
+func (r *Reporter) NotifyRateLimit(workerName string, hitCount int, backoffUntil time.Time) {
+	backoff := time.Until(backoffUntil).Round(time.Second)
+	r.slack(fmt.Sprintf(
+		":rotating_light: *HEGEMON rate limit* `%s`\nAPI quota hit (429/529) — consecutive: %d\nBackoff: %s (until %s)",
+		workerName, hitCount, backoff, backoffUntil.UTC().Format("15:04 UTC"),
+	))
+}
+
 // NotifyHealthFailure sends a worker health failure notification with per-worker cooldown.
 // Only fires once per healthCooldown per worker to prevent spam.
 func (r *Reporter) NotifyHealthFailure(workerName, errMsg string) {

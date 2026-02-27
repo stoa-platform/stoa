@@ -28,12 +28,13 @@ type LinearConfig struct {
 }
 
 type WorkerConfig struct {
-	Name   string   `yaml:"name"`
-	Host   string   `yaml:"host"`
-	Port   int      `yaml:"port"`
-	User   string   `yaml:"user"`
-	SSHKey string   `yaml:"ssh_key"`
-	Roles  []string `yaml:"roles"`
+	Name               string   `yaml:"name"`
+	Host               string   `yaml:"host"`
+	Port               int      `yaml:"port"`
+	User               string   `yaml:"user"`
+	SSHKey             string   `yaml:"ssh_key"`
+	Roles              []string `yaml:"roles"`
+	InfisicalSecretPath string  `yaml:"infisical_secret_path"` // Per-worker Infisical path (e.g. /hegemon/worker-1)
 }
 
 type SlackConfig struct {

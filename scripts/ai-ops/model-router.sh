@@ -5,17 +5,18 @@
 #        MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
 #        TURNS=$(echo "$ROUTE" | cut -d'|' -f2)
 
-# Tiered model routing (implementation jobs):
-#   <=3pts Ship   → Sonnet, 20 turns  (~$5/ticket)
-#   <=3pts        → Sonnet, 25 turns  (~$7/ticket)
-#   4-5pts        → Sonnet, 35 turns  (~$10/ticket)
+# Tiered model routing v2 — Opus-first (implementation jobs):
+#   <=3pts Ship   → Haiku,  20 turns  (~$1/ticket)
+#   <=3pts        → Haiku,  20 turns  (~$1/ticket)
+#   4-5pts        → Opus,   20 turns  (~$15/ticket)
 #   6-8pts        → Opus,   30 turns  (~$18/ticket)
 #   >8pts         → Opus,   40 turns  (~$25/ticket)
 #
 # Kill-switch: set CLAUDE_DEFAULT_MODEL repo variable to force a single model
 # for all tiers (e.g. "claude-sonnet-4-6" to revert to Sonnet-only).
 #
-# Haiku is reserved for council/plan-validate (structured evaluation).
+# Sonnet removed from autonomous mode: 44% sessions >1h, Opus resolves same tasks in <15min.
+# Haiku for <=3pts: structural/scoring tasks, 80% cheaper than Sonnet.
 # Turn budget accounts for action overhead (~5-8 turns for branch+PR+tests).
 
 route_model() {
@@ -41,22 +42,17 @@ route_model() {
 
   local MODEL TURNS
   if [ "$ESTIMATE" -le 3 ]; then
-    MODEL="claude-sonnet-4-6"
-    TURNS=25
+    MODEL="claude-haiku-4-5-20251001"
+    TURNS=20
   elif [ "$ESTIMATE" -le 5 ]; then
-    MODEL="claude-sonnet-4-6"
-    TURNS=35
+    MODEL="claude-opus-4-6"
+    TURNS=20
   elif [ "$ESTIMATE" -le 8 ]; then
     MODEL="claude-opus-4-6"
     TURNS=30
   else
     MODEL="claude-opus-4-6"
     TURNS=40
-  fi
-
-  # Ship mode: tighter budget on small tickets (faster, cheaper)
-  if [ "$MODE" = "ship" ] && [ "$ESTIMATE" -le 3 ]; then
-    TURNS=20
   fi
 
   echo "${MODEL}|${TURNS}"

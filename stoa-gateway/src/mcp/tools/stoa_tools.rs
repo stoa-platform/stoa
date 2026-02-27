@@ -306,9 +306,22 @@ pub async fn refresh_tools_for_tenant(
     // every subsequent request retriggers a synchronous HTTP call to the
     // control plane, creating a retry storm that tanks p95 latency.
     // The TTL-based refresh (default 300s) will reattempt later.
+    let start = std::time::Instant::now();
     let defs = match discover_with_resilience(cp, &cb).await {
-        Ok(d) => d,
+        Ok(d) => {
+            crate::metrics::record_tool_discovery(
+                tenant_id,
+                "success",
+                start.elapsed().as_secs_f64(),
+            );
+            d
+        }
         Err(e) => {
+            crate::metrics::record_tool_discovery(
+                tenant_id,
+                "failure",
+                start.elapsed().as_secs_f64(),
+            );
             registry.mark_loaded(tenant_id);
             tracing::warn!(
                 tenant_id = %tenant_id,

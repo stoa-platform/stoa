@@ -16485,10 +16485,27 @@
             "title": "Company"
           },
           "display_name": {
+            "maxLength": 255,
+            "minLength": 2,
             "title": "Display Name",
             "type": "string"
           },
+          "invite_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Code"
+          },
           "name": {
+            "maxLength": 63,
+            "minLength": 2,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9 _-]*$",
             "title": "Name",
             "type": "string"
           },
@@ -16496,6 +16513,10 @@
             "format": "email",
             "title": "Owner Email",
             "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SignupPlan",
+            "default": "trial"
           }
         },
         "required": [
@@ -16508,6 +16529,10 @@
       },
       "SelfServiceSignupResponse": {
         "properties": {
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
           "poll_url": {
             "title": "Poll Url",
             "type": "string"
@@ -16524,6 +16549,7 @@
         "required": [
           "tenant_id",
           "status",
+          "plan",
           "poll_url"
         ],
         "title": "SelfServiceSignupResponse",
@@ -16531,6 +16557,17 @@
       },
       "SelfServiceStatusResponse": {
         "properties": {
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
           "provisioning_status": {
             "title": "Provisioning Status",
             "type": "string"
@@ -16720,6 +16757,15 @@
         ],
         "title": "SetBaselineRequest",
         "type": "object"
+      },
+      "SignupPlan": {
+        "description": "Available plans for self-service signup.",
+        "enum": [
+          "trial",
+          "standard"
+        ],
+        "title": "SignupPlan",
+        "type": "string"
       },
       "SkillCreate": {
         "description": "Create a new skill.",
@@ -20410,6 +20456,68 @@
           "avg_latency_ms"
         ],
         "title": "UsagePeriodStats",
+        "type": "object"
+      },
+      "UsageRecordRequest": {
+        "description": "Gateway-submitted usage event (CAB-1568: LLM proxy metering).",
+        "properties": {
+          "endpoint": {
+            "default": "/v1/messages",
+            "description": "API endpoint called",
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "input_tokens": {
+            "default": 0,
+            "description": "Input tokens",
+            "minimum": 0.0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "description": "Output tokens",
+            "minimum": 0.0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "request_count": {
+            "default": 1,
+            "description": "Number of requests",
+            "minimum": 0.0,
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "subscription_id": {
+            "description": "Subscription ID from API key validation",
+            "title": "Subscription Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "description": "Tenant ID from API key validation",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "total_latency_ms": {
+            "default": 0,
+            "description": "Request latency in ms",
+            "minimum": 0.0,
+            "title": "Total Latency Ms",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "description": "Total tokens (input + output)",
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subscription_id"
+        ],
+        "title": "UsageRecordRequest",
         "type": "object"
       },
       "UsageResponse": {
@@ -44158,6 +44266,61 @@
         "summary": "Get My Active Subscriptions",
         "tags": [
           "Usage"
+        ]
+      }
+    },
+    "/v1/usage/record": {
+      "post": {
+        "description": "Record usage from a STOA gateway (CAB-1568: LLM proxy metering).\n\nAuthenticated via X-API-Key header (control plane API key).\nCalled by gateways after proxying LLM API requests.",
+        "operationId": "record_usage_v1_usage_record_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Api-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsageRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Record Usage V1 Usage Record Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Usage",
+        "tags": [
+          "Usage Metering"
         ]
       }
     },

@@ -159,6 +159,17 @@ class Settings(BaseSettings):
     # Tenant provisioning defaults (CAB-1315)
     TENANT_DEFAULT_RATE_LIMIT_RPM: int = 100
 
+    # Self-service signup (CAB-1541)
+    SIGNUP_BLOCKED_EMAIL_DOMAINS: str = ""  # Comma-separated override (empty = use built-in blocklist)
+    SIGNUP_INVITE_CODES: str = ""  # Comma-separated valid invite codes (empty = no codes required for trial)
+
+    @property
+    def signup_invite_codes_list(self) -> list[str]:
+        """Return SIGNUP_INVITE_CODES as a list."""
+        if not self.SIGNUP_INVITE_CODES:
+            return []
+        return [code.strip() for code in self.SIGNUP_INVITE_CODES.split(",") if code.strip()]
+
     # Logging - Basic Configuration
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"  # json, text

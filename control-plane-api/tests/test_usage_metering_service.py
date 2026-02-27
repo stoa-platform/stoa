@@ -154,3 +154,108 @@ class TestRecordUsage:
         assert isinstance(result, UsageSummaryResponse)
         assert result.request_count == 500  # from sample_record mock
         service.repo.upsert_usage.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_record_passes_optional_params(self, service, sample_record, sample_api_id):
+        """Optional params (p99, consumer_id, total_tokens) forwarded to repo."""
+        service.repo.upsert_usage = AsyncMock(return_value=sample_record)
+        consumer = uuid4()
+        now = datetime.now(tz=UTC)
+        await service.record_usage(
+            tenant_id="acme",
+            api_id=sample_api_id,
+            period="monthly",
+            period_start=now,
+            request_count=10,
+            error_count=0,
+            total_latency_ms=200,
+            p99_latency_ms=180,
+            total_tokens=1500,
+            consumer_id=consumer,
+        )
+        call_kwargs = service.repo.upsert_usage.call_args[1]
+        assert call_kwargs["p99_latency_ms"] == 180
+        assert call_kwargs["total_tokens"] == 1500
+        assert call_kwargs["consumer_id"] == consumer
+
+
+# ---------- get_details with dates ----------
+
+
+class TestGetDetailsWithDates:
+    """Tests for get_details date filtering."""
+
+    @pytest.mark.asyncio
+    async def test_passes_date_params(self, service, sample_api_id):
+        service.repo.get_usage_details = AsyncMock(return_value=None)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        end = datetime(2026, 1, 31, tzinfo=UTC)
+        await service.get_details(
+            tenant_id="acme",
+            api_id=sample_api_id,
+            period="monthly",
+            start_date=start,
+            end_date=end,
+        )
+        call_kwargs = service.repo.get_usage_details.call_args[1]
+        assert call_kwargs["period"] == "monthly"
+        assert call_kwargs["start_date"] == start
+        assert call_kwargs["end_date"] == end
+
+    @pytest.mark.asyncio
+    async def test_detail_response_fields(self, service, sample_api_id):
+        """All fields from repo dict are mapped to response."""
+        now = datetime.now(tz=UTC)
+        service.repo.get_usage_details = AsyncMock(return_value={
+            "api_id": sample_api_id,
+            "tenant_id": "acme",
+            "period": "daily",
+            "period_start": now,
+            "total_requests": 5000,
+            "total_errors": 100,
+            "error_rate": 2.0,
+            "avg_latency_ms": 120.5,
+            "p99_latency_ms": 600,
+            "total_tokens": 30000,
+        })
+        result = await service.get_details(tenant_id="acme", api_id=sample_api_id)
+        assert result.total_errors == 100
+        assert result.avg_latency_ms == 120.5
+        assert result.p99_latency_ms == 600
+        assert result.total_tokens == 30000
+
+
+# ---------- get_summary edge cases ----------
+
+
+class TestGetSummaryEdgeCases:
+    """Edge cases for get_summary."""
+
+    @pytest.mark.asyncio
+    async def test_pagination_metadata(self, service, sample_record):
+        """Response includes limit and offset from request."""
+        service.repo.get_usage_summary = AsyncMock(return_value=([sample_record], 100))
+        result = await service.get_summary(tenant_id="acme", limit=20, offset=40)
+        assert result.limit == 20
+        assert result.offset == 40
+        assert result.total == 100
+
+    @pytest.mark.asyncio
+    async def test_default_params(self, service):
+        """Default period is daily, limit=50, offset=0."""
+        service.repo.get_usage_summary = AsyncMock(return_value=([], 0))
+        await service.get_summary(tenant_id="acme")
+        call_kwargs = service.repo.get_usage_summary.call_args[1]
+        assert call_kwargs["period"] == "daily"
+        assert call_kwargs["limit"] == 50
+        assert call_kwargs["offset"] == 0
+        assert call_kwargs["api_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_multiple_items(self, service, sample_record):
+        """Multiple records are all returned."""
+        records = [sample_record, sample_record, sample_record]
+        service.repo.get_usage_summary = AsyncMock(return_value=(records, 3))
+        result = await service.get_summary(tenant_id="acme")
+        assert len(result.items) == 3
+        assert result.total == 3

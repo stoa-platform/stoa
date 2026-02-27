@@ -20,7 +20,6 @@ from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
 from ..services.git_service import git_service
 from ..services.kafka_service import kafka_service
-from ..services.trial_service import check_trial_api_limit, check_trial_expiry
 
 logger = logging.getLogger(__name__)
 
@@ -147,19 +146,17 @@ async def create_api(
     This creates the API definition in the GitOps repository:
     - tenants/{tenant_id}/apis/{api_name}/api.yaml
     - tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)
-
-    Trial tenants are subject to limits (CAB-1549):
-    - Max 3 APIs (configurable via tenant.settings.max_apis)
-    - 402 after 30-day trial expires
     """
-    # Trial limits enforcement (CAB-1549)
+    # Check tenant API limit (CAB-1549)
+    from ..routers.tenants import get_tenant_limits
+
     repo = TenantRepository(db)
     tenant = await repo.get_by_id(tenant_id)
     if tenant:
-        settings = tenant.settings or {}
-        check_trial_expiry(settings)
+        max_apis, _ = get_tenant_limits(tenant)
         current_apis = await git_service.list_apis(tenant_id)
-        check_trial_api_limit(settings, len(current_apis))
+        if len(current_apis) >= max_apis:
+            raise HTTPException(status_code=429, detail=f"API limit reached ({max_apis})")
 
     api_id = str(uuid.uuid4())
 

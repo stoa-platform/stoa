@@ -26,7 +26,33 @@ TIMEOUT="${TIMEOUT:-10}"
 SCRIPT_PATH="${SCRIPT_PATH:-/scripts/benchmark-enterprise.js}"
 ARENA_INSTANCE="${ARENA_INSTANCE:-default}"
 ARENA_JWT="${ARENA_JWT:-}"
+OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-stoa-healthcheck}"
+OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET:-}"
+OIDC_TOKEN_URL="${OIDC_TOKEN_URL:-}"
 SCENARIOS="ent_mcp_discovery ent_mcp_toolcall ent_auth_chain ent_policy_eval ent_guardrails ent_quota_burst ent_resilience ent_governance"
+
+# ---------------------------------------------------------------------------
+# JWT Auto-Fetch: if ARENA_JWT is empty but OIDC credentials are available,
+# fetch a fresh token via client_credentials grant (CAB-1558).
+# ---------------------------------------------------------------------------
+if [ -z "$ARENA_JWT" ] && [ -n "$OIDC_CLIENT_SECRET" ] && [ -n "$OIDC_TOKEN_URL" ]; then
+  log_json "\"Fetching JWT via client_credentials (client: ${OIDC_CLIENT_ID})\""
+  TOKEN_RESPONSE=$(curl -s --max-time 10 \
+    -d "grant_type=client_credentials" \
+    -d "client_id=${OIDC_CLIENT_ID}" \
+    -d "client_secret=${OIDC_CLIENT_SECRET}" \
+    "$OIDC_TOKEN_URL" 2>&1) || true
+
+  FETCHED_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty' 2>/dev/null) || true
+
+  if [ -n "$FETCHED_TOKEN" ]; then
+    ARENA_JWT="$FETCHED_TOKEN"
+    log_json "\"JWT acquired successfully (${#ARENA_JWT} chars)\""
+  else
+    ERROR_MSG=$(echo "$TOKEN_RESPONSE" | head -c 200 | tr '"' "'")
+    log_json "\"WARNING: JWT fetch failed — auth scenarios will use unauthenticated mode: ${ERROR_MSG}\""
+  fi
+fi
 WORK_DIR="/tmp/arena-enterprise"
 
 log_json() {

@@ -26,10 +26,11 @@ TIMEOUT="${TIMEOUT:-10}"
 SCRIPT_PATH="${SCRIPT_PATH:-/scripts/benchmark-enterprise.js}"
 ARENA_INSTANCE="${ARENA_INSTANCE:-default}"
 ARENA_JWT="${ARENA_JWT:-}"
+LLM_MOCK_URL="${LLM_MOCK_URL:-}"
 OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-stoa-healthcheck}"
 OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET:-}"
 OIDC_TOKEN_URL="${OIDC_TOKEN_URL:-}"
-SCENARIOS="ent_mcp_discovery ent_mcp_toolcall ent_auth_chain ent_policy_eval ent_guardrails ent_quota_burst ent_resilience ent_governance"
+SCENARIOS="ent_mcp_discovery ent_mcp_toolcall ent_auth_chain ent_policy_eval ent_guardrails ent_quota_burst ent_resilience ent_governance ent_llm_routing"
 WORK_DIR="/tmp/arena-enterprise"
 
 log_json() {
@@ -99,6 +100,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
       --env MCP_PROTOCOL="$GW_MCP_PROTO" \
       --env HEADERS="$GW_HEADERS" \
       --env ARENA_JWT="$ARENA_JWT" \
+      --env LLM_MOCK_URL="$LLM_MOCK_URL" \
       --env TIMEOUT="$TIMEOUT" \
       --env SUMMARY_FILE="/dev/null" \
       --quiet \
@@ -114,6 +116,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
         --env MCP_PROTOCOL="$GW_MCP_PROTO" \
         --env HEADERS="$GW_HEADERS" \
         --env ARENA_JWT="$ARENA_JWT" \
+        --env LLM_MOCK_URL="$LLM_MOCK_URL" \
         --env TIMEOUT="$TIMEOUT" \
         --env SUMMARY_FILE="$SUMMARY_FILE" \
         --quiet \

@@ -1,0 +1,323 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Gateway Arena Historical — Enterprise benchmark trending from OpenSearch (CAB-1601). Long-term composite scores, per-dimension heatmap, latency trends, CI95 bands.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "bolt",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "L1: Enterprise (Live)",
+      "type": "link",
+      "url": "/d/gateway-arena-enterprise/gateway-arena-enterprise"
+    },
+    {
+      "asDropdown": false,
+      "icon": "bolt",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "L0: Proxy Baseline",
+      "type": "link",
+      "url": "/d/gateway-arena/gateway-arena"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "panels": [],
+      "title": "Composite Score Timeline",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+      "description": "Composite Enterprise Readiness Index over time, grouped by gateway. Source: OpenSearch stoa-bench-*.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "Score (0-100)",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": true
+          },
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 60},
+              {"color": "yellow", "value": 80},
+              {"color": "green", "value": 95}
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 1},
+      "id": 2,
+      "options": {
+        "legend": {"calcs": ["lastNotNull", "mean", "min", "max"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+          "query": "{\"size\":0,\"aggs\":{\"gateways\":{\"terms\":{\"field\":\"gateway\",\"size\":10},\"aggs\":{\"over_time\":{\"date_histogram\":{\"field\":\"@timestamp\",\"fixed_interval\":\"1h\"},\"aggs\":{\"avg_composite\":{\"avg\":{\"field\":\"composite_score\"}}}}}}}}",
+          "refId": "A",
+          "metrics": [{"type": "avg", "field": "composite_score", "id": "1"}],
+          "bucketAggs": [
+            {"type": "terms", "field": "gateway", "id": "3", "settings": {"size": "10", "order": "desc", "orderBy": "1"}},
+            {"type": "date_histogram", "field": "@timestamp", "id": "2", "settings": {"interval": "auto"}}
+          ],
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Composite Score Timeline",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 11},
+      "id": 3,
+      "panels": [],
+      "title": "Per-Dimension Analysis",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+      "description": "Per-dimension scores across gateways. Rows = dimensions, columns = gateways. Color = score (red < 60, yellow 60-80, green > 80).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "continuous-GrYlRd"},
+          "custom": {"cellOptions": {"type": "color-background"}},
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 60},
+              {"color": "yellow", "value": 80},
+              {"color": "green", "value": 95}
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 12, "w": 16, "x": 0, "y": 12},
+      "id": 4,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{"displayName": "dimension", "desc": false}]
+      },
+      "targets": [
+        {
+          "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+          "refId": "A",
+          "metrics": [{"type": "avg", "field": "dimension_score", "id": "1"}],
+          "bucketAggs": [
+            {"type": "terms", "field": "dimension", "id": "3", "settings": {"size": "20", "order": "asc", "orderBy": "_term"}},
+            {"type": "terms", "field": "gateway", "id": "4", "settings": {"size": "10", "order": "desc", "orderBy": "1"}}
+          ],
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Per-Dimension Heatmap",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+      "description": "Number of benchmark runs recorded per day. Verifies CronJobs are running.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"fixedColor": "blue", "mode": "fixed"},
+          "custom": {"drawStyle": "bars", "fillOpacity": 50, "lineWidth": 1},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 12},
+      "id": 5,
+      "targets": [
+        {
+          "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+          "refId": "A",
+          "metrics": [{"type": "cardinality", "field": "run_id", "id": "1"}],
+          "bucketAggs": [
+            {"type": "date_histogram", "field": "@timestamp", "id": "2", "settings": {"interval": "1d"}}
+          ],
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Run Count (per day)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+      "description": "CI95 confidence band around the composite score. Narrower band = more consistent results.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "spanNulls": true},
+          "min": 0,
+          "max": 100,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 18},
+      "id": 6,
+      "targets": [
+        {
+          "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+          "refId": "A",
+          "metrics": [
+            {"type": "avg", "field": "ci95.lower", "id": "1"},
+            {"type": "avg", "field": "ci95.upper", "id": "2"},
+            {"type": "avg", "field": "composite_score", "id": "3"}
+          ],
+          "bucketAggs": [
+            {"type": "terms", "field": "gateway", "id": "4", "settings": {"size": "10"}},
+            {"type": "date_histogram", "field": "@timestamp", "id": "5", "settings": {"interval": "auto"}}
+          ],
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "CI95 Confidence Band",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24},
+      "id": 7,
+      "panels": [],
+      "title": "Latency Trends",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+      "description": "P95 latency per dimension over time. Tracks whether gateway performance is improving or degrading.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 5, "lineWidth": 1, "spanNulls": true},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 10, "w": 16, "x": 0, "y": 25},
+      "id": 8,
+      "targets": [
+        {
+          "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+          "refId": "A",
+          "metrics": [{"type": "avg", "field": "latency.p95", "id": "1"}],
+          "bucketAggs": [
+            {"type": "terms", "field": "dimension", "id": "3", "settings": {"size": "20", "order": "asc", "orderBy": "_term"}},
+            {"type": "date_histogram", "field": "@timestamp", "id": "2", "settings": {"interval": "auto"}}
+          ],
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "P95 Latency Timeline (all dimensions)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+      "description": "LLM Routing dimension score (dim 9). Currently weight=0.00 (observation mode).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 2, "spanNulls": true},
+          "min": 0,
+          "max": 100,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 10, "w": 8, "x": 16, "y": 25},
+      "id": 9,
+      "targets": [
+        {
+          "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+          "refId": "A",
+          "metrics": [{"type": "avg", "field": "dimension_score", "id": "1"}],
+          "bucketAggs": [
+            {"type": "terms", "field": "gateway", "id": "3", "settings": {"size": "10"}},
+            {"type": "date_histogram", "field": "@timestamp", "id": "2", "settings": {"interval": "auto"}}
+          ],
+          "query": "dimension:llm_routing",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Dimension 9: LLM Routing Score",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["arena", "enterprise", "historical", "opensearch"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "stoa-k8s", "value": "stoa-k8s"},
+        "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+        "definition": "{\"find\":\"terms\",\"field\":\"gateway\"}",
+        "includeAll": true,
+        "multi": true,
+        "name": "gateway",
+        "options": [],
+        "query": "{\"find\":\"terms\",\"field\":\"gateway\"}",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {"selected": false, "text": "All", "value": "$__all"},
+        "datasource": {"type": "grafana-opensearch-datasource", "uid": "opensearch-bench"},
+        "definition": "{\"find\":\"terms\",\"field\":\"dimension\"}",
+        "includeAll": true,
+        "multi": true,
+        "name": "dimension",
+        "options": [],
+        "query": "{\"find\":\"terms\",\"field\":\"dimension\"}",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-7d", "to": "now"},
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Gateway Arena — Historical (OpenSearch)",
+  "uid": "gateway-arena-historical",
+  "version": 1
+}

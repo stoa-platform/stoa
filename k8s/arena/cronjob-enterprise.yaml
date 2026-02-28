@@ -57,6 +57,10 @@ spec:
                   value: "/scripts/benchmark-enterprise.js"
                 - name: ARENA_INSTANCE
                   value: "k8s"
+                - name: OPENSEARCH_URL
+                  value: "http://opensearch.stoa-system.svc:9200"
+                - name: LLM_MOCK_URL
+                  value: "http://llm-mock-backend.stoa-system.svc:8889"
                   # OIDC credentials for JWT auto-fetch (reuses L2 verify config)
                   # If ARENA_JWT is empty, the orchestrator fetches a fresh token
                   # via client_credentials grant before running benchmarks.

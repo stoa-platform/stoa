@@ -1,0 +1,75 @@
+{
+  "dimension": "policy_eval",
+  "weight": 0.15,
+  "latency_cap_ms": 200,
+  "description": "Policy Engine — measures OPA policy evaluation overhead on MCP requests. Gateway should add minimal latency from policy checks.",
+  "checks": [
+    "policy_eval_not_500",
+    "policy_eval_p95_under_200ms"
+  ],
+  "tasks": [
+    {
+      "id": "policy-01",
+      "name": "Discovery with OPA enabled",
+      "method": "initialize",
+      "params": null,
+      "expected": {
+        "not_status": 500,
+        "latency_p95_under_ms": 200
+      },
+      "notes": "Baseline policy overhead — discovery should complete in <200ms even with OPA evaluation."
+    },
+    {
+      "id": "policy-02",
+      "name": "Policy eval under concurrent load",
+      "method": "initialize",
+      "params": null,
+      "concurrency": 5,
+      "repeat": 20,
+      "expected": {
+        "not_status": 500,
+        "latency_p95_under_ms": 200
+      },
+      "notes": "5 VUs × 20 iterations — OPA should not bottleneck under concurrency."
+    },
+    {
+      "id": "policy-03",
+      "name": "Policy eval with authenticated request",
+      "method": "initialize",
+      "params": null,
+      "headers": { "Authorization": "Bearer {{ARENA_JWT}}" },
+      "expected": {
+        "not_status": 500,
+        "latency_p95_under_ms": 200
+      },
+      "notes": "Auth + policy in the same request — combined overhead must stay under cap."
+    },
+    {
+      "id": "policy-04",
+      "name": "Policy eval with large headers",
+      "method": "initialize",
+      "params": null,
+      "headers": {
+        "X-Custom-Metadata": "arena-bench-large-header-value-for-testing-policy-overhead",
+        "X-Request-ID": "policy-eval-bench-004"
+      },
+      "expected": {
+        "not_status": 500,
+        "latency_p95_under_ms": 200
+      },
+      "notes": "Extra headers should not cause policy evaluation to slow down."
+    },
+    {
+      "id": "policy-05",
+      "name": "Rapid-fire policy eval burst",
+      "method": "initialize",
+      "params": null,
+      "repeat": 50,
+      "expected": {
+        "not_status": 500,
+        "latency_p95_under_ms": 200
+      },
+      "notes": "50 sequential calls — tests that OPA policy cache stays warm."
+    }
+  ]
+}

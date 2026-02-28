@@ -1,0 +1,98 @@
+{
+  "dimension": "guardrails",
+  "weight": 0.10,
+  "latency_cap_ms": 1000,
+  "description": "AI Guardrails — gateway detects and handles PII/sensitive data in tool call payloads. Expects blocking (4xx) or redaction, never crashes (500).",
+  "checks": [
+    "guardrails_not_500",
+    "guardrails_pii_handled",
+    "guardrails_response_exists"
+  ],
+  "tasks": [
+    {
+      "id": "guardrails-01",
+      "name": "SSN in tool arguments",
+      "method": "tools/call",
+      "params": {
+        "name": "arena-test-tool",
+        "arguments": {
+          "query": "My SSN is 123-45-6789 and my email is test@example.com"
+        }
+      },
+      "expected": {
+        "not_status": 500,
+        "body_length_gt": 0
+      },
+      "notes": "SSN + email PII — gateway should block or redact, never crash."
+    },
+    {
+      "id": "guardrails-02",
+      "name": "Credit card number in payload",
+      "method": "tools/call",
+      "params": {
+        "name": "arena-test-tool",
+        "arguments": {
+          "query": "Process payment for card 4111-1111-1111-1111 expiry 12/28"
+        }
+      },
+      "expected": {
+        "not_status": 500,
+        "body_length_gt": 0
+      },
+      "notes": "Credit card PII pattern — tests PAN detection in guardrails."
+    },
+    {
+      "id": "guardrails-03",
+      "name": "Phone number and address",
+      "method": "tools/call",
+      "params": {
+        "name": "arena-test-tool",
+        "arguments": {
+          "query": "Contact John Doe at +33 6 12 34 56 78, lives at 42 Rue de Rivoli, Paris"
+        }
+      },
+      "expected": {
+        "not_status": 500,
+        "body_length_gt": 0
+      },
+      "notes": "European phone number + address — tests non-US PII patterns."
+    },
+    {
+      "id": "guardrails-04",
+      "name": "Clean payload (no PII)",
+      "method": "tools/call",
+      "params": {
+        "name": "arena-test-tool",
+        "arguments": {
+          "query": "What is the current weather in Paris?"
+        }
+      },
+      "expected": {
+        "not_status": 500,
+        "body_length_gt": 0
+      },
+      "notes": "No PII — guardrails should pass through without blocking."
+    },
+    {
+      "id": "guardrails-05",
+      "name": "Mixed PII in nested arguments",
+      "method": "tools/call",
+      "params": {
+        "name": "arena-test-tool",
+        "arguments": {
+          "user_profile": {
+            "name": "Jane Smith",
+            "email": "jane@example.com",
+            "national_id": "2 85 12 75 108 042 38"
+          },
+          "query": "Look up this user's account"
+        }
+      },
+      "expected": {
+        "not_status": 500,
+        "body_length_gt": 0
+      },
+      "notes": "Nested object with French national ID (NIR) + email — tests deep PII scanning."
+    }
+  ]
+}

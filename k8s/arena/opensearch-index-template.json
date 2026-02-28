@@ -1,0 +1,52 @@
+{
+  "index_patterns": ["stoa-bench-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index.mapping.total_fields.limit": 50
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "run_id": { "type": "keyword" },
+        "layer": { "type": "keyword" },
+        "instance": { "type": "keyword" },
+        "gateway": { "type": "keyword" },
+        "dimension": { "type": "keyword" },
+        "dimension_score": { "type": "half_float" },
+        "composite_score": { "type": "half_float" },
+        "weight": { "type": "half_float" },
+        "stddev": { "type": "half_float" },
+        "availability": {
+          "properties": {
+            "passes": { "type": "integer" },
+            "fails": { "type": "integer" },
+            "score": { "type": "half_float" }
+          }
+        },
+        "latency": {
+          "properties": {
+            "p50": { "type": "float" },
+            "p95": { "type": "float" },
+            "p99": { "type": "float" },
+            "cap": { "type": "float" },
+            "score": { "type": "half_float" }
+          }
+        },
+        "ci95": {
+          "properties": {
+            "lower": { "type": "half_float" },
+            "upper": { "type": "half_float" }
+          }
+        }
+      }
+    }
+  },
+  "priority": 100,
+  "composed_of": [],
+  "version": 1,
+  "_meta": {
+    "description": "STOA Bench — Enterprise AI Readiness benchmark results (CAB-1601)"
+  }
+}

@@ -47,6 +47,21 @@ datasources:
           name: TraceID
           url: "$${__value.raw}"
 
+  # OpenSearch for STOA Bench historical data (CAB-1601)
+  - name: OpenSearch-Bench
+    type: grafana-opensearch-datasource
+    uid: opensearch-bench
+    access: proxy
+    url: ${OPENSEARCH_URL:-http://opensearch.stoa-system.svc:9200}
+    editable: true
+    jsonData:
+      database: stoa-bench-*
+      version: "2.11.0"
+      timeField: "@timestamp"
+      logMessageField: dimension
+      logLevelField: layer
+      pplEnabled: true
+
   - name: Tempo
     type: tempo
     uid: tempo

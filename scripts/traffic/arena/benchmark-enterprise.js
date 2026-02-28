@@ -29,6 +29,7 @@ const SCENARIO = __ENV.SCENARIO || 'ent_mcp_discovery';
 const ARENA_JWT = __ENV.ARENA_JWT || '';
 const HEADERS = __ENV.HEADERS ? JSON.parse(__ENV.HEADERS) : {};
 const TIMEOUT = (__ENV.TIMEOUT || '10') + 's';
+const LLM_MOCK_URL = __ENV.LLM_MOCK_URL || '';
 
 // Auth headers when JWT is available
 function authHeaders() {
@@ -141,6 +142,12 @@ const scenarios = {
     vus: 1,
     iterations: 5,
     maxDuration: '15s',
+  },
+  ent_llm_routing: {
+    executor: 'per-vu-iterations',
+    vus: 3,
+    iterations: 10,
+    maxDuration: '30s',
   },
 };
 
@@ -296,6 +303,44 @@ function runGovernance() {
   }
 }
 
+function runLlmRouting() {
+  // Test LLM proxy: POST /v1/messages through the gateway
+  // Gateway should proxy to the LLM mock backend (or real upstream)
+  const body = {
+    model: 'claude-mock',
+    max_tokens: 64,
+    messages: [{ role: 'user', content: 'Arena benchmark test — reply briefly.' }],
+  };
+  const hdrs = Object.assign(
+    { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
+    authHeaders()
+  );
+  const url = `${TARGET_URL}/v1/messages`;
+  const res = http.post(url, JSON.stringify(body), {
+    headers: hdrs,
+    timeout: TIMEOUT,
+    tags: { scenario: 'ent_llm_routing' },
+  });
+  check(res, {
+    'llm_routing_status_2xx': (r) => r.status >= 200 && r.status < 300,
+    'llm_routing_valid_json': (r) => {
+      try { JSON.parse(r.body); return true; } catch (_e) { return false; }
+    },
+    'llm_routing_has_message': (r) => {
+      try {
+        const data = JSON.parse(r.body);
+        return data.type === 'message' || data.content !== undefined;
+      } catch (_e) { return false; }
+    },
+    'llm_routing_has_usage': (r) => {
+      try {
+        const data = JSON.parse(r.body);
+        return data.usage && data.usage.input_tokens > 0;
+      } catch (_e) { return false; }
+    },
+  });
+}
+
 // --- Main ---
 
 export default function () {
@@ -330,6 +375,9 @@ export default function () {
       break;
     case 'ent_governance':
       runGovernance();
+      break;
+    case 'ent_llm_routing':
+      runLlmRouting();
       break;
     default:
       throw new Error(`Unknown enterprise scenario: ${SCENARIO}`);

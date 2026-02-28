@@ -58,7 +58,15 @@ spec:
                 - name: ARENA_INSTANCE
                   value: "k8s"
                 - name: OPENSEARCH_URL
-                  value: "http://opensearch.stoa-system.svc:9200"
+                  value: "http://opensearch.opensearch.svc:9200"
+                - name: OPENSEARCH_USER
+                  value: "admin"
+                - name: OPENSEARCH_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: opensearch-credentials
+                      key: admin-password
+                      optional: true
                 - name: LLM_MOCK_URL
                   value: "http://llm-mock-backend.stoa-system.svc:8889"
                   # OIDC credentials for JWT auto-fetch (reuses L2 verify config)

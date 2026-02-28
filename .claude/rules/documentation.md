@@ -1,8 +1,5 @@
 ---
-globs:
-  - "docs/**"
-  - "blog/**"
-  - "CONTRIBUTING.md"
+globs: "docs/**,blog/**,CONTRIBUTING.md"
 ---
 
 # Documentation Strategy

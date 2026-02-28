@@ -1,6 +1,5 @@
 ---
-globs:
-  - "stoa-gateway/**"
+globs: "stoa-gateway/**"
 ---
 
 # Rust Code Style

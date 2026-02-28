@@ -1,7 +1,5 @@
 ---
-globs:
-  - ".github/workflows/claude-*"
-  - "scripts/ai-ops/n8n-*"
+globs: ".github/workflows/claude-*,scripts/ai-ops/n8n-*"
 ---
 
 # Instance Dispatch — Parallel tmux Mapping

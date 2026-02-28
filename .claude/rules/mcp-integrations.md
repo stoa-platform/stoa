@@ -1,10 +1,6 @@
 ---
 description: MCP server integrations — Linear, Cloudflare, Vercel, Notion, n8n usage patterns and workflows
-globs:
-  - "stoa-gateway/src/mcp/**"
-  - "stoa-gateway/src/oauth/**"
-  - ".claude/skills/**"
-  - ".claude/agents/**"
+globs: "stoa-gateway/src/mcp/**,stoa-gateway/src/oauth/**,.claude/skills/**,.claude/agents/**"
 ---
 
 # MCP Integrations — Claude.ai Native Services

@@ -1,7 +1,5 @@
 ---
-globs:
-  - ".claude/claims/**"
-  - "hegemon/**"
+globs: ".claude/claims/**,hegemon/**"
 ---
 
 # Phase Ownership — Multi-Instance Coordination Protocol

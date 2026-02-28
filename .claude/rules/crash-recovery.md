@@ -1,7 +1,5 @@
 ---
-globs:
-  - ".claude/hooks/**"
-  - "hegemon/tools/state/**"
+globs: ".claude/hooks/**,hegemon/tools/state/**"
 ---
 
 # Crash Recovery Protocol

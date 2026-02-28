@@ -1,7 +1,5 @@
 ---
-globs:
-  - "control-plane-api/src/adapters/**"
-  - "control-plane-api/tests/test_*_adapter*"
+globs: "control-plane-api/src/adapters/**,control-plane-api/tests/test_*_adapter*"
 ---
 
 # Gateway Adapters — Per-Gateway Rules & Tips

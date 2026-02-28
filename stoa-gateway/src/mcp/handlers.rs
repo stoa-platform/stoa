@@ -218,8 +218,11 @@ pub async fn mcp_rest_tools_list(
     debug!(tenant_id = %auth.tenant_id, "REST v1: listing MCP tools");
 
     // CAB-1317: stale-while-revalidate — return cached immediately, refresh in background
+    // CAB-1558: thundering herd prevention — only one refresh per tenant at a time
     let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
-    if state.tool_registry.is_stale(&auth.tenant_id, ttl) {
+    if state.tool_registry.is_stale(&auth.tenant_id, ttl)
+        && state.tool_registry.try_start_refresh(&auth.tenant_id)
+    {
         let registry = state.tool_registry.clone();
         let tenant_id = auth.tenant_id.clone();
         let cp = state.control_plane.clone();
@@ -229,6 +232,7 @@ pub async fn mcp_rest_tools_list(
             if let Err(e) = refresh_tenant_tools(&registry, &cp, cb, &tenant_id).await {
                 warn!(tenant_id = %tenant_id, error = %e, "Background tool refresh failed");
             }
+            registry.finish_refresh(&tenant_id);
         });
     }
 
@@ -282,8 +286,11 @@ pub async fn mcp_tools_list(
     debug!(tenant_id = %auth.tenant_id, "Listing MCP tools");
 
     // CAB-1317: stale-while-revalidate — return cached immediately, refresh in background
+    // CAB-1558: thundering herd prevention — only one refresh per tenant at a time
     let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
-    if state.tool_registry.is_stale(&auth.tenant_id, ttl) {
+    if state.tool_registry.is_stale(&auth.tenant_id, ttl)
+        && state.tool_registry.try_start_refresh(&auth.tenant_id)
+    {
         let registry = state.tool_registry.clone();
         let tenant_id = auth.tenant_id.clone();
         let cp = state.control_plane.clone();
@@ -293,6 +300,7 @@ pub async fn mcp_tools_list(
             if let Err(e) = refresh_tenant_tools(&registry, &cp, cb, &tenant_id).await {
                 warn!(tenant_id = %tenant_id, error = %e, "Background tool refresh failed");
             }
+            registry.finish_refresh(&tenant_id);
         });
     }
 

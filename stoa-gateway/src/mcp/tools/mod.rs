@@ -281,6 +281,9 @@ pub struct ToolRegistry {
     /// When a client calls a tool by its old name, the alias resolves to the
     /// canonical name and a deprecation warning is logged.
     aliases: RwLock<HashMap<String, String>>,
+    /// Guards against thundering herd: tracks which tenants have a background
+    /// refresh in flight. Only one refresh per tenant at a time (CAB-1558).
+    tenant_refreshing: RwLock<std::collections::HashSet<String>>,
 }
 
 impl ToolRegistry {
@@ -289,6 +292,7 @@ impl ToolRegistry {
             tools: RwLock::new(HashMap::new()),
             tenant_loaded_at: RwLock::new(HashMap::new()),
             aliases: RwLock::new(HashMap::new()),
+            tenant_refreshing: RwLock::new(std::collections::HashSet::new()),
         }
     }
 
@@ -429,6 +433,19 @@ impl ToolRegistry {
     /// Returns true if cache exists (even if stale), false if never loaded.
     pub fn has_been_loaded(&self, tenant_id: &str) -> bool {
         self.tenant_loaded_at.read().contains_key(tenant_id)
+    }
+
+    /// Attempt to start a background refresh for a tenant (CAB-1558).
+    /// Returns true if this caller "won" (no refresh in flight), false if
+    /// another task is already refreshing. Prevents thundering herd when
+    /// multiple VUs hit /tools/list concurrently on a stale cache.
+    pub fn try_start_refresh(&self, tenant_id: &str) -> bool {
+        self.tenant_refreshing.write().insert(tenant_id.to_string())
+    }
+
+    /// Mark a tenant refresh as complete, allowing future refreshes.
+    pub fn finish_refresh(&self, tenant_id: &str) {
+        self.tenant_refreshing.write().remove(tenant_id);
     }
 
     /// Get the age of the tool cache for a tenant (None if never loaded).
@@ -840,6 +857,42 @@ mod tests {
         assert!(registry.has_been_loaded("acme"));
         // Different tenant → still false
         assert!(!registry.has_been_loaded("other-tenant"));
+    }
+
+    // === Thundering Herd Prevention Tests (CAB-1558) ===
+
+    #[test]
+    fn test_try_start_refresh_returns_true_first_time() {
+        let registry = ToolRegistry::new();
+        // First call wins
+        assert!(registry.try_start_refresh("acme"));
+    }
+
+    #[test]
+    fn test_try_start_refresh_returns_false_when_in_flight() {
+        let registry = ToolRegistry::new();
+        // First call wins
+        assert!(registry.try_start_refresh("acme"));
+        // Second call for same tenant is blocked
+        assert!(!registry.try_start_refresh("acme"));
+    }
+
+    #[test]
+    fn test_try_start_refresh_different_tenants_independent() {
+        let registry = ToolRegistry::new();
+        // Different tenants can refresh simultaneously
+        assert!(registry.try_start_refresh("acme"));
+        assert!(registry.try_start_refresh("other-tenant"));
+    }
+
+    #[test]
+    fn test_finish_refresh_allows_next_refresh() {
+        let registry = ToolRegistry::new();
+        assert!(registry.try_start_refresh("acme"));
+        assert!(!registry.try_start_refresh("acme"));
+        // After finish, next refresh is allowed
+        registry.finish_refresh("acme");
+        assert!(registry.try_start_refresh("acme"));
     }
 
     // === Alias Tests (CAB-606) ===

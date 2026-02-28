@@ -1,8 +1,5 @@
 ---
-globs:
-  - "blog/**"
-  - "docs/**"
-  - "*.mdx"
+globs: "blog/**,docs/**,*.mdx"
 ---
 
 # SEO Content & Community Strategy

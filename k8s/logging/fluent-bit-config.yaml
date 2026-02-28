@@ -56,7 +56,7 @@ data:
         Match             gateway.*
         Host              opensearch.opensearch.svc.cluster.local
         Port              9200
-        HTTP_User         admin
+        HTTP_User         ${OPENSEARCH_USER}
         HTTP_Passwd       ${OPENSEARCH_PASSWORD}
         Index             stoa-logs
         tls               Off

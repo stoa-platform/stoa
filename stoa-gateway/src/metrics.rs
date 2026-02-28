@@ -232,6 +232,18 @@ pub static DPOP_VALIDATIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_dpop_validations_total metric")
 });
 
+// === Sender-Constraint Metrics (CAB-1607) ===
+
+/// Counter of unified sender-constraint checks by result, method, and tenant.
+pub static SENDER_CONSTRAINT_CHECKS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_sender_constraint_checks_total",
+        "Total sender-constraint checks (mTLS + DPoP unified pipeline)",
+        &["result", "method", "tenant"]
+    )
+    .expect("Failed to create stoa_sender_constraint_checks_total metric")
+});
+
 // === Tool Discovery Metrics (CAB-1558) ===
 
 /// Histogram of tool discovery (CP sync) durations in seconds, per tenant and outcome.
@@ -517,6 +529,15 @@ pub fn record_mtls_binding_check(result: &str) {
     MTLS_BINDING_CHECKS_TOTAL.with_label_values(&[result]).inc();
 }
 
+// === Sender-Constraint metrics helpers ===
+
+/// Record a sender-constraint check outcome.
+pub fn record_sender_constraint_check(result: &str, method: &str, tenant: &str) {
+    SENDER_CONSTRAINT_CHECKS_TOTAL
+        .with_label_values(&[result, method, tenant])
+        .inc();
+}
+
 // === HTTP metrics helpers ===
 
 /// Record an HTTP request with method, path, status, and duration.
@@ -590,6 +611,7 @@ pub fn init_all_metrics() {
     Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
     Lazy::force(&FEDERATION_REQUESTS_TOTAL);
     Lazy::force(&DPOP_VALIDATIONS_TOTAL);
+    Lazy::force(&SENDER_CONSTRAINT_CHECKS_TOTAL);
 }
 
 /// Get the total number of MCP tool calls across all labels.

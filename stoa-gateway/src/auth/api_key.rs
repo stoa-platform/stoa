@@ -82,13 +82,12 @@ impl ApiKeyValidator {
             ));
         }
 
-        let url = format!("{}/api/v1/keys/validate", self.control_plane_url);
+        let url = format!("{}/v1/subscriptions/validate-key", self.control_plane_url);
 
         let response = self
             .http_client
             .post(&url)
-            .header("X-API-Key", api_key)
-            .json(&serde_json::json!({ "key": api_key }))
+            .query(&[("api_key", api_key)])
             .timeout(Duration::from_secs(5))
             .send()
             .await
@@ -96,11 +95,34 @@ impl ApiKeyValidator {
 
         let status = response.status();
         if status.is_success() {
-            let info: ApiKeyInfo = response
+            // CP API returns: { valid, subscription_id, tenant_id, api_name, plan_name, ... }
+            let cp_resp: serde_json::Value = response
                 .json()
                 .await
                 .map_err(|e| ApiKeyError::ParseError(e.to_string()))?;
-            Ok(info)
+
+            Ok(ApiKeyInfo {
+                key_id: cp_resp
+                    .get("subscription_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
+                tenant_id: cp_resp
+                    .get("tenant_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                subscription_id: cp_resp
+                    .get("subscription_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                scopes: vec![],
+                valid: cp_resp
+                    .get("valid")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            })
         } else if status.as_u16() == 401 || status.as_u16() == 403 {
             Ok(ApiKeyInfo {
                 key_id: "unknown".into(),

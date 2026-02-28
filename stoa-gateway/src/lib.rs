@@ -274,6 +274,8 @@ pub fn build_router(state: AppState) -> Router {
                 // LLM API Proxy (CAB-1568: STOA Dogfood) — before fallback
                 .route("/v1/messages", post(llm_proxy_handler))
                 .route("/v1/messages/count_tokens", post(llm_proxy_handler))
+                // OpenAI-compatible LLM proxy (Mistral, OpenAI, vLLM, etc.)
+                .route("/v1/chat/completions", post(llm_proxy_handler))
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)

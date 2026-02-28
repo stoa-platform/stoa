@@ -35,23 +35,59 @@ fn llm_client(timeout: Duration) -> &'static Client {
     })
 }
 
-/// Proxy handler for POST /v1/messages (and /v1/messages/count_tokens).
+/// Proxy handler for POST /v1/messages, /v1/messages/count_tokens, /v1/chat/completions.
 ///
 /// Flow:
-/// 1. Extract and validate STOA API key (X-API-Key or x-api-key header)
-/// 2. Replace auth with real upstream API key
-/// 3. Forward request to upstream, preserving anthropic-version header
-/// 4. Stream response back to client
-/// 5. Async: extract token usage and POST to CP API for metering
+/// 1. Detect API format from request path (Anthropic vs OpenAI-compatible)
+/// 2. Extract and validate STOA API key (X-API-Key or Authorization: Bearer)
+/// 3. Replace auth with real upstream API key (format-aware header injection)
+/// 4. Forward request to upstream (provider-aware URL routing)
+/// 5. Stream response back to client
+/// 6. Async: extract token usage (format-aware) and POST to CP API for metering
 pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<Body>) -> Response {
     if !state.config.llm_proxy_enabled {
         return (StatusCode::NOT_FOUND, "LLM proxy not enabled").into_response();
     }
 
-    let upstream_api_key = match &state.config.llm_proxy_api_key {
-        Some(key) if !key.is_empty() => key.clone(),
+    // Step 0: Detect API format from request path
+    let request_path = request.uri().path().to_string();
+    let api_format = LlmApiFormat::from_path(&request_path);
+
+    // Resolve upstream URL and API key based on format
+    let (upstream_base_url, upstream_api_key) = match api_format {
+        LlmApiFormat::OpenAiCompat => {
+            // OpenAI-compatible: use Mistral-specific config, fallback to default
+            let key = state
+                .config
+                .llm_proxy_mistral_api_key
+                .clone()
+                .or_else(|| state.config.llm_proxy_api_key.clone());
+            let url = if state.config.llm_proxy_mistral_api_key.is_some() {
+                // Mistral API key is set → use Mistral upstream URL
+                state.config.llm_proxy_mistral_upstream_url.clone()
+            } else {
+                // Fallback to default upstream for OpenAI-compat with no Mistral-specific config
+                state.config.llm_proxy_upstream_url.clone()
+            };
+            (url, key)
+        }
+        LlmApiFormat::Anthropic => (
+            state.config.llm_proxy_upstream_url.clone(),
+            state.config.llm_proxy_api_key.clone(),
+        ),
+    };
+
+    let upstream_api_key = match upstream_api_key {
+        Some(key) if !key.is_empty() => key,
         _ => {
-            error!("LLM proxy: upstream API key not configured (STOA_LLM_PROXY_API_KEY)");
+            let provider = match api_format {
+                LlmApiFormat::OpenAiCompat => "OpenAI-compat/Mistral",
+                LlmApiFormat::Anthropic => "Anthropic",
+            };
+            error!(
+                provider = provider,
+                "LLM proxy: upstream API key not configured"
+            );
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "LLM proxy upstream not configured",
@@ -67,7 +103,7 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         None => {
             return (
                 StatusCode::UNAUTHORIZED,
-                "Missing API key (x-api-key header required)",
+                "Missing API key (x-api-key or Authorization: Bearer header required)",
             )
                 .into_response();
         }
@@ -88,12 +124,12 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
     debug!(
         tenant_id = %tenant_id,
         subscription_id = %subscription_id,
+        format = ?api_format,
         "LLM proxy: consumer authenticated"
     );
 
     // Step 3: Build upstream request
-    let request_path = request.uri().path().to_string();
-    let upstream_url = format!("{}{}", state.config.llm_proxy_upstream_url, request_path);
+    let upstream_url = format!("{}{}", upstream_base_url, request_path);
 
     let timeout = Duration::from_secs(state.config.llm_proxy_timeout_secs);
     let client = llm_client(timeout);
@@ -108,25 +144,46 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         }
     };
 
-    // Build upstream headers: keep anthropic-version, anthropic-beta, content-type
+    // Build upstream headers (format-aware)
     let mut upstream_headers = HeaderMap::new();
-    for key in &[
-        "anthropic-version",
-        "anthropic-beta",
-        "content-type",
-        "accept",
-    ] {
-        if let Some(val) = parts.headers.get(*key) {
-            if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
-                upstream_headers.insert(name, val.clone());
+    match api_format {
+        LlmApiFormat::Anthropic => {
+            // Anthropic: forward anthropic-specific headers, use x-api-key
+            for key in &[
+                "anthropic-version",
+                "anthropic-beta",
+                "content-type",
+                "accept",
+            ] {
+                if let Some(val) = parts.headers.get(*key) {
+                    if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                        upstream_headers.insert(name, val.clone());
+                    }
+                }
             }
+            upstream_headers.insert(
+                "x-api-key",
+                HeaderValue::from_str(&upstream_api_key)
+                    .unwrap_or_else(|_| HeaderValue::from_static("")),
+            );
+        }
+        LlmApiFormat::OpenAiCompat => {
+            // OpenAI-compatible: forward content-type/accept, use Authorization: Bearer
+            for key in &["content-type", "accept"] {
+                if let Some(val) = parts.headers.get(*key) {
+                    if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                        upstream_headers.insert(name, val.clone());
+                    }
+                }
+            }
+            let bearer = format!("Bearer {}", upstream_api_key);
+            upstream_headers.insert(
+                header::AUTHORIZATION,
+                HeaderValue::from_str(&bearer)
+                    .unwrap_or_else(|_| HeaderValue::from_static("Bearer ")),
+            );
         }
     }
-    // Inject real upstream API key
-    upstream_headers.insert(
-        "x-api-key",
-        HeaderValue::from_str(&upstream_api_key).unwrap_or_else(|_| HeaderValue::from_static("")),
-    );
 
     let start = Instant::now();
 
@@ -153,16 +210,18 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         .map(|ct| ct.contains("text/event-stream"))
         .unwrap_or(false);
 
-    // Build response headers
+    // Build response headers (forward relevant headers from upstream response)
     let mut response_headers = HeaderMap::new();
     for (key, val) in &upstream_headers {
-        // Forward relevant headers
         let key_str = key.as_str();
         if key_str.starts_with("content-type")
             || key_str.starts_with("anthropic-")
             || key_str.starts_with("x-ratelimit-")
             || key_str == "request-id"
             || key_str == "retry-after"
+            // OpenAI-compatible headers
+            || key_str == "x-request-id"
+            || key_str.starts_with("openai-")
         {
             response_headers.insert(key.clone(), val.clone());
         }
@@ -359,28 +418,86 @@ struct AnthropicResponse {
     usage: Option<AnthropicUsage>,
 }
 
+/// OpenAI-compatible response usage block (used by Mistral, OpenAI, vLLM, etc.).
+#[derive(Debug, Deserialize)]
+struct OpenAiUsage {
+    prompt_tokens: u64,
+    completion_tokens: u64,
+}
+
+/// OpenAI-compatible response (partial — only what we need).
+#[derive(Debug, Deserialize)]
+struct OpenAiResponse {
+    usage: Option<OpenAiUsage>,
+}
+
+/// API format detected from request path or configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LlmApiFormat {
+    /// Anthropic: /v1/messages, x-api-key header, AnthropicResponse schema.
+    Anthropic,
+    /// OpenAI-compatible: /v1/chat/completions, Authorization: Bearer, OpenAiResponse schema.
+    OpenAiCompat,
+}
+
+impl LlmApiFormat {
+    /// Detect API format from request path.
+    pub fn from_path(path: &str) -> Self {
+        if path.starts_with("/v1/chat/completions") {
+            LlmApiFormat::OpenAiCompat
+        } else {
+            // Default to Anthropic for /v1/messages and other paths
+            LlmApiFormat::Anthropic
+        }
+    }
+}
+
 /// Extract usage from a non-streaming JSON response.
+///
+/// Tries Anthropic format first (`usage.input_tokens/output_tokens`),
+/// then falls back to OpenAI-compatible format (`usage.prompt_tokens/completion_tokens`).
 fn extract_json_usage(body: &[u8]) -> Option<LlmUsage> {
-    let resp: AnthropicResponse = serde_json::from_slice(body).ok()?;
-    let usage = resp.usage?;
-    Some(LlmUsage {
-        input_tokens: usage.input_tokens,
-        output_tokens: usage.output_tokens,
-    })
+    // Try Anthropic format first
+    if let Ok(resp) = serde_json::from_slice::<AnthropicResponse>(body) {
+        if let Some(usage) = resp.usage {
+            return Some(LlmUsage {
+                input_tokens: usage.input_tokens,
+                output_tokens: usage.output_tokens,
+            });
+        }
+    }
+
+    // Fallback to OpenAI-compatible format (Mistral, OpenAI, vLLM, etc.)
+    if let Ok(resp) = serde_json::from_slice::<OpenAiResponse>(body) {
+        if let Some(usage) = resp.usage {
+            return Some(LlmUsage {
+                input_tokens: usage.prompt_tokens,
+                output_tokens: usage.completion_tokens,
+            });
+        }
+    }
+
+    None
 }
 
 /// Extract usage from SSE stream body.
 ///
-/// Anthropic SSE streams contain a `message_delta` event with cumulative usage
-/// and a final `message_stop` event. The usage is in the `message_delta` event:
-/// ```text
-/// event: message_delta
-/// data: {"type":"message_delta","usage":{"output_tokens":42}}
-/// ```
-/// Or in `message_start`:
+/// Supports two SSE formats:
+///
+/// **Anthropic SSE** — usage split across events:
 /// ```text
 /// event: message_start
 /// data: {"type":"message_start","message":{"usage":{"input_tokens":15,"output_tokens":0},...}}
+///
+/// event: message_delta
+/// data: {"type":"message_delta","usage":{"output_tokens":42}}
+/// ```
+///
+/// **OpenAI-compatible SSE** (Mistral, OpenAI, vLLM) — usage in final chunk:
+/// ```text
+/// data: {"choices":[...],"usage":{"prompt_tokens":10,"completion_tokens":25}}
+///
+/// data: [DONE]
 /// ```
 fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
     let mut input_tokens: u64 = 0;
@@ -400,8 +517,8 @@ fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
             let event_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
             match event_type {
+                // Anthropic SSE format
                 "message_start" => {
-                    // input_tokens from message_start.message.usage
                     if let Some(msg_usage) = val.get("message").and_then(|m| m.get("usage")) {
                         if let Some(it) = msg_usage.get("input_tokens").and_then(|v| v.as_u64()) {
                             input_tokens = it;
@@ -409,7 +526,6 @@ fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
                     }
                 }
                 "message_delta" => {
-                    // output_tokens from message_delta.usage
                     if let Some(delta_usage) = val.get("usage") {
                         if let Some(ot) = delta_usage.get("output_tokens").and_then(|v| v.as_u64())
                         {
@@ -417,7 +533,18 @@ fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
                         }
                     }
                 }
-                _ => {}
+                _ => {
+                    // OpenAI-compatible SSE format: usage in final chunk
+                    // (no "type" field, but has "usage.prompt_tokens")
+                    if let Some(usage) = val.get("usage") {
+                        if let Some(pt) = usage.get("prompt_tokens").and_then(|v| v.as_u64()) {
+                            input_tokens = pt;
+                        }
+                        if let Some(ct) = usage.get("completion_tokens").and_then(|v| v.as_u64()) {
+                            output_tokens = ct;
+                        }
+                    }
+                }
             }
         }
     }
@@ -560,5 +687,75 @@ data: {"type":"message_stop"}
     fn test_extract_api_key_missing() {
         let headers = HeaderMap::new();
         assert!(extract_api_key(&headers).is_none());
+    }
+
+    // --- OpenAI-compatible format tests (Mistral, OpenAI, vLLM) ---
+
+    #[test]
+    fn test_extract_json_usage_openai_format() {
+        let body = br#"{"id":"chatcmpl-abc","object":"chat.completion","model":"mistral-small-latest","choices":[{"index":0,"message":{"role":"assistant","content":"Hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":25,"total_tokens":35}}"#;
+        let usage = extract_json_usage(body).unwrap();
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.output_tokens, 25);
+    }
+
+    #[test]
+    fn test_extract_json_usage_mistral_format() {
+        // Mistral uses the exact same format as OpenAI
+        let body = br#"{"id":"cmpl-123","object":"chat.completion","model":"mistral-7b","choices":[{"index":0,"message":{"role":"assistant","content":"Test"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":12,"total_tokens":20}}"#;
+        let usage = extract_json_usage(body).unwrap();
+        assert_eq!(usage.input_tokens, 8);
+        assert_eq!(usage.output_tokens, 12);
+    }
+
+    #[test]
+    fn test_extract_json_usage_tries_both_formats() {
+        // Anthropic format should be tried first and succeed
+        let anthropic_body = br#"{"usage":{"input_tokens":5,"output_tokens":10}}"#;
+        let usage = extract_json_usage(anthropic_body).unwrap();
+        assert_eq!(usage.input_tokens, 5);
+        assert_eq!(usage.output_tokens, 10);
+
+        // OpenAI format should work as fallback
+        let openai_body = br#"{"usage":{"prompt_tokens":7,"completion_tokens":14}}"#;
+        let usage = extract_json_usage(openai_body).unwrap();
+        assert_eq!(usage.input_tokens, 7);
+        assert_eq!(usage.output_tokens, 14);
+    }
+
+    #[test]
+    fn test_extract_sse_usage_openai_format() {
+        let body = "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: {\"id\":\"chatcmpl-1\",\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":25,\"total_tokens\":35}}\n\ndata: [DONE]\n\n";
+        let usage = extract_sse_usage(body).unwrap();
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.output_tokens, 25);
+    }
+
+    #[test]
+    fn test_extract_sse_usage_openai_no_usage_chunk() {
+        // Stream without a usage chunk (some providers don't include it)
+        let body = "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: [DONE]\n\n";
+        assert!(extract_sse_usage(body).is_none());
+    }
+
+    #[test]
+    fn test_api_format_from_path() {
+        assert_eq!(
+            LlmApiFormat::from_path("/v1/messages"),
+            LlmApiFormat::Anthropic
+        );
+        assert_eq!(
+            LlmApiFormat::from_path("/v1/messages/count_tokens"),
+            LlmApiFormat::Anthropic
+        );
+        assert_eq!(
+            LlmApiFormat::from_path("/v1/chat/completions"),
+            LlmApiFormat::OpenAiCompat
+        );
+        // Unknown paths default to Anthropic
+        assert_eq!(
+            LlmApiFormat::from_path("/v1/unknown"),
+            LlmApiFormat::Anthropic
+        );
     }
 }

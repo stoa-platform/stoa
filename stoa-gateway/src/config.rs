@@ -488,6 +488,22 @@ pub struct Config {
     /// Env: STOA_LLM_PROXY_METERING_URL
     #[serde(default)]
     pub llm_proxy_metering_url: Option<String>,
+
+    /// Default LLM proxy provider format: "anthropic" | "mistral" | "openai".
+    /// Controls header injection and response parsing for the default upstream.
+    /// Env: STOA_LLM_PROXY_PROVIDER
+    #[serde(default)]
+    pub llm_proxy_provider: Option<String>,
+
+    /// API key for Mistral upstream (when provider=mistral or for /v1/chat/completions).
+    /// Env: STOA_LLM_PROXY_MISTRAL_API_KEY
+    #[serde(default)]
+    pub llm_proxy_mistral_api_key: Option<String>,
+
+    /// Upstream URL for Mistral API (default: https://api.mistral.ai).
+    /// Env: STOA_LLM_PROXY_MISTRAL_UPSTREAM_URL
+    #[serde(default = "default_llm_proxy_mistral_upstream_url")]
+    pub llm_proxy_mistral_upstream_url: String,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -836,6 +852,10 @@ fn default_llm_proxy_timeout_secs() -> u64 {
     300
 }
 
+fn default_llm_proxy_mistral_upstream_url() -> String {
+    "https://api.mistral.ai".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -933,6 +953,9 @@ impl Default for Config {
             llm_proxy_api_key: None,
             llm_proxy_timeout_secs: default_llm_proxy_timeout_secs(),
             llm_proxy_metering_url: None,
+            llm_proxy_provider: None,
+            llm_proxy_mistral_api_key: None,
+            llm_proxy_mistral_upstream_url: default_llm_proxy_mistral_upstream_url(),
         }
     }
 }

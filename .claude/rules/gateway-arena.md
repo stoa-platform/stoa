@@ -1,8 +1,5 @@
 ---
-globs:
-  - "scripts/traffic/arena/**"
-  - "k8s/arena/**"
-  - "deploy/vps/bench/**"
+globs: "scripts/traffic/arena/**,k8s/arena/**,deploy/vps/bench/**"
 ---
 
 # Gateway Arena — Benchmark Lab

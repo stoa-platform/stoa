@@ -1,7 +1,5 @@
 ---
-globs:
-  - "stoa-gateway/src/oauth/**"
-  - "stoa-gateway/src/auth/**"
+globs: "stoa-gateway/src/oauth/**,stoa-gateway/src/auth/**"
 ---
 
 # MCP OAuth 2.1 Flow — Critical Patterns

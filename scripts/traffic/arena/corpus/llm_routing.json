@@ -2,7 +2,7 @@
   "dimension": "llm_routing",
   "weight": 0.00,
   "latency_cap_ms": 2000,
-  "description": "LLM Routing — gateway proxies /v1/messages to an LLM backend (Anthropic API format). Weight=0.00 in observation mode; scored but does not affect composite.",
+  "description": "LLM Routing — gateway proxies /v1/messages (Anthropic) and /v1/chat/completions (OpenAI-compat) to LLM backends. Weight=0.00 in observation mode; scored but does not affect composite.",
   "checks": [
     "llm_routing_status_2xx",
     "llm_routing_valid_json",
@@ -115,6 +115,108 @@
         "latency_p95_under_ms": 2000
       },
       "notes": "3 VUs × 10 iterations — tests LLM proxy throughput and connection pooling."
+    },
+    {
+      "id": "llm-06",
+      "name": "Basic completion (OpenAI/Mistral format)",
+      "endpoint": "{{TARGET_URL}}/v1/chat/completions",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "mistral-mock",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Arena benchmark test — reply briefly." }]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_has_field": "usage.prompt_tokens"
+      },
+      "notes": "Mirror of llm-01 in OpenAI-compatible format. Tests /v1/chat/completions routing."
+    },
+    {
+      "id": "llm-07",
+      "name": "Long prompt (OpenAI/Mistral format)",
+      "endpoint": "{{TARGET_URL}}/v1/chat/completions",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "mistral-mock",
+        "max_tokens": 256,
+        "messages": [
+          { "role": "user", "content": "This is a longer benchmark prompt designed to test gateway handling of larger payloads. The gateway should proxy the full request to the upstream LLM without truncation. Please generate a detailed response covering: 1) proxy overhead, 2) header forwarding, 3) body integrity, 4) timeout handling, 5) error propagation. This tests the gateway's ability to handle non-trivial request sizes." }
+        ]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_is_valid_json": true
+      },
+      "notes": "Mirror of llm-02 in OpenAI-compatible format. Larger payload test."
+    },
+    {
+      "id": "llm-08",
+      "name": "System message (OpenAI/Mistral format)",
+      "endpoint": "{{TARGET_URL}}/v1/chat/completions",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "mistral-mock",
+        "max_tokens": 64,
+        "messages": [
+          { "role": "system", "content": "You are a benchmark test assistant. Respond with exactly: OK" },
+          { "role": "user", "content": "Confirm." }
+        ]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_is_valid_json": true
+      },
+      "notes": "Mirror of llm-03 in OpenAI-compatible format. System message as first message in array."
+    },
+    {
+      "id": "llm-09",
+      "name": "Invalid model (OpenAI/Mistral format)",
+      "endpoint": "{{TARGET_URL}}/v1/chat/completions",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "nonexistent-model-12345",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Test" }]
+      },
+      "expected": {
+        "status": [200, 400, 404],
+        "not_status": 500
+      },
+      "notes": "Mirror of llm-04 in OpenAI-compatible format. Invalid model should not produce 500."
+    },
+    {
+      "id": "llm-10",
+      "name": "Concurrent requests (OpenAI/Mistral format)",
+      "endpoint": "{{TARGET_URL}}/v1/chat/completions",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "mistral-mock",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Concurrent benchmark request." }]
+      },
+      "concurrency": 3,
+      "repeat": 10,
+      "expected": {
+        "status": "2xx",
+        "latency_p95_under_ms": 2000
+      },
+      "notes": "Mirror of llm-05 in OpenAI-compatible format. Tests /v1/chat/completions under load."
     }
   ]
 }

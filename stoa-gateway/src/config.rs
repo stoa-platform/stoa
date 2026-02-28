@@ -252,6 +252,12 @@ pub struct Config {
     #[serde(default)]
     pub dpop: crate::auth::dpop::DpopConfig,
 
+    // === Sender-Constraint Middleware (CAB-1607, unified mTLS + DPoP) ===
+    /// Sender-constraint configuration (nested struct, STOA_SENDER_CONSTRAINT_ prefix)
+    /// Env: STOA_SENDER_CONSTRAINT_ENABLED, STOA_SENDER_CONSTRAINT_DPOP_REQUIRED, etc.
+    #[serde(default)]
+    pub sender_constraint: SenderConstraintConfig,
+
     // === Quota Enforcement (Phase 4: CAB-1121) ===
     /// Enable per-consumer quota enforcement
     /// Env: STOA_QUOTA_ENFORCEMENT_ENABLED
@@ -736,6 +742,35 @@ impl Default for MtlsConfig {
     }
 }
 
+// =============================================================================
+// Sender-Constraint Configuration (CAB-1607)
+// =============================================================================
+
+/// Unified sender-constraint configuration for mTLS + DPoP pipeline.
+///
+/// When enabled, validates that tokens are bound to the sender via:
+/// - mTLS: cnf.x5t#S256 matches client certificate thumbprint (RFC 8705)
+/// - DPoP: cnf.jkt matches DPoP proof JWK thumbprint (RFC 9449)
+///
+/// Per-tenant policy: tenants can require DPoP, mTLS, or both.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SenderConstraintConfig {
+    /// Enable the unified sender-constraint middleware.
+    /// Env: STOA_SENDER_CONSTRAINT_ENABLED
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Require DPoP proof when cnf.jkt is present in the token.
+    /// Env: STOA_SENDER_CONSTRAINT_DPOP_REQUIRED
+    #[serde(default)]
+    pub dpop_required: bool,
+
+    /// Require mTLS binding when cnf.x5t#S256 is present in the token.
+    /// Env: STOA_SENDER_CONSTRAINT_MTLS_REQUIRED
+    #[serde(default)]
+    pub mtls_required: bool,
+}
+
 fn default_otel_sample_rate() -> f64 {
     1.0 // Sample all traces by default
 }
@@ -909,6 +944,7 @@ impl Default for Config {
             kafka_cns_consumer_group: default_kafka_cns_consumer_group(),
             mtls: MtlsConfig::default(),
             dpop: crate::auth::dpop::DpopConfig::default(),
+            sender_constraint: SenderConstraintConfig::default(),
             quota_enforcement_enabled: false,
             quota_sync_interval_secs: default_quota_sync_interval(),
             quota_default_rate_per_minute: default_quota_rate_per_minute(),

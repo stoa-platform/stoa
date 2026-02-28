@@ -1,0 +1,16 @@
+# SnippetsFilter for OpenSearch Dashboards
+# OSD with OIDC sends large response headers (cookies, tokens)
+# that exceed NGINX's default proxy_buffer_size (4k).
+# Without this, NGINX returns 502 "upstream sent too big header".
+apiVersion: gateway.nginx.org/v1alpha1
+kind: SnippetsFilter
+metadata:
+  name: osd-proxy-buffers
+  namespace: opensearch
+spec:
+  snippets:
+    - context: http.server.location
+      value: |
+        proxy_buffer_size 32k;
+        proxy_buffers 8 32k;
+        proxy_busy_buffers_size 64k;

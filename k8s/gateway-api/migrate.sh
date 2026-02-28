@@ -9,7 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NGF_NAMESPACE="nginx-gateway"
 
-TOTAL=7
+TOTAL=8
 echo "=== Ingress → HTTPRoute Migration (CAB-1400) ==="
 echo ""
 
@@ -60,20 +60,29 @@ echo ""
 echo "[3/$TOTAL] Applying Gateway resource..."
 kubectl apply -f "${SCRIPT_DIR}/gateway.yaml"
 
-# 4. Apply HTTPRoutes
+# 4. Apply SnippetsFilters (must exist before HTTPRoutes that reference them)
 echo ""
-echo "[4/$TOTAL] Applying HTTPRoutes..."
+echo "[4/$TOTAL] Applying SnippetsFilters..."
+if [ -d "${SCRIPT_DIR}/snippetsfilters/" ]; then
+  kubectl apply -f "${SCRIPT_DIR}/snippetsfilters/"
+else
+  echo "  No snippetsfilters/ directory. Skipping."
+fi
+
+# 5. Apply HTTPRoutes
+echo ""
+echo "[5/$TOTAL] Applying HTTPRoutes..."
 kubectl apply -f "${SCRIPT_DIR}/httproutes/"
 
-# 5. Wait for Gateway to be programmed
+# 6. Wait for Gateway to be programmed
 echo ""
-echo "[5/$TOTAL] Waiting for Gateway to be programmed..."
+echo "[6/$TOTAL] Waiting for Gateway to be programmed..."
 sleep 10
 kubectl get gateway stoa -n "${NGF_NAMESPACE}"
 
-# 6. Get new LoadBalancer IP
+# 7. Get new LoadBalancer IP
 echo ""
-echo "[6/$TOTAL] Checking LoadBalancer IP..."
+echo "[7/$TOTAL] Checking LoadBalancer IP..."
 for i in {1..30}; do
   NEW_IP=$(kubectl get svc ngf-nginx-gateway-fabric -n "${NGF_NAMESPACE}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
   if [ -n "$NEW_IP" ]; then
@@ -90,9 +99,9 @@ if [ -z "$NEW_IP" ]; then
 fi
 echo "  New LoadBalancer IP: $NEW_IP"
 
-# 7. Validate routes
+# 8. Validate routes
 echo ""
-echo "[7/$TOTAL] Validating HTTPRoutes on new LB IP..."
+echo "[8/$TOTAL] Validating HTTPRoutes on new LB IP..."
 echo ""
 OLD_IP="5.196.236.53"
 HOSTS=(

@@ -297,7 +297,18 @@ pub fn build_router(state: AppState) -> Router {
                 edge_base
             };
 
-            edge_with_mtls.with_state(state)
+            // Sender-constraint layer: unified mTLS + DPoP pipeline (CAB-1607)
+            let edge_final = if state.config.sender_constraint.enabled {
+                let sc_config = state.config.sender_constraint.clone();
+                edge_with_mtls.layer(axum::middleware::from_fn(move |request, next| {
+                    let config = sc_config.clone();
+                    auth::sender_constraint::sender_constraint_middleware(config, request, next)
+                }))
+            } else {
+                edge_with_mtls
+            };
+
+            edge_final.with_state(state)
         }
         GatewayMode::Sidecar => {
             // Sidecar: policy enforcement, ext_authz style

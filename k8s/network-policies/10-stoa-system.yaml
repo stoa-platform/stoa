@@ -82,7 +82,7 @@ spec:
         - protocol: TCP
           port: 20184
 ---
-# API → OpenSearch (log shipping)
+# API + Arena → OpenSearch (log shipping + benchmark persistence)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -93,8 +93,12 @@ metadata:
     security.stoa.dev/policy: cab-1401
 spec:
   podSelector:
-    matchLabels:
-      app: stoa-control-plane-api
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - stoa-control-plane-api
+          - gateway-arena-enterprise
   policyTypes:
     - Egress
   egress:

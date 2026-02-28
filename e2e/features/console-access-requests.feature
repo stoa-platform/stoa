@@ -25,3 +25,17 @@ Feature: Console - Admin Access Requests
     And the STOA Console is accessible
     When I navigate to the Admin Access Requests page
     Then I receive an access denied error
+
+  @rbac
+  Scenario: DevOps user is denied access to Access Requests page
+    Given I am logged in to Console as "art3mis" from team "high-five"
+    And the STOA Console is accessible
+    When I navigate to the Admin Access Requests page
+    Then I receive an access denied error
+
+  Scenario: Access Requests page shows request list or empty state
+    Given I am logged in to Console as "anorak" platform admin
+    And the STOA Console is accessible
+    When I navigate to the Admin Access Requests page
+    Then the Admin Access Requests page loads successfully
+    And the Access Requests page shows a list or empty state

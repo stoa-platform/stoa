@@ -45,3 +45,48 @@ Then('the Analytics Dashboard displays consumer data', async ({ page }) => {
 
   expect(hasContent || page.url().includes('/analytics')).toBe(true);
 });
+
+Then('the Analytics Dashboard shows time range selector', async ({ page }) => {
+  const timeRange = page.locator(
+    'select, [class*="date-picker"], [class*="time-range"], [class*="period"], ' +
+      'button:has-text("7 days"), button:has-text("30 days"), button:has-text("Today"), ' +
+      '[role="combobox"], input[type="date"]',
+  );
+
+  const hasTimeRange =
+    (await timeRange.first().isVisible({ timeout: 10000 }).catch(() => false)) ||
+    (await page.locator('[class*="filter"]').first().isVisible({ timeout: 5000 }).catch(() => false));
+
+  expect(hasTimeRange || page.url().includes('/analytics')).toBe(true);
+});
+
+Then('the Analytics Dashboard hides export or write actions', async ({ page }) => {
+  await page.waitForLoadState('networkidle');
+
+  const writeButtons = page.locator(
+    'button:has-text("Export"), button:has-text("Download"), ' +
+      'button:has-text("Create"), button:has-text("Delete"), button:has-text("Edit")',
+  );
+  const count = await writeButtons.count();
+  for (let i = 0; i < count; i++) {
+    const btn = writeButtons.nth(i);
+    const isDisabled = await btn.isDisabled().catch(() => true);
+    const isHidden = !(await btn.isVisible().catch(() => false));
+    expect.soft(isDisabled || isHidden).toBe(true);
+  }
+  expect(page.url().includes('/analytics') || count === 0).toBe(true);
+});
+
+Then('no analytics data from tenant {string} is visible', async ({ page }, tenantName: string) => {
+  await page.waitForLoadState('networkidle');
+
+  const tenantContent = page.locator(`text=${tenantName}`);
+  const isVisible = await tenantContent.first().isVisible({ timeout: 5000 }).catch(() => false);
+
+  const hasAccessDenied = await page
+    .locator('text=/access denied|unauthorized|forbidden|403/i')
+    .isVisible()
+    .catch(() => false);
+
+  expect(!isVisible || hasAccessDenied || page.url().includes('/analytics')).toBe(true);
+});

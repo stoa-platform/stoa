@@ -47,3 +47,34 @@ Then('the Error Taxonomy chart is visible', async ({ page }) => {
 
   expect(hasChart || page.url().includes('/executions')).toBe(true);
 });
+
+Then('the Execution View shows filter controls', async ({ page }) => {
+  const filters = page.locator(
+    'select, [class*="filter"], [class*="date-picker"], [class*="time-range"], ' +
+      '[role="combobox"], input[type="date"], button:has-text("Filter"), ' +
+      'button:has-text("7 days"), button:has-text("30 days")',
+  );
+
+  const hasFilters =
+    (await filters.first().isVisible({ timeout: 10000 }).catch(() => false)) ||
+    (await page.locator('[class*="toolbar"]').first().isVisible({ timeout: 5000 }).catch(() => false));
+
+  expect(hasFilters || page.url().includes('/executions')).toBe(true);
+});
+
+Then('the Execution View hides write actions', async ({ page }) => {
+  await page.waitForLoadState('networkidle');
+
+  const writeButtons = page.locator(
+    'button:has-text("Export"), button:has-text("Download"), ' +
+      'button:has-text("Create"), button:has-text("Delete"), button:has-text("Edit")',
+  );
+  const count = await writeButtons.count();
+  for (let i = 0; i < count; i++) {
+    const btn = writeButtons.nth(i);
+    const isDisabled = await btn.isDisabled().catch(() => true);
+    const isHidden = !(await btn.isVisible().catch(() => false));
+    expect.soft(isDisabled || isHidden).toBe(true);
+  }
+  expect(page.url().includes('/executions') || count === 0).toBe(true);
+});

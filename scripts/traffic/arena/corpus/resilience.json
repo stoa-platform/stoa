@@ -1,0 +1,89 @@
+{
+  "dimension": "resilience",
+  "weight": 0.10,
+  "latency_cap_ms": 1000,
+  "description": "Resilience — gateway handles invalid/malformed tool calls gracefully. Expects 4xx (client error), never 500 (server crash).",
+  "checks": [
+    "resilience_not_500",
+    "resilience_graceful_error",
+    "resilience_has_error_body"
+  ],
+  "tasks": [
+    {
+      "id": "resilience-01",
+      "name": "Non-existent tool call",
+      "method": "tools/call",
+      "params": {
+        "name": "nonexistent-tool-arena-benchmark",
+        "arguments": { "invalid": true }
+      },
+      "expected": {
+        "status": "4xx",
+        "not_status": 500,
+        "body_length_gt": 0
+      },
+      "notes": "Tool does not exist — gateway should return 4xx with error message, not crash."
+    },
+    {
+      "id": "resilience-02",
+      "name": "Empty tool name",
+      "method": "tools/call",
+      "params": {
+        "name": "",
+        "arguments": {}
+      },
+      "expected": {
+        "status": "4xx",
+        "not_status": 500,
+        "body_length_gt": 0
+      },
+      "notes": "Empty tool name — should be rejected with validation error."
+    },
+    {
+      "id": "resilience-03",
+      "name": "Missing arguments field",
+      "method": "tools/call",
+      "params": {
+        "name": "arena-test-tool"
+      },
+      "expected": {
+        "status": [200, 400, 404, 422],
+        "not_status": 500
+      },
+      "notes": "No arguments — gateway should handle missing optional field gracefully."
+    },
+    {
+      "id": "resilience-04",
+      "name": "Oversized payload",
+      "method": "tools/call",
+      "params": {
+        "name": "arena-test-tool",
+        "arguments": {
+          "data": "{{REPEAT:A:10000}}"
+        }
+      },
+      "expected": {
+        "status": [200, 400, 413],
+        "not_status": 500
+      },
+      "notes": "10KB payload — gateway should either process or reject with 413, never crash."
+    },
+    {
+      "id": "resilience-05",
+      "name": "Concurrent error requests",
+      "method": "tools/call",
+      "params": {
+        "name": "nonexistent-tool-arena-benchmark",
+        "arguments": { "concurrent_error_test": true }
+      },
+      "concurrency": 3,
+      "repeat": 15,
+      "expected": {
+        "status": "4xx",
+        "not_status": 500,
+        "body_length_gt": 0
+      },
+      "notes": "3 VUs × 15 iterations of bad requests — error handling must be consistent under load."
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "dimension": "llm_routing",
+  "weight": 0.00,
+  "latency_cap_ms": 2000,
+  "description": "LLM Routing — gateway proxies /v1/messages to an LLM backend (Anthropic API format). Weight=0.00 in observation mode; scored but does not affect composite.",
+  "checks": [
+    "llm_routing_status_2xx",
+    "llm_routing_valid_json",
+    "llm_routing_has_message",
+    "llm_routing_has_usage"
+  ],
+  "tasks": [
+    {
+      "id": "llm-01",
+      "name": "Basic message completion",
+      "endpoint": "{{TARGET_URL}}/v1/messages",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "claude-mock",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Arena benchmark test — reply briefly." }]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_contains": ["type", "message"],
+        "body_has_field": "usage.input_tokens"
+      },
+      "notes": "Baseline: simple prompt, expect valid Anthropic API response with usage stats."
+    },
+    {
+      "id": "llm-02",
+      "name": "Long prompt (stress test)",
+      "endpoint": "{{TARGET_URL}}/v1/messages",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "claude-mock",
+        "max_tokens": 256,
+        "messages": [
+          { "role": "user", "content": "This is a longer benchmark prompt designed to test gateway handling of larger payloads. The gateway should proxy the full request to the upstream LLM without truncation. Please generate a detailed response covering: 1) proxy overhead, 2) header forwarding, 3) body integrity, 4) timeout handling, 5) error propagation. This tests the gateway's ability to handle non-trivial request sizes." }
+        ]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_is_valid_json": true
+      },
+      "notes": "Longer payload — tests that gateway doesn't truncate or timeout on larger prompts."
+    },
+    {
+      "id": "llm-03",
+      "name": "System message included",
+      "endpoint": "{{TARGET_URL}}/v1/messages",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "claude-mock",
+        "max_tokens": 64,
+        "system": "You are a benchmark test assistant. Respond with exactly: OK",
+        "messages": [{ "role": "user", "content": "Confirm." }]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_is_valid_json": true
+      },
+      "notes": "System message in request body — gateway should forward without modification."
+    },
+    {
+      "id": "llm-04",
+      "name": "Invalid model name",
+      "endpoint": "{{TARGET_URL}}/v1/messages",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "nonexistent-model-12345",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Test" }]
+      },
+      "expected": {
+        "status": [200, 400, 404],
+        "not_status": 500
+      },
+      "notes": "Invalid model — gateway should proxy error from upstream (400/404) or mock returns 200. Never 500."
+    },
+    {
+      "id": "llm-05",
+      "name": "Concurrent LLM requests",
+      "endpoint": "{{TARGET_URL}}/v1/messages",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "claude-mock",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Concurrent benchmark request." }]
+      },
+      "concurrency": 3,
+      "repeat": 10,
+      "expected": {
+        "status": "2xx",
+        "latency_p95_under_ms": 2000
+      },
+      "notes": "3 VUs × 10 iterations — tests LLM proxy throughput and connection pooling."
+    }
+  ]
+}

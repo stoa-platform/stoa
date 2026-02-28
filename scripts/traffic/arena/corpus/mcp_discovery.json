@@ -1,0 +1,72 @@
+{
+  "dimension": "mcp_discovery",
+  "weight": 0.15,
+  "latency_cap_ms": 500,
+  "description": "MCP Discovery — gateway exposes capabilities via GET /mcp/capabilities (STOA REST) or POST /mcp with initialize method (Streamable HTTP).",
+  "checks": [
+    "mcp_discovery_status_2xx",
+    "mcp_discovery_valid_json",
+    "mcp_discovery_has_capabilities"
+  ],
+  "tasks": [
+    {
+      "id": "discovery-01",
+      "name": "Basic capabilities request",
+      "method": "initialize",
+      "params": null,
+      "expected": {
+        "status": "2xx",
+        "body_contains": ["capabilities"]
+      },
+      "notes": "Baseline: gateway returns capabilities or tools object."
+    },
+    {
+      "id": "discovery-02",
+      "name": "Discovery with auth header",
+      "method": "initialize",
+      "params": null,
+      "headers": { "Authorization": "Bearer {{ARENA_JWT}}" },
+      "expected": {
+        "status": "2xx",
+        "body_contains": ["capabilities"]
+      },
+      "notes": "Authenticated discovery — JWT should be accepted, same result as unauthenticated."
+    },
+    {
+      "id": "discovery-03",
+      "name": "Discovery with extra headers",
+      "method": "initialize",
+      "params": null,
+      "headers": { "X-Request-ID": "arena-bench-003", "X-Forwarded-For": "10.0.0.1" },
+      "expected": {
+        "status": "2xx",
+        "body_contains": ["capabilities"]
+      },
+      "notes": "Proxy headers should be forwarded without breaking discovery."
+    },
+    {
+      "id": "discovery-04",
+      "name": "Repeated rapid discovery",
+      "method": "initialize",
+      "params": null,
+      "repeat": 10,
+      "expected": {
+        "status": "2xx",
+        "latency_p95_under_ms": 500
+      },
+      "notes": "10 rapid discovery calls — tests caching and consistency under load."
+    },
+    {
+      "id": "discovery-05",
+      "name": "Discovery with Accept header negotiation",
+      "method": "initialize",
+      "params": null,
+      "headers": { "Accept": "application/json" },
+      "expected": {
+        "status": "2xx",
+        "content_type": "application/json"
+      },
+      "notes": "Content negotiation — gateway should respect Accept header."
+    }
+  ]
+}

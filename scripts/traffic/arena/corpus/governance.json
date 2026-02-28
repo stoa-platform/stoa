@@ -1,0 +1,69 @@
+{
+  "dimension": "governance",
+  "weight": 0.05,
+  "latency_cap_ms": 2000,
+  "description": "Agent Governance — gateway exposes session and circuit-breaker statistics endpoints for operational visibility.",
+  "checks": [
+    "governance_endpoint_exists",
+    "governance_not_404"
+  ],
+  "tasks": [
+    {
+      "id": "governance-01",
+      "name": "Session stats endpoint",
+      "endpoint": "{{TARGET_URL}}/admin/sessions/stats",
+      "method": "GET",
+      "expected": {
+        "not_status": [404, 500],
+        "body_is_valid_json": true
+      },
+      "notes": "Admin session stats — gateway should expose session count, active sessions, etc."
+    },
+    {
+      "id": "governance-02",
+      "name": "Circuit breaker stats endpoint",
+      "endpoint": "{{TARGET_URL}}/admin/circuit-breaker/stats",
+      "method": "GET",
+      "expected": {
+        "not_status": [404, 500],
+        "body_is_valid_json": true
+      },
+      "notes": "Circuit breaker stats — open/closed/half-open counts, trip history."
+    },
+    {
+      "id": "governance-03",
+      "name": "Governance with auth header",
+      "endpoint": "{{TARGET_URL}}/admin/sessions/stats",
+      "method": "GET",
+      "headers": { "Authorization": "Bearer {{ARENA_JWT}}" },
+      "expected": {
+        "not_status": [404, 500]
+      },
+      "notes": "Authenticated governance call — admin endpoints should accept JWT."
+    },
+    {
+      "id": "governance-04",
+      "name": "Both endpoints in sequence",
+      "sequence": [
+        { "endpoint": "{{TARGET_URL}}/admin/sessions/stats", "method": "GET" },
+        { "endpoint": "{{TARGET_URL}}/admin/circuit-breaker/stats", "method": "GET" }
+      ],
+      "expected": {
+        "all_not_status": [404, 500]
+      },
+      "notes": "Sequential calls to both endpoints — tests that admin router handles multiple paths."
+    },
+    {
+      "id": "governance-05",
+      "name": "Governance endpoint response time",
+      "endpoint": "{{TARGET_URL}}/admin/sessions/stats",
+      "method": "GET",
+      "repeat": 5,
+      "expected": {
+        "not_status": [404, 500],
+        "latency_p95_under_ms": 2000
+      },
+      "notes": "5 calls — governance endpoints should respond within 2s even under stats computation."
+    }
+  ]
+}

@@ -18,6 +18,7 @@ import math
 import os
 import sys
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +38,7 @@ DIMENSIONS = [
     {"key": "quota_burst",    "scenario": "ent_quota_burst",    "weight": 0.10, "requires_mcp": False},
     {"key": "resilience",     "scenario": "ent_resilience",     "weight": 0.10, "requires_mcp": True},
     {"key": "governance",     "scenario": "ent_governance",     "weight": 0.05, "requires_mcp": False},
+    {"key": "llm_routing",   "scenario": "ent_llm_routing",   "weight": 0.00, "requires_mcp": False},
 ]
 
 # Latency caps per dimension (seconds) — p95 above this = score 0
@@ -49,6 +51,7 @@ LATENCY_CAPS = {
     "quota_burst": 1.0,      # 1s
     "resilience": 1.0,       # 1s
     "governance": 2.0,       # 2s (admin endpoints, less critical)
+    "llm_routing": 2.0,      # 2s (LLM calls are inherently slower)
 }
 
 
@@ -168,6 +171,8 @@ def main() -> None:
     }
 
     leaderboard = []
+    # Collect per-dimension detail for OpenSearch export
+    os_export_data: list[dict] = []
 
     for gw in gateways:
         name = gw["name"]
@@ -175,10 +180,13 @@ def main() -> None:
         gw_dir = work_dir / name
         valid_runs = list(range(discard_first + 1, total_runs + 1))
         n = len(valid_runs)
+        instance = os.environ.get("ARENA_INSTANCE", "default")
 
-        # Per-dimension, per-run scores
+        # Per-dimension, per-run scores and raw data
         dim_run_scores: dict[str, list[float]] = {d["key"]: [] for d in DIMENSIONS}
         dim_median_latencies: dict[str, float] = {}
+        dim_median_checks: dict[str, dict[str, int]] = {}
+        dim_all_latencies: dict[str, list[dict[str, float]]] = {d["key"]: [] for d in DIMENSIONS}
 
         for dim in DIMENSIONS:
             dim_key = dim["key"]
@@ -188,9 +196,12 @@ def main() -> None:
             if dim["requires_mcp"] and not has_mcp:
                 dim_run_scores[dim_key] = [0.0] * n
                 dim_median_latencies[dim_key] = 0.0
+                dim_median_checks[dim_key] = {"passes": 0, "fails": 0}
                 continue
 
-            run_latencies: list[float] = []
+            run_latencies_p95: list[float] = []
+            all_checks: list[dict[str, int]] = []
+            all_lats: list[dict[str, float]] = []
 
             for run in valid_runs:
                 jf = gw_dir / f"run-{run}" / f"{scenario}.json"
@@ -198,9 +209,18 @@ def main() -> None:
                 latency = extract_latency(jf)
                 s = score_dimension(dim_key, checks, latency)
                 dim_run_scores[dim_key].append(s)
-                run_latencies.append(latency["p95"])
+                run_latencies_p95.append(latency["p95"])
+                all_checks.append(checks)
+                all_lats.append(latency)
 
-            dim_median_latencies[dim_key] = median(run_latencies)
+            dim_median_latencies[dim_key] = median(run_latencies_p95)
+            dim_all_latencies[dim_key] = all_lats
+            # Use median run's checks (pick the middle run)
+            if all_checks:
+                mid = len(all_checks) // 2
+                dim_median_checks[dim_key] = all_checks[mid]
+            else:
+                dim_median_checks[dim_key] = {"passes": 0, "fails": 0}
 
         # Compute per-run composite scores
         run_composites: list[float] = []
@@ -249,6 +269,40 @@ def main() -> None:
             families["gateway_arena_enterprise_latency_p95"].append(
                 f'gateway_arena_enterprise_latency_p95{{gateway="{name}",dimension="{dim_key}"}} {dim_median_latencies[dim_key]:.6f}')
 
+            # Collect data for OpenSearch export (1 doc per dimension per gateway)
+            cap = LATENCY_CAPS.get(dim_key, 1.0)
+            checks_data = dim_median_checks.get(dim_key, {"passes": 0, "fails": 0})
+            total_checks = checks_data["passes"] + checks_data["fails"]
+            avail_score = 100.0 * checks_data["passes"] / total_checks if total_checks > 0 else 0.0
+            lat_score = max(0.0, min(100.0, 100.0 * (1.0 - dim_median_latencies[dim_key] / cap))) if cap > 0 else 0.0
+            # Median latencies across runs
+            lats = dim_all_latencies.get(dim_key, [])
+            med_p50 = median([l["p50"] for l in lats]) if lats else 0.0
+            med_p99 = median([l["p99"] for l in lats]) if lats else 0.0
+
+            os_export_data.append({
+                "gateway": name,
+                "instance": instance,
+                "dimension": dim_key,
+                "dimension_score": round(dim_score, 2),
+                "composite_score": round(enterprise_score, 2),
+                "availability": {
+                    "passes": checks_data["passes"],
+                    "fails": checks_data["fails"],
+                    "score": round(avail_score, 2),
+                },
+                "latency": {
+                    "p50": round(med_p50, 6),
+                    "p95": round(dim_median_latencies[dim_key], 6),
+                    "p99": round(med_p99, 6),
+                    "cap": cap,
+                    "score": round(lat_score, 2),
+                },
+                "weight": dim["weight"],
+                "ci95": {"lower": round(ci_lower, 2), "upper": round(ci_upper, 2)},
+                "stddev": round(stddev, 4),
+            })
+
         leaderboard.append({
             "gateway": name,
             "enterprise_score": round(enterprise_score, 2),
@@ -279,15 +333,16 @@ def main() -> None:
     leaderboard.sort(key=lambda x: x["enterprise_score"], reverse=True)
     print(json.dumps({"event": "enterprise_leaderboard", "ranking": leaderboard}), file=sys.stderr)
 
-    # Export to OpenSearch for long-term retention (CAB-1558)
-    export_to_opensearch(leaderboard)
+    # Export to OpenSearch for long-term retention (CAB-1601)
+    export_to_opensearch(os_export_data)
 
 
-def export_to_opensearch(leaderboard: list[dict]) -> None:
+def export_to_opensearch(dimension_docs: list[dict]) -> None:
     """Export arena scores to OpenSearch for long-term retention.
 
-    Each run creates one document per gateway in the 'arena-scores' index.
-    Uses stdlib urllib only (no requests/httpx dependency).
+    Each run creates one document per dimension per gateway in a monthly index
+    (stoa-bench-{yyyy.MM}). Uses stdlib urllib only (no requests/httpx dependency).
+
     Env vars:
       OPENSEARCH_URL — OpenSearch base URL (default: http://opensearch.stoa-system.svc:9200)
       OPENSEARCH_ENABLED — set to "false" to skip export (default: true)
@@ -298,35 +353,66 @@ def export_to_opensearch(leaderboard: list[dict]) -> None:
     base_url = os.environ.get(
         "OPENSEARCH_URL", "http://opensearch.stoa-system.svc:9200"
     )
-    index = "arena-scores"
-    timestamp = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
+    index = f"stoa-bench-{now.strftime('%Y.%m')}"
+    timestamp = now.isoformat()
+    run_id = str(uuid.uuid4())
 
-    for entry in leaderboard:
+    # Use bulk API for efficiency: one request instead of N
+    bulk_lines: list[str] = []
+    for entry in dimension_docs:
         doc = {
             "@timestamp": timestamp,
+            "run_id": run_id,
             "layer": "enterprise",
+            "instance": entry.get("instance", "default"),
             "gateway": entry["gateway"],
-            "enterprise_score": entry["enterprise_score"],
+            "dimension": entry["dimension"],
+            "dimension_score": entry["dimension_score"],
+            "composite_score": entry["composite_score"],
+            "availability": entry["availability"],
+            "latency": entry["latency"],
+            "weight": entry["weight"],
+            "ci95": entry["ci95"],
             "stddev": entry["stddev"],
-            "ci95_lower": float(entry["ci95"].strip("[]").split(",")[0]),
-            "ci95_upper": float(entry["ci95"].strip("[]").split(",")[1]),
-            "dimensions": entry["dimensions"],
         }
-        try:
-            payload = json.dumps(doc).encode("utf-8")
-            req = urllib.request.Request(
-                f"{base_url}/{index}/_doc",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                resp.read()
-        except Exception as e:
-            print(
-                f'{{"opensearch_export_error":"{entry["gateway"]}","{e}"}}',
-                file=sys.stderr,
-            )
+        bulk_lines.append(json.dumps({"index": {"_index": index}}))
+        bulk_lines.append(json.dumps(doc))
+
+    if not bulk_lines:
+        return
+
+    try:
+        payload = ("\n".join(bulk_lines) + "\n").encode("utf-8")
+        req = urllib.request.Request(
+            f"{base_url}/_bulk",
+            data=payload,
+            headers={"Content-Type": "application/x-ndjson"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read())
+            if result.get("errors"):
+                err_items = [
+                    i for i in result.get("items", [])
+                    if i.get("index", {}).get("error")
+                ]
+                print(
+                    f'{{"opensearch_bulk_errors":{len(err_items)},'
+                    f'"first_error":{json.dumps(err_items[0] if err_items else None)}}}',
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f'{{"opensearch_export":"ok","index":"{index}",'
+                    f'"docs":{len(dimension_docs)},"run_id":"{run_id}"}}',
+                    file=sys.stderr,
+                )
+    except Exception as e:
+        print(
+            f'{{"opensearch_export_error":"{e}"}}',
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

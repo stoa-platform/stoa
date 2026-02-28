@@ -1,0 +1,72 @@
+{
+  "dimension": "mcp_toolcall",
+  "weight": 0.20,
+  "latency_cap_ms": 500,
+  "description": "MCP Tool Execution — gateway lists and calls tools via POST /mcp/tools/list (STOA REST) or POST /mcp with tools/list method (Streamable HTTP).",
+  "checks": [
+    "mcp_toolcall_status_2xx",
+    "mcp_toolcall_valid_json",
+    "mcp_toolcall_p95_under_500ms"
+  ],
+  "tasks": [
+    {
+      "id": "toolcall-01",
+      "name": "List all tools",
+      "method": "tools/list",
+      "params": null,
+      "expected": {
+        "status": "2xx",
+        "body_is_valid_json": true
+      },
+      "notes": "Baseline: list all registered tools. Response should be JSON with tools array."
+    },
+    {
+      "id": "toolcall-02",
+      "name": "List tools with cursor pagination",
+      "method": "tools/list",
+      "params": { "cursor": null },
+      "expected": {
+        "status": "2xx",
+        "body_contains": ["tools"]
+      },
+      "notes": "Pagination support — cursor=null should return first page."
+    },
+    {
+      "id": "toolcall-03",
+      "name": "List tools under high concurrency",
+      "method": "tools/list",
+      "params": null,
+      "concurrency": 5,
+      "repeat": 20,
+      "expected": {
+        "status": "2xx",
+        "latency_p95_under_ms": 500
+      },
+      "notes": "5 VUs × 20 iterations — measures tool registry throughput under load."
+    },
+    {
+      "id": "toolcall-04",
+      "name": "List tools with auth token",
+      "method": "tools/list",
+      "params": null,
+      "headers": { "Authorization": "Bearer {{ARENA_JWT}}" },
+      "expected": {
+        "status": "2xx",
+        "body_is_valid_json": true
+      },
+      "notes": "Authenticated tool listing — JWT should not degrade performance."
+    },
+    {
+      "id": "toolcall-05",
+      "name": "List tools repeatedly for consistency",
+      "method": "tools/list",
+      "params": null,
+      "repeat": 10,
+      "expected": {
+        "status": "2xx",
+        "all_responses_identical": true
+      },
+      "notes": "10 sequential calls — response must be deterministic (same tool set)."
+    }
+  ]
+}

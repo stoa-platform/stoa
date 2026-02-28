@@ -101,12 +101,20 @@ pub struct Claims {
     pub master_account_id: Option<String>,
 }
 
-/// RFC 8705 Confirmation claim for certificate-bound tokens.
+/// RFC 8705 / RFC 9449 Confirmation claim for sender-constrained tokens.
+///
+/// Supports two binding methods:
+/// - `x5t#S256`: mTLS certificate thumbprint (RFC 8705)
+/// - `jkt`: DPoP JWK thumbprint (RFC 9449 Section 6.1)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CnfClaim {
-    /// Base64url-encoded SHA-256 certificate thumbprint
-    #[serde(rename = "x5t#S256")]
-    pub x5t_s256: String,
+    /// Base64url-encoded SHA-256 certificate thumbprint (mTLS binding)
+    #[serde(rename = "x5t#S256", default)]
+    pub x5t_s256: Option<String>,
+
+    /// JWK thumbprint for DPoP binding (RFC 9449)
+    #[serde(default)]
+    pub jkt: Option<String>,
 }
 
 /// Audience can be a single string or array of strings.
@@ -466,10 +474,51 @@ mod tests {
         }"#;
         let claims: Claims = serde_json::from_str(json).unwrap();
         assert!(claims.cnf.is_some());
+        let cnf = claims.cnf.unwrap();
         assert_eq!(
-            claims.cnf.unwrap().x5t_s256,
-            "obsz1234567890abcdefghijklmnopqrstuvwxyz_-A"
+            cnf.x5t_s256.as_deref(),
+            Some("obsz1234567890abcdefghijklmnopqrstuvwxyz_-A")
         );
+        assert!(cnf.jkt.is_none());
+    }
+
+    #[test]
+    fn test_cnf_claim_jkt_deserialization() {
+        let json = r#"{
+            "sub": "user-1",
+            "exp": 9999999999,
+            "iat": 1000000000,
+            "iss": "https://auth.gostoa.dev/realms/stoa",
+            "cnf": {
+                "jkt": "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+            }
+        }"#;
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        assert!(claims.cnf.is_some());
+        let cnf = claims.cnf.unwrap();
+        assert!(cnf.x5t_s256.is_none());
+        assert_eq!(
+            cnf.jkt.as_deref(),
+            Some("0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I")
+        );
+    }
+
+    #[test]
+    fn test_cnf_claim_both_fields() {
+        let json = r#"{
+            "sub": "user-1",
+            "exp": 9999999999,
+            "iat": 1000000000,
+            "iss": "https://auth.gostoa.dev/realms/stoa",
+            "cnf": {
+                "x5t#S256": "cert-thumbprint-abc",
+                "jkt": "dpop-thumbprint-xyz"
+            }
+        }"#;
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        let cnf = claims.cnf.unwrap();
+        assert_eq!(cnf.x5t_s256.as_deref(), Some("cert-thumbprint-abc"));
+        assert_eq!(cnf.jkt.as_deref(), Some("dpop-thumbprint-xyz"));
     }
 
     #[test]

@@ -23,9 +23,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
+use subtle::ConstantTimeEq;
 use thiserror::Error;
 use tracing::{debug, warn};
 
+use crate::auth::claims::CnfClaim;
 use crate::metrics;
 
 // =============================================================================
@@ -148,6 +150,9 @@ pub enum DpopError {
 
     #[error("invalid DPoP proof: missing 'ath' claim for token binding")]
     MissingAth,
+
+    #[error("DPoP cnf.jkt binding mismatch: token jkt does not match proof JWK thumbprint")]
+    JktMismatch,
 }
 
 // =============================================================================
@@ -240,12 +245,14 @@ impl DpopValidator {
     /// - `http_method`: The HTTP method of the current request (e.g., "POST")
     /// - `http_uri`: The HTTP target URI (scheme + authority + path)
     /// - `access_token`: Optional access token for `ath` binding verification
+    /// - `token_cnf`: Optional `cnf` claim from the access token for `jkt` binding
     pub fn validate(
         &self,
         dpop_header: &str,
         http_method: &str,
         http_uri: &str,
         access_token: Option<&str>,
+        token_cnf: Option<&CnfClaim>,
     ) -> Result<DpopJwk, DpopError> {
         // Step 1: Parse JWT header
         let header = decode_header(dpop_header).map_err(|e| {
@@ -336,6 +343,12 @@ impl DpopValidator {
             }
         }
 
+        // Step 11: Verify cnf.jkt binding (RFC 9449 Section 6.1)
+        // If the access token has a cnf.jkt claim, verify it matches the DPoP proof JWK thumbprint
+        if let Some(cnf) = token_cnf {
+            Self::verify_cnf_binding(&jwk, cnf)?;
+        }
+
         metrics::record_dpop_validation("success");
         debug!("DPoP proof validated successfully (jti={jti})");
         Ok(jwk)
@@ -374,6 +387,26 @@ impl DpopValidator {
         }
         self.jti_cache.insert(jti.to_string(), ());
         Ok(())
+    }
+
+    /// Verify that the DPoP proof JWK thumbprint matches the `cnf.jkt` in the access token.
+    ///
+    /// Uses timing-safe comparison to prevent side-channel attacks.
+    fn verify_cnf_binding(jwk: &DpopJwk, cnf: &CnfClaim) -> Result<(), DpopError> {
+        if let Some(expected_jkt) = &cnf.jkt {
+            let proof_jkt = compute_jwk_thumbprint(jwk);
+            if proof_jkt.as_bytes().ct_eq(expected_jkt.as_bytes()).into() {
+                debug!("DPoP cnf.jkt binding verified");
+                Ok(())
+            } else {
+                warn!("DPoP cnf.jkt binding mismatch");
+                metrics::record_dpop_validation("jkt_mismatch");
+                Err(DpopError::JktMismatch)
+            }
+        } else {
+            // No jkt in cnf — DPoP binding not required by token
+            Ok(())
+        }
     }
 
     /// Returns true if DPoP is enabled.
@@ -712,5 +745,98 @@ mod tests {
         assert!(result.is_err());
         let err = result.err().unwrap();
         assert!(matches!(err, DpopError::UnsupportedKeyType(_)));
+    }
+
+    // =========================================================================
+    // cnf.jkt binding tests (CAB-1605)
+    // =========================================================================
+
+    fn ec_test_jwk() -> DpopJwk {
+        DpopJwk {
+            kty: "EC".to_string(),
+            crv: Some("P-256".to_string()),
+            x: Some("test-x-coord".to_string()),
+            y: Some("test-y-coord".to_string()),
+            n: None,
+            e: None,
+            d: None,
+            p: None,
+            q: None,
+        }
+    }
+
+    #[test]
+    fn test_cnf_jkt_binding_valid() {
+        let jwk = ec_test_jwk();
+        let expected_jkt = compute_jwk_thumbprint(&jwk);
+        let cnf = CnfClaim {
+            x5t_s256: None,
+            jkt: Some(expected_jkt),
+        };
+        let result = DpopValidator::verify_cnf_binding(&jwk, &cnf);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cnf_jkt_binding_mismatch() {
+        let jwk = ec_test_jwk();
+        let cnf = CnfClaim {
+            x5t_s256: None,
+            jkt: Some("wrong-thumbprint-value".to_string()),
+        };
+        let result = DpopValidator::verify_cnf_binding(&jwk, &cnf);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), DpopError::JktMismatch));
+    }
+
+    #[test]
+    fn test_cnf_jkt_binding_missing_jkt() {
+        // When cnf exists but has no jkt field, binding is not enforced
+        let jwk = ec_test_jwk();
+        let cnf = CnfClaim {
+            x5t_s256: Some("cert-thumbprint".to_string()),
+            jkt: None,
+        };
+        let result = DpopValidator::verify_cnf_binding(&jwk, &cnf);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cnf_jkt_binding_rsa_key() {
+        let jwk = DpopJwk {
+            kty: "RSA".to_string(),
+            crv: None,
+            x: None,
+            y: None,
+            n: Some("test-modulus".to_string()),
+            e: Some("AQAB".to_string()),
+            d: None,
+            p: None,
+            q: None,
+        };
+        let expected_jkt = compute_jwk_thumbprint(&jwk);
+        let cnf = CnfClaim {
+            x5t_s256: None,
+            jkt: Some(expected_jkt),
+        };
+        assert!(DpopValidator::verify_cnf_binding(&jwk, &cnf).is_ok());
+    }
+
+    #[test]
+    fn test_cnf_jkt_binding_timing_safe() {
+        // Verify that even similar thumbprints fail (no prefix bypass)
+        let jwk = ec_test_jwk();
+        let mut wrong_jkt = compute_jwk_thumbprint(&jwk);
+        // Flip the last character
+        let last = wrong_jkt.pop().unwrap_or('A');
+        wrong_jkt.push(if last == 'A' { 'B' } else { 'A' });
+        let cnf = CnfClaim {
+            x5t_s256: None,
+            jkt: Some(wrong_jkt),
+        };
+        assert!(matches!(
+            DpopValidator::verify_cnf_binding(&jwk, &cnf).unwrap_err(),
+            DpopError::JktMismatch
+        ));
     }
 }

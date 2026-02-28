@@ -52,7 +52,7 @@ datasources:
     type: grafana-opensearch-datasource
     uid: opensearch-bench
     access: proxy
-    url: ${OPENSEARCH_URL:-http://opensearch.stoa-system.svc:9200}
+    url: ${OPENSEARCH_URL:-http://opensearch.opensearch.svc:9200}
     editable: true
     jsonData:
       database: stoa-bench-*

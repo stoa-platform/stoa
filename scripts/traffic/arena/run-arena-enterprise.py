@@ -344,15 +344,19 @@ def export_to_opensearch(dimension_docs: list[dict]) -> None:
     (stoa-bench-{yyyy.MM}). Uses stdlib urllib only (no requests/httpx dependency).
 
     Env vars:
-      OPENSEARCH_URL — OpenSearch base URL (default: http://opensearch.stoa-system.svc:9200)
+      OPENSEARCH_URL — OpenSearch base URL (default: http://opensearch.opensearch.svc:9200)
+      OPENSEARCH_USER — Basic auth username (default: admin)
+      OPENSEARCH_PASSWORD — Basic auth password (default: empty, no auth)
       OPENSEARCH_ENABLED — set to "false" to skip export (default: true)
     """
     if os.environ.get("OPENSEARCH_ENABLED", "true").lower() == "false":
         return
 
     base_url = os.environ.get(
-        "OPENSEARCH_URL", "http://opensearch.stoa-system.svc:9200"
+        "OPENSEARCH_URL", "http://opensearch.opensearch.svc:9200"
     )
+    os_user = os.environ.get("OPENSEARCH_USER", "admin")
+    os_password = os.environ.get("OPENSEARCH_PASSWORD", "")
     now = datetime.now(timezone.utc)
     index = f"stoa-bench-{now.strftime('%Y.%m')}"
     timestamp = now.isoformat()
@@ -384,10 +388,18 @@ def export_to_opensearch(dimension_docs: list[dict]) -> None:
 
     try:
         payload = ("\n".join(bulk_lines) + "\n").encode("utf-8")
+        headers: dict[str, str] = {"Content-Type": "application/x-ndjson"}
+        if os_password:
+            import base64
+
+            credentials = base64.b64encode(
+                f"{os_user}:{os_password}".encode()
+            ).decode()
+            headers["Authorization"] = f"Basic {credentials}"
         req = urllib.request.Request(
             f"{base_url}/_bulk",
             data=payload,
-            headers={"Content-Type": "application/x-ndjson"},
+            headers=headers,
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=10) as resp:

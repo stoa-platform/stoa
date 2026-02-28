@@ -5,23 +5,40 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-OPENSEARCH_URL="${OPENSEARCH_URL:-http://opensearch.stoa-system.svc:9200}"
-TOTAL=8
+OPENSEARCH_URL="${OPENSEARCH_URL:-http://opensearch.opensearch.svc:9200}"
+# OpenSearch auth — required when security plugin is enabled
+OPENSEARCH_USER="${OPENSEARCH_USER:-admin}"
+OPENSEARCH_PASSWORD="${OPENSEARCH_PASSWORD:-}"
+TOTAL=9
+
+AUTH_ARGS=""
+if [ -n "$OPENSEARCH_PASSWORD" ]; then
+  AUTH_ARGS="-u ${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}"
+fi
 
 echo "=== Gateway Arena Enterprise Deploy (Layer 1: AI Readiness) ==="
 
+# 0. Create OpenSearch credentials K8s Secret (if password provided)
+if [ -n "$OPENSEARCH_PASSWORD" ]; then
+  echo "[0/$TOTAL] Creating/updating opensearch-credentials secret..."
+  kubectl create secret generic opensearch-credentials \
+    --from-literal=admin-password="$OPENSEARCH_PASSWORD" \
+    -n stoa-system \
+    --dry-run=client -o yaml | kubectl apply -f -
+fi
+
 # 1. Bootstrap OpenSearch index template
 echo "[1/$TOTAL] Applying OpenSearch index template (stoa-bench-*)..."
-kubectl exec -n stoa-system deploy/opensearch -- \
-  curl -s -XPUT "${OPENSEARCH_URL}/_index_template/stoa-bench" \
+kubectl exec -n opensearch opensearch-0 -- \
+  curl -s $AUTH_ARGS -XPUT "${OPENSEARCH_URL}/_index_template/stoa-bench" \
   -H "Content-Type: application/json" \
   -d "$(cat "$SCRIPT_DIR/opensearch-index-template.json")" 2>/dev/null \
   || echo "  (OpenSearch not reachable in-cluster, apply template manually)"
 
 # 2. Apply ISM lifecycle policy
 echo "[2/$TOTAL] Applying ISM lifecycle policy (stoa-bench-lifecycle)..."
-kubectl exec -n stoa-system deploy/opensearch -- \
-  curl -s -XPUT "${OPENSEARCH_URL}/_plugins/_ism/policies/stoa-bench-lifecycle" \
+kubectl exec -n opensearch opensearch-0 -- \
+  curl -s $AUTH_ARGS -XPUT "${OPENSEARCH_URL}/_plugins/_ism/policies/stoa-bench-lifecycle" \
   -H "Content-Type: application/json" \
   -d "$(cat "$SCRIPT_DIR/opensearch-ism-policy.json")" 2>/dev/null \
   || echo "  (OpenSearch ISM not reachable, apply policy manually)"
@@ -50,10 +67,12 @@ fi
 echo "[5/$TOTAL] Importing OpenSearch Dashboards visualizations..."
 OSD_FILE="$REPO_ROOT/docker/observability/opensearch-dashboards/saved-objects/stoa-bench-dashboards.ndjson"
 if [ -f "$OSD_FILE" ]; then
-  kubectl exec -n stoa-system deploy/opensearch-dashboards -- \
-    curl -s -XPOST "http://localhost:5601/api/saved_objects/_import?overwrite=true" \
-    -H "osd-xsrf: true" \
-    --form file=@- < "$OSD_FILE" 2>/dev/null \
+  # Copy file to OSD pod then import (kubectl exec with stdin piping is unreliable)
+  kubectl cp "$OSD_FILE" opensearch/$(kubectl get pod -n opensearch -l app=opensearch-dashboards -o jsonpath='{.items[0].metadata.name}'):/tmp/stoa-bench-dashboards.ndjson 2>/dev/null \
+    && kubectl exec -n opensearch deploy/opensearch-dashboards -- \
+      curl -s -XPOST "http://localhost:5601/api/saved_objects/_import?overwrite=true" \
+      -H "osd-xsrf: true" \
+      -F file=@/tmp/stoa-bench-dashboards.ndjson 2>/dev/null \
     || echo "  (OpenSearch Dashboards not reachable, import manually via UI: Stack Management > Saved Objects > Import)"
 else
   echo "  (saved objects file not found, skipping)"
@@ -67,9 +86,16 @@ kubectl apply -f "$SCRIPT_DIR/cronjob-enterprise.yaml"
 echo "[7/$TOTAL] Verifying CronJob..."
 kubectl get cronjob gateway-arena-enterprise -n stoa-system
 
-# 8. Smoke test — trigger manual run
+# 8. Verify OpenSearch connectivity from stoa-system namespace
+echo "[8/$TOTAL] Verifying cross-namespace OpenSearch connectivity..."
+kubectl run os-test --rm -it --restart=Never -n stoa-system \
+  --image=curlimages/curl --command -- \
+  curl -s $AUTH_ARGS "${OPENSEARCH_URL}/_cluster/health" 2>/dev/null \
+  || echo "  (Cross-namespace connectivity check failed — verify NetworkPolicy)"
+
+# 9. Smoke test — trigger manual run
 JOB_NAME="arena-ent-smoke-$(date +%s)"
-echo "[8/$TOTAL] Triggering smoke test: $JOB_NAME"
+echo "[9/$TOTAL] Triggering smoke test: $JOB_NAME"
 kubectl create job --from=cronjob/gateway-arena-enterprise "$JOB_NAME" -n stoa-system
 
 echo ""
@@ -86,7 +112,7 @@ if kubectl wait --for=condition=complete "job/$JOB_NAME" -n stoa-system --timeou
   echo "Deploy complete. Next steps:"
   echo "  1. Check Pushgateway: kubectl exec -n monitoring deploy/pushgateway -- wget -qO- localhost:9091/metrics | grep enterprise"
   echo "  2. Import Grafana dashboard: docker/observability/grafana/dashboards/gateway-arena-historical.json"
-  echo "  3. OpenSearch Dashboards: stoa-bench-dashboards.ndjson (auto-imported in step 5)"
+  echo "  3. OpenSearch Dashboards: https://opensearch.gostoa.dev (OIDC via Keycloak)"
   echo "  4. Cleanup: kubectl delete job $JOB_NAME -n stoa-system"
 else
   echo "Job did not complete in 15m. Check logs:"

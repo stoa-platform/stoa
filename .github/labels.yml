@@ -1,0 +1,223 @@
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Declarative label configuration for the STOA repository.
+# Sync with: https://github.com/EndBug/label-sync or `gh label create`
+#
+# Usage:
+#   gh label list --json name | jq -r '.[].name' | sort
+#   # Then compare with this file to detect drift.
+
+# ─── Type ───────────────────────────────────────────────────────────────────────
+
+- name: "type:bug"
+  color: "d73a4a"
+  description: "Something isn't working"
+
+- name: "type:feature"
+  color: "a2eeef"
+  description: "New feature or enhancement request"
+
+- name: "type:docs"
+  color: "0075ca"
+  description: "Documentation improvements or additions"
+
+- name: "type:question"
+  color: "d876e3"
+  description: "Usage or configuration question"
+
+- name: "type:migration"
+  color: "006b75"
+  description: "Migration help request from another gateway"
+
+- name: "type:security"
+  color: "e11d48"
+  description: "Security vulnerability or hardening"
+
+# ─── Status ─────────────────────────────────────────────────────────────────────
+
+- name: "status:triage"
+  color: "fbca04"
+  description: "Needs maintainer triage"
+
+- name: "status:confirmed"
+  color: "0e8a16"
+  description: "Confirmed and ready for implementation"
+
+- name: "status:wontfix"
+  color: "ffffff"
+  description: "Will not be worked on"
+
+- name: "status:duplicate"
+  color: "cfd3d7"
+  description: "Duplicate of an existing issue"
+
+- name: "status:blocked"
+  color: "b60205"
+  description: "Blocked by external dependency or decision"
+
+# ─── Priority ───────────────────────────────────────────────────────────────────
+
+- name: "priority:critical"
+  color: "b60205"
+  description: "Service down or data loss — fix immediately"
+
+- name: "priority:high"
+  color: "d73a4a"
+  description: "Feature broken, no workaround"
+
+- name: "priority:medium"
+  color: "e4b400"
+  description: "Feature broken, workaround exists"
+
+- name: "priority:low"
+  color: "c5def5"
+  description: "Cosmetic or minor inconvenience"
+
+# ─── Component ──────────────────────────────────────────────────────────────────
+
+- name: "component:api"
+  color: "2b67c6"
+  description: "Control Plane API (FastAPI)"
+
+- name: "component:console"
+  color: "168700"
+  description: "Console UI (React)"
+
+- name: "component:portal"
+  color: "1d76db"
+  description: "Developer Portal (React)"
+
+- name: "component:gateway"
+  color: "000000"
+  description: "STOA Gateway (Rust)"
+
+- name: "component:helm"
+  color: "0e8a16"
+  description: "Helm charts / Kubernetes manifests"
+
+- name: "component:e2e"
+  color: "5319e7"
+  description: "End-to-end tests (Playwright)"
+
+- name: "component:docs"
+  color: "0075ca"
+  description: "Documentation (stoa-docs)"
+
+- name: "component:cli"
+  color: "006b75"
+  description: "CLI tool (stoactl)"
+
+# ─── Difficulty (contributors) ──────────────────────────────────────────────────
+
+- name: "good first issue"
+  color: "7057ff"
+  description: "Good for newcomers"
+
+- name: "help wanted"
+  color: "008672"
+  description: "Extra attention is needed"
+
+- name: "difficulty:beginner"
+  color: "0e8a16"
+  description: "Suitable for first-time contributors"
+
+- name: "difficulty:intermediate"
+  color: "e4b400"
+  description: "Some familiarity with the codebase needed"
+
+- name: "difficulty:advanced"
+  color: "d73a49"
+  description: "Deep knowledge of the component required"
+
+# ─── Community ──────────────────────────────────────────────────────────────────
+
+- name: "community"
+  color: "7057ff"
+  description: "Community-related"
+
+- name: "spotlight"
+  color: "fbca04"
+  description: "Community spotlight nomination"
+
+# ─── CI / Automation ────────────────────────────────────────────────────────────
+
+- name: "dependencies"
+  color: "0366d6"
+  description: "Pull requests that update a dependency file"
+
+- name: "github_actions"
+  color: "000000"
+  description: "Pull requests that update GitHub Actions code"
+
+- name: "python"
+  color: "2b67c6"
+  description: "Pull requests that update Python code"
+
+- name: "javascript"
+  color: "168700"
+  description: "Pull requests that update JavaScript code"
+
+- name: "rust"
+  color: "000000"
+  description: "Pull requests that update Rust code"
+
+# ─── AI Factory ─────────────────────────────────────────────────────────────────
+
+- name: "claude-implement"
+  color: "6f42c1"
+  description: "Triggers autonomous Council + implementation"
+
+- name: "council-review"
+  color: "fbca04"
+  description: "Issue has pending Council review"
+
+- name: "council-validated"
+  color: "0e8a16"
+  description: "Council validation passed"
+
+- name: "plan-validated"
+  color: "006b75"
+  description: "Stage 2 plan validation passed"
+
+- name: "ship-fast-path"
+  color: "0e8a16"
+  description: "Ship mode ≤5pts — Stage 2 skipped"
+
+- name: "autopilot-candidate"
+  color: "7057ff"
+  description: "Selected by autopilot scan"
+
+- name: "self-improve"
+  color: "0e8a16"
+  description: "AI Factory self-improvement proposal"
+
+- name: "daily-digest"
+  color: "c5def5"
+  description: "Daily triage digest"
+
+- name: "weekly-audit"
+  color: "bfd4f2"
+  description: "Weekly audit report"
+
+- name: "ci-failure"
+  color: "d73a4a"
+  description: "CI failure requiring attention"
+
+- name: "coverage-drop"
+  color: "e4e669"
+  description: "Test coverage regression"
+
+# ─── PR Hygiene ─────────────────────────────────────────────────────────────────
+
+- name: "stale"
+  color: "e4e669"
+  description: "No recent activity"
+
+- name: "abandoned"
+  color: "d73a49"
+  description: "Close-eligible due to inactivity"
+
+- name: "auto-closed"
+  color: "cfd3d7"
+  description: "Closed by PR Hygiene automation"

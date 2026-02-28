@@ -156,7 +156,7 @@ VPS gateways run in Docker. The echo container MUST be on the same Docker networ
 
 ```bash
 # Build (manual, only needed on k6 version bump)
-docker buildx build --platform linux/amd64 -t ghcr.io/stoa-platform/arena-bench:0.1.0 --push scripts/traffic/arena/
+docker buildx build --platform linux/amd64 -t ghcr.io/stoa-platform/arena-bench:0.2.0 --push scripts/traffic/arena/
 
 # Image contents: k6 0.54.0 + jq + curl + bash + python3
 # Scripts mounted via ConfigMap (not baked into image)

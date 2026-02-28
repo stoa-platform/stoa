@@ -15,6 +15,7 @@ pub enum LlmProvider {
     OpenAi,
     Anthropic,
     Google,
+    Mistral,
     Local,
 }
 
@@ -24,6 +25,7 @@ impl fmt::Display for LlmProvider {
             LlmProvider::OpenAi => write!(f, "openai"),
             LlmProvider::Anthropic => write!(f, "anthropic"),
             LlmProvider::Google => write!(f, "google"),
+            LlmProvider::Mistral => write!(f, "mistral"),
             LlmProvider::Local => write!(f, "local"),
         }
     }
@@ -36,9 +38,19 @@ impl LlmProvider {
             "openai" | "open_ai" => Some(LlmProvider::OpenAi),
             "anthropic" => Some(LlmProvider::Anthropic),
             "google" | "gemini" => Some(LlmProvider::Google),
+            "mistral" => Some(LlmProvider::Mistral),
             "local" | "ollama" | "vllm" => Some(LlmProvider::Local),
             _ => None,
         }
+    }
+
+    /// Returns true if this provider uses OpenAI-compatible API format
+    /// (`/v1/chat/completions`, `Authorization: Bearer`, OpenAI response schema).
+    pub fn is_openai_compatible(&self) -> bool {
+        matches!(
+            self,
+            LlmProvider::OpenAi | LlmProvider::Mistral | LlmProvider::Local
+        )
     }
 }
 
@@ -234,6 +246,7 @@ mod tests {
         assert_eq!(LlmProvider::OpenAi.to_string(), "openai");
         assert_eq!(LlmProvider::Anthropic.to_string(), "anthropic");
         assert_eq!(LlmProvider::Google.to_string(), "google");
+        assert_eq!(LlmProvider::Mistral.to_string(), "mistral");
         assert_eq!(LlmProvider::Local.to_string(), "local");
     }
 
@@ -252,9 +265,22 @@ mod tests {
             Some(LlmProvider::Google)
         );
         assert_eq!(
+            LlmProvider::from_str_opt("mistral"),
+            Some(LlmProvider::Mistral)
+        );
+        assert_eq!(
             LlmProvider::from_str_opt("ollama"),
             Some(LlmProvider::Local)
         );
         assert_eq!(LlmProvider::from_str_opt("unknown"), None);
+    }
+
+    #[test]
+    fn is_openai_compatible() {
+        assert!(LlmProvider::OpenAi.is_openai_compatible());
+        assert!(LlmProvider::Mistral.is_openai_compatible());
+        assert!(LlmProvider::Local.is_openai_compatible());
+        assert!(!LlmProvider::Anthropic.is_openai_compatible());
+        assert!(!LlmProvider::Google.is_openai_compatible());
     }
 }

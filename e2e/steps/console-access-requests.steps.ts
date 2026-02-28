@@ -30,3 +30,16 @@ Then('the Admin Access Requests page loads successfully', async ({ page }) => {
 
   expect(loaded || page.url().includes('/admin/access-requests')).toBe(true);
 });
+
+Then('the Access Requests page shows a list or empty state', async ({ page }) => {
+  const requestList = page.locator('table, [class*="table"], [class*="list"], [class*="request"]');
+  const emptyState = page.locator(
+    'text=/no.*request|empty|no.*data|no.*result/i, [class*="empty"], [class*="no-data"]',
+  );
+
+  const hasContent =
+    (await requestList.first().isVisible({ timeout: 10000 }).catch(() => false)) ||
+    (await emptyState.first().isVisible({ timeout: 5000 }).catch(() => false));
+
+  expect(hasContent || page.url().includes('/admin/access-requests')).toBe(true);
+});

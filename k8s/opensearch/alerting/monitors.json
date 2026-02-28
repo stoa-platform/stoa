@@ -1,0 +1,342 @@
+[
+  {
+    "name": "Gateway 5xx Error Spike",
+    "type": "monitor",
+    "monitor_type": "query_level_monitor",
+    "enabled": true,
+    "schedule": {
+      "period": { "interval": 5, "unit": "MINUTES" }
+    },
+    "inputs": [
+      {
+        "search": {
+          "indices": ["stoa-logs-*"],
+          "query": {
+            "size": 0,
+            "query": {
+              "bool": {
+                "must": [
+                  { "range": { "@timestamp": { "gte": "now-5m", "lte": "now" } } },
+                  { "range": { "status": { "gte": 500 } } }
+                ]
+              }
+            },
+            "aggs": {
+              "error_count": { "value_count": { "field": "status" } },
+              "by_path": {
+                "terms": { "field": "path", "size": 5, "order": { "_count": "desc" } }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "name": "5xx spike detected",
+        "severity": "1",
+        "condition": {
+          "script": {
+            "source": "ctx.results[0].aggregations.error_count.value > 10",
+            "lang": "painless"
+          }
+        },
+        "actions": [
+          {
+            "name": "Slack 5xx alert",
+            "destination_id": "REPLACE_DESTINATION_ID",
+            "throttle_enabled": true,
+            "throttle": { "value": 30, "unit": "MINUTES" },
+            "message_template": {
+              "source": ":rotating_light: *Gateway 5xx Error Spike*\n\n*{{ctx.results[0].aggregations.error_count.value}}* server errors in the last 5 minutes.\n\nTop paths:\n{{#ctx.results[0].aggregations.by_path.buckets}}  - `{{key}}`: {{doc_count}} errors\n{{/ctx.results[0].aggregations.by_path.buckets}}\n\n<https://opensearch.gostoa.dev|View in OpenSearch Dashboards>"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Auth Failure Burst",
+    "type": "monitor",
+    "monitor_type": "query_level_monitor",
+    "enabled": true,
+    "schedule": {
+      "period": { "interval": 5, "unit": "MINUTES" }
+    },
+    "inputs": [
+      {
+        "search": {
+          "indices": ["stoa-logs-*"],
+          "query": {
+            "size": 0,
+            "query": {
+              "bool": {
+                "must": [
+                  { "range": { "@timestamp": { "gte": "now-5m", "lte": "now" } } },
+                  { "term": { "status": 401 } }
+                ]
+              }
+            },
+            "aggs": {
+              "auth_failures": { "value_count": { "field": "status" } },
+              "by_path": {
+                "terms": { "field": "path", "size": 5, "order": { "_count": "desc" } }
+              },
+              "by_user_agent": {
+                "terms": { "field": "user_agent.keyword", "size": 3, "order": { "_count": "desc" } }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "name": "Auth failure burst detected",
+        "severity": "2",
+        "condition": {
+          "script": {
+            "source": "ctx.results[0].aggregations.auth_failures.value > 20",
+            "lang": "painless"
+          }
+        },
+        "actions": [
+          {
+            "name": "Slack auth alert",
+            "destination_id": "REPLACE_DESTINATION_ID",
+            "throttle_enabled": true,
+            "throttle": { "value": 30, "unit": "MINUTES" },
+            "message_template": {
+              "source": ":lock: *Auth Failure Burst*\n\n*{{ctx.results[0].aggregations.auth_failures.value}}* 401 responses in the last 5 minutes.\nPossible brute-force or misconfigured client.\n\nTop paths:\n{{#ctx.results[0].aggregations.by_path.buckets}}  - `{{key}}`: {{doc_count}}\n{{/ctx.results[0].aggregations.by_path.buckets}}\n\n<https://opensearch.gostoa.dev|Investigate>"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Slow Gateway Requests",
+    "type": "monitor",
+    "monitor_type": "query_level_monitor",
+    "enabled": true,
+    "schedule": {
+      "period": { "interval": 5, "unit": "MINUTES" }
+    },
+    "inputs": [
+      {
+        "search": {
+          "indices": ["stoa-logs-*"],
+          "query": {
+            "size": 0,
+            "query": {
+              "bool": {
+                "must": [
+                  { "range": { "@timestamp": { "gte": "now-5m", "lte": "now" } } },
+                  { "range": { "duration_ms": { "gte": 2000 } } }
+                ]
+              }
+            },
+            "aggs": {
+              "slow_count": { "value_count": { "field": "duration_ms" } },
+              "avg_duration": { "avg": { "field": "duration_ms" } },
+              "max_duration": { "max": { "field": "duration_ms" } },
+              "by_path": {
+                "terms": { "field": "path", "size": 5, "order": { "_count": "desc" } }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "name": "Slow requests detected",
+        "severity": "2",
+        "condition": {
+          "script": {
+            "source": "ctx.results[0].aggregations.slow_count.value > 10",
+            "lang": "painless"
+          }
+        },
+        "actions": [
+          {
+            "name": "Slack latency alert",
+            "destination_id": "REPLACE_DESTINATION_ID",
+            "throttle_enabled": true,
+            "throttle": { "value": 30, "unit": "MINUTES" },
+            "message_template": {
+              "source": ":snail: *Slow Gateway Requests*\n\n*{{ctx.results[0].aggregations.slow_count.value}}* requests > 2s in the last 5 minutes.\nAvg: {{ctx.results[0].aggregations.avg_duration.value}}ms | Max: {{ctx.results[0].aggregations.max_duration.value}}ms\n\nSlowest paths:\n{{#ctx.results[0].aggregations.by_path.buckets}}  - `{{key}}`: {{doc_count}} slow requests\n{{/ctx.results[0].aggregations.by_path.buckets}}\n\n<https://opensearch.gostoa.dev|Investigate>"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "MCP Tool Errors",
+    "type": "monitor",
+    "monitor_type": "query_level_monitor",
+    "enabled": true,
+    "schedule": {
+      "period": { "interval": 5, "unit": "MINUTES" }
+    },
+    "inputs": [
+      {
+        "search": {
+          "indices": ["stoa-logs-*"],
+          "query": {
+            "size": 0,
+            "query": {
+              "bool": {
+                "must": [
+                  { "range": { "@timestamp": { "gte": "now-5m", "lte": "now" } } },
+                  { "wildcard": { "path": "/mcp/tools/*" } },
+                  { "range": { "status": { "gte": 400 } } }
+                ]
+              }
+            },
+            "aggs": {
+              "tool_errors": { "value_count": { "field": "status" } },
+              "by_status": {
+                "terms": { "field": "status", "size": 5 }
+              },
+              "by_path": {
+                "terms": { "field": "path", "size": 5, "order": { "_count": "desc" } }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "name": "MCP tool errors detected",
+        "severity": "2",
+        "condition": {
+          "script": {
+            "source": "ctx.results[0].aggregations.tool_errors.value > 5",
+            "lang": "painless"
+          }
+        },
+        "actions": [
+          {
+            "name": "Slack MCP alert",
+            "destination_id": "REPLACE_DESTINATION_ID",
+            "throttle_enabled": true,
+            "throttle": { "value": 30, "unit": "MINUTES" },
+            "message_template": {
+              "source": ":wrench: *MCP Tool Errors*\n\n*{{ctx.results[0].aggregations.tool_errors.value}}* errors on `/mcp/tools/*` in the last 5 minutes.\n\nStatus breakdown:\n{{#ctx.results[0].aggregations.by_status.buckets}}  - HTTP {{key}}: {{doc_count}}\n{{/ctx.results[0].aggregations.by_status.buckets}}\n\nPaths:\n{{#ctx.results[0].aggregations.by_path.buckets}}  - `{{key}}`: {{doc_count}}\n{{/ctx.results[0].aggregations.by_path.buckets}}\n\n<https://opensearch.gostoa.dev|Investigate>"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Log Pipeline Dead",
+    "type": "monitor",
+    "monitor_type": "query_level_monitor",
+    "enabled": true,
+    "schedule": {
+      "period": { "interval": 15, "unit": "MINUTES" }
+    },
+    "inputs": [
+      {
+        "search": {
+          "indices": ["stoa-logs-*"],
+          "query": {
+            "size": 0,
+            "query": {
+              "range": {
+                "@timestamp": { "gte": "now-15m", "lte": "now" }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "name": "No logs received",
+        "severity": "1",
+        "condition": {
+          "script": {
+            "source": "ctx.results[0].hits.total.value == 0",
+            "lang": "painless"
+          }
+        },
+        "actions": [
+          {
+            "name": "Slack pipeline dead alert",
+            "destination_id": "REPLACE_DESTINATION_ID",
+            "throttle_enabled": true,
+            "throttle": { "value": 60, "unit": "MINUTES" },
+            "message_template": {
+              "source": ":skull: *Log Pipeline Dead*\n\nZero documents ingested into `stoa-logs-*` in the last 15 minutes.\nFluentBit may be down or OpenSearch is rejecting writes.\n\nCheck:\n```\nkubectl logs -n logging -l app=fluent-bit --tail=20\nkubectl get pods -n logging\n```\n\n<https://opensearch.gostoa.dev|OpenSearch Dashboards>"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Arena Score Drop",
+    "type": "monitor",
+    "monitor_type": "query_level_monitor",
+    "enabled": true,
+    "schedule": {
+      "period": { "interval": 60, "unit": "MINUTES" }
+    },
+    "inputs": [
+      {
+        "search": {
+          "indices": ["stoa-bench-*"],
+          "query": {
+            "size": 0,
+            "query": {
+              "bool": {
+                "must": [
+                  { "range": { "@timestamp": { "gte": "now-2h", "lte": "now" } } },
+                  { "term": { "gateway": "stoa-k8s" } }
+                ]
+              }
+            },
+            "aggs": {
+              "latest_score": {
+                "top_hits": {
+                  "size": 1,
+                  "sort": [{ "@timestamp": { "order": "desc" } }],
+                  "_source": { "includes": ["composite_score", "gateway", "@timestamp"] }
+                }
+              },
+              "avg_score": { "avg": { "field": "composite_score" } }
+            }
+          }
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "name": "Arena score below threshold",
+        "severity": "3",
+        "condition": {
+          "script": {
+            "source": "ctx.results[0].aggregations.avg_score.value != null && ctx.results[0].aggregations.avg_score.value < 80",
+            "lang": "painless"
+          }
+        },
+        "actions": [
+          {
+            "name": "Slack arena alert",
+            "destination_id": "REPLACE_DESTINATION_ID",
+            "throttle_enabled": true,
+            "throttle": { "value": 120, "unit": "MINUTES" },
+            "message_template": {
+              "source": ":chart_with_downwards_trend: *Arena Score Drop*\n\nSTOA Gateway composite score dropped below 80.\nAvg score (last 2h): *{{ctx.results[0].aggregations.avg_score.value}}*\n\nPossible causes: resource constraint, config regression, backend issues.\n\n<https://opensearch.gostoa.dev|View Arena Dashboard>"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -6,9 +6,16 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/stoa-platform/stoa/actions/workflows/security-scan.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/security-scan.yml/badge.svg" alt="Security Scan"></a>
+  <a href="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml/badge.svg" alt="API CI"></a>
+  <a href="https://github.com/stoa-platform/stoa/actions/workflows/stoa-gateway-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/stoa-gateway-ci.yml/badge.svg" alt="Gateway CI"></a>
+  <a href="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-ui-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-ui-ci.yml/badge.svg" alt="Console CI"></a>
+  <a href="https://github.com/stoa-platform/stoa/actions/workflows/stoa-portal-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/stoa-portal-ci.yml/badge.svg" alt="Portal CI"></a>
+</p>
+<p align="center">
   <a href="https://github.com/stoa-platform/stoa/stargazers"><img src="https://img.shields.io/github/stars/stoa-platform/stoa?style=social" alt="GitHub Stars"></a>
   <a href="https://discord.gg/j8tHSSes"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://status.gostoa.dev"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/stoa-platform/status/master/api/stoa-api-gateway/uptime.json" alt="Uptime"></a>
+  <a href="https://github.com/stoa-platform/stoa/actions/workflows/scorecard.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/scorecard.yml/badge.svg" alt="OpenSSF Scorecard"></a>
 </p>
 <p align="center">
   <a href="https://docs.gostoa.dev"><img src="https://img.shields.io/badge/docs-docs.gostoa.dev-green.svg" alt="Documentation"></a>
@@ -42,19 +49,19 @@
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     STOA Platform                             │
-│                                                               │
-│  Console ──── API ──── Keycloak ──── Portal                   │
-│  (React)    (Python)   (OIDC)      (React)                    │
-│                │                                              │
-│         ┌──────┴──────┐                                       │
-│         │ Rust Gateway │ ◄── JWT + Rate Limit + MCP Bridge    │
-│         └──────┬──────┘                                       │
-│                │                                              │
-│  Prometheus ── Grafana ── Loki ── OpenSearch                  │
-│  (Metrics)    (Dashboards) (Logs) (Error Tracking)            │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                       STOA Platform                         │
+│                                                             │
+│  Console ──── API ──── Keycloak ──── Portal                 │
+│  (React)    (Python)    (OIDC)      (React)                 │
+│                │                                            │
+│         ┌──────┴──────┐                                     │
+│         │ Rust Gateway │ ◄── JWT + Rate Limit + MCP Bridge  │
+│         └──────┬──────┘                                     │
+│                │                                            │
+│  Prometheus ── Grafana ── Loki ── OpenSearch                │
+│  (Metrics)   (Dashboards) (Logs) (Error Tracking)           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
@@ -76,6 +83,8 @@ docker compose up -d
 ```
 
 Open http://localhost — login as `halliday` / `readyplayerone`.
+
+For component-by-component local development (without Docker), see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 | Service | URL |
 |---------|-----|
@@ -150,23 +159,23 @@ stoa/
 ├── control-plane-api/     # FastAPI backend
 ├── control-plane-ui/      # React admin console
 ├── portal/                # React developer portal
-├── stoa-gateway/          # Rust API gateway
-├── mcp-gateway/           # Python MCP gateway (legacy, migrating to Rust)
-├── e2e/                   # Playwright E2E tests
+├── stoa-gateway/          # Rust API gateway + MCP bridge
+├── cli/                   # Python CLI (Typer + Rich)
+├── e2e/                   # Playwright E2E tests (BDD)
 ├── charts/                # Helm charts
 ├── deploy/                # Docker Compose + configs
 │   ├── docker-compose/    # Quick-start setup (17 services)
 │   └── grafana/           # Analytics dashboards
-└── scripts/               # Demo + seed scripts
+├── scripts/               # Demo, seed, migration scripts
+└── docs/                  # Runbooks + benchmark methodology
 ```
 
 ## Related Repositories
 
 | Repository | Purpose |
 |------------|---------|
-| [stoa-infra](https://github.com/stoa-platform/stoa-infra) | Terraform + Ansible + Helm |
-| [stoa-docs](https://github.com/stoa-platform/stoa-docs) | Documentation (docs.gostoa.dev) |
-| [stoa-web](https://github.com/stoa-platform/stoa-web) | Landing page (gostoa.dev) |
+| [stoa-docs](https://github.com/stoa-platform/stoa-docs) | Documentation ([docs.gostoa.dev](https://docs.gostoa.dev)) |
+| [stoa-web](https://github.com/stoa-platform/stoa-web) | Landing page ([gostoa.dev](https://gostoa.dev)) |
 | [stoa-quickstart](https://github.com/stoa-platform/stoa-quickstart) | Self-hosted quickstart |
 | [stoactl](https://github.com/stoa-platform/stoactl) | CLI tool (Go) |
 

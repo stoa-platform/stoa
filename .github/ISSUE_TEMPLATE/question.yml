@@ -19,9 +19,9 @@ body:
       description: Which part of STOA is your question about?
       options:
         - control-plane-api (FastAPI backend)
-        - portal (Developer Portal)
         - control-plane-ui (Console UI)
-        - mcp-gateway (MCP Gateway)
+        - portal (Developer Portal)
+        - stoa-gateway (Rust gateway)
         - helm (Charts / Kubernetes)
         - deployment / infrastructure
         - general / getting started

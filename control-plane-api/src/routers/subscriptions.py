@@ -7,6 +7,7 @@ import uuid as uuid_mod
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
@@ -744,9 +745,16 @@ async def reactivate_subscription(
 # ============== API Key Validation Endpoint (Gateway) ==============
 
 
+class _ValidateKeyBody(BaseModel):
+    """Request body for API key validation (preferred over query param)."""
+
+    api_key: str
+
+
 @router.post("/validate-key")
 async def validate_api_key(
-    api_key: str,
+    body: _ValidateKeyBody | None = None,
+    api_key: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -755,14 +763,23 @@ async def validate_api_key(
     This is an internal endpoint for the API Gateway to validate
     incoming API keys and get subscription details.
 
+    Accepts key via JSON body (preferred) or query param (legacy).
+    Body is preferred because the PII middleware masks query params
+    named ``api_key``.
+
     Supports grace period: during key rotation, both old and new keys are valid.
     """
+    # Body takes precedence (query params are masked by PII middleware)
+    key = (body.api_key if body else None) or api_key
+    if not key:
+        raise HTTPException(status_code=400, detail="api_key required in body or query")
+
     # Validate format
-    if not APIKeyService.validate_format(api_key):
+    if not APIKeyService.validate_format(key):
         raise HTTPException(status_code=401, detail="Invalid API key format")
 
     # Hash and lookup
-    api_key_hash = APIKeyService.hash_key(api_key)
+    api_key_hash = APIKeyService.hash_key(key)
 
     repo = SubscriptionRepository(db)
 

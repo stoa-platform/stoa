@@ -492,6 +492,44 @@ class TestSubscriptionsRouter:
 
         app.dependency_overrides.clear()
 
+    def test_validate_key_via_body(
+        self, app, mock_db_session, sample_subscription_data
+    ):
+        """Test POST /validate-key with JSON body (preferred, PII-safe)."""
+        from src.database import get_db
+
+        mock_sub = self._create_mock_subscription(sample_subscription_data)
+        mock_sub.status = SubscriptionStatus.ACTIVE
+        mock_sub.expires_at = None
+        mock_sub.previous_key_expires_at = None
+
+        async def override_get_db():
+            yield mock_db_session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.APIKeyService") as MockKeyService:
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_api_key_hash = AsyncMock(return_value=mock_sub)
+            mock_repo_instance.get_by_previous_key_hash = AsyncMock(return_value=None)
+
+            MockKeyService.validate_format.return_value = True
+            MockKeyService.hash_key.return_value = "hashed_key_test_123"
+
+            with TestClient(app) as client:
+                response = client.post(
+                    "/v1/subscriptions/validate-key",
+                    json={"api_key": "stoa_sk_test1234567890abcdef12345678"},
+                )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["valid"] is True
+            assert data["subscription_id"] == str(sample_subscription_data["id"])
+
+        app.dependency_overrides.clear()
+
     # ============== Phase 2: Suspend/Reactivate Tests ==============
 
     def test_suspend_subscription_success(

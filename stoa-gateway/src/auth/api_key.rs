@@ -87,7 +87,7 @@ impl ApiKeyValidator {
         let response = self
             .http_client
             .post(&url)
-            .query(&[("api_key", api_key)])
+            .json(&serde_json::json!({"api_key": api_key}))
             .timeout(Duration::from_secs(5))
             .send()
             .await

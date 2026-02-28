@@ -7,6 +7,11 @@
 service:
   type: NodePort
 
+# Enable SnippetsFilter for custom NGINX directives per HTTPRoute.
+# Required for OSD proxy buffer increase (OIDC large headers → 502).
+snippetsFilters:
+  enable: true
+
 # Kyverno requires explicit securityContext on all containers.
 nginxGateway:
   securityContext:

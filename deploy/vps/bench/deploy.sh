@@ -99,7 +99,7 @@ GATEWAYS=${COMBINED_GATEWAYS}
 ENVEOF"
 
   echo "  [4/5] Pulling arena-bench image..."
-  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "docker pull ghcr.io/stoa-platform/arena-bench:0.1.0 2>/dev/null || echo 'Pull failed — ensure docker login ghcr.io'"
+  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "docker pull ghcr.io/stoa-platform/arena-bench:0.2.0 2>/dev/null || echo 'Pull failed — ensure docker login ghcr.io'"
 
   echo "  [5/5] Installing systemd timer (every 30 min)..."
   ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sudo tee /etc/systemd/system/arena-bench.service > /dev/null <<'SVCEOF'

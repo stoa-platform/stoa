@@ -31,7 +31,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: verify
-              image: ghcr.io/stoa-platform/arena-bench:0.1.0
+              image: ghcr.io/stoa-platform/arena-bench:0.2.0
               command:
                 - bash
                 - /scripts/run-arena-verify.sh

@@ -1,0 +1,83 @@
+{
+  "dimension": "quota_burst",
+  "weight": 0.10,
+  "latency_cap_ms": 1000,
+  "description": "Rate Limiting — gateway enforces rate limits under burst traffic. Valid responses: 200 (request passed) or 429 (rate limit enforced). Never 500.",
+  "checks": [
+    "quota_burst_not_500",
+    "quota_burst_valid_response"
+  ],
+  "tasks": [
+    {
+      "id": "quota-01",
+      "name": "Gradual ramp to 20 VUs",
+      "method": "initialize",
+      "params": null,
+      "executor": "ramping-vus",
+      "stages": [
+        { "duration": "3s", "target": 20 },
+        { "duration": "10s", "target": 20 },
+        { "duration": "2s", "target": 0 }
+      ],
+      "expected": {
+        "status": [200, 429],
+        "not_status": 500
+      },
+      "notes": "Primary burst test — ramp from 0 to 20 concurrent users over 3s, hold 10s."
+    },
+    {
+      "id": "quota-02",
+      "name": "Instant spike to 10 VUs",
+      "method": "initialize",
+      "params": null,
+      "concurrency": 10,
+      "repeat": 50,
+      "expected": {
+        "status": [200, 429],
+        "not_status": 500
+      },
+      "notes": "Instant concurrency — tests rate limiter under sudden spike."
+    },
+    {
+      "id": "quota-03",
+      "name": "429 response includes Retry-After",
+      "method": "initialize",
+      "params": null,
+      "concurrency": 20,
+      "repeat": 100,
+      "expected": {
+        "status": [200, 429],
+        "on_429_header_present": "Retry-After"
+      },
+      "notes": "RFC 6585 compliance — 429 responses should include Retry-After header."
+    },
+    {
+      "id": "quota-04",
+      "name": "Rate limit recovery",
+      "method": "initialize",
+      "params": null,
+      "stages": [
+        { "action": "burst", "concurrency": 20, "repeat": 50 },
+        { "action": "wait", "duration": "5s" },
+        { "action": "single_request" }
+      ],
+      "expected": {
+        "final_status": 200
+      },
+      "notes": "After burst triggers 429, wait for window reset, verify single request succeeds."
+    },
+    {
+      "id": "quota-05",
+      "name": "Health endpoint under burst (fallback)",
+      "endpoint": "{{TARGET_URL}}/health",
+      "method": "GET",
+      "concurrency": 20,
+      "repeat": 50,
+      "expected": {
+        "status": [200, 429],
+        "not_status": 500
+      },
+      "notes": "For gateways without MCP — tests rate limiting on /health endpoint."
+    }
+  ]
+}

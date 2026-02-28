@@ -1,0 +1,99 @@
+# LLM Mock Backend for Arena Enterprise benchmarks — simulates Anthropic /v1/messages.
+# Returns static JSON in Anthropic API format with minimal latency (~1ms).
+# Deployed in stoa-system so the gateway can proxy to it during benchmarks.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-mock-nginx-config
+  namespace: stoa-system
+data:
+  default.conf: |
+    server {
+        listen 8889;
+        server_name _;
+
+        # Anthropic /v1/messages mock
+        location /v1/messages {
+            default_type application/json;
+            add_header X-Mock-Server "llm-mock-k8s";
+            return 200 '{"id":"msg_arena_mock_001","type":"message","role":"assistant","content":[{"type":"text","text":"Arena benchmark mock response."}],"model":"claude-mock","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":12,"output_tokens":8}}';
+        }
+
+        # Health endpoint
+        location /health {
+            default_type application/json;
+            return 200 '{"status":"healthy","service":"llm-mock"}';
+        }
+
+        # Catch-all for unknown paths
+        location / {
+            default_type application/json;
+            return 404 '{"error":"not_found","message":"Only /v1/messages is supported"}';
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-mock-backend
+  namespace: stoa-system
+  labels:
+    app: llm-mock-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-mock-backend
+  template:
+    metadata:
+      labels:
+        app: llm-mock-backend
+    spec:
+      containers:
+        - name: llm-mock
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - containerPort: 8889
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8889
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8889
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: llm-mock-nginx-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-mock-backend
+  namespace: stoa-system
+  labels:
+    app: llm-mock-backend
+spec:
+  selector:
+    app: llm-mock-backend
+  ports:
+    - port: 8889
+      targetPort: 8889
+      protocol: TCP

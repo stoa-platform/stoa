@@ -1,0 +1,71 @@
+{
+  "dimension": "auth_chain",
+  "weight": 0.15,
+  "latency_cap_ms": 1000,
+  "description": "Auth Chain — gateway validates JWT tokens on MCP endpoints. Valid tokens get 2xx, missing/invalid tokens get 401/403.",
+  "checks": [
+    "auth_chain_not_500",
+    "auth_chain_auth_processed",
+    "auth_chain_p95_under_1s"
+  ],
+  "tasks": [
+    {
+      "id": "auth-01",
+      "name": "Valid JWT token",
+      "method": "tools/list",
+      "params": null,
+      "headers": { "Authorization": "Bearer {{VALID_JWT}}" },
+      "expected": {
+        "status": "2xx"
+      },
+      "notes": "Happy path — valid OIDC token should grant access to tool listing."
+    },
+    {
+      "id": "auth-02",
+      "name": "Expired JWT token",
+      "method": "tools/list",
+      "params": null,
+      "headers": { "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2MDAwMDAwMDB9.invalid" },
+      "expected": {
+        "status": [401, 403]
+      },
+      "notes": "Expired token — gateway must reject with 401/403, never 500."
+    },
+    {
+      "id": "auth-03",
+      "name": "Missing Authorization header",
+      "method": "tools/list",
+      "params": null,
+      "headers": {},
+      "expected": {
+        "status": [401, 403, 200],
+        "not_status": 500
+      },
+      "notes": "No token — gateway should return 401/403 (auth enforced) or 200 (auth optional). Never 500."
+    },
+    {
+      "id": "auth-04",
+      "name": "Malformed Authorization header",
+      "method": "tools/list",
+      "params": null,
+      "headers": { "Authorization": "NotBearer some-random-string" },
+      "expected": {
+        "status": [400, 401, 403],
+        "not_status": 500
+      },
+      "notes": "Malformed auth scheme — gateway must handle gracefully."
+    },
+    {
+      "id": "auth-05",
+      "name": "Wrong scope JWT",
+      "method": "tools/list",
+      "params": null,
+      "headers": { "Authorization": "Bearer {{JWT_WRONG_SCOPE}}" },
+      "expected": {
+        "status": [403, 200],
+        "not_status": 500
+      },
+      "notes": "Valid JWT but insufficient scope — expect 403 (scope enforced) or 200 (scope not enforced). Never 500."
+    }
+  ]
+}

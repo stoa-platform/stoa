@@ -226,6 +226,22 @@ make test-gateway    # cargo test (gateway)
 make test-cli        # pytest (CLI)
 ```
 
+## Linting
+
+```bash
+# Run all linters
+make lint
+
+# Run by component
+make lint-api        # ruff + black
+make lint-ui         # eslint + prettier + tsc
+make lint-portal     # eslint + prettier + tsc
+make lint-gateway    # clippy + fmt
+
+# List all available make targets
+make help
+```
+
 ## Documentation
 
 - Update relevant docs when changing functionality
@@ -235,9 +251,9 @@ make test-cli        # pytest (CLI)
 
 ## Community
 
-- 💬 [Discord](https://discord.gg/stoa) — Chat with the community
-- 🐦 [Twitter/X](https://x.com/gostoa) — Follow for updates
-- 📧 [Email](mailto:hello@gostoa.dev) — Reach out directly
+- [Discord](https://discord.gg/j8tHSSes) — Chat with the community
+- [Twitter/X](https://x.com/gostoa) — Follow for updates
+- [Email](mailto:hello@gostoa.dev) — Reach out directly
 
 ## Recognition
 

@@ -28,12 +28,18 @@ spec:
               name: http-metrics
               protocol: TCP
           env:
+            - name: OPENSEARCH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: fluent-bit-opensearch
+                  key: username
+                  optional: false
             - name: OPENSEARCH_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: stoa-opensearch-secret
-                  key: OPENSEARCH_PASSWORD
-                  optional: true
+                  name: fluent-bit-opensearch
+                  key: password
+                  optional: false
           volumeMounts:
             - name: varlog
               mountPath: /var/log

@@ -46,7 +46,7 @@ spec:
     - to:
         - podSelector: {}
 ---
-# OpenSearch ingress from stoa-system (log shipping from API)
+# OpenSearch ingress from stoa-system, monitoring, and logging namespaces
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -62,6 +62,7 @@ spec:
   policyTypes:
     - Ingress
   ingress:
+    # Log shipping from control-plane-api
     - from:
         - namespaceSelector:
             matchLabels:
@@ -74,6 +75,14 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9200
+    # FluentBit log ingestion
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: logging
       ports:
         - protocol: TCP
           port: 9200

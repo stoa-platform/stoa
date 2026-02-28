@@ -32,3 +32,24 @@ Feature: Console - Execution View and Error Taxonomy
     When I navigate to the Execution View page
     Then the Execution View page loads successfully
     And the Error Taxonomy chart is visible
+
+  Scenario: DevOps user can access Execution View
+    Given I am logged in to Console as "art3mis" from team "high-five"
+    And the STOA Console is accessible
+    When I navigate to the Execution View page
+    Then the Execution View page loads successfully
+
+  Scenario: Execution View shows filter controls
+    Given I am logged in to Console as "parzival" from team "high-five"
+    And the STOA Console is accessible
+    When I navigate to the Execution View page
+    Then the Execution View page loads successfully
+    And the Execution View shows filter controls
+
+  @rbac
+  Scenario: Viewer sees Execution View in read-only mode
+    Given I am logged in to Console as "aech" from team "high-five"
+    And the STOA Console is accessible
+    When I navigate to the Execution View page
+    Then the Execution View page loads successfully
+    And the Execution View hides write actions

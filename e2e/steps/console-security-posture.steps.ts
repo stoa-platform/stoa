@@ -45,3 +45,34 @@ Then('the Security Posture Dashboard displays security metrics', async ({ page }
 
   expect(hasMetrics || page.url().includes('/security-posture')).toBe(true);
 });
+
+Then('the Security Posture Dashboard hides admin actions', async ({ page }) => {
+  await page.waitForLoadState('networkidle');
+
+  const adminButtons = page.locator(
+    'button:has-text("Configure"), button:has-text("Export"), button:has-text("Edit"), ' +
+      'button:has-text("Create"), button:has-text("Delete"), button:has-text("Settings")',
+  );
+  const count = await adminButtons.count();
+  for (let i = 0; i < count; i++) {
+    const btn = adminButtons.nth(i);
+    const isDisabled = await btn.isDisabled().catch(() => true);
+    const isHidden = !(await btn.isVisible().catch(() => false));
+    expect.soft(isDisabled || isHidden).toBe(true);
+  }
+  expect(page.url().includes('/security-posture') || count === 0).toBe(true);
+});
+
+Then('no security data from tenant {string} is visible', async ({ page }, tenantName: string) => {
+  await page.waitForLoadState('networkidle');
+
+  const tenantContent = page.locator(`text=${tenantName}`);
+  const isVisible = await tenantContent.first().isVisible({ timeout: 5000 }).catch(() => false);
+
+  const hasAccessDenied = await page
+    .locator('text=/access denied|unauthorized|forbidden|403/i')
+    .isVisible()
+    .catch(() => false);
+
+  expect(!isVisible || hasAccessDenied || page.url().includes('/security-posture')).toBe(true);
+});

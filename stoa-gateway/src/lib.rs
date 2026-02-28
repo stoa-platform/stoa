@@ -233,6 +233,13 @@ pub fn build_router(state: AppState) -> Router {
                 )
                 .route("/oauth/token", post(oauth::proxy::token_proxy))
                 .route("/oauth/register", post(oauth::proxy::register_proxy))
+                // RFC 7592 — Dynamic Client Registration Management (CAB-1606)
+                .route(
+                    "/oauth/register/:client_id",
+                    get(oauth::proxy::register_get_proxy)
+                        .put(oauth::proxy::register_update_proxy)
+                        .delete(oauth::proxy::register_delete_proxy),
+                )
                 // MCP Discovery
                 .route("/mcp", get(mcp_discovery))
                 .route("/mcp/capabilities", get(mcp_capabilities))

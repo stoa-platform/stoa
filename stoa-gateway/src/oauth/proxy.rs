@@ -1,9 +1,13 @@
 //! OAuth Token + DCR Proxy
 //!
 //! CAB-1094: Proxy OAuth endpoints to Keycloak for Claude.ai MCP connector.
+//! CAB-1606: RFC 7592 — Dynamic Client Registration Management Protocol.
 //!
 //! - POST /oauth/token — transparent proxy to Keycloak token endpoint
-//! - POST /oauth/register — DCR proxy + public client patch for PKCE
+//! - POST /oauth/register — DCR proxy + public client patch for PKCE (RFC 7591)
+//! - GET  /oauth/register/:client_id — read client metadata (RFC 7592)
+//! - PUT  /oauth/register/:client_id — update client metadata (RFC 7592)
+//! - DELETE /oauth/register/:client_id — revoke/delete client (RFC 7592)
 
 use axum::{
     body::Bytes,
@@ -464,6 +468,256 @@ async fn patch_client_inner(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// RFC 7592 — Dynamic Client Registration Management Protocol (CAB-1606)
+// ---------------------------------------------------------------------------
+
+/// Build the Keycloak DCR management URL for a specific client.
+fn dcr_client_url(keycloak_url: &str, realm: &str, client_id: &str) -> String {
+    format!(
+        "{}/realms/{}/clients-registrations/openid-connect/{}",
+        keycloak_url.trim_end_matches('/'),
+        realm,
+        client_id,
+    )
+}
+
+/// Extract and validate the Registration Access Token from the Authorization header.
+/// Returns `Err(Response)` with a 401 if missing or malformed.
+fn extract_rat(headers: &HeaderMap) -> Result<String, Box<Response>> {
+    let auth = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if let Some(token) = auth.strip_prefix("Bearer ") {
+        if !token.is_empty() {
+            return Ok(token.to_string());
+        }
+    }
+
+    Err(Box::new(
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "error": "invalid_token",
+                "error_description": "Registration Access Token required (RFC 7592)"
+            })),
+        )
+            .into_response(),
+    ))
+}
+
+/// Return a 503 response when Keycloak is not configured.
+fn keycloak_not_configured() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({
+            "error": "server_error",
+            "error_description": "Identity provider not configured"
+        })),
+    )
+        .into_response()
+}
+
+/// GET /oauth/register/:client_id  (RFC 7592)
+///
+/// Read client metadata. The caller must present the Registration Access Token
+/// (RAT) obtained during initial DCR registration.
+pub async fn register_get_proxy(
+    State(state): State<AppState>,
+    axum::extract::Path(client_id): axum::extract::Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let rat = match extract_rat(&headers) {
+        Ok(t) => t,
+        Err(resp) => return *resp,
+    };
+
+    let config = &state.config;
+    let keycloak_url = match config.keycloak_url.as_deref() {
+        Some(url) => url,
+        None => return keycloak_not_configured(),
+    };
+    let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
+    let url = dcr_client_url(keycloak_url, realm, &client_id);
+
+    debug!(client_id = %client_id, "RFC 7592: reading client metadata");
+
+    let client = state.http_client.clone();
+    let via_value = build_via_value();
+
+    let result = with_keycloak_resilience(&state.circuit_breakers, "oauth-register-get", || {
+        let c = client.clone();
+        let u = url.clone();
+        let r = rat.clone();
+        let via = via_value.clone();
+        async move {
+            c.get(&u)
+                .header("Authorization", format!("Bearer {}", r))
+                .header("Via", via)
+                .send()
+                .await
+                .map_err(|e| e.to_string())
+        }
+    })
+    .await;
+
+    forward_keycloak_json(result).await
+}
+
+/// PUT /oauth/register/:client_id  (RFC 7592)
+///
+/// Update client metadata. Applies the same scope-stripping logic as
+/// POST /oauth/register to prevent Keycloak from replacing realm defaults.
+pub async fn register_update_proxy(
+    State(state): State<AppState>,
+    axum::extract::Path(client_id): axum::extract::Path<String>,
+    headers: HeaderMap,
+    Json(payload): Json<Value>,
+) -> Response {
+    let rat = match extract_rat(&headers) {
+        Ok(t) => t,
+        Err(resp) => return *resp,
+    };
+
+    let config = &state.config;
+    let keycloak_url = match config.keycloak_url.as_deref() {
+        Some(url) => url,
+        None => return keycloak_not_configured(),
+    };
+    let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
+    let url = dcr_client_url(keycloak_url, realm, &client_id);
+
+    // Strip `scope` — same rationale as POST /oauth/register (PR #541).
+    let mut cleaned = payload;
+    if let Some(obj) = cleaned.as_object_mut() {
+        if obj.remove("scope").is_some() {
+            debug!("Stripping 'scope' from client update payload (RFC 7592)");
+        }
+    }
+
+    debug!(client_id = %client_id, "RFC 7592: updating client metadata");
+
+    let client = state.http_client.clone();
+    let via_value = build_via_value();
+
+    let result = with_keycloak_resilience(&state.circuit_breakers, "oauth-register-update", || {
+        let c = client.clone();
+        let u = url.clone();
+        let r = rat.clone();
+        let p = cleaned.clone();
+        let via = via_value.clone();
+        async move {
+            c.put(&u)
+                .header("Authorization", format!("Bearer {}", r))
+                .header("content-type", "application/json")
+                .header("Via", via)
+                .json(&p)
+                .send()
+                .await
+                .map_err(|e| e.to_string())
+        }
+    })
+    .await;
+
+    forward_keycloak_json(result).await
+}
+
+/// DELETE /oauth/register/:client_id  (RFC 7592)
+///
+/// Revoke/delete a dynamically registered client.
+pub async fn register_delete_proxy(
+    State(state): State<AppState>,
+    axum::extract::Path(client_id): axum::extract::Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let rat = match extract_rat(&headers) {
+        Ok(t) => t,
+        Err(resp) => return *resp,
+    };
+
+    let config = &state.config;
+    let keycloak_url = match config.keycloak_url.as_deref() {
+        Some(url) => url,
+        None => return keycloak_not_configured(),
+    };
+    let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
+    let url = dcr_client_url(keycloak_url, realm, &client_id);
+
+    debug!(client_id = %client_id, "RFC 7592: deleting client");
+
+    let client = state.http_client.clone();
+    let via_value = build_via_value();
+
+    let result = with_keycloak_resilience(&state.circuit_breakers, "oauth-register-delete", || {
+        let c = client.clone();
+        let u = url.clone();
+        let r = rat.clone();
+        let via = via_value.clone();
+        async move {
+            c.delete(&u)
+                .header("Authorization", format!("Bearer {}", r))
+                .header("Via", via)
+                .send()
+                .await
+                .map_err(|e| e.to_string())
+        }
+    })
+    .await;
+
+    match result {
+        Ok(resp) => {
+            let status = resp.status();
+            // DELETE typically returns 204 No Content
+            if status == reqwest::StatusCode::NO_CONTENT {
+                StatusCode::NO_CONTENT.into_response()
+            } else {
+                forward_keycloak_json(Ok(resp)).await
+            }
+        }
+        Err((status, msg)) => (
+            status,
+            Json(json!({"error": "server_error", "error_description": msg})),
+        )
+            .into_response(),
+    }
+}
+
+/// Forward a Keycloak JSON response, preserving status code and body.
+async fn forward_keycloak_json(
+    result: Result<reqwest::Response, (StatusCode, String)>,
+) -> Response {
+    match result {
+        Ok(resp) => {
+            let status = resp.status();
+            let body_bytes = resp.bytes().await.unwrap_or_default();
+            let axum_status =
+                StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+
+            if body_bytes.is_empty() {
+                return axum_status.into_response();
+            }
+
+            match serde_json::from_slice::<Value>(&body_bytes) {
+                Ok(json_body) => (axum_status, Json(json_body)).into_response(),
+                Err(_) => {
+                    let mut response = (axum_status, body_bytes).into_response();
+                    if let Ok(ct) = "application/json".parse() {
+                        response.headers_mut().insert("content-type", ct);
+                    }
+                    response
+                }
+            }
+        }
+        Err((status, msg)) => (
+            status,
+            Json(json!({"error": "server_error", "error_description": msg})),
+        )
+            .into_response(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -484,9 +738,16 @@ mod tests {
     }
 
     fn build_oauth_router(state: AppState) -> Router {
+        use axum::routing::get;
         Router::new()
             .route("/oauth/token", post(token_proxy))
             .route("/oauth/register", post(register_proxy))
+            .route(
+                "/oauth/register/:client_id",
+                get(register_get_proxy)
+                    .put(register_update_proxy)
+                    .delete(register_delete_proxy),
+            )
             .with_state(state)
     }
 
@@ -892,5 +1153,314 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    }
+
+    // === RFC 7592 — Client Management tests (CAB-1606) ===
+
+    #[tokio::test]
+    async fn test_rfc7592_get_client_success() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(
+                "/realms/stoa/clients-registrations/openid-connect/my-client",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "client_id": "my-client",
+                "client_name": "My App",
+                "redirect_uris": ["https://app.example.com/callback"]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/oauth/register/my-client")
+                    .header("Authorization", "Bearer rat-valid-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["client_id"], "my-client");
+        assert_eq!(json["client_name"], "My App");
+    }
+
+    #[tokio::test]
+    async fn test_rfc7592_get_client_missing_rat() {
+        let state = test_state_with_keycloak(Some("http://127.0.0.1:9999"));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/oauth/register/my-client")
+                    // No Authorization header
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"], "invalid_token");
+    }
+
+    #[tokio::test]
+    async fn test_rfc7592_get_client_not_found() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(
+                "/realms/stoa/clients-registrations/openid-connect/nonexistent",
+            ))
+            .respond_with(ResponseTemplate::new(404).set_body_json(
+                json!({"error": "invalid_client", "error_description": "Client not found"}),
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/oauth/register/nonexistent")
+                    .header("Authorization", "Bearer rat-some-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_rfc7592_get_client_invalid_rat() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(
+                "/realms/stoa/clients-registrations/openid-connect/my-client",
+            ))
+            .respond_with(
+                ResponseTemplate::new(401).set_body_json(json!({"error": "unauthorized_client"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/oauth/register/my-client")
+                    .header("Authorization", "Bearer wrong-rat")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_rfc7592_update_client_success() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path(
+                "/realms/stoa/clients-registrations/openid-connect/my-client",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "client_id": "my-client",
+                "client_name": "Updated App",
+                "redirect_uris": ["https://new.example.com/callback"]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/oauth/register/my-client")
+                    .header("Authorization", "Bearer rat-valid-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&json!({
+                            "client_name": "Updated App",
+                            "redirect_uris": ["https://new.example.com/callback"]
+                        }))
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["client_name"], "Updated App");
+    }
+
+    /// Verify scope stripping on PUT (same protection as POST — PR #541 regression guard).
+    #[tokio::test]
+    async fn test_rfc7592_update_strips_scope() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path(
+                "/realms/stoa/clients-registrations/openid-connect/scope-client",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "client_id": "scope-client",
+                "client_name": "Scope Test"
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/oauth/register/scope-client")
+                    .header("Authorization", "Bearer rat-valid")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&json!({
+                            "client_name": "Scope Test",
+                            "scope": "openid profile stoa:read stoa:write"
+                        }))
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Verify scope was stripped from the forwarded request
+        let requests = mock_server.received_requests().await.unwrap();
+        let update_req = requests
+            .iter()
+            .find(|r| r.method == wiremock::http::Method::PUT)
+            .expect("PUT request should have been sent");
+        let forwarded: Value = serde_json::from_slice(&update_req.body).unwrap();
+        assert!(
+            forwarded.get("scope").is_none(),
+            "scope must be stripped from PUT payload (RFC 7592)"
+        );
+        assert_eq!(forwarded["client_name"], "Scope Test");
+    }
+
+    #[tokio::test]
+    async fn test_rfc7592_delete_client_success() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path(
+                "/realms/stoa/clients-registrations/openid-connect/my-client",
+            ))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/oauth/register/my-client")
+                    .header("Authorization", "Bearer rat-valid-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_rfc7592_delete_client_not_found() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path(
+                "/realms/stoa/clients-registrations/openid-connect/nonexistent",
+            ))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": "invalid_client"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/oauth/register/nonexistent")
+                    .header("Authorization", "Bearer rat-some-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_rfc7592_no_keycloak_configured() {
+        let state = test_state_with_keycloak(None);
+        let app = build_oauth_router(state);
+
+        // GET
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/oauth/register/any-client")
+                    .header("Authorization", "Bearer rat")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        // DELETE
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/oauth/register/any-client")
+                    .header("Authorization", "Bearer rat")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }

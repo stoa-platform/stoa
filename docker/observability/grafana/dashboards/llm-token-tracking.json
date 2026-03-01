@@ -1,32 +1,51 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "LLM token usage, cost tracking, cache performance, and request breakdown per tenant/model",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
+  "id": null,
   "links": [
     {
-      "asDropdown": false,
+      "asDropdown": true,
       "icon": "external link",
       "includeVars": true,
       "keepTime": true,
-      "tags": ["ai-factory"],
+      "tags": ["stoa"],
       "targetBlank": true,
-      "title": "AI Factory Dashboards",
+      "title": "STOA Dashboards",
       "type": "dashboards"
     }
   ],
+  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": [],
       "title": "LLM Token Overview",
       "type": "row"
     },
     {
+      "id": 2,
       "title": "Total Tokens Processed",
+      "description": "Cumulative token count across all tenants and directions",
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -49,7 +68,7 @@
       },
       "targets": [
         {
-          "expr": "sum(stoa_token_budget_tokens_total{tenant=~\"$project\"})",
+          "expr": "sum(stoa_token_budget_tokens_total{tenant=~\"$tenant\"})",
           "legendFormat": "Tokens",
           "refId": "A",
           "instant": true
@@ -57,10 +76,12 @@
       ]
     },
     {
+      "id": 3,
       "title": "Estimated Cost (USD)",
+      "description": "Total LLM cost tracked by the gateway across all providers",
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "unit": "currencyUSD",
@@ -83,7 +104,7 @@
       },
       "targets": [
         {
-          "expr": "sum(gateway_llm_cost_total)",
+          "expr": "sum(gateway_llm_cost_total{model=~\"$model\"})",
           "legendFormat": "Cost",
           "refId": "A",
           "instant": true
@@ -91,10 +112,12 @@
       ]
     },
     {
+      "id": 4,
       "title": "Cache Hit Ratio",
+      "description": "Ratio of tool calls served from cache vs total calls",
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
@@ -119,7 +142,7 @@
       },
       "targets": [
         {
-          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$project\", status=\"cache_hit\"}) / clamp_min(sum(stoa_mcp_tools_calls_total{tenant=~\"$project\"}), 1)",
+          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$tenant\", status=\"cache_hit\"}) / clamp_min(sum(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}), 1)",
           "legendFormat": "Hit Ratio",
           "refId": "A",
           "instant": true
@@ -127,10 +150,12 @@
       ]
     },
     {
-      "title": "Active Projects",
+      "id": 5,
+      "title": "Active Tenants",
+      "description": "Number of distinct tenants with token activity",
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -152,18 +177,19 @@
       "targets": [
         {
           "expr": "count(count by (tenant) (stoa_token_budget_tokens_total))",
-          "legendFormat": "Projects",
+          "legendFormat": "Tenants",
           "refId": "A",
           "instant": true
         }
       ]
     },
     {
-      "title": "Tokens Consumed per Project",
-      "description": "Total tokens processed by each project/tenant, split by direction (input/output)",
+      "id": 6,
+      "title": "Token Usage by Tenant (Input / Output)",
+      "description": "Total tokens per tenant split by direction",
       "type": "barchart",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -180,7 +206,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (tenant, direction) (stoa_token_budget_tokens_total{tenant=~\"$project\"})",
+          "expr": "sum by (tenant, direction) (stoa_token_budget_tokens_total{tenant=~\"$tenant\"})",
           "legendFormat": "{{tenant}} — {{direction}}",
           "refId": "A",
           "instant": true,
@@ -189,18 +215,23 @@
       ]
     },
     {
+      "id": 7,
       "title": "Token Throughput Over Time",
-      "description": "Token rate per project over time (tokens/s)",
+      "description": "Token rate per tenant (tokens/s)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
           "unit": "short",
           "custom": {
+            "drawStyle": "line",
             "fillOpacity": 15,
             "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true,
             "stacking": { "mode": "normal" }
           }
         },
@@ -212,7 +243,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (tenant) (rate(stoa_token_budget_tokens_total{tenant=~\"$project\"}[5m]))",
+          "expr": "sum by (tenant) (rate(stoa_token_budget_tokens_total{tenant=~\"$tenant\"}[5m]))",
           "legendFormat": "{{tenant}}",
           "refId": "A"
         }
@@ -221,50 +252,18 @@
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
-      "title": "Quota & Cost",
+      "id": 8,
+      "panels": [],
+      "title": "Cost & Model Breakdown",
       "type": "row"
     },
     {
-      "title": "Quota Remaining per Project",
-      "description": "Remaining quota for each consumer/project. Lower values indicate approaching limits.",
-      "type": "gauge",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "orange", "value": 20 },
-              { "color": "green", "value": 50 }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "orientation": "auto"
-      },
-      "targets": [
-        {
-          "expr": "stoa_quota_remaining{consumer=~\"$project\"}",
-          "legendFormat": "{{consumer}} ({{period}})",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "title": "Estimated Cost per Project",
-      "description": "Estimated LLM cost breakdown by provider and model",
+      "id": 9,
+      "title": "Cost per Model (USD)",
+      "description": "LLM cost breakdown by provider and model",
       "type": "stat",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "unit": "currencyUSD",
@@ -288,25 +287,99 @@
       },
       "targets": [
         {
-          "expr": "sum by (provider) (gateway_llm_cost_total)",
-          "legendFormat": "{{provider}}",
+          "expr": "sum by (model) (gateway_llm_cost_total{model=~\"$model\"})",
+          "legendFormat": "{{model}}",
           "refId": "A",
           "instant": true
         }
       ]
     },
     {
+      "id": 10,
+      "title": "Cost Over Time by Provider",
+      "description": "LLM cost rate per provider",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": { "mode": "normal" }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (provider) (rate(gateway_llm_cost_total{model=~\"$model\"}[5m]))",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Quota Remaining",
+      "description": "Remaining quota per consumer — lower values indicate approaching limits",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 20 },
+              { "color": "green", "value": 50 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "orientation": "auto"
+      },
+      "targets": [
+        {
+          "expr": "stoa_quota_remaining{consumer=~\"$tenant\"}",
+          "legendFormat": "{{consumer}} ({{period}})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+      "id": 12,
+      "panels": [],
       "title": "Cache Performance",
       "type": "row"
     },
     {
+      "id": 13,
       "title": "Cache Hit vs Miss",
-      "description": "Proportion of tool calls served from semantic cache vs backend execution",
+      "description": "Proportion of tool calls served from cache vs backend execution",
       "type": "piechart",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 23 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -320,9 +393,9 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "API Calls" },
+            "matcher": { "id": "byName", "options": "Cache Misses" },
             "properties": [
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
             ]
           }
         ]
@@ -334,25 +407,26 @@
       },
       "targets": [
         {
-          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$project\", status=\"cache_hit\"})",
+          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$tenant\", status=\"cache_hit\"})",
           "legendFormat": "Cache Hits",
           "refId": "A",
           "instant": true
         },
         {
-          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$project\", status!=\"cache_hit\"})",
-          "legendFormat": "API Calls",
+          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$tenant\", status!=\"cache_hit\"})",
+          "legendFormat": "Cache Misses",
           "refId": "B",
           "instant": true
         }
       ]
     },
     {
+      "id": 14,
       "title": "Cache Hit Rate Over Time",
-      "description": "Cache hit ratio trend — higher is better (reduces LLM API costs)",
+      "description": "Cache hit ratio trend — higher values reduce LLM API costs",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 23 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
@@ -360,8 +434,12 @@
           "max": 1,
           "color": { "mode": "fixed", "fixedColor": "green" },
           "custom": {
+            "drawStyle": "line",
             "fillOpacity": 20,
             "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true,
             "thresholdsStyle": { "mode": "area" }
           },
           "thresholds": {
@@ -381,26 +459,30 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$project\", status=\"cache_hit\"}[5m])) / clamp_min(sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$project\"}[5m])), 0.001)",
+          "expr": "sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\", status=\"cache_hit\"}[5m])) / clamp_min(sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}[5m])), 0.001)",
           "legendFormat": "Hit Rate",
           "refId": "A"
         }
       ]
     },
     {
+      "id": 15,
       "title": "Budget Exceeded Events",
-      "description": "Token budget exceeded events per project — indicates quota enforcement",
+      "description": "Token budget exceeded events per tenant — indicates quota enforcement",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 23 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
           "unit": "short",
           "custom": {
+            "drawStyle": "bars",
             "fillOpacity": 30,
             "lineWidth": 2,
-            "drawStyle": "bars"
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
           }
         },
         "overrides": []
@@ -411,34 +493,223 @@
       },
       "targets": [
         {
-          "expr": "sum by (tenant) (increase(stoa_token_budget_exceeded_total{tenant=~\"$project\"}[1h]))",
+          "expr": "sum by (tenant) (increase(stoa_token_budget_exceeded_total{tenant=~\"$tenant\"}[1h]))",
           "legendFormat": "{{tenant}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "id": 16,
+      "panels": [],
+      "title": "Requests & Latency",
+      "type": "row"
+    },
+    {
+      "id": 17,
+      "title": "Requests by Status",
+      "description": "MCP tool call requests per status (ok, error, cache_hit, rate_limited)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": { "mode": "normal" }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*error.*" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*cache_hit.*" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "LLM Latency (P50 / P95 / P99)",
+      "description": "LLM request latency percentiles by model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, model) (rate(gateway_llm_latency_seconds_bucket{model=~\"$model\"}[5m])))",
+          "legendFormat": "P50 — {{model}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, model) (rate(gateway_llm_latency_seconds_bucket{model=~\"$model\"}[5m])))",
+          "legendFormat": "P95 — {{model}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, model) (rate(gateway_llm_latency_seconds_bucket{model=~\"$model\"}[5m])))",
+          "legendFormat": "P99 — {{model}}",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "title": "LLM Fallback Events",
+      "description": "Provider fallback events — indicates primary provider failures",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 30,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (from_provider, to_provider) (increase(gateway_llm_fallback_total[1h]))",
+          "legendFormat": "{{from_provider}} → {{to_provider}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Cost per 1K Tokens by Model",
+      "description": "Effective cost efficiency — cost per 1000 tokens by model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (rate(gateway_llm_cost_total{model=~\"$model\"}[5m])) / clamp_min(sum by (model) (rate(stoa_token_budget_tokens_total{tenant=~\"$tenant\"}[5m])), 0.001) * 1000",
+          "legendFormat": "{{model}} ($/1K tokens)",
           "refId": "A"
         }
       ]
     }
   ],
   "schemaVersion": 39,
-  "tags": ["ai-factory", "llm", "tokens", "cost", "stoa"],
+  "tags": ["stoa", "llm", "tokens", "cost", "ai-factory"],
   "templating": {
     "list": [
       {
         "current": {},
         "hide": 0,
-        "name": "DS_PROMETHEUS",
-        "type": "datasource",
-        "query": "prometheus"
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
       },
       {
         "current": { "selected": true, "text": "All", "value": "$__all" },
-        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
         "definition": "label_values(stoa_token_budget_tokens_total, tenant)",
         "hide": 0,
         "includeAll": true,
-        "label": "Project / Tenant",
+        "label": "Tenant",
         "multi": true,
-        "name": "project",
-        "query": { "query": "label_values(stoa_token_budget_tokens_total, tenant)", "refId": "project" },
+        "name": "tenant",
+        "query": { "query": "label_values(stoa_token_budget_tokens_total, tenant)", "refId": "tenant" },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(gateway_llm_cost_total, model)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Model",
+        "multi": true,
+        "name": "model",
+        "query": { "query": "label_values(gateway_llm_cost_total, model)", "refId": "model" },
         "refresh": 2,
         "regex": "",
         "sort": 1,
@@ -447,6 +718,9 @@
     ]
   },
   "time": { "from": "now-24h", "to": "now" },
-  "title": "LLM Token Tracking — Per Project",
-  "uid": "llm-token-tracking"
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "LLM Token Tracking",
+  "uid": "llm-token-tracking",
+  "version": 1
 }

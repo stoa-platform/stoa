@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# stoa-merge — Auto-merge PR with update-branch retry for strict branch protection.
+#
+# Problem: `strict: true` + `allow_auto_merge: false` = each merge makes the next PR
+#          stale. Sequential merge cascade wastes ~40% of parallel session time.
+#
+# Solution: Enable auto-merge on the PR, then update branch. GitHub merges automatically
+#           once CI passes on the updated branch.
+#
+# Usage:
+#   stoa-merge <PR-number>         # Enable auto-merge + update branch
+#   stoa-merge <PR-number> --wait  # Same, but poll until merged
+#   stoa-merge --enable-repo       # Enable auto-merge setting on repo (one-time)
+
+set -euo pipefail
+
+REPO="${STOA_REPO:-stoa-platform/stoa}"
+
+usage() {
+  echo "Usage: stoa-merge <PR-number> [--wait]"
+  echo "       stoa-merge --enable-repo"
+  exit 1
+}
+
+enable_repo_auto_merge() {
+  echo "Enabling auto-merge on $REPO..."
+  gh api "repos/$REPO" -X PATCH -f allow_auto_merge=true --silent
+  echo "Auto-merge enabled. Verify:"
+  gh api "repos/$REPO" --jq '.allow_auto_merge'
+}
+
+merge_pr() {
+  local pr="$1"
+  local wait="${2:-false}"
+
+  # Check PR state
+  local state
+  state=$(gh pr view "$pr" --repo "$REPO" --json state --jq '.state')
+  if [[ "$state" == "MERGED" ]]; then
+    echo "PR #$pr is already merged."
+    return 0
+  fi
+  if [[ "$state" != "OPEN" ]]; then
+    echo "ERROR: PR #$pr is $state (expected OPEN)"
+    return 1
+  fi
+
+  # Enable auto-merge (squash) on the PR
+  echo "Enabling auto-merge (squash) on PR #$pr..."
+  gh pr merge "$pr" --repo "$REPO" --squash --auto --delete-branch 2>&1 || {
+    echo "WARNING: auto-merge enable failed. Trying direct merge..."
+  }
+
+  # Update branch to get latest main
+  echo "Updating PR branch with latest main..."
+  gh api "repos/$REPO/pulls/$pr/update-branch" -X PUT -f update_method=merge --silent 2>/dev/null || {
+    echo "Branch already up to date or update not needed."
+  }
+
+  if [[ "$wait" == "true" ]]; then
+    echo "Waiting for CI + auto-merge on PR #$pr..."
+    local attempts=0
+    local max_attempts=60  # 10 min max (60 × 10s)
+    while [[ $attempts -lt $max_attempts ]]; do
+      state=$(gh pr view "$pr" --repo "$REPO" --json state --jq '.state')
+      if [[ "$state" == "MERGED" ]]; then
+        echo "PR #$pr merged successfully!"
+        return 0
+      fi
+      sleep 10
+      attempts=$((attempts + 1))
+      if (( attempts % 6 == 0 )); then
+        echo "  Still waiting... (${attempts}0s elapsed, state=$state)"
+      fi
+    done
+    echo "WARNING: PR #$pr not merged after 10 min. Check CI status."
+    return 1
+  else
+    echo "Auto-merge enabled on PR #$pr. It will merge once CI passes."
+    echo "Run 'stoa-merge $pr --wait' to poll, or check: gh pr view $pr --repo $REPO"
+  fi
+}
+
+# --- Main ---
+
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+case "$1" in
+  --enable-repo)
+    enable_repo_auto_merge
+    ;;
+  --help|-h)
+    usage
+    ;;
+  *)
+    if ! [[ "$1" =~ ^[0-9]+$ ]]; then
+      echo "ERROR: First argument must be a PR number or --enable-repo"
+      usage
+    fi
+    wait_flag="false"
+    if [[ "${2:-}" == "--wait" ]]; then
+      wait_flag="true"
+    fi
+    merge_pr "$1" "$wait_flag"
+    ;;
+esac

@@ -5,8 +5,8 @@ Revises: 040b
 Create Date: 2026-02-24
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "041_mcp_generated_tools"
@@ -36,10 +36,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["contract_id"], ["contracts.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_mcp_tools_tenant", "mcp_generated_tools", ["tenant_id"])
-    op.create_index("ix_mcp_tools_contract", "mcp_generated_tools", ["contract_id"])
+    op.create_index("ix_mcp_gen_tools_tenant", "mcp_generated_tools", ["tenant_id"])
+    op.create_index("ix_mcp_gen_tools_contract", "mcp_generated_tools", ["contract_id"])
     op.create_index(
-        "ix_mcp_tools_name",
+        "ix_mcp_gen_tools_name",
         "mcp_generated_tools",
         ["tenant_id", "tool_name"],
         unique=True,
@@ -47,7 +47,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_mcp_tools_name", table_name="mcp_generated_tools")
-    op.drop_index("ix_mcp_tools_contract", table_name="mcp_generated_tools")
-    op.drop_index("ix_mcp_tools_tenant", table_name="mcp_generated_tools")
+    op.drop_index("ix_mcp_gen_tools_name", table_name="mcp_generated_tools")
+    op.drop_index("ix_mcp_gen_tools_contract", table_name="mcp_generated_tools")
+    op.drop_index("ix_mcp_gen_tools_tenant", table_name="mcp_generated_tools")
     op.drop_table("mcp_generated_tools")

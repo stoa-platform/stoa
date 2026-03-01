@@ -103,6 +103,27 @@ See `instance-dispatch.md` → "ORCHESTRE Rules" for the full discipline.
 
 Follow the appropriate pattern from `ai-factory.md` (Pattern 3/5/7 for features, Pattern 1/2 for reviews).
 
+### Inline S2 — Queue-Sourced Tickets (Contabo Workers)
+
+When a ticket arrives from the dispatch-daemon queue (mode field present in prompt):
+
+```
+IF mode != 'ship' AND estimate > 5:
+  1. Read ticket description + DoD from the dispatch prompt
+  2. Write an implementation plan (5 steps max)
+  3. Self-validate the plan (4 Council personas, inline, no subagent):
+     - Chucky (risk): is the plan safe?
+     - OSS Killer (value): does the plan deliver the right thing?
+     - Archi (architecture): is the plan technically sound?
+     - Saul (compliance): any legal/security concerns?
+  4. If average score < 7.0: log PLAN-REJECTED in operations.log, skip ticket
+  5. If average score >= 7.0: proceed to implementation
+ELSE (Ship mode OR estimate ≤ 5):
+  → Implement directly (skip plan validation)
+```
+
+This replaces the GHA `plan-validate` job with inline validation by the worker.
+
 ## Step 4b — Phase Chaining (after PR merge, same MEGA)
 
 After merging a PR for a phase, check if the same MEGA has another unclaimed unblocked phase:

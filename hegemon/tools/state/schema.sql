@@ -91,7 +91,12 @@ CREATE TABLE IF NOT EXISTS queue_jobs (
     dispatched_at TEXT DEFAULT NULL,
     completed_at  TEXT DEFAULT NULL,
     created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M','now')),
-    error         TEXT DEFAULT NULL
+    error         TEXT DEFAULT NULL,
+    council_score REAL DEFAULT NULL,
+    estimate      INTEGER DEFAULT NULL,
+    mode          TEXT DEFAULT 'ask',
+    source        TEXT DEFAULT 'manual',
+    description   TEXT DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_queue_priority ON queue_jobs(priority, status, created_at);

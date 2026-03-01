@@ -1,6 +1,6 @@
-# Level 3.5: Autopilot Scan — Daily backlog scan → Council → Slack approve → implement
+# Level 3.5: Autopilot Scan — Daily backlog scan → Council → Queue → Contabo Workers
 # Scans Linear backlog for autopilot-eligible tickets, runs Council validation,
-# creates GitHub issues with Slack "Approve & Start" buttons.
+# pushes Go tickets directly to PocketBase queue for dispatch-daemon → workers.
 # Kill-switch: set DISABLE_AUTOPILOT_SCAN=true in repo variables to disable.
 
 name: Claude Autopilot Scan
@@ -16,7 +16,7 @@ on:
         default: '3'
         type: string
       dry_run:
-        description: "Dry run — scan only, no issues created"
+        description: "Dry run — scan only, no queue jobs created"
         default: false
         type: boolean
 
@@ -26,7 +26,6 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
   id-token: write
   actions: write
 
@@ -179,7 +178,7 @@ jobs:
                 "verdict": "Go",
                 "ship_show_ask": "Ship",
                 "estimated_points": 5,
-                "council_body": "# Council: CAB-XXXX — Title\n**Score: 8.5/10 — Go**\n## Personas\n**Chucky**: 8/10 — ...\n**OSS Killer**: 9/10 — ...\n**Archi**: 8/10 — ...\n**Saul**: 9/10 — ...\n## Ship/Show/Ask: Ship\n## Plan\n...\n## DoD\n- [ ] ...\n---\nComment /go to start implementation."
+                "council_body": "# Council: CAB-XXXX — Title\n**Score: 8.5/10 — Go**\n## Personas\n**Chucky**: 8/10 — ...\n**OSS Killer**: 9/10 — ...\n**Archi**: 8/10 — ...\n**Saul**: 9/10 — ...\n## Ship/Show/Ask: Ship\n## Plan\n...\n## DoD\n- [ ] ...\n---\nScore >= 8.0 tickets are auto-queued for Contabo worker implementation."
               }
             ]
           # Model tier: haiku (read-only Council scan, no code generation)
@@ -191,18 +190,19 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=haiku-4-5, MaxTurns=5, Stage=council-scan"
 
-      # Parse Council output and create GitHub issues + Slack notifications
-      - name: Create Issues and Notify
+      # Parse Council output, push Go tickets to PocketBase queue, send Slack info
+      - name: Push to Queue and Notify
         if: steps.council.outcome == 'success' && inputs.dry_run != true
         env:
-          GH_TOKEN: ${{ github.token }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-          N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
-          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
+          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
+          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
         run: |
+          source scripts/ai-ops/ai-factory-notify.sh
+
           EXEC_FILE="${{ steps.council.outputs.execution_file }}"
           EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
 
@@ -222,9 +222,8 @@ jobs:
           CANDIDATE_COUNT=$(echo "$CANDIDATES" | jq 'length')
           echo "Council validated ${CANDIDATE_COUNT} candidates"
 
-          CREATED=0
+          QUEUED=0
           SKIPPED=0
-          EXISTING_LINKS=""
           # Use process substitution (not pipe) so counters propagate to parent shell
           while IFS= read -r ticket; do
             TICKET_ID=$(echo "$ticket" | jq -r '.ticket_id')
@@ -232,108 +231,103 @@ jobs:
             SCORE=$(echo "$ticket" | jq -r '.score')
             COUNCIL_BODY=$(echo "$ticket" | jq -r '.council_body')
             EST_POINTS=$(echo "$ticket" | jq -r '.estimated_points // empty')
+            C_MODE=$(echo "$ticket" | jq -r '.ship_show_ask // "ask"' 2>/dev/null | tr '[:upper:]' '[:lower:]')
+            C_MODE="${C_MODE:-ask}"
+
+            # Resolve Linear issue ID for this ticket
+            LINEAR_ISSUE_ID=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .id' eligible-tickets.json)
+            LIN_PRIORITY=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .priority // 3' eligible-tickets.json)
 
             # If Council estimated points for an unpointed ticket, update Linear
             if [ -n "$EST_POINTS" ] && [ "$EST_POINTS" != "null" ]; then
-              # Find the Linear issue ID from eligible-tickets.json
-              LINEAR_ID=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .id' eligible-tickets.json)
               LINEAR_EST=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .estimate' eligible-tickets.json)
-              if [ -n "$LINEAR_ID" ] && [ "$LINEAR_EST" = "null" ]; then
+              if [ -n "$LINEAR_ISSUE_ID" ] && [ "$LINEAR_ISSUE_ID" != "null" ] && [ "$LINEAR_EST" = "null" ]; then
                 echo "Updating ${TICKET_ID} estimate to ${EST_POINTS} pts (was unpointed)"
                 curl -s -X POST "https://api.linear.app/graphql" \
                   -H "Authorization: ${LINEAR_API_KEY}" \
                   -H "Content-Type: application/json" \
-                  -d "{\"query\": \"mutation { issueUpdate(id: \\\"${LINEAR_ID}\\\", input: { estimate: ${EST_POINTS} }) { success } }\"}" > /dev/null 2>&1 || true
+                  -d "{\"query\": \"mutation { issueUpdate(id: \\\"${LINEAR_ISSUE_ID}\\\", input: { estimate: ${EST_POINTS} }) { success } }\"}" > /dev/null 2>&1 || true
               fi
             fi
 
-            echo "Processing ${TICKET_ID} (score: ${SCORE})"
+            # Use Council estimate if original was null
+            ESTIMATE="${EST_POINTS:-0}"
+            ORIG_EST=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .estimate // empty' eligible-tickets.json)
+            [ -n "$ORIG_EST" ] && [ "$ORIG_EST" != "null" ] && ESTIMATE="$ORIG_EST"
 
-            # Dedup guard: skip if GitHub issue already exists for this ticket
-            EXISTING_ISSUE=$(gh issue list --label "$TICKET_ID" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
-            if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
-              echo "Issue #${EXISTING_ISSUE} already exists for ${TICKET_ID} — sending reminder"
-              SKIPPED=$((SKIPPED + 1))
-              EXISTING_LINKS="${EXISTING_LINKS}• <https://github.com/stoa-platform/stoa/issues/${EXISTING_ISSUE}|#${EXISTING_ISSUE}> ${TICKET_ID} — ${TITLE}\n"
-
-              # Send reminder notification with approve button
-              source scripts/ai-ops/ai-factory-notify.sh
-              ISSUE_URL="https://github.com/stoa-platform/stoa/issues/${EXISTING_ISSUE}"
-              REMINDER_TS=$(notify_reminder "$TICKET_ID" "$TITLE" "$ISSUE_URL" "$EXISTING_ISSUE" "$SCORE")
-              _react_slack "bell" "$REMINDER_TS"
-              continue
-            fi
+            echo "Processing ${TICKET_ID} (score: ${SCORE}, est: ${ESTIMATE}, mode: ${C_MODE})"
 
             # Sync council:ticket-go label to Linear
-            if [ -n "$LINEAR_API_KEY" ]; then
-              LINEAR_ISSUE_ID=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .id' eligible-tickets.json)
-              if [ -n "$LINEAR_ISSUE_ID" ] && [ "$LINEAR_ISSUE_ID" != "null" ]; then
-                LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            if [ -n "$LINEAR_API_KEY" ] && [ -n "$LINEAR_ISSUE_ID" ] && [ "$LINEAR_ISSUE_ID" != "null" ]; then
+              LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: ${LINEAR_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d '{"query": "{ issueLabels(filter: { name: { eq: \"council:ticket-go\" } }) { nodes { id } } }"}' \
+                | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
+              if [ -n "$LABEL_ID" ]; then
+                EXISTING_LABELS=$(curl -s -X POST "https://api.linear.app/graphql" \
                   -H "Authorization: ${LINEAR_API_KEY}" \
                   -H "Content-Type: application/json" \
-                  -d '{"query": "{ issueLabels(filter: { name: { eq: \"council:ticket-go\" } }) { nodes { id } } }"}' \
-                  | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
-                if [ -n "$LABEL_ID" ]; then
-                  EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
-                    -H "Authorization: ${LINEAR_API_KEY}" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"query\": \"{ issue(id: \\\"${LINEAR_ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
-                    | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:ticket-") | not) | .id]' 2>/dev/null || echo "[]")
-                  LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
-                  curl -s -X POST "https://api.linear.app/graphql" \
-                    -H "Authorization: ${LINEAR_API_KEY}" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"query\": \"mutation { issueUpdate(id: \\\"${LINEAR_ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
-                    > /dev/null 2>&1 || true
-                  echo "Applied council:ticket-go to ${TICKET_ID} on Linear"
-                fi
-                # Post Council comment
-                GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
-                COMMENT="Autopilot Council: **${SCORE}/10** — council:ticket-go\n[GitHub Actions](${GH_RUN})"
+                  -d "{\"query\": \"{ issue(id: \\\"${LINEAR_ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
+                  | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:ticket-") | not) | .id]' 2>/dev/null || echo "[]")
+                LABEL_IDS=$(echo "$EXISTING_LABELS" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
                 curl -s -X POST "https://api.linear.app/graphql" \
                   -H "Authorization: ${LINEAR_API_KEY}" \
                   -H "Content-Type: application/json" \
-                  -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${LINEAR_ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+                  -d "{\"query\": \"mutation { issueUpdate(id: \\\"${LINEAR_ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
                   > /dev/null 2>&1 || true
+                echo "Applied council:ticket-go to ${TICKET_ID} on Linear"
               fi
+              # Post Council comment on Linear
+              GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+              COMMENT="Autopilot Council: **${SCORE}/10** — council:ticket-go — Queued for Contabo worker\n[GitHub Actions](${GH_RUN})"
+              curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: ${LINEAR_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${LINEAR_ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+                > /dev/null 2>&1 || true
             fi
 
-            # Create labels (idempotent)
-            gh label create "${TICKET_ID}" --color "0075ca" --description "Linear ticket" --force 2>/dev/null || true
-            gh label create "autopilot-candidate" --color "7057ff" --description "Selected by autopilot scan" --force 2>/dev/null || true
+            # Detect component from ticket labels for role mapping
+            COMPONENT=""
+            TICKET_LABELS=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .labels[]' eligible-tickets.json 2>/dev/null || echo "")
+            for lbl in $TICKET_LABELS; do
+              case "$lbl" in
+                *backend*|*api*|*infra*) COMPONENT="api" ; break ;;
+                *frontend*|*ui*|*console*) COMPONENT="ui" ; break ;;
+                *portal*) COMPONENT="portal" ; break ;;
+                *gateway*|*mcp*) COMPONENT="gateway" ; break ;;
+                *auth*|*keycloak*) COMPONENT="auth" ; break ;;
+                *e2e*|*test*|*qa*) COMPONENT="e2e" ; break ;;
+              esac
+            done
 
-            # Create GitHub issue
-            ISSUE_URL=$(gh issue create \
-              --title "Council: ${TICKET_ID} — ${TITLE}" \
-              --label "council-review" \
-              --label "autopilot-candidate" \
-              --label "${TICKET_ID}" \
-              --body "$COUNCIL_BODY")
+            # Compute priority and role for queue
+            PRIORITY=$(compute_queue_priority "$LIN_PRIORITY" "$SCORE" "$ESTIMATE")
+            ROLE=$(compute_queue_role "$COMPONENT")
 
-            ISSUE_NUM=$(echo "$ISSUE_URL" | grep -oE '/issues/[0-9]+' | grep -oE '[0-9]+')
-            echo "Created issue #${ISSUE_NUM}: ${ISSUE_URL}"
+            # Get ticket description for worker context
+            DESCRIPTION=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .description // ""' eligible-tickets.json)
 
-            # Send Slack notification with approve button
-            source scripts/ai-ops/ai-factory-notify.sh
-            # Extract mode and LOC from council candidate JSON
-            C_MODE=$(echo "$ticket" | jq -r '.ship_show_ask // empty' 2>/dev/null || echo "")
-            C_LOC=$(echo "$ticket" | jq -r '.estimated_points // empty' 2>/dev/null || echo "")
-            # Use verdict from Council JSON (already filtered to Go/>=8.0 by the jq select above)
-            C_VERDICT=$(echo "$ticket" | jq -r '.verdict // "Go"' 2>/dev/null || echo "Go")
-            COUNCIL_TS=$(notify_council "$TICKET_ID" "$TITLE" "$SCORE" "$C_VERDICT" "$ISSUE_URL" "$ISSUE_NUM" "$C_MODE" "$C_LOC" "")
+            # Push to PocketBase queue
+            push_queue_job "$TICKET_ID" "$PRIORITY" "$ROLE" "$TITLE" "$ESTIMATE" "$SCORE" "$C_MODE" "l3.5" "$DESCRIPTION"
+
+            # Send info-only Slack notification (no approve button)
+            LINEAR_LINK="https://linear.app/cab-ing/issue/${TICKET_ID}"
+            COUNCIL_TS=$(notify_council "$TICKET_ID" "$TITLE" "$SCORE" "Go" "$LINEAR_LINK" "" "$C_MODE" "$ESTIMATE" "")
             _react_slack "mag" "$COUNCIL_TS"
+            # Queued notification
+            notify_queued "$TICKET_ID" "$SCORE" "$PRIORITY" "$ROLE" "$C_MODE" "$ESTIMATE"
+            _react_slack "inbox_tray" "$COUNCIL_TS"
 
-            CREATED=$((CREATED + 1))
+            QUEUED=$((QUEUED + 1))
           done < <(echo "$CANDIDATES" | jq -c '.[] | select(.verdict == "Go" and .score >= 8.0)')
 
-          echo "Created ${CREATED} autopilot candidate issues (${SKIPPED} skipped — already existed)"
-          # Export to GITHUB_ENV so the summary step can read accurate counts
-          echo "SCAN_CREATED=${CREATED}" >> "$GITHUB_ENV"
+          echo "Queued ${QUEUED} tickets for Contabo workers (${SKIPPED} skipped)"
+          echo "SCAN_CREATED=${QUEUED}" >> "$GITHUB_ENV"
           echo "SCAN_SKIPPED=${SKIPPED}" >> "$GITHUB_ENV"
-          # Write existing issue links to a file (multiline strings don't work in GITHUB_ENV)
-          printf '%b' "$EXISTING_LINKS" > /tmp/existing-issues.txt
 
-      # Increment velocity counter so daily cap tracks scan-created issues
+      # Increment velocity counter so daily cap tracks queued jobs
       - name: Increment Velocity Counter
         if: steps.council.outcome == 'success' && inputs.dry_run != true
         continue-on-error: true
@@ -342,7 +336,7 @@ jobs:
         run: |
           CREATED="${SCAN_CREATED:-0}"
           if [ "$CREATED" -eq 0 ]; then
-            echo "No issues created — skipping counter increment"
+            echo "No jobs queued — skipping counter increment"
             exit 0
           fi
 

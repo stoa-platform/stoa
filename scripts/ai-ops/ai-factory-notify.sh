@@ -1118,6 +1118,104 @@ EOF
     "${PUSHGATEWAY_URL}/metrics/job/hegemon_queue" >/dev/null 2>&1 || true
 }
 
+# push_queue_job TICKET PRIORITY ROLE TITLE ESTIMATE SCORE MODE SOURCE DESCRIPTION
+# Push a job to PocketBase queue_jobs collection. Called from GHA after Council Go.
+# Priority mapping (computed by caller):
+#   0=P0 (Urgent+Go), 1=P1 (High+Go or ≤5pts), 2=P2 (6-8pts), 3=P3 (>8pts)
+push_queue_job() {
+  local ticket="${1:?}" priority="${2:-2}" role="${3:-}" title="${4:-}"
+  local estimate="${5:-}" score="${6:-}" mode="${7:-ask}" source="${8:-l3}" desc="${9:-}"
+  local token now
+  token=$(_pb_auth) || return 0
+  now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  local payload
+  payload=$(jq -nc \
+    --arg ticket "$ticket" --argjson priority "$priority" \
+    --arg role "$role" --arg title "$title" \
+    --arg estimate "$estimate" --arg score "$score" \
+    --arg mode "$mode" --arg source "$source" \
+    --arg desc "$desc" --arg now "$now" \
+    '{ticket_id:$ticket, priority:$priority,
+      role:(if $role == "" then null else $role end),
+      title:$title, status:"pending",
+      council_score:(if $score == "" then null else ($score|tonumber) end),
+      estimate:(if $estimate == "" then null else ($estimate|tonumber) end),
+      mode:$mode, source:$source, description:$desc,
+      created_at:$now}')
+  curl -sf --max-time 5 -X POST \
+    "${HEGEMON_REMOTE_URL}/api/collections/queue_jobs/records" \
+    -H "Content-Type: application/json" -H "Authorization: ${token}" \
+    -d "$payload" >/dev/null 2>&1 || true
+  echo "::notice::Pushed queue job: ${ticket} (P${priority}, role: ${role:-any}, score: ${score:-n/a})"
+}
+
+# compute_queue_priority LINEAR_PRIORITY COUNCIL_SCORE ESTIMATE
+# Outputs the computed queue priority (0-3) based on plan mapping table.
+compute_queue_priority() {
+  local lin_priority="${1:-3}" score="${2:-0}" estimate="${3:-0}"
+  # P0: Linear Urgent (1) + Council Go
+  if [ "${lin_priority}" -eq 1 ] 2>/dev/null; then echo "0"; return; fi
+  # P1: Linear High (2) + score >= 8.5, or ≤5pts
+  if [ "${lin_priority}" -eq 2 ] 2>/dev/null; then
+    local score_ok
+    score_ok=$(echo "$score >= 8.5" | bc -l 2>/dev/null || echo "0")
+    if [ "${score_ok}" = "1" ]; then echo "1"; return; fi
+  fi
+  if [ "${estimate}" -le 5 ] 2>/dev/null; then echo "1"; return; fi
+  # P2: 6-8 pts
+  if [ "${estimate}" -le 8 ] 2>/dev/null; then echo "2"; return; fi
+  # P3: >8 pts
+  echo "3"
+}
+
+# compute_queue_role COMPONENT
+# Maps Linear component to worker role name.
+compute_queue_role() {
+  local component="${1:-}"
+  case "$component" in
+    api|infra)   echo "backend" ;;
+    ui)          echo "frontend" ;;
+    portal)      echo "frontend" ;;
+    gateway)     echo "mcp" ;;
+    auth)        echo "auth" ;;
+    e2e|test)    echo "qa" ;;
+    *)           echo "" ;;  # NULL = any worker
+  esac
+}
+
+# notify_queued TICKET SCORE PRIORITY ROLE MODE ESTIMATE
+# Post info-only Slack notification when a ticket is queued. No buttons.
+notify_queued() {
+  local ticket="${1:?}" score="${2:-}" priority="${3:-2}" role="${4:-}" mode="${5:-ask}" estimate="${6:-}"
+  local linear_link
+  linear_link=$(_linear_url "$ticket")
+  local role_text="${role:-any}"
+  local score_text="${score:+${score}/10}"
+  local est_text="${estimate:+${estimate}pts}"
+  local mode_text="${mode}"
+  local detail_parts=""
+  [ -n "$score_text" ] && detail_parts="${score_text}"
+  [ -n "$detail_parts" ] && detail_parts="${detail_parts}, " || true
+  detail_parts="${detail_parts}P${priority}"
+  [ -n "$mode_text" ] && detail_parts="${detail_parts}, ${mode_text}"
+  [ -n "$est_text" ] && detail_parts="${detail_parts}, ${est_text}"
+  detail_parts="${detail_parts}, → ${role_text}"
+
+  local payload
+  payload=$(jq -n \
+    --arg ticket "$ticket" --arg detail "$detail_parts" \
+    --arg link "$linear_link" --arg run "$(_run_url)" \
+    '{blocks: [
+      {type:"section", text:{type:"mrkdwn",
+        text:(":inbox_tray: *Queued: <" + $link + "|" + $ticket + ">* — " + $detail)}},
+      {type:"context", elements:[
+        {type:"mrkdwn", text:("<" + $run + "|Pipeline Run>")}
+      ]}
+    ]}')
+
+  _send_slack "$payload" || true
+}
+
 # push_state_cleanup INSTANCE_ID
 push_state_cleanup() {
   local instance_id="${1:?}"

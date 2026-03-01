@@ -352,6 +352,31 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "stoa-e2e-dpop",
+      "name": "STOA E2E DPoP Test Client",
+      "description": "Confidential client for DPoP E2E tests — client_credentials + DPoP binding",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dpop-e2e-dev-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "attributes": {
+        "dpop.bound.access.tokens": "true"
+      }
     }
   ],
   "users": [

@@ -139,7 +139,8 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
 - **HEGEMON v3 autonomous startup** (2026-03-01): `hegemon-start.sh` auto-launches Claude Code with zero interactive prompts
-  - 3-layer permission fix: `~/.claude.json` (onboarding/trust) + `~/.claude/settings.json` (`Bash(*)` + `skipDangerousModePermissionPrompt`) + `--permission-mode acceptEdits` (file tools + safety warnings)
+  - 3+1 layer permission fix: `~/.claude.json` (onboarding/trust) + `~/.claude/settings.json` (`Bash(*)` + file tools + `skipDangerousModePermissionPrompt`) + `--permission-mode acceptEdits` (safety warnings)
+  - **Critical**: `acceptEdits` only auto-approves file tools WITHIN workspace. `Read/Write/Edit/Glob/Grep/WebFetch/WebSearch` in global `permissions.allow` covers out-of-workspace access (`~/.claude/projects/.../operations.log`)
   - Auto-config: `ensure_claude_config()` patches onboarding, API key approval, project trust, tool permissions, global settings — all idempotent
   - MCP auto-approver: background watcher sends Enter on "Enter to confirm" prompt (30 polls × 2s)
   - Deployed on ALL 5 workers, validated with `systemctl restart hegemon-agent`

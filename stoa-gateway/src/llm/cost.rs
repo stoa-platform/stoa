@@ -195,6 +195,7 @@ mod tests {
         ProviderRegistry::new(vec![
             ProviderConfig {
                 provider: LlmProvider::OpenAi,
+                backend_id: None,
                 base_url: "https://api.openai.com/v1".to_string(),
                 api_key_env: None,
                 default_model: Some("gpt-4o".to_string()),
@@ -203,9 +204,12 @@ mod tests {
                 cost_per_1m_input: 5.0,
                 cost_per_1m_output: 15.0,
                 priority: 1,
+                deployment: None,
+                api_version: None,
             },
             ProviderConfig {
                 provider: LlmProvider::Anthropic,
+                backend_id: None,
                 base_url: "https://api.anthropic.com/v1".to_string(),
                 api_key_env: None,
                 default_model: Some("claude-sonnet-4-20250514".to_string()),
@@ -214,6 +218,8 @@ mod tests {
                 cost_per_1m_input: 3.0,
                 cost_per_1m_output: 15.0,
                 priority: 2,
+                deployment: None,
+                api_version: None,
             },
         ])
         .into_shared()

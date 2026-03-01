@@ -5,6 +5,7 @@
 //! and supports automatic fallback when a provider is unhealthy.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -142,6 +143,79 @@ impl LlmRouter {
     fn parse_provider(&self, name: &str) -> Option<LlmProvider> {
         LlmProvider::from_str_opt(name)
     }
+
+    /// Select a provider by subscription ID using a subscription-to-backend mapping.
+    ///
+    /// This enables multi-namespace routing: the same API contract is served by
+    /// different backends depending on the subscriber's plan. For example, two Azure
+    /// OpenAI namespaces (`projet-alpha`, `projet-beta`) can be routed to based on
+    /// which plan the subscriber is on.
+    ///
+    /// Returns `None` if the subscription has no mapping or the mapped backend is
+    /// not found / unhealthy.
+    pub fn select_for_subscription(
+        &self,
+        subscription_id: &str,
+        mapping: &SubscriptionMapping,
+    ) -> Option<&ProviderConfig> {
+        let backend_id = mapping.get_backend(subscription_id)?;
+        let config = self.registry.get_by_backend_id(backend_id)?;
+        if self.is_healthy(config.provider) {
+            Some(config)
+        } else {
+            None
+        }
+    }
+}
+
+/// Maps subscription IDs (or plan names) to backend IDs in the provider registry.
+///
+/// # Example
+///
+/// ```text
+/// Plan "Projet Alpha" → backend_id "projet-alpha" → Azure OpenAI namespace alpha
+/// Plan "Projet Beta"  → backend_id "projet-beta"  → Azure OpenAI namespace beta
+/// ```
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SubscriptionMapping {
+    /// subscription_id → backend_id
+    map: HashMap<String, String>,
+}
+
+impl SubscriptionMapping {
+    /// Create an empty mapping.
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+        }
+    }
+
+    /// Create a mapping from a list of (subscription_id, backend_id) pairs.
+    pub fn from_pairs(pairs: impl IntoIterator<Item = (String, String)>) -> Self {
+        Self {
+            map: pairs.into_iter().collect(),
+        }
+    }
+
+    /// Add a subscription → backend mapping.
+    pub fn insert(&mut self, subscription_id: String, backend_id: String) {
+        self.map.insert(subscription_id, backend_id);
+    }
+
+    /// Look up which backend a subscription maps to.
+    pub fn get_backend(&self, subscription_id: &str) -> Option<&str> {
+        self.map.get(subscription_id).map(|s| s.as_str())
+    }
+
+    /// Number of mappings.
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    /// Whether the mapping is empty.
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
 }
 
 #[cfg(test)]
@@ -156,6 +230,7 @@ mod tests {
     ) -> super::super::providers::ProviderConfig {
         super::super::providers::ProviderConfig {
             provider,
+            backend_id: None,
             base_url: format!("https://{}.example.com", provider),
             api_key_env: None,
             default_model: None,
@@ -164,6 +239,33 @@ mod tests {
             cost_per_1m_input: cost_input,
             cost_per_1m_output: cost_input * 3.0,
             priority,
+            deployment: None,
+            api_version: None,
+        }
+    }
+
+    fn make_azure_backend(
+        backend_id: &str,
+        endpoint: &str,
+        deployment: &str,
+        priority: u32,
+    ) -> super::super::providers::ProviderConfig {
+        super::super::providers::ProviderConfig {
+            provider: LlmProvider::AzureOpenAi,
+            backend_id: Some(backend_id.to_string()),
+            base_url: endpoint.to_string(),
+            api_key_env: Some(format!(
+                "AZURE_{}_KEY",
+                backend_id.to_uppercase().replace('-', "_")
+            )),
+            default_model: None,
+            max_concurrent: 50,
+            enabled: true,
+            cost_per_1m_input: 5.0,
+            cost_per_1m_output: 15.0,
+            priority,
+            deployment: Some(deployment.to_string()),
+            api_version: Some("2024-12-01-preview".to_string()),
         }
     }
 
@@ -291,5 +393,136 @@ mod tests {
         let router = LlmRouter::new(registry, cb_registry, RoutingStrategy::RoundRobin);
 
         assert!(router.select(None, None).is_none());
+    }
+
+    // --- Subscription routing tests (CAB-1610) ---
+
+    #[test]
+    fn subscription_routes_to_correct_backend() {
+        let router = make_router(
+            vec![
+                make_azure_backend(
+                    "projet-alpha",
+                    "https://projet-alpha.openai.azure.com",
+                    "gpt-4o",
+                    1,
+                ),
+                make_azure_backend(
+                    "projet-beta",
+                    "https://projet-beta.openai.azure.com",
+                    "gpt-4o",
+                    2,
+                ),
+            ],
+            RoutingStrategy::RoundRobin,
+        );
+
+        let mapping = SubscriptionMapping::from_pairs(vec![
+            ("sub-alpha-001".to_string(), "projet-alpha".to_string()),
+            ("sub-beta-001".to_string(), "projet-beta".to_string()),
+        ]);
+
+        // Same contract, different subscriptions → different backends
+        let alpha = router
+            .select_for_subscription("sub-alpha-001", &mapping)
+            .expect("should route to alpha");
+        assert_eq!(alpha.base_url, "https://projet-alpha.openai.azure.com");
+        assert_eq!(alpha.backend_id.as_deref(), Some("projet-alpha"));
+
+        let beta = router
+            .select_for_subscription("sub-beta-001", &mapping)
+            .expect("should route to beta");
+        assert_eq!(beta.base_url, "https://projet-beta.openai.azure.com");
+        assert_eq!(beta.backend_id.as_deref(), Some("projet-beta"));
+    }
+
+    #[test]
+    fn subscription_unknown_returns_none() {
+        let router = make_router(
+            vec![make_azure_backend(
+                "projet-alpha",
+                "https://projet-alpha.openai.azure.com",
+                "gpt-4o",
+                1,
+            )],
+            RoutingStrategy::RoundRobin,
+        );
+
+        let mapping = SubscriptionMapping::from_pairs(vec![(
+            "sub-alpha-001".to_string(),
+            "projet-alpha".to_string(),
+        )]);
+
+        // Unknown subscription → None (caller returns 401)
+        assert!(router
+            .select_for_subscription("sub-unknown", &mapping)
+            .is_none());
+    }
+
+    #[test]
+    fn subscription_unhealthy_backend_returns_none() {
+        let router = make_router(
+            vec![make_azure_backend(
+                "projet-alpha",
+                "https://projet-alpha.openai.azure.com",
+                "gpt-4o",
+                1,
+            )],
+            RoutingStrategy::RoundRobin,
+        );
+
+        let mapping = SubscriptionMapping::from_pairs(vec![(
+            "sub-alpha-001".to_string(),
+            "projet-alpha".to_string(),
+        )]);
+
+        // Trip circuit breaker for AzureOpenAi
+        for _ in 0..6 {
+            router.record_failure(LlmProvider::AzureOpenAi);
+        }
+
+        // Backend is unhealthy → None
+        assert!(router
+            .select_for_subscription("sub-alpha-001", &mapping)
+            .is_none());
+    }
+
+    #[test]
+    fn subscription_mapping_to_missing_backend_returns_none() {
+        let router = make_router(
+            vec![make_azure_backend(
+                "projet-alpha",
+                "https://projet-alpha.openai.azure.com",
+                "gpt-4o",
+                1,
+            )],
+            RoutingStrategy::RoundRobin,
+        );
+
+        // Mapping points to a backend that doesn't exist in registry
+        let mapping = SubscriptionMapping::from_pairs(vec![(
+            "sub-gamma-001".to_string(),
+            "projet-gamma".to_string(),
+        )]);
+
+        assert!(router
+            .select_for_subscription("sub-gamma-001", &mapping)
+            .is_none());
+    }
+
+    #[test]
+    fn subscription_mapping_operations() {
+        let mut mapping = SubscriptionMapping::new();
+        assert!(mapping.is_empty());
+        assert_eq!(mapping.len(), 0);
+
+        mapping.insert("sub-1".to_string(), "backend-a".to_string());
+        mapping.insert("sub-2".to_string(), "backend-b".to_string());
+
+        assert!(!mapping.is_empty());
+        assert_eq!(mapping.len(), 2);
+        assert_eq!(mapping.get_backend("sub-1"), Some("backend-a"));
+        assert_eq!(mapping.get_backend("sub-2"), Some("backend-b"));
+        assert_eq!(mapping.get_backend("sub-3"), None);
     }
 }

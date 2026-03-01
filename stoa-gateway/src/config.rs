@@ -536,6 +536,12 @@ pub struct LlmRouterConfig {
     /// Provider configurations.
     #[serde(default)]
     pub providers: Vec<crate::llm::ProviderConfig>,
+
+    /// Subscription-to-backend routing map (CAB-1610).
+    /// Maps subscription IDs (or plan names) to backend IDs in the provider list.
+    /// Enables multi-namespace routing: same API contract, different backends per subscriber.
+    #[serde(default)]
+    pub subscription_mapping: crate::llm::SubscriptionMapping,
 }
 
 impl Default for LlmRouterConfig {
@@ -545,6 +551,7 @@ impl Default for LlmRouterConfig {
             default_strategy: crate::llm::RoutingStrategy::default(),
             budget_limit_usd: 0.0,
             providers: Vec::new(),
+            subscription_mapping: crate::llm::SubscriptionMapping::new(),
         }
     }
 }

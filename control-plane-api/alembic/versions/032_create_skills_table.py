@@ -7,6 +7,7 @@ Create Date: 2026-02-18
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "032"
@@ -17,7 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Create enum type first
-    skill_scope_enum = sa.Enum("global", "tenant", "tool", "user", name="skill_scope_enum", create_type=False)
+    skill_scope_enum = postgresql.ENUM("global", "tenant", "tool", "user", name="skill_scope_enum", create_type=False)
     skill_scope_enum.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
@@ -51,4 +52,4 @@ def downgrade() -> None:
     op.drop_index("ix_skills_tenant_scope", table_name="skills")
     op.drop_index("ix_skills_tenant_id", table_name="skills")
     op.drop_table("skills")
-    sa.Enum(name="skill_scope_enum").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="skill_scope_enum").drop(op.get_bind(), checkfirst=True)

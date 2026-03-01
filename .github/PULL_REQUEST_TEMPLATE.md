@@ -16,6 +16,15 @@
 - [ ] Tests (adding or updating tests)
 - [ ] CI/CD (workflow, pipeline, or config changes)
 
+## Breaking Changes
+
+<!-- Does this PR introduce breaking changes? If yes, describe what breaks and how to migrate. -->
+
+- [ ] No breaking changes
+- [ ] Breaking change (describe below)
+
+<!-- If breaking: what changed, who is affected, migration steps -->
+
 ## How Has This Been Tested?
 
 <!-- Describe how you tested your changes -->

@@ -129,7 +129,12 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
     );
 
     // Step 3: Build upstream request
-    let upstream_url = format!("{}{}", upstream_base_url, request_path);
+    // Trim trailing slash from base URL to avoid double-slash issues
+    let upstream_url = format!(
+        "{}{}",
+        upstream_base_url.trim_end_matches('/'),
+        request_path
+    );
 
     let timeout = Duration::from_secs(state.config.llm_proxy_timeout_secs);
     let client = llm_client(timeout);

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-01 (CAB-1614: Arena 20 Dimensions complete, PRs #1270 + #1276)
+> Derniere MAJ: 2026-03-01 (CAB-1601: Cache Token Tracking complete, PRs #1292, #1303, #1304, #1305)
 
 ## ✅ DONE
 
@@ -8,6 +8,11 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 12 (Feb 27+)
+- ✅ CAB-1601: Anthropic Cache Token Tracking (21 pts) — 4 PRs across 4 components:
+  - PR #1292: Rust gateway — cache field extraction, cache-aware cost calc, 4 Prometheus counters
+  - PR #1303: Python CP API — schema, migration 049, model, repository, service, router
+  - PR #1304: Grafana dashboard — cache hit ratio, savings ($/hr), per-tenant cost, model mix
+  - PR #1305: Dogfood script — `--verify` (4 checks), `--hegemon` (VPS env), enhanced `--setup`
 - ✅ CAB-1614: Arena 20 Dimensions — Blue Ocean (21 pts) — PRs #1270, #1276 (12 new k6 scenarios, features gate, 4-category Grafana, VPS sidecar deploy)
 - ✅ CAB-1552: Lazy MCP Discovery + ADR-051 (5 pts) — PR #1209 (LazyMcpDiscovery struct, moka cache, 10 tests)
 
@@ -135,6 +140,7 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - C9 final: 830/830 pts (100%), 68 issues. Only demo rehearsal (human-only) remains
 - C10 CLOSED: 193/193 pts, 13 tickets, 100%
 - C11 CLOSED: 152/152 pts, 8 tickets, 9 PRs, 3h wall clock, 4 parallel instances
+- **Cache token tracking** (CAB-1601): end-to-end Anthropic prompt cache monitoring. Gateway extracts cache_creation/read tokens → Prometheus counters → CP API stores in usage_summaries (migration 049) → Grafana dashboard (cache ratio, savings, per-tenant cost, model mix). Verify: `stoa-dogfood.sh --verify`
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330+ gateway tests
 - Session 2026-02-27: 9 PRs merged (#1181-#1191), parallel 4-pane dispatch, 152 pts in 3h
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon

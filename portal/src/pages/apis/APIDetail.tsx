@@ -28,6 +28,7 @@ import { useAPI, useOpenAPISpec } from '../../hooks/useAPIs';
 import { useSubscribe, SubscribeToAPIResponse } from '../../hooks/useSubscriptions';
 import { SubscribeModal, SubscribeFormData } from '../../components/subscriptions/SubscribeModal';
 import { config } from '../../config';
+import { ChatCompletionsEnrichment } from '../../components/apis/ChatCompletionsEnrichment';
 import type { APIEndpoint } from '../../types';
 
 type TabType = 'overview' | 'endpoints' | 'openapi';
@@ -325,6 +326,9 @@ export function APIDetail() {
                 </div>
               </div>
             </div>
+
+            {/* API-specific enrichment (e.g. Chat Completions) */}
+            <ChatCompletionsEnrichment apiName={api.name} />
           </div>
         )}
 

@@ -27,7 +27,7 @@ Usage:
     heg-state queue done <job_id>
     heg-state queue fail <job_id> "reason"
     heg-state queue cancel <job_id>
-    heg-state queue flush
+    heg-state queue flush [--all]
     heg-state queue stats
     heg-state queue current
 """
@@ -1129,16 +1129,22 @@ def cmd_queue_cancel(args: argparse.Namespace) -> None:
 
 
 def cmd_queue_flush(args: argparse.Namespace) -> None:
-    """Cancel all pending jobs."""
-    now = _now()
+    """Cancel all pending jobs, or delete everything with --all."""
     conn = _connect()
-    count = conn.execute(
-        "UPDATE queue_jobs SET status='cancelled', completed_at=? WHERE status='pending'",
-        (now,),
-    ).rowcount
-    conn.commit()
-    conn.close()
-    print(f"Flushed {count} pending job(s)")
+    if getattr(args, "flush_all", False):
+        count = conn.execute("DELETE FROM queue_jobs").rowcount
+        conn.commit()
+        conn.close()
+        print(f"Deleted {count} job(s) (all statuses)")
+    else:
+        now = _now()
+        count = conn.execute(
+            "UPDATE queue_jobs SET status='cancelled', completed_at=? WHERE status='pending'",
+            (now,),
+        ).rowcount
+        conn.commit()
+        conn.close()
+        print(f"Flushed {count} pending job(s)")
 
 
 def cmd_queue_stats(args: argparse.Namespace) -> None:
@@ -1345,7 +1351,8 @@ def main() -> None:
     qp.add_argument("job_id", type=int)
 
     # queue flush
-    qsub.add_parser("flush", help="Cancel all pending jobs")
+    qp = qsub.add_parser("flush", help="Cancel all pending jobs (--all to clear entire queue)")
+    qp.add_argument("--all", action="store_true", dest="flush_all", help="Delete ALL jobs (pending, dispatched, done, failed, cancelled)")
 
     # queue stats
     qsub.add_parser("stats", help="Show queue summary counts")

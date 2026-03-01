@@ -48,8 +48,7 @@ Feature: Demo "IA pour tous" — Azure OpenAI Multi-Tenant via STOA (CAB-1609)
     Given I am logged in as "art3mis" from community "high-five"
     And the STOA Portal is accessible
     When I navigate to the Chat Completions API detail page
-    Then the API detail page is displayed
-    And I see the Chat Completions enrichment panel
+    Then I see the Chat Completions enrichment panel
     And the enrichment panel shows subscription plans
     And the enrichment panel shows the GDPR notice
 

@@ -73,7 +73,11 @@ When('I navigate to the Chat Completions API detail page', async ({ authSession 
     await anyCard.click();
     await page.waitForLoadState('networkidle').catch(() => {});
   }
-  // If no API cards at all, subsequent enrichment steps will gracefully skip
+  // If no API cards at all, subsequent enrichment panel steps will gracefully skip
+  // Verify we landed on an API detail page (if a card was clicked)
+  if (page.url().includes('/apis/')) {
+    await page.waitForTimeout(1000);
+  }
 });
 
 // ---------------------------------------------------------------------------

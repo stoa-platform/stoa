@@ -412,23 +412,22 @@ function runGovernance() {
 // =====================================================================
 
 function runLlmRouting() {
-  // Test LLM proxy: POST /v1/messages through the gateway
-  const body = {
+  // Test LLM proxy: Anthropic format POST /v1/messages
+  const anthropicBody = {
     model: 'claude-mock',
     max_tokens: 64,
     messages: [{ role: 'user', content: 'Arena benchmark test — reply briefly.' }],
   };
-  const hdrs = Object.assign(
+  const anthropicHdrs = Object.assign(
     { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
     authHeaders()
   );
-  const url = `${TARGET_URL}/v1/messages`;
-  const res = http.post(url, JSON.stringify(body), {
-    headers: hdrs,
+  const anthropicRes = http.post(`${TARGET_URL}/v1/messages`, JSON.stringify(anthropicBody), {
+    headers: anthropicHdrs,
     timeout: TIMEOUT,
     tags: { scenario: 'ent_llm_routing' },
   });
-  check(res, {
+  check(anthropicRes, {
     'llm_routing_status_2xx': (r) => r.status >= 200 && r.status < 300,
     'llm_routing_valid_json': (r) => {
       try { JSON.parse(r.body); return true; } catch (_e) { return false; }
@@ -449,6 +448,40 @@ function runLlmRouting() {
       // STOA adds X-Stoa-Llm-Provider header indicating routing decision
       const provider = r.headers['X-Stoa-Llm-Provider'] || r.headers['x-stoa-llm-provider'];
       return provider !== undefined && provider !== '';
+    },
+  });
+
+  // Test LLM proxy: OpenAI/Mistral format POST /v1/chat/completions
+  const mistralBody = {
+    model: 'mistral-mock',
+    max_tokens: 64,
+    messages: [{ role: 'user', content: 'Arena benchmark test — reply briefly.' }],
+  };
+  const mistralHdrs = Object.assign(
+    { 'Content-Type': 'application/json' },
+    authHeaders()
+  );
+  const mistralRes = http.post(`${TARGET_URL}/v1/chat/completions`, JSON.stringify(mistralBody), {
+    headers: mistralHdrs,
+    timeout: TIMEOUT,
+    tags: { scenario: 'ent_llm_routing' },
+  });
+  check(mistralRes, {
+    'llm_routing_openai_status_2xx': (r) => r.status >= 200 && r.status < 300,
+    'llm_routing_openai_valid_json': (r) => {
+      try { JSON.parse(r.body); return true; } catch (_e) { return false; }
+    },
+    'llm_routing_openai_has_choices': (r) => {
+      try {
+        const data = JSON.parse(r.body);
+        return Array.isArray(data.choices) && data.choices.length > 0;
+      } catch (_e) { return false; }
+    },
+    'llm_routing_openai_has_usage': (r) => {
+      try {
+        const data = JSON.parse(r.body);
+        return data.usage && data.usage.prompt_tokens > 0;
+      } catch (_e) { return false; }
     },
   });
 }

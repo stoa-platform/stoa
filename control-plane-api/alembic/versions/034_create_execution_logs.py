@@ -18,9 +18,9 @@ depends_on = None
 
 def upgrade() -> None:
     # Create enums
-    executionstatus = sa.Enum("success", "error", "timeout", name="executionstatus")
+    executionstatus = sa.Enum("success", "error", "timeout", name="executionstatus", create_type=False)
     errorcategory = sa.Enum(
-        "auth", "rate_limit", "backend", "timeout", "validation", name="errorcategory"
+        "auth", "rate_limit", "backend", "timeout", "validation", name="errorcategory", create_type=False
     )
     executionstatus.create(op.get_bind(), checkfirst=True)
     errorcategory.create(op.get_bind(), checkfirst=True)

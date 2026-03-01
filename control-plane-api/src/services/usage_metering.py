@@ -76,6 +76,10 @@ class UsageMeteringService:
         total_latency_ms: int = 0,
         p99_latency_ms: int | None = None,
         total_tokens: int = 0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cache_creation_input_tokens: int = 0,
+        cache_read_input_tokens: int = 0,
         consumer_id: uuid.UUID | None = None,
     ) -> UsageSummaryResponse:
         """Record (upsert) a usage event into the summaries table."""
@@ -89,6 +93,10 @@ class UsageMeteringService:
             total_latency_ms=total_latency_ms,
             p99_latency_ms=p99_latency_ms,
             total_tokens=total_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens,
+            cache_read_input_tokens=cache_read_input_tokens,
             consumer_id=consumer_id,
         )
         return UsageSummaryResponse.model_validate(record)

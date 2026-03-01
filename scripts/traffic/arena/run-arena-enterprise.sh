@@ -14,6 +14,11 @@
 #   ARENA_JWT         — Bearer token for authenticated scenarios (optional)
 #   SCRIPT_PATH       — Path to benchmark-enterprise.js (default: /scripts/benchmark-enterprise.js)
 #   ARENA_INSTANCE    — Instance label for Pushgateway grouping (default: "default")
+#
+# Gateway JSON fields (per entry in GATEWAYS):
+#   name, target, mcp_base, mcp_protocol, health        — existing
+#   admin_base  — admin API base URL (for skills, federation, diagnostic, etc.)
+#   features    — array of feature keys this gateway supports (e.g., ["llm_routing","skills_lifecycle"])
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -30,7 +35,9 @@ LLM_MOCK_URL="${LLM_MOCK_URL:-}"
 OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-stoa-healthcheck}"
 OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET:-}"
 OIDC_TOKEN_URL="${OIDC_TOKEN_URL:-}"
-SCENARIOS="ent_mcp_discovery ent_mcp_toolcall ent_auth_chain ent_policy_eval ent_guardrails ent_quota_burst ent_resilience ent_governance ent_llm_routing"
+# 20 enterprise scenarios across 4 categories:
+# Original 8 (core) + Cat A (LLM Intelligence) + Cat B (MCP Depth) + Cat C (Security) + Cat D (Platform Ops)
+SCENARIOS="ent_mcp_discovery ent_mcp_toolcall ent_auth_chain ent_policy_eval ent_guardrails ent_quota_burst ent_resilience ent_governance ent_llm_routing ent_llm_cost ent_llm_circuit_breaker ent_native_tools_crud ent_api_bridge ent_uac_binding ent_pii_detection ent_distributed_tracing ent_prompt_cache ent_skills_lifecycle ent_federation ent_diagnostic"
 WORK_DIR="/tmp/arena-enterprise"
 
 log_json() {
@@ -85,8 +92,9 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
   GW_MCP=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].mcp_base // empty")
   GW_MCP_PROTO=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].mcp_protocol // \"stoa\"")
   GW_HEADERS=$(echo "$GATEWAYS" | jq -c ".[$gw_idx].proxy_headers // {}")
+  GW_ADMIN=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].admin_base // empty")
 
-  log_json "\"Benchmarking gateway: ${GW_NAME} (mcp_base: ${GW_MCP:-none})\""
+  log_json "\"Benchmarking gateway: ${GW_NAME} (mcp_base: ${GW_MCP:-none}, admin_base: ${GW_ADMIN:-none})\""
   mkdir -p "$WORK_DIR/$GW_NAME"
 
   for run in $(seq 1 "$RUNS"); do
@@ -98,6 +106,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
       --env TARGET_URL="$GW_TARGET" \
       --env MCP_BASE="$GW_MCP" \
       --env MCP_PROTOCOL="$GW_MCP_PROTO" \
+      --env ADMIN_BASE="$GW_ADMIN" \
       --env HEADERS="$GW_HEADERS" \
       --env ARENA_JWT="$ARENA_JWT" \
       --env LLM_MOCK_URL="$LLM_MOCK_URL" \
@@ -114,6 +123,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
         --env TARGET_URL="$GW_TARGET" \
         --env MCP_BASE="$GW_MCP" \
         --env MCP_PROTOCOL="$GW_MCP_PROTO" \
+        --env ADMIN_BASE="$GW_ADMIN" \
         --env HEADERS="$GW_HEADERS" \
         --env ARENA_JWT="$ARENA_JWT" \
         --env LLM_MOCK_URL="$LLM_MOCK_URL" \

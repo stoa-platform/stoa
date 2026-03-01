@@ -4,8 +4,16 @@
 Computes per-dimension scores and a composite Enterprise Readiness Index
 from k6 enterprise benchmark summaries.
 
+20 dimensions across 5 categories:
+  - Core (8): MCP discovery/toolcall, auth, policy, guardrails, quota, resilience, governance
+  - LLM Intelligence (3): routing, cost tracking, circuit breaker
+  - MCP Depth (3): native tools CRUD, API bridge, UAC binding
+  - Security (3): PII detection, distributed tracing, prompt cache
+  - Platform Ops (3): skills lifecycle, federation, diagnostic
+
 Gateways without MCP (mcp_base == null) score 0 on MCP dimensions.
-The spec is open — any gateway can implement MCP and re-run.
+Gateways without a required feature score 0 on that dimension.
+The spec is open — any gateway can implement and re-run.
 
 Uses stdlib only (no scipy/numpy).
 
@@ -28,30 +36,68 @@ T_TABLE = {
     6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
 }
 
-# 8 Enterprise dimensions with weights
+# 20 Enterprise dimensions with weights (sum = 1.00)
+# Categories: core (original 8), llm_intel (A), mcp_depth (B), security (C), platform_ops (D)
+# requires_feature: if set, gateway must declare this feature in its "features" list
 DIMENSIONS = [
-    {"key": "mcp_discovery",  "scenario": "ent_mcp_discovery",  "weight": 0.15, "requires_mcp": True},
-    {"key": "mcp_toolcall",   "scenario": "ent_mcp_toolcall",   "weight": 0.20, "requires_mcp": True},
-    {"key": "auth_chain",     "scenario": "ent_auth_chain",     "weight": 0.15, "requires_mcp": True},
-    {"key": "policy_eval",    "scenario": "ent_policy_eval",    "weight": 0.15, "requires_mcp": True},
-    {"key": "guardrails",     "scenario": "ent_guardrails",     "weight": 0.10, "requires_mcp": True},
-    {"key": "quota_burst",    "scenario": "ent_quota_burst",    "weight": 0.10, "requires_mcp": False},
-    {"key": "resilience",     "scenario": "ent_resilience",     "weight": 0.10, "requires_mcp": True},
-    {"key": "governance",     "scenario": "ent_governance",     "weight": 0.05, "requires_mcp": False},
-    {"key": "llm_routing",   "scenario": "ent_llm_routing",   "weight": 0.00, "requires_mcp": False},
+    # --- Core (8 original, reweighted) --- sum = 0.51
+    {"key": "mcp_discovery", "scenario": "ent_mcp_discovery", "weight": 0.08, "requires_mcp": True, "category": "core"},
+    {"key": "mcp_toolcall", "scenario": "ent_mcp_toolcall", "weight": 0.10, "requires_mcp": True, "category": "core"},
+    {"key": "auth_chain", "scenario": "ent_auth_chain", "weight": 0.08, "requires_mcp": True, "category": "core"},
+    {"key": "policy_eval", "scenario": "ent_policy_eval", "weight": 0.06, "requires_mcp": True, "category": "core"},
+    {"key": "guardrails", "scenario": "ent_guardrails", "weight": 0.06, "requires_mcp": True, "category": "core"},
+    {"key": "quota_burst", "scenario": "ent_quota_burst", "weight": 0.05, "requires_mcp": False, "category": "core"},
+    {"key": "resilience", "scenario": "ent_resilience", "weight": 0.05, "requires_mcp": True, "category": "core"},
+    {"key": "governance", "scenario": "ent_governance", "weight": 0.03, "requires_mcp": False, "category": "core"},
+    # --- Cat A: LLM Intelligence (3) --- sum = 0.17
+    {"key": "llm_routing", "scenario": "ent_llm_routing", "weight": 0.07, "requires_mcp": False, "category": "llm_intel", "requires_feature": "llm_routing"},
+    {"key": "llm_cost", "scenario": "ent_llm_cost", "weight": 0.05, "requires_mcp": False, "category": "llm_intel", "requires_feature": "llm_cost"},
+    {"key": "llm_circuit_breaker", "scenario": "ent_llm_circuit_breaker", "weight": 0.05, "requires_mcp": False, "category": "llm_intel", "requires_feature": "llm_circuit_breaker"},
+    # --- Cat B: MCP Depth (3) --- sum = 0.13
+    {"key": "native_tools_crud", "scenario": "ent_native_tools_crud", "weight": 0.05, "requires_mcp": True, "category": "mcp_depth", "requires_feature": "native_tools_crud"},
+    {"key": "api_bridge", "scenario": "ent_api_bridge", "weight": 0.04, "requires_mcp": True, "category": "mcp_depth", "requires_feature": "api_bridge"},
+    {"key": "uac_binding", "scenario": "ent_uac_binding", "weight": 0.04, "requires_mcp": True, "category": "mcp_depth", "requires_feature": "uac_binding"},
+    # --- Cat C: Security & Compliance (3) --- sum = 0.10
+    {"key": "pii_detection", "scenario": "ent_pii_detection", "weight": 0.04, "requires_mcp": True, "category": "security", "requires_feature": "pii_detection"},
+    {"key": "distributed_tracing", "scenario": "ent_distributed_tracing", "weight": 0.03, "requires_mcp": False, "category": "security", "requires_feature": "distributed_tracing"},
+    {"key": "prompt_cache", "scenario": "ent_prompt_cache", "weight": 0.03, "requires_mcp": False, "category": "security", "requires_feature": "prompt_cache"},
+    # --- Cat D: Platform Operations (3) --- sum = 0.09
+    {"key": "skills_lifecycle", "scenario": "ent_skills_lifecycle", "weight": 0.03, "requires_mcp": False, "category": "platform_ops", "requires_feature": "skills_lifecycle"},
+    {"key": "federation", "scenario": "ent_federation", "weight": 0.03, "requires_mcp": False, "category": "platform_ops", "requires_feature": "federation"},
+    {"key": "diagnostic", "scenario": "ent_diagnostic", "weight": 0.03, "requires_mcp": False, "category": "platform_ops", "requires_feature": "diagnostic"},
 ]
+
+# Validate weight sum at import time
+_weight_sum = sum(d["weight"] for d in DIMENSIONS)
+assert abs(_weight_sum - 1.0) < 0.01, f"DIMENSIONS weights must sum to 1.00, got {_weight_sum:.4f}"
 
 # Latency caps per dimension (seconds) — p95 above this = score 0
 LATENCY_CAPS = {
-    "mcp_discovery": 0.5,    # 500ms
-    "mcp_toolcall": 0.5,     # 500ms
-    "auth_chain": 1.0,       # 1s
-    "policy_eval": 0.2,      # 200ms overhead cap
-    "guardrails": 1.0,       # 1s
-    "quota_burst": 1.0,      # 1s
-    "resilience": 1.0,       # 1s
-    "governance": 2.0,       # 2s (admin endpoints, less critical)
-    "llm_routing": 2.0,      # 2s (LLM calls are inherently slower)
+    # Core
+    "mcp_discovery": 0.5,
+    "mcp_toolcall": 0.5,
+    "auth_chain": 1.0,
+    "policy_eval": 0.2,
+    "guardrails": 1.0,
+    "quota_burst": 1.0,
+    "resilience": 1.0,
+    "governance": 2.0,
+    # Cat A: LLM Intelligence
+    "llm_routing": 2.0,
+    "llm_cost": 2.0,
+    "llm_circuit_breaker": 2.0,
+    # Cat B: MCP Depth
+    "native_tools_crud": 1.0,
+    "api_bridge": 2.0,
+    "uac_binding": 2.0,
+    # Cat C: Security & Compliance
+    "pii_detection": 0.5,
+    "distributed_tracing": 0.5,
+    "prompt_cache": 2.0,
+    # Cat D: Platform Operations
+    "skills_lifecycle": 1.0,
+    "federation": 2.0,
+    "diagnostic": 2.0,
 }
 
 
@@ -177,6 +223,7 @@ def main() -> None:
     for gw in gateways:
         name = gw["name"]
         has_mcp = bool(gw.get("mcp_base"))
+        gw_features = set(gw.get("features", []))
         gw_dir = work_dir / name
         valid_runs = list(range(discard_first + 1, total_runs + 1))
         n = len(valid_runs)
@@ -194,6 +241,14 @@ def main() -> None:
 
             # Gateway without MCP scores 0 on MCP dimensions
             if dim["requires_mcp"] and not has_mcp:
+                dim_run_scores[dim_key] = [0.0] * n
+                dim_median_latencies[dim_key] = 0.0
+                dim_median_checks[dim_key] = {"passes": 0, "fails": 0}
+                continue
+
+            # Features gate: if dimension requires a feature the gateway doesn't have, score 0
+            req_feature = dim.get("requires_feature")
+            if req_feature and req_feature not in gw_features:
                 dim_run_scores[dim_key] = [0.0] * n
                 dim_median_latencies[dim_key] = 0.0
                 dim_median_checks[dim_key] = {"passes": 0, "fails": 0}
@@ -284,6 +339,7 @@ def main() -> None:
                 "gateway": name,
                 "instance": instance,
                 "dimension": dim_key,
+                "category": dim.get("category", "core"),
                 "dimension_score": round(dim_score, 2),
                 "composite_score": round(enterprise_score, 2),
                 "availability": {
@@ -372,6 +428,7 @@ def export_to_opensearch(dimension_docs: list[dict]) -> None:
             "instance": entry.get("instance", "default"),
             "gateway": entry["gateway"],
             "dimension": entry["dimension"],
+            "category": entry.get("category", "core"),
             "dimension_score": entry["dimension_score"],
             "composite_score": entry["composite_score"],
             "availability": entry["availability"],

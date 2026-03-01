@@ -82,9 +82,13 @@ spec:
                       optional: true
                 - name: OIDC_TOKEN_URL
                   value: "http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/token"
-                  # GATEWAYS: mcp_base is null for gateways without MCP support
-                  # Those gateways score 0 on MCP dimensions (not N/A)
-                  # target: base URL for warmup + non-MCP scenarios
+                  # GATEWAYS: 20-dimension enterprise benchmark config
+                  # mcp_base: null = no MCP support (scores 0 on MCP dims)
+                  # admin_base: admin API for introspection endpoints
+                  # features: list of supported feature keys (missing = score 0)
+                  # Feature keys: llm_routing, llm_cost, llm_circuit_breaker,
+                  #   native_tools_crud, api_bridge, uac_binding, pii_detection,
+                  #   distributed_tracing, prompt_cache, skills_lifecycle, federation, diagnostic
                 - name: GATEWAYS
                   value: |
                     [
@@ -93,20 +97,31 @@ spec:
                         "target": "http://stoa-gateway.stoa-system.svc",
                         "mcp_base": "http://stoa-gateway.stoa-system.svc/mcp",
                         "mcp_protocol": "stoa",
-                        "health": "http://stoa-gateway.stoa-system.svc/health"
+                        "admin_base": "http://stoa-gateway.stoa-system.svc",
+                        "health": "http://stoa-gateway.stoa-system.svc/health",
+                        "features": [
+                          "llm_routing", "llm_cost", "llm_circuit_breaker",
+                          "native_tools_crud", "api_bridge", "uac_binding",
+                          "pii_detection", "distributed_tracing", "prompt_cache",
+                          "skills_lifecycle", "federation", "diagnostic"
+                        ]
                       },
                       {
                         "name": "kong-k8s",
                         "target": "http://kong-arena.stoa-system.svc:8000",
                         "mcp_base": null,
-                        "health": "http://kong-arena.stoa-system.svc:8001/status"
+                        "admin_base": null,
+                        "health": "http://kong-arena.stoa-system.svc:8001/status",
+                        "features": []
                       },
                       {
                         "name": "gravitee-k8s",
                         "target": "http://gravitee-arena-gw.stoa-system.svc:8082",
                         "mcp_base": "http://gravitee-arena-gw.stoa-system.svc:8082/mcp",
                         "mcp_protocol": "streamable-http",
-                        "health": "http://gravitee-arena-gw.stoa-system.svc:18082/_node/health"
+                        "admin_base": null,
+                        "health": "http://gravitee-arena-gw.stoa-system.svc:18082/_node/health",
+                        "features": []
                       }
                     ]
               resources:

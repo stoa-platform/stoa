@@ -204,7 +204,25 @@ def _connect() -> sqlite3.Connection:
     # Always run schema — all statements use IF NOT EXISTS so this is
     # idempotent and handles migrations (new tables added to schema.sql).
     conn.executescript(SCHEMA_PATH.read_text())
+    # Migrate existing queue_jobs: add columns that may not exist yet
+    _migrate_queue_columns(conn)
     return conn
+
+
+def _migrate_queue_columns(conn: sqlite3.Connection) -> None:
+    """Add new queue_jobs columns if they don't exist (idempotent)."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(queue_jobs)").fetchall()}
+    migrations = [
+        ("council_score", "REAL DEFAULT NULL"),
+        ("estimate", "INTEGER DEFAULT NULL"),
+        ("mode", "TEXT DEFAULT 'ask'"),
+        ("source", "TEXT DEFAULT 'manual'"),
+        ("description", "TEXT DEFAULT ''"),
+    ]
+    for col_name, col_def in migrations:
+        if col_name not in existing:
+            conn.execute(f"ALTER TABLE queue_jobs ADD COLUMN {col_name} {col_def}")
+    conn.commit()
 
 
 # ── Session commands ──────────────────────────────────────────────
@@ -976,6 +994,11 @@ def cmd_queue_add(args: argparse.Namespace) -> None:
     now = _now()
     priority = args.priority if args.priority is not None else 2
     role = args.role
+    score = getattr(args, "score", None)
+    estimate = getattr(args, "estimate", None)
+    mode = getattr(args, "mode", None) or "ask"
+    source = getattr(args, "source", None) or "manual"
+    desc = getattr(args, "description", None) or ""
 
     added = 0
     for ticket_id in args.tickets:
@@ -983,16 +1006,19 @@ def cmd_queue_add(args: argparse.Namespace) -> None:
         if not ticket_id:
             continue
         conn.execute(
-            """INSERT INTO queue_jobs (ticket_id, title, priority, role, status, created_at)
-               VALUES (?, ?, ?, ?, 'pending', ?)""",
-            (ticket_id, args.title or "", priority, role, now),
+            """INSERT INTO queue_jobs (ticket_id, title, priority, role, status, created_at,
+                                      council_score, estimate, mode, source, description)
+               VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)""",
+            (ticket_id, args.title or "", priority, role, now,
+             score, estimate, mode, source, desc),
         )
         added += 1
 
     conn.commit()
     conn.close()
     role_info = f" (role: {role})" if role else ""
-    print(f"Enqueued {added} job(s) at priority {priority}{role_info}")
+    score_info = f", score: {score}" if score else ""
+    print(f"Enqueued {added} job(s) at priority {priority}{role_info}{score_info}")
 
 
 def cmd_queue_ls(args: argparse.Namespace) -> None:
@@ -1012,12 +1038,16 @@ def cmd_queue_ls(args: argparse.Namespace) -> None:
         print("Queue empty.")
         return
 
-    print(f"{'ID':<6} {'TICKET':<14} {'PRI':<5} {'STATUS':<12} {'ROLE':<10} {'ASSIGNED':<14} {'CREATED':<20}")
-    print("─" * 81)
+    print(f"{'ID':<6} {'TICKET':<14} {'PRI':<5} {'STATUS':<12} {'ROLE':<10} {'SCORE':<7} {'MODE':<6} {'EST':<5} {'SOURCE':<8} {'ASSIGNED':<14}")
+    print("─" * 97)
     for r in rows:
         role = r["role"] or "any"
         assigned = r["assigned_to"] or "—"
-        print(f"{r['id']:<6} {r['ticket_id']:<14} {r['priority']:<5} {r['status']:<12} {role:<10} {assigned:<14} {r['created_at']:<20}")
+        score = f"{r['council_score']:.1f}" if r.get("council_score") else "—"
+        mode = r.get("mode") or "—"
+        est = str(r.get("estimate") or "—")
+        source = r.get("source") or "—"
+        print(f"{r['id']:<6} {r['ticket_id']:<14} {r['priority']:<5} {r['status']:<12} {role:<10} {score:<7} {mode:<6} {est:<5} {source:<8} {assigned:<14}")
 
 
 def cmd_queue_next(args: argparse.Namespace) -> None:
@@ -1055,9 +1085,17 @@ def cmd_queue_next(args: argparse.Namespace) -> None:
             "id": row["id"], "ticket_id": row["ticket_id"],
             "priority": row["priority"], "role": row["role"],
             "title": row["title"],
+            "council_score": row.get("council_score"),
+            "estimate": row.get("estimate"),
+            "mode": row.get("mode", "ask"),
+            "source": row.get("source", "manual"),
+            "description": row.get("description", ""),
         }))
     else:
-        print(f"Next: #{row['id']} {row['ticket_id']} (P{row['priority']}, role: {row['role'] or 'any'})")
+        score = f", score: {row['council_score']:.1f}" if row.get("council_score") else ""
+        mode = f", {row.get('mode', 'ask')}" if row.get("mode") else ""
+        est = f", {row.get('estimate')}pts" if row.get("estimate") else ""
+        print(f"Next: #{row['id']} {row['ticket_id']} (P{row['priority']}, role: {row['role'] or 'any'}{score}{mode}{est})")
 
 
 def cmd_queue_dispatch(args: argparse.Namespace) -> None:
@@ -1322,6 +1360,11 @@ def main() -> None:
                      help="0=urgent, 1=high, 2=normal (default), 3=low")
     qp.add_argument("--role", "-r", choices=VALID_ROLES, help="Target worker role")
     qp.add_argument("--title", "-t", help="Ticket title (optional)")
+    qp.add_argument("--score", type=float, help="Council score (e.g., 8.5)")
+    qp.add_argument("--estimate", type=int, help="Story points estimate")
+    qp.add_argument("--mode", choices=["ship", "show", "ask"], help="Ship/Show/Ask mode")
+    qp.add_argument("--source", choices=["manual", "l3", "l3.5", "l1"], help="Pipeline source")
+    qp.add_argument("--description", help="Ticket description for worker context")
 
     # queue ls
     qp = qsub.add_parser("ls", help="List queue jobs")

@@ -239,7 +239,15 @@ def mock_db_session():
     """Create a mock AsyncSession for database operations."""
     from sqlalchemy.ext.asyncio import AsyncSession
     session = AsyncMock(spec=AsyncSession)
-    session.execute = AsyncMock()
+    # return_value must be MagicMock (not AsyncMock) so that chained
+    # attribute access like result.scalar_one_or_none() returns a MagicMock
+    # instead of a coroutine.  We further configure scalar_one_or_none to
+    # return None by default so endpoints that do optional DB lookups (e.g.
+    # TenantRepository.get_by_id for trial-limit checks) gracefully skip.
+    _exec_result = MagicMock()
+    _exec_result.scalar_one_or_none.return_value = None
+    _exec_result.scalars.return_value.first.return_value = None
+    session.execute = AsyncMock(return_value=_exec_result)
     session.flush = AsyncMock()
     session.commit = AsyncMock()
     session.rollback = AsyncMock()

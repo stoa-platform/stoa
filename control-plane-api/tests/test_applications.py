@@ -3,6 +3,7 @@
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -142,6 +143,7 @@ def test_get_wrong_tenant(mock_kc):
 # ---- Create ----
 
 
+@pytest.mark.integration
 @patch("src.routers.applications.keycloak_service")
 def test_create(mock_kc):
     mock_kc.create_client = AsyncMock(

@@ -53,6 +53,7 @@ import {
   Sparkles,
   Stethoscope,
   Settings,
+  DollarSign,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -248,6 +249,12 @@ const navigationSections: NavSection[] = [
         name: 'nav.shadowDiscovery',
         href: '/shadow-discovery',
         icon: Eye,
+        permission: 'apis:read',
+      },
+      {
+        name: 'nav.llmCost',
+        href: '/llm-cost',
+        icon: DollarSign,
         permission: 'apis:read',
       },
       {

@@ -89,7 +89,7 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
     let resolved = resolve_upstream(&state, api_format, &subscription_id, &request_path);
     let (upstream_url, upstream_headers_preset) = match resolved {
         UpstreamResolution::Azure { url, headers } => (url, Some(headers)),
-        UpstreamResolution::Static { url, .. } => (url, None::<Vec<(String, String)>>),
+        UpstreamResolution::Static { url } => (url, None::<Vec<(String, String)>>),
         UpstreamResolution::Error(msg) => {
             return (StatusCode::SERVICE_UNAVAILABLE, msg).into_response();
         }
@@ -389,10 +389,7 @@ enum UpstreamResolution {
         headers: Vec<(String, String)>,
     },
     /// Static routing: base_url + request_path, API key resolved separately.
-    Static {
-        url: String,
-        api_key: Option<String>,
-    },
+    Static { url: String },
     /// Configuration error — return to caller as SERVICE_UNAVAILABLE.
     Error(String),
 }
@@ -448,11 +445,7 @@ fn resolve_upstream(
                         provider.base_url.trim_end_matches('/'),
                         request_path
                     );
-                    let api_key = provider
-                        .api_key_env
-                        .as_deref()
-                        .and_then(|env| std::env::var(env).ok());
-                    return UpstreamResolution::Static { url, api_key };
+                    return UpstreamResolution::Static { url };
                 }
                 // Subscription not in mapping — fall through to static routing
                 debug!(
@@ -464,28 +457,19 @@ fn resolve_upstream(
     }
 
     // Static routing fallback
-    let (base_url, api_key) = match api_format {
+    let base_url = match api_format {
         LlmApiFormat::OpenAiCompat => {
-            let key = state
-                .config
-                .llm_proxy_mistral_api_key
-                .clone()
-                .or_else(|| state.config.llm_proxy_api_key.clone());
-            let url = if state.config.llm_proxy_mistral_api_key.is_some() {
+            if state.config.llm_proxy_mistral_api_key.is_some() {
                 state.config.llm_proxy_mistral_upstream_url.clone()
             } else {
                 state.config.llm_proxy_upstream_url.clone()
-            };
-            (url, key)
+            }
         }
-        LlmApiFormat::Anthropic => (
-            state.config.llm_proxy_upstream_url.clone(),
-            state.config.llm_proxy_api_key.clone(),
-        ),
+        LlmApiFormat::Anthropic => state.config.llm_proxy_upstream_url.clone(),
     };
 
     let url = format!("{}{}", base_url.trim_end_matches('/'), request_path);
-    UpstreamResolution::Static { url, api_key }
+    UpstreamResolution::Static { url }
 }
 
 /// Extract API key from request headers (x-api-key or Authorization: Bearer).
@@ -984,7 +968,7 @@ data: {"type":"message_stop"}
         );
 
         match result {
-            UpstreamResolution::Static { url, .. } => {
+            UpstreamResolution::Static { url } => {
                 // Falls through to static because mapping is empty
                 assert!(
                     url.contains("/v1/chat/completions"),
@@ -1009,7 +993,7 @@ data: {"type":"message_stop"}
         let result = resolve_upstream(&state, LlmApiFormat::Anthropic, "sub-123", "/v1/messages");
 
         match result {
-            UpstreamResolution::Static { url, .. } => {
+            UpstreamResolution::Static { url } => {
                 assert!(
                     url.contains("api.anthropic.com"),
                     "Anthropic should use static upstream: {url}"
@@ -1037,7 +1021,7 @@ data: {"type":"message_stop"}
         );
 
         match result {
-            UpstreamResolution::Static { url, .. } => {
+            UpstreamResolution::Static { url } => {
                 assert!(
                     url.contains("api.openai.com"),
                     "Non-Azure provider should use base_url: {url}"
@@ -1070,7 +1054,7 @@ data: {"type":"message_stop"}
         );
 
         match result {
-            UpstreamResolution::Static { url, .. } => {
+            UpstreamResolution::Static { url } => {
                 // Should NOT hit Azure even though mapping exists, because router is disabled
                 assert!(
                     !url.contains("azure"),

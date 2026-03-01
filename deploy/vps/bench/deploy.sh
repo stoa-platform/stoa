@@ -67,7 +67,7 @@ for VPS_IP in "${!UNIQUE_VPS[@]}"; do
   echo ""
   echo "--- Deploying to $VPS_IP (gateways: $GATEWAY_NAMES) ---"
 
-  # Build combined GATEWAYS JSON for this VPS
+  # Build combined GATEWAYS JSON for this VPS (L0)
   COMBINED_GATEWAYS="["
   first=true
   for gw_name in $GATEWAY_NAMES; do
@@ -76,16 +76,29 @@ for VPS_IP in "${!UNIQUE_VPS[@]}"; do
     else
       COMBINED_GATEWAYS="${COMBINED_GATEWAYS},"
     fi
-    # Strip outer brackets and add
     gw_json=$(echo "${VPS_GATEWAYS[$gw_name]}" | jq -c '.[0]')
     COMBINED_GATEWAYS="${COMBINED_GATEWAYS}${gw_json}"
   done
   COMBINED_GATEWAYS="${COMBINED_GATEWAYS}]"
 
-  echo "  [1/5] Creating remote directory..."
+  # Build combined enterprise GATEWAYS JSON for this VPS (L1)
+  COMBINED_GATEWAYS_ENT="["
+  first=true
+  for gw_name in $GATEWAY_NAMES; do
+    if [ "$first" = true ]; then
+      first=false
+    else
+      COMBINED_GATEWAYS_ENT="${COMBINED_GATEWAYS_ENT},"
+    fi
+    gw_json=$(echo "${VPS_GATEWAYS_ENTERPRISE[$gw_name]}" | jq -c '.[0]')
+    COMBINED_GATEWAYS_ENT="${COMBINED_GATEWAYS_ENT}${gw_json}"
+  done
+  COMBINED_GATEWAYS_ENT="${COMBINED_GATEWAYS_ENT}]"
+
+  echo "  [1/7] Creating remote directory..."
   ssh -i "$SSH_KEY" "debian@${VPS_IP}" "mkdir -p ${REMOTE_DIR}/scripts"
 
-  echo "  [2/5] Copying scripts + docker-compose..."
+  echo "  [2/7] Copying scripts + docker-compose..."
   scp -i "$SSH_KEY" -q \
     "$REPO_ROOT/scripts/traffic/arena/benchmark.js" \
     "$REPO_ROOT/scripts/traffic/arena/run-arena.sh" \
@@ -100,7 +113,7 @@ for VPS_IP in "${!UNIQUE_VPS[@]}"; do
     "debian@${VPS_IP}:${REMOTE_DIR}/"
 
   INSTANCE_LABEL="${VPS_INSTANCE[$VPS_IP]}"
-  echo "  [3/5] Creating .env file (instance=$INSTANCE_LABEL)..."
+  echo "  [3/7] Creating .env file (L0, instance=$INSTANCE_LABEL)..."
   ssh -i "$SSH_KEY" "debian@${VPS_IP}" "cat > ${REMOTE_DIR}/.env <<ENVEOF
 PUSHGATEWAY_URL=${PUSHGATEWAY_URL}
 PUSHGATEWAY_AUTH=arena:arena-push-2026
@@ -111,13 +124,24 @@ ARENA_INSTANCE=${INSTANCE_LABEL}
 GATEWAYS=${COMBINED_GATEWAYS}
 ENVEOF"
 
-  echo "  [4/5] Pulling arena-bench image..."
+  echo "  [4/7] Creating .env.enterprise file (L1, instance=$INSTANCE_LABEL)..."
+  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "cat > ${REMOTE_DIR}/.env.enterprise <<ENVEOF
+PUSHGATEWAY_URL=${PUSHGATEWAY_URL}
+PUSHGATEWAY_AUTH=arena:arena-push-2026
+RUNS=5
+DISCARD_FIRST=1
+TIMEOUT=10
+ARENA_INSTANCE=${INSTANCE_LABEL}
+GATEWAYS=${COMBINED_GATEWAYS_ENT}
+ENVEOF"
+
+  echo "  [5/7] Pulling arena-bench image..."
   ssh -i "$SSH_KEY" "debian@${VPS_IP}" "docker pull ghcr.io/stoa-platform/arena-bench:0.2.0 2>/dev/null || echo 'Pull failed — ensure docker login ghcr.io'"
 
-  echo "  [5/5] Installing systemd timer (every 30 min)..."
+  echo "  [6/7] Installing L0 systemd timer (every 30 min)..."
   ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sudo tee /etc/systemd/system/arena-bench.service > /dev/null <<'SVCEOF'
 [Unit]
-Description=Gateway Arena Benchmark
+Description=Gateway Arena Benchmark (L0)
 After=docker.service
 
 [Service]
@@ -131,7 +155,7 @@ SVCEOF
 
 sudo tee /etc/systemd/system/arena-bench.timer > /dev/null <<'TMREOF'
 [Unit]
-Description=Run Arena Benchmark every 30 minutes
+Description=Run Arena Benchmark every 30 minutes (L0)
 
 [Timer]
 OnCalendar=*:00,30
@@ -145,15 +169,47 @@ TMREOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now arena-bench.timer"
 
+  echo "  [7/7] Installing L1 enterprise systemd timer (hourly)..."
+  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sudo tee /etc/systemd/system/arena-bench-enterprise.service > /dev/null <<'SVCEOF'
+[Unit]
+Description=Gateway Arena Enterprise Benchmark (L1)
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=${REMOTE_DIR}
+ExecStart=/usr/bin/docker compose -f docker-compose.enterprise.yml run --rm arena-enterprise
+User=debian
+StandardOutput=append:/var/log/arena-bench-enterprise.log
+StandardError=append:/var/log/arena-bench-enterprise.log
+SVCEOF
+
+sudo tee /etc/systemd/system/arena-bench-enterprise.timer > /dev/null <<'TMREOF'
+[Unit]
+Description=Run Arena Enterprise Benchmark hourly (L1)
+
+[Timer]
+OnCalendar=*:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
+TMREOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now arena-bench-enterprise.timer"
+
   echo "  Done: $VPS_IP"
 done
 
 echo ""
 echo "=== VPS Deploy Complete ==="
-echo "Timer: every 30 min (systemd) on each VPS"
+echo "Timers: L0 every 30 min + L1 enterprise hourly on each VPS"
 echo "Pushgateway: ${PUSHGATEWAY_URL}"
 echo ""
 echo "Verify (manual run):"
 echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose run --rm arena'"
-echo "  ssh -i $SSH_KEY debian@54.36.209.237 'cd /opt/arena && docker compose run --rm arena'"
-echo "  curl -sf -u arena:arena-push-2026 https://pushgateway.gostoa.dev/metrics | grep gateway_arena_score"
+echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose -f docker-compose.enterprise.yml run --rm arena-enterprise'"
+echo "  ssh -i $SSH_KEY debian@54.36.209.237 'cd /opt/arena && docker compose -f docker-compose.enterprise.yml run --rm arena-enterprise'"
+echo "  curl -sf -u arena:arena-push-2026 https://pushgateway.gostoa.dev/metrics | grep enterprise_dimension"

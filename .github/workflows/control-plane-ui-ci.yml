@@ -182,6 +182,16 @@ jobs:
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+      - name: Patch k8s manifests for staging
+        run: |
+          cd control-plane-ui/k8s
+          # Staging uses Traefik (not nginx) and staging-* hostnames
+          sed -i \
+            -e 's/host: console\.gostoa\.dev/host: staging-console.gostoa.dev/g' \
+            -e 's/- console\.gostoa\.dev/- staging-console.gostoa.dev/g' \
+            -e 's/ingressClassName: nginx/ingressClassName: traefik/g' \
+            -e 's/letsencrypt-prod/letsencrypt-production/g' \
+            ingress.yaml
       - name: Apply k8s manifest
         run: |
           kubectl apply -f control-plane-ui/k8s/ 2>&1 || {

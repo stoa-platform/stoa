@@ -72,24 +72,35 @@ kubectl set image deployment/stoa-gateway \
 Run the automated verification:
 
 ```bash
+# Full verification (HTTP + Kubernetes + ArgoCD)
 ./scripts/release/verify-upgrade.sh
+
+# HTTP-only (no kubectl required)
+./scripts/release/verify-upgrade.sh --skip-k8s
+
+# With version confirmation
+./scripts/release/verify-upgrade.sh --expected-version vX.Y.Z
+
+# Single component
+./scripts/release/verify-upgrade.sh --component api
+
+# Machine-readable output
+./scripts/release/verify-upgrade.sh --json
 ```
 
-Or verify manually — **all checks must pass**:
+Or verify manually — see the full [Verification Matrix](./verification-matrix.md) for all checks.
 
-### Verification Matrix
+### Quick Manual Checks
 
-| # | Component | What to Test | Command | Pass Criteria |
-|---|-----------|-------------|---------|---------------|
-| 1 | API Health | Service responds | `curl -sf ${STOA_API_URL}/v1/health` | HTTP 200, `{"status":"healthy"}` |
-| 2 | Gateway Health | Service responds | `curl -sf ${STOA_GATEWAY_URL}/health` | HTTP 200 |
-| 3 | Auth Chain | Token endpoint works | `curl -sf -X POST ${STOA_AUTH_URL}/realms/stoa/protocol/openid-connect/token -d 'grant_type=client_credentials&client_id=...'` | HTTP 200, `access_token` present |
-| 4 | MCP Discovery | MCP capabilities | `curl -sf ${STOA_GATEWAY_URL}/mcp/capabilities` | HTTP 200, valid JSON |
-| 5 | Console UI | Frontend loads | `curl -sf ${STOA_CONSOLE_URL} -o /dev/null -w '%{http_code}'` | HTTP 200 |
-| 6 | Portal | Frontend loads | `curl -sf ${STOA_PORTAL_URL} -o /dev/null -w '%{http_code}'` | HTTP 200 |
-| 7 | Pod Status | No restarts | `kubectl get pods -n stoa-system --no-headers \| grep -v Running` | Empty output |
-| 8 | ArgoCD Sync | Apps synced | `kubectl get applications -n argocd -o jsonpath='{range .items[*]}{.metadata.name}: {.status.sync.status}\n{end}'` | All "Synced" |
-| 9 | Logs Clean | No errors post-upgrade | `kubectl logs -n stoa-system deploy/control-plane-api --since=5m \| grep -c ERROR` | 0 |
+| # | Component | Command | Pass Criteria |
+|---|-----------|---------|---------------|
+| 1 | API | `curl -sf ${STOA_API_URL}/v1/health` | HTTP 200 |
+| 2 | Gateway | `curl -sf ${STOA_GATEWAY_URL}/health` | HTTP 200 |
+| 3 | Auth | `curl -sf ${STOA_AUTH_URL}/realms/stoa/.well-known/openid-configuration` | `"issuer"` present |
+| 4 | Console | `curl -sf -o /dev/null -w '%{http_code}' ${STOA_CONSOLE_URL}` | `200` |
+| 5 | Portal | `curl -sf -o /dev/null -w '%{http_code}' ${STOA_PORTAL_URL}` | `200` |
+| 6 | MCP | `curl -sf ${STOA_GATEWAY_URL}/mcp/capabilities` | Valid JSON |
+| 7 | Pods | `kubectl get pods -n stoa-system --no-headers \| grep -v Running` | Empty |
 
 ### New Features to Test (vX.Y.Z specific)
 

@@ -29,6 +29,13 @@ declare -A VPS_GATEWAYS=(
   ["gravitee-vps"]='[{"name":"gravitee-vps","health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://localhost:8082/echo/get"}]'
 )
 
+# Enterprise GATEWAYS JSON (L1 — with mcp_base, admin_base, features)
+declare -A VPS_GATEWAYS_ENTERPRISE=(
+  ["stoa-vps"]='[{"name":"stoa-vps","target":"http://localhost:8080","mcp_base":"http://localhost:8080/mcp","mcp_protocol":"stoa","admin_base":"http://localhost:8080","health":"http://localhost:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]}]'
+  ["kong-vps"]='[{"name":"kong-vps","target":"http://localhost:8000","mcp_base":null,"admin_base":null,"health":"http://localhost:8001/status","features":[]}]'
+  ["gravitee-vps"]='[{"name":"gravitee-vps","target":"http://localhost:8082","mcp_base":"http://localhost:8082/mcp","mcp_protocol":"streamable-http","admin_base":null,"health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","features":[]}]'
+)
+
 # Unique VPS IPs (stoa and kong share the same VPS)
 declare -A UNIQUE_VPS=(
   ["51.83.45.13"]="stoa-vps kong-vps"
@@ -83,8 +90,14 @@ for VPS_IP in "${!UNIQUE_VPS[@]}"; do
     "$REPO_ROOT/scripts/traffic/arena/benchmark.js" \
     "$REPO_ROOT/scripts/traffic/arena/run-arena.sh" \
     "$REPO_ROOT/scripts/traffic/arena/run-arena.py" \
+    "$REPO_ROOT/scripts/traffic/arena/benchmark-enterprise.js" \
+    "$REPO_ROOT/scripts/traffic/arena/run-arena-enterprise.sh" \
+    "$REPO_ROOT/scripts/traffic/arena/run-arena-enterprise.py" \
     "debian@${VPS_IP}:${REMOTE_DIR}/scripts/"
-  scp -i "$SSH_KEY" -q "$SCRIPT_DIR/docker-compose.yml" "debian@${VPS_IP}:${REMOTE_DIR}/"
+  scp -i "$SSH_KEY" -q \
+    "$SCRIPT_DIR/docker-compose.yml" \
+    "$SCRIPT_DIR/docker-compose.enterprise.yml" \
+    "debian@${VPS_IP}:${REMOTE_DIR}/"
 
   INSTANCE_LABEL="${VPS_INSTANCE[$VPS_IP]}"
   echo "  [3/5] Creating .env file (instance=$INSTANCE_LABEL)..."

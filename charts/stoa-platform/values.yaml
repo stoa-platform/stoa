@@ -87,10 +87,10 @@ stoaGateway:
   resources:
     requests:
       cpu: 100m
-      memory: 64Mi
+      memory: 128Mi
     limits:
       cpu: 500m
-      memory: 256Mi
+      memory: 512Mi
 
   # Gateway mode (ADR-024): edge-mcp | sidecar | proxy | shadow
   mode: edge-mcp

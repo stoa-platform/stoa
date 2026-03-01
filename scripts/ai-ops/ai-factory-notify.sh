@@ -1065,6 +1065,59 @@ push_state_milestone() {
     -d "$payload" >/dev/null 2>&1 || true
 }
 
+# notify_queue_status — Post queue summary to Slack
+# Usage: notify_queue_status [THREAD_TS]
+notify_queue_status() {
+  local thread_ts="${1:-${SLACK_THREAD_TS:-}}"
+  local heg_state="${HOME}/.local/bin/heg-state"
+  [ ! -x "$heg_state" ] && return 0
+
+  local stats
+  stats=$($heg_state queue stats 2>/dev/null || echo "Queue empty.")
+
+  local text=":clipboard: *Queue Status*\n${stats}"
+  local payload
+  payload=$(jq -n --arg text "$text" '{text: $text}')
+
+  _send_slack "$payload" "$thread_ts"
+}
+
+# push_metrics_queue — Push queue gauge metrics to Pushgateway
+# Usage: push_metrics_queue
+push_metrics_queue() {
+  [ -z "${PUSHGATEWAY_URL:-}" ] && return 0
+
+  local heg_state="${HOME}/.local/bin/heg-state"
+  [ ! -x "$heg_state" ] && return 0
+
+  # Get counts by status
+  local pending dispatched running done failed
+  pending=$($heg_state queue ls 2>/dev/null | grep -c " pending " || echo "0")
+  dispatched=$($heg_state queue ls 2>/dev/null | grep -c " dispatched " || echo "0")
+  running=$($heg_state queue ls 2>/dev/null | grep -c " running " || echo "0")
+  done=$($heg_state queue ls --all 2>/dev/null | grep -c " done " || echo "0")
+  failed=$($heg_state queue ls --all 2>/dev/null | grep -c " failed " || echo "0")
+
+  local metrics
+  metrics=$(cat <<EOF
+# HELP hegemon_queue_jobs Number of queue jobs by status
+# TYPE hegemon_queue_jobs gauge
+hegemon_queue_jobs{status="pending"} ${pending}
+hegemon_queue_jobs{status="dispatched"} ${dispatched}
+hegemon_queue_jobs{status="running"} ${running}
+hegemon_queue_jobs{status="done"} ${done}
+hegemon_queue_jobs{status="failed"} ${failed}
+EOF
+)
+
+  local auth_header=""
+  [ -n "${PUSHGATEWAY_AUTH:-}" ] && auth_header="-u ${PUSHGATEWAY_AUTH}"
+
+  echo "$metrics" | curl -sf --max-time 5 ${auth_header} \
+    --data-binary @- \
+    "${PUSHGATEWAY_URL}/metrics/job/hegemon_queue" >/dev/null 2>&1 || true
+}
+
 # push_state_cleanup INSTANCE_ID
 push_state_cleanup() {
   local instance_id="${1:?}"

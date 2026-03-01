@@ -48,6 +48,12 @@ if [ -n "$TICKET" ]; then
   esac
 fi
 
+# Mark current queue job as done (if any) — best-effort
+CURRENT_JOB=$($HEG_STATE queue current 2>/dev/null || echo "")
+if [ -n "$CURRENT_JOB" ]; then
+  $HEG_STATE queue done "$CURRENT_JOB" >/dev/null 2>&1 || true
+fi
+
 # Cleanup stale sessions (>24h) — best-effort hygiene
 $HEG_STATE cleanup --stale 24h >/dev/null 2>&1 || true
 

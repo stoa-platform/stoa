@@ -114,7 +114,7 @@
     {
       "id": 4,
       "title": "Cache Hit Ratio",
-      "description": "Ratio of tool calls served from cache vs total calls",
+      "description": "Ratio of Anthropic cache read tokens vs total input tokens",
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
@@ -142,7 +142,7 @@
       },
       "targets": [
         {
-          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$tenant\", status=\"cache_hit\"}) / clamp_min(sum(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}), 1)",
+          "expr": "sum(gateway_llm_cache_read_tokens_total{model=~\"$model\"}) / clamp_min(sum(gateway_llm_cache_read_tokens_total{model=~\"$model\"}) + sum(gateway_llm_input_tokens_total{model=~\"$model\"}), 1)",
           "legendFormat": "Hit Ratio",
           "refId": "A",
           "instant": true
@@ -375,8 +375,8 @@
     },
     {
       "id": 13,
-      "title": "Cache Hit vs Miss",
-      "description": "Proportion of tool calls served from cache vs backend execution",
+      "title": "Cache Read vs Full-Price Input",
+      "description": "Proportion of tokens served from Anthropic prompt cache vs full-price input",
       "type": "piechart",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 23 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
@@ -387,15 +387,21 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Cache Hits" },
+            "matcher": { "id": "byName", "options": "Cache Read Tokens" },
             "properties": [
               { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Cache Misses" },
+            "matcher": { "id": "byName", "options": "Full-Price Input Tokens" },
             "properties": [
               { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Cache Write Tokens" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
             ]
           }
         ]
@@ -407,15 +413,21 @@
       },
       "targets": [
         {
-          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$tenant\", status=\"cache_hit\"})",
-          "legendFormat": "Cache Hits",
+          "expr": "sum(gateway_llm_cache_read_tokens_total{model=~\"$model\"})",
+          "legendFormat": "Cache Read Tokens",
           "refId": "A",
           "instant": true
         },
         {
-          "expr": "sum(stoa_mcp_tools_calls_total{tenant=~\"$tenant\", status!=\"cache_hit\"})",
-          "legendFormat": "Cache Misses",
+          "expr": "sum(gateway_llm_input_tokens_total{model=~\"$model\"})",
+          "legendFormat": "Full-Price Input Tokens",
           "refId": "B",
+          "instant": true
+        },
+        {
+          "expr": "sum(gateway_llm_cache_write_tokens_total{model=~\"$model\"})",
+          "legendFormat": "Cache Write Tokens",
+          "refId": "C",
           "instant": true
         }
       ]
@@ -423,7 +435,7 @@
     {
       "id": 14,
       "title": "Cache Hit Rate Over Time",
-      "description": "Cache hit ratio trend — higher values reduce LLM API costs",
+      "description": "Anthropic prompt cache hit ratio trend — higher values reduce LLM API costs",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 23 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
@@ -459,7 +471,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\", status=\"cache_hit\"}[5m])) / clamp_min(sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}[5m])), 0.001)",
+          "expr": "sum(rate(gateway_llm_cache_read_tokens_total{model=~\"$model\"}[5m])) / clamp_min(sum(rate(gateway_llm_cache_read_tokens_total{model=~\"$model\"}[5m])) + sum(rate(gateway_llm_input_tokens_total{model=~\"$model\"}[5m])), 0.001)",
           "legendFormat": "Hit Rate",
           "refId": "A"
         }
@@ -664,6 +676,107 @@
           "expr": "sum by (model) (rate(gateway_llm_cost_total{model=~\"$model\"}[5m])) / clamp_min(sum by (model) (rate(stoa_token_budget_tokens_total{tenant=~\"$tenant\"}[5m])), 0.001) * 1000",
           "legendFormat": "{{model}} ($/1K tokens)",
           "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 48 },
+      "id": 21,
+      "panels": [],
+      "title": "Prompt Cache Savings & Cost Breakdown",
+      "type": "row"
+    },
+    {
+      "id": 22,
+      "title": "Cache Savings (USD/hr)",
+      "description": "Estimated hourly savings from Anthropic prompt caching — cache reads cost 90% less than full-price input",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 49 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_llm_cache_read_cost_total{model=~\"$model\"}[1h]))",
+          "legendFormat": "Savings (cache reads vs full-price)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "title": "Per-Tenant Daily Cost (USD)",
+      "description": "Estimated daily LLM cost per tenant — includes input, output, cache read, and cache write costs",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 49 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "stacking": "normal",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" },
+        "orientation": "horizontal",
+        "barWidth": 0.7
+      },
+      "targets": [
+        {
+          "expr": "sum by (tenant) (increase(gateway_llm_cost_total{model=~\"$model\"}[24h]))",
+          "legendFormat": "{{tenant}}",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "title": "Model Mix (Cost Distribution)",
+      "description": "Cost distribution across LLM models — identifies which models drive spend",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 49 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (gateway_llm_cost_total{model=~\"$model\"})",
+          "legendFormat": "{{model}}",
+          "refId": "A",
+          "instant": true
         }
       ]
     }

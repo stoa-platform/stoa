@@ -196,9 +196,9 @@ class McpGeneratedTool(Base):
     contract = relationship("Contract")
 
     __table_args__ = (
-        Index("ix_mcp_tools_tenant", "tenant_id"),
-        Index("ix_mcp_tools_contract", "contract_id"),
-        Index("ix_mcp_tools_name", "tenant_id", "tool_name", unique=True),
+        Index("ix_mcp_gen_tools_tenant", "tenant_id"),
+        Index("ix_mcp_gen_tools_contract", "contract_id"),
+        Index("ix_mcp_gen_tools_name", "tenant_id", "tool_name", unique=True),
     )
 
     def __repr__(self):

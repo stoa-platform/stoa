@@ -11,13 +11,13 @@ use crate::auth::mtls::MtlsStats;
 use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
-use crate::llm::{LlmRouter, ProviderRegistry};
 use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::diagnostics::DiagnosticEngine;
 use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::guardrails::{GuardrailPolicyStore, TokenBudgetTracker};
+use crate::llm::{LlmRouter, ProviderRegistry};
 use crate::mcp::pending_requests::PendingRequestTracker;
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
@@ -465,8 +465,7 @@ impl AppState {
 
         // Initialize LLM provider router for subscription-aware routing (CAB-1615)
         let llm_router = if config.llm_router.enabled && !config.llm_router.providers.is_empty() {
-            let registry =
-                ProviderRegistry::new(config.llm_router.providers.clone()).into_shared();
+            let registry = ProviderRegistry::new(config.llm_router.providers.clone()).into_shared();
             let router = LlmRouter::new(
                 registry,
                 circuit_breakers.clone(),

@@ -89,10 +89,7 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
     let resolved = resolve_upstream(&state, api_format, &subscription_id, &request_path);
     let (upstream_url, upstream_headers_preset) = match resolved {
         UpstreamResolution::Azure { url, headers } => (url, Some(headers)),
-        UpstreamResolution::Static { url, api_key } => {
-            (url, None::<Vec<(String, String)>>)
-            // api_key is consumed below when building headers
-        }
+        UpstreamResolution::Static { url, .. } => (url, None::<Vec<(String, String)>>),
         UpstreamResolution::Error(msg) => {
             return (StatusCode::SERVICE_UNAVAILABLE, msg).into_response();
         }
@@ -167,8 +164,7 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                 }
                 upstream_headers.insert(
                     "x-api-key",
-                    HeaderValue::from_str(api_key)
-                        .unwrap_or_else(|_| HeaderValue::from_static("")),
+                    HeaderValue::from_str(api_key).unwrap_or_else(|_| HeaderValue::from_static("")),
                 );
             }
             LlmApiFormat::OpenAiCompat => {
@@ -879,13 +875,18 @@ data: {"type":"message_stop"}
         providers: Vec<crate::llm::ProviderConfig>,
         subscription_mapping: crate::llm::SubscriptionMapping,
     ) -> AppState {
-        let mut config = crate::config::Config::default();
-        config.llm_proxy_enabled = true;
-        config.llm_proxy_upstream_url = "https://api.anthropic.com".to_string();
-        config.llm_proxy_mistral_upstream_url = "https://api.mistral.ai".to_string();
-        config.llm_router.enabled = router_enabled;
-        config.llm_router.providers = providers;
-        config.llm_router.subscription_mapping = subscription_mapping;
+        let config = crate::config::Config {
+            llm_proxy_enabled: true,
+            llm_proxy_upstream_url: "https://api.anthropic.com".to_string(),
+            llm_proxy_mistral_upstream_url: "https://api.mistral.ai".to_string(),
+            llm_router: crate::config::LlmRouterConfig {
+                enabled: router_enabled,
+                providers,
+                subscription_mapping,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
         AppState::new(config)
     }
 
@@ -936,8 +937,12 @@ data: {"type":"message_stop"}
 
         let state = make_test_state(true, vec![provider], mapping);
 
-        let result =
-            resolve_upstream(&state, LlmApiFormat::OpenAiCompat, "sub-123", "/v1/chat/completions");
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-123",
+            "/v1/chat/completions",
+        );
 
         match result {
             UpstreamResolution::Azure { url, headers } => {
@@ -1001,8 +1006,7 @@ data: {"type":"message_stop"}
         let state = make_test_state(true, vec![provider], mapping);
 
         // Anthropic format should ALWAYS use static routing (Azure is OpenAI-compat only)
-        let result =
-            resolve_upstream(&state, LlmApiFormat::Anthropic, "sub-123", "/v1/messages");
+        let result = resolve_upstream(&state, LlmApiFormat::Anthropic, "sub-123", "/v1/messages");
 
         match result {
             UpstreamResolution::Static { url, .. } => {

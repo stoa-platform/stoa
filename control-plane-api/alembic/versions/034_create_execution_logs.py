@@ -9,6 +9,7 @@ CAB-1318: Consumer execution view with error taxonomy.
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision = "034"
 down_revision = "033"
@@ -18,8 +19,8 @@ depends_on = None
 
 def upgrade() -> None:
     # Create enums
-    executionstatus = sa.Enum("success", "error", "timeout", name="executionstatus", create_type=False)
-    errorcategory = sa.Enum(
+    executionstatus = postgresql.ENUM("success", "error", "timeout", name="executionstatus", create_type=False)
+    errorcategory = postgresql.ENUM(
         "auth", "rate_limit", "backend", "timeout", "validation", name="errorcategory", create_type=False
     )
     executionstatus.create(op.get_bind(), checkfirst=True)
@@ -56,5 +57,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("execution_logs")
-    op.execute("DROP TYPE IF EXISTS executionstatus")
-    op.execute("DROP TYPE IF EXISTS errorcategory")
+    postgresql.ENUM(name="executionstatus").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="errorcategory").drop(op.get_bind(), checkfirst=True)

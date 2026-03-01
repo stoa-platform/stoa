@@ -102,6 +102,14 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub cost_per_1m_output: f64,
 
+    /// Cost per 1M cache-read input tokens in USD (Anthropic: ~10% of input cost).
+    #[serde(default)]
+    pub cost_per_1m_cache_read: f64,
+
+    /// Cost per 1M cache-write (creation) input tokens in USD (Anthropic: ~125% of input cost).
+    #[serde(default)]
+    pub cost_per_1m_cache_write: f64,
+
     /// Routing priority (lower = higher priority, 0 = highest).
     #[serde(default = "default_priority")]
     pub priority: u32,
@@ -219,6 +227,8 @@ mod tests {
             enabled,
             cost_per_1m_input: cost_input,
             cost_per_1m_output: cost_input * 3.0,
+            cost_per_1m_cache_read: 0.0,
+            cost_per_1m_cache_write: 0.0,
             priority,
             deployment: None,
             api_version: None,

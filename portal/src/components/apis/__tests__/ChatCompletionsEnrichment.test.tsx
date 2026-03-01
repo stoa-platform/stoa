@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { ChatCompletionsEnrichment } from '../ChatCompletionsEnrichment';
 import { renderWithProviders } from '../../../test/helpers';
 import { CHAT_COMPLETIONS_API_NAME } from '../../../data/chatCompletionsConfig';
@@ -75,5 +75,31 @@ describe('ChatCompletionsEnrichment', () => {
     expect(
       screen.getByText(/cles API Azure OpenAI sont gerees de maniere centralisee/)
     ).toBeInTheDocument();
+  });
+
+  it('does not render subscribe buttons when onSelectPlan is not provided', () => {
+    renderWithProviders(<ChatCompletionsEnrichment apiName={CHAT_COMPLETIONS_API_NAME} />);
+    expect(screen.queryAllByText('Souscrire')).toHaveLength(0);
+  });
+
+  it('renders subscribe buttons when onSelectPlan is provided', () => {
+    const onSelectPlan = vi.fn();
+    renderWithProviders(
+      <ChatCompletionsEnrichment apiName={CHAT_COMPLETIONS_API_NAME} onSelectPlan={onSelectPlan} />
+    );
+    const buttons = screen.getAllByText('Souscrire');
+    expect(buttons).toHaveLength(2);
+  });
+
+  it('calls onSelectPlan with the correct slug when a plan button is clicked', () => {
+    const onSelectPlan = vi.fn();
+    renderWithProviders(
+      <ChatCompletionsEnrichment apiName={CHAT_COMPLETIONS_API_NAME} onSelectPlan={onSelectPlan} />
+    );
+    const buttons = screen.getAllByText('Souscrire');
+    fireEvent.click(buttons[0]);
+    expect(onSelectPlan).toHaveBeenCalledWith('alpha-exploration');
+    fireEvent.click(buttons[1]);
+    expect(onSelectPlan).toHaveBeenCalledWith('beta-production');
   });
 });

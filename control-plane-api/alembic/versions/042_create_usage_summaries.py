@@ -7,6 +7,7 @@ Create Date: 2026-02-24
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "042_usage_summaries"
@@ -17,7 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Create the enum type first
-    usage_period_enum = sa.Enum("daily", "monthly", name="usage_period_enum", create_type=False)
+    usage_period_enum = postgresql.ENUM("daily", "monthly", name="usage_period_enum", create_type=False)
     usage_period_enum.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
@@ -56,4 +57,4 @@ def downgrade() -> None:
     op.drop_table("usage_summaries")
 
     # Drop the enum type
-    sa.Enum(name="usage_period_enum").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="usage_period_enum").drop(op.get_bind(), checkfirst=True)

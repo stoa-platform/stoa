@@ -61,12 +61,45 @@ const mockBudget = {
 };
 
 const mockGet = vi.fn();
+const mockGetLlmUsage = vi.fn();
+const mockGetLlmTimeseries = vi.fn();
+const mockGetLlmProviderBreakdown = vi.fn();
 
 vi.mock('../../services/api', () => ({
   apiService: {
     get: (...args: unknown[]) => mockGet(...args),
+    getLlmUsage: (...args: unknown[]) => mockGetLlmUsage(...args),
+    getLlmTimeseries: (...args: unknown[]) => mockGetLlmTimeseries(...args),
+    getLlmProviderBreakdown: (...args: unknown[]) => mockGetLlmProviderBreakdown(...args),
   },
 }));
+
+const mockUsage = {
+  total_cost_usd: 12.345,
+  input_tokens: 50000,
+  output_tokens: 20000,
+  avg_cost_per_request: 0.001234,
+  cache_read_cost_usd: 0.5,
+  cache_write_cost_usd: 0.1,
+  period: 'month',
+};
+
+const mockTimeseries = {
+  points: [
+    { timestamp: '2026-02-28T00:00:00Z', value: 1.5 },
+    { timestamp: '2026-02-28T01:00:00Z', value: 2.3 },
+  ],
+  period: 'day',
+  step: '1h',
+};
+
+const mockProviderCosts = {
+  providers: [
+    { provider: 'anthropic', model: 'claude-3-5-sonnet', cost_usd: 8.5 },
+    { provider: 'openai', model: 'gpt-4o', cost_usd: 3.2 },
+  ],
+  period: 'month',
+};
 
 function setupApiMock(providers = mockProviders, budget: typeof mockBudget | null = mockBudget) {
   mockGet.mockImplementation((url: string) => {
@@ -81,6 +114,9 @@ function setupApiMock(providers = mockProviders, budget: typeof mockBudget | nul
     }
     return Promise.resolve({ data: {} });
   });
+  mockGetLlmUsage.mockResolvedValue(mockUsage);
+  mockGetLlmTimeseries.mockResolvedValue(mockTimeseries);
+  mockGetLlmProviderBreakdown.mockResolvedValue(mockProviderCosts);
 }
 
 describe('LLMCostDashboard', () => {
@@ -242,16 +278,16 @@ describe('LLMCostDashboard', () => {
     it('renders provider slug under display name', async () => {
       renderWithProviders(<LLMCostDashboard />);
       await waitFor(() => {
-        expect(screen.getByText('anthropic')).toBeInTheDocument();
-        expect(screen.getByText('openai')).toBeInTheDocument();
+        expect(screen.getAllByText('anthropic').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('openai').length).toBeGreaterThanOrEqual(1);
       });
     });
 
     it('renders default models', async () => {
       renderWithProviders(<LLMCostDashboard />);
       await waitFor(() => {
-        expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument();
-        expect(screen.getByText('gpt-4o')).toBeInTheDocument();
+        expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('gpt-4o').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -308,6 +344,163 @@ describe('LLMCostDashboard', () => {
     });
   });
 
+  describe('Period Selector', () => {
+    it('renders period selector buttons', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('period-selector')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('period-hour')).toBeInTheDocument();
+      expect(screen.getByTestId('period-day')).toBeInTheDocument();
+      expect(screen.getByTestId('period-week')).toBeInTheDocument();
+      expect(screen.getByTestId('period-month')).toBeInTheDocument();
+    });
+
+    it('defaults to month period', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('period-month')).toHaveClass('bg-blue-600');
+      });
+    });
+
+    it('changes period on click and refetches', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('period-selector')).toBeInTheDocument();
+      });
+      await user.click(screen.getByTestId('period-day'));
+      await waitFor(() => {
+        expect(mockGetLlmUsage).toHaveBeenCalledWith(expect.anything(), 'day');
+      });
+    });
+  });
+
+  describe('Usage KPI Cards (Prometheus)', () => {
+    it('shows usage cards when data available', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('usage-cards')).toBeInTheDocument();
+      });
+    });
+
+    it('displays total cost', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByText('Total Cost')).toBeInTheDocument();
+        expect(screen.getByText('$12.3450')).toBeInTheDocument();
+      });
+    });
+
+    it('displays tokens used', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByText('Tokens Used')).toBeInTheDocument();
+        expect(screen.getByText('70.0K')).toBeInTheDocument();
+      });
+    });
+
+    it('displays average cost per request', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByText('Avg Cost / Request')).toBeInTheDocument();
+        expect(screen.getByText('$0.001234')).toBeInTheDocument();
+      });
+    });
+
+    it('displays cache savings', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByText('Cache Savings')).toBeInTheDocument();
+        expect(screen.getByText('$0.6000')).toBeInTheDocument();
+      });
+    });
+
+    it('hides usage cards when Prometheus unavailable', async () => {
+      mockGetLlmUsage.mockRejectedValue(new Error('503'));
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('budget-cards')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('usage-cards')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Cost Time-Series Chart', () => {
+    it('renders timeseries chart', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('cost-timeseries')).toBeInTheDocument();
+      });
+    });
+
+    it('renders bars for each data point', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        const bars = screen.getByTestId('timeseries-bars');
+        expect(bars.children).toHaveLength(2);
+      });
+    });
+
+    it('shows step label', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByText('Step: 1h')).toBeInTheDocument();
+      });
+    });
+
+    it('hides chart when no timeseries data', async () => {
+      mockGetLlmTimeseries.mockResolvedValue({ points: [], period: 'day', step: '1h' });
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('budget-cards')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('cost-timeseries')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Provider Cost Breakdown (Prometheus)', () => {
+    it('renders provider cost breakdown table', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('provider-cost-breakdown')).toBeInTheDocument();
+      });
+    });
+
+    it('shows provider cost rows', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('cost-row-anthropic-claude-3-5-sonnet')).toBeInTheDocument();
+        expect(screen.getByTestId('cost-row-openai-gpt-4o')).toBeInTheDocument();
+      });
+    });
+
+    it('displays cost amounts', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByText('$8.5000')).toBeInTheDocument();
+        expect(screen.getByText('$3.2000')).toBeInTheDocument();
+      });
+    });
+
+    it('displays share percentages', async () => {
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByText('72.6%')).toBeInTheDocument();
+        expect(screen.getByText('27.4%')).toBeInTheDocument();
+      });
+    });
+
+    it('hides breakdown when no cost data', async () => {
+      mockGetLlmProviderBreakdown.mockResolvedValue({ providers: [], period: 'month' });
+      renderWithProviders(<LLMCostDashboard />);
+      await waitFor(() => {
+        expect(screen.getByTestId('budget-cards')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('provider-cost-breakdown')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Refresh', () => {
     it('calls API on refresh click', async () => {
       const user = userEvent.setup();
@@ -317,8 +510,9 @@ describe('LLMCostDashboard', () => {
       });
       const refreshBtn = screen.getByTestId('refresh-btn');
       await user.click(refreshBtn);
-      // Each refresh calls 2 endpoints (providers + budget)
+      // Each refresh calls 5 endpoints (providers + budget + usage + timeseries + breakdown)
       expect(mockGet).toHaveBeenCalledTimes(4);
+      expect(mockGetLlmUsage).toHaveBeenCalledTimes(2);
     });
   });
 

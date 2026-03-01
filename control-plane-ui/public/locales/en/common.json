@@ -43,7 +43,8 @@
     "diagnostics": "Diagnostics",
     "analytics": "Usage Analytics",
     "securityPosture": "Security Posture",
-    "proxyOwner": "Proxy Owner"
+    "proxyOwner": "Proxy Owner",
+    "llmCost": "LLM Cost"
   },
   "layout": {
     "controlPlane": "Control Plane",

@@ -19,6 +19,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
+use crate::llm::{CostCalculator, LlmProvider, TokenUsage};
 use crate::state::AppState;
 
 /// Dedicated HTTP client for LLM proxy (long timeouts, large bodies).
@@ -87,9 +88,15 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
 
     // Step 3: Resolve upstream — subscription-aware Azure routing or static fallback (CAB-1615)
     let resolved = resolve_upstream(&state, api_format, &subscription_id, &request_path);
-    let (upstream_url, upstream_headers_preset) = match resolved {
-        UpstreamResolution::Azure { url, headers } => (url, Some(headers)),
-        UpstreamResolution::Static { url } => (url, None::<Vec<(String, String)>>),
+    let (upstream_url, upstream_headers_preset, resolved_provider) = match resolved {
+        UpstreamResolution::Azure {
+            url,
+            headers,
+            provider,
+        } => (url, Some(headers), provider),
+        UpstreamResolution::Static { url, provider } => {
+            (url, None::<Vec<(String, String)>>, provider)
+        }
         UpstreamResolution::Error(msg) => {
             return (StatusCode::SERVICE_UNAVAILABLE, msg).into_response();
         }
@@ -132,6 +139,12 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
             return (StatusCode::BAD_REQUEST, "Failed to read request body").into_response();
         }
     };
+
+    // Extract model from request body for cost tracking (best-effort, non-blocking)
+    let request_model = serde_json::from_slice::<serde_json::Value>(&body_bytes)
+        .ok()
+        .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from))
+        .unwrap_or_else(|| "unknown".to_string());
 
     // Build upstream headers (format-aware)
     let mut upstream_headers = HeaderMap::new();
@@ -277,6 +290,11 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
             StatusCode::from_u16(upstream_status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
         *response.headers_mut() = response_headers;
 
+        // Clone cost tracking context for the async metering task (CAB-1487 wiring)
+        let sse_cost_calculator = state.cost_calculator.clone();
+        let sse_request_model = request_model.clone();
+        let sse_provider = resolved_provider;
+
         // Spawn async metering (non-blocking, fire-and-forget)
         tokio::spawn(async move {
             // Wait a bit for stream to complete
@@ -308,6 +326,16 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                             latency_ms = elapsed.as_millis() as u64,
                             "LLM proxy: usage extracted from SSE stream"
                         );
+
+                        // Track cost to Prometheus (CAB-1487 wiring — SSE path)
+                        track_cost(
+                            &sse_cost_calculator,
+                            &usage,
+                            sse_provider,
+                            &sse_request_model,
+                            elapsed.as_secs_f64(),
+                        );
+
                         record_usage_to_cp(&MeteringParams {
                             client: &http_client,
                             metering_url: metering_url.as_deref(),
@@ -352,6 +380,15 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                 "LLM proxy: usage extracted from response"
             );
 
+            // Track cost to Prometheus (CAB-1487 wiring)
+            track_cost(
+                &state.cost_calculator,
+                &usage,
+                resolved_provider,
+                &request_model,
+                elapsed.as_secs_f64(),
+            );
+
             let metering_url = state
                 .config
                 .llm_proxy_metering_url
@@ -391,11 +428,45 @@ enum UpstreamResolution {
     Azure {
         url: String,
         headers: Vec<(String, String)>,
+        provider: LlmProvider,
     },
     /// Static routing: base_url + request_path, API key resolved separately.
-    Static { url: String },
+    Static { url: String, provider: LlmProvider },
     /// Configuration error — return to caller as SERVICE_UNAVAILABLE.
     Error(String),
+}
+
+/// Convert proxy-local `LlmUsage` to cost module `TokenUsage` for Prometheus tracking.
+fn to_token_usage(usage: &LlmUsage, provider: LlmProvider, model: &str) -> TokenUsage {
+    TokenUsage {
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        cache_read_input_tokens: usage.cache_read_input_tokens,
+        cache_creation_input_tokens: usage.cache_creation_input_tokens,
+        provider,
+        model: model.to_string(),
+    }
+}
+
+/// Track cost via Prometheus if CostCalculator is available.
+fn track_cost(
+    cost_calculator: &Option<std::sync::Arc<CostCalculator>>,
+    usage: &LlmUsage,
+    provider: LlmProvider,
+    model: &str,
+    latency_secs: f64,
+) {
+    if let Some(ref calc) = cost_calculator {
+        let token_usage = to_token_usage(usage, provider, model);
+        let result = calc.track(&token_usage);
+        crate::llm::record_latency(provider, model, latency_secs);
+        debug!(
+            provider = %provider,
+            model = %model,
+            cost_usd = result.total_usd,
+            "LLM cost tracked"
+        );
+    }
 }
 
 /// Resolve the upstream URL and auth for a request (CAB-1615).
@@ -428,6 +499,7 @@ fn resolve_upstream(
                                 return UpstreamResolution::Azure {
                                     url: azure_req.url,
                                     headers: azure_req.headers,
+                                    provider: provider.provider,
                                 };
                             }
                             Err(e) => {
@@ -449,7 +521,10 @@ fn resolve_upstream(
                         provider.base_url.trim_end_matches('/'),
                         request_path
                     );
-                    return UpstreamResolution::Static { url };
+                    return UpstreamResolution::Static {
+                        url,
+                        provider: provider.provider,
+                    };
                 }
                 // Subscription not in mapping — fall through to static routing
                 debug!(
@@ -461,19 +536,28 @@ fn resolve_upstream(
     }
 
     // Static routing fallback
-    let base_url = match api_format {
+    let (base_url, provider) = match api_format {
         LlmApiFormat::OpenAiCompat => {
             if state.config.llm_proxy_mistral_api_key.is_some() {
-                state.config.llm_proxy_mistral_upstream_url.clone()
+                (
+                    state.config.llm_proxy_mistral_upstream_url.clone(),
+                    LlmProvider::Mistral,
+                )
             } else {
-                state.config.llm_proxy_upstream_url.clone()
+                (
+                    state.config.llm_proxy_upstream_url.clone(),
+                    LlmProvider::OpenAi,
+                )
             }
         }
-        LlmApiFormat::Anthropic => state.config.llm_proxy_upstream_url.clone(),
+        LlmApiFormat::Anthropic => (
+            state.config.llm_proxy_upstream_url.clone(),
+            LlmProvider::Anthropic,
+        ),
     };
 
     let url = format!("{}{}", base_url.trim_end_matches('/'), request_path);
-    UpstreamResolution::Static { url }
+    UpstreamResolution::Static { url, provider }
 }
 
 /// Extract API key from request headers (x-api-key or Authorization: Bearer).
@@ -967,7 +1051,7 @@ data: {"type":"message_stop"}
         );
 
         match result {
-            UpstreamResolution::Azure { url, headers } => {
+            UpstreamResolution::Azure { url, headers, .. } => {
                 assert!(
                     url.contains("test-ns.openai.azure.com"),
                     "URL should target Azure: {url}"
@@ -1006,7 +1090,7 @@ data: {"type":"message_stop"}
         );
 
         match result {
-            UpstreamResolution::Static { url } => {
+            UpstreamResolution::Static { url, .. } => {
                 // Falls through to static because mapping is empty
                 assert!(
                     url.contains("/v1/chat/completions"),
@@ -1031,7 +1115,7 @@ data: {"type":"message_stop"}
         let result = resolve_upstream(&state, LlmApiFormat::Anthropic, "sub-123", "/v1/messages");
 
         match result {
-            UpstreamResolution::Static { url } => {
+            UpstreamResolution::Static { url, .. } => {
                 assert!(
                     url.contains("api.anthropic.com"),
                     "Anthropic should use static upstream: {url}"
@@ -1059,7 +1143,7 @@ data: {"type":"message_stop"}
         );
 
         match result {
-            UpstreamResolution::Static { url } => {
+            UpstreamResolution::Static { url, .. } => {
                 assert!(
                     url.contains("api.openai.com"),
                     "Non-Azure provider should use base_url: {url}"
@@ -1092,7 +1176,7 @@ data: {"type":"message_stop"}
         );
 
         match result {
-            UpstreamResolution::Static { url } => {
+            UpstreamResolution::Static { url, .. } => {
                 // Should NOT hit Azure even though mapping exists, because router is disabled
                 assert!(
                     !url.contains("azure"),

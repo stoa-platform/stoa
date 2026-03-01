@@ -157,6 +157,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/skills/:id/health", get(admin::skills_health))
         .route("/skills/:id/health/reset", post(admin::skills_health_reset))
+        // CAB-1487: LLM cost-aware routing admin
+        .route("/llm/status", get(admin::llm_status))
+        .route("/llm/providers", get(admin::llm_providers))
+        .route("/llm/costs", get(admin::llm_costs))
         // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
         .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
         // CAB-1316: Per-request diagnostic report + aggregated summary

@@ -65,6 +65,7 @@ from .routers import (
     git,
     health,
     llm_budget,
+    llm_usage,
     mcp_gitops,
     mcp_policy_proxy,
     mcp_proxy,
@@ -678,6 +679,9 @@ app.include_router(billing.router)
 
 # LLM Budget & Provider Config (CAB-1491)
 app.include_router(llm_budget.router)
+
+# LLM Usage & Cost Monitoring (CAB-1487)
+app.include_router(llm_usage.router)
 
 # Environments (ADR-040 — Born GitOps)
 app.include_router(environments.router)

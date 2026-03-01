@@ -120,13 +120,44 @@ class LlmBudgetService:
         logger.info("Updated LLM budget: tenant=%s", tenant_id)
         return LlmBudgetResponse.model_validate(budget)
 
-    async def record_spend(self, tenant_id: str, amount_usd: float) -> None:
-        """Record LLM spend against a tenant's budget."""
+    async def record_spend(
+        self,
+        tenant_id: str,
+        amount_usd: float,
+        provider_name: str | None = None,
+        model: str | None = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        latency_seconds: float | None = None,
+        cached: int = 0,
+    ) -> None:
+        """Record LLM spend against a tenant's budget.
+
+        Also writes to llm_spend_events audit table when provider metadata is supplied.
+        """
         budget = await self.repo.get_budget_by_tenant(tenant_id)
         if not budget:
             raise ValueError(f"Budget not found for tenant: {tenant_id}")
 
         await self.repo.increment_spend(tenant_id, amount_usd)
+
+        # Write audit event if provider metadata is available (CAB-1487)
+        if provider_name:
+            from src.models.llm_budget import LlmSpendEvent
+
+            event = LlmSpendEvent(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                provider_name=provider_name,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=Decimal(str(round(amount_usd, 6))),
+                latency_seconds=Decimal(str(round(latency_seconds, 4))) if latency_seconds is not None else None,
+                cached=cached,
+            )
+            self.repo.session.add(event)
+            await self.repo.session.flush()
 
         new_spend = float(budget.current_spend_usd) + amount_usd
         usage_pct = (new_spend / float(budget.monthly_limit_usd)) * 100 if budget.monthly_limit_usd else 0

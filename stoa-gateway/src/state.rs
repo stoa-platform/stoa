@@ -123,6 +123,9 @@ pub struct AppState {
     /// LLM provider router for subscription-aware Azure OpenAI routing (CAB-1615).
     /// None when LLM router is disabled or has no providers configured.
     pub llm_router: Option<Arc<LlmRouter>>,
+    /// LLM cost calculator for per-request cost tracking via Prometheus (CAB-1487 wiring).
+    /// Shares the same ProviderRegistry as llm_router. None when LLM router is disabled.
+    pub cost_calculator: Option<Arc<crate::llm::CostCalculator>>,
 }
 
 impl AppState {
@@ -483,6 +486,13 @@ impl AppState {
             None
         };
 
+        // Initialize LLM cost calculator — shares ProviderRegistry from router (CAB-1487 wiring)
+        let cost_calculator = llm_router.as_ref().map(|router| {
+            let calc = crate::llm::CostCalculator::new(router.registry().clone());
+            tracing::info!("LLM cost calculator initialized");
+            Arc::new(calc)
+        });
+
         let start_time = Instant::now();
 
         Self {
@@ -526,6 +536,7 @@ impl AppState {
             mcp_discovery,
             capabilities_json,
             llm_router,
+            cost_calculator,
         }
     }
 

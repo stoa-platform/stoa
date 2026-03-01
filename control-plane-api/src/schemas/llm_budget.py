@@ -75,3 +75,62 @@ class SpendSummaryResponse(BaseModel):
     remaining_usd: Decimal
     usage_pct: float
     is_over_budget: bool
+
+
+# ---- LLM Usage / Cost Monitoring schemas (CAB-1487) ----
+
+
+class LlmUsageResponse(BaseModel):
+    """Top-level LLM usage summary for a tenant."""
+
+    total_cost_usd: float
+    input_tokens: int
+    output_tokens: int
+    avg_cost_per_request: float
+    cache_read_cost_usd: float
+    cache_write_cost_usd: float
+    period: str
+
+
+class LlmTimeseriesPoint(BaseModel):
+    """Single time-series data point."""
+
+    timestamp: str
+    value: float
+
+
+class LlmTimeseriesResponse(BaseModel):
+    """Cost time-series for charting."""
+
+    points: list[LlmTimeseriesPoint]
+    period: str
+    step: str
+
+
+class LlmProviderCostEntry(BaseModel):
+    """Cost breakdown for a single provider/model combination."""
+
+    provider: str
+    model: str
+    cost_usd: float
+
+
+class LlmProviderBreakdownResponse(BaseModel):
+    """Cost breakdown by provider."""
+
+    providers: list[LlmProviderCostEntry]
+    period: str
+
+
+class LlmAnomalyEntry(BaseModel):
+    """A detected cost anomaly."""
+
+    provider: str
+    avg_latency_seconds: float
+
+
+class LlmAnomaliesResponse(BaseModel):
+    """Latency anomalies per provider (high latency = potential cost issue)."""
+
+    entries: list[LlmAnomalyEntry]
+    period: str

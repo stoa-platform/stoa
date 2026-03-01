@@ -1,7 +1,7 @@
 """Create workflow tables for configurable onboarding workflows (CAB-593)
 
-Revision ID: 028
-Revises: 027
+Revision ID: 028b
+Revises: 028
 Create Date: 2026-02-17
 """
 
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "028"
-down_revision = "027"
+revision = "028b"
+down_revision = "028"
 branch_labels = None
 depends_on = None
 

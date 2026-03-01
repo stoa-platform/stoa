@@ -93,7 +93,7 @@ export default defineConfig({
         storageState: 'fixtures/.auth/art3mis.json',
       },
       dependencies: ['auth-setup'],
-      testMatch: /demo-showcase/,
+      testMatch: /demo-(showcase|ia-pour-tous)/,
     },
 
     // Gateway API tests (no browser, just HTTP)

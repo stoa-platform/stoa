@@ -14,11 +14,18 @@ import type { API, Application } from '../../types';
 
 type SubscriptionPlan = 'free' | 'basic' | 'premium' | 'enterprise';
 
+export interface CustomPlan {
+  slug: string;
+  name: string;
+  description: string;
+  features: string[];
+}
+
 export interface SubscribeFormData {
   applicationId: string;
   applicationName: string;
   apiId: string;
-  plan: SubscriptionPlan;
+  plan: string;
   certificateFingerprint?: string;
 }
 
@@ -29,6 +36,10 @@ interface SubscribeModalProps {
   api: API;
   isLoading?: boolean;
   error?: string | null;
+  /** Override default plans with API-specific plans (e.g. Chat Completions). */
+  customPlans?: CustomPlan[];
+  /** Pre-select a plan slug when opening the modal. */
+  defaultPlan?: string;
 }
 
 interface PlanInfo {
@@ -87,12 +98,15 @@ export function SubscribeModal({
   api,
   isLoading = false,
   error = null,
+  customPlans,
+  defaultPlan,
 }: SubscribeModalProps) {
   const [selectedAppId, setSelectedAppId] = useState<string>('');
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>('free');
+  const [selectedPlan, setSelectedPlan] = useState<string>('free');
   const [certResult, setCertResult] = useState<CertificateValidationResult | null>(null);
 
   const requiresMtls = api.tags?.includes('mtls') ?? false;
+  const hasCustomPlans = customPlans && customPlans.length > 0;
 
   const { data: applications, isLoading: appsLoading } = useApplications();
 
@@ -100,10 +114,10 @@ export function SubscribeModal({
   useEffect(() => {
     if (isOpen) {
       setSelectedAppId('');
-      setSelectedPlan('free');
+      setSelectedPlan(defaultPlan ?? (hasCustomPlans ? customPlans[0].slug : 'free'));
       setCertResult(null);
     }
-  }, [isOpen]);
+  }, [isOpen, defaultPlan, hasCustomPlans, customPlans]);
 
   // Auto-select first app if only one exists
   useEffect(() => {
@@ -245,59 +259,105 @@ export function SubscribeModal({
                   <span className="sr-only">(required)</span>
                 </span>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {(Object.keys(plans) as SubscriptionPlan[]).map((planKey) => {
-                    const plan = plans[planKey];
-                    const Icon = plan.icon;
-                    const isSelected = selectedPlan === planKey;
-
-                    return (
-                      <button
-                        key={planKey}
-                        type="button"
-                        onClick={() => setSelectedPlan(planKey)}
-                        disabled={isLoading}
-                        className={`relative p-4 rounded-lg border-2 text-left transition-all ${
-                          isSelected
-                            ? `${plan.borderColor} ${plan.bgColor} ring-2 ring-offset-1 ring-primary-500 dark:ring-offset-neutral-800`
-                            : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`p-2 rounded-lg ${plan.bgColor}`}>
-                            <Icon className={`h-5 w-5 ${plan.color}`} />
-                          </div>
-                          <div className="flex-1">
-                            <h4
-                              className={`font-semibold ${isSelected ? plan.color : 'text-neutral-900 dark:text-white'}`}
-                            >
-                              {plan.name}
-                            </h4>
-                            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                              {plan.description}
-                            </p>
-                            <ul className="mt-2 space-y-1">
-                              {plan.features.map((feature, idx) => (
-                                <li
-                                  key={idx}
-                                  className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400"
-                                >
-                                  <Check className="h-3 w-3 text-green-500" />
-                                  {feature}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                        {isSelected && (
-                          <div className="absolute top-2 right-2">
-                            <div className="p-1 bg-primary-600 rounded-full">
-                              <Check className="h-3 w-3 text-white" />
+                  {hasCustomPlans
+                    ? customPlans.map((cp) => {
+                        const isSelected = selectedPlan === cp.slug;
+                        return (
+                          <button
+                            key={cp.slug}
+                            type="button"
+                            onClick={() => setSelectedPlan(cp.slug)}
+                            disabled={isLoading}
+                            className={`relative p-4 rounded-lg border-2 text-left transition-all ${
+                              isSelected
+                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 ring-2 ring-offset-1 ring-primary-500 dark:ring-offset-neutral-800'
+                                : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            <div className="flex-1">
+                              <h4
+                                className={`font-semibold ${isSelected ? 'text-primary-700 dark:text-primary-400' : 'text-neutral-900 dark:text-white'}`}
+                              >
+                                {cp.name}
+                              </h4>
+                              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                                {cp.description}
+                              </p>
+                              <ul className="mt-2 space-y-1">
+                                {cp.features.map((feature, idx) => (
+                                  <li
+                                    key={idx}
+                                    className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400"
+                                  >
+                                    <Check className="h-3 w-3 text-green-500" />
+                                    {feature}
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
+                            {isSelected && (
+                              <div className="absolute top-2 right-2">
+                                <div className="p-1 bg-primary-600 rounded-full">
+                                  <Check className="h-3 w-3 text-white" />
+                                </div>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })
+                    : (Object.keys(plans) as SubscriptionPlan[]).map((planKey) => {
+                        const plan = plans[planKey];
+                        const Icon = plan.icon;
+                        const isSelected = selectedPlan === planKey;
+
+                        return (
+                          <button
+                            key={planKey}
+                            type="button"
+                            onClick={() => setSelectedPlan(planKey)}
+                            disabled={isLoading}
+                            className={`relative p-4 rounded-lg border-2 text-left transition-all ${
+                              isSelected
+                                ? `${plan.borderColor} ${plan.bgColor} ring-2 ring-offset-1 ring-primary-500 dark:ring-offset-neutral-800`
+                                : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`p-2 rounded-lg ${plan.bgColor}`}>
+                                <Icon className={`h-5 w-5 ${plan.color}`} />
+                              </div>
+                              <div className="flex-1">
+                                <h4
+                                  className={`font-semibold ${isSelected ? plan.color : 'text-neutral-900 dark:text-white'}`}
+                                >
+                                  {plan.name}
+                                </h4>
+                                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                                  {plan.description}
+                                </p>
+                                <ul className="mt-2 space-y-1">
+                                  {plan.features.map((feature, idx) => (
+                                    <li
+                                      key={idx}
+                                      className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400"
+                                    >
+                                      <Check className="h-3 w-3 text-green-500" />
+                                      {feature}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <div className="absolute top-2 right-2">
+                                <div className="p-1 bg-primary-600 rounded-full">
+                                  <Check className="h-3 w-3 text-white" />
+                                </div>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                 </div>
               </div>
 

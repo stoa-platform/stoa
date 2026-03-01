@@ -29,7 +29,24 @@ import { useSubscribe, SubscribeToAPIResponse } from '../../hooks/useSubscriptio
 import { SubscribeModal, SubscribeFormData } from '../../components/subscriptions/SubscribeModal';
 import { config } from '../../config';
 import { ChatCompletionsEnrichment } from '../../components/apis/ChatCompletionsEnrichment';
+import {
+  CHAT_COMPLETIONS_API_NAME,
+  PLANS as CHAT_COMPLETIONS_PLANS,
+} from '../../data/chatCompletionsConfig';
+import type { CustomPlan } from '../../components/subscriptions/SubscribeModal';
 import type { APIEndpoint } from '../../types';
+
+/** Map Chat Completions plans to the SubscribeModal custom plan format. */
+const chatCompletionsCustomPlans: CustomPlan[] = CHAT_COMPLETIONS_PLANS.map((p) => ({
+  slug: p.slug,
+  name: p.name,
+  description: p.description,
+  features: [
+    `${p.tokensPerMinute.toLocaleString()} tokens/min`,
+    `${p.requestsPerMinute} req/min`,
+    `Namespace: ${p.namespace}`,
+  ],
+}));
 
 type TabType = 'overview' | 'endpoints' | 'openapi';
 
@@ -50,6 +67,7 @@ export function APIDetail() {
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const [subscriptionResult, setSubscriptionResult] = useState<SubscribeToAPIResponse | null>(null);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
+  const [preselectedPlan, setPreselectedPlan] = useState<string | undefined>(undefined);
 
   const { data: api, isLoading, isError, error } = useAPI(id);
   const { data: openApiSpec, isLoading: specLoading } = useOpenAPISpec(id);
@@ -328,7 +346,13 @@ export function APIDetail() {
             </div>
 
             {/* API-specific enrichment (e.g. Chat Completions) */}
-            <ChatCompletionsEnrichment apiName={api.name} />
+            <ChatCompletionsEnrichment
+              apiName={api.name}
+              onSelectPlan={(planSlug) => {
+                setPreselectedPlan(planSlug);
+                setIsSubscribeModalOpen(true);
+              }}
+            />
           </div>
         )}
 
@@ -530,11 +554,16 @@ export function APIDetail() {
         onClose={() => {
           setIsSubscribeModalOpen(false);
           setSubscribeError(null);
+          setPreselectedPlan(undefined);
         }}
         onSubmit={handleSubscribe}
         api={api}
         isLoading={subscribeMutation.isPending}
         error={subscribeError}
+        customPlans={
+          api.name === CHAT_COMPLETIONS_API_NAME ? chatCompletionsCustomPlans : undefined
+        }
+        defaultPlan={preselectedPlan}
       />
 
       {/* Subscription Success Modal - Shows API Key (only once!) */}

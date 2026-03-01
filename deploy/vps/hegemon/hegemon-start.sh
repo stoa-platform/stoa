@@ -107,6 +107,13 @@ expected_settings = {
     "permissions": {
         "allow": [
             "Bash(*)",
+            "Read",
+            "Write",
+            "Edit",
+            "Glob",
+            "Grep",
+            "WebFetch",
+            "WebSearch",
             "mcp__context7__resolve-library-id",
             "mcp__context7__query-docs",
             "mcp__playwright__*",

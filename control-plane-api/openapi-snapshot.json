@@ -20567,6 +20567,20 @@
       "UsageRecordRequest": {
         "description": "Gateway-submitted usage event (CAB-1568: LLM proxy metering).",
         "properties": {
+          "cache_creation_input_tokens": {
+            "default": 0,
+            "description": "Anthropic cache creation tokens",
+            "minimum": 0.0,
+            "title": "Cache Creation Input Tokens",
+            "type": "integer"
+          },
+          "cache_read_input_tokens": {
+            "default": 0,
+            "description": "Anthropic cache read tokens",
+            "minimum": 0.0,
+            "title": "Cache Read Input Tokens",
+            "type": "integer"
+          },
           "endpoint": {
             "default": "/v1/messages",
             "description": "API endpoint called",
@@ -20853,6 +20867,16 @@
             "title": "Api Id",
             "type": "string"
           },
+          "cache_creation_input_tokens": {
+            "default": 0,
+            "title": "Cache Creation Input Tokens",
+            "type": "integer"
+          },
+          "cache_read_input_tokens": {
+            "default": 0,
+            "title": "Cache Read Input Tokens",
+            "type": "integer"
+          },
           "consumer_id": {
             "anyOf": [
               {
@@ -20879,6 +20903,16 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
+            "type": "integer"
           },
           "p99_latency_ms": {
             "anyOf": [

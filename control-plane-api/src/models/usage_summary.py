@@ -37,6 +37,10 @@ class UsageSummary(Base):
 
     # Token usage (for LLM/MCP tool calls)
     total_tokens = Column(BigInteger, nullable=False, default=0)
+    input_tokens = Column(BigInteger, nullable=False, default=0, server_default="0")
+    output_tokens = Column(BigInteger, nullable=False, default=0, server_default="0")
+    cache_creation_input_tokens = Column(BigInteger, nullable=False, default=0, server_default="0")
+    cache_read_input_tokens = Column(BigInteger, nullable=False, default=0, server_default="0")
 
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

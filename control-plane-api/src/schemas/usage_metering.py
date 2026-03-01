@@ -22,6 +22,10 @@ class UsageSummaryResponse(BaseModel):
     total_latency_ms: int = 0
     p99_latency_ms: int | None = None
     total_tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -45,6 +49,8 @@ class UsageRecordRequest(BaseModel):
     total_tokens: int = Field(default=0, ge=0, description="Total tokens (input + output)")
     input_tokens: int = Field(default=0, ge=0, description="Input tokens")
     output_tokens: int = Field(default=0, ge=0, description="Output tokens")
+    cache_creation_input_tokens: int = Field(default=0, ge=0, description="Anthropic cache creation tokens")
+    cache_read_input_tokens: int = Field(default=0, ge=0, description="Anthropic cache read tokens")
     total_latency_ms: int = Field(default=0, ge=0, description="Request latency in ms")
 
 

@@ -1,0 +1,605 @@
+#!/bin/bash
+# stoa-parallel — Launch parallel Claude Code tmux workspace (CAB-1513 v2)
+#
+# Layout (7 panes in 1 window — tiled grid, all visible):
+#   Pane 0: ORCHESTRE  — Lead orchestrator (always Max, full repo access)
+#   Pane 1: MONITOR    — htop + memory watchdog
+#   Pane 2: BACKEND    — Claude (control-plane-api, infra, docs)
+#   Pane 3: FRONTEND   — Claude (portal, control-plane-ui, shared)
+#   Pane 4: AUTH       — Claude (keycloak, IAM, OAuth)
+#   Pane 5: MCP        — Claude (stoa-gateway, Rust)
+#   Pane 6: QA         — Claude (e2e, tests — read-only on rest)
+#
+# Pane borders show role names. Zoom any pane: Ctrl+B z (toggle).
+#
+# Shared state: PocketBase (state.gostoa.dev) via heg-state CLI.
+# Each instance runs `heg-state start` at startup to register session + claim.
+# ORCHESTRE uses `heg-state remote-ls` for cross-instance visibility.
+#
+# Billing modes:
+#   - Max (subscription): ORCHESTRE + BACKEND + MCP (heaviest workloads)
+#   - API (consumption):  FRONTEND + AUTH + QA (lighter scopes)
+#
+# API key resolution (in order):
+#   1. --api-key=sk-ant-...              explicit
+#   2. ANTHROPIC_API_KEY env var         from .zshrc or shell
+#   3. Infisical vault (auto-fetched)    vault.gostoa.dev/prod/anthropic
+#
+# Usage:
+#   stoa-parallel                          # auto-fetch key → 3 Max + 3 API
+#   stoa-parallel --api-key=sk-ant-...     # explicit key → 3 Max + 3 API
+#   stoa-parallel --max-panes=0,2,5        # Override which panes use Max
+#   stoa-parallel --all-api                # All on API key
+#   stoa-parallel --all-max                # All on Max (no API key needed)
+#   stoa-parallel --attach                 # Create + attach
+#   stoa-parallel --kill                   # Tear down
+#   stoa-parallel --no-claude              # Layout only
+
+set -euo pipefail
+
+SESSION="stoa"
+STOA_DIR="$HOME/hlfh-repos/stoa"
+LAUNCH_CLAUDE=true
+API_KEY="${ANTHROPIC_API_KEY:-}"
+# Default: panes 0 (ORCHESTRE) and 2 (BACKEND) on Max — 2 Max + 4 API
+MAX_PANES="0,2"
+ALL_API=false
+ALL_MAX=false
+
+INFISICAL_API="${INFISICAL_API_URL:-https://vault.gostoa.dev/api}"
+INFISICAL_PROJECT="97972ffc-990b-4d28-9c4d-0664d217f03b"
+
+# Instance role context files (CLAUDE.local.md per role)
+INSTANCES_DIR="$STOA_DIR/.claude/instances"
+
+# Pane index → role name mapping
+ROLES=(ORCHESTRE MONITOR BACKEND FRONTEND AUTH MCP QA)
+
+# Fetch API key from Infisical if not already set
+fetch_api_key() {
+  if [[ -n "$API_KEY" || "$ALL_MAX" == "true" ]]; then return 0; fi
+
+  echo "Fetching ANTHROPIC_API_KEY from Infisical..."
+  local token
+  token=$(infisical-token --raw 2>/dev/null) || {
+    echo "WARN: Infisical auth failed — falling back to all-Max mode" >&2
+    ALL_MAX=true
+    return 0
+  }
+
+  local response
+  response=$(curl -sf \
+    "${INFISICAL_API}/v3/secrets/raw/ANTHROPIC_API_KEY?workspaceId=${INFISICAL_PROJECT}&environment=prod&secretPath=/anthropic" \
+    -H "Authorization: Bearer ${token}" 2>/dev/null) || {
+    echo "WARN: Secret not found in Infisical (prod/anthropic/ANTHROPIC_API_KEY)" >&2
+    ALL_MAX=true
+    return 0
+  }
+
+  API_KEY=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['secret']['secretValue'])" 2>/dev/null) || {
+    echo "WARN: Could not parse Infisical response — falling back to all-Max mode" >&2
+    ALL_MAX=true
+    return 0
+  }
+
+  if [[ -z "$API_KEY" || "$API_KEY" == "null" ]]; then
+    echo "WARN: Empty API key from Infisical — falling back to all-Max mode" >&2
+    ALL_MAX=true
+    return 0
+  fi
+
+  echo "OK: API key loaded from Infisical (${API_KEY:0:10}...)"
+}
+
+# Parse args
+for arg in "$@"; do
+  case "$arg" in
+    --kill)
+      echo "Killing session $SESSION..."
+      tmux kill-session -t "$SESSION" 2>/dev/null || echo "No session to kill."
+      # Cleanup generated files
+      for role in orchestre backend frontend auth mcp qa; do
+        rm -f "$INSTANCES_DIR/${role}.local.md"
+      done
+      rm -rf /tmp/claude-api-config
+      exit 0
+      ;;
+    --no-claude) LAUNCH_CLAUDE=false ;;
+    --attach) ;; # handled at the end
+    --all-api) ALL_API=true ;;
+    --all-max) ALL_MAX=true ;;
+    --api-key=*) API_KEY="${arg#--api-key=}" ;;
+    --max-panes=*) MAX_PANES="${arg#--max-panes=}" ;;
+    --max-windows=*) MAX_PANES="${arg#--max-windows=}" ;; # compat alias
+    -h|--help)
+      cat <<'HELP'
+Usage: stoa-parallel [OPTIONS]
+
+Options:
+  --attach              Create and attach immediately
+  --kill                Kill existing session
+  --no-claude           Create layout without launching Claude instances
+  --api-key=sk-ant-...  Set API key for consumption-billed instances
+  --max-panes=0,2,5     Pane indices that use Max subscription (default: 0,2,5)
+  --all-api             All instances on API key (requires --api-key)
+  --all-max             All instances on Max subscription
+  -h, --help            Show this help
+
+Navigation (7 panes in tiled grid):
+  Ctrl+B q       Show pane numbers (then press digit to jump)
+  Ctrl+B o       Cycle to next pane
+  Ctrl+B z       Zoom/unzoom pane (fullscreen toggle)
+  Ctrl+B ↑↓←→   Move between panes directionally
+  Ctrl+B d       Detach (everything keeps running)
+  tmux attach -t stoa   Reattach
+
+Pane map:
+  0 = ORCHESTRE   1 = MONITOR   2 = BACKEND
+  3 = FRONTEND    4 = AUTH      5 = MCP       6 = QA
+
+Cross-instance messaging:
+  stoa-dispatch BACKEND "Travaille sur CAB-1350"
+  stoa-dispatch --list     List panes
+  stoa-dispatch --status   Show heg-state remote-ls
+
+Instance → Linear label:
+  BACKEND  → instance:backend   (control-plane-api, infra)
+  FRONTEND → instance:frontend  (portal, control-plane-ui)
+  AUTH     → instance:auth      (keycloak, IAM)
+  MCP      → instance:mcp       (stoa-gateway)
+  QA       → instance:qa        (e2e, tests)
+
+Shared state: PocketBase (state.gostoa.dev) via heg-state CLI
+HELP
+      exit 0
+      ;;
+    --api-key)
+      echo "Use --api-key=VALUE (with =)" >&2; exit 1
+      ;;
+  esac
+done
+
+# Auto-fetch API key from Infisical if needed
+fetch_api_key
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Session '$SESSION' already exists."
+  echo "  tmux attach -t $SESSION     # attach"
+  echo "  stoa-parallel --kill         # kill and restart"
+  for arg in "$@"; do
+    [[ "$arg" == "--attach" ]] && exec tmux attach -t "$SESSION"
+  done
+  exit 0
+fi
+
+# Determine billing mode per pane
+is_max_pane() {
+  local pane="$1"
+  if [[ "$ALL_MAX" == "true" ]]; then return 0; fi
+  if [[ "$ALL_API" == "true" ]]; then return 1; fi
+  if [[ -z "$API_KEY" ]]; then return 0; fi  # no key = all Max
+  echo ",$MAX_PANES," | grep -q ",$pane,"
+}
+
+# Pane index → instance role (lowercase)
+pane_role() {
+  case "$1" in
+    2) echo "backend" ;;
+    3) echo "frontend" ;;
+    4) echo "auth" ;;
+    5) echo "mcp" ;;
+    6) echo "qa" ;;
+  esac
+}
+
+# Generate CLAUDE.local.md context files for each role
+generate_context_files() {
+  mkdir -p "$INSTANCES_DIR"
+
+  # ORCHESTRE context
+  cat > "$INSTANCES_DIR/orchestre.local.md" << 'ORCHEOF'
+# Instance: ORCHESTRE (Lead)
+
+Tu es le LEAD ORCHESTRATEUR de la session stoa-parallel. Tu coordonnes 5 instances specialisees.
+
+## Tes instances
+
+| Pane | Role | Scope | Commande |
+|------|------|-------|----------|
+| 2 | BACKEND | control-plane-api/, charts/, k8s/ | `stoa-dispatch BACKEND "..."` |
+| 3 | FRONTEND | portal/, control-plane-ui/, shared/ | `stoa-dispatch FRONTEND "..."` |
+| 4 | AUTH | keycloak/, OAuth configs | `stoa-dispatch AUTH "..."` |
+| 5 | MCP | stoa-gateway/ | `stoa-dispatch MCP "..."` |
+| 6 | QA | e2e/ (read-only sur le reste) | `stoa-dispatch QA "..."` |
+
+## Protocole
+
+1. **Lire** `plan.md` et `memory.md` pour connaitre le cycle courant
+2. **Lister** les tickets du cycle via Linear MCP: `list_issues(cycle: current)`
+3. **COUNCIL GATE (OBLIGATOIRE)**: Avant de dispatcher un ticket >= 5 pts:
+   - Verifier que le ticket a le label `council:ticket-go` ou `council:ticket-fix` sur Linear
+   - Si absent: lancer `/council "description du ticket"` d'abord
+   - Si Council < 8.0: ne PAS dispatcher, reporter au lead
+   - `stoa-dispatch` bloque automatiquement les tickets sans label Council
+   - Override: `stoa-dispatch --force ROLE "message"` (audit trail obligatoire)
+4. **Dispatcher** chaque ticket valide a l'instance appropriee via `stoa-dispatch`
+5. **Monitorer** l'avancement via `heg-state remote-ls` (sessions PocketBase)
+6. **Merger** les PRs quand CI green: `gh pr merge <N> --squash --delete-branch`
+7. **Verifier** la coherence cross-composants avant merge
+
+## Visibilite etat partage
+
+```bash
+# Voir toutes les sessions actives + claims
+heg-state remote-ls
+
+# Envoyer une instruction a une instance
+stoa-dispatch BACKEND "Travaille sur CAB-1350: description courte"
+
+# Demander le status
+stoa-dispatch MCP "Quel est ton avancement ?"
+```
+
+## Linear (OBLIGATOIRE)
+
+- Quand tu dispatches un ticket: `linear.update_issue(id, state="In Progress")`
+- Quand un PR est merge: `linear.update_issue(id, state="Done")` + `linear.create_comment(...)`
+ORCHEOF
+
+  # BACKEND context
+  cat > "$INSTANCES_DIR/backend.local.md" << 'BACKEOF'
+# Instance: BACKEND
+
+Tu es l'instance BACKEND. Ton scope exclusif:
+- `control-plane-api/src/`, `control-plane-api/tests/`
+- `charts/`, `k8s/` (Helm, K8s manifests)
+
+## Interdit
+- Modifier: `portal/`, `stoa-gateway/src/`, `control-plane-ui/src/`, `e2e/`
+- Le hook `pre-instance-scope.sh` bloque ces chemins automatiquement
+
+## Prefixes commits
+- `feat(api):`, `fix(api):`, `test(api):`, `chore(infra):`
+
+## Protocole au demarrage
+1. Lire `memory.md` + `plan.md`
+2. Chercher tes tickets: Linear label `instance:backend`, cycle courant
+3. **Pour chaque ticket commence**: `heg-state start --ticket CAB-XXXX --role backend --branch feat/...`
+4. **Linear**: `linear.update_issue(id, state="In Progress")`
+5. Travailler 1 ticket a la fois, micro-PRs (<300 LOC)
+
+## Apres merge
+1. `heg-state done CAB-XXXX`
+2. `linear.update_issue(id, state="Done")` + `linear.create_comment(issueId, body="Completed in PR #XXX")`
+3. Passer au ticket suivant
+
+## Si PocketBase inaccessible
+Continuer normalement. `heg-state` utilise SQLite local en fallback. Le remote sync reprendra automatiquement.
+BACKEOF
+
+  # FRONTEND context
+  cat > "$INSTANCES_DIR/frontend.local.md" << 'FRONTEOF'
+# Instance: FRONTEND
+
+Tu es l'instance FRONTEND. Ton scope exclusif:
+- `portal/src/`, `control-plane-ui/src/`, `shared/`
+
+## Interdit
+- Modifier: `control-plane-api/src/`, `stoa-gateway/`, `e2e/`, `charts/`, `k8s/`
+
+## Prefixes commits
+- `feat(portal):`, `feat(ui):`, `fix(portal):`, `fix(ui):`
+
+## Protocole au demarrage
+1. Lire `memory.md` + `plan.md`
+2. Chercher tes tickets: Linear label `instance:frontend`, cycle courant
+3. **Pour chaque ticket commence**: `heg-state start --ticket CAB-XXXX --role frontend --branch feat/...`
+4. **Linear**: `linear.update_issue(id, state="In Progress")`
+5. Travailler 1 ticket a la fois, micro-PRs (<300 LOC)
+
+## Apres merge
+1. `heg-state done CAB-XXXX`
+2. `linear.update_issue(id, state="Done")` + `linear.create_comment(issueId, body="Completed in PR #XXX")`
+3. Passer au ticket suivant
+
+## Si PocketBase inaccessible
+Continuer normalement. `heg-state` utilise SQLite local en fallback.
+FRONTEOF
+
+  # AUTH context
+  cat > "$INSTANCES_DIR/auth.local.md" << 'AUTHEOF'
+# Instance: AUTH
+
+Tu es l'instance AUTH. Ton scope exclusif:
+- `keycloak/`, configs OAuth/IAM, `control-plane-api/src/auth/`
+
+## Interdit
+- Modifier: `portal/src/`, `stoa-gateway/src/`, `control-plane-ui/src/`, `e2e/`
+
+## Prefixes commits
+- `feat(auth):`, `fix(auth):`, `chore(auth):`
+
+## Protocole au demarrage
+1. Lire `memory.md` + `plan.md`
+2. Chercher tes tickets: Linear label `instance:auth`, cycle courant
+3. **Pour chaque ticket commence**: `heg-state start --ticket CAB-XXXX --role auth --branch feat/...`
+4. **Linear**: `linear.update_issue(id, state="In Progress")`
+5. Travailler 1 ticket a la fois
+
+## Apres merge
+1. `heg-state done CAB-XXXX`
+2. `linear.update_issue(id, state="Done")` + `linear.create_comment(issueId, body="Completed in PR #XXX")`
+3. Passer au ticket suivant
+
+## Si PocketBase inaccessible
+Continuer normalement. `heg-state` utilise SQLite local en fallback.
+AUTHEOF
+
+  # MCP context
+  cat > "$INSTANCES_DIR/mcp.local.md" << 'MCPEOF'
+# Instance: MCP
+
+Tu es l'instance MCP (Gateway). Ton scope exclusif:
+- `stoa-gateway/src/`, `stoa-gateway/tests/`
+
+## Interdit
+- Modifier: `control-plane-ui/`, `portal/`, `e2e/`, `control-plane-api/src/`
+
+## Prefixes commits
+- `feat(gateway):`, `fix(gateway):`, `test(gateway):`
+
+## Protocole au demarrage
+1. Lire `memory.md` + `plan.md`
+2. Chercher tes tickets: Linear label `instance:mcp`, cycle courant
+3. **Pour chaque ticket commence**: `heg-state start --ticket CAB-XXXX --role mcp --branch feat/...`
+4. **Linear**: `linear.update_issue(id, state="In Progress")`
+5. Travailler 1 ticket a la fois, micro-PRs (<300 LOC)
+
+## Apres merge
+1. `heg-state done CAB-XXXX`
+2. `linear.update_issue(id, state="Done")` + `linear.create_comment(issueId, body="Completed in PR #XXX")`
+3. Passer au ticket suivant
+
+## Si PocketBase inaccessible
+Continuer normalement. `heg-state` utilise SQLite local en fallback.
+MCPEOF
+
+  # QA context
+  cat > "$INSTANCES_DIR/qa.local.md" << 'QAEOF'
+# Instance: QA
+
+Tu es l'instance QA. Ton scope exclusif:
+- `e2e/` (features, steps, fixtures)
+- Tu peux LIRE tous les sources mais JAMAIS les modifier
+
+## Interdit
+- Modifier: `control-plane-api/src/`, `control-plane-ui/src/`, `portal/src/`, `stoa-gateway/src/`, `charts/`, `k8s/`
+
+## Prefixes commits
+- `test(e2e):`, `test(api):`, `test(portal):`
+
+## Protocole au demarrage
+1. Lire `memory.md` + `plan.md`
+2. Chercher tes tickets: Linear label `instance:qa`, cycle courant
+3. **Pour chaque ticket commence**: `heg-state start --ticket CAB-XXXX --role qa --branch feat/...`
+4. **Linear**: `linear.update_issue(id, state="In Progress")`
+5. Travailler 1 ticket a la fois
+
+## Apres merge
+1. `heg-state done CAB-XXXX`
+2. `linear.update_issue(id, state="Done")` + `linear.create_comment(issueId, body="Completed in PR #XXX")`
+3. Passer au ticket suivant
+
+## Si PocketBase inaccessible
+Continuer normalement. `heg-state` utilise SQLite local en fallback.
+QAEOF
+
+  echo "OK: Context files generated in $INSTANCES_DIR/"
+}
+
+echo "Creating 7-pane tmux grid..."
+
+# ── Create session with pane 0 (ORCHESTRE) ──
+# Use -x/-y to ensure enough space for 7 panes when detached (resizes on attach)
+tmux new-session -d -s "$SESSION" -n "workspace" -x 220 -y 60 -c "$STOA_DIR"
+
+# ── Create panes 1-6 (apply tiled after each split to redistribute space) ──
+PANE_DIRS=(
+  "$STOA_DIR"                    # pane 1: MONITOR
+  "$STOA_DIR/control-plane-api"  # pane 2: BACKEND
+  "$STOA_DIR/portal"             # pane 3: FRONTEND
+  "$STOA_DIR"                    # pane 4: AUTH
+  "$STOA_DIR/stoa-gateway"       # pane 5: MCP
+  "$STOA_DIR/e2e"                # pane 6: QA
+)
+for dir in "${PANE_DIRS[@]}"; do
+  tmux split-window -t "$SESSION:workspace" -c "$dir"
+  tmux select-layout -t "$SESSION:workspace" tiled
+done
+
+# ── Pane border labels (static, based on pane_index — immune to Claude Code overrides) ──
+BORDER_FMT='#{?#{==:#{pane_index},0},ORCHESTRE,#{?#{==:#{pane_index},1},MONITOR,#{?#{==:#{pane_index},2},BACKEND,#{?#{==:#{pane_index},3},FRONTEND,#{?#{==:#{pane_index},4},AUTH,#{?#{==:#{pane_index},5},MCP,QA}}}}}}'
+tmux set-window-option -t "$SESSION:workspace" pane-border-format " ${BORDER_FMT} "
+tmux set-window-option -t "$SESSION:workspace" pane-border-status top
+tmux set-window-option -t "$SESSION:workspace" allow-rename off
+
+# ── Style: highlight active pane ──
+tmux set-window-option -t "$SESSION:workspace" pane-active-border-style "fg=cyan,bold"
+tmux set-window-option -t "$SESSION:workspace" pane-border-style "fg=colour240"
+
+# ── Ensure homebrew PATH in all panes (tmux may not source .zprofile) ──
+# Send PATH export and wait for shells to process it before launching any commands.
+HOMEBREW_PATH="/opt/homebrew/bin:/opt/homebrew/sbin"
+for p in 0 1 2 3 4 5 6; do
+  tmux send-keys -t "$SESSION:workspace.$p" "export PATH=\"${HOMEBREW_PATH}:\$HOME/.local/bin:\$PATH\"" Enter
+done
+
+# Wait for all 7 shells to process the PATH export
+sleep 2
+
+# ── Launch MONITOR (pane 1): watchdog + GC ──
+# Watchdog runs in background, GC runs in foreground (both infinite loops)
+tmux send-keys -t "$SESSION:workspace.1" "claude-watchdog --threshold-gb 15 --system-gb 90 &" Enter
+sleep 0.5
+tmux send-keys -t "$SESSION:workspace.1" "stoa-exit-watchdog $SESSION &" Enter
+sleep 0.5
+tmux send-keys -t "$SESSION:workspace.1" "stoa-gc" Enter
+
+if [[ "$LAUNCH_CLAUDE" == "true" ]]; then
+  # ── Ensure auto-merge is enabled on the repo ──
+  # Without this, `stoa-merge` and `gh pr merge --auto` fail silently.
+  # Only check once per session (idempotent, non-blocking).
+  auto_merge=$(gh api "repos/stoa-platform/stoa" --jq '.allow_auto_merge' 2>/dev/null || echo "unknown")
+  if [[ "$auto_merge" == "false" ]]; then
+    echo "Enabling auto-merge on stoa-platform/stoa..."
+    gh api "repos/stoa-platform/stoa" -X PATCH -f allow_auto_merge=true >/dev/null 2>&1 || true
+  elif [[ "$auto_merge" == "true" ]]; then
+    echo "OK: Auto-merge already enabled"
+  fi
+
+  # Generate context files for each role
+  generate_context_files
+
+  # ── Prepare isolated config dir for API-key instances ──
+  # CLAUDE_CONFIG_DIR overrides ~/.claude/ — API instances won't see Max credentials.
+  # Max instances use default ~/.claude/ (with subscription credentials).
+  #
+  # Key insight: without .credentials.json, Claude Code doesn't see Max subscription
+  # and falls back to ANTHROPIC_API_KEY env var → "API Usage Billing".
+  #
+  # We also pre-populate .claude.json with onboarding-complete flags so the
+  # interactive first-time setup wizard (theme, account type, trust dialog,
+  # etc.) is skipped entirely — navigating 5+ interactive screens via
+  # `tmux send-keys` is fragile and breaks regularly.
+  API_CONFIG_DIR="/tmp/claude-api-config"
+  rm -rf "$API_CONFIG_DIR"
+  mkdir -p "$API_CONFIG_DIR"
+  # Symlink settings from REPO (not ~/.claude/) so API panes get:
+  #   - Bash(*) permission (project settings.local.json)
+  #   - Correct hooks (project settings.json: PreToolUse, PostToolUse, Stop)
+  #   - MCP server config
+  # Fallback to ~/.claude/ if repo files don't exist.
+  if [[ -f "$STOA_DIR/.claude/settings.json" ]]; then
+    ln -sf "$STOA_DIR/.claude/settings.json" "$API_CONFIG_DIR/settings.json"
+  else
+    ln -sf ~/.claude/settings.json "$API_CONFIG_DIR/settings.json" 2>/dev/null || true
+  fi
+  if [[ -f "$STOA_DIR/.claude/settings.local.json" ]]; then
+    ln -sf "$STOA_DIR/.claude/settings.local.json" "$API_CONFIG_DIR/settings.local.json"
+  else
+    ln -sf ~/.claude/settings.local.json "$API_CONFIG_DIR/settings.local.json" 2>/dev/null || true
+  fi
+  cp -f ~/.claude/CLAUDE.md "$API_CONFIG_DIR/" 2>/dev/null || true
+  # Symlink projects dir so session history and memory persist
+  ln -sfn ~/.claude/projects "$API_CONFIG_DIR/projects" 2>/dev/null || true
+
+  # Pre-populate .claude.json to skip the first-time setup wizard entirely.
+  # Extract API key suffix for customApiKeyResponses (Claude stores last 20 chars).
+  key_suffix="${API_KEY: -20}"
+  cat > "$API_CONFIG_DIR/.claude.json" << CONFIGEOF
+{
+  "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "2.1.59",
+  "numStartups": 1,
+  "effortCalloutDismissed": true,
+  "lastReleaseNotesSeen": "2.1.59",
+  "penguinModeOrgEnabled": true,
+  "opusProMigrationComplete": true,
+  "sonnet1m45MigrationComplete": true,
+  "officialMarketplaceAutoInstallAttempted": true,
+  "officialMarketplaceAutoInstalled": true,
+  "customApiKeyResponses": {
+    "approved": ["${key_suffix}"],
+    "rejected": []
+  },
+  "projects": {
+    "${STOA_DIR}": {
+      "hasTrustDialogAccepted": true,
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "${STOA_DIR}/control-plane-api": {
+      "hasTrustDialogAccepted": true,
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {}
+    },
+    "${STOA_DIR}/portal": {
+      "hasTrustDialogAccepted": true,
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {}
+    },
+    "${STOA_DIR}/stoa-gateway": {
+      "hasTrustDialogAccepted": true,
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {}
+    },
+    "${STOA_DIR}/e2e": {
+      "hasTrustDialogAccepted": true,
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {}
+    }
+  }
+}
+CONFIGEOF
+
+  # Count billing
+  max_count=0; api_count=0
+  for p in 0 2 3 4 5 6; do
+    if is_max_pane "$p"; then max_count=$((max_count + 1)); else api_count=$((api_count + 1)); fi
+  done
+  echo "Launching 6 Claude instances (${max_count} Max + ${api_count} API)..."
+
+  # ── ORCHESTRE (pane 0, always Max) ──
+  tmux send-keys -t "$SESSION:workspace.0" "claude" Enter
+
+  # ── Specialist instances (panes 2-6) ──
+  for p in 2 3 4 5 6; do
+    role=$(pane_role "$p")
+
+    if is_max_pane "$p"; then
+      # Max pane: uses ~/.claude/ (has subscription credentials)
+      tmux send-keys -t "$SESSION:workspace.$p" "export STOA_INSTANCE=${role}" Enter
+    else
+      # API pane: CLAUDE_CONFIG_DIR points to dir WITHOUT Max credentials
+      tmux send-keys -t "$SESSION:workspace.$p" "export STOA_INSTANCE=${role} ANTHROPIC_API_KEY='${API_KEY}' CLAUDE_CONFIG_DIR='${API_CONFIG_DIR}'" Enter
+    fi
+    # Small delay to ensure env export is processed before claude launch
+    sleep 0.3
+    # bypassPermissions: skips interactive prompts BUT keeps PreToolUse hooks
+    # (pre-instance-scope.sh enforces the deny matrix — that's the real safety layer)
+    tmux send-keys -t "$SESSION:workspace.$p" "claude --permission-mode bypassPermissions" Enter
+  done
+fi
+
+# Focus on ORCHESTRE pane (pane 0)
+tmux select-pane -t "$SESSION:workspace.0"
+
+echo ""
+echo "Session ready (7 panes, tiled grid):"
+echo "  ORCHESTRE(0)  MONITOR(1)  BACKEND(2)  FRONTEND(3)  AUTH(4)  MCP(5)  QA(6)"
+echo ""
+echo "Navigation:"
+echo "  Ctrl+B q       Show pane numbers (press digit to jump)"
+echo "  Ctrl+B o       Cycle to next pane"
+echo "  Ctrl+B z       Zoom/unzoom (fullscreen toggle)"
+echo "  Ctrl+B arrows  Move directionally"
+echo "  Ctrl+B d       Detach"
+echo ""
+echo "  tmux attach -t $SESSION"
+echo "  stoa-dispatch BACKEND \"message\"   # send to instance"
+
+# Attach if requested
+for arg in "$@"; do
+  if [[ "$arg" == "--attach" ]]; then exec tmux attach -t "$SESSION"; fi
+done
+exit 0

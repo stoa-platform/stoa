@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# stoa-merge — Queue PRs for auto-merge with strict branch protection handling
+#
+# Problem: strict: true branch protection + sequential merges cause a cascade:
+# Merge PR #1 → PR #2 becomes stale → update-branch → wait CI → merge → repeat.
+# With 5 PRs = 15+ min wasted on manual intervention.
+#
+# Solution: Enable auto-merge on each PR. GitHub automatically:
+# 1. Updates the branch when it falls behind main
+# 2. Waits for required checks to pass
+# 3. Merges when ready
+#
+# Prerequisite: repo must have allow_auto_merge=true
+#   gh api repos/stoa-platform/stoa -X PATCH -f allow_auto_merge=true
+#
+# Usage:
+#   stoa-merge 1239                     # single PR
+#   stoa-merge 1239 1240 1241           # multiple PRs (queued)
+#   stoa-merge --check                  # verify repo auto-merge setting
+
+set -euo pipefail
+
+REPO="stoa-platform/stoa"
+
+if [[ "${1:-}" == "--check" ]]; then
+  enabled=$(gh api "repos/$REPO" --jq '.allow_auto_merge')
+  if [[ "$enabled" == "true" ]]; then
+    echo "Auto-merge is ENABLED on $REPO"
+  else
+    echo "Auto-merge is DISABLED on $REPO"
+    echo "Enable with: gh api repos/$REPO -X PATCH -f allow_auto_merge=true"
+  fi
+  exit 0
+fi
+
+if [[ "${1:-}" == "--status" ]]; then
+  echo "Open PRs with auto-merge status:"
+  gh pr list --repo "$REPO" --state open --json number,title,autoMergeRequest,statusCheckRollup \
+    --template '{{range .}}#{{.number}} {{if .autoMergeRequest}}[AUTO-MERGE] {{end}}{{.title}}{{"\n"}}{{end}}' 2>/dev/null
+  exit 0
+fi
+
+if [[ $# -eq 0 ]]; then
+  echo "Usage: stoa-merge <PR_NUMBER> [PR_NUMBER...]"
+  echo "       stoa-merge --check"
+  echo "       stoa-merge --status"
+  exit 1
+fi
+
+for pr in "$@"; do
+  echo "Queuing auto-merge for PR #$pr..."
+
+  # Try to enable auto-merge directly
+  if gh pr merge "$pr" --auto --squash --delete-branch 2>/dev/null; then
+    echo "  PR #$pr: auto-merge enabled (will merge when checks pass)"
+  else
+    # If auto-merge fails, update branch first then retry
+    echo "  PR #$pr: updating branch before retry..."
+    gh api "repos/$REPO/pulls/$pr/update-branch" -X PUT -f update_method=merge 2>/dev/null || true
+    sleep 2
+    if gh pr merge "$pr" --auto --squash --delete-branch 2>/dev/null; then
+      echo "  PR #$pr: auto-merge enabled after branch update"
+    else
+      echo "  PR #$pr: FAILED — check if auto-merge is enabled on repo"
+      echo "  Run: gh api repos/$REPO -X PATCH -f allow_auto_merge=true"
+    fi
+  fi
+done
+
+echo ""
+echo "All PRs queued. GitHub will merge each when checks pass."
+echo "Monitor: gh pr list --state open --json number,title,autoMergeRequest"

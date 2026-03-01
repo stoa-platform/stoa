@@ -18,8 +18,6 @@
     {"type": "ci", "section": "CI/CD", "hidden": true}
   ],
   "packages": {
-    ".": {
-      "package-name": "stoa-platform"
-    }
+    ".": {}
   }
 }

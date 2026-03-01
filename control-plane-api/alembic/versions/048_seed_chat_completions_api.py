@@ -28,15 +28,17 @@ API_NAME = "IA \u2014 Chat Completions (GPT-4o)"
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+
     # 1. Insert API catalog entry
-    op.execute(
+    conn.execute(
         sa.text("""
             INSERT INTO api_catalog (id, tenant_id, api_id, api_name, version, status, category, tags,
                                      portal_published, audience, metadata, openapi_spec, target_gateways)
             VALUES (
                 :id, :tenant_id, :api_id, :api_name, :version, :status, :category,
-                :tags::jsonb, :portal_published, :audience, :metadata::jsonb,
-                :openapi_spec::jsonb, :target_gateways::jsonb
+                CAST(:tags AS jsonb), :portal_published, :audience, CAST(:metadata AS jsonb),
+                CAST(:openapi_spec AS jsonb), CAST(:target_gateways AS jsonb)
             )
             ON CONFLICT (tenant_id, api_id) DO UPDATE SET
                 api_name = EXCLUDED.api_name,
@@ -130,15 +132,15 @@ def upgrade() -> None:
     )
 
     # 2. Insert Plan: Alpha — Exploration (1000 tokens/min)
-    op.execute(
+    conn.execute(
         sa.text("""
             INSERT INTO plans (id, slug, name, description, tenant_id,
                                rate_limit_per_minute, requires_approval, auto_approve_roles,
                                status, pricing_metadata, created_by)
             VALUES (
                 :id, :slug, :name, :description, :tenant_id,
-                :rate_limit_per_minute, :requires_approval, :auto_approve_roles::json,
-                :status, :pricing_metadata::json, :created_by
+                :rate_limit_per_minute, :requires_approval, CAST(:auto_approve_roles AS json),
+                :status, CAST(:pricing_metadata AS json), :created_by
             )
             ON CONFLICT (tenant_id, slug) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -161,15 +163,15 @@ def upgrade() -> None:
     )
 
     # 3. Insert Plan: Beta — Production (5000 tokens/min)
-    op.execute(
+    conn.execute(
         sa.text("""
             INSERT INTO plans (id, slug, name, description, tenant_id,
                                rate_limit_per_minute, requires_approval, auto_approve_roles,
                                status, pricing_metadata, created_by)
             VALUES (
                 :id, :slug, :name, :description, :tenant_id,
-                :rate_limit_per_minute, :requires_approval, :auto_approve_roles::json,
-                :status, :pricing_metadata::json, :created_by
+                :rate_limit_per_minute, :requires_approval, CAST(:auto_approve_roles AS json),
+                :status, CAST(:pricing_metadata AS json), :created_by
             )
             ON CONFLICT (tenant_id, slug) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -193,11 +195,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
+    conn = op.get_bind()
+    conn.execute(
         sa.text("DELETE FROM plans WHERE id IN (:alpha_id, :beta_id)"),
         {"alpha_id": PLAN_ALPHA_ID, "beta_id": PLAN_BETA_ID},
     )
-    op.execute(
+    conn.execute(
         sa.text("DELETE FROM api_catalog WHERE id = :id"),
         {"id": API_CATALOG_ID},
     )

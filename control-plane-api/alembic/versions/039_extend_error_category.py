@@ -1,6 +1,6 @@
 """Extend errorcategory enum with diagnostic categories (CAB-1316).
 
-Revision ID: 039
+Revision ID: 039b
 Revises: 038
 Create Date: 2026-02-23
 
@@ -12,8 +12,8 @@ from collections.abc import Sequence
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "039"
-down_revision: str | None = "038"
+revision: str = "039b"
+down_revision: str | None = "039"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

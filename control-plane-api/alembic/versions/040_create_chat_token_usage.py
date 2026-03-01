@@ -1,7 +1,7 @@
 """040 — Create chat_token_usage table (CAB-288).
 
 Revision ID: 040
-Revises: 039
+Revises: 039b
 """
 
 import sqlalchemy as sa
@@ -9,7 +9,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "040"
-down_revision = "039"
+down_revision = "039b"
 branch_labels = None
 depends_on = None
 

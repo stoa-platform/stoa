@@ -1,14 +1,14 @@
 """Add status column to chat_conversations.
 
-Revision ID: 040
-Revises: 039
+Revision ID: 040b
+Revises: 040
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "040"
-down_revision = "039"
+revision = "040b"
+down_revision = "040"
 branch_labels = None
 depends_on = None
 

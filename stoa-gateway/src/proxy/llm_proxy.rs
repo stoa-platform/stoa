@@ -586,7 +586,7 @@ async fn record_usage_to_cp(params: &MeteringParams<'_>) {
         }
     };
 
-    let url = format!("{}/api/v1/usage/record", base_url);
+    let url = format!("{}/v1/usage/record", base_url.trim_end_matches('/'));
     let total_tokens = params.usage.input_tokens + params.usage.output_tokens;
 
     let payload = serde_json::json!({

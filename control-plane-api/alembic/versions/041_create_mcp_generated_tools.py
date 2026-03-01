@@ -1,7 +1,7 @@
 """041 — Create mcp_generated_tools table (CAB-605).
 
 Revision ID: 041_mcp_generated_tools
-Revises: 040
+Revises: 040b
 Create Date: 2026-02-24
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "041_mcp_generated_tools"
-down_revision = "040"
+down_revision = "040b"
 branch_labels = None
 depends_on = None
 

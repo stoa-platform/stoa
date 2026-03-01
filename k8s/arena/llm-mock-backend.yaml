@@ -1,5 +1,6 @@
-# LLM Mock Backend for Arena Enterprise benchmarks — simulates Anthropic /v1/messages.
-# Returns static JSON in Anthropic API format with minimal latency (~1ms).
+# LLM Mock Backend for Arena Enterprise benchmarks.
+# Simulates Anthropic /v1/messages AND OpenAI-compat /v1/chat/completions (Mistral, GPT).
+# Returns static JSON with minimal latency (~1ms).
 # Deployed in stoa-system so the gateway can proxy to it during benchmarks.
 apiVersion: v1
 kind: ConfigMap
@@ -19,6 +20,13 @@ data:
             return 200 '{"id":"msg_arena_mock_001","type":"message","role":"assistant","content":[{"type":"text","text":"Arena benchmark mock response."}],"model":"claude-mock","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":12,"output_tokens":8}}';
         }
 
+        # OpenAI-compat /v1/chat/completions mock (Mistral, GPT format)
+        location /v1/chat/completions {
+            default_type application/json;
+            add_header X-Mock-Server "llm-mock-k8s";
+            return 200 '{"id":"chatcmpl-arena_mock_001","object":"chat.completion","created":1709000000,"model":"mistral-mock","choices":[{"index":0,"message":{"role":"assistant","content":"Arena benchmark mock response."},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20}}';
+        }
+
         # Health endpoint
         location /health {
             default_type application/json;
@@ -28,7 +36,7 @@ data:
         # Catch-all for unknown paths
         location / {
             default_type application/json;
-            return 404 '{"error":"not_found","message":"Only /v1/messages is supported"}';
+            return 404 '{"error":"not_found","message":"Supported: /v1/messages, /v1/chat/completions"}';
         }
     }
 ---

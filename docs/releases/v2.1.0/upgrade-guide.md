@@ -90,7 +90,14 @@ helm upgrade stoa-platform ./charts/stoa-platform \
 ### Automated Verification
 
 ```bash
+# Full verification
 ./scripts/release/verify-upgrade.sh
+
+# With version confirmation
+./scripts/release/verify-upgrade.sh --expected-version v2.1.0
+
+# Machine-readable output
+./scripts/release/verify-upgrade.sh --json
 ```
 
 ## Step 5 — Post-Upgrade

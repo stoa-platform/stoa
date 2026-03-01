@@ -1,0 +1,66 @@
+
+=============================================================
+  STOA Platform — {{ .Chart.Name }} {{ .Chart.Version }}
+  App Version: {{ .Chart.AppVersion }}
+=============================================================
+
+Your STOA Platform release "{{ .Release.Name }}" has been deployed
+to namespace "{{ .Release.Namespace }}".
+
+--------------------------------------------------------------
+  POST-UPGRADE VERIFICATION
+--------------------------------------------------------------
+
+Run the automated verification script:
+
+  ./scripts/release/verify-upgrade.sh \
+    --base-domain {{ .Values.baseDomain | default "<YOUR_DOMAIN>" }} \
+    --namespace {{ .Release.Namespace }}
+
+Or verify manually:
+
+  1. API Health:
+     curl -sf https://api.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}/v1/health
+
+  2. Gateway Health:
+     curl -sf https://mcp.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}/health
+
+  3. Auth (Keycloak):
+     curl -sf https://auth.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}/realms/stoa/.well-known/openid-configuration
+
+  4. Console UI:
+     curl -sf -o /dev/null -w '%{http_code}' https://console.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}
+
+  5. Portal:
+     curl -sf -o /dev/null -w '%{http_code}' https://portal.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}
+
+  6. Pod Status:
+     kubectl get pods -n {{ .Release.Namespace }}
+
+{{- if .Values.stoaGateway.enabled }}
+
+  7. MCP Discovery:
+     curl -sf https://mcp.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}/mcp/capabilities
+{{- end }}
+
+--------------------------------------------------------------
+  BREAKING CHANGES
+--------------------------------------------------------------
+
+Check for breaking changes before going to production:
+
+  cat docs/releases/breaking-changes.md
+
+Or visit: https://docs.gostoa.dev/guides/migration/
+
+--------------------------------------------------------------
+  ROLLBACK
+--------------------------------------------------------------
+
+If any check fails, rollback with:
+
+  helm rollback {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+Full upgrade guide:
+  docs/releases/_template/upgrade-guide.md
+

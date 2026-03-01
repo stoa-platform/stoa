@@ -17,7 +17,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Create enum type first
-    skill_scope_enum = sa.Enum("global", "tenant", "tool", "user", name="skill_scope_enum", create_type=True)
+    skill_scope_enum = sa.Enum("global", "tenant", "tool", "user", name="skill_scope_enum", create_type=False)
     skill_scope_enum.create(op.get_bind(), checkfirst=True)
 
     op.create_table(

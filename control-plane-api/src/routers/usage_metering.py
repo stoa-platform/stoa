@@ -106,6 +106,10 @@ async def record_usage(
         request_count=payload.request_count,
         total_latency_ms=payload.total_latency_ms,
         total_tokens=payload.total_tokens,
+        input_tokens=payload.input_tokens,
+        output_tokens=payload.output_tokens,
+        cache_creation_input_tokens=payload.cache_creation_input_tokens,
+        cache_read_input_tokens=payload.cache_read_input_tokens,
     )
     await db.commit()
 

@@ -20,6 +20,16 @@ Usage:
     heg-state ticket-sync --from-remote
     heg-state council-cache CAB-1350 --score 8.5 --verdict Go --hash abc123
     heg-state council-check CAB-1350 --hash abc123
+    heg-state queue add CAB-1550 CAB-1551 --priority 1
+    heg-state queue ls [--all]
+    heg-state queue next --role backend [--format json]
+    heg-state queue dispatch <job_id> <worker>
+    heg-state queue done <job_id>
+    heg-state queue fail <job_id> "reason"
+    heg-state queue cancel <job_id>
+    heg-state queue flush
+    heg-state queue stats
+    heg-state queue current
 """
 
 import argparse
@@ -933,6 +943,242 @@ def cmd_brief(args: argparse.Namespace) -> None:
     print(json.dumps(brief, indent=2))
 
 
+# ── Queue commands ────────────────────────────────────────────────
+
+VALID_QUEUE_STATUSES = ["pending", "dispatched", "running", "done", "failed", "cancelled"]
+
+
+def cmd_queue(args: argparse.Namespace) -> None:
+    """Dispatch to queue subcommand."""
+    queue_commands = {
+        "add": cmd_queue_add,
+        "ls": cmd_queue_ls,
+        "next": cmd_queue_next,
+        "dispatch": cmd_queue_dispatch,
+        "done": cmd_queue_done,
+        "fail": cmd_queue_fail,
+        "cancel": cmd_queue_cancel,
+        "flush": cmd_queue_flush,
+        "stats": cmd_queue_stats,
+        "current": cmd_queue_current,
+    }
+    handler = queue_commands.get(args.queue_command)
+    if handler:
+        handler(args)
+    else:
+        print(f"Unknown queue command: {args.queue_command}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_queue_add(args: argparse.Namespace) -> None:
+    """Enqueue one or more tickets."""
+    conn = _connect()
+    now = _now()
+    priority = args.priority if args.priority is not None else 2
+    role = args.role
+
+    added = 0
+    for ticket_id in args.tickets:
+        ticket_id = ticket_id.strip().upper()
+        if not ticket_id:
+            continue
+        conn.execute(
+            """INSERT INTO queue_jobs (ticket_id, title, priority, role, status, created_at)
+               VALUES (?, ?, ?, ?, 'pending', ?)""",
+            (ticket_id, args.title or "", priority, role, now),
+        )
+        added += 1
+
+    conn.commit()
+    conn.close()
+    role_info = f" (role: {role})" if role else ""
+    print(f"Enqueued {added} job(s) at priority {priority}{role_info}")
+
+
+def cmd_queue_ls(args: argparse.Namespace) -> None:
+    """List queue jobs."""
+    conn = _connect()
+    if args.all:
+        rows = conn.execute(
+            "SELECT * FROM queue_jobs ORDER BY priority ASC, id ASC"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM queue_jobs WHERE status IN ('pending', 'dispatched', 'running') ORDER BY priority ASC, id ASC"
+        ).fetchall()
+    conn.close()
+
+    if not rows:
+        print("Queue empty.")
+        return
+
+    print(f"{'ID':<6} {'TICKET':<14} {'PRI':<5} {'STATUS':<12} {'ROLE':<10} {'ASSIGNED':<14} {'CREATED':<20}")
+    print("─" * 81)
+    for r in rows:
+        role = r["role"] or "any"
+        assigned = r["assigned_to"] or "—"
+        print(f"{r['id']:<6} {r['ticket_id']:<14} {r['priority']:<5} {r['status']:<12} {role:<10} {assigned:<14} {r['created_at']:<20}")
+
+
+def cmd_queue_next(args: argparse.Namespace) -> None:
+    """Peek at the next pending job matching the role filter."""
+    conn = _connect()
+
+    if args.role:
+        row = conn.execute(
+            """SELECT * FROM queue_jobs
+               WHERE status = 'pending'
+                 AND (role IS NULL OR role = ?)
+               ORDER BY priority ASC, id ASC
+               LIMIT 1""",
+            (args.role,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """SELECT * FROM queue_jobs
+               WHERE status = 'pending'
+               ORDER BY priority ASC, id ASC
+               LIMIT 1""",
+        ).fetchone()
+
+    conn.close()
+
+    if not row:
+        if args.format == "json":
+            print("")
+        else:
+            print("No pending jobs.")
+        return
+
+    if args.format == "json":
+        print(json.dumps({
+            "id": row["id"], "ticket_id": row["ticket_id"],
+            "priority": row["priority"], "role": row["role"],
+            "title": row["title"],
+        }))
+    else:
+        print(f"Next: #{row['id']} {row['ticket_id']} (P{row['priority']}, role: {row['role'] or 'any'})")
+
+
+def cmd_queue_dispatch(args: argparse.Namespace) -> None:
+    """Mark a job as dispatched to a worker."""
+    now = _now()
+    conn = _connect()
+    updated = conn.execute(
+        "UPDATE queue_jobs SET status='dispatched', assigned_to=?, dispatched_at=? WHERE id=? AND status='pending'",
+        (args.worker, now, args.job_id),
+    ).rowcount
+    conn.commit()
+    conn.close()
+
+    if updated == 0:
+        print(f"Job #{args.job_id} not found or not pending.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Job #{args.job_id} dispatched to {args.worker}")
+
+
+def cmd_queue_done(args: argparse.Namespace) -> None:
+    """Mark a job as completed."""
+    now = _now()
+    conn = _connect()
+    updated = conn.execute(
+        "UPDATE queue_jobs SET status='done', completed_at=? WHERE id=? AND status IN ('pending', 'dispatched', 'running')",
+        (now, args.job_id),
+    ).rowcount
+    conn.commit()
+    conn.close()
+
+    if updated == 0:
+        print(f"Job #{args.job_id} not found or already finished.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Job #{args.job_id} done")
+
+
+def cmd_queue_fail(args: argparse.Namespace) -> None:
+    """Mark a job as failed."""
+    now = _now()
+    conn = _connect()
+    updated = conn.execute(
+        "UPDATE queue_jobs SET status='failed', completed_at=?, error=? WHERE id=? AND status IN ('pending', 'dispatched', 'running')",
+        (now, args.reason, args.job_id),
+    ).rowcount
+    conn.commit()
+    conn.close()
+
+    if updated == 0:
+        print(f"Job #{args.job_id} not found or already finished.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Job #{args.job_id} failed: {args.reason}")
+
+
+def cmd_queue_cancel(args: argparse.Namespace) -> None:
+    """Cancel a pending job."""
+    now = _now()
+    conn = _connect()
+    updated = conn.execute(
+        "UPDATE queue_jobs SET status='cancelled', completed_at=? WHERE id=? AND status='pending'",
+        (now, args.job_id),
+    ).rowcount
+    conn.commit()
+    conn.close()
+
+    if updated == 0:
+        print(f"Job #{args.job_id} not found or not pending.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Job #{args.job_id} cancelled")
+
+
+def cmd_queue_flush(args: argparse.Namespace) -> None:
+    """Cancel all pending jobs."""
+    now = _now()
+    conn = _connect()
+    count = conn.execute(
+        "UPDATE queue_jobs SET status='cancelled', completed_at=? WHERE status='pending'",
+        (now,),
+    ).rowcount
+    conn.commit()
+    conn.close()
+    print(f"Flushed {count} pending job(s)")
+
+
+def cmd_queue_stats(args: argparse.Namespace) -> None:
+    """Show queue summary."""
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT status, COUNT(*) as cnt FROM queue_jobs GROUP BY status"
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        print("Queue empty.")
+        return
+
+    counts = {r["status"]: r["cnt"] for r in rows}
+    total = sum(counts.values())
+    parts = []
+    for status in ["pending", "dispatched", "running", "done", "failed", "cancelled"]:
+        if counts.get(status, 0) > 0:
+            parts.append(f"{counts[status]} {status}")
+    print(f"Queue: {total} total — {', '.join(parts)}")
+
+
+def cmd_queue_current(args: argparse.Namespace) -> None:
+    """Print the current running/dispatched job ID for this host (used by stop hook)."""
+    conn = _connect()
+    host = _hostname()
+    row = conn.execute(
+        "SELECT id FROM queue_jobs WHERE assigned_to=? AND status IN ('dispatched', 'running') ORDER BY dispatched_at DESC LIMIT 1",
+        (host,),
+    ).fetchone()
+    conn.close()
+
+    if row:
+        print(row["id"])
+    else:
+        # No current job — exit silently (stop hook uses this with || true)
+        pass
+
+
 # ── Main ──────────────────────────────────────────────────────────
 
 
@@ -1059,6 +1305,54 @@ def main() -> None:
     p.add_argument("ticket")
     p.add_argument("--hash", required=True, help="sha256(title + description)")
 
+    # queue (with subcommands)
+    p = sub.add_parser("queue", help="Priority FIFO job queue")
+    qsub = p.add_subparsers(dest="queue_command", required=True)
+
+    # queue add
+    qp = qsub.add_parser("add", help="Enqueue tickets")
+    qp.add_argument("tickets", nargs="+", help="Ticket IDs (e.g., CAB-1550 CAB-1551)")
+    qp.add_argument("--priority", "-p", type=int, choices=[0, 1, 2, 3],
+                     help="0=urgent, 1=high, 2=normal (default), 3=low")
+    qp.add_argument("--role", "-r", choices=VALID_ROLES, help="Target worker role")
+    qp.add_argument("--title", "-t", help="Ticket title (optional)")
+
+    # queue ls
+    qp = qsub.add_parser("ls", help="List queue jobs")
+    qp.add_argument("--all", "-a", action="store_true", help="Include done/failed/cancelled")
+
+    # queue next
+    qp = qsub.add_parser("next", help="Peek next pending job")
+    qp.add_argument("--role", "-r", choices=VALID_ROLES, help="Filter by worker role")
+    qp.add_argument("--format", "-f", choices=["text", "json"], default="text")
+
+    # queue dispatch
+    qp = qsub.add_parser("dispatch", help="Mark job as dispatched to a worker")
+    qp.add_argument("job_id", type=int)
+    qp.add_argument("worker", help="Worker hostname or role name")
+
+    # queue done
+    qp = qsub.add_parser("done", help="Mark job as completed")
+    qp.add_argument("job_id", type=int)
+
+    # queue fail
+    qp = qsub.add_parser("fail", help="Mark job as failed")
+    qp.add_argument("job_id", type=int)
+    qp.add_argument("reason", help="Failure reason")
+
+    # queue cancel
+    qp = qsub.add_parser("cancel", help="Cancel a pending job")
+    qp.add_argument("job_id", type=int)
+
+    # queue flush
+    qsub.add_parser("flush", help="Cancel all pending jobs")
+
+    # queue stats
+    qsub.add_parser("stats", help="Show queue summary counts")
+
+    # queue current
+    qsub.add_parser("current", help="Print current job ID for this host")
+
     args = parser.parse_args()
 
     commands = {
@@ -1083,6 +1377,7 @@ def main() -> None:
         "ticket-sync": cmd_ticket_sync,
         "council-cache": cmd_council_cache,
         "council-check": cmd_council_check,
+        "queue": cmd_queue,
     }
     commands[args.command](args)
 

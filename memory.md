@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-27 (C11 COMPLETE: 152/152 pts, 9 PRs, 3h wall clock)
+> Derniere MAJ: 2026-03-01 (CAB-1614: Arena 20 Dimensions complete, PRs #1270 + #1276)
 
 ## ✅ DONE
 
@@ -8,7 +8,7 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 12 (Feb 27+)
-- ✅ CAB-1614: Arena 20 Dimensions — Blue Ocean (21 pts) — PR #1270 (12 new k6 scenarios, features gate, 4-category Grafana)
+- ✅ CAB-1614: Arena 20 Dimensions — Blue Ocean (21 pts) — PRs #1270, #1276 (12 new k6 scenarios, features gate, 4-category Grafana, VPS sidecar deploy)
 - ✅ CAB-1552: Lazy MCP Discovery + ADR-051 (5 pts) — PR #1209 (LazyMcpDiscovery struct, moka cache, 10 tests)
 
 ### Cycle 11 (Feb 27) — 152/152 pts, 8 tickets, 9 PRs, 3h wall clock

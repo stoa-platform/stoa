@@ -5,5 +5,6 @@
 
 mod auth;
 mod common;
+mod llm_proxy;
 mod mcp;
 mod quota;

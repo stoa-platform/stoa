@@ -535,6 +535,45 @@ function runLlmCost() {
       );
     },
   });
+
+  // Verify admin cost tracking endpoint (Phase 1 wiring)
+  const tags = { scenario: 'ent_llm_cost' };
+  const costsRes = adminRequest('/admin/llm/costs', tags);
+  if (costsRes) {
+    check(costsRes, {
+      'llm_cost_admin_ok': (r) => r.status >= 200 && r.status < 300,
+      'llm_cost_admin_has_tracking': (r) => {
+        try {
+          const data = JSON.parse(r.body);
+          return typeof data.cost_tracking_enabled === 'boolean';
+        } catch (_e) { return false; }
+      },
+      'llm_cost_admin_has_metrics': (r) => {
+        try {
+          const data = JSON.parse(r.body);
+          return Array.isArray(data.metrics);
+        } catch (_e) { return false; }
+      },
+    });
+  }
+
+  // Verify admin provider listing includes cost metadata
+  const providersRes = adminRequest('/admin/llm/providers', tags);
+  if (providersRes) {
+    check(providersRes, {
+      'llm_cost_providers_ok': (r) => r.status >= 200 && r.status < 300,
+      'llm_cost_providers_valid_json': (r) => {
+        try { JSON.parse(r.body); return true; } catch (_e) { return false; }
+      },
+      'llm_cost_providers_have_pricing': (r) => {
+        try {
+          const data = JSON.parse(r.body);
+          if (!Array.isArray(data) || data.length === 0) return true; // empty = ok (no providers configured)
+          return data[0].cost_per_1m_input !== undefined;
+        } catch (_e) { return false; }
+      },
+    });
+  }
 }
 
 function runLlmCircuitBreaker() {

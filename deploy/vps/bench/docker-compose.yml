@@ -1,6 +1,6 @@
 services:
   arena:
-    image: ghcr.io/stoa-platform/arena-bench:0.1.0
+    image: ghcr.io/stoa-platform/arena-bench:0.2.0
     container_name: arena-bench
     network_mode: host
     entrypoint: ["bash"]

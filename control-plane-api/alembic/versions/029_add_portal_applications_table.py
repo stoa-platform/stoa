@@ -1,7 +1,7 @@
 """Add portal_applications table for persistent app management (CAB-1306)
 
 Revision ID: 029
-Revises: 028
+Revises: 028b
 Create Date: 2026-02-17
 """
 
@@ -10,7 +10,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "029"
-down_revision = "028"
+down_revision = "028b"
 branch_labels = None
 depends_on = None
 

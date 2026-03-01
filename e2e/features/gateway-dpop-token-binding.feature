@@ -2,13 +2,14 @@
 Feature: Gateway - DPoP Token Binding (RFC 9449)
   # DPoP (Demonstrating Proof-of-Possession) binds access tokens to client key pairs
   # via DPoP JWT proofs sent in the DPoP header. The gateway validates the 10-step
-  # chain: parse JWT, verify typ=dpop+jwt, verify asymmetric alg, verify jwk public-only,
-  # verify signature, verify htm/htu match, verify iat freshness, verify jti uniqueness,
-  # verify ath binding (SHA-256 of access token).
+  # chain per RFC 9449.
   #
-  # Step definitions generate DPoP proofs locally using Node.js crypto (ES256).
-  # Tests validate proof structure and gateway HTTP responses without requiring
-  # live Keycloak DPoP infrastructure.
+  # Token acquisition: E2E tests request DPoP-bound tokens from Keycloak using
+  # the stoa-e2e-dpop client (client_credentials + DPoP proof).
+  # DPoP proofs are generated locally using Node.js crypto (ES256).
+  #
+  # Prerequisites: Keycloak accessible, stoa-e2e-dpop client configured,
+  # gateway with dpop.enabled=true and sender_constraint.enabled=true.
 
   Background:
     Given I have a DPoP-bound access token for consumer "api-consumer-001"

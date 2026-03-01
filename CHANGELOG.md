@@ -1,1463 +1,364 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-
----
-
-## [Unreleased]
-
-### Added (2026-01-08) - Portal Integration Subscription API (CAB-292)
-
-> **Related Ticket**: CAB-292 - Portal Integration Subscription API
-
-- **API Key Modal Component** (`portal/src/components/subscriptions/ApiKeyModal.tsx`)
-  - Displays API key after successful tool subscription
-  - "Key shown only once" warning with acknowledgment checkbox
-  - Copy to clipboard functionality
-  - Download claude_desktop_config.json configuration
-  - Usage example with curl command
-  - Must acknowledge before closing modal
-
-- **Subscribe Hook Integration** (`portal/src/hooks/useTools.ts`)
-  - `useSubscribeToTool` hook now calls MCP subscription service
-  - Returns subscription data and one-time API key
-  - Invalidates subscriptions cache on success
-
-- **Tool Detail Page Enhancement** (`portal/src/pages/tools/ToolDetail.tsx`)
-  - Wired Subscribe button to MCP subscription API
-  - Shows ApiKeyModal after successful subscription
-  - Integrated with SubscribeToToolModal for plan selection
-
-- **Existing Components Verified**
-  - `SubscribeToToolModal` - Plan selection (free/basic/premium)
-  - `MySubscriptions` page - List, filter, revoke subscriptions
-  - `subscriptionsService` - MCP Gateway API client
-  - `useSubscriptions`, `useRevokeSubscription` hooks
-
-### Added (2026-01-08) - Demo Validation Script (CAB-295)
-
-> **Related Ticket**: CAB-295 - Script de validation demo (Smoke Test)
-
-- **Validation Script** (`scripts/validate-demo.sh`)
-  - Comprehensive smoke test for all demo components
-  - 8 validation categories with colored output
-
-- **Checks Performed**
-  - **Services**: Control-Plane API, MCP Gateway, Portal, Console health
-  - **Observability**: Grafana, Prometheus availability
-  - **Authentication**: Keycloak OIDC, token acquisition, auth flow (401/200)
-  - **Database**: PostgreSQL readiness
-  - **MCP Gateway**: List tools, invoke tool, metrics endpoint
-  - **Demo Data**: Tools, Tenants, Subscriptions CRDs
-  - **Dashboards**: Grafana dashboard ConfigMaps
-  - **Alerting**: PrometheusRule deployment
-  - **Pod Status**: Key pod health in stoa-system
-
-- **Features**
-  - `--local` mode for kubectl port-forward testing
-  - `--verbose` mode for detailed output
-  - Exit code 0/1 for CI integration
-  - Colored pass/fail/skip output
-
-### Added (2026-01-08) - Prometheus Alerting Rules (CAB-310)
-
-> **Related Ticket**: CAB-310 - Observability Alerting Rules Prometheus
-
-- **Alerting Rules** (`deploy/prometheus/alerting-rules.yaml`)
-  - PrometheusRule CRD with 8 rule groups and 24 alerts
-
-- **Alert Categories**
-  - **MCP Gateway** (4 alerts): HighErrorRate, HighLatency, Down, ToolInvocationErrors
-  - **Control-Plane API** (3 alerts): HighErrorRate, HighLatency, Down
-  - **Database** (3 alerts): Down, HighConnections, SlowQueries
-  - **Kubernetes** (4 alerts): PodNotReady, PodCrashLooping, PodHighMemory, PodHighCPU
-  - **Disk** (3 alerts): DiskSpaceHigh, DiskSpaceCritical, PVCSpaceHigh
-  - **Keycloak** (2 alerts): Down, HighLoginFailures
-  - **Redpanda** (2 alerts): Down, ConsumerLag
-  - **SLO** (3 alerts): ErrorBudgetLow, ErrorBudgetExhausted, SLOAvailabilityBreach
-
-- **Features**
-  - Severity labels (warning/critical)
-  - Component labels for filtering
-  - Runbook URLs for incident response
-  - Human-readable annotations with template variables
-
-### Added (2026-01-07) - MCP Gateway Traceability Dashboard (CAB-282)
-
-> **Related Ticket**: CAB-282 - Dashboard Grafana MCP Traceability
-
-- **Grafana Dashboard** (`deploy/grafana/dashboards/`)
-  - `mcp-gateway-traceability.json` - Full dashboard definition
-  - `mcp-gateway-configmap.yaml` - K8s ConfigMap for Grafana sidecar
-
-- **Dashboard Panels**
-  - Real-time MCP logs via Loki
-  - Calls by Tenant (bar chart, 5m rate)
-  - Latency P95 by Tool (time series)
-  - Error Rate / Success Rate (stat panels)
-  - Total Calls Today (stat)
-  - Calls by Tool (pie chart)
-  - Request Rate by Status (stacked time series)
-  - Top 10 Tools by Invocations (table)
-
-- **Template Variables**
-  - `$tenant` - Filter by tenant ID
-  - `$tool` - Filter by tool name
-  - `$search` - Full-text log search
-
-### Added (2026-01-07) - Demo Tenants Setup (CAB-279)
-
-> **Related Ticket**: CAB-279 - Setup 2 Demo Tenants for MVP
-
-- **Demo Tenants** (`deploy/demo-tenants/`)
-  - `team-alpha.yaml` - Sales & Finance tenant (CRM, Billing tools)
-  - `team-beta.yaml` - Operations tenant (Inventory, Notifications tools)
-  - `subscriptions.yaml` - Pre-approved tool subscriptions
-  - `kustomization.yaml` - Kustomize deployment configuration
-  - `README.md` - Deployment and testing documentation
-
-- **Seed Script** (`scripts/seed-demo-data.py`)
-  - Creates tenants via Control-Plane API
-  - Assigns E2E test users to tenants
-  - Creates tool subscriptions with API keys
-  - Supports Keycloak authentication
-  - Prints access matrix summary
-
-- **User-Tenant Assignments**
-  - `e2e-tenant-admin` → team-alpha (admin)
-  - `e2e-devops` → team-beta (admin)
-  - `e2e-viewer` → both tenants (viewer)
-
-### Added (2026-01-07) - Demo MCP Tools for Multi-Tenant Isolation (CAB-290)
-
-> **Related Ticket**: CAB-290 - Demo MCP Tools
-
-- **Demo Tools** (`deploy/demo-tools/`)
-  - `crm-search.yaml` - CRM customer search (team-alpha tenant)
-  - `billing-invoice.yaml` - Invoice generator (team-alpha tenant)
-  - `inventory-lookup.yaml` - Stock level checker (team-beta tenant)
-  - `notifications-send.yaml` - Multi-channel notifications (team-beta tenant)
-  - `kustomization.yaml` - Kustomize deployment
-  - `README.md` - Usage documentation and testing guide
-
-- **Multi-Tenant Isolation Demo**
-  - team-alpha: Sales & Finance tools (crm-search, billing-invoice)
-  - team-beta: Operations & Communications tools (inventory-lookup, notifications-send)
-  - Namespace-based isolation with OPA policy enforcement
-  - Mock ConfigMaps with sample response data
-
-### Fixed (2026-01-07) - MCP Gateway K8s Watcher Integration
-
-- **K8s Watcher Fixes** (`mcp-gateway/`)
-  - Connected K8s watcher callbacks to ToolRegistry for dynamic tool registration
-  - Updated `src/main.py` to set callbacks before starting watcher
-  - Added `kubernetes-asyncio` to Docker image dependencies
-  - Updated `mcp-gateway/Dockerfile` to install `.[k8s]` extras
-
-- **RBAC Configuration**
-  - Created `stoa-mcp-gateway` ServiceAccount
-  - Created ClusterRole with permissions for tools, toolsets CRDs
-  - Created ClusterRoleBinding for all-namespace access
-
-### Added (2026-01-07) - API Subscriptions System (CAB-247)
-
-> **Related Ticket**: CAB-247 - API Subscriptions & API Key Management
-
-- **Database Layer** (`control-plane-api/`)
-  - SQLAlchemy + asyncpg for async PostgreSQL support
-  - Alembic migrations infrastructure
-  - `src/database.py` - Async session management with connection pooling
-  - `src/config.py` - DATABASE_URL configuration
-
-- **Subscription Model** (`src/models/subscription.py`)
-  - SQLAlchemy model with UUID primary key
-  - Fields: application_id, subscriber_id, api_id, tenant_id, plan_id
-  - API key storage: hashed (SHA-256), prefix for display
-  - Status enum: pending, active, suspended, revoked, expired
-  - Audit fields: approved_by, revoked_by, timestamps
-  - Composite indexes for common queries
-
-- **Pydantic Schemas** (`src/schemas/subscription.py`)
-  - `SubscriptionCreate` - New subscription request
-  - `SubscriptionResponse` - Subscription details
-  - `SubscriptionListResponse` - Paginated list with total/pages
-  - `SubscriptionApprove` - Approval with optional expiration
-  - `SubscriptionRevoke` - Revocation with reason
-  - `APIKeyResponse` - API key shown once at creation
-
-- **Repository** (`src/repositories/subscription.py`)
-  - Async CRUD operations with SQLAlchemy
-  - Methods: create, get_by_id, get_by_api_key_hash
-  - List methods: by_subscriber, by_tenant, by_api, pending
-  - Status management with actor tracking
-  - Statistics aggregation
-
-- **API Key Service** (`src/services/api_key.py`)
-  - Key format: `stoa_sk_{32 hex chars}` (128 bits entropy)
-  - SHA-256 hashing for secure storage
-  - Format validation and key masking
-
-- **REST API Endpoints** (`src/routers/subscriptions.py`)
-  - **Subscriber endpoints** (Developer Portal):
-    - `POST /v1/subscriptions` - Create subscription (returns API key once)
-    - `GET /v1/subscriptions/my` - List my subscriptions
-    - `GET /v1/subscriptions/{id}` - Get subscription details
-    - `DELETE /v1/subscriptions/{id}` - Cancel subscription
-  - **Admin endpoints** (Control Plane):
-    - `GET /v1/subscriptions/tenant/{tenant_id}` - List tenant subscriptions
-    - `GET /v1/subscriptions/tenant/{tenant_id}/pending` - Pending approvals
-    - `POST /v1/subscriptions/{id}/approve` - Approve subscription
-    - `POST /v1/subscriptions/{id}/revoke` - Revoke with reason
-    - `POST /v1/subscriptions/{id}/suspend` - Suspend subscription
-    - `POST /v1/subscriptions/{id}/reactivate` - Reactivate subscription
-  - **Gateway endpoint**:
-    - `POST /v1/subscriptions/validate-key` - Validate API key
-
-- **Alembic Migration** (`alembic/versions/001_create_subscriptions_table.py`)
-  - Creates subscriptions table with all columns
-  - Indexes: application_id, subscriber_id, api_id, tenant_id
-  - Composite indexes: tenant+api, subscriber+status, application+api
-
-- **Dependencies Added** (`requirements.txt`)
-  - sqlalchemy[asyncio]==2.0.25
-  - asyncpg==0.29.0
-  - alembic==1.13.1
-  - psycopg2-binary==2.9.9
-
-- **Database Deployment** (`deploy/database/`)
-  - `postgres-statefulset.yaml` - PostgreSQL 15 StatefulSet for subscriptions
-  - `alembic-migration-job.yaml` - Kubernetes Job for running migrations
-  - Service: `control-plane-db.stoa-system.svc.cluster.local:5432`
-  - Storage: 10Gi PVC with gp2 storage class
-
-- **Helm Chart Integration** (`charts/stoa-platform/`)
-  - `templates/database/postgres-statefulset.yaml` - PostgreSQL as Helm template
-  - `values.yaml` - Database configuration section with credentials, storage, resources
-
-- **Ansible Playbook** (`ansible/playbooks/deploy-subscriptions-db.yaml`)
-  - Automated database deployment with Alembic migrations
-  - AWX-compatible with environment variable overrides
-  - Tags: `database`, `migrations`, `api`, `secret`
-  - Updates control-plane-api with DATABASE_URL
-
-- **Redpanda Deployment** (`deploy/redpanda/values.yaml`)
-  - Kafka-compatible message broker for event streaming
-  - Single-node dev configuration
-  - Console UI enabled
-
-### Added (2026-01-07) - Loki Log Aggregation (CAB-281)
-
-> **Related Ticket**: CAB-281 - Loki Log Aggregation Implementation
-
-- **Loki Configuration** (`docker/observability/loki/loki-config.yml`)
-  - TSDB storage backend with filesystem
-  - 30-day log retention policy
-  - Structured metadata support for JSON log fields
-  - Query and ingestion limits configured
-  - Compactor with automatic retention enforcement
-
-- **Promtail Configuration** (`docker/observability/promtail/promtail-config.yml`)
-  - Docker container log scraping (for development)
-  - Kubernetes pod log scraping (for production)
-  - JSON log parsing with field extraction
-  - Label extraction: level, logger, tenant_id, component
-  - CRI/Docker log format support
-
-- **Kubernetes Manifests** (`charts/stoa-platform/templates/`)
-  - `loki-deployment.yaml` - Loki StatefulSet with PVC
-  - `promtail-daemonset.yaml` - Promtail DaemonSet with RBAC
-  - Configurable via `loki.enabled`, `promtail.enabled`
-  - Namespace filtering for STOA components
-
-- **Structured Logging** (`control-plane-api/src/logging_config.py`)
-  - Structlog integration matching MCP Gateway pattern
-  - JSON output format for Loki ingestion
-  - Context binding for tenant_id, request_id, etc.
-  - Log level configuration via `LOG_LEVEL` env var
-  - Text format option for local development
-
-- **Grafana Dashboard** (`docker/observability/grafana/dashboards/logs-explorer.json`)
-  - Log statistics: total entries, errors, warnings, rate
-  - Log volume by level and component over time
-  - Error rate visualization by component
-  - Live log stream with search filter
-  - Collapsible panels: Error Logs, Auth Logs, HTTP Requests
-  - Variables: namespace, component, search text
-
-### Added (2026-01-07) - Prometheus + Grafana Monitoring (CAB-11)
-
-> **Related Ticket**: CAB-11 - Prometheus + Grafana Implementation
-
-- **Control-Plane API Metrics** (`control-plane-api/src/middleware/metrics.py`)
-  - Prometheus metrics middleware following MCP Gateway pattern
-  - Metrics prefix: `stoa_control_plane_`
-  - `stoa_control_plane_http_requests_total` - Counter with method, endpoint, status_code labels
-  - `stoa_control_plane_http_request_duration_seconds` - Histogram with latency buckets
-  - `stoa_control_plane_http_requests_in_progress` - Gauge for concurrent requests
-  - `/metrics` endpoint for Prometheus scraping
-
-- **ServiceMonitor CRDs** (`charts/stoa-platform/templates/`)
-  - `servicemonitor-control-plane-api.yaml` - ServiceMonitor for Control-Plane API
-  - `servicemonitor-mcp-gateway.yaml` - ServiceMonitor for MCP Gateway
-  - Configurable via `monitoring.enabled`, `monitoring.interval`, `monitoring.scrapeTimeout`
-
-- **Grafana Dashboards** (`docker/observability/grafana/dashboards/`)
-  - `platform-overview.json` - High-level platform health dashboard
-    - Total requests/sec across all services
-    - Error rate (5xx) with thresholds
-    - P95 latency with SLO thresholds
-    - Service status and availability
-  - `control-plane-api.json` - Control-Plane API detailed metrics
-    - Request rate by endpoint and method
-    - Latency percentiles (P50, P95, P99)
-    - Error rate by status code and endpoint
-    - In-progress requests tracking
-  - `mcp-gateway.json` - MCP Gateway detailed metrics
-    - HTTP request metrics
-    - MCP tool invocations by tool and status
-    - Tool invocation duration by tool
-    - Authentication metrics (success/failure, failure reasons)
-    - Backend request metrics by service
-
-### Added (2026-01-07) - E2E Testing Infrastructure (CAB-238)
-
-> **Related Ticket**: CAB-238 - E2E Testing Infrastructure
-
-- **E2E Test Framework** (`tests/e2e/`)
-  - **Stack**: Playwright + pytest for browser automation
-  - **Authentication**: Keycloak OIDC integration with console.gostoa.dev
-
-  - **Test Fixtures** (`conftest.py`):
-    - `keycloak_login` - Factory fixture for role-based login
-    - `authenticated_page` - Pre-authenticated page fixture
-    - `get_token` - JWT access token extraction from browser storage
-    - AWS Secrets Manager integration for secure credential storage
-
-  - **Test Scenarios** (`scenarios/test_auth_flow.py`):
-    - `test_redirect_to_keycloak_when_unauthenticated` - Auth redirect validation
-    - `test_admin_login_success` - Admin (cpi-admin) login flow
-    - `test_tenant_admin_login_success` - Tenant admin login flow
-    - `test_viewer_login_success` - Viewer (read-only) login flow
-    - `test_invalid_credentials_shows_error` - Error handling validation
-    - `test_token_contains_required_claims` - JWT claims validation
-    - `test_logout_clears_session` - Logout flow validation
-    - `test_accessing_protected_route_after_logout` - Session protection
-    - `test_token_refresh_before_expiry` - Token refresh mechanism
-
-  - **Test Users in Keycloak** (realm: `stoa`):
-    - `e2e-admin` - cpi-admin role (stoa:admin, stoa:write, stoa:read)
-    - `e2e-tenant-admin` - tenant-admin role (stoa:write, stoa:read)
-    - `e2e-devops` - devops role (stoa:write, stoa:read)
-    - `e2e-viewer` - viewer role (stoa:read)
-
-  - **Setup Script** (`scripts/setup_test_users.sh`):
-    - Creates test users in Keycloak via Admin API
-    - Assigns RBAC roles to users
-    - Stores credentials in AWS Secrets Manager (`stoa/e2e-test-credentials`)
-
-  - **Configuration**:
-    - `pytest.ini` - Test markers (auth, smoke, slow)
-    - `fixtures/users.json` - User configuration with role mappings
-    - Environment variables for Keycloak/Console URLs
-
-  - **Documentation** (`docs/E2E-TESTING.md`):
-    - Setup and installation guide
-    - Running tests locally and in CI/CD
-    - Fixture usage examples
-    - GitLab CI and GitHub Actions integration
-
-### Added (2026-01-05) - Developer Portal Enhancement (CAB-246)
-
-> **Related Ticket**: CAB-246 - STOA Developer Portal Enhancement
-
-- **STOA Developer Portal** - API Consumer features (`portal/`)
-  - **API Catalog** (`src/pages/apis/`):
-    - `APICatalog.tsx` - Browse all published APIs with search/filter
-    - `APIDetail.tsx` - API details with OpenAPI spec viewer
-    - `APITestingSandbox.tsx` - Interactive API testing sandbox
-
-  - **Consumer Applications** (`src/pages/apps/`):
-    - `MyApplications.tsx` - Create and manage consumer apps
-    - `ApplicationDetail.tsx` - App credentials and subscriptions
-
-  - **Subscriptions** (`src/pages/subscriptions/`):
-    - `MySubscriptions.tsx` - Manage API and MCP Tool subscriptions
-    - Support for both API and MCP Tool subscription types
-
-  - **API Testing Components** (`src/components/testing/`):
-    - `EnvironmentSelector.tsx` - Environment dropdown with production warnings
-    - `RequestBuilder.tsx` - Request configuration (method, path, headers, body)
-    - `ResponseViewer.tsx` - Response display with timing, status codes
-    - `SandboxConfirmationModal.tsx` - Production environment confirmation
-
-  - **Configuration** (`src/config.ts`):
-    - `portalMode` - production vs non-production portal
-    - `enableApplications` - Consumer apps feature flag
-    - `enableAPITesting` - Testing sandbox feature flag
-    - `testing.requireSandboxConfirmation` - Production safety
-
-  - **Portal Deployment**:
-    - URL: https://portal.gostoa.dev
-    - Keycloak client: `stoa-portal`
-    - CI/CD: `.github/workflows/stoa-portal-ci.yml`
-
-### Added (2026-01-05) - Phase 9.5 Production Readiness (CAB-103)
-
-> **Related Tickets**:
-> | Ticket | Title | Status |
-> |--------|-------|--------|
-> | CAB-103 | Phase 9.5: Production Readiness | ✅ Done |
-> | CAB-104 | Backup/Restore AWX | ✅ Done |
-> | CAB-105 | Backup/Restore Vault | ✅ Done |
-> | CAB-106 | Load Test Pipeline (K6) | ✅ Done |
-> | CAB-107 | Operational Runbooks | ✅ Done |
-> | CAB-108 | Security Audit (OWASP) | ✅ Done |
-> | CAB-109 | Chaos Testing (Litmus) | ✅ Done |
-> | CAB-110 | SLO/SLA Definition | ✅ Done |
-
-- **Backup/Restore Infrastructure (CAB-104, CAB-105)**
-  - `terraform/modules/backup/` - Terraform module for AWS infrastructure:
-    - S3 bucket with versioning and lifecycle (30 days retention)
-    - KMS key for backup encryption
-    - IAM role and policy for IRSA (OIDC)
-    - Region: eu-west-3 (Paris)
-
-  - `scripts/backup/` - Automated backup scripts:
-    - `backup-awx.sh` - AWX PostgreSQL backup to S3
-    - `backup-vault.sh` - Vault Raft snapshot to S3
-    - `restore-awx.sh` - AWX restoration from S3
-    - `restore-vault.sh` - Vault restoration from snapshot
-    - `common.sh` - Shared functions (S3, logging, Slack)
-
-  - `charts/stoa-platform/templates/backup-*.yaml` - Kubernetes CronJobs:
-    - `backup-awx-cronjob.yaml` - Daily AWX backup (2 AM)
-    - `backup-vault-cronjob.yaml` - Daily Vault backup (3 AM)
-    - `backup-rbac.yaml` - ServiceAccount and RBAC
-
-  - `docs/runbooks/critical/` - Restore procedures (CAB-107):
-    - `awx-restore.md` - AWX restoration guide
-    - `vault-restore.md` - Vault restoration guide
-
-- **Load Testing K6 (CAB-106)**
-  - `tests/load/k6/` - Load testing scenarios:
-    - `scenarios/smoke.js` - Minimal test (10 users, 1 min)
-    - `scenarios/load.js` - Normal load test (100 users, 5 min)
-    - `scenarios/stress.js` - Stress test (500 users, 10 min)
-    - `scenarios/spike.js` - Spike test (1000 users spike)
-    - `lib/auth.js` - Keycloak authentication helper
-    - `lib/config.js` - Endpoint configuration per environment
-    - `thresholds.js` - SLO thresholds (p95 < 500ms, errors < 1%)
-
-  - `scripts/run-load-tests.sh` - K6 execution script
-  - `tests/load/docker-compose.yml` - K6 + InfluxDB + Grafana
-
-- **SLO/SLA Documentation and Monitoring (CAB-110)**
-  - `docs/SLO-SLA.md` - Objectives documentation:
-    - Availability: 99.9% (SLO) / 99.5% (SLA)
-    - Latency p95: < 500ms (SLO) / < 1000ms (SLA)
-    - Error Rate: < 0.1% (SLO) / < 1% (SLA)
-    - MTTR P1: < 1h (SLO) / < 4h (SLA)
-
-  - `charts/stoa-platform/templates/prometheus-rules.yaml`:
-    - Recording rules: `slo:api_availability:ratio`, `slo:api_latency_p95:seconds`
-    - Error budget calculation per period (30 days)
-
-  - `charts/stoa-platform/templates/prometheus-alerts.yaml`:
-    - `SLOAvailabilityBreach` - Availability < 99.9%
-    - `SLOLatencyP95Breach` - Latency p95 > 500ms
-    - `SLOErrorRateBreach` - Error rate > 0.1%
-    - `ErrorBudgetLow` - Error budget < 10%
-
-  - `charts/stoa-platform/templates/alertmanager-config.yaml`:
-    - Slack configuration (#ops-alerts)
-    - Routes by severity (critical, warning)
-
-  - `docker/observability/grafana/dashboards/slo-dashboard.json`:
-    - Gauges: Availability, Latency P95, Error Rate, Error Budget
-    - Time series: 24h Trends
-    - Component SLOs: API, MCP Gateway, Vault, AWX
-    - Alert list panel
-
-  - `docker/observability/grafana/provisioning/`:
-    - `datasources/prometheus.yml` - Prometheus + Loki
-    - `dashboards/default.yml` - Auto-provisioning config
-
-- **Security Scanning (CAB-108)**
-  - `tests/security/zap/` - OWASP ZAP configuration:
-    - `zap-baseline.yaml` - Passive scan (production-safe)
-    - `zap-full.yaml` - Full active scan (staging only)
-    - `api-scan-rules.conf` - Rules (FAIL: SQL injection, XSS, HSTS)
-
-  - `scripts/run-security-scan.sh` - Scan script:
-    - Modes: baseline, api, full
-    - Environments: dev, staging, prod
-    - Production protection (blocks active scans)
-    - Slack notification
-
-  - `.github/workflows/security-scan.yml`:
-    - ZAP baseline scan
-    - Trivy container scanning
-    - pip-audit + npm audit (dependencies)
-    - Gitleaks (secrets detection)
-    - Schedule: Sunday 4 AM + PR to main
-
-  - `tests/security/README.md` - Complete documentation
-
-- **Chaos Testing LitmusChaos (CAB-109)**
-  - `scripts/install-litmus.sh` - LitmusChaos 3.0 installation:
-    - Helm install with CRDs
-    - RBAC and pre-installed experiments
-    - Commands: install, uninstall, verify
-
-  - `tests/chaos/experiments/` - Chaos scenarios:
-    - `pod-delete-api.yaml` - Kill Control-Plane API pods
-    - `pod-delete-mcp.yaml` - Kill MCP Gateway pods
-    - `pod-delete-vault.yaml` - Kill Vault pod (auto-unseal test)
-    - `pod-delete-awx.yaml` - Kill AWX pods
-    - `network-latency.yaml` - 500ms latency injection
-    - `cpu-stress.yaml` - CPU/Memory stress tests
-
-  - `tests/chaos/workflows/full-chaos-suite.yaml`:
-    - Complete workflow executing all scenarios
-    - Final platform health validation
-    - Schedule: Saturday 2 AM (staging)
-
-  - `tests/chaos/README.md` - Chaos testing documentation
-
-### Changed (2026-01-04) - CAB-237 Rename devops → console subdomain
-
-- **Control Plane UI Subdomain Rename**
-  - `devops.gostoa.dev` → `console.gostoa.dev`
-  - Reflects UI unification: DevOps + Developers (AI Tools Portal)
-
-- **Configuration files updated**:
-  - `deploy/config/dev.env` - CORS_ORIGINS, DOMAIN_UI
-  - `deploy/config/staging.env` - CORS_ORIGINS, DOMAIN_UI
-  - `deploy/config/prod.env` - CORS_ORIGINS, DOMAIN_UI
-  - `control-plane-api/src/config.py` - CORS_ORIGINS default
-  - `control-plane-api/Dockerfile` - ENV CORS_ORIGINS
-  - `gitops-templates/_defaults.yaml` - CONTROL_PLANE_UI_URL
-
-- **Scripts and playbooks**:
-  - `ansible/playbooks/bootstrap-platform.yaml` - URL in final message
-  - `scripts/init-gitlab-gitops.sh` - URL in display
-
-- **Documentation**:
-  - `CLAUDE.md` - Key URLs section
-  - `README.md` - Architecture diagram, URLs, examples
-  - `docs/ibm/webmethods-gateway-api.md` - Example URLs
-  - `docs/runbooks/README.md` - Service URLs
-  - `docs/runbooks/high/certificate-expiration.md` - Check script domains
-  - `docs/runbooks/medium/api-rollback.md` - Verification URLs
-
-- **Migration scripts**:
-  - `scripts/update-keycloak-console-redirect.sh` - Updates Keycloak redirectURIs
-  - `scripts/verify-console-dns.sh` - Verifies/creates Route53 DNS
-
-- **Deployment completed**:
-  - Ingress `control-plane-ui` updated to `console.gostoa.dev`
-  - TLS Certificate `stoa-console-tls` issued by Let's Encrypt
-  - Keycloak client `control-plane-ui` redirectURIs updated
-
-- **Console UI Access**:
-  - URL: https://console.gostoa.dev
-  - Users: `admin@cab-i.com`, `demo@apim.local` (password: `demo`)
-
-### Added (2026-01-04) - CAB-124 Portal Integration - Tool Catalog
-
-- **Control Plane UI - AI Tools Section**
-  - `src/pages/AITools/ToolCatalog.tsx` - MCP Tools catalog:
-    - Card grid with filters (search, tag, tenant)
-    - Pagination and results counter
-    - Inline Subscribe/Unsubscribe button
-    - Navigation to tool detail
-
-  - `src/pages/AITools/ToolDetail.tsx` - Tool detail page:
-    - Header with name, method, version, tags
-    - Tabs: Overview, Schema, Quick Start, Usage
-    - Subscribe/Unsubscribe button
-    - Usage statistics display
-
-  - `src/pages/AITools/MySubscriptions.tsx` - Subscription management:
-    - Table of subscribed tools
-    - Status, usage count, subscription date
-    - Actions: view detail, unsubscribe
-
-  - `src/pages/AITools/UsageDashboard.tsx` - Metrics dashboard:
-    - Stats cards: Total Calls, Success Rate, Avg Latency, Cost
-    - Temporal charts (UsageChart)
-    - Breakdown table by tool
-    - Period selector (day, week, month)
-
-  - `src/components/tools/ToolCard.tsx` - Tool card for catalog:
-    - Display: name, description, method, tags, params count
-    - API-backed indicator, tenant info
-    - Subscribe button
-
-  - `src/components/tools/ToolSchemaViewer.tsx` - JSON Schema viewer:
-    - Hierarchical property display
-    - Colored types, required badges
-    - Enum, default values
-    - Expandable mode for objects/arrays
-
-  - `src/components/tools/QuickStartGuide.tsx` - Integration guide:
-    - Tabs: Claude Desktop, Python SDK, cURL
-    - Code snippets with Copy button
-    - Automatic argument example generation
-
-  - `src/components/tools/UsageChart.tsx` - Usage charts:
-    - Simple bar chart with hover tooltips
-    - Trend indicator
-    - UsageStatsCard for key metrics
-
-  - `src/services/mcpGatewayApi.ts` - MCP Gateway API client:
-    - Methods: getTools, getTool, getToolTags
-    - Subscriptions: getMySubscriptions, subscribeTool, unsubscribeTool
-    - Usage: getMyUsage, getToolUsage, getUsageHistory
-    - Server info and health check
-
-  - `src/types/index.ts` - Added TypeScript types:
-    - MCPTool, ToolInputSchema, ToolPropertySchema
-    - ListToolsResponse, ToolUsageStats, ToolUsageSummary
-    - ToolSubscription, ToolSubscriptionCreate
-
-  - **Navigation and routes** (`src/App.tsx`, `src/components/Layout.tsx`):
-    - "AI Tools" menu with Wrench icon
-    - Routes: /ai-tools, /ai-tools/:toolName, /ai-tools/subscriptions, /ai-tools/usage
-    - QuickActionCard on Dashboard
-
-  - **Configuration** (`src/config.ts`):
-    - `services.mcpGateway.url` (VITE_MCP_GATEWAY_URL)
-    - `features.enableAITools` (VITE_ENABLE_AI_TOOLS)
-
-  - **Tests** (vitest + @testing-library/react):
-    - `src/components/tools/ToolCard.test.tsx` - 12 tests
-    - `src/components/tools/ToolSchemaViewer.test.tsx` - 10 tests
-    - `src/services/mcpGatewayApi.test.ts` - 15 tests
-    - Setup: vitest.config.ts, test/setup.ts, test/mocks.ts
-
-  - **Added dev dependencies**:
-    - vitest, @testing-library/react, @testing-library/jest-dom
-    - @testing-library/user-event, jsdom
-
-### Added (2026-01-04) - CAB-121 Tool Registry CRDs Kubernetes
-
-- **STOA MCP Gateway - Kubernetes CRDs for Tool Registry**
-  - `charts/stoa-platform/crds/tool-crd.yaml` - Tool CRD:
-    - Kind: `Tool`, API Group: `gostoa.dev/v1alpha1`
-    - Spec: displayName, description, endpoint, method, inputSchema, tags
-    - Authentication: type (none/apiKey/bearer/oauth2), secretRef
-    - Status subresource: phase, invocationCount, errorCount, conditions
-    - Printer columns for `kubectl get tools`
-
-  - `charts/stoa-platform/crds/toolset-crd.yaml` - ToolSet CRD:
-    - Kind: `ToolSet`, generates multiple tools from OpenAPI spec
-    - Sources: url, configMapRef, secretRef, inline
-    - Selector: filtering by tags, operationIds, methods
-    - toolDefaults: default values for all generated tools
-
-  - `src/k8s/models.py` - Pydantic models for CRDs:
-    - `ToolCR`, `ToolCRSpec`, `ToolCRStatus`, `ToolCRAuthentication`
-    - `ToolSetCR`, `ToolSetCRSpec`, `OpenAPISource`, `ToolSelector`
-    - Complete spec validation
-
-  - `src/k8s/watcher.py` - Async Kubernetes Watcher:
-    - `ToolWatcher`: watching Tool and ToolSet CRDs
-    - Callbacks: on_added, on_removed, on_modified
-    - CRD → internal Tool conversion
-    - Multi-namespace or single namespace support
-    - Graceful degradation if kubernetes-asyncio not installed
-    - Automatic watch restart with backoff
-
-  - `charts/stoa-platform/templates/mcp-gateway-rbac.yaml`:
-    - ServiceAccount, ClusterRole, RoleBinding
-    - Permissions: get, list, watch on tools, toolsets
-    - Permissions: patch, update on status subresource
-
-  - `charts/stoa-platform/templates/mcp-gateway-deployment.yaml`:
-    - Complete Helm Deployment for MCP Gateway
-    - All configurable environment variables
-    - Liveness/readiness probes
-
-  - `charts/stoa-platform/values/mcp-gateway.yaml`:
-    - Default MCP Gateway configuration
-    - Commented example CRDs
-
-  - `tests/test_k8s.py` - 24 tests:
-    - Model tests: ToolCR, ToolCRSpec, ToolSetCR
-    - Watcher tests: callbacks, tool name generation, event handling
-    - Singleton pattern tests
-    - OpenAPI converter integration tests
-
-  - **Added configuration** (`src/config/settings.py`):
-    - `k8s_watcher_enabled`: bool (default: False)
-    - `k8s_watch_namespace`: str | None (default: None = all namespaces)
-    - `kubeconfig_path`: str | None (default: None = in-cluster config)
-
-  - **Optional dependency**: `kubernetes-asyncio>=29.0.0`, `pyyaml>=6.0`
-    - Installation: `pip install stoa-mcp-gateway[k8s]`
-
-  - **Metrics**: 196 tests, 79% global coverage
-    - k8s/models.py: 100% coverage
-    - k8s/watcher.py: 45% coverage (async code difficult to test)
-
-### Added (2026-01-04) - CAB-123 Metering Pipeline (Kafka)
-
-- **STOA MCP Gateway - Metering Pipeline**
-  - `src/metering/models.py` - Metering event schema:
-    - `MeteringEvent`: tenant, project, consumer, user_id, tool, latency_ms, status, cost_units
-    - `MeteringStatus`: success, error, timeout, rate_limited, unauthorized
-    - `MeteringEventBatch`: Event batch for bulk processing
-    - Methods: `to_kafka_message()`, `from_tool_invocation()`, `_compute_cost()`
-    - Pricing model: base cost + latency cost + premium tools
-
-  - `src/metering/producer.py` - Async Kafka Producer:
-    - `MeteringProducer`: aiokafka client with buffering
-    - Dual mode: emit (buffered) vs emit_immediate (direct)
-    - Periodic flush (5s) and flush on buffer full (100 events)
-    - Graceful degradation if Kafka unavailable
-    - Gzip compression, idempotence, partition by tenant
-
-  - **MCP handlers integration** (`src/handlers/mcp.py`):
-    - Automatic metering on each tool invocation
-    - Capture: latency_ms, status, consumer (X-Consumer-ID header)
-    - Emission even for errors (403, timeout, etc.)
-    - Fire-and-forget (doesn't block request)
-
-  - `tests/test_metering.py` - 23 tests:
-    - MeteringEvent tests: creation, serialization, cost computation
-    - MeteringProducer tests: buffering, flush, graceful failure
-    - Singleton pattern tests
-    - Integration tests with mocked Kafka
-
-  - **Added configuration** (`src/config/settings.py`):
-    - `metering_enabled`: bool (default: True)
-    - `kafka_bootstrap_servers`: str (default: localhost:9092)
-    - `metering_topic`: str (default: stoa.metering.events)
-    - `metering_buffer_size`: int (default: 100)
-    - `metering_flush_interval`: float (default: 5.0s)
-
-  - **Dependency**: aiokafka>=0.10.0 added to pyproject.toml
-
-  - **Metrics**: 172 tests, 85% global coverage
-    - metering/models.py: 100% coverage
-    - metering/producer.py: 69% coverage
-
-- **Rename**: `stoa-mcp-gateway/` → `mcp-gateway/`
-
-### Added (2026-01-04) - CAB-122 OPA Policy Engine Integration
-
-- **STOA MCP Gateway - OPA Policy Engine**
-  - `src/policy/opa_client.py` - OPA Client with dual mode:
-    - Embedded mode (MVP): Python rule evaluation (no sidecar)
-    - Sidecar mode (production): HTTP requests to OPA
-    - Fail-open for high availability
-
-  - `src/policy/policies/authz.rego` - Rego authorization rules:
-    - Tool classification: read_only, write, admin
-    - Role → scope mapping (cpi-admin, tenant-admin, devops, viewer)
-    - Multi-tenant isolation
-    - Dynamic tools management
-
-  - `src/policy/policies/tools.rego` - Tool-specific rules:
-    - Rate limiting by role
-    - Production environment restrictions
-    - Confirmation for destructive actions
-
-  - `tests/test_opa_policy.py` - 31 tests for policy engine:
-    - EmbeddedEvaluator tests: scopes, authz, tenant isolation, dynamic tools
-    - OPAClient tests: embedded, sidecar, fail-open
-    - Singleton pattern tests
-
-  - **MCP handlers integration**:
-    - Policy check before tool invocation
-    - user_claims construction from TokenClaims
-    - 403 error if policy denied
-
-  - **Docker Compose**: OPA sidecar added (openpolicyagent/opa:0.60.0)
-
-  - **Metrics**: 149 tests, 86% global coverage
-    - opa_client.py: 93% coverage
-
-### Added (2026-01-04) - CAB-199 MCP Gateway Tests & Tools Implementation
-
-- **STOA MCP Gateway - Complete tests and additional tools**
-  - `tests/test_tool_registry.py` - 46 tests for tool registry
-    - Basic tests: register, unregister, get, overwrite
-    - List tests: filter by tenant, by tag, pagination
-    - Lifecycle tests: startup, shutdown, HTTP client
-    - Invocation tests: builtin tools, API-backed tools, error handling
-    - HTTP methods tests: GET, POST, PUT, DELETE, PATCH
-    - Singleton pattern tests
-    - New built-in tools tests
-
-  - `tests/test_openapi_converter.py` - 30 tests for OpenAPI conversion
-    - Basic tests: empty spec, single/multiple operations
-    - Conversion tests: operationId, name generation, description
-    - Parameters tests: query, path, enum, required
-    - Request body tests: properties extraction
-    - Base URL tests: OpenAPI 3.x, Swagger 2.0, override
-    - Metadata tests: api_id, tenant_id, version
-    - Edge cases tests: $ref, missing schema, non-dict paths
-
-  - `tests/test_mcp.py` - 25 tests for MCP handlers
-    - Server info, tools, resources, prompts endpoint tests
-    - Pagination and filters tests
-    - Authentication tests with dependency override
-    - Response format tests (camelCase aliases)
-
-  - `src/services/openapi_converter.py` - OpenAPI → MCP Tools Converter
-    - OpenAPI 3.0.x, 3.1.x and Swagger 2.0 support
-    - Parameters extraction (path, query, header)
-    - Request body extraction (JSON)
-    - Automatic name generation if no operationId
-    - Name sanitization for MCP compatibility
-    - STOA metadata (api_id, tenant_id, base_url)
-
-  - **New built-in tools** added to registry:
-    - `stoa_health_check` - Service health check (api, gateway, auth)
-    - `stoa_list_tools` - List available tools with tag filtering
-    - `stoa_get_tool_schema` - Get tool schema
-    - `stoa_search_apis` - API search by keyword (placeholder)
-
-  - **tool_registry.py improvements**:
-    - HTTP PATCH method support
-    - 7 total built-in tools
-    - Helper methods: `_check_health()`, `_get_tools_info()`, `_get_tool_schema()`
-
-  - **Metrics**: 118 tests, 85% global coverage
-    - tool_registry.py: 96% coverage
-    - openapi_converter.py: 91% coverage
-    - mcp.py (handlers): 98% coverage
-    - models/mcp.py: 100% coverage
-
-### Added (2026-01-03) - CAB-120 MCP Gateway Auth + MCP Base
-
-- **STOA MCP Gateway - Phase 2** - Auth + MCP Base
-  - `stoa-mcp-gateway/src/middleware/auth.py` - Complete Keycloak OIDC Middleware
-    - JWT validation with JWKS cache (TTL 5 min)
-    - `TokenClaims` model with helpers `has_role()`, `has_scope()`
-    - FastAPI dependencies: `get_current_user`, `get_optional_user`
-    - Factories: `require_role()`, `require_scope()` for access control
-    - Bearer token + API Key (M2M) support
-
-  - `stoa-mcp-gateway/src/handlers/mcp.py` - MCP Protocol Handlers
-    - `GET /mcp/v1/` - Server info and capabilities
-    - `GET /mcp/v1/tools` - Tool list with pagination
-    - `GET /mcp/v1/tools/{name}` - Tool details
-    - `POST /mcp/v1/tools/{name}/invoke` - Invocation (auth required)
-    - `GET /mcp/v1/resources` - Resource list
-    - `GET /mcp/v1/prompts` - Prompt list
-
-  - `stoa-mcp-gateway/src/models/mcp.py` - Pydantic MCP spec models
-    - `Tool`, `ToolInvocation`, `ToolResult` with STOA extensions
-    - `Resource`, `ResourceReference`, `ResourceContentRead`
-    - `Prompt`, `PromptArgument`, `PromptMessage`
-    - Responses: `ListToolsResponse`, `InvokeToolResponse`, etc.
-
-  - `stoa-mcp-gateway/src/services/tool_registry.py` - Tool Registry
-    - Dynamic tool registration
-    - Built-in tools: `stoa_platform_info`, `stoa_list_apis`, `stoa_get_api_details`
-    - Invocation with user token forwarding
-    - HTTP backend support (GET/POST/PUT/DELETE)
-
-  - `stoa-mcp-gateway/src/middleware/metrics.py` - Prometheus Metrics
-    - HTTP: requests total, duration, in-progress
-    - MCP: tool invocations, duration per tool
-    - Auth: attempts, token validation duration
-    - Backend: requests by backend/method/status
-
-  - `stoa-mcp-gateway/docker-compose.yml` - Local development stack
-    - MCP Gateway with hot-reload (Dockerfile.dev)
-    - Keycloak with pre-configured `stoa` realm
-    - Prometheus (port 9090)
-    - Grafana (port 3000, admin/admin)
-
-  - `stoa-mcp-gateway/dev/keycloak/stoa-realm.json` - Keycloak Realm
-    - Roles: `cpi-admin`, `tenant-admin`, `devops`, `viewer`
-    - Clients: `stoa-mcp-gateway`, `stoa-test-client`
-    - Test users: admin, tenant-admin, devops, viewer
-
-  - **Tests**: 25 tests, 71% coverage
-    - `tests/test_auth.py` - TokenClaims, OIDCAuthenticator
-    - `tests/test_mcp.py` - MCP Endpoints
-    - `tests/test_health.py` - Health checks
-
-### Changed (2025-01-03) - Rebranding APIM → STOA
-
-- **Complete project renaming** - APIM Platform becomes STOA Platform
-  - GitHub Repository: `apim-aws` → `stoa`
-  - GitLab Repository: `apim-gitops` → `stoa-gitops` (cab6961310/stoa-gitops)
-  - Domain: `apim.cab-i.com` → `gostoa.dev`
-  - Kubernetes Namespace: `apim-system` → `stoa-system`
-  - Keycloak realm: `apim` → `stoa`
-  - Helm chart: `apim-platform` → `stoa-platform`
-  - Vault paths: `secret/apim/*` → `secret/stoa/*`
-  - AWS resources: `apim-*` → `stoa-*`
-
-- **72 files modified** for rebranding:
-  - Documentation (README, CHANGELOG, docs/*)
-  - Configuration (deploy/config/*.env)
-  - Python API (control-plane-api/)
-  - React UI (control-plane-ui/)
-  - Ansible playbooks and vars
-  - GitOps templates
-  - Helm charts and K8s manifests
-  - Scripts
-  - Terraform modules
-
-- **GitLab stoa-gitops repository initialized**
-  - Structure: environments/{dev,staging,prod}, tenants/, argocd/
-  - ArgoCD ApplicationSets configured
-  - URL: https://gitlab.com/cab6961310/stoa-gitops
-
-- **Complete AWS infrastructure migration**
-  - DNS: `*.gostoa.dev` configured (Hostpapa CNAME)
-  - TLS Certificates Let's Encrypt generated for all subdomains
-  - Kubernetes Ingresses updated (api, devops, auth, gateway, awx)
-  - Keycloak: hostname corrected in deployment args
-  - AWX: CRD updated with new hostname
-  - Control-Plane UI: rebuilt with new URLs
-
-- **URL hardcoding removal**
-  - Ansible playbooks: using `{{ base_domain | default('gostoa.dev') }}`
-  - Scripts: using environment variables with fallback
-  - Centralized configuration in `ansible/vars/platform-config.yaml`
-
-- **Centralized configuration architecture**
-  - `BASE_DOMAIN` as single source of truth for domain
-  - .env files with derived variables: `${BASE_DOMAIN}` → subdomains
-  - Enables client deployment by changing a single variable
-  - Structure:
-    - `deploy/config/{dev,staging,prod}.env` - Per-environment configuration
-    - `control-plane-api/src/config.py` - Python config with BASE_DOMAIN fallback
-    - `control-plane-ui/src/config.ts` - TypeScript config with Vite env vars
-    - `ansible/vars/platform-config.yaml` - Centralized Ansible config
-    - `gitops-templates/_defaults.yaml` - GitOps defaults with interpolation
-
-### Removed (2024-12-23) - webMethods Developer Portal Removal
-
-- **webMethods Developer Portal** - Removed from architecture
-  - IBM trial license requested only for Gateway (without Portal)
-  - Custom React Developer Portal planned for Phase 8
-  - Playbook `promote-portal.yaml` removed
-  - Portal references removed from documentation
-  - Handler `_handle_promote_request` removed from deployment_worker
-
-### Added (2025-12-23) - Phase 3: Secrets & Gateway Alias - COMPLETED ✅
-
-- **HashiCorp Vault** - Deployed on EKS for centralized secrets management
-  - Helm chart `hashicorp/vault` v0.31.0 (Vault 1.20.4)
-  - Namespace: `vault`
-  - Storage: 5GB PVC (gp2)
-  - UI accessible: https://vault.gostoa.dev
-  - Unseal keys saved in AWS Secrets Manager (`stoa/vault/keys`)
-
-- **Vault Secrets Engine** - KV v2 for APIM secrets
-  - Path: `secret/stoa/{env}/{type}`
-  - Structure:
-    - `secret/stoa/dev/gateway-admin` - Gateway admin credentials
-    - `secret/stoa/dev/keycloak-admin` - Keycloak admin credentials
-    - `secret/stoa/dev/awx-automation` - AWX client credentials
-    - `secret/stoa/dev/aliases/*` - Backend aliases with credentials
-
-- **Vault Kubernetes Auth** - Native K8s authentication
-  - Roles: `stoa-apps` (read), `awx-admin` (read/write)
-  - Service accounts: `control-plane-api`, `awx-web`, `awx-task`
-  - Policies: `stoa-read`, `stoa-admin`
-
-- **sync-alias.yaml Playbook** - Vault → Gateway alias synchronization
-  - Reading aliases from Vault
-  - Create/update in webMethods Gateway
-  - Authentication support: Basic Auth, API Key, OAuth2
-  - Dry-run mode for preview
-
-- **rotate-credentials.yaml Playbook** - Automatic credential rotation
-  - Supported types: password, api_key, oauth_client
-  - Vault + Gateway Alias update in one operation
-  - Keycloak client secret rotation for OAuth
-  - Notification callback to Control-Plane API
-
-- **AWX Job Templates** - New Phase 3 templates
-  - `Sync Gateway Aliases` (ID: 15) - sync-alias.yaml
-  - `Rotate Credentials` (ID: 16) - rotate-credentials.yaml
-
-### Fixed (2024-12-23) - OpenAPI 3.1.0 → 3.0.0 Conversion
-
-- **OpenAPI Version Compatibility** - webMethods Gateway 10.15 doesn't support OpenAPI 3.1.0
-  - `deploy-api.yaml`: Automatic OpenAPI version detection
-  - 3.1.x → 3.0.0 conversion before Gateway import
-  - Native swagger 2.0 and OpenAPI 3.0.x support
-  - API type detection (`swagger` vs `openapi`) in playbook
-
-- **Gateway Proxy Response Format** - Handling both response formats
-  - Control-Plane API proxy returns `{"api_id": "..."}`
-  - Direct Gateway returns `{"apiResponse": {"api": {"id": "..."}}}`
-  - Variable `imported_api_id` extracted for compatibility
-  - Variable `final_api_id` for unified display
-
-- **POST /v1/gateway/apis** - New endpoint for API import via proxy
-  - `control-plane-api/src/routers/gateway.py`: POST /apis route
-  - `control-plane-api/src/services/gateway_service.py`: `import_api()` method
-  - `apiDefinition` support as JSON object (not string)
-  - `type` parameter support (openapi, swagger, raml, wsdl)
-
-- **AWX Job Template Deploy API** - E2E flow validated
-  - API import with OpenAPI 3.1.0 spec (converted to 3.0.0)
-  - Automatic API activation after import
-  - Notification to Control-Plane API
-  - Test validated: Control-Plane-API-E2E v2.2 (ID: 4b4045ba-23f3-4a45-ad38-680419d79880)
-
-### Fixed (2024-12-22) - E2E Pipeline Kafka → AWX
-
-- **AWX Token** - Configuration and persistence
-  - API Token created and saved in AWS Secrets Manager (`stoa/awx-token`)
-  - Variable `AWX_TOKEN` configured on control-plane-api deployment
-
-- **AWX Job Template Names** - Code/AWX alignment
-  - `awx_service.py`: `deploy-api` → `Deploy API`, `rollback-api` → `Rollback API`
-  - `deployment_worker.py`: `promote-portal` → `Promote Portal`, `sync-gateway` → `Sync Gateway`
-
-- **Missing GitLab Playbooks** - Push to stoa-gitops
-  - `deploy-api.yaml` - API deployment to Gateway
-  - `rollback.yaml` - API rollback/deactivation
-  - `sync-gateway.yaml` - Gateway synchronization
-  - `promote-portal.yaml` - API publication to Gateway
-
-- **Kafka Snappy Compression** - snappy codec support
-  - Added `python-snappy==0.7.3` to requirements.txt
-  - Added `libsnappy-dev` to Dockerfile
-
-- **GitLab Atomic Commits** - Fixed race condition
-  - `git_service.py`: Using `commits.create()` API for atomic commits
-  - Avoids `reference does not point to expected object` error
-
-- **AWX Project Sync** - Updated job templates
-  - All templates (Deploy API, Rollback API, Sync Gateway, Promote Portal)
-    point to project 7 "APIM Playbooks" with correct playbooks
-
-- **Deploy API Pipeline** - Working Kafka → AWX → Gateway flow
-  - `deploy-api.yaml`: Fixed recursive Ansible variables (`_gateway_url` vs `gw_url`)
-  - `deploy-api.yaml`: Added default credentials (avoids missing `vars_files` in AWX)
-  - `awx_service.py`: Added `openapi_spec` parameter in `deploy_api()`
-  - `deployment_worker.py`: Transmits `openapi_spec` to AWX extra_vars
-  - `events.py`: Endpoint `POST /v1/events/deployment-result` for AWX callbacks
-  - Test validated: PetstoreAPI v3.0.0 deployed and activated via pipeline
-
-- **OIDC Playbooks** - Migration to OIDC authentication via Gateway-Admin-API proxy
-  - All playbooks support 2 modes: OIDC (recommended) and Basic Auth (fallback)
-  - External HTTPS URLs: `https://auth.gostoa.dev`, `https://api.gostoa.dev/v1/gateway`
-  - Service account client `awx-automation` for AWX
-  - Updated playbooks: `deploy-api.yaml`, `rollback.yaml`, `sync-gateway.yaml`, `promote-portal.yaml`
-  - `bootstrap-platform.yaml`: Automatic creation of Keycloak client `awx-automation`
-
-### Added (Phase 2.5) - E2E Validation - COMPLETED ✅
-
-- **Gateway OIDC Configuration** - APIs secured via Keycloak
-  - External Authorization Server `KeycloakOIDC` configured in Gateway
-  - OAuth2 Strategies per application with JWT validation
-  - Standardized scope mappings: `{AuthServer}:{Tenant}:{Api}:{Version}:{Scope}`
-  - Secured APIs:
-    - Control-Plane-API (ID: `7ba67c90-814d-4d2f-a5da-36e9cda77afe`)
-    - Gateway-Admin-API (ID: `8f9c7b6c-1bc6-4438-88be-a10e2352bae2`) - Admin proxy
-
-- **Gateway Admin Service** - OIDC Proxy for Gateway administration
-  - `control-plane-api/src/services/gateway_service.py` - Dual-mode auth service
-  - `control-plane-api/src/routers/gateway.py` - Router `/v1/gateway/*`
-  - Token forwarding: User JWT transmitted to Gateway (audit trail)
-  - Basic Auth fallback for legacy compatibility
-  - Config: `GATEWAY_USE_OIDC_PROXY=True` (default)
-
-- **Secrets Security** - AWS Secrets Manager + K8s
-  - `ansible/vars/secrets.yaml` - Centralized configuration (zero hardcoding)
-  - `terraform/modules/secrets/main.tf` - AWS Secrets Manager module
-  - Documented strategy:
-    - **AWS Secrets Manager**: Bootstrap secrets (gateway-admin, keycloak-admin, rds-master, etc.)
-    - **K8s Secrets / Vault**: Runtime secrets (OAuth clients, tenant tokens)
-  - AWS SM paths: `stoa/{env}/gateway-admin`, `stoa/{env}/keycloak-admin`, etc.
-  - All Ansible playbooks updated with `vars_files: ../vars/secrets.yaml`
-
-- **STOA Platform Tenant** - Administrator tenant with cross-tenant access
-  - File: `tenants/stoa/` in GitLab stoa-gitops
-  - User: `stoaadmin@cab-i.com` (role: cpi-admin)
-  - API: Control-Plane configured for Gateway OIDC
-
-- **Ansible Playbooks** - Complete automation
-  - `bootstrap-platform.yaml` - **Platform initialization** (KeycloakOIDC + bootstrap APIs)
-  - `provision-tenant.yaml` - Creates Keycloak groups, users, K8s namespaces
-  - `register-api-gateway.yaml` - OpenAPI import, OIDC, rate limiting, activation
-  - `configure-gateway-oidc.yaml` - Complete OIDC configuration
-  - `configure-gateway-oidc-tasks.yaml` - Reusable tasks with scope naming
-  - `tasks/create-keycloak-user.yaml` - User creation with roles
-  - Existing secured playbooks: `deploy-api`, `sync-gateway`, `promote-portal`, `rollback`
-
-- **Gateway-Admin API** - OpenAPI spec for admin proxy
-  - `apis/gateway-admin-api/openapi.json` - OpenAPI 3.0.3 spec
-  - Endpoints: `/apis`, `/applications`, `/scopes`, `/alias`, `/configure-oidc`, `/health`
-  - Secured via Keycloak JWT (BearerAuth)
-  - Backend: proxy to `apigateway:5555/rest/apigateway`
-
-- **AWX Job Templates** - New templates
-  - `Provision Tenant` (ID: 12) - Complete tenant provisioning
-  - `Register API Gateway` (ID: 13) - API registration in Gateway
-
-- **Control-Plane API** - New handlers and services
-  - Router `/v1/gateway/*` - Gateway administration via OIDC proxy
-  - Endpoints: `GET /apis`, `PUT /apis/{id}/activate`, `POST /configure-oidc`, etc.
-  - Event `tenant-provisioning` → AWX Provision Tenant
-  - Event `api-registration` → AWX Register API Gateway
-  - `gateway_service`: `list_apis()`, `activate_api()`, `configure_api_oidc()`, etc.
-  - `awx_service`: `provision_tenant()`, `register_api_gateway()`
-
-- **Clarified architecture**
-  - GitHub (stoa): Source code, development, CI/CD
-  - GitLab (stoa-gitops): Runtime data, tenants, AWX playbooks
-
-### Added (Phase 2) - COMPLETED
-- **GitOps Templates** (`gitops-templates/`) - Templates to initialize GitLab
-  - `_defaults.yaml` - Global default variables
-  - `environments/{dev,staging,prod}/config.yaml` - Per-environment config
-  - `templates/` - API, Application, Tenant templates
-  - **Note**: Tenant data is on GitLab, not here
-
-- **Variable Resolver Service** - `${VAR}` and `${VAR:default}` placeholder resolution
-  - Vault reference support: `vault:secret/path#key`
-  - Config merge: global → env → tenant → inline defaults
-  - Required variable validation
-
-- **IAM Sync Service** - GitOps ↔ Keycloak synchronization
-  - Per-tenant group/user sync
-  - OAuth2 client creation for applications
-  - Reconciliation and drift detection
-  - Client secret rotation
-
-- **GitOps-Enabled Routers**
-  - APIs router: CRUD via GitLab + Kafka events
-  - Tenants router: Multi-tenant with RBAC
-
-- **ArgoCD** - GitOps Continuous Delivery
-  - Helm Chart with Keycloak SSO
-  - ApplicationSets for multi-tenant auto-discovery
-  - AppProjects with per-tenant RBAC
-  - Installation scripts: `scripts/install-argocd.sh`
-  - URL: https://argocd.gostoa.dev
-
-- **Init GitLab Script** - `scripts/init-gitlab-gitops.sh`
-  - Initializes GitLab stoa-gitops repo
-  - Copies templates and configurations
-
-- **GitLab stoa-gitops** - Configured repository
-  - URL: https://gitlab.com/cab6961310/stoa-gitops
-  - Structure: `_defaults.yaml`, `environments/`, `tenants/`
-  - Connected to ArgoCD for GitOps
-
----
-
-## [2.0.0] - 2024-12-21
-
-### Phase 1: Event-Driven Architecture - COMPLETED
-
-#### Added
-- **Redpanda (Kafka)** - Kafka-compatible event streaming
-  - 1 broker on EKS with Redpanda Console
-  - Storage: 10GB persistent (EBS gp2)
-  - Topics: `api-created`, `api-updated`, `api-deleted`, `deploy-requests`, `deploy-results`, `audit-log`, `notifications`
-
-- **AWX (Ansible Tower)** - Automation
-  - AWX 24.6.1 via AWX Operator 2.19.1
-  - URL: https://awx.gostoa.dev
-  - Job Templates: Deploy API, Sync Gateway, Promote Portal, Rollback API
-
-- **Control-Plane UI** - React Interface
-  - Keycloak authentication with PKCE (Keycloak 25+)
-  - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
-  - URL: https://console.gostoa.dev
-
-- **Control-Plane API** - FastAPI Backend
-  - Integrated Kafka Producer (events on CRUD)
-  - Deployment Worker (consumer `deploy-requests`)
-  - GitLab Webhook (Push, MR, Tag Push)
-  - Pipeline Traces (in-memory store)
-  - URL: https://api.gostoa.dev
-
-- **Variabilized Configuration**
-  - UI: `VITE_*` variables for build-time config
-  - API: Environment variables via pydantic-settings
-  - Dockerfiles with build args for customization
-
-#### Changed
-- Infrastructure: 3x t3.large (2 CPU / 8GB RAM) to support Redpanda + AWX
-- Keycloak: Realm `stoa`, clients `control-plane-ui` and `control-plane-api`
-
-#### Fixed
-- PKCE Authentication - `response_type: 'code'` + `pkce_method: 'S256'`
-- Keycloak URLs - `auth.gostoa.dev` instead of `keycloak.dev.gostoa.dev`
-- OpenAPI Tags - Case harmonization (`Traces` instead of `traces`)
-
----
-
-## [1.0.0] - 2024-12-XX
-
-### Initial Infrastructure
-
-#### Added
-- **AWS Infrastructure** (Terraform)
-  - VPC with public/private subnets
-  - EKS Cluster `stoa-dev-cluster`
-  - RDS PostgreSQL (db.t3.micro)
-  - ECR Repositories
-
-- **Kubernetes**
-  - Nginx Ingress Controller
-  - Cert-Manager (Let's Encrypt)
-  - EBS CSI Driver
-
-- **webMethods**
-  - API Gateway (lean trial 10.15)
-  - Elasticsearch 8.11 (for Gateway)
-
-- **Keycloak** - Identity Provider
-  - URL: https://auth.gostoa.dev
-  - Realm: `stoa`
-
----
-
-## Roadmap
-
-### Phase 2: GitOps + ArgoCD (High Priority) - COMPLETED ✅
-- [x] Per-tenant GitOps structure (`gitops-templates/`)
-- [x] Variable Resolver (templates with `${VAR}` placeholders)
-- [x] IAM Sync Service (Git → Keycloak)
-- [x] API/Tenants routers with GitLab integration
-- [x] ArgoCD Helm chart with Keycloak SSO
-- [x] Multi-tenant ApplicationSets
-- [x] ArgoCD installation on EKS
-- [x] GitLab `stoa-gitops` repository configured
-
-### Phase 2.5: E2E Validation - COMPLETED ✅
-- [x] provision-tenant.yaml playbook (Keycloak + K8s namespaces)
-- [x] register-api-gateway.yaml playbook (Gateway OIDC)
-- [x] AWX Job Templates (Provision Tenant, Register API Gateway)
-- [x] stoa tenant in GitLab with STOAAdmin
-- [x] Control-Plane API handlers (tenant-provisioning, api-registration)
-- [x] User stoaadmin@cab-i.com created with cpi-admin role
-- [x] GitHub/GitLab architecture documented
-
-### Phase 3: Secrets & Gateway Alias - COMPLETED ✅
-- [x] HashiCorp Vault deployed on EKS
-- [x] Vault KV v2 with APIM secrets structure
-- [x] Kubernetes auth configured (roles, policies)
-- [x] sync-alias.yaml playbook for Gateway Alias
-- [x] rotate-credentials.yaml playbook for secret rotation
-- [x] AWX Jobs: Sync Gateway Aliases, Rotate Credentials
-- [ ] External Secrets Operator integration (optional - future)
-- [ ] Auto-unseal with AWS KMS (optional - future)
-
-### Phase 2.6: Cilium Network Foundation (Medium Priority)
-- [ ] Install Cilium on EKS (replaces AWS VPC CNI + kube-proxy)
-- [ ] Gateway API CRDs + Cilium GatewayClass
-- [ ] Migrate Nginx Ingress → Gateway API (*.gostoa.dev)
-- [ ] CiliumNetworkPolicy - Default deny + tenant isolation
-- [ ] Hubble - Network observability
-- [ ] Cilium migration documentation & runbooks
-
-### Phase 4: Observability (Medium Priority)
-- [ ] Amazon OpenSearch
-- [ ] FluentBit (log shipping)
-- [ ] Prometheus + Grafana
-- [ ] OpenSearch Dashboards
-
-### Phase 5: Multi-Environment (Low Priority)
-- [ ] STAGING Environment
-- [ ] Promotion DEV → STAGING → PROD
-
-### Phase 6: Beta Testing (Low Priority)
-- [ ] Demo tenant
-- [ ] User documentation (MkDocs)
-
-### Phase 7: Operational Security (Low Priority)
-- [ ] Job 1: Certificate Checker (TLS expiration, Vault PKI, endpoints)
-- [ ] Job 2: Secret Rotation (API Keys, OAuth, DB passwords via Vault)
-- [ ] Job 3: Usage Reporting (per-tenant metrics, PDF, email)
-- [ ] Job 4: GitLab Security Scan (Gitleaks, Semgrep, Trivy)
-- [ ] NotificationService (Email, Slack, PagerDuty)
-- [ ] Kubernetes CronJobs (Helm chart)
-- [ ] GitLab CI/CD integration (security-scan stage)
-- [ ] Jobs Monitoring (Prometheus, Kafka, OpenSearch, Grafana Dashboard)
-- [ ] Alerts (job failed, job not running, critical findings)
-
-### Phase 8: Custom Developer Portal (Low Priority)
-- [ ] React + TypeScript + Vite + TailwindCSS frontend
-- [ ] Keycloak SSO (client `developer-portal`)
-- [ ] API catalog with search/filters
-- [ ] API detail + Swagger-UI
-- [ ] Applications management (CRUD, credentials, API Key rotation)
-- [ ] Subscription management
-- [ ] Try-It Console (Monaco Editor, backend proxy)
-- [ ] Code Samples (curl, Python, JavaScript)
-- [ ] `/portal/*` endpoints in Control-Plane API
-- [ ] Kafka events (application-created, subscription-created)
-- [ ] Kubernetes deployment
-- [ ] Detailed plan: [docs/DEVELOPER-PORTAL-PLAN.md](docs/DEVELOPER-PORTAL-PLAN.md)
-
-### Phase 9: Ticketing - Production Requests (Low Priority)
-- [ ] PromotionRequest model (YAML in Git)
-- [ ] Workflow: PENDING → APPROVED → DEPLOYING → DEPLOYED
-- [ ] RBAC: DevOps creates, CPI approves
-- [ ] Anti-self-approval rule
-- [ ] CRUD endpoints `/v1/requests/prod`
-- [ ] Automatic AWX trigger on approval
-- [ ] AWX webhook callback → update status
-- [ ] UI: Requests list, form, detail, timeline
-- [ ] Kafka events (request-created, approved, rejected, deployed, failed)
-- [ ] Email + Slack notifications
-- [ ] Detailed plan: [docs/TICKETING-SYSTEM-PLAN.md](docs/TICKETING-SYSTEM-PLAN.md)
-
-### Phase 4.5: Jenkins Orchestration Layer (High Priority - Enterprise)
-- [ ] Jenkins deployed on EKS (Helm jenkins/jenkins)
-- [ ] JCasC configuration (Jenkins Configuration as Code)
-- [ ] Keycloak SSO integration (OIDC)
-- [ ] Kafka Consumer Service → Jenkins Trigger
-- [ ] Jenkinsfile `deploy-api` with approval gates
-- [ ] Jenkinsfile `rollback-api` with emergency bypass
-- [ ] Jenkinsfile `promote-api` for env promotion
-- [ ] Jenkinsfile `delete-api` with confirmation
-- [ ] Shared Library (kafkaPublish, awxLaunch, notifyDeployment)
-- [ ] Blue Ocean UI accessible
-- [ ] Slack notifications configured
-- [ ] Jenkins metrics dashboard
-- [ ] AWX/Kafka/Keycloak credentials in Jenkins Credentials Store
-- [ ] Jenkins config backup (PVC + S3)
-
-### Phase 9.5: Production Readiness (High Priority - Critical) ✅ COMPLETED
-
-> **Tickets**: CAB-103, CAB-104, CAB-105, CAB-106, CAB-107, CAB-108, CAB-109, CAB-110
-> **Completed**: 2026-01-05
-
-- [x] AWX database backup script (PostgreSQL) → S3 (CAB-104)
-- [x] Vault snapshot backup script → S3 + KMS (CAB-105)
-- [x] Kubernetes CronJob for daily backups (AWX + Vault)
-- [x] Documented and tested restore procedures (CAB-107)
-- [x] K6 Load Testing Pipeline (CAB-106)
-- [x] Performance thresholds defined (p95 < 500ms, p99 < 1s)
-- [x] Operational runbooks (docs/runbooks/) (CAB-107)
-  - Incident: API Gateway down
-  - Incident: AWX job failure
-  - Incident: Vault sealed
-  - Incident: High Kafka lag
-  - Procedure: Emergency rollback
-  - Procedure: Horizontal scaling
-  - Procedure: Secret rotation
-- [x] OWASP ZAP scan on Control Plane API and UI (CAB-108)
-- [x] Trivy, pip-audit, npm audit, Gitleaks configuration
-- [x] LitmusChaos Testing (CAB-109)
-  - Pod kill (API, MCP, AWX, Vault)
-  - Network latency injection (500ms)
-  - CPU/Memory stress
-- [x] Kubernetes auto-healing validation
-- [x] SLO/SLA documented (CAB-110)
-  - Availability: 99.9%
-  - API Latency p95: < 500ms
-  - Deployment Success Rate: > 99%
-  - MTTR: < 1h for P1
-- [x] SLO Dashboard in Grafana
-- [x] Prometheus alerts configured → Slack #ops-alerts
-
-### Phase 10: Resource Lifecycle Management (Medium Priority)
-- [ ] Terraform `common_tags` module with validations
-- [ ] Required tags: environment, owner, project, cost-center, ttl, created_at, auto-teardown, data-class
-- [ ] Lambda `resource-cleanup` with EventBridge schedule (cron 2h UTC)
-- [ ] Owner notifications (48h → 24h → delete)
-- [ ] OPA Gatekeeper policies for Kubernetes admission control
-- [ ] GitHub Actions workflow `tag-governance.yaml`
-- [ ] Grafana "Resource Lifecycle" dashboard
-- [ ] Kafka events (resource-created, resource-expiring, resource-deleted, tag-violation)
-- [ ] Guardrails: TTL max 30d, prod exclusion, data-class=restricted exclusion
-- [ ] Tagging policy documentation
-- [ ] Alternative n8n workflow for multi-cloud (optional)
-
-### Phase 11: Resource Lifecycle Advanced (Low Priority)
-- [ ] Per-project quota system (Terraform + AWS Service Quotas)
-- [ ] Whitelist configuration (ARN patterns, critical=true tags)
-- [ ] Ordered destruction (AWS dependencies: IAM → ASG → EC2 → ELB → S3 → RDS)
-- [ ] Self-service TTL extension API (`PATCH /v1/resources/{id}/ttl`)
-- [ ] Snooze buttons in emails (7d, 14d)
-- [ ] 2 extension max limit (60d total)
-- [ ] Avoided cost calculation (AWS pricing per instance_type)
-- [ ] Grafana "Cost Savings" dashboard (avoided cost per project)
-- [ ] Prometheus metrics (resources_deleted, cost_avoided_usd)
-- [ ] Complete n8n workflow with Notion board "Resources to Delete"
-- [ ] Hourly cron (instead of daily) for pre-alerts
-- [ ] Kafka event `resource-ttl-extended`
-
-### Phase 12: STOA MCP Gateway (High Priority) - COMPLETE ✅
-- [x] Gateway Core + Keycloak Auth (CAB-120)
-  - FastAPI + OIDC middleware with JWKS caching
-  - Pydantic MCP Protocol spec models
-  - Tool Registry with built-in tools
-  - Prometheus metrics middleware
-  - Docker Compose dev stack (Keycloak, Prometheus, Grafana)
-- [x] Gateway Tests & Tools Implementation (CAB-199)
-  - 118 tests, 85% global coverage
-  - OpenAPI → MCP Tools converter (OpenAPI 3.x, Swagger 2.0)
-  - 7 built-in tools (platform_info, list_apis, get_api_details, health_check, list_tools, get_tool_schema, search_apis)
-  - HTTP PATCH method support
-- [x] OPA Policy Engine Integration (CAB-122)
-  - Embedded mode (Python) + sidecar (Rego)
-  - Policies: authz, tenant isolation, rate limiting
-  - 31 tests, 93% opa_client.py coverage
-- [x] Kafka Metering Pipeline (CAB-123)
-  - MeteringEvent schema, async MeteringProducer
-  - MCP handlers integration (fire-and-forget)
-  - 23 tests, 100% models coverage
-- [x] Kubernetes Tool Registry CRDs (CAB-121)
-  - CRDs: Tool, ToolSet (OpenAPI → MCP tools)
-  - Async Kubernetes watcher with callbacks
-  - Helm templates: RBAC, Deployment
-  - 24 tests, 100% models coverage
-- [x] Portal Integration - Tool Catalog (CAB-124)
-  - AI Tools section in Control Plane UI
-  - Pages: ToolCatalog, ToolDetail, MySubscriptions, UsageDashboard
-  - Components: ToolCard, ToolSchemaViewer, QuickStartGuide, UsageChart
-  - mcpGatewayApi.ts service, vitest tests
-
-### Phase 13: B2B Protocol Binders (Low Priority)
-- [ ] EDI X12/EDIFACT support
-- [ ] SWIFT messaging integration
-- [ ] AS2/AS4 protocol handlers
-- [ ] B2B message transformation
-- [ ] Partner onboarding automation
-
-### Phase 14: Community & Go-to-Market (Medium Priority)
-- [ ] GTM-01: Open Core strategy documented (CAB-201)
-- [ ] GTM-02: Licensing choice Apache 2.0 vs dual (CAB-202)
-- [ ] GTM-03: Repository structure mono vs multi-repo (CAB-203)
-- [ ] GTM-04: Public Docusaurus documentation (CAB-204)
-- [ ] GTM-05: STOA landing page (CAB-205)
-- [ ] GTM-06: Community channels Discord/GitHub (CAB-206)
-- [ ] GTM-07: Public roadmap (CAB-207)
-- [ ] GTM-08: IBM Partnership positioning (CAB-208)
-- [ ] GTM-09: Pricing tiers definition (CAB-209)
-- [ ] GTM-10: Beta program structure (CAB-210)
-
----
-
-## URLs
-
-| Service | URL | Notes |
-|---------|-----|-------|
-| Control Plane UI | https://console.gostoa.dev | React + Keycloak |
-| Control Plane API (direct) | https://api.gostoa.dev | FastAPI (direct access) |
-| **API Gateway Runtime** | https://apis.gostoa.dev | APIs via Gateway (OIDC auth) |
-| Keycloak | https://auth.gostoa.dev | Realm: stoa |
-| AWX | https://awx.gostoa.dev | admin/demo |
-| API Gateway Admin | https://gateway.gostoa.dev | Administrator/manage |
-| ArgoCD | https://argocd.gostoa.dev | GitOps CD |
-| Vault | https://vault.gostoa.dev | Secrets Management |
-| **Grafana** | https://grafana.gostoa.dev | Dashboards & Visualization |
-| **Prometheus** | https://prometheus.gostoa.dev | Metrics & Alerting |
-| **Loki** | https://loki.gostoa.dev | Log Aggregation |
-
-> **Architecture**: The UI calls the API via the Gateway (`apis.gostoa.dev/gateway/Control-Plane-API/2.0`) for centralized OIDC authentication.
+## [2.2.0](https://github.com/stoa-platform/stoa/compare/v2.1.0...v2.2.0) (2026-03-01)
+
+
+### Features
+
+* **api,ai-ops:** chat docs search tool + n8n v3 workflow consolidation ([#912](https://github.com/stoa-platform/stoa/issues/912)) ([7b94c7f](https://github.com/stoa-platform/stoa/commit/7b94c7ff0a18bb5a3988d312a0445a30e56c3b0c))
+* **api,gateway,ui:** self-diagnostic engine + hop detection (CAB-1316) ([#906](https://github.com/stoa-platform/stoa/issues/906)) ([e2ebe35](https://github.com/stoa-platform/stoa/commit/e2ebe358a7597173771b537ff1ece8c50416ab71))
+* **api,gateway:** add Kafka policy propagation events (CAB-1347) ([#1032](https://github.com/stoa-platform/stoa/issues/1032)) ([f6ff176](https://github.com/stoa-platform/stoa/commit/f6ff1768b693c3a92c30e8ac5f60254659cd1c6c))
+* **api,gateway:** credential mapping — API + gateway integration (CAB-1432) ([#899](https://github.com/stoa-platform/stoa/issues/899)) ([a4087ea](https://github.com/stoa-platform/stoa/commit/a4087eab0ccb646ea37dd8a4805dbd4a0a887dc0))
+* **api,portal:** add onboarding funnel analytics + dashboard (CAB-1325 Phase 3) ([#732](https://github.com/stoa-platform/stoa/issues/732)) ([5dccc97](https://github.com/stoa-platform/stoa/commit/5dccc9742d392066b21121b28b6518af822b9fbf))
+* **api,ui,portal:** add execution view with error taxonomy dashboard (CAB-1318) ([#762](https://github.com/stoa-platform/stoa/issues/762)) ([c868e00](https://github.com/stoa-platform/stoa/commit/c868e007a60ef87ac20d33d802978c4f81b2c167))
+* **api,ui:** add audience governance admin UI (CAB-1323) ([#719](https://github.com/stoa-platform/stoa/issues/719)) ([b610a13](https://github.com/stoa-platform/stoa/commit/b610a13f59e3b10c00b982158dcbae05920f9654))
+* **api:** add AWS API Gateway adapter (CAB-1427) ([#855](https://github.com/stoa-platform/stoa/issues/855)) ([b34cb98](https://github.com/stoa-platform/stoa/commit/b34cb98e1d9a0601a1c1af9696b1ed695e659be9))
+* **api:** add Azure APIM adapter (CAB-1428) ([#873](https://github.com/stoa-platform/stoa/issues/873)) ([f4db265](https://github.com/stoa-platform/stoa/commit/f4db2654c564267b90944429d1476d0c5cfcc92b))
+* **api:** add billing consumer + CRUD endpoints (CAB-1458) ([#1005](https://github.com/stoa-platform/stoa/issues/1005)) ([0ab6de4](https://github.com/stoa-platform/stoa/commit/0ab6de422da3f9d1450650e9bd1aaf88259e1801))
+* **api:** add billing models + budget check endpoint (CAB-1457) ([#1000](https://github.com/stoa-platform/stoa/issues/1000)) ([b622cb5](https://github.com/stoa-platform/stoa/commit/b622cb5c8307d3544e03d4b14111c31217cbc8ae))
+* **api:** add cache token columns to usage metering (CAB-1601) ([#1303](https://github.com/stoa-platform/stoa/issues/1303)) ([681a7d9](https://github.com/stoa-platform/stoa/commit/681a7d9f539857755e8f178754b6fbe2256f4a3e))
+* **api:** add Chat Agent backend with Anthropic streaming (CAB-286) ([#889](https://github.com/stoa-platform/stoa/issues/889)) ([9112662](https://github.com/stoa-platform/stoa/commit/91126623969f201f36ad2ff1e22fec2e26bba4cf))
+* **api:** add chat agent tool injection with agentic loop (CAB-287) ([#894](https://github.com/stoa-platform/stoa/issues/894)) ([676b5f0](https://github.com/stoa-platform/stoa/commit/676b5f071b2b82079f120f55d615be63689f5f19))
+* **api:** add chat conversation history + GDPR purge (CAB-289) ([#930](https://github.com/stoa-platform/stoa/issues/930)) ([d39b871](https://github.com/stoa-platform/stoa/commit/d39b871ea43638e202a969d615d4cb4e4cd587d4))
+* **api:** add contract lifecycle management (CAB-1335) ([#1148](https://github.com/stoa-platform/stoa/issues/1148)) ([92dd37b](https://github.com/stoa-platform/stoa/commit/92dd37b0107114bd3444887669fe2e0cad4f8bd3))
+* **api:** add data governance endpoints (CAB-1324) ([#1026](https://github.com/stoa-platform/stoa/issues/1026)) ([77d47fc](https://github.com/stoa-platform/stoa/commit/77d47fcc76407c0cc04e900ca5a76afaa5c17af7))
+* **api:** add demo tenant automation (CAB-1304) ([#1052](https://github.com/stoa-platform/stoa/issues/1052)) ([656983c](https://github.com/stoa-platform/stoa/commit/656983c3d0b52229990309100dd037bd1a31a22e))
+* **api:** add docs search endpoint with Algolia + llms.txt boost (CAB-1327) ([#910](https://github.com/stoa-platform/stoa/issues/910)) ([d13d5d9](https://github.com/stoa-platform/stoa/commit/d13d5d9747ec9047ce38a589f9b529a5d3937b2a))
+* **api:** add docs semantic search with embedding pipeline (CAB-1327) ([#923](https://github.com/stoa-platform/stoa/issues/923)) ([5cc5512](https://github.com/stoa-platform/stoa/commit/5cc5512721bf33d2ce14a3b340fdfa1be331c1d6))
+* **api:** add dynamic MCP tool generation from UAC contracts (CAB-605) ([#937](https://github.com/stoa-platform/stoa/issues/937)) ([ff3134f](https://github.com/stoa-platform/stoa/commit/ff3134fcadf10b77683357c88c15a9bbef8df6ea))
+* **api:** add LLM budget service + provider config API (CAB-1491) ([#1126](https://github.com/stoa-platform/stoa/issues/1126)) ([c81700e](https://github.com/stoa-platform/stoa/commit/c81700e0ac8e009a0099a660d7cf3daeebdc0fce))
+* **api:** add PII masking middleware + admin endpoints (CAB-430) ([#1024](https://github.com/stoa-platform/stoa/issues/1024)) ([be8063f](https://github.com/stoa-platform/stoa/commit/be8063fa0b14256049a8027e2d58b822e13c0633))
+* **api:** add POST /v1/tenants/provision endpoint (CAB-1547) ([#1204](https://github.com/stoa-platform/stoa/issues/1204)) ([1256162](https://github.com/stoa-platform/stoa/commit/12561629eb58c35f4646ef6a5cbffe970bb7299a))
+* **api:** add SCIM↔Gateway reconciliation service (CAB-1484) ([#1131](https://github.com/stoa-platform/stoa/issues/1131)) ([384e42a](https://github.com/stoa-platform/stoa/commit/384e42ac8c2e1cee8972331148cfe0d967f3eb6c))
+* **api:** add security posture scanner service (CAB-1461 P1) ([#1093](https://github.com/stoa-platform/stoa/issues/1093)) ([cd769e0](https://github.com/stoa-platform/stoa/commit/cd769e0b0dfcf98c4e81ecb34e68a99b449c0b02))
+* **api:** add self-service signup service (CAB-1541) ([#1190](https://github.com/stoa-platform/stoa/issues/1190)) ([2827a69](https://github.com/stoa-platform/stoa/commit/2827a695a2b8258b0959368554a17e3b1bb84204))
+* **api:** add self-service TTL extension endpoint (CAB-86) ([#780](https://github.com/stoa-platform/stoa/issues/780)) ([da3f27c](https://github.com/stoa-platform/stoa/commit/da3f27ca8a2fb9846041c2d8cd5918dc987d85dd))
+* **api:** add system info endpoint with edition/licensing model (CAB-1311) ([#1157](https://github.com/stoa-platform/stoa/issues/1157)) ([6610975](https://github.com/stoa-platform/stoa/commit/6610975a7d4221507dfdd6cd7871993569aaa8de))
+* **api:** add tenant export endpoint for DR (CAB-1474) ([#1152](https://github.com/stoa-platform/stoa/issues/1152)) ([dcf80c9](https://github.com/stoa-platform/stoa/commit/dcf80c9450bd4e938619e52c5b67b5335495d3e4))
+* **api:** add tenant import/restore endpoint (CAB-1474 P2) ([#1155](https://github.com/stoa-platform/stoa/issues/1155)) ([acd27b3](https://github.com/stoa-platform/stoa/commit/acd27b3ded331da67f72b6406aa229673d6f94fc))
+* **api:** add tenant usage limits and rate limiting (CAB-1549) ([#1213](https://github.com/stoa-platform/stoa/issues/1213)) ([74718c4](https://github.com/stoa-platform/stoa/commit/74718c4b2ae61f81a57b85a14e8725af97da091a))
+* **api:** add trial limits enforcement (CAB-1549) ([#1219](https://github.com/stoa-platform/stoa/issues/1219)) ([7023fc6](https://github.com/stoa-platform/stoa/commit/7023fc6f877b482b342c1f69cad266dfef14652e))
+* **api:** add UAC → OpenAPI reverse transform + round-trip tests (CAB-1349) ([#1147](https://github.com/stoa-platform/stoa/issues/1147)) ([bd836b6](https://github.com/stoa-platform/stoa/commit/bd836b65e9edce8d637dd2c1612f4ebb97a60cc8))
+* **api:** add UAC v1.0 JSON Schema + validator library (CAB-1350) ([#1146](https://github.com/stoa-platform/stoa/issues/1146)) ([0b5436c](https://github.com/stoa-platform/stoa/commit/0b5436c1cea05694e34fe056ca0eeb308829a457))
+* **api:** add usage metering pipeline (CAB-1334) ([#991](https://github.com/stoa-platform/stoa/issues/991)) ([4a05e8f](https://github.com/stoa-platform/stoa/commit/4a05e8f79905a13b8c283d9eb2753b4af3ca9b15))
+* **api:** chat token metering + budget enforcement (CAB-288) ([#915](https://github.com/stoa-platform/stoa/issues/915)) ([5ed4ccb](https://github.com/stoa-platform/stoa/commit/5ed4ccbaec01231e83a6913902100cf8e3b19554))
+* **api:** deploy log streaming + SSE event fan-out (CAB-1420) ([#850](https://github.com/stoa-platform/stoa/issues/850)) ([58d765f](https://github.com/stoa-platform/stoa/commit/58d765f2f41cf1a517ce72cc64dcb5a883fbc2bb))
+* **api:** deployment notification service — Kafka → Slack (CAB-1413) ([#814](https://github.com/stoa-platform/stoa/issues/814)) ([edf91d1](https://github.com/stoa-platform/stoa/commit/edf91d1c8f012293750336ecf3f0eed88026dda3))
+* **api:** enhance Apigee adapter with app support (CAB-1426) ([#879](https://github.com/stoa-platform/stoa/issues/879)) ([2ba5ce1](https://github.com/stoa-platform/stoa/commit/2ba5ce1e080246ab39e3474a73e172da2d4a8960))
+* **api:** PG audit trail with dual-write (CAB-1475) ([#1094](https://github.com/stoa-platform/stoa/issues/1094)) ([e25301a](https://github.com/stoa-platform/stoa/commit/e25301acbead59d2003eb60ea69b8be2b3b4d5ad))
+* **api:** replace 20 TODO stubs with real implementations (CAB-1381) ([#718](https://github.com/stoa-platform/stoa/issues/718)) ([7baf893](https://github.com/stoa-platform/stoa/commit/7baf89388944753c88e6c243ba417377f11bdea1))
+* **api:** seed Chat Completions API and 2 subscription plans (CAB-1616) ([#1272](https://github.com/stoa-platform/stoa/issues/1272)) ([873cd65](https://github.com/stoa-platform/stoa/commit/873cd65ee6560f2648fddf85a8297e492f32c718))
+* **api:** stoa.yaml spec model + deployment event producer (CAB-1410) ([#808](https://github.com/stoa-platform/stoa/issues/808)) ([f3234e3](https://github.com/stoa-platform/stoa/commit/f3234e345599105e6013598086d903ebe1c804a3))
+* **api:** wire UAC gateway dispatch in enable_binding (Gap [#1](https://github.com/stoa-platform/stoa/issues/1)) ([#802](https://github.com/stoa-platform/stoa/issues/802)) ([467e5f2](https://github.com/stoa-platform/stoa/commit/467e5f2931a071a3032ab6e721c7761cc0ff8058))
+* **arena:** Gateway Arena v2 — Enterprise AI-Native Benchmark ([#770](https://github.com/stoa-platform/stoa/issues/770)) ([2c7d1a3](https://github.com/stoa-platform/stoa/commit/2c7d1a38b5987e80e70789de2cbb418afae38cb6))
+* **arena:** Gravitee 4.8 MCP + Kong 3.9.1 + multi-protocol benchmark ([#779](https://github.com/stoa-platform/stoa/issues/779)) ([3da43ad](https://github.com/stoa-platform/stoa/commit/3da43addcc402fff89e1238c42adfff98ff96795))
+* **auth:** add SCIM→Roles protocol mapper + DCR onboarding API (CAB-1483) ([#1113](https://github.com/stoa-platform/stoa/issues/1113)) ([9a8c1ca](https://github.com/stoa-platform/stoa/commit/9a8c1ca2d17680d9e7e29ae2e4574a65030b5188))
+* Boris audit + competitive watch 3-level veille ([#1019](https://github.com/stoa-platform/stoa/issues/1019)) ([3eb9738](https://github.com/stoa-platform/stoa/commit/3eb973815e288cf5499be550cb4541bd8efddab2))
+* **ci:** /stoa slash command, access tiers, progress streaming (CAB-1398) ([#795](https://github.com/stoa-platform/stoa/issues/795)) ([25e2b82](https://github.com/stoa-platform/stoa/commit/25e2b822713480dd6e90a15ab52ce0bda2bf0923))
+* **ci:** add n8n blog publish workflow for Google Indexing (CAB-1460) ([#1053](https://github.com/stoa-platform/stoa/issues/1053)) ([fc3c774](https://github.com/stoa-platform/stoa/commit/fc3c774f04b23c5bf7a72f3d02dd091cadd078ec))
+* **ci:** add performance regression gate for gateway PRs (CAB-1490) ([#1121](https://github.com/stoa-platform/stoa/issues/1121)) ([0af0865](https://github.com/stoa-platform/stoa/commit/0af086593fc49aa2c5f183ab4ca6e4e0066bb16e))
+* **ci:** add PR Hygiene pipeline with Slack close button (CAB-1433) ([#916](https://github.com/stoa-platform/stoa/issues/916)) ([c8d1509](https://github.com/stoa-platform/stoa/commit/c8d15094934b035237803bc5a2b0390a13b0ba54))
+* **ci:** add priority FIFO queue to HEGEMON dispatch ([#1277](https://github.com/stoa-platform/stoa/issues/1277)) ([527c628](https://github.com/stoa-platform/stoa/commit/527c6284baba8411c672439c68893968757718b0))
+* **ci:** add progressive permission allowlist hooks (CAB-1481) ([940fb06](https://github.com/stoa-platform/stoa/commit/940fb0628b9f2b333f9f647944d264f2fc078e7e))
+* **ci:** add Slack Bot API threading to AI Factory notifications ([#775](https://github.com/stoa-platform/stoa/issues/775)) ([4573775](https://github.com/stoa-platform/stoa/commit/45737754ade8757ca5f790643db5c7ae38c15125))
+* **ci:** add Slack reminders for pending autopilot approvals ([#1086](https://github.com/stoa-platform/stoa/issues/1086)) ([217b2e5](https://github.com/stoa-platform/stoa/commit/217b2e5da75e41e09f51f62bde0437bfe3d34a11))
+* **ci:** add Slack threading + reactions to AI Factory notifications (CAB-1398) ([#781](https://github.com/stoa-platform/stoa/issues/781)) ([38b171a](https://github.com/stoa-platform/stoa/commit/38b171a425d3de560493d26ff4830bf58f5fc3f2))
+* **ci:** AI Factory Phase 2+3 — alerting rules, afternoon scan, docs fix (CAB-1386) ([#750](https://github.com/stoa-platform/stoa/issues/750)) ([31d812d](https://github.com/stoa-platform/stoa/commit/31d812db07e2a898336e4a8957b09037a734f4d1))
+* **ci:** AI Factory Pushgateway observability + Grafana dashboard (CAB-1386) ([#747](https://github.com/stoa-platform/stoa/issues/747)) ([b367457](https://github.com/stoa-platform/stoa/commit/b367457f1c27d3fc8efb8014afb90379f087e700))
+* **ci:** automated staging pipeline & parity tooling (CAB-1303) ([#908](https://github.com/stoa-platform/stoa/issues/908)) ([cec3a26](https://github.com/stoa-platform/stoa/commit/cec3a2652b26d50afdd1f9151af7f955c9aa040a))
+* **ci:** enrich AI Factory notifications with metrics (CAB-1377) ([#720](https://github.com/stoa-platform/stoa/issues/720)) ([eade296](https://github.com/stoa-platform/stoa/commit/eade296fc0a7018c58b3911cc390280660a2dbd8))
+* **ci:** HEGEMON Phase 2 — agent service + Slack + PocketBase (CAB-1514) ([#1119](https://github.com/stoa-platform/stoa/issues/1119)) ([c65d481](https://github.com/stoa-platform/stoa/commit/c65d48194088445e57a393c4f8747d69b491d353))
+* **ci:** HEGEMON Runtime VPS provisioning + cost analysis (CAB-1514 P1) ([#1118](https://github.com/stoa-platform/stoa/issues/1118)) ([24c4542](https://github.com/stoa-platform/stoa/commit/24c4542736d9c3c8142ce9624cadd4b1b41389d4))
+* **ci:** stoa-parallel v2 PocketBase state (CAB-1513) ([#1114](https://github.com/stoa-platform/stoa/issues/1114)) ([b60f9e1](https://github.com/stoa-platform/stoa/commit/b60f9e18f2b9a4466fb768fc4705c62008d5cafb))
+* **ci:** upgrade L1 veille to accumulation mode ([#1033](https://github.com/stoa-platform/stoa/issues/1033)) ([7b0a24e](https://github.com/stoa-platform/stoa/commit/7b0a24e46db5449cef8bd45e4d43b88714c3bd2e))
+* **ci:** wire PocketBase state push into 8 claude-* workflows (CAB-1482 P4) ([#1110](https://github.com/stoa-platform/stoa/issues/1110)) ([b6429ca](https://github.com/stoa-platform/stoa/commit/b6429ca9e64450a7b4bd43c901e449d292ac4d76))
+* community launch preparation (CAB-1326) ([#1048](https://github.com/stoa-platform/stoa/issues/1048)) ([398fb33](https://github.com/stoa-platform/stoa/commit/398fb332d1af796523b6adc6540ee090e6f45ff1))
+* dashboard components, analytics pages & Keycloak 26.5.3 upgrade ([#1080](https://github.com/stoa-platform/stoa/issues/1080)) ([6e0f383](https://github.com/stoa-platform/stoa/commit/6e0f3838fc52c4be068a869370ff901a4a981d0c))
+* **demo:** add Citadelle + Middle-Earth Banking demo scenarios (CAB-1329) ([#902](https://github.com/stoa-platform/stoa/issues/902)) ([5ca8b1a](https://github.com/stoa-platform/stoa/commit/5ca8b1a3b99556f6d47ff8276ebae5c07b7205e7))
+* **docs:** add verification matrix and Helm post-upgrade notes (CAB-1622) ([#1281](https://github.com/stoa-platform/stoa/issues/1281)) ([6fa8b0b](https://github.com/stoa-platform/stoa/commit/6fa8b0b4331efdaf65db7d73e2d665bac1503c64))
+* **gateway,api:** self-diagnostic engine with auto-RCA + hop detection (CAB-1316) ([#981](https://github.com/stoa-platform/stoa/issues/981)) ([84ff0e6](https://github.com/stoa-platform/stoa/commit/84ff0e6c7a33342f595995aa41ccb8e4a8021fec))
+* **gateway:** add --verify and --hegemon to stoa-dogfood (CAB-1601) ([#1305](https://github.com/stoa-platform/stoa/issues/1305)) ([672427c](https://github.com/stoa-platform/stoa/commit/672427c4f6a24ddd7f440432c53eb514c50312be))
+* **gateway:** add Anthropic cache token tracking (CAB-1601) ([#1292](https://github.com/stoa-platform/stoa/issues/1292)) ([0679a90](https://github.com/stoa-platform/stoa/commit/0679a9043dcc973a17a91a4a829842ac271aa696))
+* **gateway:** add arena observability — metrics, OpenSearch export, PV (CAB-1558) ([#1231](https://github.com/stoa-platform/stoa/issues/1231)) ([4c51604](https://github.com/stoa-platform/stoa/commit/4c516048ed598bc4ca61f96c9a72498a6e76e97e))
+* **gateway:** add bench OpenSearch + LLM dim (CAB-1601) ([#1242](https://github.com/stoa-platform/stoa/issues/1242)) ([b1f3d8f](https://github.com/stoa-platform/stoa/commit/b1f3d8f343a5ee4dbe11b1c87fdf6e49eb5dd55e))
+* **gateway:** add DPoP cnf.jkt token-to-proof binding (CAB-1605) ([#1237](https://github.com/stoa-platform/stoa/issues/1237)) ([eba20fa](https://github.com/stoa-platform/stoa/commit/eba20faeb3afb7e613eb3a8a08b1689b13797022))
+* **gateway:** add lazy MCP discovery with cache-first pattern (CAB-1552) ([#1209](https://github.com/stoa-platform/stoa/issues/1209)) ([bbd21b0](https://github.com/stoa-platform/stoa/commit/bbd21b0ae8ac95890e5713261834aa965f3a3217))
+* **gateway:** add LLM API proxy for STOA dogfood (CAB-1568) ([#1205](https://github.com/stoa-platform/stoa/issues/1205)) ([0920302](https://github.com/stoa-platform/stoa/commit/09203021fe3418cd3f471bc680f73791d11c1d1b))
+* **gateway:** add LLM contract types for UAC (CAB-709) ([#895](https://github.com/stoa-platform/stoa/issues/895)) ([416e9bb](https://github.com/stoa-platform/stoa/commit/416e9bb79669605f4054f6dde03e9e65beda983a))
+* **gateway:** add LLM token tracking Grafana dashboard (CAB-1617) ([#1273](https://github.com/stoa-platform/stoa/issues/1273)) ([ca0f6dd](https://github.com/stoa-platform/stoa/commit/ca0f6dd2dc8a4dcfae8a7248885947b4e47aff7c))
+* **gateway:** add MCP spec compliance methods (CAB-1472) ([#1077](https://github.com/stoa-platform/stoa/issues/1077)) ([07edc50](https://github.com/stoa-platform/stoa/commit/07edc509cd2e919d85d82d74450a89c2e8ed275f))
+* **gateway:** add metering enrichment + budget enforcement (CAB-1456) ([#998](https://github.com/stoa-platform/stoa/issues/998)) ([7b662e1](https://github.com/stoa-platform/stoa/commit/7b662e154057390d9f31635eebec2884e2553fbc))
+* **gateway:** add Mistral co-processor with multi-provider LLM proxy (CAB-1601) ([#1247](https://github.com/stoa-platform/stoa/issues/1247)) ([7778bed](https://github.com/stoa-platform/stoa/commit/7778bed21ad20889a728f2a268c634551061c8c9))
+* **gateway:** add prompt cache endpoints + MCP tools (CAB-1123) ([#878](https://github.com/stoa-platform/stoa/issues/878)) ([fd3ac23](https://github.com/stoa-platform/stoa/commit/fd3ac237cb0d0a1fbb8a004eccb2566c11075d56))
+* **gateway:** add proxy hardening with CB + retry for OAuth & CP calls (CAB-1542) ([#1208](https://github.com/stoa-platform/stoa/issues/1208)) ([11a5ab0](https://github.com/stoa-platform/stoa/commit/11a5ab021d9c8b0827a636c346c48ccabe497dfe))
+* **gateway:** add RFC 7592 DCR management endpoints (CAB-1606) ([#1239](https://github.com/stoa-platform/stoa/issues/1239)) ([e9a85c6](https://github.com/stoa-platform/stoa/commit/e9a85c6d764c2bd6a54bfbadb3080295e7c81a45))
+* **gateway:** add sender-constraint middleware (CAB-1607) ([#1248](https://github.com/stoa-platform/stoa/issues/1248)) ([2fcd9c2](https://github.com/stoa-platform/stoa/commit/2fcd9c2b5f0f7fe9c65729cfa08260a1235f4616))
+* **gateway:** add skills CRUD + circuit breaker health tracking (CAB-1551) ([#1199](https://github.com/stoa-platform/stoa/issues/1199)) ([46ee849](https://github.com/stoa-platform/stoa/commit/46ee849aa94451202f813b797b7bac687ce7ed25))
+* **gateway:** add skills system, proxy hardening & auto-RCA (CAB-1542) ([#1189](https://github.com/stoa-platform/stoa/issues/1189)) ([63d3604](https://github.com/stoa-platform/stoa/commit/63d36048e38ed8fdb32166fb6b58ae7cf62a2e1a))
+* **gateway:** add token budget management (CAB-1337 Phase 2) ([#813](https://github.com/stoa-platform/stoa/issues/813)) ([bf9c1be](https://github.com/stoa-platform/stoa/commit/bf9c1beab399a8d0e5f1822e4f041e6251de51a6))
+* **gateway:** add tool schema validation at registration (CAB-1551) ([#1223](https://github.com/stoa-platform/stoa/issues/1223)) ([2236019](https://github.com/stoa-platform/stoa/commit/2236019d3c52fba89b49e4a7c1eeb3d2e7a623c0))
+* **gateway:** add W3C trace context middleware (CAB-1455) ([#1143](https://github.com/stoa-platform/stoa/issues/1143)) ([e1313a4](https://github.com/stoa-platform/stoa/commit/e1313a438b0be2ca01f38ad4a89d13e65668c113))
+* **gateway:** Azure OpenAI multi-namespace subscription routing (CAB-1610) ([#1255](https://github.com/stoa-platform/stoa/issues/1255)) ([c1956b5](https://github.com/stoa-platform/stoa/commit/c1956b53494eab4b336bfd0dd970538d7d274a17))
+* **gateway:** bump MCP protocol to 2025-11-25 + add handler tests (CAB-1472) ([#1104](https://github.com/stoa-platform/stoa/issues/1104)) ([5cd3b20](https://github.com/stoa-platform/stoa/commit/5cd3b20cc952476185ae53f444cab91d7784b76c))
+* **gateway:** complete skill context injection into tool calls (CAB-1365) ([#721](https://github.com/stoa-platform/stoa/issues/721)) ([91c1acb](https://github.com/stoa-platform/stoa/commit/91c1acbdb63b7ca3e018f02a1dbbe965ed03ea5d))
+* **gateway:** content filtering guardrail V2 Phase 1 (CAB-1337) ([#809](https://github.com/stoa-platform/stoa/issues/809)) ([f5474eb](https://github.com/stoa-platform/stoa/commit/f5474eb90fd7caa48eeca95d38ebb81375fd3b7c))
+* **gateway:** deploy progress telemetry — structured events (CAB-1421) ([#852](https://github.com/stoa-platform/stoa/issues/852)) ([5e1349b](https://github.com/stoa-platform/stoa/commit/5e1349bea94dc7e32a992b90c75964eead7903df))
+* **gateway:** GuardrailPolicy CRD — per-tenant guardrail engine (CAB-1337 Phase 3) ([#825](https://github.com/stoa-platform/stoa/issues/825)) ([5580655](https://github.com/stoa-platform/stoa/commit/55806556e8f534d0ad23ef2fe13981365258c3c0))
+* **gateway:** implement shadow capture + federation polish (CAB-1380) ([#713](https://github.com/stoa-platform/stoa/issues/713)) ([e964e97](https://github.com/stoa-platform/stoa/commit/e964e97a2a390eb51268acadfa07837f341d66be))
+* **gateway:** LLM provider router + cost tracking (CAB-1487) ([#1125](https://github.com/stoa-platform/stoa/issues/1125)) ([2d50eb8](https://github.com/stoa-platform/stoa/commit/2d50eb83227ec767f44d603c4cb30e139d9e22d5))
+* **gateway:** MCP hot-reload — push tools/list_changed on CRD mutations (CAB-1330) ([#727](https://github.com/stoa-platform/stoa/issues/727)) ([c3831a6](https://github.com/stoa-platform/stoa/commit/c3831a6812fb2e00ce5bd9f9f1790091a94a1823))
+* **gateway:** MCP resources, prompts, completion REST endpoints (CAB-1472) ([ab2255b](https://github.com/stoa-platform/stoa/commit/ab2255b2c930a88b07bedc37b3b30cbdf0c3dfa7))
+* **gateway:** mcp spec parity — prompts, logging, resources/read + 16 conformance tests (CAB-1333) ([#831](https://github.com/stoa-platform/stoa/issues/831)) ([e2818b4](https://github.com/stoa-platform/stoa/commit/e2818b451696289cdf4cbba676951e895bf8ef06))
+* **gateway:** migrate existing tools to new schema with alias support (CAB-606) ([#967](https://github.com/stoa-platform/stoa/issues/967)) ([c6726c5](https://github.com/stoa-platform/stoa/commit/c6726c56b6abf09b62efb3aff18bdaeb518768bd))
+* **gateway:** propagate W3C traceparent through proxy hops (CAB-1455) ([#1151](https://github.com/stoa-platform/stoa/issues/1151)) ([02ba924](https://github.com/stoa-platform/stoa/commit/02ba924b63ed328bf0a82dc6db0059eb2c610b7b))
+* **gateway:** WebSocket transport + bidirectional MCP (CAB-1345) ([#890](https://github.com/stoa-platform/stoa/issues/890)) ([bba6a98](https://github.com/stoa-platform/stoa/commit/bba6a984f5e7b7b962cc874e9cbaf53fd50b5e71))
+* **gateway:** wire OTel sampling + UAC spans + Tempo (CAB-1331) ([#870](https://github.com/stoa-platform/stoa/issues/870)) ([8706b72](https://github.com/stoa-platform/stoa/commit/8706b7288ec0abf00c87e55986b29ebeebf86dfe))
+* **gateway:** wire OTel sampling + UAC spans + Tempo (CAB-1424, CAB-1425) ([#871](https://github.com/stoa-platform/stoa/issues/871)) ([9c7dedf](https://github.com/stoa-platform/stoa/commit/9c7dedf0396a538d1492e0d2e22938ebdb2c5dfe))
+* **gateway:** wire subscription-aware Azure OpenAI routing (CAB-1615) ([#1268](https://github.com/stoa-platform/stoa/issues/1268)) ([5204b7c](https://github.com/stoa-platform/stoa/commit/5204b7c4060790a1887f19da7da3838ea22a6bed))
+* **gateway:** wire typed fields + extract JWT user_id in proxy (CAB-1389 P2) ([#811](https://github.com/stoa-platform/stoa/issues/811)) ([ade043e](https://github.com/stoa-platform/stoa/commit/ade043ee73655808c11a35a185f7d1131402ddee))
+* **grafana:** add UAC debug dashboard with drill-down (CAB-1375) ([#763](https://github.com/stoa-platform/stoa/issues/763)) ([db29b88](https://github.com/stoa-platform/stoa/commit/db29b888209556f734543638d7d9c32739935b8e))
+* **hegemon:** add PocketBase remote tier + sync (CAB-1482 P3) ([#1099](https://github.com/stoa-platform/stoa/issues/1099)) ([ab9710d](https://github.com/stoa-platform/stoa/commit/ab9710d419a2a997da680cac4d9e325957786ad2))
+* **hegemon:** Agent State Store with auto-tracking hooks (CAB-1482) ([#1098](https://github.com/stoa-platform/stoa/issues/1098)) ([79c31dd](https://github.com/stoa-platform/stoa/commit/79c31ddc7d4a06ef74e4a1f6c5546147b73e2d28))
+* **hegemon:** notification throttle, retry cap + digest mode ([#1156](https://github.com/stoa-platform/stoa/issues/1156)) ([01164e9](https://github.com/stoa-platform/stoa/commit/01164e933a9cfe28afff7a099b599c42339f0db6))
+* **hegemon:** v8 executor — Opus-only + env hints + turn budget (CAB-1514) ([#1161](https://github.com/stoa-platform/stoa/issues/1161)) ([52b9546](https://github.com/stoa-platform/stoa/commit/52b95468e0888e0cd5a1d00d17acdb11df53c189))
+* **helm,k8s:** add HPA and PDB for all runtime components (CAB-1379) ([#715](https://github.com/stoa-platform/stoa/issues/715)) ([3d1f3b7](https://github.com/stoa-platform/stoa/commit/3d1f3b7def68726f564837f1de6ee9f43ffbaab8))
+* **helm:** add HPA + PDB for all components (CAB-1438) ([#970](https://github.com/stoa-platform/stoa/issues/970)) ([dc2d85f](https://github.com/stoa-platform/stoa/commit/dc2d85fceaceb7a4019ce439b927aa86f1d09f88))
+* **helm:** add hybrid multi-cluster observability dashboard (CAB-1426) ([#884](https://github.com/stoa-platform/stoa/issues/884)) ([70b7cb3](https://github.com/stoa-platform/stoa/commit/70b7cb39a213752c0a4870542cb4124aa6bfa324))
+* **helm:** add infisical secret sync + multi-staging (CAB-1342) ([#990](https://github.com/stoa-platform/stoa/issues/990)) ([6a42f2a](https://github.com/stoa-platform/stoa/commit/6a42f2af9f0841024841b034389c274f7f3163be))
+* **helm:** add ServiceMonitor for control-plane-api (Gap [#5](https://github.com/stoa-platform/stoa/issues/5)) ([#788](https://github.com/stoa-platform/stoa/issues/788)) ([0bbe876](https://github.com/stoa-platform/stoa/commit/0bbe8768c81d88c03544ce970883e34038029a71))
+* **infra:** add Kafka topics for audit, catalog, and errors (CAB-498) ([#742](https://github.com/stoa-platform/stoa/issues/742)) ([c8f5e0b](https://github.com/stoa-platform/stoa/commit/c8f5e0bcc665f9ba0a006764d35709cead053bca))
+* **infra:** default-deny NetworkPolicy for 4 namespaces (CAB-1401) ([#797](https://github.com/stoa-platform/stoa/issues/797)) ([d88bdfb](https://github.com/stoa-platform/stoa/commit/d88bdfb933e2f0633feba0315b79d8b65bb1ac62))
+* **infra:** Event Backbone — Kafka/Redpanda Ops & SLOs (CAB-497) ([#745](https://github.com/stoa-platform/stoa/issues/745)) ([781453b](https://github.com/stoa-platform/stoa/commit/781453b2af9c3a73afcd453807b83165d12e831b))
+* **infra:** Gateway API CRDs + NGINX Gateway Fabric (CAB-1399) ([#785](https://github.com/stoa-platform/stoa/issues/785)) ([cc347f5](https://github.com/stoa-platform/stoa/commit/cc347f5bd6aae318e010a011f0ae2fcda9be0c20))
+* **infra:** Ingress → HTTPRoute migration with NGINX Gateway Fabric (CAB-1400) ([#791](https://github.com/stoa-platform/stoa/issues/791)) ([3275055](https://github.com/stoa-platform/stoa/commit/3275055f3e859c330edcd8c6fe2ba2017e3f22b1))
+* **infra:** Kafka multi-tenant quotas for noisy neighbor prevention (CAB-499) ([#740](https://github.com/stoa-platform/stoa/issues/740)) ([6d567a7](https://github.com/stoa-platform/stoa/commit/6d567a78036b4d943dec0a8133fc99c0871bac46))
+* **observability:** add AI FinOps Grafana dashboard (CAB-1612) ([#1259](https://github.com/stoa-platform/stoa/issues/1259)) ([eb93659](https://github.com/stoa-platform/stoa/commit/eb93659b4eb95616912019d0ca66e2eea6241d0d))
+* **observability:** add LLM token tracking dashboard (CAB-1617) ([#1263](https://github.com/stoa-platform/stoa/issues/1263)) ([7014247](https://github.com/stoa-platform/stoa/commit/7014247e8240ea29ae58528bad2851280c4b46d5))
+* **observability:** add stoa-gateway alerts + request journey dashboard (CAB-1455) ([#1153](https://github.com/stoa-platform/stoa/issues/1153)) ([3a836e3](https://github.com/stoa-platform/stoa/commit/3a836e30920054254480367c0e7100c226d75d3f))
+* **observability:** ArgoCD drift monitoring and GitOps sync SLO (CAB-402) ([#1059](https://github.com/stoa-platform/stoa/issues/1059)) ([028d433](https://github.com/stoa-platform/stoa/commit/028d4332c8e74885d34e1d187430f7ac95eb8f74))
+* **ops:** add impact analysis — reverse deps + /impact skill (CAB-1469) ([#1043](https://github.com/stoa-platform/stoa/issues/1043)) ([0530143](https://github.com/stoa-platform/stoa/commit/05301435559e17c942fd2dea9f06708def653afd))
+* **ops:** add Token Observatory cost tracking (CAB-1433) ([#914](https://github.com/stoa-platform/stoa/issues/914)) ([75d1c66](https://github.com/stoa-platform/stoa/commit/75d1c66e634b1dab6d9d494c34e4fda7ad507d39))
+* **ops:** HEGEMON Go daemon orchestrator (CAB-1519) ([#1135](https://github.com/stoa-platform/stoa/issues/1135)) ([97d6b2e](https://github.com/stoa-platform/stoa/commit/97d6b2e9e4ad5a96a421886645410f0dcc59f463))
+* **ops:** instance-based permission enforcement + Slack notify (CAB-1481) ([#1087](https://github.com/stoa-platform/stoa/issues/1087)) ([8ccd173](https://github.com/stoa-platform/stoa/commit/8ccd1733733a8beee939184f2dab79766d341bc4))
+* **ops:** instance-based ticket dispatch for parallel tmux (CAB-1480) ([#1084](https://github.com/stoa-platform/stoa/issues/1084)) ([1e91ccc](https://github.com/stoa-platform/stoa/commit/1e91ccce26df49fed96ecf8c6149c62e3f1ed544))
+* **ops:** platform service catalog + /carto skill (CAB-1467) ([#1039](https://github.com/stoa-platform/stoa/issues/1039)) ([5dd875c](https://github.com/stoa-platform/stoa/commit/5dd875c224931f5f6032255f603f8a92b29b0668))
+* **portal:** add advanced features (CAB-1470) ([#1176](https://github.com/stoa-platform/stoa/issues/1176)) ([73bbcb3](https://github.com/stoa-platform/stoa/commit/73bbcb382a5eb0f1bd52ad932df8388a98764e03))
+* **portal:** add Chat Completions API enrichment panel (CAB-1611) ([#1254](https://github.com/stoa-platform/stoa/issues/1254)) ([2034ff9](https://github.com/stoa-platform/stoa/commit/2034ff9d284d90d246fa700d1e009603d5055efa))
+* **portal:** add execution taxonomy filters + 4-persona tests (CAB-1554) ([#1229](https://github.com/stoa-platform/stoa/issues/1229)) ([1a5bb45](https://github.com/stoa-platform/stoa/commit/1a5bb450995b58968301b2e22e17b67ba0ea86bc))
+* **portal:** add i18n quality gate + shared glossary (CAB-1444) ([#976](https://github.com/stoa-platform/stoa/issues/976)) ([6d483df](https://github.com/stoa-platform/stoa/commit/6d483df814d980febe366bf77e66e231f8e6f60b))
+* **portal:** add self-service signup page (CAB-1548) ([#1230](https://github.com/stoa-platform/stoa/issues/1230)) ([cf57e3d](https://github.com/stoa-platform/stoa/commit/cf57e3daa2321969e4cf0df3cc341a60af0ee581))
+* **portal:** add unified Marketplace page (CAB-1453) ([#1172](https://github.com/stoa-platform/stoa/issues/1172)) ([00ab9a5](https://github.com/stoa-platform/stoa/commit/00ab9a537708e6509cdb3b66ea8974a17b7505e2))
+* **portal:** credential mapping management UI (CAB-1432) ([#903](https://github.com/stoa-platform/stoa/issues/903)) ([215b7e0](https://github.com/stoa-platform/stoa/commit/215b7e0ff3fe0ae9993182d60189c77780d72189))
+* **portal:** MCP Developer Self-Service — tenant-scoped servers (CAB-1319) ([#898](https://github.com/stoa-platform/stoa/issues/898)) ([74cffdd](https://github.com/stoa-platform/stoa/commit/74cffddc9b31b709f96d7ae283884fba13f55fde))
+* **portal:** RBAC widget visibility for dashboard (CAB-1323) ([#714](https://github.com/stoa-platform/stoa/issues/714)) ([df63d2f](https://github.com/stoa-platform/stoa/commit/df63d2f1731f7f92b2456a0b983868a092f9a356))
+* **portal:** wire Chat Completions plans into subscription flow (CAB-1616) ([#1267](https://github.com/stoa-platform/stoa/issues/1267)) ([2510d6e](https://github.com/stoa-platform/stoa/commit/2510d6e239d248fc61ba299426f311221ca0e49d))
+* **portal:** wire ChatCompletionsEnrichment into API detail page (CAB-1611) ([#1260](https://github.com/stoa-platform/stoa/issues/1260)) ([2f22da3](https://github.com/stoa-platform/stoa/commit/2f22da3545a75d390747642e99efdec7efcbf6cf))
+* **security:** add cloudflare access for infisical + multi-device SSH (CAB-1537) ([#1165](https://github.com/stoa-platform/stoa/issues/1165)) ([89e1c5a](https://github.com/stoa-platform/stoa/commit/89e1c5a64a612dee811a046470e3c6289bf9ae3a))
+* **security:** add security scanner CronJob + Prometheus alerts (CAB-1492) ([#1122](https://github.com/stoa-platform/stoa/issues/1122)) ([aff84e1](https://github.com/stoa-platform/stoa/commit/aff84e18077d26c62983946ba581296c7d641415))
+* **security:** add sender-constrained token validation (CAB-438) ([#1092](https://github.com/stoa-platform/stoa/issues/1092)) ([182ddfe](https://github.com/stoa-platform/stoa/commit/182ddfef6eb0e0eb74e395081168e674abe81f0b))
+* **ui:** add Access Review Dashboard (CAB-1485) ([#1132](https://github.com/stoa-platform/stoa/issues/1132)) ([dcc2b06](https://github.com/stoa-platform/stoa/commit/dcc2b0653c51ac4f0ea4e3b0a04be66e1e3af151))
+* **ui:** add admin access requests page (CAB-1468) ([#1042](https://github.com/stoa-platform/stoa/issues/1042)) ([39069b7](https://github.com/stoa-platform/stoa/commit/39069b761a4768e4844a8bc9161f621b85b82482))
+* **ui:** add admin users, settings & roles pages (CAB-1454) ([#1175](https://github.com/stoa-platform/stoa/issues/1175)) ([413d9e3](https://github.com/stoa-platform/stoa/commit/413d9e32641b7f9652101b02702092a6abbf5120))
+* **ui:** add i18n framework with react-i18next (CAB-1429) ([#876](https://github.com/stoa-platform/stoa/issues/876)) ([4236dd3](https://github.com/stoa-platform/stoa/commit/4236dd38a01a17f08a18a1ebda660fb37f2f238f))
+* **ui:** add i18n key-check script + CI guard (CAB-1431) ([#885](https://github.com/stoa-platform/stoa/issues/885)) ([ffe5540](https://github.com/stoa-platform/stoa/commit/ffe55400b3026aa693e7354c1408ba735a09da56))
+* **ui:** add LLM Cost Management Dashboard (CAB-1495) ([#1133](https://github.com/stoa-platform/stoa/issues/1133)) ([cea558f](https://github.com/stoa-platform/stoa/commit/cea558f458c6310f9b87f2358951995f57e4cdd5))
+* **ui:** add PermissionGate + ProxyOwner dashboard (CAB-1545) ([#1184](https://github.com/stoa-platform/stoa/issues/1184)) ([058ab23](https://github.com/stoa-platform/stoa/commit/058ab23a89a7eb369f6dc13c419eefd3619aed49))
+* **ui:** add shared Button component + Console focus-visible (CAB-1322) ([#892](https://github.com/stoa-platform/stoa/issues/892)) ([f6f5c0a](https://github.com/stoa-platform/stoa/commit/f6f5c0ac87cb04ca88562aa8a0aa829236fa92c1))
+* **ui:** add token binding status to security posture dashboard (CAB-438 W4) ([#1101](https://github.com/stoa-platform/stoa/issues/1101)) ([c17ef2e](https://github.com/stoa-platform/stoa/commit/c17ef2ec63c83bbbb9723089daf82ce9c80df388))
+* **ui:** add token usage dashboard widget (CAB-288) ([#919](https://github.com/stoa-platform/stoa/issues/919)) ([38e7b3d](https://github.com/stoa-platform/stoa/commit/38e7b3d9b4ac874cbb18332598061da0c9d0d122))
+* **ui:** enhance Security Posture Dashboard (CAB-1497) ([#1130](https://github.com/stoa-platform/stoa/issues/1130)) ([701d7b1](https://github.com/stoa-platform/stoa/commit/701d7b1071d1fb06c56d6fa2ddd1f2a4ee84119a))
+* **ui:** expand i18n translations + wire Tenants page (CAB-1430) ([#888](https://github.com/stoa-platform/stoa/issues/888)) ([58d4978](https://github.com/stoa-platform/stoa/commit/58d49787f01cb2627402676e509013c2c123836f))
+* **ui:** floating AI assistant chat widget (CAB-285) ([#877](https://github.com/stoa-platform/stoa/issues/877)) ([ca78f99](https://github.com/stoa-platform/stoa/commit/ca78f995b0c736c4ddaf7ca8a13d909d9e3aa791))
+* **ui:** i18n Layout.tsx — extract 39+ nav strings (CAB-1430) ([#882](https://github.com/stoa-platform/stoa/issues/882)) ([420ec9a](https://github.com/stoa-platform/stoa/commit/420ec9a534760da36e39d74b7e4d7b633b58c395))
+* **ui:** live deployment dashboard — SSE logs + step progress (CAB-1422) ([#856](https://github.com/stoa-platform/stoa/issues/856)) ([7a4efeb](https://github.com/stoa-platform/stoa/commit/7a4efebb439a614563fce22efc248162d17a8280))
+
+
+### Bug Fixes
+
+* **ai-factory:** drop Haiku tier from implementation routing ([#737](https://github.com/stoa-platform/stoa/issues/737)) ([b37ca36](https://github.com/stoa-platform/stoa/commit/b37ca366847f2da51f7f2e639b6f3a041a19bc31))
+* **ai-factory:** partial success detection for max_turns hits ([#739](https://github.com/stoa-platform/stoa/issues/739)) ([9a66eac](https://github.com/stoa-platform/stoa/commit/9a66eac2339c4c1f228e0098858ae3b9a8e3d461))
+* **ai-factory:** prevent Haiku routing for unknown estimates ([#735](https://github.com/stoa-platform/stoa/issues/735)) ([2caea88](https://github.com/stoa-platform/stoa/commit/2caea88c35694262086eb72302ea429d34496249))
+* **api,gateway:** send API key in body to bypass PII middleware (CAB-1601) ([#1250](https://github.com/stoa-platform/stoa/issues/1250)) ([e8f6cda](https://github.com/stoa-platform/stoa/commit/e8f6cda139c3accce72735d5421ecffce5055321))
+* **api:** add pytest-httpx to dev deps — fixes httpx_mock fixture not found ([#827](https://github.com/stoa-platform/stoa/issues/827)) ([d7b1798](https://github.com/stoa-platform/stoa/commit/d7b17987c5bd1042a49792eea506a55dbf141e8d))
+* **api:** credential mapping mypy type ignores (CAB-1432) ([#911](https://github.com/stoa-platform/stoa/issues/911)) ([1433a83](https://github.com/stoa-platform/stoa/commit/1433a83c84f1e270af876995789137e88f68c980))
+* **api:** filter caplog by logger in billing tests ([#1046](https://github.com/stoa-platform/stoa/issues/1046)) ([f548d4b](https://github.com/stoa-platform/stoa/commit/f548d4b65c035c485f3b579c581991e30b34eaf1))
+* **api:** fix 7 pre-existing test failures blocking CI/CD (CAB-1601) ([#1252](https://github.com/stoa-platform/stoa/issues/1252)) ([d8dd386](https://github.com/stoa-platform/stoa/commit/d8dd386156fb81ad2271a15d5cd823f2d09502ef))
+* **api:** fix pre-existing test failures blocking CD pipeline ([#821](https://github.com/stoa-platform/stoa/issues/821)) ([2de81cb](https://github.com/stoa-platform/stoa/commit/2de81cb54f366038a42071be29f7d08c2a9b768e))
+* **api:** make migration 026 idempotent for partial-apply recovery (CAB-1601) ([#1279](https://github.com/stoa-platform/stoa/issues/1279)) ([fe85956](https://github.com/stoa-platform/stoa/commit/fe859564eb7b2e7159bf500f45429f00718f64d5))
+* **api:** make migration 035 idempotent for pre-existing columns (CAB-1601) ([#1286](https://github.com/stoa-platform/stoa/issues/1286)) ([c3347c7](https://github.com/stoa-platform/stoa/commit/c3347c7d43599fa7d6e13717e9d88297d15b05c7))
+* **api:** mark test_import_endpoint_exists as integration test (CAB-1474) ([#1253](https://github.com/stoa-platform/stoa/issues/1253)) ([2f6f552](https://github.com/stoa-platform/stoa/commit/2f6f552548dd6c2e74b4b7d23659b6c882d9ef74))
+* **api:** pass REGISTRY to openmetrics generate_latest (/metrics returns 500) ([#793](https://github.com/stoa-platform/stoa/issues/793)) ([5040a2e](https://github.com/stoa-platform/stoa/commit/5040a2e30083c4a2cdd2ed30879977cf06390b3c))
+* **api:** prevent enum double-create in 5 alembic migrations (CAB-1601) ([#1284](https://github.com/stoa-platform/stoa/issues/1284)) ([d788db8](https://github.com/stoa-platform/stoa/commit/d788db8df4662ec87877b356be3521148d3a319f))
+* **api:** remove 20 type-ignore suppressions in credential mapping (CAB-1437) ([#966](https://github.com/stoa-platform/stoa/issues/966)) ([7fb5db5](https://github.com/stoa-platform/stoa/commit/7fb5db56915db421c6c3e56d1aea276c1c05f866))
+* **api:** rename mcp_generated_tools indexes to avoid collision (CAB-1601) ([#1287](https://github.com/stoa-platform/stoa/issues/1287)) ([f477355](https://github.com/stoa-platform/stoa/commit/f477355d665072db73314f2eb483d4eb5784fe1d))
+* **api:** resolve 51 pre-existing CI test failures ([#1045](https://github.com/stoa-platform/stoa/issues/1045)) ([52bd3cb](https://github.com/stoa-platform/stoa/commit/52bd3cbb58142c7b2213e837c0d9f47d8f26db9d))
+* **api:** resolve remaining alembic chain breaks (CAB-1601) ([#1275](https://github.com/stoa-platform/stoa/issues/1275)) ([d450237](https://github.com/stoa-platform/stoa/commit/d450237036682c3e8b200c444e682349c13db136))
+* **api:** update OpenAPI snapshot + mypy fixes for demo endpoints (CAB-1304) ([#1056](https://github.com/stoa-platform/stoa/issues/1056)) ([de6f01d](https://github.com/stoa-platform/stoa/commit/de6f01d8cd58a0b65ac33bf7895fa34bdd073e82))
+* **api:** update OpenAPI snapshot for billing endpoint (CAB-1457) ([#1002](https://github.com/stoa-platform/stoa/issues/1002)) ([1d281c9](https://github.com/stoa-platform/stoa/commit/1d281c9360be3fb86701a1620f2cb36053910037))
+* **api:** update OpenAPI snapshot for data governance + PII endpoints ([#1030](https://github.com/stoa-platform/stoa/issues/1030)) ([e538d08](https://github.com/stoa-platform/stoa/commit/e538d08e2cddbd48bdfadf2b773d1960899384a7))
+* **api:** update OpenAPI snapshot for validate-key body param (CAB-1601) ([#1251](https://github.com/stoa-platform/stoa/issues/1251)) ([e732844](https://github.com/stoa-platform/stoa/commit/e7328442766903d3c8c413032ef2d106e8e7ea68))
+* **api:** use async for instead of async with for get_db in background tasks ([#1011](https://github.com/stoa-platform/stoa/issues/1011)) ([9292d7e](https://github.com/stoa-platform/stoa/commit/9292d7ea45414f56f6789da119ff994334581db1))
+* **api:** use CAST() instead of :: for jsonb/json in migration 048 (CAB-1601) ([#1289](https://github.com/stoa-platform/stoa/issues/1289)) ([6e7c00f](https://github.com/stoa-platform/stoa/commit/6e7c00f437a844750ae266d6e1c348b3fe4928e8))
+* **api:** use conn.execute for parameterized seed migration (CAB-1601) ([#1288](https://github.com/stoa-platform/stoa/issues/1288)) ([162f5d6](https://github.com/stoa-platform/stoa/commit/162f5d6d3ba9df50a58b33874312fb19d445fc8c))
+* **api:** use postgresql.ENUM for create_type=False in migrations (CAB-1601) ([#1285](https://github.com/stoa-platform/stoa/issues/1285)) ([ab135f6](https://github.com/stoa-platform/stoa/commit/ab135f6bad688227cd0470362a4fbdc6698bada2))
+* **arena:** add echo route to Kong VPS declarative config ([#1258](https://github.com/stoa-platform/stoa/issues/1258)) ([96d6ef1](https://github.com/stoa-platform/stoa/commit/96d6ef15b3f37831e6397d23e589308b76ff93bd))
+* **arena:** add runAsUser to Gravitee init Job curl containers ([#782](https://github.com/stoa-platform/stoa/issues/782)) ([f4051c8](https://github.com/stoa-platform/stoa/commit/f4051c8fd81e020fd1f444388f09e039383c7ec2))
+* **arena:** correct OpenSearch namespace and add auth support (CAB-1601) ([#1245](https://github.com/stoa-platform/stoa/issues/1245)) ([a50203a](https://github.com/stoa-platform/stoa/commit/a50203abcb159d462abb1106e87d0e6f9d3bce2b))
+* **arena:** correct service names and auth for Arena L2 verify (CAB-1567) ([#1201](https://github.com/stoa-platform/stoa/issues/1201)) ([af28bbb](https://github.com/stoa-platform/stoa/commit/af28bbb132e9e037558b39a2fc4dad486cb6a220))
+* **arena:** correct stoa-k8s port in enterprise CronJob (CAB-1558) ([#1234](https://github.com/stoa-platform/stoa/issues/1234)) ([099a357](https://github.com/stoa-platform/stoa/commit/099a3572bf21a119c7b7ec2fbf7784fd94139ab1))
+* **arena:** downgrade OSD saved objects for 2.11.0 compatibility (CAB-1601) ([#1246](https://github.com/stoa-platform/stoa/issues/1246)) ([9937b41](https://github.com/stoa-platform/stoa/commit/9937b410e2a026fc2a766209745405d9646d1109))
+* **arena:** increase Gravitee 4.8 resources + probe delays ([#784](https://github.com/stoa-platform/stoa/issues/784)) ([eca53ee](https://github.com/stoa-platform/stoa/commit/eca53ee349e244a5cd3073824d0999ae04b87ca3))
+* **arena:** prevent Pushgateway metric overwrites between pushers ([#866](https://github.com/stoa-platform/stoa/issues/866)) ([9bbf7d5](https://github.com/stoa-platform/stoa/commit/9bbf7d56f2fb5340dd8f56b1c92179b1404a434e))
+* **ci:** 5-tier model routing + autopilot infra exclusion ([#1057](https://github.com/stoa-platform/stoa/issues/1057)) ([eb48500](https://github.com/stoa-platform/stoa/commit/eb48500d7d53849062fc574534042586154fdd91))
+* **ci:** add --insecure flag for staging smoke tests (CAB-1303) ([#909](https://github.com/stoa-platform/stoa/issues/909)) ([ea5e4cf](https://github.com/stoa-platform/stoa/commit/ea5e4cf753d98a4275f790766082d598f28622c0))
+* **ci:** add actions:read permission to self-improve workflow ([#824](https://github.com/stoa-platform/stoa/issues/824)) ([3ea7dfb](https://github.com/stoa-platform/stoa/commit/3ea7dfb880c55bb7040f74d1ac558c68cecb262e))
+* **ci:** add apply-manifest step to stoa-gateway-ci.yml ([#835](https://github.com/stoa-platform/stoa/issues/835)) ([4011683](https://github.com/stoa-platform/stoa/commit/4011683a87c48fb3d66aa337310bc55bd36f4168))
+* **ci:** add Bash to council allowed tools — fixes Mark Council skip ([#826](https://github.com/stoa-platform/stoa/issues/826)) ([#837](https://github.com/stoa-platform/stoa/issues/837)) ([eb3c963](https://github.com/stoa-platform/stoa/commit/eb3c963c686dc5a98c87d569d0ebe3c58f6a2c77))
+* **ci:** add Bash to L3 plan-validate allowedTools (CAB-1450) ([#983](https://github.com/stoa-platform/stoa/issues/983)) ([90ca519](https://github.com/stoa-platform/stoa/commit/90ca519c8a094460c015cd8de6000c850e91c9e8))
+* **ci:** add Bash to plan-validate allowed tools (same root cause as [#837](https://github.com/stoa-platform/stoa/issues/837)) ([#839](https://github.com/stoa-platform/stoa/issues/839)) ([56dcbf1](https://github.com/stoa-platform/stoa/commit/56dcbf1b00f7777313834d9670d07ad972a4a305))
+* **ci:** add docker to deploy-staging needs for image-tag access ([#920](https://github.com/stoa-platform/stoa/issues/920)) ([02df197](https://github.com/stoa-platform/stoa/commit/02df1978138a469a3f1c87e4a57f0387aae52581))
+* **ci:** add merge instructions to Ask-mode Slack notification (CAB-1387) ([#746](https://github.com/stoa-platform/stoa/issues/746)) ([7154f22](https://github.com/stoa-platform/stoa/commit/7154f227d690d8919959c7651379546609b937f6))
+* **ci:** add trailing newline for pushgateway metrics (CAB-1433) ([#927](https://github.com/stoa-platform/stoa/issues/927)) ([3a5ff38](https://github.com/stoa-platform/stoa/commit/3a5ff38bb7394f158dc6dead0eb12812188d564b))
+* **ci:** AI Factory hook efficiency — fix paths + instance guards + log rotation ([#1040](https://github.com/stoa-platform/stoa/issues/1040)) ([b0af0d4](https://github.com/stoa-platform/stoa/commit/b0af0d4fbf3e017421c65831bb19188b565787f7))
+* **ci:** allow bot actors in scheduled workflows + n8n dedup filter ([#757](https://github.com/stoa-platform/stoa/issues/757)) ([a922cb0](https://github.com/stoa-platform/stoa/commit/a922cb0905dc4fad967f789c311ba904b4777d45))
+* **ci:** auto-close GitHub Council issues on PR merge ([#748](https://github.com/stoa-platform/stoa/issues/748)) ([ecaa0d5](https://github.com/stoa-platform/stoa/commit/ecaa0d5d9434b6afd1f02fcb5c2781e863002537))
+* **ci:** autopilot scan reports accurate counts and existing issue links ([#743](https://github.com/stoa-platform/stoa/issues/743)) ([573a88c](https://github.com/stoa-platform/stoa/commit/573a88c0f0c5c887dba0e0d706864dc4ba933b93))
+* **ci:** consolidate n8n approve-ticket + merge-pr to single Code node (CAB-1319) ([#965](https://github.com/stoa-platform/stoa/issues/965)) ([32ec127](https://github.com/stoa-platform/stoa/commit/32ec12798766872125d84a4b86cf8941d9cebd23))
+* **ci:** dispatch gap fixes — 4 gaps (CAB-1398) ([#792](https://github.com/stoa-platform/stoa/issues/792)) ([3e906ea](https://github.com/stoa-platform/stoa/commit/3e906ead5106dcd04facbd8955d50ca68130e8ff))
+* **ci:** dispatch gap fixes for AI Factory (CAB-1388) ([#768](https://github.com/stoa-platform/stoa/issues/768)) ([3aef7c3](https://github.com/stoa-platform/stoa/commit/3aef7c337354d2c19ec6356ce50c4f41e88e42be))
+* **ci:** fix HMAC error path in n8n approve-ticket and merge-pr workflows ([#924](https://github.com/stoa-platform/stoa/issues/924)) ([734b959](https://github.com/stoa-platform/stoa/commit/734b9596e11d8aa5a66a955a7edbb011f0fe57f1))
+* **ci:** guard set -e in pr-hygiene label checks (CAB-1433) ([#918](https://github.com/stoa-platform/stoa/issues/918)) ([5f6bb5e](https://github.com/stoa-platform/stoa/commit/5f6bb5ed6242e7d0928bdc36eb2599b249af5b6f))
+* **ci:** harden Close the Loop PR search to prevent false positives ([#758](https://github.com/stoa-platform/stoa/issues/758)) ([b1b4a61](https://github.com/stoa-platform/stoa/commit/b1b4a614a6e06f0eaf52bcd6e4f42e468a554405))
+* **ci:** harden hegemon daemon — tilde expansion, prompt file, retry ([#1144](https://github.com/stoa-platform/stoa/issues/1144)) ([484ec12](https://github.com/stoa-platform/stoa/commit/484ec12cda8c6fc80d6c29d16eeaee4d05d8bf6e))
+* **ci:** hegemon tmux session dies on startup ([#1186](https://github.com/stoa-platform/stoa/issues/1186)) ([8545fd2](https://github.com/stoa-platform/stoa/commit/8545fd271a258dd9c41a1e7681877322a91fa79e))
+* **ci:** ignore CVE-2024-23342 in pip-audit (ecdsa, no upstream fix) ([#843](https://github.com/stoa-platform/stoa/issues/843)) ([12819df](https://github.com/stoa-platform/stoa/commit/12819df7d678be0ae937b7181c6568f72091f518))
+* **ci:** model router estimate from comments (CAB-1450) ([#985](https://github.com/stoa-platform/stoa/issues/985)) ([23b5f57](https://github.com/stoa-platform/stoa/commit/23b5f5714c483dd1dea4d0917b058adf2e92ca72))
+* **ci:** move log_json before JWT auto-fetch in arena script (CAB-1558) ([#1216](https://github.com/stoa-platform/stoa/issues/1216)) ([671ba40](https://github.com/stoa-platform/stoa/commit/671ba40124c1b46fc15bf4515797b3914282ca7b))
+* **ci:** pass issue body/title via env vars to prevent bash injection ([#829](https://github.com/stoa-platform/stoa/issues/829)) ([aef73b5](https://github.com/stoa-platform/stoa/commit/aef73b562813930a3e1c10af8688078dc19f7a64))
+* **ci:** read Slack raw body from binary data in n8n v2 webhooks ([#933](https://github.com/stoa-platform/stoa/issues/933)) ([6ee7707](https://github.com/stoa-platform/stoa/commit/6ee7707d00a0fccb0a78771d9d432f1b3f90c42d))
+* **ci:** remove pkill self-match in hegemon deploy ([#1174](https://github.com/stoa-platform/stoa/issues/1174)) ([44fdcfe](https://github.com/stoa-platform/stoa/commit/44fdcfe07bfaddd6c95fdb196112e7cf575f6d18))
+* **ci:** replace mismatched SSH key + use printf for hegemon deploy ([#1171](https://github.com/stoa-platform/stoa/issues/1171)) ([8e671d9](https://github.com/stoa-platform/stoa/commit/8e671d947bfde0112b8ce3aa5ed62b76374642eb))
+* **ci:** restore pane grid layout in stoa-parallel docs ([#1117](https://github.com/stoa-platform/stoa/issues/1117)) ([cb73839](https://github.com/stoa-platform/stoa/commit/cb73839ad3f6aa31e40d0c74b61a5955836eec48))
+* **ci:** retry pushgateway without auth on 400 (CAB-1433) ([#922](https://github.com/stoa-platform/stoa/issues/922)) ([a304092](https://github.com/stoa-platform/stoa/commit/a304092f1924da9870c38ea17d17be7e9678d767))
+* **ci:** simplify heg-state PocketBase auth (admin endpoint) ([#1141](https://github.com/stoa-platform/stoa/issues/1141)) ([7338659](https://github.com/stoa-platform/stoa/commit/7338659e7c57e884de0c726d39c2a2d457b970f5))
+* **ci:** stoa-parallel reliability — 3 root causes (CAB-1608) ([#1244](https://github.com/stoa-platform/stoa/issues/1244)) ([281e076](https://github.com/stoa-platform/stoa/commit/281e07664a71fb74e5c6815d3f23cdf8d2bcf6b4))
+* **ci:** stop hegemon before scp to avoid ETXTBSY ([#1167](https://github.com/stoa-platform/stoa/issues/1167)) ([806dfce](https://github.com/stoa-platform/stoa/commit/806dfceb4deff71f4fb111e676798ebbbc0b8f03))
+* **ci:** use correct allowed_bots param for Claude Code Action ([#760](https://github.com/stoa-platform/stoa/issues/760)) ([bafc990](https://github.com/stoa-platform/stoa/commit/bafc9900bf94c810743326d4293e302ca0ab571d))
+* **ci:** use correct K8s deployment name for API deploy ([#913](https://github.com/stoa-platform/stoa/issues/913)) ([24cea42](https://github.com/stoa-platform/stoa/commit/24cea42a5ce0491206427de7a98db8c9dc85663d))
+* **ci:** use correct Linear GraphQL endpoint in close-on-merge ([#1063](https://github.com/stoa-platform/stoa/issues/1063)) ([f316d2b](https://github.com/stoa-platform/stoa/commit/f316d2b9d4c046b2e81f2ad25945b2c108a8f687))
+* **ci:** use env var for SSH key in hegemon deploy ([#1173](https://github.com/stoa-platform/stoa/issues/1173)) ([613e0ab](https://github.com/stoa-platform/stoa/commit/613e0ab429efef1dc5d87e913650bcd0c36325f8))
+* **ci:** use parameter expansion fallback for TICKET var ([#826](https://github.com/stoa-platform/stoa/issues/826)) ([#832](https://github.com/stoa-platform/stoa/issues/832)) ([1b49e80](https://github.com/stoa-platform/stoa/commit/1b49e800f62121bba80d2671ac505dcf33cb14ce))
+* **ci:** use PAT for Release Please to bypass enterprise PR restriction ([#1309](https://github.com/stoa-platform/stoa/issues/1309)) ([2234899](https://github.com/stoa-platform/stoa/commit/22348990e6f433c122fac7ce9565932cbc2ffc49))
+* **ci:** use printf format for pr-hygiene pushgateway metrics (CAB-1433) ([#921](https://github.com/stoa-platform/stoa/issues/921)) ([a0a4c43](https://github.com/stoa-platform/stoa/commit/a0a4c43f45b0a2aade61e00b789b705970f25ff8))
+* **ci:** use SSH config alias for hegemon deploy ([#1169](https://github.com/stoa-platform/stoa/issues/1169)) ([550a6ab](https://github.com/stoa-platform/stoa/commit/550a6abbb2ccb2b857c079fa15c96417f84307dd))
+* competitive-watch grep -P macOS compat ([#1020](https://github.com/stoa-platform/stoa/issues/1020)) ([fb11502](https://github.com/stoa-platform/stoa/commit/fb11502d517553851d5b330d805ed01c37c5acaa))
+* **demo:** source persona passwords from Infisical vault (CAB-1151) ([#716](https://github.com/stoa-platform/stoa/issues/716)) ([5af9c18](https://github.com/stoa-platform/stoa/commit/5af9c18c933147de355bb6d0c9b5739fa813d1e2))
+* **docker:** add tsconfig.base.json to CP UI and Portal builds ([#1090](https://github.com/stoa-platform/stoa/issues/1090)) ([2170b5f](https://github.com/stoa-platform/stoa/commit/2170b5fdddf8d73874e49e38417abf27311ae52a))
+* **docs:** correct quickstart URL in tests and rules ([#936](https://github.com/stoa-platform/stoa/issues/936)) ([adff9bb](https://github.com/stoa-platform/stoa/commit/adff9bbf8f4d1e86e79cce7dde6b6ae3107b26a1))
+* **docs:** reset CHANGELOG for Release Please + v2.2.0 release docs ([#1290](https://github.com/stoa-platform/stoa/issues/1290)) ([1f53ccf](https://github.com/stoa-platform/stoa/commit/1f53ccfdda52b68bc9e44de1941d9a97f6e5050e))
+* **docs:** update Grafana LLM dashboard for cache tokens (CAB-1601) ([#1304](https://github.com/stoa-platform/stoa/issues/1304)) ([51ac30c](https://github.com/stoa-platform/stoa/commit/51ac30ccf3dc17832982322635fad89a9146f769))
+* **e2e:** unblock 4 [@wip](https://github.com/wip) features with step definitions (CAB-1382) ([#728](https://github.com/stoa-platform/stoa/issues/728)) ([209ac42](https://github.com/stoa-platform/stoa/commit/209ac4225ae8aa7911c5fe210bfec86633105137))
+* enable Linear MCP server ([#1021](https://github.com/stoa-platform/stoa/issues/1021)) ([6729486](https://github.com/stoa-platform/stoa/commit/6729486facb7af3b005c0a46b09f90f2082f7a45))
+* **gateway,api:** resolve 3 post-deploy issues (CAB-1601) ([#1265](https://github.com/stoa-platform/stoa/issues/1265)) ([1f60ac1](https://github.com/stoa-platform/stoa/commit/1f60ac1ecd8950acf5d03b8d62627ac1949bdf70))
+* **gateway:** add missing secret_key field in UpstreamAuth test (CAB-1382) ([#725](https://github.com/stoa-platform/stoa/issues/725)) ([4062037](https://github.com/stoa-platform/stoa/commit/40620370ec595ab9ee97ff98448d3ae8de812f9d))
+* **gateway:** bump Dockerfile to rust:1.93-bookworm (floor_char_boundary stable) ([#830](https://github.com/stoa-platform/stoa/issues/830)) ([dbd88ea](https://github.com/stoa-platform/stoa/commit/dbd88ea1f6785d58355dd6fc61b52b63ff262c2e))
+* **gateway:** bypass hairpin NAT for OIDC discovery via internal Keycloak URL ([#819](https://github.com/stoa-platform/stoa/issues/819)) ([7837825](https://github.com/stoa-platform/stoa/commit/7837825b756b6060ef0595e4351d2ba57ffdabcc))
+* **gateway:** correct API key validation endpoint URL (CAB-1601) ([#1249](https://github.com/stoa-platform/stoa/issues/1249)) ([fca4f77](https://github.com/stoa-platform/stoa/commit/fca4f772f68450abe3e16b1830aa0bac01a70c44))
+* **gateway:** correct Keycloak internal URL port + extend startup probe ([#840](https://github.com/stoa-platform/stoa/issues/840)) ([6071ab6](https://github.com/stoa-platform/stoa/commit/6071ab641ea8147b6e3c3992aa6d7993a804e0a5))
+* **gateway:** increase startup probe to 53s — covers CP registration timeout ([#834](https://github.com/stoa-platform/stoa/issues/834)) ([5e33f5f](https://github.com/stoa-platform/stoa/commit/5e33f5fc10505566fa0dc0ba939839ce170f027b))
+* **gateway:** prevent retry storm on tool discovery failure (CAB-1558) ([#1228](https://github.com/stoa-platform/stoa/issues/1228)) ([92d844c](https://github.com/stoa-platform/stoa/commit/92d844cf3269a9cf9203f0e62fba23db61a5fabc))
+* **gateway:** remove duplicate default_token_budget_* fns in config.rs (CAB-1337) ([#816](https://github.com/stoa-platform/stoa/issues/816)) ([b49b2da](https://github.com/stoa-platform/stoa/commit/b49b2da77d929bded986cbda82e39d7b2a574a51))
+* **gateway:** remove duplicate default_token_budget_* functions (CAB-1337) ([#817](https://github.com/stoa-platform/stoa/issues/817)) ([51359d5](https://github.com/stoa-platform/stoa/commit/51359d552a6bc993b229a49d17d59ddc3f4bc7a9))
+* **gateway:** replace floor_char_boundary with stable is_char_boundary scan ([#828](https://github.com/stoa-platform/stoa/issues/828)) ([8fd3be4](https://github.com/stoa-platform/stoa/commit/8fd3be41b0da660ef7808305ab42f71a8077169e))
+* **gateway:** reuse HTTP client in budget cache + document assumptions (CAB-1456) ([#1001](https://github.com/stoa-platform/stoa/issues/1001)) ([59a011d](https://github.com/stoa-platform/stoa/commit/59a011da1ba19ccbdc8e41c2aa3ba7f26b1eab5d))
+* **gateway:** trim trailing slash from LLM proxy upstream base URL (CAB-1601) ([#1256](https://github.com/stoa-platform/stoa/issues/1256)) ([dafe0c1](https://github.com/stoa-platform/stoa/commit/dafe0c105e1640b14f3b543ecb2c3fcae10e1192))
+* **gateway:** update MCP capabilities snapshot for policy notifications ([#1034](https://github.com/stoa-platform/stoa/issues/1034)) ([0cfd17c](https://github.com/stoa-platform/stoa/commit/0cfd17c0b8ced3dc51034291e5c52ce605156ca6))
+* **hegemon:** add SSL context to remote-ls urlopen call ([#1106](https://github.com/stoa-platform/stoa/issues/1106)) ([1bae6b5](https://github.com/stoa-platform/stoa/commit/1bae6b535d5ab08ba7a8fac6f00717628aeed8cf))
+* **hegemon:** force IPv4 + CF Access headers in infisical-loader ([#1200](https://github.com/stoa-platform/stoa/issues/1200)) ([071cffe](https://github.com/stoa-platform/stoa/commit/071cffe57a142e474249579ef10686a4c677ffac))
+* **hegemon:** migrate PocketBase scripts to v0.23 API (CAB-1482) ([5aa379b](https://github.com/stoa-platform/stoa/commit/5aa379b54324897191127e29707e24a2b07f8c98))
+* **helm:** persist Arena L2 verify NetworkPolicy (CAB-1567) ([#1202](https://github.com/stoa-platform/stoa/issues/1202)) ([cc93bef](https://github.com/stoa-platform/stoa/commit/cc93befc1fe8b8343905d096c659f31e50a7ed06))
+* **infra:** add file tools to hegemon permissions.allow (CAB-1601) ([#1264](https://github.com/stoa-platform/stoa/issues/1264)) ([022a7aa](https://github.com/stoa-platform/stoa/commit/022a7aaa15258b6e27b327e319ad4b15b5647b66))
+* **infra:** stoa-parallel reliability — 3 root causes (CAB-1608) ([#1271](https://github.com/stoa-platform/stoa/issues/1271)) ([39e9ecb](https://github.com/stoa-platform/stoa/commit/39e9ecbca609c12afd7f51299cb402a868999622))
+* **k8s,api,portal:** resolve portal 502 + harden access-requests endpoint ([#1038](https://github.com/stoa-platform/stoa/issues/1038)) ([cff3703](https://github.com/stoa-platform/stoa/commit/cff37039185957ebc9ca470e21b49a01ad083d8d))
+* **k8s:** add port 8000 to Prometheus NetworkPolicies for CP API scraping ([#799](https://github.com/stoa-platform/stoa/issues/799)) ([ec8bfa9](https://github.com/stoa-platform/stoa/commit/ec8bfa9e4a731dbf92de0290add4e35eac1b4a9f))
+* **observability:** align metrics with Rust gateway — fix SLO 'No data' ([#786](https://github.com/stoa-platform/stoa/issues/786)) ([c0d0c57](https://github.com/stoa-platform/stoa/commit/c0d0c57a0b5490f16fad2173d78220354acb702a))
+* **ops:** fix Pushgateway push in Token Observatory ([#931](https://github.com/stoa-platform/stoa/issues/931)) ([efc8957](https://github.com/stoa-platform/stoa/commit/efc89579cf31c9e80a779355bc6c8a38f1f4dc8a))
+* **ops:** handle empty EXTRA_HOSTS array with nounset ([#1168](https://github.com/stoa-platform/stoa/issues/1168)) ([ea58cdc](https://github.com/stoa-platform/stoa/commit/ea58cdc76056b90ff8413753acb5f50d6a3fca98))
+* **portal:** eliminate all ESLint warnings, ratchet to zero (CAB-1382) ([#726](https://github.com/stoa-platform/stoa/issues/726)) ([b228876](https://github.com/stoa-platform/stoa/commit/b228876301bdf123d397f1c455a1aedb4d038ce2))
+* **portal:** load onboarding i18n namespace on wizard mount ([#769](https://github.com/stoa-platform/stoa/issues/769)) ([94ea9b6](https://github.com/stoa-platform/stoa/commit/94ea9b63167c6ae24e1da0ce9cb673a2ae08c4b6))
+* **portal:** make number formatting tests locale-agnostic ([#1050](https://github.com/stoa-platform/stoa/issues/1050)) ([cdef54f](https://github.com/stoa-platform/stoa/commit/cdef54f9a4fbf7c4a6cc021d9e7b806b0af203be))
+* **portal:** polish dashboard dark-mode, a11y & focus styles (CAB-1471) ([#1180](https://github.com/stoa-platform/stoa/issues/1180)) ([2ef8f42](https://github.com/stoa-platform/stoa/commit/2ef8f4229af862e7e990f5e691f26f31378d320a))
+* **portal:** pre-load onboarding and catalog i18n namespaces at startup ([#812](https://github.com/stoa-platform/stoa/issues/812)) ([a7489ab](https://github.com/stoa-platform/stoa/commit/a7489abf9dcb6c5775bce98aff0fda94da67c11d))
+* **portal:** remove mock data fallback from MCP server pages ([#771](https://github.com/stoa-platform/stoa/issues/771)) ([3425342](https://github.com/stoa-platform/stoa/commit/3425342c22301dbf42b6df44ba722d30137eaa7d))
+* **security:** add clientId to DCR service account template ([#1085](https://github.com/stoa-platform/stoa/issues/1085)) ([bf9cf8e](https://github.com/stoa-platform/stoa/commit/bf9cf8e7b7a9a72c084d7f6ad4c559f065d8d6f7))
+* **security:** DDoS mitigation — rate limiting and endpoint hardening ([#736](https://github.com/stoa-platform/stoa/issues/736)) ([250c526](https://github.com/stoa-platform/stoa/commit/250c526082c46d6b9c9faf9550b360786fb1bcb0))
+* **security:** resolve symlink in heg-state schema path ([#1178](https://github.com/stoa-platform/stoa/issues/1178)) ([94540d1](https://github.com/stoa-platform/stoa/commit/94540d10703e740d82b1a187fa4018624af24169))
+* **ui,portal:** await i18n translations before React render ([#917](https://github.com/stoa-platform/stoa/issues/917)) ([99de16d](https://github.com/stoa-platform/stoa/commit/99de16da28d2b60fe658b21fb3524f6a1a3f81b2))
+* **ui:** add missing fireEvent import in FederationAccountDetail test (CAB-1378) ([#722](https://github.com/stoa-platform/stoa/issues/722)) ([9521c35](https://github.com/stoa-platform/stoa/commit/9521c3578539f82c190f5150771421500f1eb48a))
+* **ui:** gate PlatformStatus actions by RBAC permission (CAB-1553) ([#1198](https://github.com/stoa-platform/stoa/issues/1198)) ([8b98f30](https://github.com/stoa-platform/stoa/commit/8b98f30f1201710a523a5a7eaccebad0376b6193))
+* **ui:** wire dead buttons in 3 console dashboards ([#1149](https://github.com/stoa-platform/stoa/issues/1149)) ([fc1ed38](https://github.com/stoa-platform/stoa/commit/fc1ed38cdde83c109ce5c1b36090e2a8c43b36ec))
+
+
+### Performance
+
+* **gateway:** optimize proxy hot path — Arc routes, zero-alloc comparisons (CAB-1332) ([#730](https://github.com/stoa-platform/stoa/issues/730)) ([a851b64](https://github.com/stoa-platform/stoa/commit/a851b64aba73b795915e9c4d445b7c4456352e26))
+* **gateway:** pre-serialize capabilities + arena L1 optimization (CAB-1558) ([#1215](https://github.com/stoa-platform/stoa/issues/1215)) ([b9f6d98](https://github.com/stoa-platform/stoa/commit/b9f6d987d708ed7006eaf5b751f2fd760269401f))
+* **gateway:** prevent thundering herd on tool registry refresh (CAB-1558) ([#1236](https://github.com/stoa-platform/stoa/issues/1236)) ([50eca20](https://github.com/stoa-platform/stoa/commit/50eca209f452455fa451817bbf0372b36872f431))
+* **gateway:** skip sync refresh for loaded tenants on tool-not-found (CAB-1558) ([#1233](https://github.com/stoa-platform/stoa/issues/1233)) ([5b831da](https://github.com/stoa-platform/stoa/commit/5b831da8a442abc900407698472fd66af7996f97))
+* token optimization — reduce session baseline from 63K to ~15K tokens ([#1163](https://github.com/stoa-platform/stoa/issues/1163)) ([7263fa2](https://github.com/stoa-platform/stoa/commit/7263fa2c21e884edc55856e4f7f143a122859cc4))
+
+
+### Documentation
+
+* add DEVELOPER.md + update PR template + fix lint thresholds (CAB-1450) ([#987](https://github.com/stoa-platform/stoa/issues/987)) ([8f177ed](https://github.com/stoa-platform/stoa/commit/8f177ed656a4787f896fc395f9a98935e2de1eaf))
+* add license header check documentation to CONTRIBUTING.md (CAB-1557) ([#1222](https://github.com/stoa-platform/stoa/issues/1222)) ([5b40bf6](https://github.com/stoa-platform/stoa/commit/5b40bf6c08f25604e7731a66f1f53054a488dd4d))
+* add OSS community files and clean internal refs (CAB-1540) ([#1191](https://github.com/stoa-platform/stoa/issues/1191)) ([9043ec1](https://github.com/stoa-platform/stoa/commit/9043ec1ba60e92656944bbf65cb804111b8f8ba9))
+* add Q1 2026 competitive benchmark report ([#1025](https://github.com/stoa-platform/stoa/issues/1025)) ([6361e03](https://github.com/stoa-platform/stoa/commit/6361e03d4bb62edefae63ff1b510ead8af25b70d))
+* add READMEs + PR template + DEVELOPER.md (CAB-1450) ([#989](https://github.com/stoa-platform/stoa/issues/989)) ([842b3f9](https://github.com/stoa-platform/stoa/commit/842b3f9feb9dcdb58e935f3c5f3fb8504835efa1))
+* add REX AI Factory — impact analysis with verified sources ([#1196](https://github.com/stoa-platform/stoa/issues/1196)) ([03c289f](https://github.com/stoa-platform/stoa/commit/03c289fe68ab6fa709715f79b735883f099773a0))
+* add roadmap visibility system (CAB-1569) ([#1210](https://github.com/stoa-platform/stoa/issues/1210)) ([081c847](https://github.com/stoa-platform/stoa/commit/081c8478cdc245b834ecf495eb737ed34b9545b7))
+* add security pipeline showcase to README (CAB-1330) ([#729](https://github.com/stoa-platform/stoa/issues/729)) ([ab7c97f](https://github.com/stoa-platform/stoa/commit/ab7c97f754c150736f22c4d6dea30792210cbda4))
+* **api:** update memory.md with CAB-1601 completion ([#1307](https://github.com/stoa-platform/stoa/issues/1307)) ([8403ab0](https://github.com/stoa-platform/stoa/commit/8403ab0ada8e380dc66990cce329f1b19ead6517))
+* **ci:** add release notes system (CAB-1619) ([#1274](https://github.com/stoa-platform/stoa/issues/1274)) ([d93abb0](https://github.com/stoa-platform/stoa/commit/d93abb04b86b1c9a52972240bcd828d8f1065b7a))
+* **ci:** fix stale thresholds + add Release Please and Rust toolchain docs ([#842](https://github.com/stoa-platform/stoa/issues/842)) ([7e0bfef](https://github.com/stoa-platform/stoa/commit/7e0bfef6089ce736144dfe61d9904b34e9cb4ae9))
+* **ci:** update instance-dispatch with billing split and tmux gotchas ([#1140](https://github.com/stoa-platform/stoa/issues/1140)) ([f55e048](https://github.com/stoa-platform/stoa/commit/f55e048730d55035a0b92f00a1f569dd305bbb43))
+* **ci:** update model IDs in autonomous-factory.md to 4.6 ([#806](https://github.com/stoa-platform/stoa/issues/806)) ([8566f6b](https://github.com/stoa-platform/stoa/commit/8566f6b4ee694f4dd1ca7d3191475ce669dfd770))
+* **ci:** update model IDs in cost-guardrails.md to 4.6 ([#805](https://github.com/stoa-platform/stoa/issues/805)) ([37c22d5](https://github.com/stoa-platform/stoa/commit/37c22d56ebca0dc880a8f372d06b49577fabe9d6))
+* **content:** add post-milestone content update checklist (CAB-371) ([#1066](https://github.com/stoa-platform/stoa/issues/1066)) ([8592ef2](https://github.com/stoa-platform/stoa/commit/8592ef256e3c4845ae8b8027e2cb7c9081084b1e)), closes [#1065](https://github.com/stoa-platform/stoa/issues/1065)
+* fix lint threshold docs + add CLI CI note (CAB-1450) ([#975](https://github.com/stoa-platform/stoa/issues/975)) ([d1180a3](https://github.com/stoa-platform/stoa/commit/d1180a3dbc715593b030fbff8840dc6e67b11d0c))
+* fix state drift — CAB-1330 and CAB-1367 already Done ([#767](https://github.com/stoa-platform/stoa/issues/767)) ([b34fb24](https://github.com/stoa-platform/stoa/commit/b34fb24155f034ad5148bf5b067af6d06e993c3f))
+* fix state drift — CAB-1398 + CAB-86 marked Done ([#803](https://github.com/stoa-platform/stoa/issues/803)) ([e8ab68b](https://github.com/stoa-platform/stoa/commit/e8ab68bc5d30eed7a08c442244a501979a362ada))
+* **ops:** add public benchmark methodology + results (CAB-1493) ([8e6f3d0](https://github.com/stoa-platform/stoa/commit/8e6f3d039b25d7712cf40a7972b24d232c848898))
+* **ops:** add public benchmark methodology + results (CAB-1493) ([#1123](https://github.com/stoa-platform/stoa/issues/1123)) ([8e6f3d0](https://github.com/stoa-platform/stoa/commit/8e6f3d039b25d7712cf40a7972b24d232c848898))
+* polish README + CONTRIBUTING for OSS readiness (CAB-1555) ([#1235](https://github.com/stoa-platform/stoa/issues/1235)) ([8e3d741](https://github.com/stoa-platform/stoa/commit/8e3d741193c2cf83e2ce08648b84a261aac6bab0))
+* **process:** add post-milestone public content update checklist (CAB-371) ([#1067](https://github.com/stoa-platform/stoa/issues/1067)) ([97cfe76](https://github.com/stoa-platform/stoa/commit/97cfe76ff789f019df35a135592e09b463b8a8a2))
+* sync plan.md + memory.md after Cycle 11 completion ([#1192](https://github.com/stoa-platform/stoa/issues/1192)) ([d1eb68e](https://github.com/stoa-platform/stoa/commit/d1eb68e6a65fd46dfe543a89c54e76bba4eb9fc7))
+* sync state files — Cycle 8 close-out + Cycle 9 open ([#772](https://github.com/stoa-platform/stoa/issues/772)) ([d58a1a6](https://github.com/stoa-platform/stoa/commit/d58a1a6020c598864876da4791417098984d4650))
+* update memory.md — Gap [#5](https://github.com/stoa-platform/stoa/issues/5) CP API metrics complete ([#800](https://github.com/stoa-platform/stoa/issues/800)) ([2d7cc43](https://github.com/stoa-platform/stoa/commit/2d7cc436f6adf11631f3e72fccd70f7e70abdfc2))
+* update memory.md — PR [#771](https://github.com/stoa-platform/stoa/issues/771) portal mock data fix ([#774](https://github.com/stoa-platform/stoa/issues/774)) ([83c2185](https://github.com/stoa-platform/stoa/commit/83c218547aa687e28d80c52e1c0d54652fbc5478))
+* update memory.md — PR [#780](https://github.com/stoa-platform/stoa/issues/780) CAB-86 TTL extension done ([#783](https://github.com/stoa-platform/stoa/issues/783)) ([0b4b570](https://github.com/stoa-platform/stoa/commit/0b4b5701b807ba2de0f1b1ce9c37d9cfc94edad1))
+* update memory.md + plan.md — PR [#781](https://github.com/stoa-platform/stoa/issues/781) CAB-1398 Phase 3 done ([#787](https://github.com/stoa-platform/stoa/issues/787)) ([8403111](https://github.com/stoa-platform/stoa/commit/8403111eda44db3ac6322fea1f5a0cac1795cbda))
+* update memory.md for CAB-1552 completion ([#1212](https://github.com/stoa-platform/stoa/issues/1212)) ([e09fdee](https://github.com/stoa-platform/stoa/commit/e09fdee1ffcae28b81d716226e6c11a4aef267a5))
+* update memory.md with CAB-1614 completion ([#1282](https://github.com/stoa-platform/stoa/issues/1282)) ([e0510bd](https://github.com/stoa-platform/stoa/commit/e0510bda9796063b0d877ce696f6e02494be3ed2))
+* update memory.md with laptop bootstrap + CF Access setup ([#1177](https://github.com/stoa-platform/stoa/issues/1177)) ([af8fd7e](https://github.com/stoa-platform/stoa/commit/af8fd7ee692100019225394ec69fd1fabf8c02f4))
+* update memory.md with PR [#775](https://github.com/stoa-platform/stoa/issues/775) + [#771](https://github.com/stoa-platform/stoa/issues/771) ([#777](https://github.com/stoa-platform/stoa/issues/777)) ([e3470a2](https://github.com/stoa-platform/stoa/commit/e3470a2cd7ea94cded6d7140043292eae2ac3af0))
+* update ROADMAP.md with live theme progress ([#1214](https://github.com/stoa-platform/stoa/issues/1214)) ([b6b63c8](https://github.com/stoa-platform/stoa/commit/b6b63c8473a8835621c1840062f0b1042410ac18))
+* update state files — CAB-1301 MEGA complete ([#798](https://github.com/stoa-platform/stoa/issues/798)) ([bade94a](https://github.com/stoa-platform/stoa/commit/bade94a12902a1b8d6ff4ab44cac566784a1b39f))
+* update state files — CAB-1398 Phase 4 done ([#792](https://github.com/stoa-platform/stoa/issues/792), [#795](https://github.com/stoa-platform/stoa/issues/795)) ([#796](https://github.com/stoa-platform/stoa/issues/796)) ([30cde6a](https://github.com/stoa-platform/stoa/commit/30cde6afcc0a518bd572946fa181b8abebe12aa3))
+* update state files — CAB-1399 done ([#789](https://github.com/stoa-platform/stoa/issues/789)) ([8eed953](https://github.com/stoa-platform/stoa/commit/8eed953f7aa798227bbdfa1e0932b2f69b459fc6))
+* update state files — CAB-1400 done ([#794](https://github.com/stoa-platform/stoa/issues/794)) ([159b1d3](https://github.com/stoa-platform/stoa/commit/159b1d366132150c3aa29274c8a8afe64eef1f3c))
+* update state files — Cycle 8 close-out + demo date March 17 ([#766](https://github.com/stoa-platform/stoa/issues/766)) ([d55e4a3](https://github.com/stoa-platform/stoa/commit/d55e4a33c23803fec5b4be823d008e05c799e207))
+* update state files after CAB-1386 Phase 1 merge ([#749](https://github.com/stoa-platform/stoa/issues/749)) ([74086c3](https://github.com/stoa-platform/stoa/commit/74086c3eb455df131ab8bb1465aafaae7b31db77))
+* update state files after CAB-1386 Phase 2+3 merge ([#750](https://github.com/stoa-platform/stoa/issues/750)) ([#751](https://github.com/stoa-platform/stoa/issues/751)) ([d1c13f4](https://github.com/stoa-platform/stoa/commit/d1c13f4b56dad0a6139706fbce9bd30f1e5fcebb))
+
+## [2.1.0](https://github.com/stoa-platform/stoa/compare/v0.2.1...v2.1.0-consolidated) (2026-01-24)
+
+See [GitHub Release](https://github.com/stoa-platform/stoa/releases/tag/v2.1.0-consolidated) for details.
+
+## [0.2.1](https://github.com/stoa-platform/stoa/compare/v0.2.0...v0.2.1) (2026-01-08)
+
+Initial public release with Portal subscription API, demo validation script, and MCP gateway integration.
+
+## [0.2.0](https://github.com/stoa-platform/stoa/releases/tag/v0.2.0) (2025-12-15)
+
+Initial release.

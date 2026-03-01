@@ -1,11 +1,11 @@
-"""LLM Budget and Provider Config SQLAlchemy models (CAB-1491)."""
+"""LLM Budget and Provider Config SQLAlchemy models (CAB-1491, CAB-1487)."""
 
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Column, DateTime, Enum as SQLEnum, Index, Integer, Numeric, String
+from sqlalchemy import Column, DateTime, Enum as SQLEnum, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from src.database import Base
@@ -92,3 +92,34 @@ class LlmBudget(Base):
         return (
             f"<LlmBudget {self.id} tenant={self.tenant_id} " f"spend={self.current_spend_usd}/{self.monthly_limit_usd}>"
         )
+
+
+class LlmSpendEvent(Base):
+    """Audit log of individual LLM spend events (CAB-1487).
+
+    Captures per-request cost data for analytics and anomaly detection.
+    Written by the service layer when recording spend; never modified after insert.
+    """
+
+    __tablename__ = "llm_spend_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(String(255), nullable=False)
+    provider_name = Column(String(100), nullable=False)
+    model = Column(String(100), nullable=True)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    cost_usd = Column(Numeric(12, 6), nullable=False, default=Decimal("0"))
+    latency_seconds = Column(Numeric(8, 4), nullable=True)
+    cached = Column(Integer, nullable=False, default=0)
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_llm_spend_events_tenant_id", "tenant_id"),
+        Index("ix_llm_spend_events_created_at", "created_at"),
+        Index("ix_llm_spend_events_tenant_created", "tenant_id", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<LlmSpendEvent {self.id} tenant={self.tenant_id} provider={self.provider_name} cost={self.cost_usd}>"

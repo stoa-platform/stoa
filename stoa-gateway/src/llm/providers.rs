@@ -15,7 +15,9 @@ pub enum LlmProvider {
     OpenAi,
     Anthropic,
     Google,
+    Mistral,
     Local,
+    AzureOpenAi,
 }
 
 impl fmt::Display for LlmProvider {
@@ -24,7 +26,9 @@ impl fmt::Display for LlmProvider {
             LlmProvider::OpenAi => write!(f, "openai"),
             LlmProvider::Anthropic => write!(f, "anthropic"),
             LlmProvider::Google => write!(f, "google"),
+            LlmProvider::Mistral => write!(f, "mistral"),
             LlmProvider::Local => write!(f, "local"),
+            LlmProvider::AzureOpenAi => write!(f, "azure_openai"),
         }
     }
 }
@@ -36,9 +40,26 @@ impl LlmProvider {
             "openai" | "open_ai" => Some(LlmProvider::OpenAi),
             "anthropic" => Some(LlmProvider::Anthropic),
             "google" | "gemini" => Some(LlmProvider::Google),
+            "mistral" => Some(LlmProvider::Mistral),
             "local" | "ollama" | "vllm" => Some(LlmProvider::Local),
+            "azure_openai" | "azure-openai" | "azureopenai" => Some(LlmProvider::AzureOpenAi),
             _ => None,
         }
+    }
+
+    /// Returns true if this provider uses OpenAI-compatible API format
+    /// (`/v1/chat/completions`, `Authorization: Bearer`, OpenAI response schema).
+    pub fn is_openai_compatible(&self) -> bool {
+        matches!(
+            self,
+            LlmProvider::OpenAi | LlmProvider::Mistral | LlmProvider::Local
+        )
+    }
+
+    /// Returns true if this provider uses the OpenAI response/request schema
+    /// but may have different auth or URL patterns (e.g. Azure OpenAI).
+    pub fn uses_openai_schema(&self) -> bool {
+        self.is_openai_compatible() || matches!(self, LlmProvider::AzureOpenAi)
     }
 }
 
@@ -47,6 +68,12 @@ impl LlmProvider {
 pub struct ProviderConfig {
     /// Provider type.
     pub provider: LlmProvider,
+
+    /// Unique backend identifier for subscription-based routing.
+    /// When multiple backends share the same provider type (e.g. two Azure OpenAI
+    /// namespaces), this ID distinguishes them in subscription → backend mappings.
+    #[serde(default)]
+    pub backend_id: Option<String>,
 
     /// Base URL for API requests (e.g. `https://api.openai.com/v1`).
     pub base_url: String,
@@ -75,9 +102,25 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub cost_per_1m_output: f64,
 
+    /// Cost per 1M cache-read input tokens in USD (Anthropic: ~10% of input cost).
+    #[serde(default)]
+    pub cost_per_1m_cache_read: f64,
+
+    /// Cost per 1M cache-write (creation) input tokens in USD (Anthropic: ~125% of input cost).
+    #[serde(default)]
+    pub cost_per_1m_cache_write: f64,
+
     /// Routing priority (lower = higher priority, 0 = highest).
     #[serde(default = "default_priority")]
     pub priority: u32,
+
+    /// Azure OpenAI deployment name (e.g. `gpt-4o`). Only used when provider is AzureOpenAi.
+    #[serde(default)]
+    pub deployment: Option<String>,
+
+    /// Azure OpenAI API version (e.g. `2024-10-21`). Only used when provider is AzureOpenAi.
+    #[serde(default)]
+    pub api_version: Option<String>,
 }
 
 fn default_max_concurrent() -> u32 {
@@ -115,6 +158,14 @@ impl ProviderRegistry {
     /// Get a provider config by type. Returns the first matching enabled provider.
     pub fn get(&self, provider: LlmProvider) -> Option<&ProviderConfig> {
         self.providers.iter().find(|p| p.provider == provider)
+    }
+
+    /// Get a provider config by backend ID. Used for subscription-based routing
+    /// where the subscription plan maps to a specific backend identifier.
+    pub fn get_by_backend_id(&self, backend_id: &str) -> Option<&ProviderConfig> {
+        self.providers
+            .iter()
+            .find(|p| p.backend_id.as_deref() == Some(backend_id))
     }
 
     /// Get all enabled providers sorted by priority (lowest number first).
@@ -168,6 +219,7 @@ mod tests {
     ) -> ProviderConfig {
         ProviderConfig {
             provider,
+            backend_id: None,
             base_url: format!("https://{}.example.com", provider),
             api_key_env: None,
             default_model: None,
@@ -175,7 +227,11 @@ mod tests {
             enabled,
             cost_per_1m_input: cost_input,
             cost_per_1m_output: cost_input * 3.0,
+            cost_per_1m_cache_read: 0.0,
+            cost_per_1m_cache_write: 0.0,
             priority,
+            deployment: None,
+            api_version: None,
         }
     }
 
@@ -234,7 +290,9 @@ mod tests {
         assert_eq!(LlmProvider::OpenAi.to_string(), "openai");
         assert_eq!(LlmProvider::Anthropic.to_string(), "anthropic");
         assert_eq!(LlmProvider::Google.to_string(), "google");
+        assert_eq!(LlmProvider::Mistral.to_string(), "mistral");
         assert_eq!(LlmProvider::Local.to_string(), "local");
+        assert_eq!(LlmProvider::AzureOpenAi.to_string(), "azure_openai");
     }
 
     #[test]
@@ -252,9 +310,74 @@ mod tests {
             Some(LlmProvider::Google)
         );
         assert_eq!(
+            LlmProvider::from_str_opt("mistral"),
+            Some(LlmProvider::Mistral)
+        );
+        assert_eq!(
             LlmProvider::from_str_opt("ollama"),
             Some(LlmProvider::Local)
         );
+        assert_eq!(
+            LlmProvider::from_str_opt("azure_openai"),
+            Some(LlmProvider::AzureOpenAi)
+        );
+        assert_eq!(
+            LlmProvider::from_str_opt("azure-openai"),
+            Some(LlmProvider::AzureOpenAi)
+        );
+        assert_eq!(
+            LlmProvider::from_str_opt("azureopenai"),
+            Some(LlmProvider::AzureOpenAi)
+        );
         assert_eq!(LlmProvider::from_str_opt("unknown"), None);
+    }
+
+    #[test]
+    fn is_openai_compatible() {
+        assert!(LlmProvider::OpenAi.is_openai_compatible());
+        assert!(LlmProvider::Mistral.is_openai_compatible());
+        assert!(LlmProvider::Local.is_openai_compatible());
+        assert!(!LlmProvider::Anthropic.is_openai_compatible());
+        assert!(!LlmProvider::Google.is_openai_compatible());
+        assert!(!LlmProvider::AzureOpenAi.is_openai_compatible());
+    }
+
+    #[test]
+    fn uses_openai_schema() {
+        assert!(LlmProvider::OpenAi.uses_openai_schema());
+        assert!(LlmProvider::Mistral.uses_openai_schema());
+        assert!(LlmProvider::Local.uses_openai_schema());
+        assert!(LlmProvider::AzureOpenAi.uses_openai_schema());
+        assert!(!LlmProvider::Anthropic.uses_openai_schema());
+        assert!(!LlmProvider::Google.uses_openai_schema());
+    }
+
+    #[test]
+    fn get_by_backend_id() {
+        let mut alpha = make_provider(LlmProvider::AzureOpenAi, true, 1, 5.0);
+        alpha.backend_id = Some("projet-alpha".to_string());
+        alpha.base_url = "https://projet-alpha.openai.azure.com".to_string();
+
+        let mut beta = make_provider(LlmProvider::AzureOpenAi, true, 2, 5.0);
+        beta.backend_id = Some("projet-beta".to_string());
+        beta.base_url = "https://projet-beta.openai.azure.com".to_string();
+
+        let registry = ProviderRegistry::new(vec![alpha, beta]);
+
+        let found = registry.get_by_backend_id("projet-alpha");
+        assert!(found.is_some());
+        assert_eq!(
+            found.expect("should find alpha").base_url,
+            "https://projet-alpha.openai.azure.com"
+        );
+
+        let found_beta = registry.get_by_backend_id("projet-beta");
+        assert!(found_beta.is_some());
+        assert_eq!(
+            found_beta.expect("should find beta").base_url,
+            "https://projet-beta.openai.azure.com"
+        );
+
+        assert!(registry.get_by_backend_id("unknown").is_none());
     }
 }

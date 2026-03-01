@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# stoa-exit-watchdog — Clear /exit poisoning from Claude Code input buffers
+#
+# Problem: Auto-compact at low context triggers autocomplete, inserting /exit
+# into the TUI input buffer. This requires manual Escape+Escape+C-u clearing.
+#
+# Solution: Scans all Claude panes every 10s, detects /exit on the input line
+# (last line of pane), and clears it automatically.
+#
+# Safety: Never sends keys to a pane that is actively executing a tool
+# (detected by spinner characters or "esc to interrupt" text).
+#
+# Usage:
+#   stoa-exit-watchdog [SESSION_NAME]
+#   stoa-exit-watchdog stoa &         # run in background
+#
+# Detection: Only matches /exit at start of line or after prompt chars (❯, $, >)
+# to avoid false positives from output containing "/exit" in help text etc.
+
+set -euo pipefail
+
+SESSION="${1:-stoa}"
+PANES=(0 2 3 4 5 6)  # All Claude panes (skip MONITOR=1 only)
+ROLES=(ORCHESTRE MONITOR BACKEND FRONTEND AUTH MCP QA)
+INTERVAL=8
+CLEAR_COUNT=0
+
+is_pane_active() {
+  # Check if Claude is actively executing a tool (spinner visible).
+  # NEVER send keys to an active pane — it interrupts tool execution.
+  local pane="$1"
+  local recent
+  recent=$(tmux capture-pane -t "$SESSION:0.$pane" -p 2>/dev/null | tail -10)
+  # Spinner chars, "esc to interrupt", or progress indicators
+  if echo "$recent" | grep -qiE 'esc to interrupt|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]|Running|Searching|Reading'; then
+    return 0  # active
+  fi
+  return 1  # not active
+}
+
+has_exit_poison() {
+  local last_line="$1"
+  # Match /exit at line start, after prompt chars, or as autocomplete suggestion
+  # Also match /exit with trailing spaces or partial completions like /exi
+  echo "$last_line" | grep -qE '(^|❯ |\$ |> |% )/exit'
+}
+
+echo "[stoa-exit-watchdog] Monitoring panes ${PANES[*]} in session '$SESSION' (every ${INTERVAL}s)"
+
+while true; do
+  for p in "${PANES[@]}"; do
+    # Verify pane exists (Claude may have exited)
+    tmux list-panes -t "$SESSION:0" -F '#{pane_index}' 2>/dev/null | grep -q "^${p}$" || continue
+
+    # Capture only the last 3 lines (autocomplete may span multiple)
+    last_lines=$(tmux capture-pane -t "$SESSION:0.$p" -p 2>/dev/null | tail -3)
+    last_line=$(echo "$last_lines" | tail -1)
+
+    if has_exit_poison "$last_line"; then
+      # Guard: never interrupt an active tool
+      if is_pane_active "$p"; then
+        echo "[$(date +%H:%M:%S)] Skipped pane $p — tool actively running"
+        continue
+      fi
+      # Clear: Escape x2 (exit autocomplete/menu) + C-u (kill line)
+      tmux send-keys -t "$SESSION:0.$p" Escape
+      sleep 0.15
+      tmux send-keys -t "$SESSION:0.$p" Escape
+      sleep 0.15
+      tmux send-keys -t "$SESSION:0.$p" C-u
+      CLEAR_COUNT=$((CLEAR_COUNT + 1))
+      echo "[$(date +%H:%M:%S)] Cleared /exit from pane $p (${ROLES[$p]:-?}) [total: $CLEAR_COUNT]"
+    fi
+  done
+  sleep "$INTERVAL"
+done

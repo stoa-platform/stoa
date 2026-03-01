@@ -1,0 +1,19 @@
+services:
+  arena-enterprise:
+    image: ghcr.io/stoa-platform/arena-bench:0.2.0
+    container_name: arena-bench-enterprise
+    network_mode: host
+    entrypoint: ["bash"]
+    command: ["/scripts/run-arena-enterprise.sh"]
+    user: "12345:12345"
+    volumes:
+      - ./scripts:/scripts:ro
+    tmpfs:
+      - /tmp:size=128m
+    env_file:
+      - .env.enterprise
+    environment:
+      - SCRIPT_PATH=/scripts/benchmark-enterprise.js
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true

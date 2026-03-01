@@ -1,7 +1,5 @@
 ---
-globs:
-  - "blog/**"
-  - "docs/**"
+globs: "blog/**,docs/**"
 ---
 
 # Content Compliance

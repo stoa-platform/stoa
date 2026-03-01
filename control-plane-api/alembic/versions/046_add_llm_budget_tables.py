@@ -5,8 +5,9 @@ Revises: 045
 Create Date: 2026-02-26
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "046_llm_budget_tables"
@@ -16,6 +17,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Create enum explicitly with checkfirst to avoid double-create in create_table
+    llm_status_enum = postgresql.ENUM("active", "inactive", "rate_limited", name="llm_provider_status_enum", create_type=False)
+    llm_status_enum.create(op.get_bind(), checkfirst=True)
+
     op.create_table(
         "llm_providers",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
@@ -27,7 +32,7 @@ def upgrade() -> None:
         sa.Column("cost_per_output_token", sa.Numeric(12, 6), nullable=False, server_default="0"),
         sa.Column(
             "status",
-            sa.Enum("active", "inactive", "rate_limited", name="llm_provider_status_enum", create_type=True),
+            llm_status_enum,
             nullable=False,
             server_default="active",
         ),
@@ -61,4 +66,4 @@ def downgrade() -> None:
     op.drop_index("ix_llm_providers_tenant_provider", table_name="llm_providers")
     op.drop_index("ix_llm_providers_tenant_id", table_name="llm_providers")
     op.drop_table("llm_providers")
-    op.execute("DROP TYPE IF EXISTS llm_provider_status_enum")
+    postgresql.ENUM(name="llm_provider_status_enum").drop(op.get_bind(), checkfirst=True)

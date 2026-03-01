@@ -5,8 +5,9 @@ Revises: 042_usage_summaries
 Create Date: 2026-02-24
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "043_department_budgets"
@@ -17,10 +18,10 @@ depends_on = None
 
 def upgrade() -> None:
     # Create enforcement enum
-    enforcement_enum = sa.Enum(
+    enforcement_enum = postgresql.ENUM(
         "enabled", "disabled", "warn_only",
         name="budget_enforcement_enum",
-        create_type=True,
+        create_type=False,
     )
     enforcement_enum.create(op.get_bind(), checkfirst=True)
 
@@ -56,4 +57,4 @@ def downgrade() -> None:
     op.drop_index("ix_dept_budgets_tenant_dept")
     op.drop_table("department_budgets")
 
-    sa.Enum(name="budget_enforcement_enum").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="budget_enforcement_enum").drop(op.get_bind(), checkfirst=True)

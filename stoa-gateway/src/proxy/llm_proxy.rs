@@ -19,6 +19,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
+use crate::llm::{CostCalculator, LlmProvider, TokenUsage};
 use crate::state::AppState;
 
 /// Dedicated HTTP client for LLM proxy (long timeouts, large bodies).
@@ -35,30 +36,23 @@ fn llm_client(timeout: Duration) -> &'static Client {
     })
 }
 
-/// Proxy handler for POST /v1/messages (and /v1/messages/count_tokens).
+/// Proxy handler for POST /v1/messages, /v1/messages/count_tokens, /v1/chat/completions.
 ///
 /// Flow:
-/// 1. Extract and validate STOA API key (X-API-Key or x-api-key header)
-/// 2. Replace auth with real upstream API key
-/// 3. Forward request to upstream, preserving anthropic-version header
-/// 4. Stream response back to client
-/// 5. Async: extract token usage and POST to CP API for metering
+/// 1. Detect API format from request path (Anthropic vs OpenAI-compatible)
+/// 2. Extract and validate STOA API key (X-API-Key or Authorization: Bearer)
+/// 3. Replace auth with real upstream API key (format-aware header injection)
+/// 4. Forward request to upstream (provider-aware URL routing)
+/// 5. Stream response back to client
+/// 6. Async: extract token usage (format-aware) and POST to CP API for metering
 pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<Body>) -> Response {
     if !state.config.llm_proxy_enabled {
         return (StatusCode::NOT_FOUND, "LLM proxy not enabled").into_response();
     }
 
-    let upstream_api_key = match &state.config.llm_proxy_api_key {
-        Some(key) if !key.is_empty() => key.clone(),
-        _ => {
-            error!("LLM proxy: upstream API key not configured (STOA_LLM_PROXY_API_KEY)");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "LLM proxy upstream not configured",
-            )
-                .into_response();
-        }
-    };
+    // Step 0: Detect API format from request path
+    let request_path = request.uri().path().to_string();
+    let api_format = LlmApiFormat::from_path(&request_path);
 
     // Step 1: Extract consumer API key from request
     let consumer_key = extract_api_key(request.headers());
@@ -67,7 +61,7 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         None => {
             return (
                 StatusCode::UNAUTHORIZED,
-                "Missing API key (x-api-key header required)",
+                "Missing API key (x-api-key or Authorization: Bearer header required)",
             )
                 .into_response();
         }
@@ -88,12 +82,50 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
     debug!(
         tenant_id = %tenant_id,
         subscription_id = %subscription_id,
+        format = ?api_format,
         "LLM proxy: consumer authenticated"
     );
 
-    // Step 3: Build upstream request
-    let request_path = request.uri().path().to_string();
-    let upstream_url = format!("{}{}", state.config.llm_proxy_upstream_url, request_path);
+    // Step 3: Resolve upstream — subscription-aware Azure routing or static fallback (CAB-1615)
+    let resolved = resolve_upstream(&state, api_format, &subscription_id, &request_path);
+    let (upstream_url, upstream_headers_preset, resolved_provider) = match resolved {
+        UpstreamResolution::Azure {
+            url,
+            headers,
+            provider,
+        } => (url, Some(headers), provider),
+        UpstreamResolution::Static { url, provider } => {
+            (url, None::<Vec<(String, String)>>, provider)
+        }
+        UpstreamResolution::Error(msg) => {
+            return (StatusCode::SERVICE_UNAVAILABLE, msg).into_response();
+        }
+    };
+
+    // Re-resolve the static API key for header building (only when not Azure-routed)
+    let static_api_key = if upstream_headers_preset.is_none() {
+        let key = match api_format {
+            LlmApiFormat::OpenAiCompat => state
+                .config
+                .llm_proxy_mistral_api_key
+                .clone()
+                .or_else(|| state.config.llm_proxy_api_key.clone()),
+            LlmApiFormat::Anthropic => state.config.llm_proxy_api_key.clone(),
+        };
+        match key {
+            Some(k) if !k.is_empty() => Some(k),
+            _ => {
+                error!("LLM proxy: upstream API key not configured");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "LLM proxy upstream not configured",
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        None // Azure route already has headers with api-key
+    };
 
     let timeout = Duration::from_secs(state.config.llm_proxy_timeout_secs);
     let client = llm_client(timeout);
@@ -108,25 +140,63 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         }
     };
 
-    // Build upstream headers: keep anthropic-version, anthropic-beta, content-type
+    // Extract model from request body for cost tracking (best-effort, non-blocking)
+    let request_model = serde_json::from_slice::<serde_json::Value>(&body_bytes)
+        .ok()
+        .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from))
+        .unwrap_or_else(|| "unknown".to_string());
+
+    // Build upstream headers (format-aware)
     let mut upstream_headers = HeaderMap::new();
-    for key in &[
-        "anthropic-version",
-        "anthropic-beta",
-        "content-type",
-        "accept",
-    ] {
-        if let Some(val) = parts.headers.get(*key) {
-            if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
-                upstream_headers.insert(name, val.clone());
+    if let Some(azure_headers) = upstream_headers_preset {
+        // Azure-routed: use pre-built headers from transform_request
+        for (key, val) in &azure_headers {
+            if let (Ok(name), Ok(value)) = (
+                header::HeaderName::from_bytes(key.as_bytes()),
+                HeaderValue::from_str(val),
+            ) {
+                upstream_headers.insert(name, value);
+            }
+        }
+    } else {
+        // Static routing: build headers based on API format
+        let api_key = static_api_key.as_deref().unwrap_or("");
+        match api_format {
+            LlmApiFormat::Anthropic => {
+                for key in &[
+                    "anthropic-version",
+                    "anthropic-beta",
+                    "content-type",
+                    "accept",
+                ] {
+                    if let Some(val) = parts.headers.get(*key) {
+                        if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                            upstream_headers.insert(name, val.clone());
+                        }
+                    }
+                }
+                upstream_headers.insert(
+                    "x-api-key",
+                    HeaderValue::from_str(api_key).unwrap_or_else(|_| HeaderValue::from_static("")),
+                );
+            }
+            LlmApiFormat::OpenAiCompat => {
+                for key in &["content-type", "accept"] {
+                    if let Some(val) = parts.headers.get(*key) {
+                        if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                            upstream_headers.insert(name, val.clone());
+                        }
+                    }
+                }
+                let bearer = format!("Bearer {}", api_key);
+                upstream_headers.insert(
+                    header::AUTHORIZATION,
+                    HeaderValue::from_str(&bearer)
+                        .unwrap_or_else(|_| HeaderValue::from_static("Bearer ")),
+                );
             }
         }
     }
-    // Inject real upstream API key
-    upstream_headers.insert(
-        "x-api-key",
-        HeaderValue::from_str(&upstream_api_key).unwrap_or_else(|_| HeaderValue::from_static("")),
-    );
 
     let start = Instant::now();
 
@@ -153,16 +223,18 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         .map(|ct| ct.contains("text/event-stream"))
         .unwrap_or(false);
 
-    // Build response headers
+    // Build response headers (forward relevant headers from upstream response)
     let mut response_headers = HeaderMap::new();
     for (key, val) in &upstream_headers {
-        // Forward relevant headers
         let key_str = key.as_str();
         if key_str.starts_with("content-type")
             || key_str.starts_with("anthropic-")
             || key_str.starts_with("x-ratelimit-")
             || key_str == "request-id"
             || key_str == "retry-after"
+            // OpenAI-compatible headers
+            || key_str == "x-request-id"
+            || key_str.starts_with("openai-")
         {
             response_headers.insert(key.clone(), val.clone());
         }
@@ -218,6 +290,11 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
             StatusCode::from_u16(upstream_status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
         *response.headers_mut() = response_headers;
 
+        // Clone cost tracking context for the async metering task (CAB-1487 wiring)
+        let sse_cost_calculator = state.cost_calculator.clone();
+        let sse_request_model = request_model.clone();
+        let sse_provider = resolved_provider;
+
         // Spawn async metering (non-blocking, fire-and-forget)
         tokio::spawn(async move {
             // Wait a bit for stream to complete
@@ -244,9 +321,21 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                             subscription_id = %metering_sub,
                             input_tokens = usage.input_tokens,
                             output_tokens = usage.output_tokens,
+                            cache_read_input_tokens = usage.cache_read_input_tokens,
+                            cache_creation_input_tokens = usage.cache_creation_input_tokens,
                             latency_ms = elapsed.as_millis() as u64,
                             "LLM proxy: usage extracted from SSE stream"
                         );
+
+                        // Track cost to Prometheus (CAB-1487 wiring — SSE path)
+                        track_cost(
+                            &sse_cost_calculator,
+                            &usage,
+                            sse_provider,
+                            &sse_request_model,
+                            elapsed.as_secs_f64(),
+                        );
+
                         record_usage_to_cp(&MeteringParams {
                             client: &http_client,
                             metering_url: metering_url.as_deref(),
@@ -285,8 +374,19 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                 subscription_id = %subscription_id,
                 input_tokens = usage.input_tokens,
                 output_tokens = usage.output_tokens,
+                cache_read_input_tokens = usage.cache_read_input_tokens,
+                cache_creation_input_tokens = usage.cache_creation_input_tokens,
                 latency_ms = elapsed.as_millis() as u64,
                 "LLM proxy: usage extracted from response"
+            );
+
+            // Track cost to Prometheus (CAB-1487 wiring)
+            track_cost(
+                &state.cost_calculator,
+                &usage,
+                resolved_provider,
+                &request_model,
+                elapsed.as_secs_f64(),
             );
 
             let metering_url = state
@@ -321,6 +421,145 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
     }
 }
 
+/// Resolved upstream target — either Azure (subscription-routed) or static (config-based).
+#[derive(Debug)]
+enum UpstreamResolution {
+    /// Azure OpenAI: custom URL + api-key headers from transform_request.
+    Azure {
+        url: String,
+        headers: Vec<(String, String)>,
+        provider: LlmProvider,
+    },
+    /// Static routing: base_url + request_path, API key resolved separately.
+    Static { url: String, provider: LlmProvider },
+    /// Configuration error — return to caller as SERVICE_UNAVAILABLE.
+    Error(String),
+}
+
+/// Convert proxy-local `LlmUsage` to cost module `TokenUsage` for Prometheus tracking.
+fn to_token_usage(usage: &LlmUsage, provider: LlmProvider, model: &str) -> TokenUsage {
+    TokenUsage {
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        cache_read_input_tokens: usage.cache_read_input_tokens,
+        cache_creation_input_tokens: usage.cache_creation_input_tokens,
+        provider,
+        model: model.to_string(),
+    }
+}
+
+/// Track cost via Prometheus if CostCalculator is available.
+fn track_cost(
+    cost_calculator: &Option<std::sync::Arc<CostCalculator>>,
+    usage: &LlmUsage,
+    provider: LlmProvider,
+    model: &str,
+    latency_secs: f64,
+) {
+    if let Some(ref calc) = cost_calculator {
+        let token_usage = to_token_usage(usage, provider, model);
+        let result = calc.track(&token_usage);
+        crate::llm::record_latency(provider, model, latency_secs);
+        debug!(
+            provider = %provider,
+            model = %model,
+            cost_usd = result.total_usd,
+            "LLM cost tracked"
+        );
+    }
+}
+
+/// Resolve the upstream URL and auth for a request (CAB-1615).
+///
+/// Priority:
+/// 1. If LLM router is enabled and subscription has a mapping → Azure transform
+/// 2. Else → static config (Mistral or Anthropic upstream)
+fn resolve_upstream(
+    state: &AppState,
+    api_format: LlmApiFormat,
+    subscription_id: &str,
+    request_path: &str,
+) -> UpstreamResolution {
+    // Try subscription-aware routing for OpenAI-compatible requests
+    if api_format == LlmApiFormat::OpenAiCompat {
+        if let Some(ref router) = state.llm_router {
+            let mapping = &state.config.llm_router.subscription_mapping;
+            if !mapping.is_empty() {
+                if let Some(provider) = router.select_for_subscription(subscription_id, mapping) {
+                    // Azure OpenAI provider — use transform_request for URL + headers
+                    if provider.provider == crate::llm::LlmProvider::AzureOpenAi {
+                        match crate::llm::transform_request(provider) {
+                            Ok(azure_req) => {
+                                info!(
+                                    subscription_id = %subscription_id,
+                                    backend_id = ?provider.backend_id,
+                                    url = %azure_req.url,
+                                    "LLM proxy: subscription routed to Azure OpenAI"
+                                );
+                                return UpstreamResolution::Azure {
+                                    url: azure_req.url,
+                                    headers: azure_req.headers,
+                                    provider: provider.provider,
+                                };
+                            }
+                            Err(e) => {
+                                error!(
+                                    error = %e,
+                                    subscription_id = %subscription_id,
+                                    backend_id = ?provider.backend_id,
+                                    "LLM proxy: Azure transform failed"
+                                );
+                                return UpstreamResolution::Error(format!(
+                                    "Azure OpenAI configuration error: {e}"
+                                ));
+                            }
+                        }
+                    }
+                    // Non-Azure provider from router — use its base_url with standard path
+                    let url = format!(
+                        "{}{}",
+                        provider.base_url.trim_end_matches('/'),
+                        request_path
+                    );
+                    return UpstreamResolution::Static {
+                        url,
+                        provider: provider.provider,
+                    };
+                }
+                // Subscription not in mapping — fall through to static routing
+                debug!(
+                    subscription_id = %subscription_id,
+                    "LLM proxy: subscription not in routing map, using static upstream"
+                );
+            }
+        }
+    }
+
+    // Static routing fallback
+    let (base_url, provider) = match api_format {
+        LlmApiFormat::OpenAiCompat => {
+            if state.config.llm_proxy_mistral_api_key.is_some() {
+                (
+                    state.config.llm_proxy_mistral_upstream_url.clone(),
+                    LlmProvider::Mistral,
+                )
+            } else {
+                (
+                    state.config.llm_proxy_upstream_url.clone(),
+                    LlmProvider::OpenAi,
+                )
+            }
+        }
+        LlmApiFormat::Anthropic => (
+            state.config.llm_proxy_upstream_url.clone(),
+            LlmProvider::Anthropic,
+        ),
+    };
+
+    let url = format!("{}{}", base_url.trim_end_matches('/'), request_path);
+    UpstreamResolution::Static { url, provider }
+}
+
 /// Extract API key from request headers (x-api-key or Authorization: Bearer).
 fn extract_api_key(headers: &HeaderMap) -> Option<String> {
     // x-api-key header (Anthropic SDK style)
@@ -339,11 +578,15 @@ fn extract_api_key(headers: &HeaderMap) -> Option<String> {
     None
 }
 
-/// Token usage from Anthropic response.
+/// Token usage from LLM response, including Anthropic prompt caching fields.
 #[derive(Debug, Clone)]
 pub struct LlmUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    /// Tokens read from Anthropic prompt cache (cheaper than regular input).
+    pub cache_read_input_tokens: u64,
+    /// Tokens written to Anthropic prompt cache (more expensive than regular input).
+    pub cache_creation_input_tokens: u64,
 }
 
 /// Anthropic response usage block.
@@ -351,6 +594,10 @@ pub struct LlmUsage {
 struct AnthropicUsage {
     input_tokens: u64,
     output_tokens: u64,
+    #[serde(default)]
+    cache_read_input_tokens: u64,
+    #[serde(default)]
+    cache_creation_input_tokens: u64,
 }
 
 /// Anthropic response (partial — only what we need).
@@ -359,32 +606,96 @@ struct AnthropicResponse {
     usage: Option<AnthropicUsage>,
 }
 
+/// OpenAI-compatible response usage block (used by Mistral, OpenAI, vLLM, etc.).
+#[derive(Debug, Deserialize)]
+struct OpenAiUsage {
+    prompt_tokens: u64,
+    completion_tokens: u64,
+}
+
+/// OpenAI-compatible response (partial — only what we need).
+#[derive(Debug, Deserialize)]
+struct OpenAiResponse {
+    usage: Option<OpenAiUsage>,
+}
+
+/// API format detected from request path or configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LlmApiFormat {
+    /// Anthropic: /v1/messages, x-api-key header, AnthropicResponse schema.
+    Anthropic,
+    /// OpenAI-compatible: /v1/chat/completions, Authorization: Bearer, OpenAiResponse schema.
+    OpenAiCompat,
+}
+
+impl LlmApiFormat {
+    /// Detect API format from request path.
+    pub fn from_path(path: &str) -> Self {
+        if path.starts_with("/v1/chat/completions") {
+            LlmApiFormat::OpenAiCompat
+        } else {
+            // Default to Anthropic for /v1/messages and other paths
+            LlmApiFormat::Anthropic
+        }
+    }
+}
+
 /// Extract usage from a non-streaming JSON response.
+///
+/// Tries Anthropic format first (`usage.input_tokens/output_tokens`),
+/// then falls back to OpenAI-compatible format (`usage.prompt_tokens/completion_tokens`).
 fn extract_json_usage(body: &[u8]) -> Option<LlmUsage> {
-    let resp: AnthropicResponse = serde_json::from_slice(body).ok()?;
-    let usage = resp.usage?;
-    Some(LlmUsage {
-        input_tokens: usage.input_tokens,
-        output_tokens: usage.output_tokens,
-    })
+    // Try Anthropic format first
+    if let Ok(resp) = serde_json::from_slice::<AnthropicResponse>(body) {
+        if let Some(usage) = resp.usage {
+            return Some(LlmUsage {
+                input_tokens: usage.input_tokens,
+                output_tokens: usage.output_tokens,
+                cache_read_input_tokens: usage.cache_read_input_tokens,
+                cache_creation_input_tokens: usage.cache_creation_input_tokens,
+            });
+        }
+    }
+
+    // Fallback to OpenAI-compatible format (Mistral, OpenAI, vLLM, etc.)
+    if let Ok(resp) = serde_json::from_slice::<OpenAiResponse>(body) {
+        if let Some(usage) = resp.usage {
+            return Some(LlmUsage {
+                input_tokens: usage.prompt_tokens,
+                output_tokens: usage.completion_tokens,
+                cache_read_input_tokens: 0,
+                cache_creation_input_tokens: 0,
+            });
+        }
+    }
+
+    None
 }
 
 /// Extract usage from SSE stream body.
 ///
-/// Anthropic SSE streams contain a `message_delta` event with cumulative usage
-/// and a final `message_stop` event. The usage is in the `message_delta` event:
-/// ```text
-/// event: message_delta
-/// data: {"type":"message_delta","usage":{"output_tokens":42}}
-/// ```
-/// Or in `message_start`:
+/// Supports two SSE formats:
+///
+/// **Anthropic SSE** — usage split across events:
 /// ```text
 /// event: message_start
 /// data: {"type":"message_start","message":{"usage":{"input_tokens":15,"output_tokens":0},...}}
+///
+/// event: message_delta
+/// data: {"type":"message_delta","usage":{"output_tokens":42}}
+/// ```
+///
+/// **OpenAI-compatible SSE** (Mistral, OpenAI, vLLM) — usage in final chunk:
+/// ```text
+/// data: {"choices":[...],"usage":{"prompt_tokens":10,"completion_tokens":25}}
+///
+/// data: [DONE]
 /// ```
 fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
     let mut input_tokens: u64 = 0;
     let mut output_tokens: u64 = 0;
+    let mut cache_read_input_tokens: u64 = 0;
+    let mut cache_creation_input_tokens: u64 = 0;
 
     for line in body.lines() {
         if !line.starts_with("data: ") {
@@ -400,16 +711,27 @@ fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
             let event_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
             match event_type {
+                // Anthropic SSE format
                 "message_start" => {
-                    // input_tokens from message_start.message.usage
                     if let Some(msg_usage) = val.get("message").and_then(|m| m.get("usage")) {
                         if let Some(it) = msg_usage.get("input_tokens").and_then(|v| v.as_u64()) {
                             input_tokens = it;
                         }
+                        if let Some(cr) = msg_usage
+                            .get("cache_read_input_tokens")
+                            .and_then(|v| v.as_u64())
+                        {
+                            cache_read_input_tokens = cr;
+                        }
+                        if let Some(cw) = msg_usage
+                            .get("cache_creation_input_tokens")
+                            .and_then(|v| v.as_u64())
+                        {
+                            cache_creation_input_tokens = cw;
+                        }
                     }
                 }
                 "message_delta" => {
-                    // output_tokens from message_delta.usage
                     if let Some(delta_usage) = val.get("usage") {
                         if let Some(ot) = delta_usage.get("output_tokens").and_then(|v| v.as_u64())
                         {
@@ -417,7 +739,18 @@ fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
                         }
                     }
                 }
-                _ => {}
+                _ => {
+                    // OpenAI-compatible SSE format: usage in final chunk
+                    // (no "type" field, but has "usage.prompt_tokens")
+                    if let Some(usage) = val.get("usage") {
+                        if let Some(pt) = usage.get("prompt_tokens").and_then(|v| v.as_u64()) {
+                            input_tokens = pt;
+                        }
+                        if let Some(ct) = usage.get("completion_tokens").and_then(|v| v.as_u64()) {
+                            output_tokens = ct;
+                        }
+                    }
+                }
             }
         }
     }
@@ -426,6 +759,8 @@ fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
         Some(LlmUsage {
             input_tokens,
             output_tokens,
+            cache_read_input_tokens,
+            cache_creation_input_tokens,
         })
     } else {
         None
@@ -454,7 +789,7 @@ async fn record_usage_to_cp(params: &MeteringParams<'_>) {
         }
     };
 
-    let url = format!("{}/api/v1/usage/record", base_url);
+    let url = format!("{}/v1/usage/record", base_url.trim_end_matches('/'));
     let total_tokens = params.usage.input_tokens + params.usage.output_tokens;
 
     let payload = serde_json::json!({
@@ -465,6 +800,8 @@ async fn record_usage_to_cp(params: &MeteringParams<'_>) {
         "total_tokens": total_tokens,
         "input_tokens": params.usage.input_tokens,
         "output_tokens": params.usage.output_tokens,
+        "cache_read_input_tokens": params.usage.cache_read_input_tokens,
+        "cache_creation_input_tokens": params.usage.cache_creation_input_tokens,
         "total_latency_ms": params.latency_ms,
     });
 
@@ -560,5 +897,326 @@ data: {"type":"message_stop"}
     fn test_extract_api_key_missing() {
         let headers = HeaderMap::new();
         assert!(extract_api_key(&headers).is_none());
+    }
+
+    // --- OpenAI-compatible format tests (Mistral, OpenAI, vLLM) ---
+
+    #[test]
+    fn test_extract_json_usage_openai_format() {
+        let body = br#"{"id":"chatcmpl-abc","object":"chat.completion","model":"mistral-small-latest","choices":[{"index":0,"message":{"role":"assistant","content":"Hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":25,"total_tokens":35}}"#;
+        let usage = extract_json_usage(body).unwrap();
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.output_tokens, 25);
+    }
+
+    #[test]
+    fn test_extract_json_usage_mistral_format() {
+        // Mistral uses the exact same format as OpenAI
+        let body = br#"{"id":"cmpl-123","object":"chat.completion","model":"mistral-7b","choices":[{"index":0,"message":{"role":"assistant","content":"Test"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":12,"total_tokens":20}}"#;
+        let usage = extract_json_usage(body).unwrap();
+        assert_eq!(usage.input_tokens, 8);
+        assert_eq!(usage.output_tokens, 12);
+    }
+
+    #[test]
+    fn test_extract_json_usage_tries_both_formats() {
+        // Anthropic format should be tried first and succeed
+        let anthropic_body = br#"{"usage":{"input_tokens":5,"output_tokens":10}}"#;
+        let usage = extract_json_usage(anthropic_body).unwrap();
+        assert_eq!(usage.input_tokens, 5);
+        assert_eq!(usage.output_tokens, 10);
+
+        // OpenAI format should work as fallback
+        let openai_body = br#"{"usage":{"prompt_tokens":7,"completion_tokens":14}}"#;
+        let usage = extract_json_usage(openai_body).unwrap();
+        assert_eq!(usage.input_tokens, 7);
+        assert_eq!(usage.output_tokens, 14);
+    }
+
+    #[test]
+    fn test_extract_sse_usage_openai_format() {
+        let body = "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: {\"id\":\"chatcmpl-1\",\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":25,\"total_tokens\":35}}\n\ndata: [DONE]\n\n";
+        let usage = extract_sse_usage(body).unwrap();
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.output_tokens, 25);
+    }
+
+    #[test]
+    fn test_extract_sse_usage_openai_no_usage_chunk() {
+        // Stream without a usage chunk (some providers don't include it)
+        let body = "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: [DONE]\n\n";
+        assert!(extract_sse_usage(body).is_none());
+    }
+
+    #[test]
+    fn test_api_format_from_path() {
+        assert_eq!(
+            LlmApiFormat::from_path("/v1/messages"),
+            LlmApiFormat::Anthropic
+        );
+        assert_eq!(
+            LlmApiFormat::from_path("/v1/messages/count_tokens"),
+            LlmApiFormat::Anthropic
+        );
+        assert_eq!(
+            LlmApiFormat::from_path("/v1/chat/completions"),
+            LlmApiFormat::OpenAiCompat
+        );
+        // Unknown paths default to Anthropic
+        assert_eq!(
+            LlmApiFormat::from_path("/v1/unknown"),
+            LlmApiFormat::Anthropic
+        );
+    }
+
+    // --- Subscription-aware routing tests (CAB-1615) ---
+
+    /// Build a minimal AppState for resolve_upstream tests.
+    fn make_test_state(
+        router_enabled: bool,
+        providers: Vec<crate::llm::ProviderConfig>,
+        subscription_mapping: crate::llm::SubscriptionMapping,
+    ) -> AppState {
+        let config = crate::config::Config {
+            llm_proxy_enabled: true,
+            llm_proxy_upstream_url: "https://api.anthropic.com".to_string(),
+            llm_proxy_mistral_upstream_url: "https://api.mistral.ai".to_string(),
+            llm_router: crate::config::LlmRouterConfig {
+                enabled: router_enabled,
+                providers,
+                subscription_mapping,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        AppState::new(config)
+    }
+
+    fn make_azure_provider(backend_id: &str, deployment: &str) -> crate::llm::ProviderConfig {
+        crate::llm::ProviderConfig {
+            provider: crate::llm::LlmProvider::AzureOpenAi,
+            backend_id: Some(backend_id.to_string()),
+            base_url: "https://test-ns.openai.azure.com".to_string(),
+            api_key_env: Some("TEST_AZURE_KEY".to_string()),
+            default_model: None,
+            max_concurrent: 50,
+            enabled: true,
+            cost_per_1m_input: 5.0,
+            cost_per_1m_output: 15.0,
+            cost_per_1m_cache_read: 0.0,
+            cost_per_1m_cache_write: 0.0,
+            priority: 1,
+            deployment: Some(deployment.to_string()),
+            api_version: Some("2024-10-21".to_string()),
+        }
+    }
+
+    fn make_openai_provider(backend_id: &str) -> crate::llm::ProviderConfig {
+        crate::llm::ProviderConfig {
+            provider: crate::llm::LlmProvider::OpenAi,
+            backend_id: Some(backend_id.to_string()),
+            base_url: "https://api.openai.com/v1".to_string(),
+            api_key_env: Some("TEST_OPENAI_KEY".to_string()),
+            default_model: None,
+            max_concurrent: 50,
+            enabled: true,
+            cost_per_1m_input: 5.0,
+            cost_per_1m_output: 15.0,
+            cost_per_1m_cache_read: 0.0,
+            cost_per_1m_cache_write: 0.0,
+            priority: 1,
+            deployment: None,
+            api_version: None,
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_azure_subscription_routing() {
+        // Set the Azure API key env var for transform_request
+        std::env::set_var("TEST_AZURE_KEY", "test-azure-api-key-12345");
+
+        let provider = make_azure_provider("projet-alpha", "gpt-4o");
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-123".to_string(),
+            "projet-alpha".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-123",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Azure { url, headers, .. } => {
+                assert!(
+                    url.contains("test-ns.openai.azure.com"),
+                    "URL should target Azure: {url}"
+                );
+                assert!(
+                    url.contains("deployments/gpt-4o"),
+                    "URL should contain deployment: {url}"
+                );
+                assert!(
+                    url.contains("api-version=2024-10-21"),
+                    "URL should have api-version: {url}"
+                );
+                // Verify api-key header is present
+                let has_api_key = headers.iter().any(|(k, _)| k == "api-key");
+                assert!(has_api_key, "Should have api-key header");
+            }
+            other => panic!("Expected Azure resolution, got: {other:?}"),
+        }
+
+        std::env::remove_var("TEST_AZURE_KEY");
+    }
+
+    #[test]
+    fn resolve_upstream_static_fallback_no_mapping() {
+        let provider = make_azure_provider("projet-alpha", "gpt-4o");
+        // Empty mapping — no subscriptions configured
+        let mapping = crate::llm::SubscriptionMapping::new();
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-unknown",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Static { url, .. } => {
+                // Falls through to static because mapping is empty
+                assert!(
+                    url.contains("/v1/chat/completions"),
+                    "URL should contain path: {url}"
+                );
+            }
+            other => panic!("Expected Static resolution, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_static_for_anthropic_format() {
+        let provider = make_azure_provider("projet-alpha", "gpt-4o");
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-123".to_string(),
+            "projet-alpha".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        // Anthropic format should ALWAYS use static routing (Azure is OpenAI-compat only)
+        let result = resolve_upstream(&state, LlmApiFormat::Anthropic, "sub-123", "/v1/messages");
+
+        match result {
+            UpstreamResolution::Static { url, .. } => {
+                assert!(
+                    url.contains("api.anthropic.com"),
+                    "Anthropic should use static upstream: {url}"
+                );
+            }
+            other => panic!("Expected Static resolution for Anthropic, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_non_azure_provider_from_router() {
+        let provider = make_openai_provider("openai-main");
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-oai".to_string(),
+            "openai-main".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-oai",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Static { url, .. } => {
+                assert!(
+                    url.contains("api.openai.com"),
+                    "Non-Azure provider should use base_url: {url}"
+                );
+                assert!(
+                    url.contains("/v1/chat/completions"),
+                    "Should append request path: {url}"
+                );
+            }
+            other => panic!("Expected Static resolution for non-Azure provider, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_router_disabled() {
+        let provider = make_azure_provider("projet-alpha", "gpt-4o");
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-123".to_string(),
+            "projet-alpha".to_string(),
+        )]);
+
+        // Router disabled — should fall through to static
+        let state = make_test_state(false, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-123",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Static { url, .. } => {
+                // Should NOT hit Azure even though mapping exists, because router is disabled
+                assert!(
+                    !url.contains("azure"),
+                    "Should not route to Azure when disabled: {url}"
+                );
+            }
+            other => panic!("Expected Static when router disabled, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_azure_missing_api_key() {
+        // Do NOT set TEST_AZURE_MISSING env var — it should fail
+        std::env::remove_var("TEST_AZURE_MISSING");
+
+        let mut provider = make_azure_provider("projet-beta", "gpt-4o");
+        provider.api_key_env = Some("TEST_AZURE_MISSING".to_string());
+
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-beta".to_string(),
+            "projet-beta".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-beta",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Error(msg) => {
+                assert!(
+                    msg.contains("Azure OpenAI"),
+                    "Error should mention Azure: {msg}"
+                );
+            }
+            other => panic!("Expected Error for missing API key, got: {other:?}"),
+        }
     }
 }

@@ -1,10 +1,5 @@
 ---
-globs:
-  - "k8s/**"
-  - "deploy/**"
-  - "charts/**"
-  - "terraform/**"
-  - "**/alembic/**"
+globs: "k8s/**,deploy/**,charts/**,terraform/**,**/alembic/**"
 ---
 
 # Deployment & K8s Checklist

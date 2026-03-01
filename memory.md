@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-02-27 (C11 COMPLETE: 152/152 pts, 9 PRs, 3h wall clock)
+> Derniere MAJ: 2026-03-01 (Arena LLM routing fix PR #1317, llm_routing 39.9→91.5)
 
 ## ✅ DONE
 
@@ -8,7 +8,14 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 12 (Feb 27+)
+- ✅ CAB-1601: Anthropic Cache Token Tracking (21 pts) — 4 PRs across 4 components:
+  - PR #1292: Rust gateway — cache field extraction, cache-aware cost calc, 4 Prometheus counters
+  - PR #1303: Python CP API — schema, migration 049, model, repository, service, router
+  - PR #1304: Grafana dashboard — cache hit ratio, savings ($/hr), per-tenant cost, model mix
+  - PR #1305: Dogfood script — `--verify` (4 checks), `--hegemon` (VPS env), enhanced `--setup`
+- ✅ CAB-1614: Arena 20 Dimensions — Blue Ocean (21 pts) — PRs #1270, #1276 (12 new k6 scenarios, features gate, 4-category Grafana, VPS sidecar deploy)
 - ✅ CAB-1552: Lazy MCP Discovery + ADR-051 (5 pts) — PR #1209 (LazyMcpDiscovery struct, moka cache, 10 tests)
+- ✅ Arena LLM routing fix — PRs #1313, #1317 (Mistral/OpenAI-compat corpus + LLM_BASE_URL fix). Score: llm_routing 39.9→91.5, llm_cost ~40→84.8, composite 83.90
 
 ### Cycle 11 (Feb 27) — 152/152 pts, 8 tickets, 9 PRs, 3h wall clock
 - ✅ CAB-1539: Portal Unit Tests (21 pts) — PR #1181 (15 untested components)
@@ -134,15 +141,19 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - C9 final: 830/830 pts (100%), 68 issues. Only demo rehearsal (human-only) remains
 - C10 CLOSED: 193/193 pts, 13 tickets, 100%
 - C11 CLOSED: 152/152 pts, 8 tickets, 9 PRs, 3h wall clock, 4 parallel instances
+- **Cache token tracking** (CAB-1601): end-to-end Anthropic prompt cache monitoring. Gateway extracts cache_creation/read tokens → Prometheus counters → CP API stores in usage_summaries (migration 049) → Grafana dashboard (cache ratio, savings, per-tenant cost, model mix). Verify: `stoa-dogfood.sh --verify`
+- **Arena Enterprise scores** (2026-03-01): STOA 83.90 (CI95 [83.74, 84.00]) | Gravitee 46.72 | Kong 5.46. LLM routing fix: `LLM_BASE_URL = LLM_MOCK_URL || TARGET_URL` routes LLM calls to mock backend in arena mode (PRs #1313, #1317)
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330+ gateway tests
 - Session 2026-02-27: 9 PRs merged (#1181-#1191), parallel 4-pane dispatch, 152 pts in 3h
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
-- HEGEMON daemon **v8** on worker-1 (207.180.246.92) — polling 60s, 5/5 workers healthy
-  - v8: Opus-only (Sonnet can't handle 40K rules), turn budgets 40/50/60/75, env setup hints, turn budget directive
-  - Validated: CAB-1528 → PR #1158 merged (35 tests, 3 bugs found, 73 turns, $2.24, 22m38s, CI fix: rule_name @property→title column)
+- **HEGEMON v3 autonomous startup** (2026-03-01): `hegemon-start.sh` auto-launches Claude Code with zero interactive prompts
+  - 3+1 layer permission fix: `~/.claude.json` (onboarding/trust) + `~/.claude/settings.json` (`Bash(*)` + file tools + `skipDangerousModePermissionPrompt`) + `--permission-mode acceptEdits` (safety warnings)
+  - **Critical**: `acceptEdits` only auto-approves file tools WITHIN workspace. `Read/Write/Edit/Glob/Grep/WebFetch/WebSearch` in global `permissions.allow` covers out-of-workspace access (`~/.claude/projects/.../operations.log`)
+  - Auto-config: `ensure_claude_config()` patches onboarding, API key approval, project trust, tool permissions, global settings — all idempotent
+  - MCP auto-approver: background watcher sends Enter on "Enter to confirm" prompt (30 polls × 2s)
+  - Deployed on ALL 5 workers, validated with `systemctl restart hegemon-agent`
   - SSH key: `~/.ssh/id_ed25519_stoa` (not default ed25519)
-  - API quota hit 2026-02-26 (resets 2026-03-01). Opus works but budget needs monitoring
   - **CI/CD deploy workflow**: WORKING. PRs #1171 (fresh SSH key), #1173 (printenv), #1174 (pkill self-match fix). Full pipeline: Build 25s → Deploy 22s → Verify active
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C11: 152 pts / 8 tickets / 3h wall clock (50.7 pts/h parallel throughput)

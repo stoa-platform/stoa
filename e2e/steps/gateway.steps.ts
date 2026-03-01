@@ -8,6 +8,7 @@ import { test, expect, URLS } from '../fixtures/test-base';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { gatewayState } from './gateway-state';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,7 +17,6 @@ const { Given, When, Then } = createBdd(test);
 
 // Store for test context
 let currentApiKey: string | null = null;
-let lastResponse: { status: number; body: any } | null = null;
 
 // mTLS test context
 let currentToken: string | null = null;
@@ -76,12 +76,12 @@ When('I call {string}', async ({ request }, endpoint: string) => {
       headers,
     });
 
-    lastResponse = {
+    gatewayState.lastResponse = {
       status: response.status(),
       body: await response.json().catch(() => ({})),
     };
   } catch (error) {
-    lastResponse = {
+    gatewayState.lastResponse = {
       status: 500,
       body: { error: String(error) },
     };
@@ -99,12 +99,12 @@ When('I call {string} without API key', async ({ request }, endpoint: string) =>
       },
     });
 
-    lastResponse = {
+    gatewayState.lastResponse = {
       status: response.status(),
       body: await response.json().catch(() => ({})),
     };
   } catch (error) {
-    lastResponse = {
+    gatewayState.lastResponse = {
       status: 500,
       body: { error: String(error) },
     };
@@ -123,7 +123,7 @@ When('I make many health check calls', async ({ request }) => {
   const responses = await Promise.all(promises);
   const statuses = responses.map(r => r.status());
 
-  lastResponse = {
+  gatewayState.lastResponse = {
     status: statuses.every(s => s < 500) ? 200 : 500,
     body: { statuses, allOk: statuses.every(s => s < 500) },
   };
@@ -149,7 +149,7 @@ When('I make many API calls rapidly', async ({ request }) => {
   const responses = await Promise.all(promises);
   const statuses = responses.map(r => r.status());
 
-  lastResponse = {
+  gatewayState.lastResponse = {
     status: statuses.every(s => s < 500) ? 200 : 500,
     body: { statuses },
   };
@@ -160,36 +160,36 @@ When('I make many API calls rapidly', async ({ request }) => {
 // ============================================================================
 
 Then('I receive a {int} response', async ({}, expectedStatus: number) => {
-  expect(lastResponse).not.toBeNull();
-  expect(lastResponse!.status).toBe(expectedStatus);
+  expect(gatewayState.lastResponse).not.toBeNull();
+  expect(gatewayState.lastResponse!.status).toBe(expectedStatus);
 });
 
 Then('I receive a {int} error', async ({}, expectedStatus: number) => {
-  expect(lastResponse).not.toBeNull();
-  expect(lastResponse!.status).toBe(expectedStatus);
+  expect(gatewayState.lastResponse).not.toBeNull();
+  expect(gatewayState.lastResponse!.status).toBe(expectedStatus);
 });
 
 Then('I receive an auth error', async () => {
-  expect(lastResponse).not.toBeNull();
+  expect(gatewayState.lastResponse).not.toBeNull();
   // Accept 401 (Unauthorized) or 403 (Forbidden) as valid auth rejection
-  expect([401, 403]).toContain(lastResponse!.status);
+  expect([401, 403]).toContain(gatewayState.lastResponse!.status);
 });
 
 Then('the gateway remains responsive', async () => {
-  expect(lastResponse).not.toBeNull();
+  expect(gatewayState.lastResponse).not.toBeNull();
   // No 5xx errors — gateway stayed up
-  expect(lastResponse!.status).toBeLessThan(500);
+  expect(gatewayState.lastResponse!.status).toBeLessThan(500);
 });
 
 Then('the error message contains {string}', async ({}, expectedMessage: string) => {
-  expect(lastResponse).not.toBeNull();
-  const bodyStr = JSON.stringify(lastResponse!.body).toLowerCase();
+  expect(gatewayState.lastResponse).not.toBeNull();
+  const bodyStr = JSON.stringify(gatewayState.lastResponse!.body).toLowerCase();
   expect(bodyStr).toContain(expectedMessage.toLowerCase());
 });
 
 Then('some calls receive a {int} error', async ({}, expectedStatus: number) => {
-  expect(lastResponse).not.toBeNull();
-  expect(lastResponse!.status).toBe(expectedStatus);
+  expect(gatewayState.lastResponse).not.toBeNull();
+  expect(gatewayState.lastResponse!.status).toBe(expectedStatus);
 });
 
 // ============================================================================
@@ -297,12 +297,12 @@ When(
         data: JSON.stringify({ tool: 'petstore', arguments: { action: 'list-pets' } }),
       });
 
-      lastResponse = {
+      gatewayState.lastResponse = {
         status: response.status(),
         body: await response.json().catch(() => ({})),
       };
     } catch (error) {
-      lastResponse = { status: 500, body: { error: String(error) } };
+      gatewayState.lastResponse = { status: 500, body: { error: String(error) } };
     }
   }
 );
@@ -332,12 +332,12 @@ When(
         data: JSON.stringify({ tool: 'petstore', arguments: { action: 'list-pets' } }),
       });
 
-      lastResponse = {
+      gatewayState.lastResponse = {
         status: response.status(),
         body: await response.json().catch(() => ({})),
       };
     } catch (error) {
-      lastResponse = { status: 500, body: { error: String(error) } };
+      gatewayState.lastResponse = { status: 500, body: { error: String(error) } };
     }
   }
 );
@@ -360,12 +360,12 @@ When(
         data: JSON.stringify({ tool: 'petstore', arguments: { action: 'list-pets' } }),
       });
 
-      lastResponse = {
+      gatewayState.lastResponse = {
         status: response.status(),
         body: await response.json().catch(() => ({})),
       };
     } catch (error) {
-      lastResponse = { status: 500, body: { error: String(error) } };
+      gatewayState.lastResponse = { status: 500, body: { error: String(error) } };
     }
   }
 );
@@ -444,12 +444,12 @@ When(
         data: JSON.stringify({ tool: 'petstore', arguments: { action: 'list-pets' } }),
       });
 
-      lastResponse = {
+      gatewayState.lastResponse = {
         status: response.status(),
         body: await response.json().catch(() => ({})),
       };
     } catch (error) {
-      lastResponse = { status: 500, body: { error: String(error) } };
+      gatewayState.lastResponse = { status: 500, body: { error: String(error) } };
     }
   }
 );

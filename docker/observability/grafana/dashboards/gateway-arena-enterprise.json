@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Gateway Arena — Enterprise AI Readiness Index (Layer 1). Measures MCP support, auth chains, guardrails, governance, and resilience.",
+  "description": "Gateway Arena — Enterprise AI Readiness Index (Layer 1). 20 dimensions across 4 categories: Core (MCP, auth, guardrails), LLM Intelligence, MCP Depth, Security & Compliance, Platform Operations.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -42,7 +42,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Composite Enterprise AI Readiness Index (0-100). Weighted sum of 8 enterprise dimensions. Gateways without MCP score 0.",
+      "description": "Composite Enterprise AI Readiness Index (0-100). Weighted sum of 20 enterprise dimensions. Gateways without MCP/features score 0.",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "thresholds"},
@@ -165,12 +165,12 @@
       "gridPos": {"h": 1, "w": 24, "x": 0, "y": 7},
       "id": 101,
       "panels": [],
-      "title": "Dimension Breakdown (8 Enterprise Dimensions)",
+      "title": "Dimension Breakdown (20 Enterprise Dimensions)",
       "type": "row"
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Per-dimension scores for each gateway. 0 = not implemented (gateway can implement MCP and re-run). Color: red < 20, yellow < 50, green >= 80.",
+      "description": "Per-dimension scores for each gateway across 20 dimensions. 0 = feature not implemented. Color: red < 20, yellow < 50, green >= 80.",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "thresholds"},
@@ -332,6 +332,347 @@
     {
       "collapsed": false,
       "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24},
+      "id": 104,
+      "panels": [],
+      "title": "Cat A — LLM Intelligence",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "LLM Intelligence dimensions: routing, cost tracking, circuit breaker. STOA-exclusive features.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 25},
+      "id": 40,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"llm_routing\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "LLM Routing",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 25},
+      "id": 41,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"llm_cost\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "LLM Cost Tracking",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 25},
+      "id": 42,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"llm_circuit_breaker\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "LLM Circuit Breaker",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 30},
+      "id": 105,
+      "panels": [],
+      "title": "Cat B — MCP Depth",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "MCP depth dimensions: native tools quality, API bridge, UAC binding.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 31},
+      "id": 50,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"native_tools_crud\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "Native Tools CRUD",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 31},
+      "id": 51,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"api_bridge\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "API Bridge",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 31},
+      "id": 52,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"uac_binding\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "UAC Binding",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 36},
+      "id": 106,
+      "panels": [],
+      "title": "Cat C — Security & Compliance",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Security & compliance dimensions: PII detection, distributed tracing, prompt cache.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 37},
+      "id": 60,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"pii_detection\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "PII Detection",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 37},
+      "id": 61,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"distributed_tracing\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "Distributed Tracing",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 37},
+      "id": 62,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"prompt_cache\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "Prompt Cache",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 42},
+      "id": 107,
+      "panels": [],
+      "title": "Cat D — Platform Operations",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Platform operations dimensions: skills lifecycle, federation, diagnostic engine.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 43},
+      "id": 70,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"skills_lifecycle\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "Skills Lifecycle",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 43},
+      "id": 71,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"federation\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "Federation",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 43},
+      "id": 72,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"expr": "gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=\"diagnostic\"}", "legendFormat": "{{gateway}}", "refId": "A"}
+      ],
+      "title": "Diagnostic Engine",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 48},
+      "id": 108,
+      "panels": [],
+      "title": "Differential Score (STOA-Unique Dimensions)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Score from STOA-unique dimensions only (49% weight). These are features Kong/Gravitee cannot score on: LLM Intelligence, MCP Depth, Security, Platform Ops.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 20}, {"color": "yellow", "value": 50}, {"color": "green", "value": 80}]},
+          "min": 0, "max": 100, "unit": "none", "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 49},
+      "id": 80,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "avg by (gateway) (gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=~\"llm_routing|llm_cost|llm_circuit_breaker|native_tools_crud|api_bridge|uac_binding|pii_detection|distributed_tracing|prompt_cache|skills_lifecycle|federation|diagnostic\"})",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Differential Score (12 STOA-Unique Dims)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Core vs Differential: bar chart comparing gateway scores on common dimensions (51% weight) vs STOA-unique dimensions (49% weight).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "Avg Score",
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "none"
+        },
+        "overrides": [
+          {"matcher": {"id": "byRegexp", "options": ".*Core.*"}, "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]},
+          {"matcher": {"id": "byRegexp", "options": ".*Differential.*"}, "properties": [{"id": "color", "value": {"fixedColor": "purple", "mode": "fixed"}}]}
+        ]
+      },
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 49},
+      "id": 81,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single", "sort": "none"}},
+      "targets": [
+        {
+          "expr": "avg by (gateway) (gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=~\"mcp_discovery|mcp_toolcall|auth_chain|policy_eval|guardrails|quota_burst|resilience|governance\"})",
+          "legendFormat": "{{gateway}} Core (8 dims)",
+          "refId": "A"
+        },
+        {
+          "expr": "avg by (gateway) (gateway_arena_enterprise_dimension{gateway=~\"$gateway\",dimension=~\"llm_routing|llm_cost|llm_circuit_breaker|native_tools_crud|api_bridge|uac_binding|pii_detection|distributed_tracing|prompt_cache|skills_lifecycle|federation|diagnostic\"})",
+          "legendFormat": "{{gateway}} Differential (12 dims)",
+          "refId": "B"
+        }
+      ],
+      "title": "Core vs Differential Score",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 55},
       "id": 103,
       "panels": [],
       "title": "Score Trend",
@@ -371,7 +712,7 @@
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 25},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 56},
       "id": 30,
       "options": {"legend": {"calcs": ["lastNotNull", "min", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
       "targets": [
@@ -442,6 +783,23 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {"selected": true, "text": "All", "value": "$__all"},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "category",
+        "options": [
+          {"selected": false, "text": "core", "value": "core"},
+          {"selected": false, "text": "llm_intelligence", "value": "llm_intelligence"},
+          {"selected": false, "text": "mcp_depth", "value": "mcp_depth"},
+          {"selected": false, "text": "security", "value": "security"},
+          {"selected": false, "text": "platform_ops", "value": "platform_ops"}
+        ],
+        "query": "core,llm_intelligence,mcp_depth,security,platform_ops",
+        "skipUrlSync": false,
+        "type": "custom"
       }
     ]
   },

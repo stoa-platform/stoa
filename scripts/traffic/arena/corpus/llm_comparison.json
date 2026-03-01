@@ -1,0 +1,138 @@
+{
+  "dimension": "llm_comparison",
+  "weight": 0.00,
+  "latency_cap_ms": 2000,
+  "description": "Comparative LLM benchmark — same prompts sent to Anthropic (/v1/messages) and OpenAI-compatible (/v1/chat/completions) format endpoints. Weight=0.00 in observation mode; scored but does not affect composite.",
+  "checks": [
+    "llm_comparison_status_2xx",
+    "llm_comparison_valid_json",
+    "llm_comparison_has_usage"
+  ],
+  "tasks": [
+    {
+      "id": "cmp-01",
+      "name": "Basic completion (Anthropic format)",
+      "endpoint": "{{TARGET_URL}}/v1/messages",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "claude-mock",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Arena comparison test — reply with exactly one word." }]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_has_field": "usage.input_tokens"
+      },
+      "notes": "Baseline Anthropic format — simple prompt for cross-format latency comparison."
+    },
+    {
+      "id": "cmp-02",
+      "name": "Basic completion (OpenAI/Mistral format)",
+      "endpoint": "{{TARGET_URL}}/v1/chat/completions",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "mistral-mock",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Arena comparison test — reply with exactly one word." }]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_has_field": "usage.prompt_tokens"
+      },
+      "notes": "Same prompt as cmp-01 but in OpenAI-compatible format. Measures format translation overhead."
+    },
+    {
+      "id": "cmp-03",
+      "name": "System message (Anthropic format)",
+      "endpoint": "{{TARGET_URL}}/v1/messages",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "claude-mock",
+        "max_tokens": 64,
+        "system": "You are a classification engine. Respond with exactly: POSITIVE or NEGATIVE.",
+        "messages": [{ "role": "user", "content": "The weather is beautiful today." }]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_is_valid_json": true
+      },
+      "notes": "Classification task (Anthropic). Good candidate for Mistral co-processing."
+    },
+    {
+      "id": "cmp-04",
+      "name": "System message (OpenAI/Mistral format)",
+      "endpoint": "{{TARGET_URL}}/v1/chat/completions",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "mistral-mock",
+        "max_tokens": 64,
+        "messages": [
+          { "role": "system", "content": "You are a classification engine. Respond with exactly: POSITIVE or NEGATIVE." },
+          { "role": "user", "content": "The weather is beautiful today." }
+        ]
+      },
+      "expected": {
+        "status": "2xx",
+        "body_is_valid_json": true
+      },
+      "notes": "Same classification task in OpenAI format. System message as first message in array."
+    },
+    {
+      "id": "cmp-05",
+      "name": "Concurrent mixed-format requests",
+      "endpoint": "{{TARGET_URL}}/v1/messages",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "claude-mock",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Concurrent cross-format benchmark." }]
+      },
+      "concurrency": 3,
+      "repeat": 5,
+      "expected": {
+        "status": "2xx",
+        "latency_p95_under_ms": 2000
+      },
+      "notes": "Concurrent requests — verifies proxy handles mixed-format traffic under load."
+    },
+    {
+      "id": "cmp-06",
+      "name": "Concurrent mixed-format requests (OpenAI)",
+      "endpoint": "{{TARGET_URL}}/v1/chat/completions",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "mistral-mock",
+        "max_tokens": 64,
+        "messages": [{ "role": "user", "content": "Concurrent cross-format benchmark." }]
+      },
+      "concurrency": 3,
+      "repeat": 5,
+      "expected": {
+        "status": "2xx",
+        "latency_p95_under_ms": 2000
+      },
+      "notes": "Paired with cmp-05 — same concurrency test on OpenAI-compatible endpoint."
+    }
+  ]
+}

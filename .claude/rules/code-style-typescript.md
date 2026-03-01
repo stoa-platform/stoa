@@ -1,7 +1,5 @@
 ---
-globs:
-  - "control-plane-ui/**"
-  - "portal/**"
+globs: "control-plane-ui/**,portal/**"
 ---
 
 # TypeScript / React Code Style

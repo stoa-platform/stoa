@@ -252,6 +252,12 @@ pub struct Config {
     #[serde(default)]
     pub dpop: crate::auth::dpop::DpopConfig,
 
+    // === Sender-Constraint Middleware (CAB-1607, unified mTLS + DPoP) ===
+    /// Sender-constraint configuration (nested struct, STOA_SENDER_CONSTRAINT_ prefix)
+    /// Env: STOA_SENDER_CONSTRAINT_ENABLED, STOA_SENDER_CONSTRAINT_DPOP_REQUIRED, etc.
+    #[serde(default)]
+    pub sender_constraint: SenderConstraintConfig,
+
     // === Quota Enforcement (Phase 4: CAB-1121) ===
     /// Enable per-consumer quota enforcement
     /// Env: STOA_QUOTA_ENFORCEMENT_ENABLED
@@ -488,6 +494,22 @@ pub struct Config {
     /// Env: STOA_LLM_PROXY_METERING_URL
     #[serde(default)]
     pub llm_proxy_metering_url: Option<String>,
+
+    /// Default LLM proxy provider format: "anthropic" | "mistral" | "openai".
+    /// Controls header injection and response parsing for the default upstream.
+    /// Env: STOA_LLM_PROXY_PROVIDER
+    #[serde(default)]
+    pub llm_proxy_provider: Option<String>,
+
+    /// API key for Mistral upstream (when provider=mistral or for /v1/chat/completions).
+    /// Env: STOA_LLM_PROXY_MISTRAL_API_KEY
+    #[serde(default)]
+    pub llm_proxy_mistral_api_key: Option<String>,
+
+    /// Upstream URL for Mistral API (default: https://api.mistral.ai).
+    /// Env: STOA_LLM_PROXY_MISTRAL_UPSTREAM_URL
+    #[serde(default = "default_llm_proxy_mistral_upstream_url")]
+    pub llm_proxy_mistral_upstream_url: String,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -514,6 +536,12 @@ pub struct LlmRouterConfig {
     /// Provider configurations.
     #[serde(default)]
     pub providers: Vec<crate::llm::ProviderConfig>,
+
+    /// Subscription-to-backend routing map (CAB-1610).
+    /// Maps subscription IDs (or plan names) to backend IDs in the provider list.
+    /// Enables multi-namespace routing: same API contract, different backends per subscriber.
+    #[serde(default)]
+    pub subscription_mapping: crate::llm::SubscriptionMapping,
 }
 
 impl Default for LlmRouterConfig {
@@ -523,6 +551,7 @@ impl Default for LlmRouterConfig {
             default_strategy: crate::llm::RoutingStrategy::default(),
             budget_limit_usd: 0.0,
             providers: Vec::new(),
+            subscription_mapping: crate::llm::SubscriptionMapping::new(),
         }
     }
 }
@@ -720,6 +749,35 @@ impl Default for MtlsConfig {
     }
 }
 
+// =============================================================================
+// Sender-Constraint Configuration (CAB-1607)
+// =============================================================================
+
+/// Unified sender-constraint configuration for mTLS + DPoP pipeline.
+///
+/// When enabled, validates that tokens are bound to the sender via:
+/// - mTLS: cnf.x5t#S256 matches client certificate thumbprint (RFC 8705)
+/// - DPoP: cnf.jkt matches DPoP proof JWK thumbprint (RFC 9449)
+///
+/// Per-tenant policy: tenants can require DPoP, mTLS, or both.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SenderConstraintConfig {
+    /// Enable the unified sender-constraint middleware.
+    /// Env: STOA_SENDER_CONSTRAINT_ENABLED
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Require DPoP proof when cnf.jkt is present in the token.
+    /// Env: STOA_SENDER_CONSTRAINT_DPOP_REQUIRED
+    #[serde(default)]
+    pub dpop_required: bool,
+
+    /// Require mTLS binding when cnf.x5t#S256 is present in the token.
+    /// Env: STOA_SENDER_CONSTRAINT_MTLS_REQUIRED
+    #[serde(default)]
+    pub mtls_required: bool,
+}
+
 fn default_otel_sample_rate() -> f64 {
     1.0 // Sample all traces by default
 }
@@ -836,6 +894,10 @@ fn default_llm_proxy_timeout_secs() -> u64 {
     300
 }
 
+fn default_llm_proxy_mistral_upstream_url() -> String {
+    "https://api.mistral.ai".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -889,6 +951,7 @@ impl Default for Config {
             kafka_cns_consumer_group: default_kafka_cns_consumer_group(),
             mtls: MtlsConfig::default(),
             dpop: crate::auth::dpop::DpopConfig::default(),
+            sender_constraint: SenderConstraintConfig::default(),
             quota_enforcement_enabled: false,
             quota_sync_interval_secs: default_quota_sync_interval(),
             quota_default_rate_per_minute: default_quota_rate_per_minute(),
@@ -933,6 +996,9 @@ impl Default for Config {
             llm_proxy_api_key: None,
             llm_proxy_timeout_secs: default_llm_proxy_timeout_secs(),
             llm_proxy_metering_url: None,
+            llm_proxy_provider: None,
+            llm_proxy_mistral_api_key: None,
+            llm_proxy_mistral_upstream_url: default_llm_proxy_mistral_upstream_url(),
         }
     }
 }

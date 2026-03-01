@@ -1,7 +1,5 @@
 ---
-globs:
-  - "control-plane-api/**"
-  - "cli/**"
+globs: "control-plane-api/**,cli/**"
 ---
 
 # Python Code Style

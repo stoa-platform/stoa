@@ -20567,6 +20567,20 @@
       "UsageRecordRequest": {
         "description": "Gateway-submitted usage event (CAB-1568: LLM proxy metering).",
         "properties": {
+          "cache_creation_input_tokens": {
+            "default": 0,
+            "description": "Anthropic cache creation tokens",
+            "minimum": 0.0,
+            "title": "Cache Creation Input Tokens",
+            "type": "integer"
+          },
+          "cache_read_input_tokens": {
+            "default": 0,
+            "description": "Anthropic cache read tokens",
+            "minimum": 0.0,
+            "title": "Cache Read Input Tokens",
+            "type": "integer"
+          },
           "endpoint": {
             "default": "/v1/messages",
             "description": "API endpoint called",
@@ -20853,6 +20867,16 @@
             "title": "Api Id",
             "type": "string"
           },
+          "cache_creation_input_tokens": {
+            "default": 0,
+            "title": "Cache Creation Input Tokens",
+            "type": "integer"
+          },
+          "cache_read_input_tokens": {
+            "default": 0,
+            "title": "Cache Read Input Tokens",
+            "type": "integer"
+          },
           "consumer_id": {
             "anyOf": [
               {
@@ -20879,6 +20903,16 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
+            "type": "integer"
           },
           "p99_latency_ms": {
             "anyOf": [
@@ -21592,6 +21626,20 @@
           }
         },
         "title": "WebhookUpdate",
+        "type": "object"
+      },
+      "_ValidateKeyBody": {
+        "description": "Request body for API key validation (preferred over query param).",
+        "properties": {
+          "api_key": {
+            "title": "Api Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "api_key"
+        ],
+        "title": "_ValidateKeyBody",
         "type": "object"
       },
       "src__routers__applications__ApplicationResponse": {
@@ -36156,19 +36204,43 @@
     },
     "/v1/subscriptions/validate-key": {
       "post": {
-        "description": "Validate an API key (used by the Gateway).\n\nThis is an internal endpoint for the API Gateway to validate\nincoming API keys and get subscription details.\n\nSupports grace period: during key rotation, both old and new keys are valid.",
+        "description": "Validate an API key (used by the Gateway).\n\nThis is an internal endpoint for the API Gateway to validate\nincoming API keys and get subscription details.\n\nAccepts key via JSON body (preferred) or query param (legacy).\nBody is preferred because the PII middleware masks query params\nnamed ``api_key``.\n\nSupports grace period: during key rotation, both old and new keys are valid.",
         "operationId": "validate_api_key_v1_subscriptions_validate_key_post",
         "parameters": [
           {
             "in": "query",
             "name": "api_key",
-            "required": true,
+            "required": false,
             "schema": {
-              "title": "Api Key",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/_ValidateKeyBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

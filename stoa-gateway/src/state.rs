@@ -17,6 +17,7 @@ use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::guardrails::{GuardrailPolicyStore, TokenBudgetTracker};
+use crate::llm::{LlmRouter, ProviderRegistry};
 use crate::mcp::pending_requests::PendingRequestTracker;
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
@@ -119,6 +120,12 @@ pub struct AppState {
     /// Pre-serialized MCP capabilities JSON (CAB-1558 arena optimization).
     /// Built once at startup — avoids per-request serde + allocation overhead.
     pub capabilities_json: Vec<u8>,
+    /// LLM provider router for subscription-aware Azure OpenAI routing (CAB-1615).
+    /// None when LLM router is disabled or has no providers configured.
+    pub llm_router: Option<Arc<LlmRouter>>,
+    /// LLM cost calculator for per-request cost tracking via Prometheus (CAB-1487 wiring).
+    /// Shares the same ProviderRegistry as llm_router. None when LLM router is disabled.
+    pub cost_calculator: Option<Arc<crate::llm::CostCalculator>>,
 }
 
 impl AppState {
@@ -459,6 +466,33 @@ impl AppState {
             serde_json::to_vec(&crate::mcp::discovery::build_capabilities_response())
                 .expect("capabilities response must serialize");
 
+        // Initialize LLM provider router for subscription-aware routing (CAB-1615)
+        let llm_router = if config.llm_router.enabled && !config.llm_router.providers.is_empty() {
+            let registry = ProviderRegistry::new(config.llm_router.providers.clone()).into_shared();
+            let router = LlmRouter::new(
+                registry,
+                circuit_breakers.clone(),
+                config.llm_router.default_strategy,
+            );
+            tracing::info!(
+                providers = config.llm_router.providers.len(),
+                subscriptions = config.llm_router.subscription_mapping.len(),
+                strategy = ?config.llm_router.default_strategy,
+                "LLM provider router initialized"
+            );
+            Some(Arc::new(router))
+        } else {
+            tracing::info!("LLM provider router disabled");
+            None
+        };
+
+        // Initialize LLM cost calculator — shares ProviderRegistry from router (CAB-1487 wiring)
+        let cost_calculator = llm_router.as_ref().map(|router| {
+            let calc = crate::llm::CostCalculator::new(router.registry().clone());
+            tracing::info!("LLM cost calculator initialized");
+            Arc::new(calc)
+        });
+
         let start_time = Instant::now();
 
         Self {
@@ -501,6 +535,8 @@ impl AppState {
             admin_token_cache,
             mcp_discovery,
             capabilities_json,
+            llm_router,
+            cost_calculator,
         }
     }
 

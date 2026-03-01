@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 
 revision = "045"
-down_revision = "044"
+down_revision = "044_audit_events"
 branch_labels = None
 depends_on = None
 

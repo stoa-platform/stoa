@@ -40,7 +40,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: arena-enterprise
-              image: ghcr.io/stoa-platform/arena-bench:0.1.0
+              image: ghcr.io/stoa-platform/arena-bench:0.2.0
               command:
                 - bash
                 - /scripts/run-arena-enterprise.sh
@@ -58,7 +58,15 @@ spec:
                 - name: ARENA_INSTANCE
                   value: "k8s"
                 - name: OPENSEARCH_URL
-                  value: "http://opensearch.stoa-system.svc:9200"
+                  value: "http://opensearch.opensearch.svc:9200"
+                - name: OPENSEARCH_USER
+                  value: "admin"
+                - name: OPENSEARCH_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: opensearch-credentials
+                      key: admin-password
+                      optional: true
                 - name: LLM_MOCK_URL
                   value: "http://llm-mock-backend.stoa-system.svc:8889"
                   # OIDC credentials for JWT auto-fetch (reuses L2 verify config)
@@ -74,9 +82,13 @@ spec:
                       optional: true
                 - name: OIDC_TOKEN_URL
                   value: "http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/token"
-                  # GATEWAYS: mcp_base is null for gateways without MCP support
-                  # Those gateways score 0 on MCP dimensions (not N/A)
-                  # target: base URL for warmup + non-MCP scenarios
+                  # GATEWAYS: 20-dimension enterprise benchmark config
+                  # mcp_base: null = no MCP support (scores 0 on MCP dims)
+                  # admin_base: admin API for introspection endpoints
+                  # features: list of supported feature keys (missing = score 0)
+                  # Feature keys: llm_routing, llm_cost, llm_circuit_breaker,
+                  #   native_tools_crud, api_bridge, uac_binding, pii_detection,
+                  #   distributed_tracing, prompt_cache, skills_lifecycle, federation, diagnostic
                 - name: GATEWAYS
                   value: |
                     [
@@ -85,20 +97,31 @@ spec:
                         "target": "http://stoa-gateway.stoa-system.svc",
                         "mcp_base": "http://stoa-gateway.stoa-system.svc/mcp",
                         "mcp_protocol": "stoa",
-                        "health": "http://stoa-gateway.stoa-system.svc/health"
+                        "admin_base": "http://stoa-gateway.stoa-system.svc",
+                        "health": "http://stoa-gateway.stoa-system.svc/health",
+                        "features": [
+                          "llm_routing", "llm_cost", "llm_circuit_breaker",
+                          "native_tools_crud", "api_bridge", "uac_binding",
+                          "pii_detection", "distributed_tracing", "prompt_cache",
+                          "skills_lifecycle", "federation", "diagnostic"
+                        ]
                       },
                       {
                         "name": "kong-k8s",
                         "target": "http://kong-arena.stoa-system.svc:8000",
                         "mcp_base": null,
-                        "health": "http://kong-arena.stoa-system.svc:8001/status"
+                        "admin_base": null,
+                        "health": "http://kong-arena.stoa-system.svc:8001/status",
+                        "features": []
                       },
                       {
                         "name": "gravitee-k8s",
                         "target": "http://gravitee-arena-gw.stoa-system.svc:8082",
                         "mcp_base": "http://gravitee-arena-gw.stoa-system.svc:8082/mcp",
                         "mcp_protocol": "streamable-http",
-                        "health": "http://gravitee-arena-gw.stoa-system.svc:18082/_node/health"
+                        "admin_base": null,
+                        "health": "http://gravitee-arena-gw.stoa-system.svc:18082/_node/health",
+                        "features": []
                       }
                     ]
               resources:

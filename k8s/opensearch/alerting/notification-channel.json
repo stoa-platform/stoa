@@ -1,0 +1,13 @@
+{
+  "config_id": "stoa-slack-channel",
+  "name": "STOA Slack Alerts",
+  "config": {
+    "name": "STOA Slack Alerts",
+    "description": "OpenSearch alerting → Slack #stoa-alerts",
+    "config_type": "slack",
+    "is_enabled": true,
+    "slack": {
+      "url": "REPLACE_WITH_SLACK_WEBHOOK_URL"
+    }
+  }
+}

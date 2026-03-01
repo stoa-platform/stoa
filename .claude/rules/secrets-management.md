@@ -1,8 +1,5 @@
 ---
-globs:
-  - "deploy/**"
-  - "terraform/**"
-  - ".infisical.json"
+globs: "deploy/**,terraform/**,.infisical.json"
 ---
 
 # Secrets Management

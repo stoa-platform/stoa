@@ -93,7 +93,7 @@ export default defineConfig({
         storageState: 'fixtures/.auth/art3mis.json',
       },
       dependencies: ['auth-setup'],
-      testMatch: /demo-showcase/,
+      testMatch: /demo-(showcase|ia-pour-tous)/,
     },
 
     // Gateway API tests (no browser, just HTTP)
@@ -103,7 +103,7 @@ export default defineConfig({
       use: {
         baseURL: process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev',
       },
-      testMatch: /gateway-(access|mtls|uac|federation|credential|dpop|mcp)/,
+      testMatch: /gateway-(access|mtls|uac|federation|credential|dpop|mcp|llm|sender)/,
     },
 
     // Cross-component integration tests (API-only, no browser)

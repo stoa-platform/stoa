@@ -157,6 +157,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/skills/:id/health", get(admin::skills_health))
         .route("/skills/:id/health/reset", post(admin::skills_health_reset))
+        // CAB-1487: LLM cost-aware routing admin
+        .route("/llm/status", get(admin::llm_status))
+        .route("/llm/providers", get(admin::llm_providers))
+        .route("/llm/costs", get(admin::llm_costs))
         // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
         .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
         // CAB-1316: Per-request diagnostic report + aggregated summary
@@ -274,6 +278,8 @@ pub fn build_router(state: AppState) -> Router {
                 // LLM API Proxy (CAB-1568: STOA Dogfood) — before fallback
                 .route("/v1/messages", post(llm_proxy_handler))
                 .route("/v1/messages/count_tokens", post(llm_proxy_handler))
+                // OpenAI-compatible LLM proxy (Mistral, OpenAI, vLLM, etc.)
+                .route("/v1/chat/completions", post(llm_proxy_handler))
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)
@@ -295,7 +301,18 @@ pub fn build_router(state: AppState) -> Router {
                 edge_base
             };
 
-            edge_with_mtls.with_state(state)
+            // Sender-constraint layer: unified mTLS + DPoP pipeline (CAB-1607)
+            let edge_final = if state.config.sender_constraint.enabled {
+                let sc_config = state.config.sender_constraint.clone();
+                edge_with_mtls.layer(axum::middleware::from_fn(move |request, next| {
+                    let config = sc_config.clone();
+                    auth::sender_constraint::sender_constraint_middleware(config, request, next)
+                }))
+            } else {
+                edge_with_mtls
+            };
+
+            edge_final.with_state(state)
         }
         GatewayMode::Sidecar => {
             // Sidecar: policy enforcement, ext_authz style

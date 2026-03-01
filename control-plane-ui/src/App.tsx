@@ -159,6 +159,11 @@ const ProxyOwnerDashboard = lazy(() =>
   import('./pages/ProxyOwner').then((m) => ({ default: m.ProxyOwnerDashboard }))
 );
 
+// CAB-1487: LLM Cost Dashboard
+const LLMCostDashboard = lazy(() =>
+  import('./pages/LLMCost').then((m) => ({ default: m.LLMCostDashboard }))
+);
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -469,6 +474,7 @@ function ProtectedRoutes() {
                 <Route path="/security-posture" element={<SecurityPostureDashboard />} />
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
+                <Route path="/llm-cost" element={<LLMCostDashboard />} />
               </Routes>
             </Suspense>
           )}

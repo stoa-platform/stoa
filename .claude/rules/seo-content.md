@@ -24,8 +24,8 @@ Rules for generating blog posts, documentation, and community content on **stoa-
 ```yaml
 ---
 slug: <kebab-case-seo-url>
-title: <Title with Primary Keyword (max 65 chars)>
-description: <Meta description 120-160 chars with primary keyword>
+title: "<Keyword-First Title (max 60 chars)>"
+description: "<Pain point opener, practitioner tone (max 155 chars)>"
 authors: [stoa-team]
 tags: [<2-5 from tags.yml>]
 unlisted: true          # ← ADD if post date > today, REMOVE when date arrives
@@ -39,12 +39,37 @@ keywords:
 
 **Rules**:
 - `slug` = URL-friendly, keyword-rich, no dates (Docusaurus prepends date from filename)
-- `title` must contain the primary keyword, ideally near the start
-- `description` = the meta description Google shows; 120-160 chars, include primary keyword
 - `tags` = only tags that exist in `blog/tags.yml` (build fails otherwise)
 - `unlisted` = **MANDATORY** for future-dated posts (date > today). Omit for posts publishing today
 - `keywords` = for SEO research tracking, not rendered but used by AI Factory to plan content
 - `<!-- last verified: YYYY-MM -->` = required on any article with comparative claims
+
+### Title Rules (CTR-optimized — mandatory)
+
+Docusaurus appends " | STOA — Open-Source AI API Gateway" to every page. Google truncates at ~60 chars total.
+
+| Rule | Do | Don't |
+|------|----|-------|
+| **Max 60 chars** | "MCP vs Function Calling: Which Wins in 2026?" | "A Comprehensive Guide to MCP vs Function Calling vs LangChain for AI Agents (2026)" |
+| **Keyword-first** | "Axway Migration to Open Source (2026)" | "How to Migrate from Axway to Open Source" |
+| **Power words** | vs, benchmark, migrate, why, how, patterns, checklist | guide, introduction, overview, comprehensive |
+| **Opinionated angle** | "Why Proxy Throughput Is the Wrong Benchmark" | "API Gateway Benchmark Comparison" |
+| **No brand in title** | "Multi-Tenant API Gateway on Kubernetes" | "STOA Multi-Tenant API Gateway on Kubernetes" |
+| **Year when relevant** | "Open Source API Gateways 2026" | "Open Source API Gateways" |
+| **Numbers when possible** | "5 Authentication Patterns for AI Agents" | "Authentication Patterns for AI Agents" |
+
+### Description Rules (CTR-optimized — mandatory)
+
+The meta description is what Google shows under the title. It must compel the click.
+
+| Rule | Do | Don't |
+|------|----|-------|
+| **Max 155 chars** | "Kong lacks native MCP support. We benchmark both on tool discovery, OAuth 2.1, and governance." | Long paragraph that gets truncated |
+| **Pain point opener** | "Still on DataPower? Protocol translation and sidecar approach for zero disruption." | "This article covers DataPower migration." |
+| **Practitioner tone** | "We tested all three protocols in production." | "A comparison of three protocols." |
+| **Concrete benefit** | "Map every policy to open-source equivalents with this phased roadmap." | "Learn about migration strategies." |
+| **No filler phrases** | Direct statement | "In this article...", "This post covers...", "Read on to discover..." |
+| **No buzzwords** | Specific capabilities | "revolutionary", "cutting-edge", "game-changing" |
 
 ### Scheduled Posts (Future-Dated Articles)
 

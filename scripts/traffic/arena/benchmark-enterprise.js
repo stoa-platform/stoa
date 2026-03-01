@@ -34,6 +34,10 @@ const ARENA_JWT = __ENV.ARENA_JWT || '';
 const HEADERS = __ENV.HEADERS ? JSON.parse(__ENV.HEADERS) : {};
 const TIMEOUT = (__ENV.TIMEOUT || '10') + 's';
 const LLM_MOCK_URL = __ENV.LLM_MOCK_URL || '';
+// LLM base URL: use mock backend when configured (arena), fall back to gateway (production)
+// In arena mode, the gateway's LLM proxy requires provider configuration that isn't set up,
+// so we test LLM format handling against the mock backend directly.
+const LLM_BASE_URL = LLM_MOCK_URL || TARGET_URL;
 
 // Auth headers when JWT is available
 function authHeaders() {
@@ -422,7 +426,7 @@ function runLlmRouting() {
     { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
     authHeaders()
   );
-  const anthropicRes = http.post(`${TARGET_URL}/v1/messages`, JSON.stringify(anthropicBody), {
+  const anthropicRes = http.post(`${LLM_BASE_URL}/v1/messages`, JSON.stringify(anthropicBody), {
     headers: anthropicHdrs,
     timeout: TIMEOUT,
     tags: { scenario: 'ent_llm_routing' },
@@ -461,7 +465,7 @@ function runLlmRouting() {
     { 'Content-Type': 'application/json' },
     authHeaders()
   );
-  const mistralRes = http.post(`${TARGET_URL}/v1/chat/completions`, JSON.stringify(mistralBody), {
+  const mistralRes = http.post(`${LLM_BASE_URL}/v1/chat/completions`, JSON.stringify(mistralBody), {
     headers: mistralHdrs,
     timeout: TIMEOUT,
     tags: { scenario: 'ent_llm_routing' },
@@ -497,7 +501,7 @@ function runLlmCost() {
     { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
     authHeaders()
   );
-  const url = `${TARGET_URL}/v1/messages`;
+  const url = `${LLM_BASE_URL}/v1/messages`;
   const res = http.post(url, JSON.stringify(body), {
     headers: hdrs,
     timeout: TIMEOUT,

@@ -17,15 +17,29 @@ branch_labels = None
 depends_on = None
 
 
+def _column_exists(table: str, column: str) -> bool:
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = :table AND column_name = :col)"
+        ),
+        {"table": table, "col": column},
+    )
+    return bool(result.scalar())
+
+
 def upgrade() -> None:
-    op.add_column(
-        "subscriptions",
-        sa.Column("ttl_extension_count", sa.Integer(), nullable=False, server_default="0"),
-    )
-    op.add_column(
-        "subscriptions",
-        sa.Column("ttl_total_extended_days", sa.Integer(), nullable=False, server_default="0"),
-    )
+    if not _column_exists("subscriptions", "ttl_extension_count"):
+        op.add_column(
+            "subscriptions",
+            sa.Column("ttl_extension_count", sa.Integer(), nullable=False, server_default="0"),
+        )
+    if not _column_exists("subscriptions", "ttl_total_extended_days"):
+        op.add_column(
+            "subscriptions",
+            sa.Column("ttl_total_extended_days", sa.Integer(), nullable=False, server_default="0"),
+        )
 
 
 def downgrade() -> None:

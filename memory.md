@@ -138,11 +138,12 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - Session 2026-02-27: 9 PRs merged (#1181-#1191), parallel 4-pane dispatch, 152 pts in 3h
 - Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
-- HEGEMON daemon **v8** on worker-1 (207.180.246.92) — polling 60s, 5/5 workers healthy
-  - v8: Opus-only (Sonnet can't handle 40K rules), turn budgets 40/50/60/75, env setup hints, turn budget directive
-  - Validated: CAB-1528 → PR #1158 merged (35 tests, 3 bugs found, 73 turns, $2.24, 22m38s, CI fix: rule_name @property→title column)
+- **HEGEMON v3 autonomous startup** (2026-03-01): `hegemon-start.sh` auto-launches Claude Code with zero interactive prompts
+  - 3-layer permission fix: `~/.claude.json` (onboarding/trust) + `~/.claude/settings.json` (`Bash(*)` + `skipDangerousModePermissionPrompt`) + `--permission-mode acceptEdits` (file tools + safety warnings)
+  - Auto-config: `ensure_claude_config()` patches onboarding, API key approval, project trust, tool permissions, global settings — all idempotent
+  - MCP auto-approver: background watcher sends Enter on "Enter to confirm" prompt (30 polls × 2s)
+  - Deployed on ALL 5 workers, validated with `systemctl restart hegemon-agent`
   - SSH key: `~/.ssh/id_ed25519_stoa` (not default ed25519)
-  - API quota hit 2026-02-26 (resets 2026-03-01). Opus works but budget needs monitoring
   - **CI/CD deploy workflow**: WORKING. PRs #1171 (fresh SSH key), #1173 (printenv), #1174 (pkill self-match fix). Full pipeline: Build 25s → Deploy 22s → Verify active
 - Backlog trim: 106 tickets canceled 2026-02-24
 - Velocity C11: 152 pts / 8 tickets / 3h wall clock (50.7 pts/h parallel throughput)

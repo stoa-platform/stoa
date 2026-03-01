@@ -190,24 +190,60 @@ Layer 0 — Proxy Baseline (existing, unchanged)
   Measures: raw throughput, burst, ramp-up
   Schedule: every 30 min (CronJob: gateway-arena)
 
-Layer 1 — Enterprise AI Readiness (NEW)
-  Score: STOA ~95 | Kong ~5 | Gravitee ~5
-  Measures: 8 enterprise dimensions
+Layer 1 — Enterprise AI Readiness (20 dimensions)
+  Score: STOA ~85-95 | Kong ~5-8 | Gravitee ~47-50
+  Measures: 20 enterprise dimensions (4 categories)
   Schedule: hourly (CronJob: gateway-arena-enterprise)
 ```
 
-### 8 Enterprise Dimensions
+### 20 Enterprise Dimensions (4 Categories)
 
-| # | Dimension | Weight | Scenario | Endpoint | Cap |
-|---|-----------|--------|----------|----------|-----|
-| 1 | MCP Discovery | 0.15 | `ent_mcp_discovery` | `GET /mcp/capabilities` | 500ms |
-| 2 | MCP Tool Execution | 0.20 | `ent_mcp_toolcall` | `POST /mcp/tools/list` (JSON-RPC) | 500ms |
-| 3 | Auth Chain | 0.15 | `ent_auth_chain` | JWT + tool call | 1s |
-| 4 | Policy Engine | 0.15 | `ent_policy_eval` | OPA evaluation overhead | 200ms |
-| 5 | AI Guardrails | 0.10 | `ent_guardrails` | PII in payload blocked/redacted | 1s |
-| 6 | Rate Limiting | 0.10 | `ent_quota_burst` | 429 enforcement | 1s |
-| 7 | Resilience | 0.10 | `ent_resilience` | Bad tool call → 4xx (not 500) | 1s |
-| 8 | Agent Governance | 0.05 | `ent_governance` | Session/governance endpoints | 2s |
+**Core (8 dims, weight 0.51)**:
+
+| # | Dimension | Weight | Scenario | Cap |
+|---|-----------|--------|----------|-----|
+| 1 | MCP Discovery | 0.08 | `ent_mcp_discovery` | 500ms |
+| 2 | MCP Tool Execution | 0.10 | `ent_mcp_toolcall` | 500ms |
+| 3 | Auth Chain | 0.08 | `ent_auth_chain` | 1s |
+| 4 | Policy Engine | 0.06 | `ent_policy_eval` | 200ms |
+| 5 | AI Guardrails | 0.06 | `ent_guardrails` | 1s |
+| 6 | Rate Limiting | 0.05 | `ent_quota_burst` | 1s |
+| 7 | Resilience | 0.05 | `ent_resilience` | 1s |
+| 8 | Agent Governance | 0.03 | `ent_governance` | 2s |
+
+**Cat A — LLM Intelligence (3 dims, weight 0.17)**:
+
+| # | Dimension | Weight | Scenario | Cap | Feature Key |
+|---|-----------|--------|----------|-----|-------------|
+| 9 | LLM Routing | 0.07 | `ent_llm_routing` | 2s | `llm_routing` |
+| 10 | LLM Cost | 0.05 | `ent_llm_cost` | 2s | `llm_cost` |
+| 11 | LLM Circuit Breaker | 0.05 | `ent_llm_circuit_breaker` | 2s | `llm_circuit_breaker` |
+
+**Cat B — MCP Depth (3 dims, weight 0.13)**:
+
+| # | Dimension | Weight | Scenario | Cap | Feature Key |
+|---|-----------|--------|----------|-----|-------------|
+| 12 | Native Tools CRUD | 0.05 | `ent_native_tools_crud` | 1s | `native_tools_crud` |
+| 13 | API Bridge | 0.04 | `ent_api_bridge` | 2s | `api_bridge` |
+| 14 | UAC Binding | 0.04 | `ent_uac_binding` | 2s | `uac_binding` |
+
+**Cat C — Security & Compliance (3 dims, weight 0.10)**:
+
+| # | Dimension | Weight | Scenario | Cap | Feature Key |
+|---|-----------|--------|----------|-----|-------------|
+| 15 | PII Detection | 0.04 | `ent_pii_detection` | 500ms | `pii_detection` |
+| 16 | Distributed Tracing | 0.03 | `ent_distributed_tracing` | 500ms | `distributed_tracing` |
+| 17 | Prompt Cache | 0.03 | `ent_prompt_cache` | 2s | `prompt_cache` |
+
+**Cat D — Platform Operations (3 dims, weight 0.09)**:
+
+| # | Dimension | Weight | Scenario | Cap | Feature Key |
+|---|-----------|--------|----------|-----|-------------|
+| 18 | Skills Lifecycle | 0.03 | `ent_skills_lifecycle` | 1s | `skills_lifecycle` |
+| 19 | Federation | 0.03 | `ent_federation` | 2s | `federation` |
+| 20 | Diagnostic | 0.03 | `ent_diagnostic` | 2s | `diagnostic` |
+
+**Features gate**: Gateways declare supported features via `features` array in GATEWAYS JSON. Missing features score 0 (not N/A). Blue Ocean: 49% weight on STOA-unique features.
 
 **Composite**: `Enterprise Readiness Index = sum(weight_i * dimension_i)`
 
@@ -219,7 +255,7 @@ Layer 1 — Enterprise AI Readiness (NEW)
 
 | File | Purpose |
 |------|---------|
-| `scripts/traffic/arena/benchmark-enterprise.js` | k6 enterprise scenarios (8 dimensions) |
+| `scripts/traffic/arena/benchmark-enterprise.js` | k6 enterprise scenarios (20 dimensions, 4 categories) |
 | `scripts/traffic/arena/run-arena-enterprise.sh` | Shell orchestrator (gateway × run × scenario) |
 | `scripts/traffic/arena/run-arena-enterprise.py` | Python scorer (per-dimension, composite, CI95) |
 | `k8s/arena/cronjob-enterprise.yaml` | Enterprise CronJob (hourly) |
@@ -242,11 +278,13 @@ Layer 1 — Enterprise AI Readiness (NEW)
 
 ```yaml
 # GATEWAYS JSON — mcp_base: null means "no MCP support, score 0"
+# admin_base: admin API for introspection endpoints (null = no admin API)
+# features: list of supported feature keys (missing = score 0 on those dimensions)
 # mcp_protocol: "stoa" (REST paths) or "streamable-http" (JSON-RPC 2.0 on single endpoint)
 [
-  {"name":"stoa-k8s", "target":"http://stoa-gateway:8080", "mcp_base":"http://stoa-gateway:8080/mcp", "mcp_protocol":"stoa"},
-  {"name":"kong-k8s",  "target":"http://kong-arena:8000",  "mcp_base":null},
-  {"name":"gravitee-k8s", "target":"http://gravitee-arena-gw:8082", "mcp_base":"http://gravitee-arena-gw:8082/mcp", "mcp_protocol":"streamable-http"}
+  {"name":"stoa-k8s", "target":"http://stoa-gateway:8080", "mcp_base":"http://stoa-gateway:8080/mcp", "mcp_protocol":"stoa", "admin_base":"http://stoa-gateway:8080", "features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]},
+  {"name":"kong-k8s",  "target":"http://kong-arena:8000",  "mcp_base":null, "admin_base":null, "features":[]},
+  {"name":"gravitee-k8s", "target":"http://gravitee-arena-gw:8082", "mcp_base":"http://gravitee-arena-gw:8082/mcp", "mcp_protocol":"streamable-http", "admin_base":null, "features":[]}
 ]
 ```
 

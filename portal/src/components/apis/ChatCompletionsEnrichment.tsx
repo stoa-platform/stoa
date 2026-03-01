@@ -10,13 +10,18 @@ import {
 
 interface ChatCompletionsEnrichmentProps {
   apiName: string;
+  /** Called when the user clicks "Subscribe" on a plan card. */
+  onSelectPlan?: (planSlug: string) => void;
 }
 
 /**
  * Enrichment panel rendered on the API detail page when the current API
  * matches the Chat Completions API name.
  */
-export function ChatCompletionsEnrichment({ apiName }: ChatCompletionsEnrichmentProps) {
+export function ChatCompletionsEnrichment({
+  apiName,
+  onSelectPlan,
+}: ChatCompletionsEnrichmentProps) {
   if (apiName !== CHAT_COMPLETIONS_API_NAME) {
     return null;
   }
@@ -77,6 +82,15 @@ export function ChatCompletionsEnrichment({ apiName }: ChatCompletionsEnrichment
                   Namespace: <code className="text-xs">{plan.namespace}</code>
                 </li>
               </ul>
+              {onSelectPlan && (
+                <button
+                  type="button"
+                  onClick={() => onSelectPlan(plan.slug)}
+                  className="mt-3 w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+                >
+                  Souscrire
+                </button>
+              )}
             </div>
           ))}
         </div>

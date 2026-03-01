@@ -117,7 +117,7 @@ dispatch_cycle() {
   fi
 
   for role in $idle_roles; do
-    # Get next job matching this role
+    # Get next job matching this role (returns enriched JSON with council fields)
     local next_job
     next_job=$($HEG_STATE queue next --role "$role" --format json 2>/dev/null || echo "")
 
@@ -125,9 +125,16 @@ dispatch_cycle() {
       continue
     fi
 
-    local ticket_id job_id
+    # Extract all fields from enriched queue job JSON
+    local ticket_id job_id title score estimate mode description priority
     ticket_id=$(echo "$next_job" | python3 -c "import sys,json; print(json.load(sys.stdin)['ticket_id'])" 2>/dev/null || echo "")
     job_id=$(echo "$next_job" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null || echo "")
+    title=$(echo "$next_job" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))" 2>/dev/null || echo "")
+    score=$(echo "$next_job" | python3 -c "import sys,json; print(json.load(sys.stdin).get('council_score',''))" 2>/dev/null || echo "")
+    estimate=$(echo "$next_job" | python3 -c "import sys,json; print(json.load(sys.stdin).get('estimate',''))" 2>/dev/null || echo "")
+    mode=$(echo "$next_job" | python3 -c "import sys,json; print(json.load(sys.stdin).get('mode','ask'))" 2>/dev/null || echo "ask")
+    description=$(echo "$next_job" | python3 -c "import sys,json; print(json.load(sys.stdin).get('description',''))" 2>/dev/null || echo "")
+    priority=$(echo "$next_job" | python3 -c "import sys,json; print(json.load(sys.stdin).get('priority',2))" 2>/dev/null || echo "2")
 
     if [ -z "$ticket_id" ] || [ -z "$job_id" ]; then
       continue
@@ -141,15 +148,37 @@ dispatch_cycle() {
       continue
     fi
 
+    # Build enriched prompt for the worker
+    local worker_prompt
+    worker_prompt="Travaille sur ${ticket_id}"
+    [ -n "$title" ] && worker_prompt="${worker_prompt} — ${title}"
+    worker_prompt="${worker_prompt}\n"
+    [ -n "$score" ] && worker_prompt="${worker_prompt}Council: ${score}/10 (Go)"
+    [ -n "$mode" ] && worker_prompt="${worker_prompt}, ${mode^}"
+    [ -n "$estimate" ] && [ "$estimate" != "0" ] && [ "$estimate" != "None" ] && worker_prompt="${worker_prompt}, ${estimate} pts"
+    worker_prompt="${worker_prompt}\n"
+    if [ -n "$description" ] && [ "$description" != "None" ] && [ ${#description} -gt 5 ]; then
+      # Truncate description to 500 chars for prompt
+      local desc_trunc="${description:0:500}"
+      worker_prompt="${worker_prompt}Description: ${desc_trunc}\n"
+    fi
+    worker_prompt="${worker_prompt}Consigne: Ship ≤5pts = skip plan, implement directly. >5pts = write plan first, then implement."
+
+    # Summary for logging
+    local log_summary="P${priority}"
+    [ -n "$score" ] && log_summary="${log_summary}, score ${score}"
+    [ -n "$mode" ] && log_summary="${log_summary}, ${mode^}"
+    [ -n "$estimate" ] && [ "$estimate" != "0" ] && [ "$estimate" != "None" ] && log_summary="${log_summary}, ${estimate}pts"
+
     if [ "$DRY_RUN" = true ]; then
-      _log "DRY-RUN: would dispatch $ticket_id (job #$job_id) to $dispatch_target ($role)"
+      _log "DRY-RUN: would dispatch $ticket_id (${log_summary}, job #$job_id) → $dispatch_target ($role)"
     else
       # Mark as dispatched in queue
       $HEG_STATE queue dispatch "$job_id" "$role" 2>/dev/null || true
 
-      # Send to worker via stoa-dispatch (handles Council gate)
+      # Send enriched prompt to worker via stoa-dispatch (handles Council gate)
       if [ -x "$STOA_DISPATCH" ]; then
-        $STOA_DISPATCH "$dispatch_target" "Travaille sur $ticket_id" 2>/dev/null || {
+        $STOA_DISPATCH "$dispatch_target" "$(echo -e "$worker_prompt")" 2>/dev/null || {
           _log "WARN: stoa-dispatch failed for $ticket_id → $dispatch_target"
           # Mark as failed if dispatch itself failed
           $HEG_STATE queue fail "$job_id" "dispatch-failed" 2>/dev/null || true
@@ -160,7 +189,7 @@ dispatch_cycle() {
         continue
       fi
 
-      _log "DISPATCHED: $ticket_id (job #$job_id) → $dispatch_target ($role)"
+      _log "DISPATCHED: $ticket_id (${log_summary}, job #$job_id) → $dispatch_target ($role)"
     fi
   done
 }

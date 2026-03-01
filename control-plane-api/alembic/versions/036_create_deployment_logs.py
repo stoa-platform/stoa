@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "036_deployment_logs"
-down_revision = "035_add_ttl_extension_fields"
+down_revision = "035"
 branch_labels = None
 depends_on = None
 

@@ -833,6 +833,53 @@ class ApiService {
     const { data } = await this.client.get('/v1/admin/roles');
     return data;
   }
+
+  // =========================================================================
+  // LLM Usage & Cost Monitoring (CAB-1487)
+  // =========================================================================
+
+  async getLlmUsage(
+    tenantId: string,
+    period: 'hour' | 'day' | 'week' | 'month' = 'month'
+  ): Promise<LlmUsageResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/llm/usage`, {
+      params: { period },
+    });
+    return data;
+  }
+
+  async getLlmTimeseries(
+    tenantId: string,
+    period: 'hour' | 'day' | 'week' | 'month' = 'week'
+  ): Promise<LlmTimeseriesResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/llm/usage/timeseries`, {
+      params: { period },
+    });
+    return data;
+  }
+
+  async getLlmProviderBreakdown(
+    tenantId: string,
+    period: 'hour' | 'day' | 'week' | 'month' = 'month'
+  ): Promise<LlmProviderBreakdownResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/llm/usage/providers`, {
+      params: { period },
+    });
+    return data;
+  }
+
+  async getLlmBudget(tenantId: string): Promise<LlmBudgetResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/llm/budget`);
+    return data;
+  }
+
+  async updateLlmBudget(
+    tenantId: string,
+    update: { monthly_limit_usd?: number; alert_threshold_pct?: number }
+  ): Promise<LlmBudgetResponse> {
+    const { data } = await this.client.put(`/v1/tenants/${tenantId}/llm/budget`, update);
+    return data;
+  }
 }
 
 // Operations metrics types (CAB-Observability)
@@ -939,6 +986,50 @@ export interface ApplicationDiffResponse {
   total_resources: number;
   diff_count: number;
   resources: ApplicationDiffResource[];
+}
+
+// LLM Usage & Cost types (CAB-1487)
+export interface LlmUsageResponse {
+  total_cost_usd: number;
+  input_tokens: number;
+  output_tokens: number;
+  avg_cost_per_request: number;
+  cache_read_cost_usd: number;
+  cache_write_cost_usd: number;
+  period: string;
+}
+
+export interface LlmTimeseriesPoint {
+  timestamp: string;
+  value: number;
+}
+
+export interface LlmTimeseriesResponse {
+  points: LlmTimeseriesPoint[];
+  period: string;
+  step: string;
+}
+
+export interface LlmProviderCostEntry {
+  provider: string;
+  model: string;
+  cost_usd: number;
+}
+
+export interface LlmProviderBreakdownResponse {
+  providers: LlmProviderCostEntry[];
+  period: string;
+}
+
+export interface LlmBudgetResponse {
+  id: string;
+  tenant_id: string;
+  monthly_limit_usd: number;
+  current_spend_usd: number;
+  remaining_usd: number;
+  usage_pct: number;
+  alert_threshold_pct: number;
+  is_over_budget: boolean;
 }
 
 export const apiService = new ApiService();

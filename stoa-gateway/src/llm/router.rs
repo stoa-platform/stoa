@@ -51,6 +51,16 @@ impl LlmRouter {
         }
     }
 
+    /// Access the shared provider registry (for cost calculation).
+    pub fn registry(&self) -> &Arc<ProviderRegistry> {
+        &self.registry
+    }
+
+    /// Return the default routing strategy.
+    pub fn default_strategy(&self) -> RoutingStrategy {
+        self.default_strategy
+    }
+
     /// Select the best provider for a request, optionally using a header override.
     ///
     /// Returns `None` if no healthy provider is available.

@@ -1,0 +1,43 @@
+# Auto-generated release notes categorization
+# Used by GitHub's "Generate release notes" feature and softprops/action-gh-release
+# See: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+    authors:
+      - dependabot
+  categories:
+    - title: "Breaking Changes"
+      labels:
+        - breaking-change
+    - title: "Gateway"
+      labels:
+        - component:gateway
+    - title: "Control Plane API"
+      labels:
+        - component:api
+    - title: "Console UI"
+      labels:
+        - component:ui
+    - title: "Developer Portal"
+      labels:
+        - component:portal
+    - title: "Features"
+      labels:
+        - enhancement
+        - feature
+    - title: "Bug Fixes"
+      labels:
+        - bug
+        - fix
+    - title: "Security"
+      labels:
+        - security
+    - title: "Documentation"
+      labels:
+        - documentation
+    - title: "Other Changes"
+      labels:
+        - "*"

@@ -10,6 +10,7 @@
     {"type": "feat", "section": "Features", "hidden": false},
     {"type": "fix", "section": "Bug Fixes", "hidden": false},
     {"type": "perf", "section": "Performance", "hidden": false},
+    {"type": "security", "section": "Security", "hidden": false},
     {"type": "docs", "section": "Documentation", "hidden": false},
     {"type": "chore", "section": "Maintenance", "hidden": true},
     {"type": "refactor", "section": "Refactoring", "hidden": true},

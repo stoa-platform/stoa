@@ -7,7 +7,11 @@
     "llm_routing_status_2xx",
     "llm_routing_valid_json",
     "llm_routing_has_message",
-    "llm_routing_has_usage"
+    "llm_routing_has_usage",
+    "llm_routing_openai_status_2xx",
+    "llm_routing_openai_valid_json",
+    "llm_routing_openai_has_choices",
+    "llm_routing_openai_has_usage"
   ],
   "tasks": [
     {

@@ -303,6 +303,8 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                             subscription_id = %metering_sub,
                             input_tokens = usage.input_tokens,
                             output_tokens = usage.output_tokens,
+                            cache_read_input_tokens = usage.cache_read_input_tokens,
+                            cache_creation_input_tokens = usage.cache_creation_input_tokens,
                             latency_ms = elapsed.as_millis() as u64,
                             "LLM proxy: usage extracted from SSE stream"
                         );
@@ -344,6 +346,8 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                 subscription_id = %subscription_id,
                 input_tokens = usage.input_tokens,
                 output_tokens = usage.output_tokens,
+                cache_read_input_tokens = usage.cache_read_input_tokens,
+                cache_creation_input_tokens = usage.cache_creation_input_tokens,
                 latency_ms = elapsed.as_millis() as u64,
                 "LLM proxy: usage extracted from response"
             );
@@ -490,11 +494,15 @@ fn extract_api_key(headers: &HeaderMap) -> Option<String> {
     None
 }
 
-/// Token usage from Anthropic response.
+/// Token usage from LLM response, including Anthropic prompt caching fields.
 #[derive(Debug, Clone)]
 pub struct LlmUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    /// Tokens read from Anthropic prompt cache (cheaper than regular input).
+    pub cache_read_input_tokens: u64,
+    /// Tokens written to Anthropic prompt cache (more expensive than regular input).
+    pub cache_creation_input_tokens: u64,
 }
 
 /// Anthropic response usage block.
@@ -502,6 +510,10 @@ pub struct LlmUsage {
 struct AnthropicUsage {
     input_tokens: u64,
     output_tokens: u64,
+    #[serde(default)]
+    cache_read_input_tokens: u64,
+    #[serde(default)]
+    cache_creation_input_tokens: u64,
 }
 
 /// Anthropic response (partial — only what we need).
@@ -555,6 +567,8 @@ fn extract_json_usage(body: &[u8]) -> Option<LlmUsage> {
             return Some(LlmUsage {
                 input_tokens: usage.input_tokens,
                 output_tokens: usage.output_tokens,
+                cache_read_input_tokens: usage.cache_read_input_tokens,
+                cache_creation_input_tokens: usage.cache_creation_input_tokens,
             });
         }
     }
@@ -565,6 +579,8 @@ fn extract_json_usage(body: &[u8]) -> Option<LlmUsage> {
             return Some(LlmUsage {
                 input_tokens: usage.prompt_tokens,
                 output_tokens: usage.completion_tokens,
+                cache_read_input_tokens: 0,
+                cache_creation_input_tokens: 0,
             });
         }
     }
@@ -594,6 +610,8 @@ fn extract_json_usage(body: &[u8]) -> Option<LlmUsage> {
 fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
     let mut input_tokens: u64 = 0;
     let mut output_tokens: u64 = 0;
+    let mut cache_read_input_tokens: u64 = 0;
+    let mut cache_creation_input_tokens: u64 = 0;
 
     for line in body.lines() {
         if !line.starts_with("data: ") {
@@ -614,6 +632,18 @@ fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
                     if let Some(msg_usage) = val.get("message").and_then(|m| m.get("usage")) {
                         if let Some(it) = msg_usage.get("input_tokens").and_then(|v| v.as_u64()) {
                             input_tokens = it;
+                        }
+                        if let Some(cr) = msg_usage
+                            .get("cache_read_input_tokens")
+                            .and_then(|v| v.as_u64())
+                        {
+                            cache_read_input_tokens = cr;
+                        }
+                        if let Some(cw) = msg_usage
+                            .get("cache_creation_input_tokens")
+                            .and_then(|v| v.as_u64())
+                        {
+                            cache_creation_input_tokens = cw;
                         }
                     }
                 }
@@ -645,6 +675,8 @@ fn extract_sse_usage(body: &str) -> Option<LlmUsage> {
         Some(LlmUsage {
             input_tokens,
             output_tokens,
+            cache_read_input_tokens,
+            cache_creation_input_tokens,
         })
     } else {
         None
@@ -684,6 +716,8 @@ async fn record_usage_to_cp(params: &MeteringParams<'_>) {
         "total_tokens": total_tokens,
         "input_tokens": params.usage.input_tokens,
         "output_tokens": params.usage.output_tokens,
+        "cache_read_input_tokens": params.usage.cache_read_input_tokens,
+        "cache_creation_input_tokens": params.usage.cache_creation_input_tokens,
         "total_latency_ms": params.latency_ms,
     });
 
@@ -885,6 +919,8 @@ data: {"type":"message_stop"}
             enabled: true,
             cost_per_1m_input: 5.0,
             cost_per_1m_output: 15.0,
+            cost_per_1m_cache_read: 0.0,
+            cost_per_1m_cache_write: 0.0,
             priority: 1,
             deployment: Some(deployment.to_string()),
             api_version: Some("2024-10-21".to_string()),
@@ -902,6 +938,8 @@ data: {"type":"message_stop"}
             enabled: true,
             cost_per_1m_input: 5.0,
             cost_per_1m_output: 15.0,
+            cost_per_1m_cache_read: 0.0,
+            cost_per_1m_cache_write: 0.0,
             priority: 1,
             deployment: None,
             api_version: None,

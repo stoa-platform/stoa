@@ -116,6 +116,8 @@ mod tests {
             enabled: true,
             cost_per_1m_input: 5.0,
             cost_per_1m_output: 15.0,
+            cost_per_1m_cache_read: 0.0,
+            cost_per_1m_cache_write: 0.0,
             priority: 1,
             deployment: Some(deployment.to_string()),
             api_version: Some(api_version.to_string()),

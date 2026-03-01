@@ -19,6 +19,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
+use crate::llm::{LlmCompletionCache, LlmProvider};
 use crate::state::AppState;
 
 /// Dedicated HTTP client for LLM proxy (long timeouts, large bodies).
@@ -53,49 +54,6 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
     let request_path = request.uri().path().to_string();
     let api_format = LlmApiFormat::from_path(&request_path);
 
-    // Resolve upstream URL and API key based on format
-    let (upstream_base_url, upstream_api_key) = match api_format {
-        LlmApiFormat::OpenAiCompat => {
-            // OpenAI-compatible: use Mistral-specific config, fallback to default
-            let key = state
-                .config
-                .llm_proxy_mistral_api_key
-                .clone()
-                .or_else(|| state.config.llm_proxy_api_key.clone());
-            let url = if state.config.llm_proxy_mistral_api_key.is_some() {
-                // Mistral API key is set → use Mistral upstream URL
-                state.config.llm_proxy_mistral_upstream_url.clone()
-            } else {
-                // Fallback to default upstream for OpenAI-compat with no Mistral-specific config
-                state.config.llm_proxy_upstream_url.clone()
-            };
-            (url, key)
-        }
-        LlmApiFormat::Anthropic => (
-            state.config.llm_proxy_upstream_url.clone(),
-            state.config.llm_proxy_api_key.clone(),
-        ),
-    };
-
-    let upstream_api_key = match upstream_api_key {
-        Some(key) if !key.is_empty() => key,
-        _ => {
-            let provider = match api_format {
-                LlmApiFormat::OpenAiCompat => "OpenAI-compat/Mistral",
-                LlmApiFormat::Anthropic => "Anthropic",
-            };
-            error!(
-                provider = provider,
-                "LLM proxy: upstream API key not configured"
-            );
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "LLM proxy upstream not configured",
-            )
-                .into_response();
-        }
-    };
-
     // Step 1: Extract consumer API key from request
     let consumer_key = extract_api_key(request.headers());
     let consumer_key = match consumer_key {
@@ -128,13 +86,107 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         "LLM proxy: consumer authenticated"
     );
 
+    // Step 2b: Resolve upstream via subscription routing (CAB-1615)
+    // Try LlmRouter subscription mapping first, fall back to static config.
+    let routed_provider = state.llm_router.as_ref().and_then(|router| {
+        router
+            .select_for_subscription(
+                &subscription_id,
+                &state.config.llm_router.subscription_mapping,
+            )
+            .cloned()
+    });
+
+    let (upstream_base_url, upstream_api_key, is_azure) =
+        if let Some(ref provider_cfg) = routed_provider {
+            // Subscription has a routed backend — use its config
+            let is_azure = provider_cfg.provider == LlmProvider::AzureOpenAi;
+            let url = provider_cfg.base_url.clone();
+            // Resolve API key from environment variable name stored in config
+            let key = provider_cfg
+                .api_key_env
+                .as_ref()
+                .and_then(|env_name| std::env::var(env_name).ok());
+            debug!(
+                subscription_id = %subscription_id,
+                backend_id = ?provider_cfg.backend_id,
+                provider = ?provider_cfg.provider,
+                "LLM proxy: subscription routed to provider"
+            );
+            (url, key, is_azure)
+        } else {
+            // Fallback to static config (existing behavior)
+            let (url, key) = match api_format {
+                LlmApiFormat::OpenAiCompat => {
+                    let key = state
+                        .config
+                        .llm_proxy_mistral_api_key
+                        .clone()
+                        .or_else(|| state.config.llm_proxy_api_key.clone());
+                    let url = if state.config.llm_proxy_mistral_api_key.is_some() {
+                        state.config.llm_proxy_mistral_upstream_url.clone()
+                    } else {
+                        state.config.llm_proxy_upstream_url.clone()
+                    };
+                    (url, key)
+                }
+                LlmApiFormat::Anthropic => (
+                    state.config.llm_proxy_upstream_url.clone(),
+                    state.config.llm_proxy_api_key.clone(),
+                ),
+            };
+            (url, key, false)
+        };
+
+    let upstream_api_key = match upstream_api_key {
+        Some(key) if !key.is_empty() => key,
+        _ => {
+            let provider = match api_format {
+                LlmApiFormat::OpenAiCompat => "OpenAI-compat/Mistral",
+                LlmApiFormat::Anthropic => "Anthropic",
+            };
+            error!(
+                provider = provider,
+                "LLM proxy: upstream API key not configured"
+            );
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "LLM proxy upstream not configured",
+            )
+                .into_response();
+        }
+    };
+
     // Step 3: Build upstream request
-    // Trim trailing slash from base URL to avoid double-slash issues
-    let upstream_url = format!(
-        "{}{}",
-        upstream_base_url.trim_end_matches('/'),
-        request_path
-    );
+    // For Azure OpenAI, use the Azure URL builder; otherwise, simple concatenation.
+    let upstream_url = if is_azure {
+        if let Some(ref provider_cfg) = routed_provider {
+            match crate::llm::build_chat_completions_url(provider_cfg) {
+                Ok(url) => url,
+                Err(e) => {
+                    error!(error = %e, "LLM proxy: failed to build Azure URL");
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        format!("Azure OpenAI config error: {e}"),
+                    )
+                        .into_response();
+                }
+            }
+        } else {
+            format!(
+                "{}{}",
+                upstream_base_url.trim_end_matches('/'),
+                request_path
+            )
+        }
+    } else {
+        // Trim trailing slash from base URL to avoid double-slash issues
+        format!(
+            "{}{}",
+            upstream_base_url.trim_end_matches('/'),
+            request_path
+        )
+    };
 
     let timeout = Duration::from_secs(state.config.llm_proxy_timeout_secs);
     let client = llm_client(timeout);
@@ -149,44 +201,86 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         }
     };
 
-    // Build upstream headers (format-aware)
+    // Build upstream headers (format-aware + Azure support)
     let mut upstream_headers = HeaderMap::new();
-    match api_format {
-        LlmApiFormat::Anthropic => {
-            // Anthropic: forward anthropic-specific headers, use x-api-key
-            for key in &[
-                "anthropic-version",
-                "anthropic-beta",
-                "content-type",
-                "accept",
-            ] {
-                if let Some(val) = parts.headers.get(*key) {
-                    if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
-                        upstream_headers.insert(name, val.clone());
-                    }
+    if is_azure {
+        // Azure OpenAI: use api-key header, forward content-type/accept
+        for key in &["content-type", "accept"] {
+            if let Some(val) = parts.headers.get(*key) {
+                if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                    upstream_headers.insert(name, val.clone());
                 }
             }
-            upstream_headers.insert(
-                "x-api-key",
-                HeaderValue::from_str(&upstream_api_key)
-                    .unwrap_or_else(|_| HeaderValue::from_static("")),
-            );
         }
-        LlmApiFormat::OpenAiCompat => {
-            // OpenAI-compatible: forward content-type/accept, use Authorization: Bearer
-            for key in &["content-type", "accept"] {
-                if let Some(val) = parts.headers.get(*key) {
-                    if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
-                        upstream_headers.insert(name, val.clone());
+        upstream_headers.insert(
+            "api-key",
+            HeaderValue::from_str(&upstream_api_key)
+                .unwrap_or_else(|_| HeaderValue::from_static("")),
+        );
+    } else {
+        match api_format {
+            LlmApiFormat::Anthropic => {
+                // Anthropic: forward anthropic-specific headers, use x-api-key
+                for key in &[
+                    "anthropic-version",
+                    "anthropic-beta",
+                    "content-type",
+                    "accept",
+                ] {
+                    if let Some(val) = parts.headers.get(*key) {
+                        if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                            upstream_headers.insert(name, val.clone());
+                        }
                     }
                 }
+                upstream_headers.insert(
+                    "x-api-key",
+                    HeaderValue::from_str(&upstream_api_key)
+                        .unwrap_or_else(|_| HeaderValue::from_static("")),
+                );
             }
-            let bearer = format!("Bearer {}", upstream_api_key);
-            upstream_headers.insert(
-                header::AUTHORIZATION,
-                HeaderValue::from_str(&bearer)
-                    .unwrap_or_else(|_| HeaderValue::from_static("Bearer ")),
+            LlmApiFormat::OpenAiCompat => {
+                // OpenAI-compatible: forward content-type/accept, use Authorization: Bearer
+                for key in &["content-type", "accept"] {
+                    if let Some(val) = parts.headers.get(*key) {
+                        if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                            upstream_headers.insert(name, val.clone());
+                        }
+                    }
+                }
+                let bearer = format!("Bearer {}", upstream_api_key);
+                upstream_headers.insert(
+                    header::AUTHORIZATION,
+                    HeaderValue::from_str(&bearer)
+                        .unwrap_or_else(|_| HeaderValue::from_static("Bearer ")),
+                );
+            }
+        }
+    }
+
+    // Check LLM completion cache for non-streaming requests (CAB-1615)
+    let is_cacheable = LlmCompletionCache::is_cacheable(&body_bytes);
+    if is_cacheable {
+        if let Some(cached) = state
+            .llm_completion_cache
+            .get(&subscription_id, &body_bytes)
+            .await
+        {
+            debug!(
+                subscription_id = %subscription_id,
+                "LLM proxy: serving from completion cache"
             );
+            let mut response = Response::new(Body::from(cached.body));
+            *response.status_mut() = StatusCode::from_u16(cached.status).unwrap_or(StatusCode::OK);
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_str(&cached.content_type)
+                    .unwrap_or_else(|_| HeaderValue::from_static("application/json")),
+            );
+            response
+                .headers_mut()
+                .insert("x-stoa-cache", HeaderValue::from_static("hit"));
+            return response;
         }
     }
 
@@ -331,7 +425,7 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         response
     } else {
         // Non-streaming: read full body, extract usage, return
-        let body_bytes = match upstream_resp.bytes().await {
+        let resp_bytes = match upstream_resp.bytes().await {
             Ok(b) => b,
             Err(e) => {
                 error!(error = %e, "LLM proxy: failed to read upstream response");
@@ -341,9 +435,34 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         };
 
         let elapsed = start.elapsed();
+        let status_code = upstream_status.as_u16();
+
+        // Store in LLM completion cache if cacheable (CAB-1615)
+        if is_cacheable {
+            let content_type = response_headers
+                .get(header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/json")
+                .to_string();
+            let cache = state.llm_completion_cache.clone();
+            let cache_sub = subscription_id.clone();
+            let cache_body = body_bytes.to_vec();
+            let cache_resp = resp_bytes.to_vec();
+            tokio::spawn(async move {
+                cache
+                    .put(
+                        &cache_sub,
+                        &cache_body,
+                        cache_resp,
+                        content_type,
+                        status_code,
+                    )
+                    .await;
+            });
+        }
 
         // Extract usage from JSON response
-        if let Some(usage) = extract_json_usage(&body_bytes) {
+        if let Some(usage) = extract_json_usage(&resp_bytes) {
             info!(
                 tenant_id = %tenant_id,
                 subscription_id = %subscription_id,
@@ -377,9 +496,9 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
             });
         }
 
-        let mut response = Response::new(Body::from(body_bytes));
+        let mut response = Response::new(Body::from(resp_bytes));
         *response.status_mut() =
-            StatusCode::from_u16(upstream_status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            StatusCode::from_u16(status_code).unwrap_or(StatusCode::BAD_GATEWAY);
         *response.headers_mut() = response_headers;
         response
     }

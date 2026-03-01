@@ -510,6 +510,22 @@ pub struct Config {
     /// Env: STOA_LLM_PROXY_MISTRAL_UPSTREAM_URL
     #[serde(default = "default_llm_proxy_mistral_upstream_url")]
     pub llm_proxy_mistral_upstream_url: String,
+
+    // === LLM Completion Cache (CAB-1615) ===
+    /// Enable LLM completion cache for non-streaming responses (default: false).
+    /// Env: STOA_LLM_CACHE_ENABLED
+    #[serde(default)]
+    pub llm_cache_enabled: bool,
+
+    /// Max entries in LLM completion cache (default: 1000).
+    /// Env: STOA_LLM_CACHE_MAX_ENTRIES
+    #[serde(default = "default_llm_cache_max_entries")]
+    pub llm_cache_max_entries: u64,
+
+    /// TTL in seconds for cached LLM completions (default: 300 = 5 min).
+    /// Env: STOA_LLM_CACHE_TTL_SECS
+    #[serde(default = "default_llm_cache_ttl_secs")]
+    pub llm_cache_ttl_secs: u64,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -898,6 +914,14 @@ fn default_llm_proxy_mistral_upstream_url() -> String {
     "https://api.mistral.ai".to_string()
 }
 
+fn default_llm_cache_max_entries() -> u64 {
+    1_000
+}
+
+fn default_llm_cache_ttl_secs() -> u64 {
+    300
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -999,6 +1023,9 @@ impl Default for Config {
             llm_proxy_provider: None,
             llm_proxy_mistral_api_key: None,
             llm_proxy_mistral_upstream_url: default_llm_proxy_mistral_upstream_url(),
+            llm_cache_enabled: false,
+            llm_cache_max_entries: default_llm_cache_max_entries(),
+            llm_cache_ttl_secs: default_llm_cache_ttl_secs(),
         }
     }
 }

@@ -119,6 +119,11 @@ pub struct AppState {
     /// Pre-serialized MCP capabilities JSON (CAB-1558 arena optimization).
     /// Built once at startup — avoids per-request serde + allocation overhead.
     pub capabilities_json: Vec<u8>,
+    /// LLM provider router for subscription-based backend selection (CAB-1610/1615).
+    /// None when the LLM router is disabled or has no providers configured.
+    pub llm_router: Option<Arc<crate::llm::LlmRouter>>,
+    /// LLM completion cache for non-streaming responses (CAB-1615).
+    pub llm_completion_cache: Arc<crate::llm::LlmCompletionCache>,
 }
 
 impl AppState {
@@ -459,6 +464,37 @@ impl AppState {
             serde_json::to_vec(&crate::mcp::discovery::build_capabilities_response())
                 .expect("capabilities response must serialize");
 
+        // Initialize LLM provider router (CAB-1610/1615)
+        let llm_router = if config.llm_router.enabled && !config.llm_router.providers.is_empty() {
+            let provider_registry = Arc::new(crate::llm::ProviderRegistry::new(
+                config.llm_router.providers.clone(),
+            ));
+            let router = Arc::new(crate::llm::LlmRouter::new(
+                provider_registry,
+                circuit_breakers.clone(),
+                config.llm_router.default_strategy,
+            ));
+            tracing::info!(
+                providers = config.llm_router.providers.len(),
+                strategy = ?config.llm_router.default_strategy,
+                "LLM provider router initialized"
+            );
+            Some(router)
+        } else {
+            tracing::info!(
+                "LLM provider router disabled (no providers or STOA_LLM_ROUTER_ENABLED=false)"
+            );
+            None
+        };
+
+        // Initialize LLM completion cache (CAB-1615)
+        let llm_cache_config = crate::llm::LlmCacheConfig {
+            max_entries: config.llm_cache_max_entries,
+            default_ttl: std::time::Duration::from_secs(config.llm_cache_ttl_secs),
+            enabled: config.llm_cache_enabled,
+        };
+        let llm_completion_cache = Arc::new(crate::llm::LlmCompletionCache::new(llm_cache_config));
+
         let start_time = Instant::now();
 
         Self {
@@ -501,6 +537,8 @@ impl AppState {
             admin_token_cache,
             mcp_discovery,
             capabilities_json,
+            llm_router,
+            llm_completion_cache,
         }
     }
 

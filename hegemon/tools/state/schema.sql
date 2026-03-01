@@ -79,3 +79,19 @@ CREATE TABLE IF NOT EXISTS council_cache (
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
 CREATE INDEX IF NOT EXISTS idx_tickets_cycle ON tickets(cycle);
 CREATE INDEX IF NOT EXISTS idx_tickets_parent ON tickets(parent_id);
+
+CREATE TABLE IF NOT EXISTS queue_jobs (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id     TEXT NOT NULL,
+    title         TEXT DEFAULT '',
+    priority      INTEGER NOT NULL DEFAULT 2,
+    role          TEXT DEFAULT NULL,
+    status        TEXT NOT NULL DEFAULT 'pending',
+    assigned_to   TEXT DEFAULT NULL,
+    dispatched_at TEXT DEFAULT NULL,
+    completed_at  TEXT DEFAULT NULL,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M','now')),
+    error         TEXT DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_queue_priority ON queue_jobs(priority, status, created_at);

@@ -1,0 +1,56 @@
+# Kong Declarative Configuration (DB-less mode)
+# 3 demo services + 1 echo backend for Arena benchmarks.
+_format_version: "3.0"
+
+services:
+  # --- Echo backend (Arena benchmark) ---
+  - name: echo-backend
+    url: http://echo-local:8888
+    routes:
+      - name: echo-route
+        paths:
+          - /echo
+        strip_path: false
+
+  # --- Demo Service 1: httpbin (HTTP testing) ---
+  - name: demo-httpbin
+    url: https://httpbin.org
+    routes:
+      - name: demo-httpbin-route
+        paths:
+          - /apis/demo/httpbin
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 60
+          policy: local
+
+  # --- Demo Service 2: JSONPlaceholder (REST mock) ---
+  - name: demo-jsonplaceholder
+    url: https://jsonplaceholder.typicode.com
+    routes:
+      - name: demo-jsonplaceholder-route
+        paths:
+          - /apis/demo/jsonplaceholder
+        methods:
+          - GET
+          - POST
+        strip_path: true
+
+  # --- Demo Service 3: ReqRes (user API mock) ---
+  - name: demo-reqres
+    url: https://reqres.in/api
+    routes:
+      - name: demo-reqres-route
+        paths:
+          - /apis/demo/reqres
+        methods:
+          - GET
+          - POST
+        strip_path: true

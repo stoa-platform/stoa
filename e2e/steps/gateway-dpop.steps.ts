@@ -14,6 +14,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { gatewayState } from './gateway-state';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +27,6 @@ const { Given, When } = createBdd(test);
 
 let dpopAccessToken: string | null = null;
 let dpopKeyPair: crypto.KeyPairKeyObjectResult | null = null;
-let lastResponse: { status: number; body: any } | null = null;
 
 // mTLS dual-binding state
 let mtlsFingerprint: string | null = null;
@@ -205,17 +205,43 @@ async function sendGatewayRequest(
 
 Given(
   'I have a DPoP-bound access token for consumer {string}',
-  async ({}, _consumerId: string) => {
-    // Generate a fresh ES256 key pair for this scenario
+  async ({ request }, _consumerId: string) => {
+    // 1. Generate fresh ES256 key pair
     dpopKeyPair = generateDpopKeyPair();
 
-    // In E2E with live Keycloak, we would obtain a DPoP-bound token via:
-    //   POST /realms/stoa/protocol/openid-connect/token
-    //   with DPoP header containing proof-of-possession
-    // For now, use a test token (scenarios are @wip, infra not yet configured)
-    dpopAccessToken = process.env.TEST_DPOP_TOKEN || 'test-dpop-access-token';
+    // 2. Build DPoP proof for the token endpoint
+    const tokenUrl = `${AUTH_URL}/realms/stoa/protocol/openid-connect/token`;
+    const proof = buildDpopProof({
+      method: 'POST',
+      uri: tokenUrl,
+      keyPair: dpopKeyPair,
+    });
 
-    lastResponse = null;
+    // 3. Request DPoP-bound token from Keycloak
+    const clientId = process.env.DPOP_E2E_CLIENT_ID || 'stoa-e2e-dpop';
+    const clientSecret = process.env.DPOP_E2E_CLIENT_SECRET || 'dpop-e2e-dev-secret';
+
+    const tokenResponse = await request.fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        DPoP: proof,
+      },
+      data: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
+    });
+
+    if (!tokenResponse.ok()) {
+      const errorBody = await tokenResponse.text();
+      throw new Error(
+        `DPoP token acquisition failed (${tokenResponse.status()}): ${errorBody}`
+      );
+    }
+
+    const tokenData = await tokenResponse.json();
+    dpopAccessToken = tokenData.access_token;
+
+    // Reset shared state
+    gatewayState.lastResponse = null;
     mtlsFingerprint = null;
     mtlsHeaders = {};
   },
@@ -258,7 +284,7 @@ When(
       accessToken: dpopAccessToken!,
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -266,7 +292,7 @@ When(
   'I call {string} without DPoP proof',
   async ({ request }, methodAndPath: string) => {
     // Send request with DPoP token scheme but no DPoP header
-    lastResponse = await sendGatewayRequest(request, methodAndPath);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath);
   },
 );
 
@@ -286,7 +312,7 @@ When(
       algorithm,
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -304,7 +330,7 @@ When(
       iatOffset: -600, // 10 minutes in the past (max_age_secs default is 300)
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -322,7 +348,7 @@ When(
       iatOffset: 120, // 2 minutes in the future (clock_skew_secs default is 30)
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -339,7 +365,7 @@ When(
       accessToken: dpopAccessToken!,
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -355,7 +381,7 @@ When(
       accessToken: dpopAccessToken!,
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -378,7 +404,7 @@ When(
     await sendGatewayRequest(request, methodAndPath, proof);
 
     // Second request with SAME jti — should be detected as replay
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -396,7 +422,7 @@ When(
       includeAth: false,
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -414,7 +440,7 @@ When(
       wrongAth: true,
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );
 
@@ -432,7 +458,7 @@ When(
     });
 
     // Send with both DPoP proof AND mTLS headers
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof, mtlsHeaders);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof, mtlsHeaders);
   },
 );
 
@@ -450,6 +476,6 @@ When(
       includePrivateKey: true,
     });
 
-    lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
+    gatewayState.lastResponse = await sendGatewayRequest(request, methodAndPath, proof);
   },
 );

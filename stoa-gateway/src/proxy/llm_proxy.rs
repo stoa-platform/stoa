@@ -53,49 +53,6 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
     let request_path = request.uri().path().to_string();
     let api_format = LlmApiFormat::from_path(&request_path);
 
-    // Resolve upstream URL and API key based on format
-    let (upstream_base_url, upstream_api_key) = match api_format {
-        LlmApiFormat::OpenAiCompat => {
-            // OpenAI-compatible: use Mistral-specific config, fallback to default
-            let key = state
-                .config
-                .llm_proxy_mistral_api_key
-                .clone()
-                .or_else(|| state.config.llm_proxy_api_key.clone());
-            let url = if state.config.llm_proxy_mistral_api_key.is_some() {
-                // Mistral API key is set → use Mistral upstream URL
-                state.config.llm_proxy_mistral_upstream_url.clone()
-            } else {
-                // Fallback to default upstream for OpenAI-compat with no Mistral-specific config
-                state.config.llm_proxy_upstream_url.clone()
-            };
-            (url, key)
-        }
-        LlmApiFormat::Anthropic => (
-            state.config.llm_proxy_upstream_url.clone(),
-            state.config.llm_proxy_api_key.clone(),
-        ),
-    };
-
-    let upstream_api_key = match upstream_api_key {
-        Some(key) if !key.is_empty() => key,
-        _ => {
-            let provider = match api_format {
-                LlmApiFormat::OpenAiCompat => "OpenAI-compat/Mistral",
-                LlmApiFormat::Anthropic => "Anthropic",
-            };
-            error!(
-                provider = provider,
-                "LLM proxy: upstream API key not configured"
-            );
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "LLM proxy upstream not configured",
-            )
-                .into_response();
-        }
-    };
-
     // Step 1: Extract consumer API key from request
     let consumer_key = extract_api_key(request.headers());
     let consumer_key = match consumer_key {
@@ -128,13 +85,40 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         "LLM proxy: consumer authenticated"
     );
 
-    // Step 3: Build upstream request
-    // Trim trailing slash from base URL to avoid double-slash issues
-    let upstream_url = format!(
-        "{}{}",
-        upstream_base_url.trim_end_matches('/'),
-        request_path
-    );
+    // Step 3: Resolve upstream — subscription-aware Azure routing or static fallback (CAB-1615)
+    let resolved = resolve_upstream(&state, api_format, &subscription_id, &request_path);
+    let (upstream_url, upstream_headers_preset) = match resolved {
+        UpstreamResolution::Azure { url, headers } => (url, Some(headers)),
+        UpstreamResolution::Static { url } => (url, None::<Vec<(String, String)>>),
+        UpstreamResolution::Error(msg) => {
+            return (StatusCode::SERVICE_UNAVAILABLE, msg).into_response();
+        }
+    };
+
+    // Re-resolve the static API key for header building (only when not Azure-routed)
+    let static_api_key = if upstream_headers_preset.is_none() {
+        let key = match api_format {
+            LlmApiFormat::OpenAiCompat => state
+                .config
+                .llm_proxy_mistral_api_key
+                .clone()
+                .or_else(|| state.config.llm_proxy_api_key.clone()),
+            LlmApiFormat::Anthropic => state.config.llm_proxy_api_key.clone(),
+        };
+        match key {
+            Some(k) if !k.is_empty() => Some(k),
+            _ => {
+                error!("LLM proxy: upstream API key not configured");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "LLM proxy upstream not configured",
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        None // Azure route already has headers with api-key
+    };
 
     let timeout = Duration::from_secs(state.config.llm_proxy_timeout_secs);
     let client = llm_client(timeout);
@@ -151,42 +135,53 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
 
     // Build upstream headers (format-aware)
     let mut upstream_headers = HeaderMap::new();
-    match api_format {
-        LlmApiFormat::Anthropic => {
-            // Anthropic: forward anthropic-specific headers, use x-api-key
-            for key in &[
-                "anthropic-version",
-                "anthropic-beta",
-                "content-type",
-                "accept",
-            ] {
-                if let Some(val) = parts.headers.get(*key) {
-                    if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
-                        upstream_headers.insert(name, val.clone());
-                    }
-                }
+    if let Some(azure_headers) = upstream_headers_preset {
+        // Azure-routed: use pre-built headers from transform_request
+        for (key, val) in &azure_headers {
+            if let (Ok(name), Ok(value)) = (
+                header::HeaderName::from_bytes(key.as_bytes()),
+                HeaderValue::from_str(val),
+            ) {
+                upstream_headers.insert(name, value);
             }
-            upstream_headers.insert(
-                "x-api-key",
-                HeaderValue::from_str(&upstream_api_key)
-                    .unwrap_or_else(|_| HeaderValue::from_static("")),
-            );
         }
-        LlmApiFormat::OpenAiCompat => {
-            // OpenAI-compatible: forward content-type/accept, use Authorization: Bearer
-            for key in &["content-type", "accept"] {
-                if let Some(val) = parts.headers.get(*key) {
-                    if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
-                        upstream_headers.insert(name, val.clone());
+    } else {
+        // Static routing: build headers based on API format
+        let api_key = static_api_key.as_deref().unwrap_or("");
+        match api_format {
+            LlmApiFormat::Anthropic => {
+                for key in &[
+                    "anthropic-version",
+                    "anthropic-beta",
+                    "content-type",
+                    "accept",
+                ] {
+                    if let Some(val) = parts.headers.get(*key) {
+                        if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                            upstream_headers.insert(name, val.clone());
+                        }
                     }
                 }
+                upstream_headers.insert(
+                    "x-api-key",
+                    HeaderValue::from_str(api_key).unwrap_or_else(|_| HeaderValue::from_static("")),
+                );
             }
-            let bearer = format!("Bearer {}", upstream_api_key);
-            upstream_headers.insert(
-                header::AUTHORIZATION,
-                HeaderValue::from_str(&bearer)
-                    .unwrap_or_else(|_| HeaderValue::from_static("Bearer ")),
-            );
+            LlmApiFormat::OpenAiCompat => {
+                for key in &["content-type", "accept"] {
+                    if let Some(val) = parts.headers.get(*key) {
+                        if let Ok(name) = header::HeaderName::from_bytes(key.as_bytes()) {
+                            upstream_headers.insert(name, val.clone());
+                        }
+                    }
+                }
+                let bearer = format!("Bearer {}", api_key);
+                upstream_headers.insert(
+                    header::AUTHORIZATION,
+                    HeaderValue::from_str(&bearer)
+                        .unwrap_or_else(|_| HeaderValue::from_static("Bearer ")),
+                );
+            }
         }
     }
 
@@ -383,6 +378,98 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         *response.headers_mut() = response_headers;
         response
     }
+}
+
+/// Resolved upstream target — either Azure (subscription-routed) or static (config-based).
+#[derive(Debug)]
+enum UpstreamResolution {
+    /// Azure OpenAI: custom URL + api-key headers from transform_request.
+    Azure {
+        url: String,
+        headers: Vec<(String, String)>,
+    },
+    /// Static routing: base_url + request_path, API key resolved separately.
+    Static { url: String },
+    /// Configuration error — return to caller as SERVICE_UNAVAILABLE.
+    Error(String),
+}
+
+/// Resolve the upstream URL and auth for a request (CAB-1615).
+///
+/// Priority:
+/// 1. If LLM router is enabled and subscription has a mapping → Azure transform
+/// 2. Else → static config (Mistral or Anthropic upstream)
+fn resolve_upstream(
+    state: &AppState,
+    api_format: LlmApiFormat,
+    subscription_id: &str,
+    request_path: &str,
+) -> UpstreamResolution {
+    // Try subscription-aware routing for OpenAI-compatible requests
+    if api_format == LlmApiFormat::OpenAiCompat {
+        if let Some(ref router) = state.llm_router {
+            let mapping = &state.config.llm_router.subscription_mapping;
+            if !mapping.is_empty() {
+                if let Some(provider) = router.select_for_subscription(subscription_id, mapping) {
+                    // Azure OpenAI provider — use transform_request for URL + headers
+                    if provider.provider == crate::llm::LlmProvider::AzureOpenAi {
+                        match crate::llm::transform_request(provider) {
+                            Ok(azure_req) => {
+                                info!(
+                                    subscription_id = %subscription_id,
+                                    backend_id = ?provider.backend_id,
+                                    url = %azure_req.url,
+                                    "LLM proxy: subscription routed to Azure OpenAI"
+                                );
+                                return UpstreamResolution::Azure {
+                                    url: azure_req.url,
+                                    headers: azure_req.headers,
+                                };
+                            }
+                            Err(e) => {
+                                error!(
+                                    error = %e,
+                                    subscription_id = %subscription_id,
+                                    backend_id = ?provider.backend_id,
+                                    "LLM proxy: Azure transform failed"
+                                );
+                                return UpstreamResolution::Error(format!(
+                                    "Azure OpenAI configuration error: {e}"
+                                ));
+                            }
+                        }
+                    }
+                    // Non-Azure provider from router — use its base_url with standard path
+                    let url = format!(
+                        "{}{}",
+                        provider.base_url.trim_end_matches('/'),
+                        request_path
+                    );
+                    return UpstreamResolution::Static { url };
+                }
+                // Subscription not in mapping — fall through to static routing
+                debug!(
+                    subscription_id = %subscription_id,
+                    "LLM proxy: subscription not in routing map, using static upstream"
+                );
+            }
+        }
+    }
+
+    // Static routing fallback
+    let base_url = match api_format {
+        LlmApiFormat::OpenAiCompat => {
+            if state.config.llm_proxy_mistral_api_key.is_some() {
+                state.config.llm_proxy_mistral_upstream_url.clone()
+            } else {
+                state.config.llm_proxy_upstream_url.clone()
+            }
+        }
+        LlmApiFormat::Anthropic => state.config.llm_proxy_upstream_url.clone(),
+    };
+
+    let url = format!("{}{}", base_url.trim_end_matches('/'), request_path);
+    UpstreamResolution::Static { url }
 }
 
 /// Extract API key from request headers (x-api-key or Authorization: Bearer).
@@ -762,5 +849,252 @@ data: {"type":"message_stop"}
             LlmApiFormat::from_path("/v1/unknown"),
             LlmApiFormat::Anthropic
         );
+    }
+
+    // --- Subscription-aware routing tests (CAB-1615) ---
+
+    /// Build a minimal AppState for resolve_upstream tests.
+    fn make_test_state(
+        router_enabled: bool,
+        providers: Vec<crate::llm::ProviderConfig>,
+        subscription_mapping: crate::llm::SubscriptionMapping,
+    ) -> AppState {
+        let config = crate::config::Config {
+            llm_proxy_enabled: true,
+            llm_proxy_upstream_url: "https://api.anthropic.com".to_string(),
+            llm_proxy_mistral_upstream_url: "https://api.mistral.ai".to_string(),
+            llm_router: crate::config::LlmRouterConfig {
+                enabled: router_enabled,
+                providers,
+                subscription_mapping,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        AppState::new(config)
+    }
+
+    fn make_azure_provider(backend_id: &str, deployment: &str) -> crate::llm::ProviderConfig {
+        crate::llm::ProviderConfig {
+            provider: crate::llm::LlmProvider::AzureOpenAi,
+            backend_id: Some(backend_id.to_string()),
+            base_url: "https://test-ns.openai.azure.com".to_string(),
+            api_key_env: Some("TEST_AZURE_KEY".to_string()),
+            default_model: None,
+            max_concurrent: 50,
+            enabled: true,
+            cost_per_1m_input: 5.0,
+            cost_per_1m_output: 15.0,
+            priority: 1,
+            deployment: Some(deployment.to_string()),
+            api_version: Some("2024-10-21".to_string()),
+        }
+    }
+
+    fn make_openai_provider(backend_id: &str) -> crate::llm::ProviderConfig {
+        crate::llm::ProviderConfig {
+            provider: crate::llm::LlmProvider::OpenAi,
+            backend_id: Some(backend_id.to_string()),
+            base_url: "https://api.openai.com/v1".to_string(),
+            api_key_env: Some("TEST_OPENAI_KEY".to_string()),
+            default_model: None,
+            max_concurrent: 50,
+            enabled: true,
+            cost_per_1m_input: 5.0,
+            cost_per_1m_output: 15.0,
+            priority: 1,
+            deployment: None,
+            api_version: None,
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_azure_subscription_routing() {
+        // Set the Azure API key env var for transform_request
+        std::env::set_var("TEST_AZURE_KEY", "test-azure-api-key-12345");
+
+        let provider = make_azure_provider("projet-alpha", "gpt-4o");
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-123".to_string(),
+            "projet-alpha".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-123",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Azure { url, headers } => {
+                assert!(
+                    url.contains("test-ns.openai.azure.com"),
+                    "URL should target Azure: {url}"
+                );
+                assert!(
+                    url.contains("deployments/gpt-4o"),
+                    "URL should contain deployment: {url}"
+                );
+                assert!(
+                    url.contains("api-version=2024-10-21"),
+                    "URL should have api-version: {url}"
+                );
+                // Verify api-key header is present
+                let has_api_key = headers.iter().any(|(k, _)| k == "api-key");
+                assert!(has_api_key, "Should have api-key header");
+            }
+            other => panic!("Expected Azure resolution, got: {other:?}"),
+        }
+
+        std::env::remove_var("TEST_AZURE_KEY");
+    }
+
+    #[test]
+    fn resolve_upstream_static_fallback_no_mapping() {
+        let provider = make_azure_provider("projet-alpha", "gpt-4o");
+        // Empty mapping — no subscriptions configured
+        let mapping = crate::llm::SubscriptionMapping::new();
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-unknown",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Static { url } => {
+                // Falls through to static because mapping is empty
+                assert!(
+                    url.contains("/v1/chat/completions"),
+                    "URL should contain path: {url}"
+                );
+            }
+            other => panic!("Expected Static resolution, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_static_for_anthropic_format() {
+        let provider = make_azure_provider("projet-alpha", "gpt-4o");
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-123".to_string(),
+            "projet-alpha".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        // Anthropic format should ALWAYS use static routing (Azure is OpenAI-compat only)
+        let result = resolve_upstream(&state, LlmApiFormat::Anthropic, "sub-123", "/v1/messages");
+
+        match result {
+            UpstreamResolution::Static { url } => {
+                assert!(
+                    url.contains("api.anthropic.com"),
+                    "Anthropic should use static upstream: {url}"
+                );
+            }
+            other => panic!("Expected Static resolution for Anthropic, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_non_azure_provider_from_router() {
+        let provider = make_openai_provider("openai-main");
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-oai".to_string(),
+            "openai-main".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-oai",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Static { url } => {
+                assert!(
+                    url.contains("api.openai.com"),
+                    "Non-Azure provider should use base_url: {url}"
+                );
+                assert!(
+                    url.contains("/v1/chat/completions"),
+                    "Should append request path: {url}"
+                );
+            }
+            other => panic!("Expected Static resolution for non-Azure provider, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_router_disabled() {
+        let provider = make_azure_provider("projet-alpha", "gpt-4o");
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-123".to_string(),
+            "projet-alpha".to_string(),
+        )]);
+
+        // Router disabled — should fall through to static
+        let state = make_test_state(false, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-123",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Static { url } => {
+                // Should NOT hit Azure even though mapping exists, because router is disabled
+                assert!(
+                    !url.contains("azure"),
+                    "Should not route to Azure when disabled: {url}"
+                );
+            }
+            other => panic!("Expected Static when router disabled, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_upstream_azure_missing_api_key() {
+        // Do NOT set TEST_AZURE_MISSING env var — it should fail
+        std::env::remove_var("TEST_AZURE_MISSING");
+
+        let mut provider = make_azure_provider("projet-beta", "gpt-4o");
+        provider.api_key_env = Some("TEST_AZURE_MISSING".to_string());
+
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-beta".to_string(),
+            "projet-beta".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-beta",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Error(msg) => {
+                assert!(
+                    msg.contains("Azure OpenAI"),
+                    "Error should mention Azure: {msg}"
+                );
+            }
+            other => panic!("Expected Error for missing API key, got: {other:?}"),
+        }
     }
 }

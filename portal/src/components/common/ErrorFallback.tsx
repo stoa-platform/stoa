@@ -1,5 +1,6 @@
-import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Home, LogIn, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getFriendlyError } from '@stoa/shared/utils';
 
 interface ErrorFallbackProps {
   error?: Error;
@@ -19,6 +20,7 @@ export function ErrorFallback({
   description = 'We encountered an unexpected error. Please try again or go back to the home page.',
 }: ErrorFallbackProps) {
   const navigate = useNavigate();
+  const friendly = error ? getFriendlyError(error) : null;
 
   const handleRetry = () => {
     if (resetError) {
@@ -34,6 +36,11 @@ export function ErrorFallback({
     navigate('/');
   };
 
+  const handleLogin = () => {
+    resetError?.();
+    window.location.reload();
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
       {/* Error icon */}
@@ -44,32 +51,30 @@ export function ErrorFallback({
       {/* Title */}
       <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">{title}</h2>
 
-      {/* Description */}
+      {/* Description — use friendly message if available */}
       <p className="text-neutral-600 dark:text-neutral-400 text-center mb-6 max-w-md">
-        {description}
+        {friendly ? friendly.message : description}
       </p>
 
-      {/* Error details (development only or for debugging) */}
-      {error && (
-        <div className="bg-neutral-100 dark:bg-neutral-700 p-4 rounded-lg mb-6 max-w-lg w-full">
-          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-            Error details:
-          </p>
-          <pre className="text-sm text-neutral-600 dark:text-neutral-400 overflow-auto whitespace-pre-wrap break-words">
-            {error.message}
-          </pre>
-        </div>
-      )}
-
-      {/* Action buttons */}
+      {/* Action buttons — adapted to error type */}
       <div className="flex gap-3">
-        <button
-          onClick={handleRetry}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Try Again
-        </button>
+        {friendly?.action === 'login' ? (
+          <button
+            onClick={handleLogin}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <LogIn className="h-4 w-4" />
+            Log In Again
+          </button>
+        ) : (
+          <button
+            onClick={handleRetry}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Try Again
+          </button>
+        )}
 
         <button
           onClick={handleGoHome}

@@ -24,15 +24,26 @@ describe('ErrorFallback', () => {
     expect(screen.getByText('Custom message')).toBeInTheDocument();
   });
 
-  it('should display error details when error is provided', () => {
+  it('should display friendly message when error is provided', () => {
     render(<ErrorFallback error={new Error('Test error message')} />);
-    expect(screen.getByText('Test error message')).toBeInTheDocument();
-    expect(screen.getByText('Error details:')).toBeInTheDocument();
+    // Generic errors show the friendly fallback, not the raw message
+    expect(screen.getByText('Something went wrong. Please try again later.')).toBeInTheDocument();
   });
 
-  it('should not display error details when no error', () => {
+  it('should display friendly message for HTTP status errors', () => {
+    render(<ErrorFallback error={new Error('Request failed with status code 401')} />);
+    expect(screen.getByText('Your session has expired. Please log in again.')).toBeInTheDocument();
+  });
+
+  it('should show Login button for 401 errors', () => {
+    render(<ErrorFallback error={new Error('Request failed with status code 401')} />);
+    expect(screen.getByText('Log In Again')).toBeInTheDocument();
+    expect(screen.queryByText('Try Again')).not.toBeInTheDocument();
+  });
+
+  it('should show default description when no error', () => {
     render(<ErrorFallback />);
-    expect(screen.queryByText('Error details:')).not.toBeInTheDocument();
+    expect(screen.getByText(/We encountered an unexpected error/)).toBeInTheDocument();
   });
 
   it('should call resetError when Try Again is clicked', () => {

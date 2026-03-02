@@ -510,6 +510,13 @@ pub struct Config {
     /// Env: STOA_LLM_PROXY_MISTRAL_UPSTREAM_URL
     #[serde(default = "default_llm_proxy_mistral_upstream_url")]
     pub llm_proxy_mistral_upstream_url: String,
+
+    /// Skip API key validation against Control Plane (local dogfood mode).
+    /// When true, the LLM proxy accepts any API key without CP subscription check.
+    /// NEVER enable in production — use only for local `stoa-dogfood.sh` testing.
+    /// Env: STOA_LLM_PROXY_SKIP_VALIDATION
+    #[serde(default)]
+    pub llm_proxy_skip_validation: bool,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -999,6 +1006,7 @@ impl Default for Config {
             llm_proxy_provider: None,
             llm_proxy_mistral_api_key: None,
             llm_proxy_mistral_upstream_url: default_llm_proxy_mistral_upstream_url(),
+            llm_proxy_skip_validation: false,
         }
     }
 }

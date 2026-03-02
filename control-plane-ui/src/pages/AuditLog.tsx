@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import {
   RefreshCw,
   ClipboardList,
@@ -111,6 +111,8 @@ export function AuditLog() {
 
   const tenantId = localStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || 'default';
 
+  const mountedRef = useRef(true);
+
   const loadData = useCallback(async () => {
     try {
       const params: Record<string, any> = {
@@ -131,20 +133,26 @@ export function AuditLog() {
         has_more: boolean;
       }>(`/v1/audit/${tenantId}`, { params });
 
+      if (!mountedRef.current) return;
       setEntries(data.entries || []);
       setTotal(data.total || 0);
       setError(null);
     } catch (err: any) {
+      if (!mountedRef.current) return;
       setError(err.response?.data?.detail || 'Failed to load audit log');
       setEntries([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [tenantId, page, filters]);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (isReady) loadData();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [isReady, loadData]);
 
   useEffect(() => {

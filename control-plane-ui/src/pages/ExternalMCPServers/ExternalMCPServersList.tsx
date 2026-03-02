@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, RefreshCw, Server, CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react';
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
@@ -58,21 +58,28 @@ export function ExternalMCPServersList() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [testingServerId, setTestingServerId] = useState<string | null>(null);
   const [syncingServerId, setSyncingServerId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (isReady) {
       loadServers();
     }
+    return () => {
+      mountedRef.current = false;
+    };
   }, [isReady]);
 
   async function loadServers() {
     try {
       setLoading(true);
       const response = await externalMcpServersService.listServers();
+      if (!mountedRef.current) return;
       setServers(response.servers);
       setError(null);
     } catch (err: any) {
       console.error('Failed to load external MCP servers:', err);
+      if (!mountedRef.current) return;
       setError(err.message || 'Failed to load servers');
     } finally {
       setLoading(false);

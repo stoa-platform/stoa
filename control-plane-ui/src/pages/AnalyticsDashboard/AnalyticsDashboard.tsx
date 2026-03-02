@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   RefreshCw,
   BarChart3,
@@ -67,6 +67,7 @@ export function AnalyticsDashboard() {
   const [_error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('calls');
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const tenantId = localStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || 'default';
   const rangeCfg = RANGE_CONFIG[timeRange];
@@ -169,18 +170,24 @@ export function AnalyticsDashboard() {
           .then((r) => r.data)
           .catch(() => ({ items: [], total_errors: 0, error_rate: 0 })),
       ]);
+      if (!mountedRef.current) return;
       setTopApis(apis);
       setErrorCategories(taxonomy.items || []);
       setError(null);
     } catch (err: any) {
+      if (!mountedRef.current) return;
       setError(err.response?.data?.detail || 'Failed to load analytics');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [tenantId]);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (isReady) loadApiData();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [isReady, loadApiData]);
 
   useEffect(() => {

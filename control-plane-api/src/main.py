@@ -80,6 +80,7 @@ from .routers import (
     portal_applications,
     quotas,
     reconciliation,
+    roles,
     security_posture,
     self_service,
     self_service_logs,
@@ -670,6 +671,9 @@ app.include_router(business.router)
 
 # User profile and permissions (Single Source of Truth for RBAC)
 app.include_router(users.router)
+
+# Role taxonomy and metadata (CAB-1634)
+app.include_router(roles.router)
 
 # Self-Service Logs (CAB-793 - Consumer log access with PII masking)
 app.include_router(self_service_logs.router)

@@ -12,6 +12,7 @@ export interface User {
   roles: string[];
   permissions: string[];
   effective_scopes: string[];
+  role_display_names?: Record<string, string>;
   is_admin?: boolean;
 }
 
@@ -24,6 +25,7 @@ export interface UserPermissionsResponse {
   roles: string[];
   permissions: string[];
   effective_scopes: string[];
+  role_display_names?: Record<string, string>;
 }
 
 // MCP Tool types (aligned with MCP Gateway response format)

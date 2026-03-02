@@ -257,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               roles: data.roles,
               permissions: data.permissions,
               effective_scopes: data.effective_scopes,
+              role_display_names: data.role_display_names,
               tenant_id: data.tenant_id || prev.tenant_id,
             }
           : null

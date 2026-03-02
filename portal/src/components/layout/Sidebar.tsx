@@ -94,6 +94,12 @@ const sections: NavSection[] = [
         scope: 'stoa:catalog:read',
       },
       {
+        name: 'My APIs',
+        href: '/my-apis',
+        icon: BookOpen,
+        scope: 'stoa:catalog:read',
+      },
+      {
         name: 'Register Consumer',
         href: '/consumers/register',
         icon: UserPlus,

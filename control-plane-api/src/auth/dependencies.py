@@ -164,7 +164,10 @@ async def get_current_user(
 
         email = payload.get("email", "")
         username = payload.get("preferred_username", "")
-        roles = payload.get("realm_access", {}).get("roles", [])
+        # Lazy import to avoid circular: dependencies -> rbac -> dependencies
+        from .rbac import normalize_roles
+
+        roles = normalize_roles(payload.get("realm_access", {}).get("roles", []))
         # Handle tenant_id as either string or list (from group membership mapper)
         raw_tenant_id = payload.get("tenant_id")
         tenant_id = (

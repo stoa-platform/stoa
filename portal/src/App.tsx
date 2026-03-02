@@ -87,6 +87,9 @@ const APIComparePage = lazy(() =>
   import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
 );
 const SignupPage = lazy(() => import('./pages/signup').then((m) => ({ default: m.SignupPage })));
+const MyAPIsPage = lazy(() =>
+  import('./pages/apis').then((m) => ({ default: m.MyAPIsPage }))
+);
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -506,6 +509,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
                   <MyMCPServersPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* My APIs - tenant self-service (CAB-1634) */}
+            <Route
+              path="/my-apis"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <MyAPIsPage />
                 </ProtectedRoute>
               }
             />

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
-from ..auth.rbac import get_user_permissions
+from ..auth.rbac import ROLE_METADATA, get_user_permissions
 from ..database import get_db
 from ..models.tenant import Tenant, TenantStatus
 from ..repositories.tenant import TenantRepository
@@ -39,6 +39,7 @@ class UserPermissionsResponse(BaseModel):
     roles: list[str]
     permissions: list[str]
     effective_scopes: list[str]
+    role_display_names: dict[str, str] = {}
 
     class Config:
         json_schema_extra = {
@@ -244,6 +245,13 @@ async def get_current_user_info(
     # Calculate OAuth2 scopes from roles
     scopes = get_effective_scopes(user_roles)
 
+    # Build display name mapping from ROLE_METADATA (CAB-1634)
+    display_names = {}
+    for role in user_roles:
+        meta = ROLE_METADATA.get(role)
+        if meta:
+            display_names[role] = meta["display_name"]
+
     return UserPermissionsResponse(
         user_id=current_user.id,
         email=current_user.email,
@@ -252,6 +260,7 @@ async def get_current_user_info(
         roles=user_roles,
         permissions=sorted(permissions),
         effective_scopes=scopes,
+        role_display_names=display_names,
     )
 
 

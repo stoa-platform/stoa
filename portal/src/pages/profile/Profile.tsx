@@ -1,4 +1,4 @@
-import { User, Mail, Building, Key, Shield } from 'lucide-react';
+import { User, Mail, Building, Key, Shield, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function ProfilePage() {
@@ -104,6 +104,24 @@ export function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Roles Section (CAB-1634) */}
+      {user && user.roles.length > 0 && (
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Roles</h3>
+          <div className="flex flex-wrap gap-2">
+            {user.roles.map((role) => (
+              <span
+                key={role}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                {user.role_display_names?.[role] || role}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* API Keys Section (placeholder) */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">

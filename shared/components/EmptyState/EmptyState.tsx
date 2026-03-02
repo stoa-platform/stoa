@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Plus, Search, FileText, Server, Layers, Wrench, Rocket, Users, Package } from 'lucide-react';
+import { Plus, Search, FileText, Server, Layers, Wrench, Rocket, Users, Package, WifiOff } from 'lucide-react';
 
 // ============================================================================
 // Types
@@ -13,7 +13,8 @@ export type EmptyStateVariant =
   | 'servers'
   | 'deployments'
   | 'users'
-  | 'subscriptions';
+  | 'subscriptions'
+  | 'service-unavailable';
 
 export interface EmptyStateProps {
   /** Variant determines the illustration and default messaging */
@@ -133,6 +134,19 @@ function UsersIllustration() {
   );
 }
 
+function ServiceUnavailableIllustration() {
+  return (
+    <div className="relative">
+      <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/30 flex items-center justify-center">
+        <WifiOff className="w-10 h-10 text-red-500" />
+      </div>
+      <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900 flex items-center justify-center">
+        <span className="text-red-600 dark:text-red-400 text-xs font-bold">!</span>
+      </div>
+    </div>
+  );
+}
+
 function SubscriptionsIllustration() {
   return (
     <div className="relative">
@@ -194,6 +208,11 @@ const variantConfig: Record<EmptyStateVariant, {
     illustration: <SubscriptionsIllustration />,
     title: 'No subscriptions yet',
     description: 'Subscribe to tools to start using them in your applications.',
+  },
+  'service-unavailable': {
+    illustration: <ServiceUnavailableIllustration />,
+    title: 'Service unavailable',
+    description: 'The MCP Gateway is currently unreachable. Please try again later.',
   },
 };
 

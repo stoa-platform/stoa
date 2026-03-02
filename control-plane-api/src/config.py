@@ -87,7 +87,7 @@ class Settings(BaseSettings):
 
     # MCP Gateway URL (for tools proxy)
     # Default to internal K8s service, can be overridden for external access
-    MCP_GATEWAY_URL: str = "http://mcp-gateway.stoa-system.svc.cluster.local:80"
+    MCP_GATEWAY_URL: str = "http://stoa-gateway.stoa-system.svc.cluster.local:80"
 
     # ArgoCD (GitOps Observability - CAB-654)
     # Uses OIDC authentication - forwards user's Keycloak token to ArgoCD

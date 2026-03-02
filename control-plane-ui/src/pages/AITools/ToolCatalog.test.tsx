@@ -56,7 +56,11 @@ vi.mock('../../components/tools', () => ({
 
 // Mock shared components
 vi.mock('@stoa/shared/components/EmptyState', () => ({
-  EmptyState: () => <div data-testid="empty-state">No tools found</div>,
+  EmptyState: ({ variant }: { variant?: string }) => (
+    <div data-testid="empty-state" data-variant={variant || 'default'}>
+      No tools found
+    </div>
+  ),
 }));
 
 vi.mock('@stoa/shared/components/Skeleton', () => ({
@@ -139,6 +143,27 @@ describe('ToolCatalog', () => {
         limit: 50,
       });
     });
+  });
+
+  it('shows tools even when tags endpoint fails', async () => {
+    mockGetToolTags.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Weather API')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Translate API')).toBeInTheDocument();
+  });
+
+  it('shows service-unavailable state when tools endpoint returns 503', async () => {
+    mockGetTools.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('empty-state')).toHaveAttribute(
+      'data-variant',
+      'service-unavailable'
+    );
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

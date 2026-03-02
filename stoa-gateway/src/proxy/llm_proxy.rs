@@ -67,17 +67,23 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         }
     };
 
-    // Step 2: Validate consumer against Control Plane
-    let consumer_info = match state.api_key_validator.validate(&consumer_key).await {
-        Ok(info) => info,
-        Err(e) => {
-            warn!(error = %e, "LLM proxy: API key validation failed");
-            return (StatusCode::UNAUTHORIZED, "Invalid API key").into_response();
-        }
+    // Step 2: Validate consumer against Control Plane (or skip in dogfood mode)
+    let (tenant_id, subscription_id) = if state.config.llm_proxy_skip_validation {
+        debug!("LLM proxy: skipping API key validation (dogfood mode)");
+        ("local-dogfood".to_string(), "local-dogfood".to_string())
+    } else {
+        let consumer_info = match state.api_key_validator.validate(&consumer_key).await {
+            Ok(info) => info,
+            Err(e) => {
+                warn!(error = %e, "LLM proxy: API key validation failed");
+                return (StatusCode::UNAUTHORIZED, "Invalid API key").into_response();
+            }
+        };
+        (
+            consumer_info.tenant_id.clone(),
+            consumer_info.subscription_id.clone(),
+        )
     };
-
-    let tenant_id = consumer_info.tenant_id.clone();
-    let subscription_id = consumer_info.subscription_id.clone();
 
     debug!(
         tenant_id = %tenant_id,

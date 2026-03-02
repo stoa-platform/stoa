@@ -25,7 +25,7 @@ Query each `roadmap:*` label to count Done vs Total issues:
 ```
 For each theme in [gateway, platform, dx, security, community, observability]:
   linear.list_issues(
-    team: "624a9948-a160-4e47-aba5-7f9404d23506",
+    team: "<LINEAR_TEAM_ID>",
     labels: ["roadmap:<theme>"],
     first: 250
   )
@@ -36,30 +36,30 @@ For each theme in [gateway, platform, dx, security, community, observability]:
 
 | Theme | Label | ID |
 |-------|-------|----|
-| Gateway | `roadmap:gateway` | `82e07bcd-69fa-4fc5-a2e1-d4d7fa0fad70` |
-| Platform | `roadmap:platform` | `c819ff92-c9cf-453d-a0f9-451840f6f8cc` |
-| DX | `roadmap:dx` | `9f4356e1-f3bc-49a5-b28a-fa1077a6e326` |
-| Security | `roadmap:security` | `365e859a-9306-44ae-8a59-fe02f8fdc5ad` |
-| Community | `roadmap:community` | `2de713f1-47a9-49a0-9e84-a7bd947eb707` |
-| Observability | `roadmap:observability` | `d4ce6487-92fe-4f12-a5f3-8d682e03623f` |
+| Gateway | `roadmap:gateway` | `<LABEL_ID_ROADMAP_GATEWAY>` |
+| Platform | `roadmap:platform` | `<LABEL_ID_ROADMAP_PLATFORM>` |
+| DX | `roadmap:dx` | `<LABEL_ID_ROADMAP_DX>` |
+| Security | `roadmap:security` | `<LABEL_ID_ROADMAP_SECURITY>` |
+| Community | `roadmap:community` | `<LABEL_ID_ROADMAP_COMMUNITY>` |
+| Observability | `roadmap:observability` | `<LABEL_ID_ROADMAP_OBSERVABILITY>` |
 
 **Important**: Theme percentages depend on `roadmap:*` labels being applied to issues. If a theme shows 0/0, it means no issues have been tagged with that label yet. Run a backfill session to tag historical issues.
 
 ## Step 2: Fetch Milestones (1 query)
 
 ```
-linear.list_milestones(project: "227427af-6844-484d-bb4a-dedeffc68825")
+linear.list_milestones(project: "<LINEAR_PROJECT_ID>")
 ```
 
 ### Milestone IDs (cached)
 
 | Milestone | ID | Target Date |
 |-----------|----|-------------|
-| Demo MVP Ready | `b70d6b9b-e7f8-4e60-8e37-67f60eba8d11` | 2026-02-17 |
-| Demo Day | `111a34ba-7662-42b2-a07b-8f5c4467d1a6` | 2026-03-17 |
-| Private Beta | `4cacb62a-af54-4abc-8bf4-560d9cbf71f3` | 2026-04-30 |
-| RC1 Public Beta | `a2d5acf5-a21b-4980-ba88-aef174daaaf2` | 2026-06-30 |
-| v1.0 GA | `8e352939-eb7d-46d1-9d22-d35789549ca6` | 2026-07-31 |
+| Demo MVP Ready | `<MILESTONE_DEMO_MVP>` | 2026-02-17 |
+| Demo Day | `<MILESTONE_DEMO_DAY>` | 2026-03-17 |
+| Private Beta | `<MILESTONE_PRIVATE_BETA>` | 2026-04-30 |
+| RC1 Public Beta | `<MILESTONE_RC1>` | 2026-06-30 |
+| v1.0 GA | `<MILESTONE_V1_GA>` | 2026-07-31 |
 
 For each milestone, compute:
 - **Status**: Done (target date < today AND progress 100%), Active (target date > today), Overdue (target date < today AND progress < 100%)
@@ -78,7 +78,7 @@ Extract:
 ## Step 4: Fetch Current Cycle (1 query)
 
 ```
-linear.list_cycles(teamId: "624a9948-a160-4e47-aba5-7f9404d23506", type: "current")
+linear.list_cycles(teamId: "<LINEAR_TEAM_ID>", type: "current")
 ```
 
 Extract: cycle name, scope (total pts), done (pts), issue count.

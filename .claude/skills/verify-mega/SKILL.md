@@ -35,7 +35,7 @@ If no children → report: "CAB-XXXX is not a MEGA (no children). Use standard c
 
 ```
 linear.list_issues(
-  teamId: "624a9948-a160-4e47-aba5-7f9404d23506",
+  teamId: "<LINEAR_TEAM_ID>",
   filter: { state: { name: { eq: "Done" } }, updatedAt: { gte: "<7 days ago>" } }
 )
 ```

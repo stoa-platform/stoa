@@ -25,7 +25,7 @@ Target: $ARGUMENTS
 Always start by discovering the active cycles:
 
 ```
-linear.list_cycles(teamId: "624a9948-a160-4e47-aba5-7f9404d23506")
+linear.list_cycles(teamId: "<LINEAR_TEAM_ID>")
 ```
 
 Identify:
@@ -40,7 +40,7 @@ For each active cycle (current + next):
 
 ```
 linear.list_issues(
-  team: "624a9948-a160-4e47-aba5-7f9404d23506",
+  team: "<LINEAR_TEAM_ID>",
   cycle: "<cycle_id>",
   first: 50
 )

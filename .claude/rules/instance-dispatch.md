@@ -23,11 +23,11 @@ When `stoa-parallel` launches, each Claude instance filters Linear for its own t
 
 | Label | ID |
 |-------|-----|
-| `instance:backend` | `b60c32eb-3374-4a53-a487-b409bfed2d61` |
-| `instance:frontend` | `e9434a2f-f313-4223-a042-598185718c7b` |
-| `instance:auth` | `c4bb2546-7bbc-45d9-b5ab-384fd7065d48` |
-| `instance:mcp` | `19497340-8712-45d0-8728-a77c96c592a7` |
-| `instance:qa` | `00ba65ee-81e3-40e8-b2d2-38f340617b2f` |
+| `instance:backend` | `<LABEL_ID_BACKEND>` |
+| `instance:frontend` | `<LABEL_ID_FRONTEND>` |
+| `instance:auth` | `<LABEL_ID_AUTH>` |
+| `instance:mcp` | `<LABEL_ID_MCP>` |
+| `instance:qa` | `<LABEL_ID_QA>` |
 
 ## Tagging Rules
 

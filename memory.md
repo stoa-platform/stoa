@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-02 (Queue-Driven AI Factory PR #1321, stoa-parallel reliability PR #1243)
+> Derniere MAJ: 2026-03-02 (CAB-1632 repo public + docs migration PR #1331, #1333)
 
 ## ✅ DONE
 
@@ -8,6 +8,7 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 12 (Feb 27+)
+- ✅ CAB-1632: Switch repo Private → Public (5 pts) — PRs #1331 (sanitize rules, CI fork safety, gitleaks), #1333 (move 25 strategic/demo docs to stoa-strategy). Savings: ~$654/mo GHA billing. Post-switch: gitleaks 0 leaks on 1984 commits, GHAS activated for free
 - ✅ CAB-1601: Anthropic Cache Token Tracking (21 pts) — 4 PRs across 4 components:
   - PR #1292: Rust gateway — cache field extraction, cache-aware cost calc, 4 Prometheus counters
   - PR #1303: Python CP API — schema, migration 049, model, repository, service, router

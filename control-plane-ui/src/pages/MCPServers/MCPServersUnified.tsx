@@ -1,0 +1,769 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Puzzle,
+  RefreshCw,
+  ExternalLink,
+  CheckCircle,
+  XCircle,
+  Plus,
+  Server,
+  AlertCircle,
+  Clock,
+} from 'lucide-react';
+import { mcpConnectorsService } from '../../services/mcpConnectorsApi';
+import { externalMcpServersService } from '../../services/externalMcpServersApi';
+import { useAuth } from '../../contexts/AuthContext';
+import { ExternalMCPServerModal } from '../ExternalMCPServers/ExternalMCPServerModal';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import type {
+  ConnectorTemplate,
+  ExternalMCPServer,
+  ExternalMCPServerCreate,
+  ExternalMCPServerUpdate,
+  ExternalMCPHealthStatus,
+} from '../../types';
+
+type TabId = 'catalog' | 'custom';
+
+const categoryLabels: Record<string, string> = {
+  project_management: 'Project Management',
+  development: 'Development',
+  communication: 'Communication',
+  monitoring: 'Monitoring',
+  analytics: 'Analytics',
+  security: 'Security',
+  data: 'Data',
+};
+
+const connectorTransportLabels: Record<string, string> = {
+  sse: 'SSE',
+  streamable_http: 'Streamable HTTP',
+  stdio: 'Stdio',
+};
+
+const serverTransportLabels: Record<string, string> = {
+  sse: 'SSE',
+  http: 'HTTP',
+  websocket: 'WebSocket',
+};
+
+const healthStatusConfig: Record<
+  ExternalMCPHealthStatus,
+  { color: string; icon: typeof CheckCircle; label: string }
+> = {
+  unknown: {
+    color: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300',
+    icon: Clock,
+    label: 'Unknown',
+  },
+  healthy: {
+    color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    icon: CheckCircle,
+    label: 'Healthy',
+  },
+  degraded: {
+    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+    icon: AlertCircle,
+    label: 'Degraded',
+  },
+  unhealthy: {
+    color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    icon: XCircle,
+    label: 'Unhealthy',
+  },
+};
+
+const ALL_CATEGORY = '__all__';
+
+export function MCPServersUnified() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as TabId) || 'catalog';
+  const setActiveTab = useCallback(
+    (tab: TabId) => setSearchParams({ tab }, { replace: true }),
+    [setSearchParams]
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">MCP Servers</h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-1">
+          Connect OAuth services or register custom MCP servers to proxy through STOA
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-neutral-200 dark:border-neutral-700">
+        <nav className="-mb-px flex gap-6" aria-label="Tabs">
+          <button
+            onClick={() => setActiveTab('catalog')}
+            className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'catalog'
+                ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
+                : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200'
+            }`}
+          >
+            <Puzzle className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+            Catalog
+          </button>
+          <button
+            onClick={() => setActiveTab('custom')}
+            className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'custom'
+                ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
+                : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200'
+            }`}
+          >
+            <Server className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+            Custom Servers
+          </button>
+        </nav>
+      </div>
+
+      {/* Tab content */}
+      {activeTab === 'catalog' ? <CatalogTab /> : <CustomServersTab />}
+    </div>
+  );
+}
+
+// ─── Catalog Tab ──────────────────────────────────────────────────────────────
+
+function CatalogTab() {
+  const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
+  const mountedRef = useRef(true);
+
+  const [connectors, setConnectors] = useState<ConnectorTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY);
+  const [connectingSlug, setConnectingSlug] = useState<string | null>(null);
+  const [disconnectingSlug, setDisconnectingSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    if (isReady) loadConnectors();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [isReady]);
+
+  async function loadConnectors() {
+    try {
+      setLoading(true);
+      const response = await mcpConnectorsService.listConnectors();
+      if (!mountedRef.current) return;
+      setConnectors(response.connectors);
+      setError(null);
+    } catch (err: unknown) {
+      if (!mountedRef.current) return;
+      const message = err instanceof Error ? err.message : 'Failed to load connectors';
+      setError(message);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }
+
+  const handleConnect = useCallback(
+    async (slug: string) => {
+      try {
+        setConnectingSlug(slug);
+        const response = await mcpConnectorsService.authorize(slug, {
+          redirect_after: window.location.href,
+        });
+        window.location.href = response.authorize_url;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to start authorization';
+        toast.error('Connection failed', message);
+        setConnectingSlug(null);
+      }
+    },
+    [toast]
+  );
+
+  const handleDisconnect = useCallback(
+    async (connector: ConnectorTemplate) => {
+      const confirmed = await confirm({
+        title: `Disconnect ${connector.display_name}?`,
+        message:
+          'This will remove the connected server and its tools. You can reconnect at any time.',
+        confirmLabel: 'Disconnect',
+        variant: 'danger',
+      });
+      if (!confirmed) return;
+
+      try {
+        setDisconnectingSlug(connector.slug);
+        await mcpConnectorsService.disconnect(connector.slug);
+        toast.success('Disconnected', `${connector.display_name} has been disconnected`);
+        await loadConnectors();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to disconnect';
+        toast.error('Disconnect failed', message);
+      } finally {
+        if (mountedRef.current) setDisconnectingSlug(null);
+      }
+    },
+    [confirm, toast]
+  );
+
+  const categories = [
+    ALL_CATEGORY,
+    ...Array.from(new Set(connectors.map((c) => c.category))).sort(),
+  ];
+
+  const featured = connectors.filter((c) => c.is_featured);
+  const filtered =
+    categoryFilter === ALL_CATEGORY
+      ? connectors
+      : connectors.filter((c) => c.category === categoryFilter);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-end">
+          <div className="h-10 w-24 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Toolbar */}
+      <div className="flex justify-end">
+        <button
+          onClick={loadConnectors}
+          className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg">
+          {error}
+          <button onClick={() => setError(null)} className="float-right font-bold">
+            &times;
+          </button>
+        </div>
+      )}
+
+      {/* Featured section */}
+      {featured.length > 0 && categoryFilter === ALL_CATEGORY && (
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-3">Featured</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featured.map((connector) => (
+              <ConnectorCard
+                key={connector.id}
+                connector={connector}
+                onConnect={handleConnect}
+                onDisconnect={handleDisconnect}
+                connectingSlug={connectingSlug}
+                disconnectingSlug={disconnectingSlug}
+                featured
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Category filter */}
+      {categories.length > 2 && (
+        <div className="flex gap-2 flex-wrap">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                categoryFilter === cat
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              {cat === ALL_CATEGORY ? 'All' : categoryLabels[cat] || cat}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Connector grid */}
+      {filtered.length === 0 ? (
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
+          <EmptyState
+            variant="default"
+            title="No connectors available"
+            description="No connector templates match your filter. Try selecting a different category."
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((connector) => (
+            <ConnectorCard
+              key={connector.id}
+              connector={connector}
+              onConnect={handleConnect}
+              onDisconnect={handleDisconnect}
+              connectingSlug={connectingSlug}
+              disconnectingSlug={disconnectingSlug}
+            />
+          ))}
+        </div>
+      )}
+
+      {ConfirmDialog}
+    </div>
+  );
+}
+
+// ─── Custom Servers Tab ───────────────────────────────────────────────────────
+
+function CustomServersTab() {
+  const navigate = useNavigate();
+  const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
+  const [servers, setServers] = useState<ExternalMCPServer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [testingServerId, setTestingServerId] = useState<string | null>(null);
+  const [syncingServerId, setSyncingServerId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    if (isReady) loadServers();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [isReady]);
+
+  async function loadServers() {
+    try {
+      setLoading(true);
+      const response = await externalMcpServersService.listServers();
+      if (!mountedRef.current) return;
+      setServers(response.servers);
+      setError(null);
+    } catch (err: unknown) {
+      if (!mountedRef.current) return;
+      const message = err instanceof Error ? err.message : 'Failed to load servers';
+      setError(message);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }
+
+  const handleCreate = useCallback(
+    async (data: ExternalMCPServerCreate | ExternalMCPServerUpdate) => {
+      try {
+        await externalMcpServersService.createServer(data as ExternalMCPServerCreate);
+        setShowCreateModal(false);
+        await loadServers();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to create server';
+        throw new Error(message);
+      }
+    },
+    []
+  );
+
+  const handleTestConnection = useCallback(
+    async (serverId: string) => {
+      try {
+        setTestingServerId(serverId);
+        const result = await externalMcpServersService.testConnection(serverId);
+        await loadServers();
+
+        if (result.success) {
+          toast.success(
+            'Connection successful',
+            `${result.tools_discovered !== undefined ? `Found ${result.tools_discovered} tools. ` : ''}Latency: ${result.latency_ms}ms`
+          );
+        } else {
+          toast.error('Connection failed', result.error);
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Test failed';
+        toast.error('Test failed', message);
+      } finally {
+        setTestingServerId(null);
+      }
+    },
+    [toast]
+  );
+
+  const handleSyncTools = useCallback(
+    async (serverId: string) => {
+      try {
+        setSyncingServerId(serverId);
+        const result = await externalMcpServersService.syncTools(serverId);
+        await loadServers();
+        toast.success(
+          'Tools synchronized',
+          `Synced ${result.synced_count} tools${result.removed_count > 0 ? `. Removed ${result.removed_count} obsolete.` : ''}`
+        );
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Sync failed';
+        toast.error('Sync failed', message);
+      } finally {
+        setSyncingServerId(null);
+      }
+    },
+    [toast]
+  );
+
+  const handleDelete = useCallback(
+    async (server: ExternalMCPServer) => {
+      const confirmed = await confirm({
+        title: 'Delete MCP Server',
+        message: `Are you sure you want to delete "${server.display_name}"? This will also delete all synced tools.`,
+        confirmLabel: 'Delete',
+        variant: 'danger',
+      });
+      if (!confirmed) return;
+
+      try {
+        await externalMcpServersService.deleteServer(server.id);
+        toast.success('Server deleted', `${server.display_name} has been removed`);
+        await loadServers();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Delete failed';
+        toast.error('Delete failed', message);
+      }
+    },
+    [toast, confirm]
+  );
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-end gap-3">
+          <div className="h-10 w-24 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-10 w-28 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Toolbar */}
+      <div className="flex justify-end gap-3">
+        <button
+          onClick={loadServers}
+          className="flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-neutral-300"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </button>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4" />
+          Add Server
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg">
+          {error}
+          <button onClick={() => setError(null)} className="float-right font-bold">
+            &times;
+          </button>
+        </div>
+      )}
+
+      {/* Server grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {servers.length === 0 ? (
+          <div className="col-span-full bg-white dark:bg-neutral-800 rounded-lg shadow">
+            <EmptyState
+              variant="servers"
+              title="No custom MCP servers registered"
+              description="Register external MCP servers like Linear or GitHub to proxy through STOA with governance."
+              action={{ label: 'Add Server', onClick: () => setShowCreateModal(true) }}
+            />
+          </div>
+        ) : (
+          servers.map((server) => (
+            <ServerCard
+              key={server.id}
+              server={server}
+              onTest={handleTestConnection}
+              onSync={handleSyncTools}
+              onDelete={handleDelete}
+              onView={(id) => navigate(`/external-mcp-servers/${id}`)}
+              testingServerId={testingServerId}
+              syncingServerId={syncingServerId}
+            />
+          ))
+        )}
+      </div>
+
+      {showCreateModal && (
+        <ExternalMCPServerModal onClose={() => setShowCreateModal(false)} onSubmit={handleCreate} />
+      )}
+
+      {ConfirmDialog}
+    </div>
+  );
+}
+
+// ─── ConnectorCard ────────────────────────────────────────────────────────────
+
+interface ConnectorCardProps {
+  connector: ConnectorTemplate;
+  onConnect: (slug: string) => void;
+  onDisconnect: (connector: ConnectorTemplate) => void;
+  connectingSlug: string | null;
+  disconnectingSlug: string | null;
+  featured?: boolean;
+}
+
+function ConnectorCard({
+  connector,
+  onConnect,
+  onDisconnect,
+  connectingSlug,
+  disconnectingSlug,
+  featured,
+}: ConnectorCardProps) {
+  const isConnecting = connectingSlug === connector.slug;
+  const isDisconnecting = disconnectingSlug === connector.slug;
+
+  return (
+    <div
+      className={`bg-white dark:bg-neutral-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow ${
+        featured ? 'ring-2 ring-primary-200 dark:ring-primary-800' : ''
+      }`}
+    >
+      <div className="flex items-start gap-3 mb-4">
+        {connector.icon_url ? (
+          <img src={connector.icon_url} alt="" className="w-10 h-10 rounded flex-shrink-0" />
+        ) : (
+          <div className="w-10 h-10 bg-neutral-100 dark:bg-neutral-700 rounded flex items-center justify-center flex-shrink-0">
+            <Puzzle className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white truncate">
+            {connector.display_name}
+          </h3>
+          {connector.description && (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 line-clamp-2 mt-0.5">
+              {connector.description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300">
+          {categoryLabels[connector.category] || connector.category}
+        </span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+          {connectorTransportLabels[connector.transport] || connector.transport}
+        </span>
+        {connector.is_connected && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+            <CheckCircle className="h-3 w-3" />
+            Connected
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t dark:border-neutral-700">
+        {connector.is_connected ? (
+          <>
+            <button
+              onClick={() => onDisconnect(connector)}
+              disabled={isDisconnecting}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+            >
+              <XCircle className="h-4 w-4" />
+              {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+            </button>
+            {connector.documentation_url && (
+              <a
+                href={connector.documentation_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => onConnect(connector.slug)}
+              disabled={isConnecting}
+              className="flex-1 px-3 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              {isConnecting ? 'Connecting...' : 'Connect'}
+            </button>
+            {connector.documentation_url && (
+              <a
+                href={connector.documentation_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ServerCard ───────────────────────────────────────────────────────────────
+
+interface ServerCardProps {
+  server: ExternalMCPServer;
+  onTest: (id: string) => void;
+  onSync: (id: string) => void;
+  onDelete: (server: ExternalMCPServer) => void;
+  onView: (id: string) => void;
+  testingServerId: string | null;
+  syncingServerId: string | null;
+}
+
+function ServerCard({
+  server,
+  onTest,
+  onSync,
+  onDelete,
+  onView,
+  testingServerId,
+  syncingServerId,
+}: ServerCardProps) {
+  const healthConfig = healthStatusConfig[server.health_status];
+  const HealthIcon = healthConfig.icon;
+
+  return (
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center gap-3">
+          {server.icon ? (
+            <img src={server.icon} alt="" className="w-10 h-10 rounded" />
+          ) : (
+            <div className="w-10 h-10 bg-neutral-100 dark:bg-neutral-700 rounded flex items-center justify-center">
+              <Server className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
+            </div>
+          )}
+          <div>
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              {server.display_name}
+            </h3>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 font-mono">
+              {server.name}
+            </p>
+          </div>
+        </div>
+        <span
+          className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${healthConfig.color}`}
+        >
+          <HealthIcon className="h-3 w-3" />
+          {healthConfig.label}
+        </span>
+      </div>
+
+      <div className="space-y-2 text-sm text-neutral-600 dark:text-neutral-300 mb-4">
+        <div className="flex justify-between">
+          <span className="text-neutral-500 dark:text-neutral-400">Transport:</span>
+          <span className="font-mono">
+            {serverTransportLabels[server.transport] || server.transport}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-neutral-500 dark:text-neutral-400">Auth:</span>
+          <span>{server.auth_type.replace('_', ' ')}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-neutral-500 dark:text-neutral-400">Tools:</span>
+          <span>{server.tools_count}</span>
+        </div>
+        {server.tool_prefix && (
+          <div className="flex justify-between">
+            <span className="text-neutral-500 dark:text-neutral-400">Prefix:</span>
+            <span className="font-mono">{server.tool_prefix}__</span>
+          </div>
+        )}
+        <div className="flex justify-between items-center">
+          <span className="text-neutral-500 dark:text-neutral-400">Status:</span>
+          <span
+            className={`px-2 py-0.5 text-xs rounded ${server.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300'}`}
+          >
+            {server.enabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+      </div>
+
+      {server.sync_error && (
+        <div
+          className="mb-4 p-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400 truncate"
+          title={server.sync_error}
+        >
+          {server.sync_error}
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-4 border-t dark:border-neutral-700">
+        <button
+          onClick={() => onTest(server.id)}
+          disabled={testingServerId === server.id}
+          className="flex-1 px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50"
+        >
+          {testingServerId === server.id ? 'Testing...' : 'Test'}
+        </button>
+        <button
+          onClick={() => onSync(server.id)}
+          disabled={syncingServerId === server.id}
+          className="flex-1 px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50"
+        >
+          {syncingServerId === server.id ? 'Syncing...' : 'Sync'}
+        </button>
+        <button
+          onClick={() => onView(server.id)}
+          className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          View
+        </button>
+      </div>
+
+      <button
+        onClick={() => onDelete(server)}
+        className="mt-2 w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded opacity-0 hover:opacity-100 transition-opacity"
+      >
+        Delete Server
+      </button>
+    </div>
+  );
+}

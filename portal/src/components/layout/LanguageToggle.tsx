@@ -15,9 +15,10 @@ export function LanguageToggle() {
     i18n.changeLanguage(next);
     localStorage.setItem(LANGUAGE_KEY, next);
 
-    // Load namespace for the new language
+    // Load namespaces for the new language
     import('../../i18n').then(({ loadNamespace }) => {
       loadNamespace(next, 'common');
+      loadNamespace(next, 'workspace');
     });
   };
 

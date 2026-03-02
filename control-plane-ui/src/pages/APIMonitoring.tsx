@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService } from '../services/api';
 import type {
   APITransaction,
@@ -616,6 +616,7 @@ export function APIMonitoring() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<TransactionStatus | 'all'>('all');
   const [apiFilter, setApiFilter] = useState<string>('all');
+  const mountedRef = useRef(true);
 
   const fetchData = useCallback(async () => {
     try {
@@ -624,20 +625,26 @@ export function APIMonitoring() {
         apiService.get<{ transactions: APITransactionSummary[] }>('/v1/monitoring/transactions'),
         apiService.get<APITransactionStats>('/v1/monitoring/transactions/stats'),
       ]);
+      if (!mountedRef.current) return;
       setTransactions(txnResponse.data.transactions);
       setStats(statsResponse.data);
     } catch (err) {
+      if (!mountedRef.current) return;
       console.log('Using demo data for transactions');
       // Use demo data
       setTransactions(generateDemoTransactions());
       setStats(generateDemoStats());
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchData();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [fetchData]);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   RefreshCw,
   Shield,
@@ -199,6 +199,8 @@ export function SecurityPostureDashboard() {
     }
   };
 
+  const mountedRef = useRef(true);
+
   const loadData = useCallback(async () => {
     try {
       const [securityRes, driftRes, tokenBindingRes, scansRes, cronJobRes] = await Promise.all([
@@ -237,6 +239,7 @@ export function SecurityPostureDashboard() {
         status: 'open' as const,
       }));
 
+      if (!mountedRef.current) return;
       setFindings(mappedFindings);
       setEvents(securityRes.data.events);
       setDriftItems(driftRes.data.items || []);
@@ -245,14 +248,19 @@ export function SecurityPostureDashboard() {
       setCronJobStatus(cronJobRes.data);
       setError(null);
     } catch (err: any) {
+      if (!mountedRef.current) return;
       setError(err.response?.data?.detail || 'Failed to load security data');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [tenantId]);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (isReady) loadData();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [isReady, loadData]);
 
   useEffect(() => {

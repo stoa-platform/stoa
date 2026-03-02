@@ -5,7 +5,7 @@
  * cross-tenant traffic overview, and embedded Grafana panels.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   RefreshCw,
   Server,
@@ -184,6 +184,7 @@ export function ProxyOwnerDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const mountedRef = useRef(true);
 
   const loadData = useCallback(async () => {
     try {
@@ -238,18 +239,24 @@ export function ProxyOwnerDashboard() {
       };
       setTraffic(trafficData);
 
+      if (!mountedRef.current) return;
       setLastRefresh(new Date());
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     loadData();
     const interval = setInterval(loadData, AUTO_REFRESH_INTERVAL);
-    return () => clearInterval(interval);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+    };
   }, [loadData]);
 
   const onlineCount = gateways.filter((g) => g.status === 'online').length;

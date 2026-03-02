@@ -62,6 +62,16 @@ class TenantRepository:
 
         return []
 
+    async def get_personal_tenant_by_owner(self, user_id: str) -> Tenant | None:
+        """Find a personal tenant by owner user ID (stored in settings JSON)."""
+        result = await self.session.execute(
+            select(Tenant).where(
+                Tenant.settings["owner_user_id"].as_string() == user_id,
+                Tenant.status != TenantStatus.ARCHIVED.value,
+            )
+        )
+        return result.scalars().first()
+
     async def update(self, tenant: Tenant) -> Tenant:
         """Update a tenant"""
         await self.session.flush()

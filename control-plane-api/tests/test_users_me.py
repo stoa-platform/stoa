@@ -117,6 +117,7 @@ class TestProvisionPersonalTenant:
         """User without tenant gets a personal tenant created."""
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=None)  # no collision
+        mock_repo.get_personal_tenant_by_owner = AsyncMock(return_value=None)
         mock_tenant = MagicMock()
         mock_tenant.id = "free-orphan-user"
         mock_tenant.name = "orphan-user's workspace"

@@ -1,0 +1,29 @@
+# Network Policies for the monitoring namespace
+# Apply with: kubectl apply -f k8s/networkpolicy-monitoring.yaml
+#
+# Allows cross-namespace traffic from stoa-system to Prometheus.
+
+---
+# Allow stoa-system pods to query Prometheus (console-ui /prometheus/ proxy)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-stoa-to-prometheus
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: stoa-system
+      ports:
+        - port: 9090
+          protocol: TCP

@@ -284,7 +284,7 @@ async def provision_personal_tenant(
     """
     repo = TenantRepository(db)
 
-    # Idempotent: if user already has a tenant, return it
+    # Idempotent check 1: JWT already has tenant_id (token refreshed after group assignment)
     if current_user.tenant_id:
         existing = await repo.get_by_id(current_user.tenant_id)
         if existing:
@@ -293,6 +293,17 @@ async def provision_personal_tenant(
                 display_name=existing.name,
                 created=False,
             )
+
+    # Idempotent check 2: DB lookup for existing personal tenant owned by this user.
+    # The JWT tenant_id claim is only set AFTER token refresh (post KC group assignment),
+    # so between signup and refresh every call would bypass check 1 and create duplicates.
+    existing_personal = await repo.get_personal_tenant_by_owner(current_user.id)
+    if existing_personal:
+        return PersonalTenantResponse(
+            tenant_id=existing_personal.id,
+            display_name=existing_personal.name,
+            created=False,
+        )
 
     # Generate slug from username
     base_slug = f"free-{_sanitize_slug(current_user.username)}"

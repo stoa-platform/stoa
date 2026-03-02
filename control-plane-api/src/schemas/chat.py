@@ -58,6 +58,12 @@ class MessageSend(BaseModel):
     content: str = Field(..., min_length=1, max_length=100000)
 
 
+class ProviderKeySet(BaseModel):
+    """Set the tenant-level provider API key (admin-only)."""
+
+    api_key: str = Field(..., min_length=10, max_length=500)
+
+
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------

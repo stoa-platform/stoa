@@ -19,8 +19,7 @@ export function useChatService() {
     async (message: string): Promise<string> => {
       // Prefer the UI-selected tenant (Layout stores it in localStorage),
       // fall back to the Keycloak token claim for non-admin users.
-      const tenantId =
-        localStorage.getItem('stoa-active-tenant') || user?.tenant_id;
+      const tenantId = localStorage.getItem('stoa-active-tenant') || user?.tenant_id;
       if (!tenantId) throw new Error('No tenant selected');
 
       const token = apiService.getAuthToken();

@@ -80,7 +80,7 @@ async def create_conversation(
 ) -> ConversationResponse:
     conv = await svc.create_conversation(
         tenant_id=tenant_id,
-        user_id=user.sub,
+        user_id=user.id,
         title=body.title,
         provider=body.provider.value,
         model=body.model,
@@ -105,7 +105,7 @@ async def list_conversations(
 ) -> ConversationListResponse:
     items, total = await svc.list_conversations(
         tenant_id=tenant_id,
-        user_id=user.sub,
+        user_id=user.id,
         limit=limit,
         offset=offset,
         status=status,
@@ -128,7 +128,7 @@ async def get_conversation(
     user: User = Depends(get_current_user),
     svc: ChatService = Depends(_service),
 ) -> ConversationDetailResponse:
-    conv = await svc.get_conversation(conversation_id, tenant_id, user.sub)
+    conv = await svc.get_conversation(conversation_id, tenant_id, user.id)
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return ConversationDetailResponse.model_validate(conv)
@@ -147,7 +147,7 @@ async def update_conversation(
     user: User = Depends(get_current_user),
     svc: ChatService = Depends(_service),
 ) -> ConversationResponse:
-    conv = await svc.update_conversation(conversation_id, tenant_id, user.sub, title=body.title)
+    conv = await svc.update_conversation(conversation_id, tenant_id, user.id, title=body.title)
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return ConversationResponse.model_validate(conv)
@@ -165,7 +165,7 @@ async def delete_conversation(
     user: User = Depends(get_current_user),
     svc: ChatService = Depends(_service),
 ) -> None:
-    deleted = await svc.delete_conversation(conversation_id, tenant_id, user.sub)
+    deleted = await svc.delete_conversation(conversation_id, tenant_id, user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -188,7 +188,7 @@ async def archive_conversation(
     user: User = Depends(get_current_user),
     svc: ChatService = Depends(_service),
 ) -> ConversationResponse:
-    conv = await svc.archive_conversation(conversation_id, tenant_id, user.sub, status=body.status.value)
+    conv = await svc.archive_conversation(conversation_id, tenant_id, user.id, status=body.status.value)
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return ConversationResponse.model_validate(conv)
@@ -266,7 +266,7 @@ async def send_message(
         async for event in svc.send_message(
             conversation_id=conversation_id,
             tenant_id=tenant_id,
-            user_id=user.sub,
+            user_id=user.id,
             content=body.content,
             api_key=api_key,
         ):
@@ -296,7 +296,7 @@ async def get_usage(
     user: User = Depends(get_current_user),
     svc: ChatService = Depends(_service),
 ) -> ChatUsageResponse:
-    stats = await svc.get_user_usage(tenant_id, user.sub)
+    stats = await svc.get_user_usage(tenant_id, user.id)
     return ChatUsageResponse(**stats)
 
 
@@ -333,7 +333,7 @@ async def get_budget_status(
 ) -> TokenBudgetStatusResponse:
     repo = ChatTokenUsageRepository(db)
     budget = settings.CHAT_TOKEN_BUDGET_DAILY or 1_000_000
-    status = await repo.get_budget_status(tenant_id, user.sub, daily_budget=budget)
+    status = await repo.get_budget_status(tenant_id, user.id, daily_budget=budget)
     return TokenBudgetStatusResponse(**status)
 
 

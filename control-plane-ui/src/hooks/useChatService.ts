@@ -59,7 +59,8 @@ export function useChatService() {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+        // Normalize CRLF→LF: sse_starlette sends \r\n line endings
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 
         // Parse SSE frames: "event: <type>\ndata: <json>\n\n"
         const frames = buffer.split('\n\n');

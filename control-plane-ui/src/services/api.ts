@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { config } from '../config';
+import { getFriendlyErrorMessage } from '@stoa/shared/utils';
 import type {
   Tenant,
   TenantCreate,
@@ -115,6 +116,10 @@ class ApiService {
           } finally {
             this.isRefreshing = false;
           }
+        }
+        // CAB-1629: Replace raw HTTP status messages with user-friendly ones
+        if (error instanceof Error) {
+          error.message = getFriendlyErrorMessage(error, error.message);
         }
         return Promise.reject(error);
       }

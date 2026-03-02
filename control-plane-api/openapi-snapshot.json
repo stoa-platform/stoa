@@ -33571,13 +33571,11 @@
             }
           },
           {
-            "description": "Time range in minutes",
             "in": "query",
             "name": "time_range",
             "required": false,
             "schema": {
               "default": 60,
-              "description": "Time range in minutes",
               "maximum": 1440,
               "minimum": 1,
               "title": "Time Range",
@@ -33622,13 +33620,11 @@
         "operationId": "get_transaction_stats_v1_monitoring_transactions_stats_get",
         "parameters": [
           {
-            "description": "Time range in minutes",
             "in": "query",
             "name": "time_range",
             "required": false,
             "schema": {
               "default": 60,
-              "description": "Time range in minutes",
               "maximum": 1440,
               "minimum": 1,
               "title": "Time Range",

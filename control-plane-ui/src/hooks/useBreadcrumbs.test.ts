@@ -100,6 +100,17 @@ describe('useBreadcrumbs', () => {
       { path: '/applications', label: 'Applications' },
       { path: '/errors', label: 'Error Snapshots' },
       { path: '/mcp', label: 'MCP' },
+      { path: '/observability', label: 'Observability' },
+      { path: '/policies', label: 'Policies' },
+      { path: '/monitoring', label: 'API Monitoring' },
+      { path: '/analytics', label: 'Analytics' },
+      { path: '/audit-log', label: 'Audit Log' },
+      { path: '/consumers', label: 'Consumers' },
+      { path: '/backend-apis', label: 'Backend APIs' },
+      { path: '/diagnostics', label: 'Diagnostics' },
+      { path: '/operations', label: 'Operations' },
+      { path: '/skills', label: 'Skills' },
+      { path: '/workflows', label: 'Workflows' },
     ];
 
     for (const { path, label } of knownRoutes) {

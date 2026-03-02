@@ -341,10 +341,17 @@ class TestPIIMaskingMiddleware:
         )
         await mw(scope, None, None)
 
-        headers = dict(captured_scope["headers"])
-        assert headers[b"authorization"] == b"[REDACTED]"
-        assert headers[b"x-api-key"] == b"[REDACTED]"
-        assert headers[b"content-type"] == b"application/json"
+        # Original headers preserved for auth dependencies (HTTPBearer, etc.)
+        original_headers = dict(captured_scope["headers"])
+        assert original_headers[b"authorization"] == b"Bearer secret-token"
+        assert original_headers[b"x-api-key"] == b"sk_live_123456"
+        assert original_headers[b"content-type"] == b"application/json"
+
+        # Masked headers stored separately for logging
+        masked_headers = dict(captured_scope["_pii_masked_headers"])
+        assert masked_headers[b"authorization"] == b"[REDACTED]"
+        assert masked_headers[b"x-api-key"] == b"[REDACTED]"
+        assert masked_headers[b"content-type"] == b"application/json"
 
     @pytest.mark.asyncio
     async def test_masks_sensitive_query_params(self):

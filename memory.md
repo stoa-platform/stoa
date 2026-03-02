@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-02 (CAB-1632 repo public + docs migration PR #1331, #1333)
+> Derniere MAJ: 2026-03-02 (CAB-1633 LLM proxy wiring PRs #1336, #1339)
 
 ## ✅ DONE
 
@@ -8,6 +8,7 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 12 (Feb 27+)
+- ✅ CAB-1633: Wire AI Factory through LLM Gateway Proxy (5 pts) — PRs #1336 (K8s deployment, stoa-parallel, HEGEMON workers), #1339 (skip_validation flag for local dogfood). Prod deployed: envFrom secretRef on gateway pods, `stoa-dogfood.sh --verify` operational
 - ✅ CAB-1632: Switch repo Private → Public (5 pts) — PRs #1331 (sanitize rules, CI fork safety, gitleaks), #1333 (move 25 strategic/demo docs to stoa-strategy). Savings: ~$654/mo GHA billing. Post-switch: gitleaks 0 leaks on 1984 commits, GHAS activated for free
 - ✅ CAB-1601: Anthropic Cache Token Tracking (21 pts) — 4 PRs across 4 components:
   - PR #1292: Rust gateway — cache field extraction, cache-aware cost calc, 4 Prometheus counters

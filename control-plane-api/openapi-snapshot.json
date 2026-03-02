@@ -1741,6 +1741,48 @@
         "title": "BudgetCheckResponse",
         "type": "object"
       },
+      "BulkActionFailure": {
+        "description": "Schema for a single failed item in bulk action",
+        "properties": {
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "error"
+        ],
+        "title": "BulkActionFailure",
+        "type": "object"
+      },
+      "BulkActionResult": {
+        "description": "Schema for bulk action result",
+        "properties": {
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/BulkActionFailure"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "succeeded",
+          "failed"
+        ],
+        "title": "BulkActionResult",
+        "type": "object"
+      },
       "BulkResultItem": {
         "description": "Result of a single row in bulk onboarding.",
         "properties": {
@@ -1898,6 +1940,55 @@
           "errors"
         ],
         "title": "BulkRevokeResponse",
+        "type": "object"
+      },
+      "BulkSubscriptionAction": {
+        "description": "Schema for bulk approve/reject actions",
+        "example": {
+          "action": "approve",
+          "ids": [
+            "550e8400-e29b-41d4-a716-446655440000"
+          ]
+        },
+        "properties": {
+          "action": {
+            "description": "Action to perform",
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Ids",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reason (required for reject)",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "ids",
+          "action"
+        ],
+        "title": "BulkSubscriptionAction",
         "type": "object"
       },
       "BusinessMetrics": {
@@ -18271,6 +18362,25 @@
         "title": "SubscriptionListResponse",
         "type": "object"
       },
+      "SubscriptionReject": {
+        "description": "Schema for rejecting a subscription",
+        "example": {
+          "reason": "API not suitable for this application"
+        },
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "SubscriptionReject",
+        "type": "object"
+      },
       "SubscriptionResponse": {
         "description": "Schema for subscription response",
         "properties": {
@@ -18409,6 +18519,29 @@
               }
             ]
           },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "rejected_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected By"
+          },
           "revoked_at": {
             "anyOf": [
               {
@@ -18509,6 +18642,52 @@
         "title": "SubscriptionRevoke",
         "type": "object"
       },
+      "SubscriptionStats": {
+        "description": "Schema for subscription statistics",
+        "properties": {
+          "avg_approval_time_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Approval Time Hours"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Status",
+            "type": "object"
+          },
+          "by_tenant": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Tenant",
+            "type": "object"
+          },
+          "recent_24h": {
+            "title": "Recent 24H",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_status",
+          "by_tenant",
+          "recent_24h"
+        ],
+        "title": "SubscriptionStats",
+        "type": "object"
+      },
       "SubscriptionStatusEnum": {
         "description": "Subscription status enum for API responses",
         "enum": [
@@ -18516,7 +18695,8 @@
           "active",
           "suspended",
           "revoked",
-          "expired"
+          "expired",
+          "rejected"
         ],
         "title": "SubscriptionStatusEnum",
         "type": "string"
@@ -18690,6 +18870,29 @@
                 "type": "null"
               }
             ]
+          },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "rejected_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected By"
           },
           "revoked_at": {
             "anyOf": [
@@ -36868,6 +37071,53 @@
         ]
       }
     },
+    "/v1/subscriptions/bulk": {
+      "post": {
+        "description": "Perform bulk approve or reject on multiple subscriptions.\n\nMaximum 50 subscriptions per call. Each subscription is processed\nindependently \u2014 partial failures are reported.",
+        "operationId": "bulk_subscription_action_v1_subscriptions_bulk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSubscriptionAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkActionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Subscription Action",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
     "/v1/subscriptions/my": {
       "get": {
         "description": "List current user's subscriptions.\n\nUsed by the Developer Portal to show user's subscribed APIs.",
@@ -37099,6 +37349,54 @@
           }
         ],
         "summary": "List Pending Subscriptions",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/v1/subscriptions/tenant/{tenant_id}/stats": {
+      "get": {
+        "description": "Get subscription statistics for a tenant.\n\nReturns counts by status, recent activity, and average approval time.",
+        "operationId": "get_subscription_stats_v1_subscriptions_tenant__tenant_id__stats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Subscription Stats",
         "tags": [
           "Subscriptions"
         ]
@@ -37361,6 +37659,65 @@
           }
         ],
         "summary": "Reactivate Subscription",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/v1/subscriptions/{subscription_id}/reject": {
+      "post": {
+        "description": "Reject a pending subscription request.\n\nOnly pending subscriptions can be rejected. The reason is stored\nfor audit purposes.",
+        "operationId": "reject_subscription_v1_subscriptions__subscription_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionReject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Subscription",
         "tags": [
           "Subscriptions"
         ]

@@ -25176,7 +25176,7 @@
     },
     "/v1/admin/gateways/health-summary": {
       "get": {
-        "description": "Gateway health status counts.",
+        "description": "Gateway health status counts.\n\ncpi-admin sees all gateways; tenant-admin sees only own tenant's gateways.",
         "operationId": "get_health_summary_v1_admin_gateways_health_summary_get",
         "responses": {
           "200": {
@@ -25201,7 +25201,7 @@
     },
     "/v1/admin/gateways/metrics": {
       "get": {
-        "description": "Aggregated metrics across all gateways (health + sync).",
+        "description": "Aggregated metrics across all gateways (health + sync).\n\ncpi-admin sees all gateways; tenant-admin sees only own tenant's gateways.",
         "operationId": "get_aggregated_metrics_v1_admin_gateways_metrics_get",
         "responses": {
           "200": {
@@ -25219,6 +25219,31 @@
           }
         ],
         "summary": "Get Aggregated Metrics",
+        "tags": [
+          "Gateway Observability"
+        ]
+      }
+    },
+    "/v1/admin/gateways/metrics/operations": {
+      "get": {
+        "description": "Adapter operation metrics from in-process Prometheus registry.\n\nReturns per-gateway-type: total_ops, success_rate, avg_latency_ms.\ncpi-admin only (process-wide metrics, not tenant-scoped).",
+        "operationId": "get_adapter_operation_metrics_v1_admin_gateways_metrics_operations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Adapter Operation Metrics",
         "tags": [
           "Gateway Observability"
         ]
@@ -25446,6 +25471,53 @@
         ]
       }
     },
+    "/v1/admin/gateways/{gateway_id}/health-history": {
+      "get": {
+        "description": "Health check details for a specific gateway.\n\nReturns current status, last check time, and health_details (check_method,\nconsecutive_failures, last_error, etc.).",
+        "operationId": "get_health_history_v1_admin_gateways__gateway_id__health_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Health History",
+        "tags": [
+          "Gateway Observability"
+        ]
+      }
+    },
     "/v1/admin/gateways/{gateway_id}/import": {
       "post": {
         "description": "Import APIs from a gateway into the STOA catalog.",
@@ -25550,7 +25622,7 @@
     },
     "/v1/admin/gateways/{gateway_id}/metrics": {
       "get": {
-        "description": "Per-gateway detailed metrics.",
+        "description": "Per-gateway detailed metrics.\n\ncpi-admin sees any gateway; tenant-admin only sees own tenant's gateways.",
         "operationId": "get_gateway_metrics_v1_admin_gateways__gateway_id__metrics_get",
         "parameters": [
           {

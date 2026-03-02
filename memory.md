@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-01 (Arena LLM routing fix PR #1317, llm_routing 39.9→91.5)
+> Derniere MAJ: 2026-03-02 (Queue-Driven AI Factory PR #1321, stoa-parallel reliability PR #1243)
 
 ## ✅ DONE
 
@@ -16,6 +16,8 @@
 - ✅ CAB-1614: Arena 20 Dimensions — Blue Ocean (21 pts) — PRs #1270, #1276 (12 new k6 scenarios, features gate, 4-category Grafana, VPS sidecar deploy)
 - ✅ CAB-1552: Lazy MCP Discovery + ADR-051 (5 pts) — PR #1209 (LazyMcpDiscovery struct, moka cache, 10 tests)
 - ✅ Arena LLM routing fix — PRs #1313, #1317 (Mistral/OpenAI-compat corpus + LLM_BASE_URL fix). Score: llm_routing 39.9→91.5, llm_cost ~40→84.8, composite 83.90
+- ✅ Queue-Driven AI Factory (8 pts) — PR #1321 (+380/-1279 LOC, 8 files). Unified pipeline: Linear → Council → PocketBase queue → dispatch-daemon → Contabo workers. Removed 3 GHA jobs (plan-validate, implement, implement-fast). Added `push_queue_job()` + `notify_queued()` to notify.sh, enriched dispatch-daemon prompts, `/stoa queue` Slack commands, inline S2 worker validation
+- ✅ CAB-1608: stoa-parallel reliability (3 pts) — PR #1243 (3 root causes fixed)
 
 ### Cycle 11 (Feb 27) — 152/152 pts, 8 tickets, 9 PRs, 3h wall clock
 - ✅ CAB-1539: Portal Unit Tests (21 pts) — PR #1181 (15 untested components)
@@ -142,6 +144,7 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 - C10 CLOSED: 193/193 pts, 13 tickets, 100%
 - C11 CLOSED: 152/152 pts, 8 tickets, 9 PRs, 3h wall clock, 4 parallel instances
 - **Cache token tracking** (CAB-1601): end-to-end Anthropic prompt cache monitoring. Gateway extracts cache_creation/read tokens → Prometheus counters → CP API stores in usage_summaries (migration 049) → Grafana dashboard (cache ratio, savings, per-tenant cost, model mix). Verify: `stoa-dogfood.sh --verify`
+- **Queue-Driven AI Factory** (PR #1321): Unified pipeline replaces GHA implement jobs. Flow: Linear → n8n → GHA Council S1 → PocketBase queue → dispatch-daemon → Contabo workers. Council Go → auto-queue (no `/go` needed). Council < 8.0 → rejected. Schema: 5 new columns on queue_jobs (council_score, estimate, mode, source, description). Dispatch enriched prompts with score/mode/estimate. `/stoa queue [stats|pause|resume]` Slack commands. Inline S2 for >5pt tickets (worker self-validates plan before implementing)
 - **Arena Enterprise scores** (2026-03-01): STOA 83.90 (CI95 [83.74, 84.00]) | Gravitee 46.72 | Kong 5.46. LLM routing fix: `LLM_BASE_URL = LLM_MOCK_URL || TARGET_URL` routes LLM calls to mock backend in arena mode (PRs #1313, #1317)
 - Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330+ gateway tests
 - Session 2026-02-27: 9 PRs merged (#1181-#1191), parallel 4-pane dispatch, 152 pts in 3h

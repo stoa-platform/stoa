@@ -257,8 +257,6 @@ async def send_message(
     if not api_key:
         api_key = await svc.get_tenant_api_key(tenant_id) or ""
     if not api_key:
-        api_key = settings.CHAT_PROVIDER_API_KEY
-    if not api_key:
         raise HTTPException(
             status_code=400,
             detail="No API key: set X-Provider-Api-Key header or configure tenant key via PUT /provider-key",

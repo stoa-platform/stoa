@@ -5,9 +5,15 @@ import random
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
 
 from ..auth import User, get_current_user
+from ..schemas.monitoring import (
+    APITransaction,
+    APITransactionStats,
+    APITransactionSummary,
+    TransactionSpan,
+)
+from ..services.monitoring_service import MonitoringService
 
 logger = logging.getLogger(__name__)
 
@@ -15,66 +21,25 @@ router = APIRouter(prefix="/v1/monitoring", tags=["Monitoring"])
 
 
 # =============================================================================
-# MODELS
+# OPENSEARCH SERVICE DEPENDENCY
 # =============================================================================
 
 
-class TransactionSpan(BaseModel):
-    name: str
-    service: str
-    start_offset_ms: int
-    duration_ms: int
-    status: str  # success, error
-    metadata: dict = {}
+def _get_monitoring_service() -> MonitoringService | None:
+    """Return a MonitoringService if OpenSearch is available, else None."""
+    try:
+        from ..opensearch.opensearch_integration import OpenSearchService
 
-
-class APITransactionSummary(BaseModel):
-    id: str
-    trace_id: str
-    api_name: str
-    method: str
-    path: str
-    status_code: int
-    status: str  # success, error, timeout, pending
-    started_at: str
-    total_duration_ms: int
-    spans_count: int
-
-
-class APITransaction(BaseModel):
-    id: str
-    trace_id: str
-    api_name: str
-    tenant_id: str
-    method: str
-    path: str
-    status_code: int
-    status: str
-    client_ip: str | None = None
-    user_id: str | None = None
-    started_at: str
-    total_duration_ms: int
-    spans: list[TransactionSpan]
-    request_headers: dict | None = None
-    response_headers: dict | None = None
-    error_message: str | None = None
-
-
-class APITransactionStats(BaseModel):
-    total_requests: int
-    success_count: int
-    error_count: int
-    timeout_count: int
-    avg_latency_ms: float
-    p95_latency_ms: float
-    p99_latency_ms: float
-    requests_per_minute: float
-    by_api: dict
-    by_status_code: dict
+        instance = OpenSearchService.get_instance()
+        if instance and instance.client:
+            return MonitoringService(instance.client)
+    except Exception:
+        logger.debug("OpenSearch not available, will use demo data")
+    return None
 
 
 # =============================================================================
-# DEMO DATA GENERATOR
+# DEMO DATA GENERATORS (fallback when OpenSearch is unavailable)
 # =============================================================================
 
 
@@ -263,26 +228,40 @@ def generate_stats() -> APITransactionStats:
 @router.get("/transactions")
 async def list_transactions(
     limit: int = Query(50, ge=1, le=200),
-    tenant_id: str | None = None,
     api_name: str | None = None,
     status: str | None = None,
+    time_range: int = Query(60, ge=1, le=1440),
     user: User = Depends(get_current_user),
 ):
     """
     List recent API transactions.
 
     Returns transaction summaries for efficient list display.
+    Uses real OpenSearch data when available, falls back to demo data.
     """
-    # Use user's tenant if not CPI admin
-    effective_tenant = tenant_id or user.tenant_id or "demo"
+    tenant_id = user.tenant_id or "demo"
 
-    transactions = generate_demo_transactions(limit, effective_tenant)
+    # Try real data from OpenSearch
+    svc = _get_monitoring_service()
+    if svc:
+        result = await svc.list_transactions(
+            tenant_id=tenant_id,
+            limit=limit,
+            api_name=api_name,
+            status=status,
+            time_range_minutes=time_range,
+        )
+        if result is not None:
+            return {
+                "transactions": [t.model_dump() for t in result],
+                "total": len(result),
+                "demo_mode": False,
+            }
 
-    # Filter by api_name if provided
+    # Fallback to demo data
+    transactions = generate_demo_transactions(limit, tenant_id)
     if api_name:
         transactions = [t for t in transactions if t.api_name == api_name]
-
-    # Filter by status if provided
     if status:
         transactions = [t for t in transactions if t.status == status]
 
@@ -295,13 +274,25 @@ async def list_transactions(
 
 @router.get("/transactions/stats")
 async def get_transaction_stats(
+    time_range: int = Query(60, ge=1, le=1440),
     user: User = Depends(get_current_user),
 ):
     """
     Get API transaction statistics.
 
     Returns aggregated metrics about API calls.
+    Uses real OpenSearch data when available, falls back to demo data.
     """
+    tenant_id = user.tenant_id or "demo"
+
+    # Try real data from OpenSearch
+    svc = _get_monitoring_service()
+    if svc:
+        result = await svc.get_transaction_stats(tenant_id=tenant_id, time_range_minutes=time_range)
+        if result is not None:
+            return {**result.model_dump(), "demo_mode": False}
+
+    # Fallback to demo data
     return {**generate_stats().model_dump(), "demo_mode": True}
 
 
@@ -314,7 +305,17 @@ async def get_transaction(
     Get detailed information about a specific transaction.
 
     Includes all spans with timing and metadata.
+    Uses real OpenSearch data when available, falls back to demo data.
     """
     tenant_id = user.tenant_id or "demo"
+
+    # Try real data from OpenSearch
+    svc = _get_monitoring_service()
+    if svc:
+        result = await svc.get_transaction(event_id=transaction_id, tenant_id=tenant_id)
+        if result is not None:
+            return {**result.model_dump(), "demo_mode": False}
+
+    # Fallback to demo data
     transaction = generate_transaction_detail(transaction_id, tenant_id)
     return {**transaction.model_dump(), "demo_mode": True}

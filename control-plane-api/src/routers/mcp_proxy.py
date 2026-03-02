@@ -179,6 +179,18 @@ class ToolInvokeResponse(BaseModel):
 # =============================================================================
 
 
+async def _fetch_tools(user: User, auth_token: str) -> list[dict]:
+    """Fetch the flat tool array from stoa-gateway and return as list of dicts."""
+    result = await proxy_to_mcp("GET", "/mcp/v1/tools", user, auth_token)
+    # stoa-gateway returns a flat JSON array, not {tools: [...]}
+    if isinstance(result, list):
+        return result
+    # Fallback: if response is already wrapped (future-proofing)
+    if isinstance(result, dict) and "tools" in result:
+        return result["tools"]
+    return []
+
+
 @router.get("", response_model=ListToolsResponse)
 async def list_tools(
     request: Request,
@@ -195,22 +207,24 @@ async def list_tools(
     """
     List all available MCP tools.
 
-    Proxies to MCP Gateway with user context for role-based filtering.
+    Proxies to stoa-gateway and wraps the flat array into ListToolsResponse.
     """
-    params = {
-        "tag": tag,
-        "tags": tags,
-        "category": category,
-        "search": search,
-        "tenant_id": tenant_id,
-        "cursor": cursor,
-        "limit": limit,
-    }
-    # Remove None values
-    params = {k: v for k, v in params.items() if v is not None}
+    all_tools = await _fetch_tools(user, credentials.credentials)
 
-    result = await proxy_to_mcp("GET", "/mcp/v1/tools", user, credentials.credentials, params=params)
-    return result
+    # Client-side filtering (stoa-gateway returns all tools)
+    filtered = all_tools
+    if search:
+        q = search.lower()
+        filtered = [t for t in filtered if q in t.get("name", "").lower() or q in (t.get("description") or "").lower()]
+    if tag:
+        filtered = [t for t in filtered if tag in (t.get("tags") or [])]
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",")]
+        filtered = [t for t in filtered if any(tg in (t.get("tags") or []) for tg in tag_list)]
+    if tenant_id:
+        filtered = [t for t in filtered if t.get("tenant_id") == tenant_id]
+
+    return ListToolsResponse(tools=filtered[:limit], totalCount=len(filtered))
 
 
 @router.get("/tags", response_model=ListTagsResponse)
@@ -222,10 +236,19 @@ async def get_tool_tags(
     """
     Get all available tool tags with counts.
 
-    Proxies to MCP Gateway.
+    Extracts tags from tools since stoa-gateway has no dedicated tags endpoint.
     """
-    result = await proxy_to_mcp("GET", "/mcp/v1/tools/tags", user, credentials.credentials)
-    return result
+    try:
+        all_tools = await _fetch_tools(user, credentials.credentials)
+        tag_counts: dict[str, int] = {}
+        for tool in all_tools:
+            for t in tool.get("tags") or []:
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        return ListTagsResponse(tags=sorted(tag_counts.keys()), tagCounts=tag_counts)
+    except HTTPException:
+        # Graceful degradation — return empty tags instead of 503
+        logger.warning("Failed to fetch tags from stoa-gateway, returning empty")
+        return ListTagsResponse(tags=[], tagCounts={})
 
 
 @router.get("/categories", response_model=ListCategoriesResponse)
@@ -235,12 +258,11 @@ async def get_tool_categories(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
-    Get all available tool categories with counts.
+    Get all available tool categories.
 
-    Proxies to MCP Gateway.
+    stoa-gateway does not have categories — returns empty list.
     """
-    result = await proxy_to_mcp("GET", "/mcp/v1/tools/categories", user, credentials.credentials)
-    return result
+    return ListCategoriesResponse(categories=[])
 
 
 @router.get("/{tool_name}", response_model=MCPToolResponse)
@@ -251,12 +273,16 @@ async def get_tool(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
-    Get details of a specific tool.
+    Get details of a specific tool by name.
 
-    Proxies to MCP Gateway.
+    Fetches all tools and filters client-side since stoa-gateway
+    has no single-tool endpoint.
     """
-    result = await proxy_to_mcp("GET", f"/mcp/v1/tools/{tool_name}", user, credentials.credentials)
-    return result
+    all_tools = await _fetch_tools(user, credentials.credentials)
+    for tool in all_tools:
+        if tool.get("name") == tool_name:
+            return tool
+    raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found")
 
 
 @router.get("/{tool_name}/schema")
@@ -269,10 +295,13 @@ async def get_tool_schema(
     """
     Get the input schema for a tool.
 
-    Proxies to MCP Gateway.
+    Fetches the tool and returns its inputSchema field.
     """
-    result = await proxy_to_mcp("GET", f"/mcp/v1/tools/{tool_name}/schema", user, credentials.credentials)
-    return result
+    all_tools = await _fetch_tools(user, credentials.credentials)
+    for tool in all_tools:
+        if tool.get("name") == tool_name:
+            return {"name": tool_name, "inputSchema": tool.get("inputSchema")}
+    raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found")
 
 
 @router.post("/{tool_name}/invoke", response_model=ToolInvokeResponse)
@@ -286,13 +315,13 @@ async def invoke_tool(
     """
     Invoke a tool with the provided arguments.
 
-    Proxies to MCP Gateway with user context.
+    Proxies to stoa-gateway with user context.
     """
     result = await proxy_to_mcp(
         "POST",
         f"/mcp/v1/tools/{tool_name}/invoke",
         user,
         credentials.credentials,
-        json_body={"name": tool_name, "arguments": body.arguments},
+        json_body={"tool": tool_name, "arguments": body.arguments},
     )
     return result

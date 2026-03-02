@@ -281,9 +281,11 @@ jobs:
 
   # ----- Stage 2: Plan Validation (runs on /go approval) -----
   plan-validate:
+    # Defense-in-depth: author_association guard for public repo fork safety
     if: |
       vars.DISABLE_L1_IMPLEMENT != 'true' &&
       github.event_name == 'issue_comment' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
       (
         github.event.comment.body == '/go' ||
         github.event.comment.body == '/approve' ||
@@ -524,9 +526,11 @@ jobs:
 
   # ----- Stage 3: Implementation (runs on /go-plan approval) -----
   implement:
+    # Defense-in-depth: author_association guard for public repo fork safety
     if: |
       vars.DISABLE_L1_IMPLEMENT != 'true' &&
       github.event_name == 'issue_comment' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
       (
         github.event.comment.body == '/go-plan' ||
         startsWith(github.event.comment.body, '/go-plan ')

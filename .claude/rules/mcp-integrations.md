@@ -23,9 +23,9 @@ Connected via Claude.ai account settings (not local `.claude/settings.json`).
 
 | Entity | ID | Name |
 |--------|----|------|
-| Team | `624a9948-a160-4e47-aba5-7f9404d23506` | CAB-ING |
-| Project | `227427af-6844-484d-bb4a-dedeffc68825` | STOA Platform |
-| Assignee | `0543749d-ecde-4edf-aec1-6f372aafafce` | Christophe ABOULICAM |
+| Team | `<LINEAR_TEAM_ID>` | CAB-ING |
+| Project | `<LINEAR_PROJECT_ID>` | STOA Platform |
+| Assignee | `<LINEAR_ASSIGNEE_ID>` | `<PRIMARY_ASSIGNEE>` |
 
 ### When to Use Linear MCP
 
@@ -94,7 +94,7 @@ Completed in PR #XXX (merged to main)
 
 ### STOA DNS Zone
 
-- Zone: `gostoa.dev` (`748bf095e4882ca8e46f21837067ced8`)
+- Zone: `gostoa.dev` (`<CF_ZONE_ID>`)
 - Proxy: OFF (DNS-only, TLS terminated at OVH/Hetzner)
 - Management: Cloudflare API token in Infisical
 

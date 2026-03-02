@@ -26,6 +26,7 @@ from ..auth import User, get_current_user, require_tenant_access
 from ..config import settings
 from ..database import get_db
 from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
+from ..auth.rbac import require_role
 from ..schemas.chat import (
     ChatTenantUsageResponse,
     ChatUsageResponse,
@@ -36,6 +37,7 @@ from ..schemas.chat import (
     ConversationResponse,
     ConversationUpdate,
     MessageSend,
+    ProviderKeySet,
     TokenBudgetStatusResponse,
     TokenUsageStatsResponse,
 )
@@ -253,9 +255,11 @@ async def send_message(
 ) -> EventSourceResponse:
     api_key = request.headers.get("X-Provider-Api-Key", "")
     if not api_key:
+        api_key = await svc.get_tenant_api_key(tenant_id) or ""
+    if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="Missing X-Provider-Api-Key header",
+            detail="No API key: set X-Provider-Api-Key header or configure tenant key via PUT /provider-key",
         )
 
     async def event_generator():  # type: ignore[return]
@@ -348,3 +352,26 @@ async def get_usage_stats(
     repo = ChatTokenUsageRepository(db)
     stats = await repo.get_usage_stats(tenant_id, days=days)
     return TokenUsageStatsResponse(**stats)
+
+
+# ---------------------------------------------------------------------------
+# Provider key management (admin)
+# ---------------------------------------------------------------------------
+
+
+@router.put(
+    "/provider-key",
+    status_code=204,
+    summary="Set the tenant-level chat provider API key (admin)",
+)
+@require_tenant_access
+@require_role(["cpi-admin", "tenant-admin"])
+async def set_provider_key(
+    tenant_id: str,
+    body: ProviderKeySet,
+    user: User = Depends(get_current_user),
+    svc: ChatService = Depends(_service),
+) -> None:
+    ok = await svc.set_tenant_api_key(tenant_id, body.api_key)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Tenant not found")

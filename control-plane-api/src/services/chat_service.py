@@ -477,6 +477,33 @@ class ChatService:
         data = decrypt_auth_config(encrypted)
         return data.get("api_key", "")
 
+    async def get_tenant_api_key(self, tenant_id: str) -> str | None:
+        """Read the encrypted chat provider API key from tenant settings."""
+        from ..models.tenant import Tenant
+
+        q = select(Tenant).where(Tenant.id == tenant_id)
+        tenant = (await self.session.execute(q)).scalar_one_or_none()
+        if tenant is None:
+            return None
+        encrypted = (tenant.settings or {}).get("chat_provider_api_key")
+        if not encrypted:
+            return None
+        return self.decrypt_api_key(encrypted)
+
+    async def set_tenant_api_key(self, tenant_id: str, api_key: str) -> bool:
+        """Encrypt and store the chat provider API key in tenant settings."""
+        from ..models.tenant import Tenant
+
+        q = select(Tenant).where(Tenant.id == tenant_id)
+        tenant = (await self.session.execute(q)).scalar_one_or_none()
+        if tenant is None:
+            return False
+        settings = dict(tenant.settings or {})
+        settings["chat_provider_api_key"] = self.encrypt_api_key(api_key)
+        tenant.settings = settings
+        await self.session.flush()
+        return True
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

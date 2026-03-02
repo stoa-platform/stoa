@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { EnvironmentProvider } from './contexts/EnvironmentContext';
 import { Layout } from './components/Layout';
 import { FloatingChat } from './components/FloatingChat';
+import { useChatService } from './hooks/useChatService';
 import { PlatformStatus } from './components/PlatformStatus';
 import { TokenUsageWidget } from './components/chat/TokenUsageWidget';
 import { quickLinks } from './config';
@@ -404,6 +405,11 @@ const QuickActionCard = memo(function QuickActionCard({
   );
 });
 
+function ConnectedFloatingChat() {
+  const { sendMessage } = useChatService();
+  return <FloatingChat onSendMessage={(msg) => sendMessage(msg)} />;
+}
+
 function ProtectedRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -482,7 +488,7 @@ function ProtectedRoutes() {
         </Layout>
       </CommandPaletteProvider>
       {/* CAB-285: Floating AI assistant — rendered above Layout so it persists across page navigation */}
-      <FloatingChat />
+      <ConnectedFloatingChat />
     </EnvironmentProvider>
   );
 }

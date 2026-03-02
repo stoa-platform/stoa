@@ -136,6 +136,10 @@ class ApiService {
     this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
+  getAuthToken(): string | null {
+    return this.authToken;
+  }
+
   clearAuthToken() {
     this.authToken = null;
     delete this.client.defaults.headers.common['Authorization'];
@@ -797,6 +801,16 @@ class ApiService {
   async getChatUsageStats(tenantId: string, days = 30): Promise<TokenUsageStats> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/metering`, {
       params: { days },
+    });
+    return data;
+  }
+
+  async createChatConversation(
+    tenantId: string,
+    title = 'New conversation'
+  ): Promise<{ id: string }> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/chat/conversations`, {
+      title,
     });
     return data;
   }

@@ -109,7 +109,7 @@ describe('ConnectorCallback', () => {
 
     await waitFor(() => {
       expect(mockToast.error).toHaveBeenCalledWith('Connection failed', 'Token exchange failed');
-      expect(mockNavigate).toHaveBeenCalledWith('/mcp-connectors', { replace: true });
+      expect(mockNavigate).toHaveBeenCalledWith('/mcp-servers?tab=catalog', { replace: true });
     });
   });
 
@@ -118,7 +118,7 @@ describe('ConnectorCallback', () => {
 
     await waitFor(() => {
       expect(mockToast.error).toHaveBeenCalledWith('Connection failed', 'User denied access');
-      expect(mockNavigate).toHaveBeenCalledWith('/mcp-connectors', { replace: true });
+      expect(mockNavigate).toHaveBeenCalledWith('/mcp-servers?tab=catalog', { replace: true });
     });
   });
 
@@ -130,7 +130,7 @@ describe('ConnectorCallback', () => {
         'Connection failed',
         'Missing authorization parameters'
       );
-      expect(mockNavigate).toHaveBeenCalledWith('/mcp-connectors', { replace: true });
+      expect(mockNavigate).toHaveBeenCalledWith('/mcp-servers?tab=catalog', { replace: true });
     });
   });
 });

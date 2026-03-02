@@ -18,7 +18,7 @@ export function ConnectorCallback() {
     if (error) {
       const description = searchParams.get('error_description') || 'Authorization was denied';
       toast.error('Connection failed', description);
-      navigate('/mcp-connectors', { replace: true });
+      navigate('/mcp-servers?tab=catalog', { replace: true });
       return;
     }
 
@@ -27,7 +27,7 @@ export function ConnectorCallback() {
 
     if (!code || !state) {
       toast.error('Connection failed', 'Missing authorization parameters');
-      navigate('/mcp-connectors', { replace: true });
+      navigate('/mcp-servers?tab=catalog', { replace: true });
       return;
     }
 
@@ -44,7 +44,7 @@ export function ConnectorCallback() {
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'Failed to complete authorization';
         toast.error('Connection failed', message);
-        navigate('/mcp-connectors', { replace: true });
+        navigate('/mcp-servers?tab=catalog', { replace: true });
       });
   }, [searchParams, navigate, toast]);
 

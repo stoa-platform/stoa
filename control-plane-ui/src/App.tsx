@@ -19,6 +19,7 @@ import { ErrorBoundary } from '@stoa/shared/components/ErrorBoundary';
 // Lazy load pages for code splitting
 // Consolidated imports — single module loader per multi-export file
 const aiToolsModule = () => import('./pages/AITools');
+const mcpServersModule = () => import('./pages/MCPServers');
 const externalMcpModule = () => import('./pages/ExternalMCPServers');
 const mcpConnectorsModule = () => import('./pages/MCPConnectors');
 const gatewaysModule = () => import('./pages/Gateways');
@@ -45,14 +46,11 @@ const ToolCatalog = lazy(() => aiToolsModule().then((m) => ({ default: m.ToolCat
 const ToolDetail = lazy(() => aiToolsModule().then((m) => ({ default: m.ToolDetail })));
 const MySubscriptions = lazy(() => aiToolsModule().then((m) => ({ default: m.MySubscriptions })));
 const UsageDashboard = lazy(() => aiToolsModule().then((m) => ({ default: m.UsageDashboard })));
-const ExternalMCPServersList = lazy(() =>
-  externalMcpModule().then((m) => ({ default: m.ExternalMCPServersList }))
+const MCPServersUnified = lazy(() =>
+  mcpServersModule().then((m) => ({ default: m.MCPServersUnified }))
 );
 const ExternalMCPServerDetail = lazy(() =>
   externalMcpModule().then((m) => ({ default: m.ExternalMCPServerDetail }))
-);
-const ConnectorCatalog = lazy(() =>
-  mcpConnectorsModule().then((m) => ({ default: m.ConnectorCatalog }))
 );
 const ConnectorCallback = lazy(() =>
   mcpConnectorsModule().then((m) => ({ default: m.ConnectorCallback }))
@@ -449,10 +447,17 @@ function ProtectedRoutes() {
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/monitoring" element={<APIMonitoring />} />
                 <Route path="/errors" element={<ErrorSnapshots />} />
-                <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
+                <Route path="/mcp-servers" element={<MCPServersUnified />} />
                 <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
-                <Route path="/mcp-connectors" element={<ConnectorCatalog />} />
                 <Route path="/mcp-connectors/callback" element={<ConnectorCallback />} />
+                <Route
+                  path="/mcp-connectors"
+                  element={<Navigate to="/mcp-servers?tab=catalog" replace />}
+                />
+                <Route
+                  path="/external-mcp-servers"
+                  element={<Navigate to="/mcp-servers?tab=custom" replace />}
+                />
                 <Route path="/gateway" element={<GatewayStatus />} />
                 <Route path="/gateways/modes" element={<GatewayModes />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />

@@ -127,17 +127,11 @@ const navigationSections: NavSection[] = [
         badge: 'STOA',
       },
       {
-        name: 'nav.mcpConnectors',
-        href: '/mcp-connectors',
+        name: 'nav.mcpServers',
+        href: '/mcp-servers',
         icon: Puzzle,
         permission: 'admin:servers',
         badge: 'NEW',
-      },
-      {
-        name: 'nav.externalMcpServers',
-        href: '/external-mcp-servers',
-        icon: Server,
-        permission: 'admin:servers',
       },
       {
         name: 'nav.applications',

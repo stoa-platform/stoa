@@ -6,6 +6,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '../config';
+import { getFriendlyErrorMessage } from '@stoa/shared/utils';
 
 // Create axios instance with base configuration
 export const apiClient: AxiosInstance = axios.create({
@@ -74,6 +75,10 @@ apiClient.interceptors.response.use(
       console.error('API: No response received', error.message);
     } else {
       console.error('API: Request setup error', error.message);
+    }
+    // CAB-1629: Replace raw HTTP status messages with user-friendly ones
+    if (error instanceof Error) {
+      error.message = getFriendlyErrorMessage(error, error.message);
     }
     return Promise.reject(error);
   }

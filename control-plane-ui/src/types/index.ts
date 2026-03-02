@@ -1407,3 +1407,46 @@ export interface RoleListResponse {
   roles: RoleDefinition[];
   total: number;
 }
+
+// =============================================================================
+// MCP Connector Catalog Types (Phase 2 UI)
+// =============================================================================
+
+export interface ConnectorTemplate {
+  id: string;
+  slug: string;
+  display_name: string;
+  description?: string;
+  icon_url?: string;
+  category: string;
+  mcp_base_url: string;
+  transport: string;
+  oauth_scopes?: string;
+  oauth_pkce_required: boolean;
+  documentation_url?: string;
+  is_featured: boolean;
+  enabled: boolean;
+  sort_order: number;
+  is_connected: boolean;
+  connected_server_id?: string;
+  connection_health?: string;
+}
+
+export interface ConnectorCatalogResponse {
+  connectors: ConnectorTemplate[];
+  total_count: number;
+}
+
+export interface AuthorizeResponse {
+  authorize_url: string;
+  state: string;
+}
+
+export interface CallbackResponse {
+  server_id: string;
+  server_name: string;
+  display_name: string;
+  slug: string;
+  tools_sync_triggered: boolean;
+  redirect_url?: string;
+}

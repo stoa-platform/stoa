@@ -20,6 +20,7 @@ import { ErrorBoundary } from '@stoa/shared/components/ErrorBoundary';
 // Consolidated imports — single module loader per multi-export file
 const aiToolsModule = () => import('./pages/AITools');
 const externalMcpModule = () => import('./pages/ExternalMCPServers');
+const mcpConnectorsModule = () => import('./pages/MCPConnectors');
 const gatewaysModule = () => import('./pages/Gateways');
 
 const Tenants = lazy(() => import('./pages/Tenants').then((m) => ({ default: m.Tenants })));
@@ -46,6 +47,12 @@ const ExternalMCPServersList = lazy(() =>
 );
 const ExternalMCPServerDetail = lazy(() =>
   externalMcpModule().then((m) => ({ default: m.ExternalMCPServerDetail }))
+);
+const ConnectorCatalog = lazy(() =>
+  mcpConnectorsModule().then((m) => ({ default: m.ConnectorCatalog }))
+);
+const ConnectorCallback = lazy(() =>
+  mcpConnectorsModule().then((m) => ({ default: m.ConnectorCallback }))
 );
 const AdminProspects = lazy(() =>
   import('./pages/AdminProspects').then((m) => ({ default: m.AdminProspects }))
@@ -440,6 +447,8 @@ function ProtectedRoutes() {
                 <Route path="/errors" element={<ErrorSnapshots />} />
                 <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
                 <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
+                <Route path="/mcp-connectors" element={<ConnectorCatalog />} />
+                <Route path="/mcp-connectors/callback" element={<ConnectorCallback />} />
                 <Route path="/gateway" element={<GatewayStatus />} />
                 <Route path="/gateways/modes" element={<GatewayModes />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />

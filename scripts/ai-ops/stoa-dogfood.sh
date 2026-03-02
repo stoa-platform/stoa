@@ -266,6 +266,26 @@ if 'cache_creation_input_tokens' in usage:
     fi
 }
 
+cmd_status() {
+    echo "=== STOA Dogfood Status ==="
+    if [[ -f "$PID_FILE" ]]; then
+        local pid
+        pid=$(cat "$PID_FILE")
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "  Status:  RUNNING"
+            echo "  PID:     $pid"
+            echo "  Port:    $GATEWAY_PORT"
+            echo "  Logs:    /tmp/stoa-dogfood.log"
+            echo "  Health:  $(curl -sf "http://localhost:${GATEWAY_PORT}/health" 2>/dev/null || echo 'unreachable')"
+        else
+            echo "  Status:  STOPPED (stale PID file)"
+            echo "  PID:     $pid (not running)"
+        fi
+    else
+        echo "  Status:  STOPPED (no PID file)"
+    fi
+}
+
 cmd_setup() {
     echo "=== STOA Dogfood Setup ==="
     echo ""
@@ -296,6 +316,7 @@ cmd_setup() {
 # --- Main ---
 case "${1:-}" in
     --stop)     cmd_stop ;;
+    --status)   cmd_status ;;
     --env)      cmd_env ;;
     --hegemon)  cmd_hegemon ;;
     --verify)   cmd_verify ;;
@@ -308,6 +329,7 @@ case "${1:-}" in
         echo "  (default)   Start the gateway locally"
         echo "  --start     Start the gateway locally"
         echo "  --stop      Stop the gateway"
+        echo "  --status    Show gateway status (PID, port, health)"
         echo "  --env       Print env vars for local tmux panes"
         echo "  --hegemon   Print env vars for HEGEMON workers (Contabo VPS)"
         echo "  --verify    Run health + passthrough + cache metrics checks"

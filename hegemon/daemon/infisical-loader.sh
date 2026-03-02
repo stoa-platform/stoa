@@ -100,6 +100,9 @@ _hegemon_load_secrets() {
   _val=$(_infisical_fetch "/n8n" "GITHUB_PAT")
   [ -n "$_val" ] && export GH_TOKEN="$_val"
 
+  # Route Claude API calls through STOA Gateway (metering, budget gate, kill-switch)
+  export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://mcp.gostoa.dev}"
+
   # Clear token from memory
   unset _HEGEMON_TOKEN
 

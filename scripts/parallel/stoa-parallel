@@ -97,6 +97,8 @@ for arg in "$@"; do
     --kill)
       echo "Killing session $SESSION..."
       tmux kill-session -t "$SESSION" 2>/dev/null || echo "No session to kill."
+      # Stop local gateway if running
+      "$STOA_DIR/scripts/ai-ops/stoa-dogfood.sh" --stop 2>/dev/null || true
       # Cleanup generated files
       for role in orchestre backend frontend auth mcp qa; do
         rm -f "$INSTANCES_DIR/${role}.local.md"
@@ -446,6 +448,10 @@ sleep 0.5
 tmux send-keys -t "$SESSION:workspace.1" "stoa-gc" Enter
 
 if [[ "$LAUNCH_CLAUDE" == "true" ]]; then
+  # ── Auto-start local gateway for LLM proxy metering ──
+  "$STOA_DIR/scripts/ai-ops/stoa-dogfood.sh" --start 2>/dev/null || \
+    echo "WARNING: Gateway start failed. Claude will call api.anthropic.com directly."
+
   # ── Ensure auto-merge is enabled on the repo ──
   # Without this, `stoa-merge` and `gh pr merge --auto` fail silently.
   # Only check once per session (idempotent, non-blocking).
@@ -560,6 +566,8 @@ CONFIGEOF
   echo "Launching 6 Claude instances (${max_count} Max + ${api_count} API)..."
 
   # ── ORCHESTRE (pane 0, always Max) ──
+  tmux send-keys -t "$SESSION:workspace.0" "export ANTHROPIC_BASE_URL=http://localhost:${GATEWAY_PORT:-8080}" Enter
+  sleep 0.3
   tmux send-keys -t "$SESSION:workspace.0" "claude" Enter
 
   # ── Specialist instances (panes 2-6) ──
@@ -568,10 +576,10 @@ CONFIGEOF
 
     if is_max_pane "$p"; then
       # Max pane: uses ~/.claude/ (has subscription credentials)
-      tmux send-keys -t "$SESSION:workspace.$p" "export STOA_INSTANCE=${role}" Enter
+      tmux send-keys -t "$SESSION:workspace.$p" "export STOA_INSTANCE=${role} ANTHROPIC_BASE_URL=http://localhost:${GATEWAY_PORT:-8080}" Enter
     else
       # API pane: CLAUDE_CONFIG_DIR points to dir WITHOUT Max credentials
-      tmux send-keys -t "$SESSION:workspace.$p" "export STOA_INSTANCE=${role} ANTHROPIC_API_KEY='${API_KEY}' CLAUDE_CONFIG_DIR='${API_CONFIG_DIR}'" Enter
+      tmux send-keys -t "$SESSION:workspace.$p" "export STOA_INSTANCE=${role} ANTHROPIC_API_KEY='${API_KEY}' CLAUDE_CONFIG_DIR='${API_CONFIG_DIR}' ANTHROPIC_BASE_URL=http://localhost:${GATEWAY_PORT:-8080}" Enter
     fi
     # Small delay to ensure env export is processed before claude launch
     sleep 0.3

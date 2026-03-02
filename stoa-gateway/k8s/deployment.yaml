@@ -64,6 +64,14 @@ spec:
               value: "true"
             - name: STOA_KAFKA_BROKERS
               value: "redpanda.stoa-system.svc.cluster.local:9092"
+            - name: STOA_LLM_PROXY_ENABLED
+              value: "true"
+            - name: STOA_LLM_PROXY_UPSTREAM_URL
+              value: "https://api.anthropic.com"
+            - name: STOA_LLM_PROXY_TIMEOUT_SECS
+              value: "300"
+            - name: STOA_LLM_PROXY_METERING_URL
+              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
           # REQUIRED for auto-registration (ADR-028):
           # The Secret `stoa-gateway-secrets` MUST contain:
           #   STOA_CONTROL_PLANE_API_KEY - API key matching one entry in

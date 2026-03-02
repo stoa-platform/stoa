@@ -94,9 +94,9 @@ measure pure gateway overhead, not backend/network latency.
 
 | Gateway | VPS IP | Health | Proxy | Backend |
 |---------|--------|--------|-------|---------|
-| stoa-vps | `51.83.45.13:8080` | `/health` | `/echo/get` | echo-local:8888 (Docker) |
-| kong-vps | `51.83.45.13:8000` | `:8001/status` | `/echo/get` | echo-local:8888 (Docker) |
-| gravitee-vps | `54.36.209.237:8082` | `:8083/management/...` | `/echo/get` | echo-local:8888 (Docker) |
+| stoa-vps | `<KONG_VPS_IP>:8080` | `/health` | `/echo/get` | echo-local:8888 (Docker) |
+| kong-vps | `<KONG_VPS_IP>:8000` | `:8001/status` | `/echo/get` | echo-local:8888 (Docker) |
+| gravitee-vps | `<GRAVITEE_VPS_IP>:8082` | `:8083/management/...` | `/echo/get` | echo-local:8888 (Docker) |
 
 ### Docker Network Setup (VPS only)
 
@@ -108,7 +108,7 @@ VPS gateways run in Docker. The echo container MUST be on the same Docker networ
 
 ### Deploy
 
-**K8s (all 3 gateways)**: `KUBECONFIG=~/.kube/config-stoa-ovh ./k8s/arena/deploy.sh`
+**K8s (all 3 gateways)**: `KUBECONFIG=~/.kube/<KUBECONFIG_OVH> ./k8s/arena/deploy.sh`
 
 **VPS sidecars**: `./deploy/vps/bench/deploy.sh`
 

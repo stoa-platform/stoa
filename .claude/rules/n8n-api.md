@@ -10,8 +10,8 @@ globs: "scripts/ai-ops/n8n-*,.github/workflows/claude-*"
 |-------|-------|
 | URL | `https://n8n.gostoa.dev` |
 | API Base | `https://n8n.gostoa.dev/api/v1` |
-| VPS | `51.254.139.205` (OVH Debian 12, shared with Healthchecks) |
-| SSH | `sshpass -p "$VPS_PASS" ssh debian@51.254.139.205` |
+| VPS | `<N8N_VPS_IP>` (OVH Debian 12, shared with Healthchecks) |
+| SSH | `sshpass -p "$VPS_PASS" ssh debian@<N8N_VPS_IP>` |
 | Path | `~/n8n/` (docker-compose.yml + .env) |
 | API Key | Infisical `/n8n/N8N_API_KEY` |
 
@@ -20,7 +20,7 @@ globs: "scripts/ai-ops/n8n-*,.github/workflows/claude-*"
 ```bash
 # Get API key from Infisical
 eval $(infisical-token)
-N8N_API_KEY=$(curl -s "https://vault.gostoa.dev/api/v3/secrets/raw/N8N_API_KEY?workspaceId=97972ffc-990b-4d28-9c4d-0664d217f03b&environment=prod&secretPath=/n8n" \
+N8N_API_KEY=$(curl -s "https://vault.gostoa.dev/api/v3/secrets/raw/N8N_API_KEY?workspaceId=$INFISICAL_PROJECT_ID&environment=prod&secretPath=/n8n" \
   -H "Authorization: Bearer $INFISICAL_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['secret']['secretValue'])")
 
 # All API calls use X-N8N-API-KEY header
@@ -102,7 +102,7 @@ Env vars are set in `~/n8n/.env` on the VPS. To add a new one:
 
 ```bash
 # 1. SSH into VPS
-sshpass -p "$VPS_PASS" ssh debian@51.254.139.205
+sshpass -p "$VPS_PASS" ssh debian@<N8N_VPS_IP>
 
 # 2. Add to .env
 echo 'MY_NEW_VAR=value' >> ~/n8n/.env
@@ -168,9 +168,9 @@ Always use `"responseMode": "responseNode"` when the workflow has a `respondToWe
 
 | ID | Name | Webhook Path | Purpose |
 |----|------|-------------|---------|
-| `0KPautNojGBEiPCT` | Approve Ticket Relay | `/webhook/approve-ticket` | Slack button → GitHub `/go` comment |
-| `6P1RIqDibRRl0lJd` | Linear → Council | — | Linear status change → GHA dispatch |
-| `gbBuc0CwbE544aGp` | Merge PR Relay | `/webhook/merge-pr` | Slack button → GitHub PR merge |
-| `mpgpE9Uf3h4UDN1H` | Slack Interactive | `/webhook/slack-interactive` | Slack button payloads |
-| `XTZFFQCm8dsZqT3n` | /stoa Slash Command | `/webhook/stoa-slash-command` | `/stoa` Slack commands |
-| `NAB5YtLae2P5b3JS` | Blog Publish | `/webhook/blog-publish` | GHA → Google Indexing + Slack |
+| `<WF_ID_APPROVE>` | Approve Ticket Relay | `/webhook/approve-ticket` | Slack button → GitHub `/go` comment |
+| `<WF_ID_LINEAR>` | Linear → Council | — | Linear status change → GHA dispatch |
+| `<WF_ID_MERGE>` | Merge PR Relay | `/webhook/merge-pr` | Slack button → GitHub PR merge |
+| `<WF_ID_INTERACTIVE>` | Slack Interactive | `/webhook/slack-interactive` | Slack button payloads |
+| `<WF_ID_SLASH>` | /stoa Slash Command | `/webhook/stoa-slash-command` | `/stoa` Slack commands |
+| `<WF_ID_BLOG>` | Blog Publish | `/webhook/blog-publish` | GHA → Google Indexing + Slack |

@@ -30,7 +30,7 @@ psql "$DB_URL" -c "<QUERY>"
 
 Fallback (direct):
 ```bash
-psql "postgresql://avnadmin:<password>@postgresql-1a861124-o65d47357.database.cloud.ovh.net:20184/stoa_production?sslmode=require"
+psql "<POSTGRES_CONNECTION_STRING>"
 ```
 
 ### Token Observatory

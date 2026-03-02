@@ -19,30 +19,30 @@ Target: $ARGUMENTS
 
 | Entity | ID |
 |--------|----|
-| Team (CAB-ING) | `624a9948-a160-4e47-aba5-7f9404d23506` |
-| Project (STOA Platform) | `227427af-6844-484d-bb4a-dedeffc68825` |
-| Assignee (Christophe) | `0543749d-ecde-4edf-aec1-6f372aafafce` |
+| Team (CAB-ING) | `<LINEAR_TEAM_ID>` |
+| Project (STOA Platform) | `<LINEAR_PROJECT_ID>` |
+| Assignee (<PRIMARY_ASSIGNEE>) | `<LINEAR_ASSIGNEE_ID>` |
 
 ### Label IDs
 
 | Label | ID |
 |-------|-----|
-| `roadmap` (parent — NOT assignable) | `922e1f2d-c839-4b8b-9eba-6c2ba4365a8c` |
-| `roadmap:gateway` | `82e07bcd-69fa-4fc5-a2e1-d4d7fa0fad70` |
-| `roadmap:dx` | `9f4356e1-f3bc-49a5-b28a-fa1077a6e326` |
-| `roadmap:platform` | `c819ff92-c9cf-453d-a0f9-451840f6f8cc` |
-| `roadmap:community` | `2de713f1-47a9-49a0-9e84-a7bd947eb707` |
-| `roadmap:observability` | `d4ce6487-92fe-4f12-a5f3-8d682e03623f` |
+| `roadmap` (parent — NOT assignable) | `<LABEL_ID_ROADMAP>` |
+| `roadmap:gateway` | `<LABEL_ID_ROADMAP_GATEWAY>` |
+| `roadmap:dx` | `<LABEL_ID_ROADMAP_DX>` |
+| `roadmap:platform` | `<LABEL_ID_ROADMAP_PLATFORM>` |
+| `roadmap:community` | `<LABEL_ID_ROADMAP_COMMUNITY>` |
+| `roadmap:observability` | `<LABEL_ID_ROADMAP_OBSERVABILITY>` |
 
 ### Instance Label IDs (parallel dispatch)
 
 | Label | ID | Components |
 |-------|-----|-----------|
-| `instance:backend` | `b60c32eb-3374-4a53-a487-b409bfed2d61` | cp-api, operator, infra, docs |
-| `instance:frontend` | `e9434a2f-f313-4223-a042-598185718c7b` | cp-ui, portal, shared |
-| `instance:auth` | `c4bb2546-7bbc-45d9-b5ab-384fd7065d48` | keycloak, IAM |
-| `instance:mcp` | `19497340-8712-45d0-8728-a77c96c592a7` | stoa-gateway |
-| `instance:qa` | `00ba65ee-81e3-40e8-b2d2-38f340617b2f` | e2e, tests |
+| `instance:backend` | `<LABEL_ID_INSTANCE_BACKEND>` | cp-api, operator, infra, docs |
+| `instance:frontend` | `<LABEL_ID_INSTANCE_FRONTEND>` | cp-ui, portal, shared |
+| `instance:auth` | `<LABEL_ID_INSTANCE_AUTH>` | keycloak, IAM |
+| `instance:mcp` | `<LABEL_ID_INSTANCE_MCP>` | stoa-gateway |
+| `instance:qa` | `<LABEL_ID_INSTANCE_QA>` | e2e, tests |
 
 ## Step 0: Determine Mode
 
@@ -60,7 +60,7 @@ Fetch all backlog issues (no cycle) from Linear:
 
 ```
 linear.list_issues(
-  team: "624a9948-a160-4e47-aba5-7f9404d23506",
+  team: "<LINEAR_TEAM_ID>",
   first: 100
 )
 ```
@@ -261,9 +261,9 @@ For each MEGA (up to 15):
 linear.create_issue(
   title: "[MEGA] <Theme>: <Description>",
   description: <see template below>,
-  team: "624a9948-a160-4e47-aba5-7f9404d23506",
-  project: "227427af-6844-484d-bb4a-dedeffc68825",
-  assignee: "0543749d-ecde-4edf-aec1-6f372aafafce",
+  team: "<LINEAR_TEAM_ID>",
+  project: "<LINEAR_PROJECT_ID>",
+  assignee: "<LINEAR_ASSIGNEE_ID>",
   estimate: <pts from Step 3>,
   priority: 3,
   labels: ["roadmap:<theme>", "instance:<lead-instance>"],

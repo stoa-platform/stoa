@@ -102,9 +102,9 @@ If Council passes (Go or Fix-then-confirmed), create the ticket using Linear MCP
 linear.create_issue(
   title: "<type>(scope): <short description>",
   description: <see template below>,
-  team: "624a9948-a160-4e47-aba5-7f9404d23506",
-  project: "227427af-6844-484d-bb4a-dedeffc68825",
-  assignee: "0543749d-ecde-4edf-aec1-6f372aafafce",
+  team: "<LINEAR_TEAM_ID>",
+  project: "<LINEAR_PROJECT_ID>",
+  assignee: "<LINEAR_ASSIGNEE_ID>",
   estimate: <fibonacci points>,
   priority: <1=Urgent, 2=High, 3=Normal, 4=Low>,
   labels: [<type label>, <priority label>, "hlfh:validated", "council:ticket-go|fix", "instance:<detected-instance>"],

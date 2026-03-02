@@ -15,12 +15,12 @@ Target: $ARGUMENTS
 
 | Label | ID |
 |-------|-----|
-| `roadmap` (parent group — NOT assignable to issues) | `922e1f2d-c839-4b8b-9eba-6c2ba4365a8c` |
-| `roadmap:gateway` | `82e07bcd-69fa-4fc5-a2e1-d4d7fa0fad70` |
-| `roadmap:dx` | `9f4356e1-f3bc-49a5-b28a-fa1077a6e326` |
-| `roadmap:platform` | `c819ff92-c9cf-453d-a0f9-451840f6f8cc` |
-| `roadmap:community` | `2de713f1-47a9-49a0-9e84-a7bd947eb707` |
-| `roadmap:observability` | `d4ce6487-92fe-4f12-a5f3-8d682e03623f` |
+| `roadmap` (parent group — NOT assignable to issues) | `<LABEL_ID_ROADMAP>` |
+| `roadmap:gateway` | `<LABEL_ID_ROADMAP_GATEWAY>` |
+| `roadmap:dx` | `<LABEL_ID_ROADMAP_DX>` |
+| `roadmap:platform` | `<LABEL_ID_ROADMAP_PLATFORM>` |
+| `roadmap:community` | `<LABEL_ID_ROADMAP_COMMUNITY>` |
+| `roadmap:observability` | `<LABEL_ID_ROADMAP_OBSERVABILITY>` |
 
 ## Step 0: Determine Mode
 
@@ -34,7 +34,7 @@ Target: $ARGUMENTS
 ## Step 1: Fetch Current Cycle from Linear
 
 ```
-linear.list_cycles(teamId: "624a9948-a160-4e47-aba5-7f9404d23506")
+linear.list_cycles(teamId: "<LINEAR_TEAM_ID>")
 ```
 
 Identify the **current** cycle (type `"current"` or date range containing today).
@@ -44,7 +44,7 @@ Then fetch all issues in the cycle:
 
 ```
 linear.list_issues(
-  team: "624a9948-a160-4e47-aba5-7f9404d23506",
+  team: "<LINEAR_TEAM_ID>",
   cycle: "<cycle_id>",
   first: 50
 )
@@ -81,7 +81,7 @@ Scan 4 sources for candidate items. Each source contributes candidates with meta
 
 ```
 linear.list_issues(
-  team: "624a9948-a160-4e47-aba5-7f9404d23506",
+  team: "<LINEAR_TEAM_ID>",
   first: 50
 )
 ```

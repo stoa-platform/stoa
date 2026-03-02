@@ -66,6 +66,7 @@ from .routers import (
     health,
     llm_budget,
     llm_usage,
+    mcp_connectors,
     mcp_gitops,
     mcp_policy_proxy,
     mcp_proxy,
@@ -624,6 +625,9 @@ app.include_router(mcp_admin_servers_router)
 # External MCP Servers (Linear, GitHub, etc.)
 app.include_router(external_mcp_servers_admin_router)
 app.include_router(external_mcp_servers_internal_router)
+
+# MCP Connector Catalog — App Store pattern (pre-configured OAuth connectors)
+app.include_router(mcp_connectors.router)
 
 # Tenant-scoped MCP Servers — developer self-service (CAB-1319)
 app.include_router(tenant_mcp_servers_router)

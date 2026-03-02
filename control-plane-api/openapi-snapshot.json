@@ -1123,6 +1123,58 @@
         "title": "AuthTypeEnum",
         "type": "string"
       },
+      "AuthorizeRequest": {
+        "description": "Request to initiate an OAuth authorization flow.",
+        "properties": {
+          "redirect_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "UI URL to redirect after callback",
+            "title": "Redirect After"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tenant to connect for (null = personal)",
+            "title": "Tenant Id"
+          }
+        },
+        "title": "AuthorizeRequest",
+        "type": "object"
+      },
+      "AuthorizeResponse": {
+        "description": "Response with the OAuth authorize URL to redirect the user to.",
+        "properties": {
+          "authorize_url": {
+            "description": "Full OAuth authorize URL with state, scope, etc.",
+            "title": "Authorize Url",
+            "type": "string"
+          },
+          "state": {
+            "description": "CSRF state token (for reference)",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url",
+          "state"
+        ],
+        "title": "AuthorizeResponse",
+        "type": "object"
+      },
       "BackendApiAuthTypeEnum": {
         "description": "Authentication type for the backend API.",
         "enum": [
@@ -1897,6 +1949,73 @@
         "title": "CallStatus",
         "type": "string"
       },
+      "CallbackRequest": {
+        "description": "Request from the OAuth callback (code + state exchange).",
+        "properties": {
+          "code": {
+            "description": "Authorization code from the provider",
+            "title": "Code",
+            "type": "string"
+          },
+          "state": {
+            "description": "CSRF state token to validate",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "state"
+        ],
+        "title": "CallbackRequest",
+        "type": "object"
+      },
+      "CallbackResponse": {
+        "description": "Response after successful OAuth callback \u2014 the created server.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "redirect_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redirect Url"
+          },
+          "server_id": {
+            "format": "uuid",
+            "title": "Server Id",
+            "type": "string"
+          },
+          "server_name": {
+            "title": "Server Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "tools_sync_triggered": {
+            "default": false,
+            "title": "Tools Sync Triggered",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "server_id",
+          "server_name",
+          "display_name",
+          "slug"
+        ],
+        "title": "CallbackResponse",
+        "type": "object"
+      },
       "CatalogSeedAPIEntry": {
         "description": "Single API entry for direct catalog seeding.",
         "properties": {
@@ -2509,6 +2628,160 @@
           "status"
         ],
         "title": "ConnectivityStage",
+        "type": "object"
+      },
+      "ConnectorCatalogResponse": {
+        "description": "Response for the connector catalog listing.",
+        "properties": {
+          "connectors": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorTemplateResponse"
+            },
+            "title": "Connectors",
+            "type": "array"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "connectors",
+          "total_count"
+        ],
+        "title": "ConnectorCatalogResponse",
+        "type": "object"
+      },
+      "ConnectorTemplateResponse": {
+        "description": "A pre-configured MCP connector template.",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "connected_server_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected Server Id"
+          },
+          "connection_health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Health"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "documentation_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentation Url"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_connected": {
+            "default": false,
+            "title": "Is Connected",
+            "type": "boolean"
+          },
+          "is_featured": {
+            "default": false,
+            "title": "Is Featured",
+            "type": "boolean"
+          },
+          "mcp_base_url": {
+            "title": "Mcp Base Url",
+            "type": "string"
+          },
+          "oauth_pkce_required": {
+            "default": false,
+            "title": "Oauth Pkce Required",
+            "type": "boolean"
+          },
+          "oauth_scopes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oauth Scopes"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "transport": {
+            "title": "Transport",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "display_name",
+          "category",
+          "mcp_base_url",
+          "transport"
+        ],
+        "title": "ConnectorTemplateResponse",
         "type": "object"
       },
       "ConsumerCreate": {
@@ -5217,6 +5490,37 @@
           "disabled_at"
         ],
         "title": "DisableBindingResponse",
+        "type": "object"
+      },
+      "DisconnectResponse": {
+        "description": "Response after disconnecting a connector.",
+        "properties": {
+          "disconnected": {
+            "default": true,
+            "title": "Disconnected",
+            "type": "boolean"
+          },
+          "server_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Id"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "title": "DisconnectResponse",
         "type": "object"
       },
       "DocsSearchResponse": {
@@ -25204,6 +25508,295 @@
         ]
       }
     },
+    "/v1/admin/mcp-connectors": {
+      "get": {
+        "description": "List the connector catalog with per-tenant connection status.",
+        "operationId": "list_connectors_v1_admin_mcp_connectors_get",
+        "parameters": [
+          {
+            "description": "Tenant to check connection status for",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant to check connection status for",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorCatalogResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Connectors",
+        "tags": [
+          "MCP Connectors - Catalog"
+        ]
+      }
+    },
+    "/v1/admin/mcp-connectors/callback": {
+      "post": {
+        "description": "Handle the OAuth callback \u2014 exchange code for tokens and create the MCP server.\n\nThis endpoint does NOT require authentication because it is called by the\nbrowser redirect from the OAuth provider. The CSRF state token provides\nsecurity by linking the callback to the original authorized session.",
+        "operationId": "oauth_callback_v1_admin_mcp_connectors_callback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oauth Callback",
+        "tags": [
+          "MCP Connectors - Catalog"
+        ]
+      }
+    },
+    "/v1/admin/mcp-connectors/{slug}": {
+      "get": {
+        "description": "Get a single connector template with connection status.",
+        "operationId": "get_connector_v1_admin_mcp_connectors__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant to check connection status for",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant to check connection status for",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorTemplateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Connector",
+        "tags": [
+          "MCP Connectors - Catalog"
+        ]
+      }
+    },
+    "/v1/admin/mcp-connectors/{slug}/authorize": {
+      "post": {
+        "description": "Initiate OAuth authorization for a connector.\n\nReturns the authorize URL to redirect the user to the provider's consent page.",
+        "operationId": "authorize_connector_v1_admin_mcp_connectors__slug__authorize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Authorize Connector",
+        "tags": [
+          "MCP Connectors - Catalog"
+        ]
+      }
+    },
+    "/v1/admin/mcp-connectors/{slug}/disconnect": {
+      "delete": {
+        "description": "Disconnect a connector \u2014 remove the server and Vault credentials.",
+        "operationId": "disconnect_connector_v1_admin_mcp_connectors__slug__disconnect_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant to disconnect for",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant to disconnect for",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisconnectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Disconnect Connector",
+        "tags": [
+          "MCP Connectors - Catalog"
+        ]
+      }
+    },
     "/v1/admin/mcp/servers": {
       "get": {
         "description": "List all MCP servers (admin view).\n\nShows all servers regardless of visibility configuration.",
@@ -32930,7 +33523,7 @@
     },
     "/v1/monitoring/transactions": {
       "get": {
-        "description": "List recent API transactions.\n\nReturns transaction summaries for efficient list display.",
+        "description": "List recent API transactions.\n\nReturns transaction summaries for efficient list display.\nUses real OpenSearch data when available, falls back to demo data.",
         "operationId": "list_transactions_v1_monitoring_transactions_get",
         "parameters": [
           {
@@ -32943,22 +33536,6 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "tenant_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tenant Id"
             }
           },
           {
@@ -32991,6 +33568,20 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "description": "Time range in minutes",
+            "in": "query",
+            "name": "time_range",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "description": "Time range in minutes",
+              "maximum": 1440,
+              "minimum": 1,
+              "title": "Time Range",
+              "type": "integer"
             }
           }
         ],
@@ -33027,8 +33618,24 @@
     },
     "/v1/monitoring/transactions/stats": {
       "get": {
-        "description": "Get API transaction statistics.\n\nReturns aggregated metrics about API calls.",
+        "description": "Get API transaction statistics.\n\nReturns aggregated metrics about API calls.\nUses real OpenSearch data when available, falls back to demo data.",
         "operationId": "get_transaction_stats_v1_monitoring_transactions_stats_get",
+        "parameters": [
+          {
+            "description": "Time range in minutes",
+            "in": "query",
+            "name": "time_range",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "description": "Time range in minutes",
+              "maximum": 1440,
+              "minimum": 1,
+              "title": "Time Range",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -33037,6 +33644,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -33052,7 +33669,7 @@
     },
     "/v1/monitoring/transactions/{transaction_id}": {
       "get": {
-        "description": "Get detailed information about a specific transaction.\n\nIncludes all spans with timing and metadata.",
+        "description": "Get detailed information about a specific transaction.\n\nIncludes all spans with timing and metadata.\nUses real OpenSearch data when available, falls back to demo data.",
         "operationId": "get_transaction_v1_monitoring_transactions__transaction_id__get",
         "parameters": [
           {

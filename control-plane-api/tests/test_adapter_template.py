@@ -54,6 +54,7 @@ class TestAdapterTemplate:
         instance = AdapterRegistry.create(
             "test_phase5_template",
             config={"base_url": "http://test"},
+            instrument=False,
         )
         assert isinstance(instance, TemplateGatewayAdapter)
         assert instance._config["base_url"] == "http://test"

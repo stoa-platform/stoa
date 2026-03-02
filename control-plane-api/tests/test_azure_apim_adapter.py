@@ -605,5 +605,6 @@ class TestRegistry:
         instance = AdapterRegistry.create(
             "azure_apim",
             {"subscription_id": "sub-1", "resource_group": "rg", "service_name": "apim"},
+            instrument=False,
         )
         assert isinstance(instance, AzureApimAdapter)

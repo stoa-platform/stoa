@@ -298,6 +298,6 @@ class TestStoaAdapterRegistry:
         """AdapterRegistry.create('stoa') returns StoaGatewayAdapter instance."""
         from src.adapters.registry import AdapterRegistry
 
-        adapter = AdapterRegistry.create("stoa", config={"base_url": "http://test:8080"})
+        adapter = AdapterRegistry.create("stoa", config={"base_url": "http://test:8080"}, instrument=False)
         assert isinstance(adapter, StoaGatewayAdapter)
         assert adapter._base_url == "http://test:8080"

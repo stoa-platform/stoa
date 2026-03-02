@@ -133,6 +133,7 @@ class Settings(BaseSettings):
 
     # Chat Agent — Anthropic integration (CAB-286)
     CHAT_ENABLED: bool = False
+    CHAT_PROVIDER_API_KEY: str = ""  # Anthropic key — via Infisical
 
     # Docs Search — Semantic / Embedding (CAB-1327 Phase 2)
     EMBEDDING_PROVIDER: str = "openai"  # openai | none

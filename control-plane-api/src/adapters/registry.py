@@ -8,6 +8,7 @@ module load time (built-in) or dynamically (future plugin system).
 import logging
 
 from .gateway_adapter_interface import GatewayAdapterInterface
+from .metrics import InstrumentedAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +30,18 @@ class AdapterRegistry:
         logger.info("Registered gateway adapter: %s -> %s", gateway_type, adapter_class.__name__)
 
     @classmethod
-    def create(cls, gateway_type: str, config: dict | None = None) -> GatewayAdapterInterface:
+    def create(
+        cls, gateway_type: str, config: dict | None = None, *, instrument: bool = True
+    ) -> GatewayAdapterInterface:
         """Create an adapter instance for the given gateway type.
 
         Args:
             gateway_type: Gateway type identifier
             config: Connection configuration (base_url, auth_config, etc.)
+            instrument: Wrap with InstrumentedAdapter for Prometheus metrics (default: True)
 
         Returns:
-            Configured adapter instance
+            Configured adapter instance (instrumented by default)
 
         Raises:
             ValueError: If no adapter is registered for the given type
@@ -48,7 +52,10 @@ class AdapterRegistry:
             raise ValueError(
                 f"No adapter registered for gateway type '{gateway_type}'. " f"Available types: {available}"
             )
-        return adapter_class(config=config)
+        adapter = adapter_class(config=config)
+        if instrument:
+            return InstrumentedAdapter(inner=adapter, gateway_type=gateway_type)
+        return adapter
 
     @classmethod
     def list_types(cls) -> list[str]:

@@ -683,7 +683,7 @@ class TestKongRegistration:
         from src.adapters.registry import AdapterRegistry
 
         assert AdapterRegistry.has_type("kong") is True
-        adapter = AdapterRegistry.create("kong", config={"base_url": "http://test:8001"})
+        adapter = AdapterRegistry.create("kong", config={"base_url": "http://test:8001"}, instrument=False)
         assert isinstance(adapter, KongGatewayAdapter)
 
 

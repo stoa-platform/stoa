@@ -23,10 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from ..auth import User, get_current_user, require_tenant_access
+from ..auth.rbac import require_role
 from ..config import settings
 from ..database import get_db
 from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
-from ..auth.rbac import require_role
 from ..schemas.chat import (
     ChatTenantUsageResponse,
     ChatUsageResponse,
@@ -365,11 +365,10 @@ async def get_usage_stats(
     summary="Set the tenant-level chat provider API key (admin)",
 )
 @require_tenant_access
-@require_role(["cpi-admin", "tenant-admin"])
 async def set_provider_key(
     tenant_id: str,
     body: ProviderKeySet,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
     svc: ChatService = Depends(_service),
 ) -> None:
     ok = await svc.set_tenant_api_key(tenant_id, body.api_key)

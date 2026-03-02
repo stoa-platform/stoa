@@ -57,7 +57,7 @@ See `stoa-gateway/src/handlers/admin.rs` for the Rust admin API contract. The Py
 - **Auth**: `Kong-Admin-Token` header (optional)
 - **Storage**: Declarative YAML via `POST /config` (atomic reload)
 - **Ports**: 8000 (proxy), 8001 (admin)
-- **VPS**: `51.83.45.13` (kong-standalone-gra)
+- **VPS**: `<KONG_VPS_IP>` (kong-standalone-gra)
 
 ### State Management Pattern
 Kong DB-less mode makes Admin API **read-only** for writes. All mutations follow:
@@ -106,7 +106,7 @@ cd control-plane-api && pytest tests/test_kong_adapter.py -v  # ~38 tests
 - **Auth**: Basic `admin:admin` (default)
 - **Storage**: MongoDB + Elasticsearch (full CRUD)
 - **Ports**: 8082 (gateway), 8083 (mgmt API), 8084 (mgmt UI)
-- **VPS**: `54.36.209.237` (gravitee-standalone-gra)
+- **VPS**: `<GRAVITEE_VPS_IP>` (gravitee-standalone-gra)
 
 ### API Lifecycle
 Gravitee APIs have a lifecycle: `CREATED → PUBLISHED → STARTED → DEPLOYED`

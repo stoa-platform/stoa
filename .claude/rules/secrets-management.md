@@ -22,9 +22,9 @@ Access layers:
 - **Infisical** = centralized secrets manager, replaces Vault + AWS SM + ESO (decommissioned Feb 2026)
 - **Self-hosted** on Hetzner (Docker Compose: infisical + postgres + redis)
 - **URL**: `https://vault.gostoa.dev`
-- **Admin**: `admin@gostoa.dev` (superAdmin)
-- **Org ID**: `0c9506ce-668c-4ecd-8e6f-5845952eeb50`
-- **Project**: `stoa-infra` (`97972ffc-990b-4d28-9c4d-0664d217f03b`)
+- **Admin**: `<INFISICAL_ADMIN_EMAIL>` (superAdmin)
+- **Org ID**: `<INFISICAL_ORG_ID>`
+- **Project**: `stoa-infra` (`<INFISICAL_PROJECT_ID>`)
 
 ## Secret Inventory
 
@@ -52,8 +52,8 @@ Like AWS IAM roles: Client ID + Client Secret → short-lived access token (24h)
 
 | Component | Value |
 |-----------|-------|
-| Identity | `stoa-cli-local` (`597c4a1e-ee10-44f7-8654-3b3cb4d01d84`) |
-| Client ID | `91417b6e-d6fd-424f-a9f0-b5e3ba063e2f` (non-sensitive, in `~/.zprofile`) |
+| Identity | `stoa-cli-local` (`<INFISICAL_IDENTITY_ID>`) |
+| Client ID | `<INFISICAL_CLIENT_ID>` (non-sensitive, in `~/.zprofile`) |
 | Client Secret | Stored in macOS Keychain (`infisical-client-secret`) |
 | Access Token TTL | 24h (auto-renewable, max 30 days) |
 | Project Role | `admin` on `stoa-infra` |
@@ -116,7 +116,7 @@ infisical secrets --env=prod --path=/cloudflare
 infisical run --env=prod --path=/cloudflare -- curl -H "Authorization: Bearer $API_TOKEN" ...
 
 # Direct API call (without CLI)
-curl -s "https://vault.gostoa.dev/api/v3/secrets/raw?workspaceId=97972ffc-990b-4d28-9c4d-0664d217f03b&environment=prod&secretPath=/cloudflare" \
+curl -s "https://vault.gostoa.dev/api/v3/secrets/raw?workspaceId=$INFISICAL_PROJECT_ID&environment=prod&secretPath=/cloudflare" \
   -H "Authorization: Bearer $INFISICAL_TOKEN"
 ```
 
@@ -260,12 +260,12 @@ If a device is lost: revoke SSH key (`distribute-ssh-key.sh --remove`), delete M
 
 | Component | Detail |
 |-----------|--------|
-| Host | Hetzner master-1 (`46.225.112.68`) |
+| Host | Hetzner master-1 (`<HETZNER_MASTER_IP>`) |
 | Path | `/opt/infisical/` |
 | Stack | `infisical:latest` + `postgres:15-alpine` + `redis:7-alpine` |
 | RAM | ~800 MB |
 | Ingress | Traefik (K3s), TLS via `letsencrypt-production` ClusterIssuer |
-| DNS | `vault.gostoa.dev` → `46.225.112.68` |
+| DNS | `vault.gostoa.dev` → `<HETZNER_MASTER_IP>` |
 | Backup | PostgreSQL dump (TODO: automate) |
 
 ## Auth Gotcha

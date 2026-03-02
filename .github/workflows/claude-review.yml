@@ -20,9 +20,10 @@ permissions:
 
 jobs:
   review:
-    # Skip Dependabot PRs, self-authored PRs, and when kill-switch is active
+    # Skip Dependabot PRs, self-authored PRs, fork PRs (secret protection), and when kill-switch is active
     if: |
       vars.DISABLE_L1_REVIEW != 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'dependabot[bot]' &&
       github.actor != 'claude[bot]' &&
       github.actor != 'github-actions[bot]'

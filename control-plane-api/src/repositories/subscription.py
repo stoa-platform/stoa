@@ -1,4 +1,5 @@
 """Repository for subscription CRUD operations"""
+
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -23,49 +24,32 @@ class SubscriptionRepository:
 
     async def get_by_id(self, subscription_id: UUID) -> Subscription | None:
         """Get subscription by ID"""
-        result = await self.session.execute(
-            select(Subscription).where(Subscription.id == subscription_id)
-        )
+        result = await self.session.execute(select(Subscription).where(Subscription.id == subscription_id))
         return result.scalar_one_or_none()
 
     async def get_by_api_key_hash(self, api_key_hash: str) -> Subscription | None:
         """Get subscription by API key hash (for validation)"""
-        result = await self.session.execute(
-            select(Subscription).where(Subscription.api_key_hash == api_key_hash)
-        )
+        result = await self.session.execute(select(Subscription).where(Subscription.api_key_hash == api_key_hash))
         return result.scalar_one_or_none()
 
-    async def get_by_application_and_api(
-        self,
-        application_id: str,
-        api_id: str
-    ) -> Subscription | None:
+    async def get_by_application_and_api(self, application_id: str, api_id: str) -> Subscription | None:
         """Check if subscription already exists for app+api combo"""
         result = await self.session.execute(
             select(Subscription).where(
                 and_(
                     Subscription.application_id == application_id,
                     Subscription.api_id == api_id,
-                    Subscription.status.in_([
-                        SubscriptionStatus.PENDING,
-                        SubscriptionStatus.ACTIVE
-                    ])
+                    Subscription.status.in_([SubscriptionStatus.PENDING, SubscriptionStatus.ACTIVE]),
                 )
             )
         )
         return result.scalar_one_or_none()
 
     async def list_by_subscriber(
-        self,
-        subscriber_id: str,
-        status: SubscriptionStatus | None = None,
-        page: int = 1,
-        page_size: int = 20
+        self, subscriber_id: str, status: SubscriptionStatus | None = None, page: int = 1, page_size: int = 20
     ) -> tuple[list[Subscription], int]:
         """List subscriptions for a subscriber with pagination"""
-        query = select(Subscription).where(
-            Subscription.subscriber_id == subscriber_id
-        )
+        query = select(Subscription).where(Subscription.subscriber_id == subscriber_id)
 
         if status:
             query = query.where(Subscription.status == status)
@@ -85,16 +69,10 @@ class SubscriptionRepository:
         return list(subscriptions), total
 
     async def list_by_tenant(
-        self,
-        tenant_id: str,
-        status: SubscriptionStatus | None = None,
-        page: int = 1,
-        page_size: int = 20
+        self, tenant_id: str, status: SubscriptionStatus | None = None, page: int = 1, page_size: int = 20
     ) -> tuple[list[Subscription], int]:
         """List subscriptions for a tenant with pagination"""
-        query = select(Subscription).where(
-            Subscription.tenant_id == tenant_id
-        )
+        query = select(Subscription).where(Subscription.tenant_id == tenant_id)
 
         if status:
             query = query.where(Subscription.status == status)
@@ -114,20 +92,10 @@ class SubscriptionRepository:
         return list(subscriptions), total
 
     async def list_by_api(
-        self,
-        api_id: str,
-        tenant_id: str,
-        status: SubscriptionStatus | None = None,
-        page: int = 1,
-        page_size: int = 20
+        self, api_id: str, tenant_id: str, status: SubscriptionStatus | None = None, page: int = 1, page_size: int = 20
     ) -> tuple[list[Subscription], int]:
         """List subscriptions for an API with pagination"""
-        query = select(Subscription).where(
-            and_(
-                Subscription.api_id == api_id,
-                Subscription.tenant_id == tenant_id
-            )
-        )
+        query = select(Subscription).where(and_(Subscription.api_id == api_id, Subscription.tenant_id == tenant_id))
 
         if status:
             query = query.where(Subscription.status == status)
@@ -147,15 +115,10 @@ class SubscriptionRepository:
         return list(subscriptions), total
 
     async def list_pending(
-        self,
-        tenant_id: str | None = None,
-        page: int = 1,
-        page_size: int = 20
+        self, tenant_id: str | None = None, page: int = 1, page_size: int = 20
     ) -> tuple[list[Subscription], int]:
         """List pending subscriptions for approval"""
-        query = select(Subscription).where(
-            Subscription.status == SubscriptionStatus.PENDING
-        )
+        query = select(Subscription).where(Subscription.status == SubscriptionStatus.PENDING)
 
         if tenant_id:
             query = query.where(Subscription.tenant_id == tenant_id)
@@ -179,7 +142,7 @@ class SubscriptionRepository:
         subscription: Subscription,
         new_status: SubscriptionStatus,
         reason: str | None = None,
-        actor_id: str | None = None
+        actor_id: str | None = None,
     ) -> Subscription:
         """Update subscription status"""
         subscription.status = new_status
@@ -194,16 +157,15 @@ class SubscriptionRepository:
         elif new_status == SubscriptionStatus.REVOKED:
             subscription.revoked_at = datetime.utcnow()
             subscription.revoked_by = actor_id
+        elif new_status == SubscriptionStatus.REJECTED:
+            subscription.rejected_at = datetime.utcnow()
+            subscription.rejected_by = actor_id
 
         await self.session.flush()
         await self.session.refresh(subscription)
         return subscription
 
-    async def set_expiration(
-        self,
-        subscription: Subscription,
-        expires_at: datetime | None
-    ) -> Subscription:
+    async def set_expiration(self, subscription: Subscription, expires_at: datetime | None) -> Subscription:
         """Set subscription expiration date"""
         subscription.expires_at = expires_at
         subscription.updated_at = datetime.utcnow()
@@ -218,17 +180,13 @@ class SubscriptionRepository:
             base_query = base_query.where(Subscription.tenant_id == tenant_id)
 
         # Total count
-        total_result = await self.session.execute(
-            select(func.count()).select_from(base_query.subquery())
-        )
+        total_result = await self.session.execute(select(func.count()).select_from(base_query.subquery()))
         total = total_result.scalar_one()
 
         # Count by status
         by_status = {}
         for status in SubscriptionStatus:
-            status_query = select(func.count()).where(
-                Subscription.status == status
-            )
+            status_query = select(func.count()).where(Subscription.status == status)
             if tenant_id:
                 status_query = status_query.where(Subscription.tenant_id == tenant_id)
             result = await self.session.execute(status_query)
@@ -236,18 +194,27 @@ class SubscriptionRepository:
 
         # Recent 24h
         yesterday = datetime.utcnow() - timedelta(hours=24)
-        recent_query = select(func.count()).where(
-            Subscription.created_at >= yesterday
-        )
+        recent_query = select(func.count()).where(Subscription.created_at >= yesterday)
         if tenant_id:
             recent_query = recent_query.where(Subscription.tenant_id == tenant_id)
         recent_result = await self.session.execute(recent_query)
         recent_24h = recent_result.scalar_one()
 
+        # Average approval time (hours)
+        avg_time_query = select(
+            func.avg(func.extract("epoch", Subscription.approved_at) - func.extract("epoch", Subscription.created_at))
+            / 3600.0
+        ).where(Subscription.approved_at.isnot(None))
+        if tenant_id:
+            avg_time_query = avg_time_query.where(Subscription.tenant_id == tenant_id)
+        avg_result = await self.session.execute(avg_time_query)
+        avg_hours = avg_result.scalar_one_or_none()
+
         return {
             "total": total,
             "by_status": by_status,
-            "recent_24h": recent_24h
+            "recent_24h": recent_24h,
+            "avg_approval_time_hours": round(avg_hours, 2) if avg_hours is not None else None,
         }
 
     async def delete(self, subscription: Subscription) -> None:
@@ -256,11 +223,7 @@ class SubscriptionRepository:
         await self.session.flush()
 
     async def rotate_key(
-        self,
-        subscription: Subscription,
-        new_api_key_hash: str,
-        new_api_key_prefix: str,
-        grace_period_hours: int = 24
+        self, subscription: Subscription, new_api_key_hash: str, new_api_key_prefix: str, grace_period_hours: int = 24
     ) -> Subscription:
         """
         Rotate API key with grace period support.
@@ -287,10 +250,7 @@ class SubscriptionRepository:
         await self.session.refresh(subscription)
         return subscription
 
-    async def get_by_previous_key_hash(
-        self,
-        api_key_hash: str
-    ) -> Subscription | None:
+    async def get_by_previous_key_hash(self, api_key_hash: str) -> Subscription | None:
         """
         Get subscription by previous API key hash (for grace period validation).
 
@@ -299,10 +259,7 @@ class SubscriptionRepository:
         now = datetime.utcnow()
         result = await self.session.execute(
             select(Subscription).where(
-                and_(
-                    Subscription.previous_api_key_hash == api_key_hash,
-                    Subscription.previous_key_expires_at > now
-                )
+                and_(Subscription.previous_api_key_hash == api_key_hash, Subscription.previous_key_expires_at > now)
             )
         )
         return result.scalar_one_or_none()
@@ -318,16 +275,8 @@ class SubscriptionRepository:
         now = datetime.utcnow()
         result = await self.session.execute(
             update(Subscription)
-            .where(
-                and_(
-                    Subscription.previous_key_expires_at.isnot(None),
-                    Subscription.previous_key_expires_at < now
-                )
-            )
-            .values(
-                previous_api_key_hash=None,
-                previous_key_expires_at=None
-            )
+            .where(and_(Subscription.previous_key_expires_at.isnot(None), Subscription.previous_key_expires_at < now))
+            .values(previous_api_key_hash=None, previous_key_expires_at=None)
         )
         await self.session.flush()
         return result.rowcount

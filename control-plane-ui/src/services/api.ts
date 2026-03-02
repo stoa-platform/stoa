@@ -38,6 +38,11 @@ import type {
   PlatformSettingsResponse,
   PlatformSetting,
   RoleListResponse,
+  Subscription,
+  SubscriptionListResponse,
+  SubscriptionStats,
+  BulkSubscriptionAction,
+  BulkActionResult,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -897,6 +902,53 @@ class ApiService {
     update: { monthly_limit_usd?: number; alert_threshold_pct?: number }
   ): Promise<LlmBudgetResponse> {
     const { data } = await this.client.put(`/v1/tenants/${tenantId}/llm/budget`, update);
+    return data;
+  }
+
+  // ============== Subscription Management (CAB-1635) ==============
+
+  async getSubscriptions(
+    tenantId: string,
+    status?: string,
+    page = 1,
+    pageSize = 20
+  ): Promise<SubscriptionListResponse> {
+    const { data } = await this.client.get(`/v1/subscriptions/tenant/${tenantId}`, {
+      params: { status, page, page_size: pageSize },
+    });
+    return data;
+  }
+
+  async getPendingSubscriptions(
+    tenantId: string,
+    page = 1,
+    pageSize = 20
+  ): Promise<SubscriptionListResponse> {
+    const { data } = await this.client.get(`/v1/subscriptions/tenant/${tenantId}/pending`, {
+      params: { page, page_size: pageSize },
+    });
+    return data;
+  }
+
+  async getSubscriptionStats(tenantId: string): Promise<SubscriptionStats> {
+    const { data } = await this.client.get(`/v1/subscriptions/tenant/${tenantId}/stats`);
+    return data;
+  }
+
+  async approveSubscription(id: string, expiresAt?: string): Promise<Subscription> {
+    const { data } = await this.client.post(`/v1/subscriptions/${id}/approve`, {
+      expires_at: expiresAt || null,
+    });
+    return data;
+  }
+
+  async rejectSubscription(id: string, reason: string): Promise<Subscription> {
+    const { data } = await this.client.post(`/v1/subscriptions/${id}/reject`, { reason });
+    return data;
+  }
+
+  async bulkSubscriptionAction(payload: BulkSubscriptionAction): Promise<BulkActionResult> {
+    const { data } = await this.client.post('/v1/subscriptions/bulk', payload);
     return data;
   }
 }

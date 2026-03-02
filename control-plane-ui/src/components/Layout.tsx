@@ -152,6 +152,12 @@ const navigationSections: NavSection[] = [
         permission: 'consumers:read',
         shortcut: ['g', 'c'],
       },
+      {
+        name: 'nav.subscriptions',
+        href: '/subscriptions',
+        icon: ClipboardList,
+        permission: 'apps:read',
+      },
     ],
   },
   {
@@ -422,6 +428,15 @@ export function Layout({ children }: LayoutProps) {
   const activeTenant = useMemo(() => {
     const id = activeTenantId || user?.tenant_id;
     return tenants?.find((t) => t.id === id || t.name === id);
+  }, [activeTenantId, user?.tenant_id, tenants]);
+
+  // Auto-select first tenant for cpi-admin users who have no tenant_id in JWT
+  useEffect(() => {
+    if (!activeTenantId && !user?.tenant_id && tenants && tenants.length > 0) {
+      const firstTenantId = tenants[0].id;
+      setActiveTenantId(firstTenantId);
+      localStorage.setItem(ACTIVE_TENANT_KEY, firstTenantId);
+    }
   }, [activeTenantId, user?.tenant_id, tenants]);
 
   const handleTenantSwitch = useCallback(

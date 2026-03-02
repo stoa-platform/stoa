@@ -149,11 +149,12 @@ export function FloatingChat({ initialOpen = false, onSendMessage }: FloatingCha
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (_error) {
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
       const errorMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        content: `Sorry, I encountered an error: ${detail}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);

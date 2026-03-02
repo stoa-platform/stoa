@@ -17,13 +17,18 @@ from ..repositories.plan import PlanRepository
 from ..repositories.subscription import SubscriptionRepository
 from ..schemas.subscription import (
     APIKeyResponse,
+    BulkActionFailure,
+    BulkActionResult,
+    BulkSubscriptionAction,
     KeyRotationRequest,
     KeyRotationResponse,
     SubscriptionApprove,
     SubscriptionCreate,
     SubscriptionListResponse,
+    SubscriptionReject,
     SubscriptionResponse,
     SubscriptionRevoke,
+    SubscriptionStats,
     SubscriptionStatusEnum,
     SubscriptionWithRotationInfo,
     TTLExtendRequest,
@@ -37,6 +42,7 @@ from ..services.webhook_service import (
     emit_subscription_approved,
     emit_subscription_created,
     emit_subscription_key_rotated,
+    emit_subscription_rejected,
     emit_subscription_revoked,
 )
 
@@ -740,6 +746,154 @@ async def reactivate_subscription(
     logger.info(f"Subscription {subscription_id} reactivated by {user.email}")
 
     return SubscriptionResponse.model_validate(subscription)
+
+
+# ============== Reject, Bulk, Stats Endpoints (CAB-1635) ==============
+
+
+@router.post("/{subscription_id}/reject", response_model=SubscriptionResponse)
+async def reject_subscription(
+    subscription_id: UUID,
+    request: SubscriptionReject,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reject a pending subscription request.
+
+    Only pending subscriptions can be rejected. The reason is stored
+    for audit purposes.
+    """
+    repo = SubscriptionRepository(db)
+    subscription = await repo.get_by_id(subscription_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    if not _has_tenant_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if subscription.status != SubscriptionStatus.PENDING:
+        raise HTTPException(status_code=400, detail=f"Cannot reject subscription in {subscription.status.value} status")
+
+    subscription = await repo.update_status(
+        subscription,
+        SubscriptionStatus.REJECTED,
+        reason=request.reason,
+        actor_id=user.id,
+    )
+
+    logger.info(f"Subscription {subscription_id} rejected by {user.email} " f"reason={request.reason}")
+
+    # Emit webhook event
+    try:
+        await emit_subscription_rejected(db, subscription)
+    except Exception as e:
+        logger.warning(f"Failed to emit subscription.rejected webhook: {e}")
+
+    return SubscriptionResponse.model_validate(subscription)
+
+
+@router.post("/bulk", response_model=BulkActionResult)
+async def bulk_subscription_action(
+    request: BulkSubscriptionAction,
+    raw_request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Perform bulk approve or reject on multiple subscriptions.
+
+    Maximum 50 subscriptions per call. Each subscription is processed
+    independently — partial failures are reported.
+    """
+    if request.action == "reject" and not request.reason:
+        raise HTTPException(status_code=400, detail="Reason is required for reject action")
+
+    repo = SubscriptionRepository(db)
+    succeeded = 0
+    failed: list[BulkActionFailure] = []
+
+    for sub_id in request.ids:
+        try:
+            subscription = await repo.get_by_id(sub_id)
+            if not subscription:
+                failed.append(BulkActionFailure(id=sub_id, error="Subscription not found"))
+                continue
+
+            if not _has_tenant_access(user, subscription.tenant_id):
+                failed.append(BulkActionFailure(id=sub_id, error="Access denied"))
+                continue
+
+            if subscription.status != SubscriptionStatus.PENDING:
+                failed.append(
+                    BulkActionFailure(
+                        id=sub_id,
+                        error=f"Cannot {request.action} subscription in {subscription.status.value} status",
+                    )
+                )
+                continue
+
+            if request.action == "approve":
+                subscription = await repo.update_status(
+                    subscription,
+                    SubscriptionStatus.ACTIVE,
+                    actor_id=user.id,
+                )
+                try:
+                    await emit_subscription_approved(db, subscription)
+                except Exception as e:
+                    logger.warning(f"Failed to emit webhook for {sub_id}: {e}")
+
+                # Auto-provision gateway
+                correlation_id = str(uuid_mod.uuid4())
+                auth_token = _extract_auth_token(raw_request)
+                asyncio.create_task(provision_on_approval(db, subscription, auth_token, correlation_id))
+
+            else:  # reject
+                subscription = await repo.update_status(
+                    subscription,
+                    SubscriptionStatus.REJECTED,
+                    reason=request.reason,
+                    actor_id=user.id,
+                )
+                try:
+                    await emit_subscription_rejected(db, subscription)
+                except Exception as e:
+                    logger.warning(f"Failed to emit webhook for {sub_id}: {e}")
+
+            succeeded += 1
+        except Exception as e:
+            logger.error(f"Bulk action failed for {sub_id}: {e}")
+            failed.append(BulkActionFailure(id=sub_id, error=str(e)))
+
+    return BulkActionResult(succeeded=succeeded, failed=failed)
+
+
+@router.get("/tenant/{tenant_id}/stats", response_model=SubscriptionStats)
+async def get_subscription_stats(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get subscription statistics for a tenant.
+
+    Returns counts by status, recent activity, and average approval time.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    repo = SubscriptionRepository(db)
+    stats = await repo.get_stats(tenant_id)
+
+    return SubscriptionStats(
+        total=stats["total"],
+        by_status=stats["by_status"],
+        by_tenant={tenant_id: stats["total"]},
+        recent_24h=stats["recent_24h"],
+        avg_approval_time_hours=stats.get("avg_approval_time_hours"),
+    )
 
 
 # ============== API Key Validation Endpoint (Gateway) ==============

@@ -10059,6 +10059,47 @@
         "title": "ListToolsResponse",
         "type": "object"
       },
+      "LlmAnomaliesResponse": {
+        "description": "Latency anomalies per provider (high latency = potential cost issue).",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LlmAnomalyEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entries",
+          "period"
+        ],
+        "title": "LlmAnomaliesResponse",
+        "type": "object"
+      },
+      "LlmAnomalyEntry": {
+        "description": "A detected cost anomaly.",
+        "properties": {
+          "avg_latency_seconds": {
+            "title": "Avg Latency Seconds",
+            "type": "number"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "avg_latency_seconds"
+        ],
+        "title": "LlmAnomalyEntry",
+        "type": "object"
+      },
       "LlmBudgetCreate": {
         "description": "Schema for creating an LLM budget.",
         "properties": {
@@ -10188,6 +10229,52 @@
           }
         },
         "title": "LlmBudgetUpdate",
+        "type": "object"
+      },
+      "LlmProviderBreakdownResponse": {
+        "description": "Cost breakdown by provider.",
+        "properties": {
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/LlmProviderCostEntry"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers",
+          "period"
+        ],
+        "title": "LlmProviderBreakdownResponse",
+        "type": "object"
+      },
+      "LlmProviderCostEntry": {
+        "description": "Cost breakdown for a single provider/model combination.",
+        "properties": {
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "cost_usd"
+        ],
+        "title": "LlmProviderCostEntry",
         "type": "object"
       },
       "LlmProviderCreate": {
@@ -10340,6 +10427,96 @@
           "updated_at"
         ],
         "title": "LlmProviderResponse",
+        "type": "object"
+      },
+      "LlmTimeseriesPoint": {
+        "description": "Single time-series data point.",
+        "properties": {
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "timestamp",
+          "value"
+        ],
+        "title": "LlmTimeseriesPoint",
+        "type": "object"
+      },
+      "LlmTimeseriesResponse": {
+        "description": "Cost time-series for charting.",
+        "properties": {
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/LlmTimeseriesPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "points",
+          "period",
+          "step"
+        ],
+        "title": "LlmTimeseriesResponse",
+        "type": "object"
+      },
+      "LlmUsageResponse": {
+        "description": "Top-level LLM usage summary for a tenant.",
+        "properties": {
+          "avg_cost_per_request": {
+            "title": "Avg Cost Per Request",
+            "type": "number"
+          },
+          "cache_read_cost_usd": {
+            "title": "Cache Read Cost Usd",
+            "type": "number"
+          },
+          "cache_write_cost_usd": {
+            "title": "Cache Write Cost Usd",
+            "type": "number"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "total_cost_usd": {
+            "title": "Total Cost Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "total_cost_usd",
+          "input_tokens",
+          "output_tokens",
+          "avg_cost_per_request",
+          "cache_read_cost_usd",
+          "cache_write_cost_usd",
+          "period"
+        ],
+        "title": "LlmUsageResponse",
         "type": "object"
       },
       "LogEntry": {
@@ -41834,6 +42011,242 @@
         "summary": "Get Spend Summary",
         "tags": [
           "LLM Budget & Providers"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/llm/usage": {
+      "get": {
+        "description": "Get LLM usage summary: total cost, tokens, avg cost/request, cache savings.",
+        "operationId": "get_llm_usage_v1_tenants__tenant_id__llm_usage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "month",
+              "pattern": "^(hour|day|week|month)$",
+              "title": "Period",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmUsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Llm Usage",
+        "tags": [
+          "LLM Usage & Cost Monitoring"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/llm/usage/anomalies": {
+      "get": {
+        "description": "Get LLM latency anomalies per provider (high latency = cost risk).",
+        "operationId": "get_llm_anomalies_v1_tenants__tenant_id__llm_usage_anomalies_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "month",
+              "pattern": "^(hour|day|week|month)$",
+              "title": "Period",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmAnomaliesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Llm Anomalies",
+        "tags": [
+          "LLM Usage & Cost Monitoring"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/llm/usage/providers": {
+      "get": {
+        "description": "Get LLM cost breakdown by provider and model.",
+        "operationId": "get_llm_provider_breakdown_v1_tenants__tenant_id__llm_usage_providers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "month",
+              "pattern": "^(hour|day|week|month)$",
+              "title": "Period",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmProviderBreakdownResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Llm Provider Breakdown",
+        "tags": [
+          "LLM Usage & Cost Monitoring"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/llm/usage/timeseries": {
+      "get": {
+        "description": "Get LLM cost time-series for charting.",
+        "operationId": "get_llm_timeseries_v1_tenants__tenant_id__llm_usage_timeseries_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "week",
+              "pattern": "^(hour|day|week|month)$",
+              "title": "Period",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmTimeseriesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Llm Timeseries",
+        "tags": [
+          "LLM Usage & Cost Monitoring"
         ]
       }
     },

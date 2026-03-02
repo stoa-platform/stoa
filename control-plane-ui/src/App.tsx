@@ -13,6 +13,7 @@ import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
 import { ThemeProvider } from '@stoa/shared/contexts';
 import { CelebrationProvider } from '@stoa/shared/components/Celebration';
 import { StoaLoader } from '@stoa/shared/components/StoaLoader';
+import { ErrorBoundary } from '@stoa/shared/components/ErrorBoundary';
 
 // Lazy load pages for code splitting
 // Consolidated imports — single module loader per multi-export file
@@ -543,18 +544,20 @@ function Login() {
 
 function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <CelebrationProvider>
-          <AuthProvider>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/*" element={<ProtectedRoutes />} />
-            </Routes>
-          </AuthProvider>
-        </CelebrationProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ToastProvider>
+          <CelebrationProvider>
+            <AuthProvider>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/*" element={<ProtectedRoutes />} />
+              </Routes>
+            </AuthProvider>
+          </CelebrationProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

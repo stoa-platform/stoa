@@ -311,6 +311,16 @@ async def lifespan(app: FastAPI):
     await argocd_service.disconnect()
     await metrics_service.disconnect()
 
+    # Close MCP proxy httpx client (prevents "Unclosed client session" warnings)
+    from .routers.mcp_proxy import close_http_client
+
+    await close_http_client()
+
+    # Dispose SQLAlchemy connection pool (prevents QueuePool exhaustion across restarts)
+    from .database import close_db
+
+    await close_db()
+
     # Flush remaining OTel spans before exit (CAB-1088)
     shutdown_tracing()
 

@@ -55,3 +55,32 @@ class TestCloseDb:
             await close_db()  # must not raise
         finally:
             db_module._engine = original
+
+
+class TestPoolSettings:
+    """Verify create_async_engine receives pool resilience parameters."""
+
+    async def test_engine_created_with_pool_pre_ping(self):
+        db_module._engine = None
+        with patch("src.database.create_async_engine", return_value=MagicMock()) as mock_create:
+            with patch("src.config.settings") as mock_settings:
+                mock_settings.DATABASE_URL = "postgresql+asyncpg://u:p@localhost/db"
+                mock_settings.DATABASE_POOL_SIZE = 10
+                mock_settings.DATABASE_MAX_OVERFLOW = 10
+                mock_settings.DEBUG = False
+                db_module._get_engine()
+
+            _, kwargs = mock_create.call_args
+            assert kwargs["pool_pre_ping"] is True
+            assert kwargs["pool_recycle"] == 300
+            assert kwargs["pool_timeout"] == 30
+            assert kwargs["pool_size"] == 10
+        db_module._engine = None
+
+    async def test_engine_created_with_correct_defaults(self):
+        """Config default for DATABASE_POOL_SIZE should be 10."""
+        from src.config import Settings
+
+        s = Settings(DATABASE_URL="postgresql+asyncpg://u:p@localhost/db")
+        assert s.DATABASE_POOL_SIZE == 10
+        assert s.DATABASE_MAX_OVERFLOW == 10

@@ -161,7 +161,7 @@ describe('useDeleteApplication', () => {
 describe('useRegenerateSecret', () => {
   it('should regenerate client secret', async () => {
     vi.mocked(applicationsService.regenerateSecret).mockResolvedValueOnce({
-      clientSecret: 'new-secret',
+      client_secret: 'new-secret',
     });
 
     const { result } = renderHook(() => useRegenerateSecret('app-1'), {
@@ -172,6 +172,6 @@ describe('useRegenerateSecret', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.clientSecret).toBe('new-secret');
+    expect(result.current.data?.client_secret).toBe('new-secret');
   });
 });

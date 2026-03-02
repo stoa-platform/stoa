@@ -238,7 +238,7 @@ class Settings(BaseSettings):
 
     # Database (PostgreSQL)
     DATABASE_URL: str = "postgresql+asyncpg://stoa:stoa@localhost:5432/stoa"
-    DATABASE_POOL_SIZE: int = 5
+    DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 10
 
     @property

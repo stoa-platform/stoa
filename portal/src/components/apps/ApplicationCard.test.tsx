@@ -11,7 +11,7 @@ describe('ApplicationCard', () => {
   });
 
   it('should show the clientId in monospace font', () => {
-    const app = mockApplication({ clientId: 'client-xyz789' });
+    const app = mockApplication({ client_id: 'client-xyz789' });
     renderWithProviders(<ApplicationCard application={app as never} />);
     const clientIdEl = screen.getByText('client-xyz789');
     expect(clientIdEl).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe('ApplicationCard', () => {
 
   it('should show subscription count', () => {
     const app = mockApplication({
-      subscriptions: [{ id: 's1' }, { id: 's2' }, { id: 's3' }],
+      api_subscriptions: ['s1', 's2', 's3'],
     });
     renderWithProviders(<ApplicationCard application={app as never} />);
     expect(screen.getByText('Subscriptions:')).toBeInTheDocument();
@@ -71,14 +71,14 @@ describe('ApplicationCard', () => {
   });
 
   it('should show subscription count of 0 when subscriptions is empty', () => {
-    const app = mockApplication({ subscriptions: [] });
+    const app = mockApplication({ api_subscriptions: [] });
     renderWithProviders(<ApplicationCard application={app as never} />);
     expect(screen.getByText('0')).toBeInTheDocument();
   });
 
   it('should show callback URL count when callbackUrls is non-empty', () => {
     const app = mockApplication({
-      callbackUrls: ['https://app.example.com/cb1', 'https://app.example.com/cb2'],
+      redirect_uris: ['https://app.example.com/cb1', 'https://app.example.com/cb2'],
     });
     renderWithProviders(<ApplicationCard application={app as never} />);
     expect(screen.getByText('Callbacks:')).toBeInTheDocument();
@@ -86,13 +86,13 @@ describe('ApplicationCard', () => {
   });
 
   it('should not show callback section when callbackUrls is empty', () => {
-    const app = mockApplication({ callbackUrls: [] });
+    const app = mockApplication({ redirect_uris: [] });
     renderWithProviders(<ApplicationCard application={app as never} />);
     expect(screen.queryByText('Callbacks:')).not.toBeInTheDocument();
   });
 
   it('should show formatted creation date', () => {
-    const app = mockApplication({ createdAt: '2026-01-15T00:00:00Z' });
+    const app = mockApplication({ created_at: '2026-01-15T00:00:00Z' });
     renderWithProviders(<ApplicationCard application={app as never} />);
     // toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     // → "Jan 15, 2026"

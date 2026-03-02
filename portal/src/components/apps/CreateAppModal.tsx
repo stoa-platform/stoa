@@ -35,8 +35,9 @@ export function CreateAppModal({
 
     await onSubmit({
       name: name.trim(),
+      display_name: name.trim(),
       description: description.trim() || undefined,
-      callbackUrls: filteredCallbackUrls,
+      redirect_uris: filteredCallbackUrls,
     });
   };
 

@@ -462,3 +462,54 @@ class TestGetHTTPClient:
             if mod._http_client and not mod._http_client.is_closed:
                 await mod._http_client.aclose()
             mod._http_client = old_client
+
+
+# ============== close_http_client tests ==============
+
+
+class TestCloseHTTPClient:
+    """Tests for the close_http_client shutdown helper."""
+
+    @pytest.mark.asyncio
+    async def test_close_http_client_closes_open_client(self):
+        """close_http_client calls aclose on an open client."""
+        import src.routers.mcp_proxy as mod
+
+        old_client = mod._http_client
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.is_closed = False
+        mod._http_client = mock_client
+        try:
+            await mod.close_http_client()
+            mock_client.aclose.assert_awaited_once()
+            assert mod._http_client is None
+        finally:
+            mod._http_client = old_client
+
+    @pytest.mark.asyncio
+    async def test_close_http_client_noop_when_none(self):
+        """close_http_client is a no-op when no client exists."""
+        import src.routers.mcp_proxy as mod
+
+        old_client = mod._http_client
+        mod._http_client = None
+        try:
+            await mod.close_http_client()  # must not raise
+            assert mod._http_client is None
+        finally:
+            mod._http_client = old_client
+
+    @pytest.mark.asyncio
+    async def test_close_http_client_noop_when_already_closed(self):
+        """close_http_client is a no-op when client is already closed."""
+        import src.routers.mcp_proxy as mod
+
+        old_client = mod._http_client
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.is_closed = True
+        mod._http_client = mock_client
+        try:
+            await mod.close_http_client()
+            mock_client.aclose.assert_not_awaited()
+        finally:
+            mod._http_client = old_client

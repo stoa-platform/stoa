@@ -24,8 +24,9 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
     e.preventDefault();
     const result = await createApp.mutateAsync({
       name: name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      display_name: displayName || name,
       description,
-      callbackUrls: [],
+      redirect_uris: [],
     });
     onCreated(result);
   };

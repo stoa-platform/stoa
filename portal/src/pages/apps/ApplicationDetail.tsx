@@ -87,9 +87,9 @@ export function ApplicationDetail() {
   const handleRegenerateSecret = async (): Promise<string | undefined> => {
     if (id) {
       const result = await regenerateMutation.mutateAsync();
-      if (result.clientSecret) {
-        setNewSecret(result.clientSecret);
-        return result.clientSecret;
+      if (result.client_secret) {
+        setNewSecret(result.client_secret);
+        return result.client_secret;
       }
     }
     return undefined;
@@ -142,7 +142,8 @@ export function ApplicationDetail() {
     );
   }
 
-  const status = statusConfig[application.status] || statusConfig.active;
+  const status =
+    statusConfig[application.status as keyof typeof statusConfig] || statusConfig.active;
   const StatusIcon = status.icon;
 
   const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] =
@@ -200,10 +201,10 @@ export function ApplicationDetail() {
         <div className="flex items-center gap-6 mt-6 pt-6 border-t border-neutral-100 dark:border-neutral-700 text-sm text-neutral-500 dark:text-neutral-400">
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4" />
-            Created {formatDate(application.createdAt)}
+            Created {formatDate(application.created_at)}
           </div>
-          {application.updatedAt !== application.createdAt && (
-            <div>Updated {formatDate(application.updatedAt)}</div>
+          {application.updated_at !== application.created_at && (
+            <div>Updated {formatDate(application.updated_at)}</div>
           )}
         </div>
       </div>
@@ -251,7 +252,7 @@ export function ApplicationDetail() {
                     Client ID
                   </dt>
                   <dd className="mt-1 text-sm text-neutral-900 dark:text-white font-mono">
-                    {application.clientId}
+                    {application.client_id}
                   </dd>
                 </div>
                 <div>
@@ -279,13 +280,13 @@ export function ApplicationDetail() {
             </div>
 
             {/* Callback URLs */}
-            {application.callbackUrls && application.callbackUrls.length > 0 && (
+            {application.redirect_uris && application.redirect_uris.length > 0 && (
               <div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
                   Callback URLs
                 </h3>
                 <ul className="space-y-2">
-                  {application.callbackUrls.map((url, index) => (
+                  {application.redirect_uris.map((url, index) => (
                     <li key={index} className="flex items-center gap-2 text-sm">
                       <ExternalLink className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
                       <a
@@ -314,7 +315,7 @@ export function ApplicationDetail() {
               Use these credentials to authenticate your application with our APIs.
             </p>
             <CredentialsViewer
-              clientId={application.clientId}
+              clientId={application.client_id ?? ''}
               clientSecret={newSecret}
               onRegenerateSecret={handleRegenerateSecret}
               isRegenerating={regenerateMutation.isPending}

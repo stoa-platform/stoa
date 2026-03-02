@@ -81,13 +81,15 @@ describe('OnboardingWizard', () => {
     mockCreateApp.mockResolvedValue({
       id: 'app-1',
       name: 'my-app',
-      clientId: 'client-123',
-      clientSecret: 'secret-xyz',
-      callbackUrls: [],
-      userId: 'u1',
+      display_name: 'my-app',
+      client_id: 'client-123',
+      client_secret: 'secret-xyz',
+      redirect_uris: [],
+      tenant_id: 'oasis-gunters',
       status: 'active',
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
+      api_subscriptions: [],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
     });
   });
 
@@ -119,8 +121,9 @@ describe('OnboardingWizard', () => {
     await waitFor(() => {
       expect(mockCreateApp).toHaveBeenCalledWith({
         name: 'test-app',
+        display_name: 'Test App',
         description: '',
-        callbackUrls: [],
+        redirect_uris: [],
       });
     });
 

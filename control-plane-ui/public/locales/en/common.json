@@ -45,7 +45,8 @@
     "analytics": "Usage Analytics",
     "securityPosture": "Security Posture",
     "proxyOwner": "Proxy Owner",
-    "llmCost": "LLM Cost"
+    "llmCost": "LLM Cost",
+    "subscriptions": "Subscriptions"
   },
   "layout": {
     "controlPlane": "Control Plane",
@@ -266,6 +267,50 @@
     "oidcProxy": "OIDC Proxy",
     "direct": "Direct",
     "mode": "mode"
+  },
+  "subscriptions": {
+    "title": "Subscriptions",
+    "subtitle": "Manage subscription requests and approvals",
+    "tabs": {
+      "pending": "Pending",
+      "active": "Active",
+      "suspended": "Suspended",
+      "revoked": "Revoked",
+      "rejected": "Rejected",
+      "all": "All"
+    },
+    "approve": "Approve",
+    "reject": "Reject",
+    "bulkApprove": "Approve ({{count}})",
+    "bulkReject": "Reject ({{count}})",
+    "rejectSubscription": "Reject Subscription",
+    "reasonPlaceholder": "Enter a reason for rejection...",
+    "reasonRequired": "A reason is required when rejecting a subscription.",
+    "noSubscriptions": "No subscriptions found",
+    "noSubscriptionsDesc": "No subscription requests for this status.",
+    "selected": "{{count}} selected",
+    "clearSelection": "Clear selection",
+    "approved": "Subscription approved",
+    "rejected": "Subscription rejected",
+    "approveFailed": "Approval failed",
+    "rejectFailed": "Rejection failed",
+    "bulkComplete": "Bulk action complete",
+    "bulkFailed": "Bulk action failed",
+    "stats": {
+      "totalSubscribers": "Total Subscribers",
+      "pendingRequests": "Pending Requests",
+      "approvalRate": "Approval Rate",
+      "avgApprovalTime": "Avg Approval Time"
+    },
+    "columns": {
+      "application": "Application",
+      "api": "API",
+      "subscriber": "Subscriber",
+      "plan": "Plan",
+      "status": "Status",
+      "created": "Created",
+      "actions": "Actions"
+    }
   },
   "diagnostics": {
     "title": "Platform Diagnostics",

@@ -152,6 +152,12 @@ const navigationSections: NavSection[] = [
         permission: 'consumers:read',
         shortcut: ['g', 'c'],
       },
+      {
+        name: 'nav.subscriptions',
+        href: '/subscriptions',
+        icon: ClipboardList,
+        permission: 'apps:read',
+      },
     ],
   },
   {

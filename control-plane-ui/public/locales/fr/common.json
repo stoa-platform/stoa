@@ -45,7 +45,8 @@
     "analytics": "Analytique d'usage",
     "securityPosture": "Posture de securite",
     "proxyOwner": "Propriétaire de proxy",
-    "llmCost": "Coûts LLM"
+    "llmCost": "Coûts LLM",
+    "subscriptions": "Abonnements"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",
@@ -266,6 +267,50 @@
     "oidcProxy": "Proxy OIDC",
     "direct": "Direct",
     "mode": "mode"
+  },
+  "subscriptions": {
+    "title": "Abonnements",
+    "subtitle": "Gérer les demandes d'abonnement et les approbations",
+    "tabs": {
+      "pending": "En attente",
+      "active": "Actif",
+      "suspended": "Suspendu",
+      "revoked": "Révoqué",
+      "rejected": "Rejeté",
+      "all": "Tous"
+    },
+    "approve": "Approuver",
+    "reject": "Rejeter",
+    "bulkApprove": "Approuver ({{count}})",
+    "bulkReject": "Rejeter ({{count}})",
+    "rejectSubscription": "Rejeter l'abonnement",
+    "reasonPlaceholder": "Entrez une raison pour le rejet...",
+    "reasonRequired": "Une raison est requise pour rejeter un abonnement.",
+    "noSubscriptions": "Aucun abonnement trouvé",
+    "noSubscriptionsDesc": "Aucune demande d'abonnement pour ce statut.",
+    "selected": "{{count}} sélectionné(s)",
+    "clearSelection": "Effacer la sélection",
+    "approved": "Abonnement approuvé",
+    "rejected": "Abonnement rejeté",
+    "approveFailed": "Échec de l'approbation",
+    "rejectFailed": "Échec du rejet",
+    "bulkComplete": "Action groupée terminée",
+    "bulkFailed": "Échec de l'action groupée",
+    "stats": {
+      "totalSubscribers": "Total abonnés",
+      "pendingRequests": "Demandes en attente",
+      "approvalRate": "Taux d'approbation",
+      "avgApprovalTime": "Temps moyen d'approbation"
+    },
+    "columns": {
+      "application": "Application",
+      "api": "API",
+      "subscriber": "Abonné",
+      "plan": "Plan",
+      "status": "Statut",
+      "created": "Créé le",
+      "actions": "Actions"
+    }
   },
   "diagnostics": {
     "title": "Diagnostics Plateforme",

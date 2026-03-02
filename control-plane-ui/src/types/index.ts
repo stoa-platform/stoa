@@ -1450,3 +1450,74 @@ export interface CallbackResponse {
   tools_sync_triggered: boolean;
   redirect_url?: string;
 }
+
+// ============== Subscription Management (CAB-1635) ==============
+
+export type SubscriptionStatus =
+  | 'pending'
+  | 'active'
+  | 'suspended'
+  | 'revoked'
+  | 'expired'
+  | 'rejected';
+
+export interface Subscription {
+  id: string;
+  application_id: string;
+  application_name: string;
+  subscriber_id: string;
+  subscriber_email: string;
+  api_id: string;
+  api_name: string;
+  api_version: string;
+  tenant_id: string;
+  plan_id: string | null;
+  plan_name: string | null;
+  api_key_prefix: string;
+  status: SubscriptionStatus;
+  status_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  approved_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  approved_by: string | null;
+  revoked_by: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  provisioning_status: string | null;
+  gateway_app_id: string | null;
+  provisioning_error: string | null;
+}
+
+export interface SubscriptionListResponse {
+  items: Subscription[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface SubscriptionStats {
+  total: number;
+  by_status: Record<string, number>;
+  by_tenant: Record<string, number>;
+  recent_24h: number;
+  avg_approval_time_hours: number | null;
+}
+
+export interface BulkSubscriptionAction {
+  ids: string[];
+  action: 'approve' | 'reject';
+  reason?: string;
+}
+
+export interface BulkActionFailure {
+  id: string;
+  error: string;
+}
+
+export interface BulkActionResult {
+  succeeded: number;
+  failed: BulkActionFailure[];
+}

@@ -294,13 +294,23 @@ export function MyMCPServersPage() {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5" />
+            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              <button
+                onClick={() => {
+                  setError(null);
+                  handleRefresh();
+                }}
+                className="text-sm text-red-600 dark:text-red-400 hover:underline mt-1"
+              >
+                Try again
+              </button>
             </div>
             <button
               onClick={() => setError(null)}
-              className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
+              className="text-red-400 hover:text-red-600 dark:hover:text-red-300 flex-shrink-0"
+              aria-label="Dismiss error"
             >
               <XCircle className="h-4 w-4" />
             </button>

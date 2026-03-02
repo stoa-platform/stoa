@@ -131,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
   const prevTokenRef = useRef<string | null>(null);
+  const fetchingMeRef = useRef(false);
 
   useEffect(() => {
     if (oidc.user) {
@@ -148,6 +149,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           queryFn: () => apiService.getTenants(),
           staleTime: 5 * 60 * 1000, // 5 minutes
         });
+        // Fetch /v1/me for role display names (CAB-1634)
+        if (!fetchingMeRef.current) {
+          fetchingMeRef.current = true;
+          apiService
+            .getMe()
+            .then((meData) => {
+              setUser((prev) =>
+                prev ? { ...prev, role_display_names: meData.role_display_names } : prev
+              );
+            })
+            .catch((err) => {
+              console.warn('[AuthContext] Failed to fetch /v1/me for display names', err);
+            })
+            .finally(() => {
+              fetchingMeRef.current = false;
+            });
+        }
       } else if (!token) {
         setUser(extractUserFromToken(oidc.user));
       }

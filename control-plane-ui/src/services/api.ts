@@ -853,6 +853,20 @@ class ApiService {
     return data;
   }
 
+  async getMe(): Promise<{
+    user_id: string;
+    email: string;
+    username: string;
+    tenant_id: string | null;
+    roles: string[];
+    permissions: string[];
+    effective_scopes: string[];
+    role_display_names: Record<string, string>;
+  }> {
+    const { data } = await this.client.get('/v1/me');
+    return data;
+  }
+
   // =========================================================================
   // LLM Usage & Cost Monitoring (CAB-1487)
   // =========================================================================

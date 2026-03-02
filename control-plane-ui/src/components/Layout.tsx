@@ -777,7 +777,7 @@ export function Layout({ children }: LayoutProps) {
                     {user.name}
                   </p>
                   <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
-                    {user.roles.join(', ')}
+                    {user.roles.map((r) => user.role_display_names?.[r] || r).join(', ')}
                   </p>
                 </>
               ) : (

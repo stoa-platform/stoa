@@ -77,7 +77,9 @@ class PIIMaskingMiddleware:
         if query_string:
             scope["query_string"] = self._mask_query_string(query_string)
 
-        # 2. Mask sensitive headers (in-place replacement for logging only)
+        # 2. Mask sensitive headers for logging — store in separate scope key
+        # IMPORTANT: Do NOT mutate scope["headers"] — FastAPI dependencies
+        # (HTTPBearer, etc.) need the original Authorization header for auth.
         raw_headers: list[tuple[bytes, bytes]] = list(scope.get("headers", []))
         masked_headers: list[tuple[bytes, bytes]] = []
         for name, value in raw_headers:
@@ -85,7 +87,7 @@ class PIIMaskingMiddleware:
                 masked_headers.append((name, b"[REDACTED]"))
             else:
                 masked_headers.append((name, value))
-        scope["headers"] = masked_headers
+        scope["_pii_masked_headers"] = masked_headers
 
         # 3. Mask client IP (partial — keep first two octets for geo/debug)
         client = scope.get("client")

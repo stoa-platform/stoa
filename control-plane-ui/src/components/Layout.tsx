@@ -430,6 +430,15 @@ export function Layout({ children }: LayoutProps) {
     return tenants?.find((t) => t.id === id || t.name === id);
   }, [activeTenantId, user?.tenant_id, tenants]);
 
+  // Auto-select first tenant for cpi-admin users who have no tenant_id in JWT
+  useEffect(() => {
+    if (!activeTenantId && !user?.tenant_id && tenants && tenants.length > 0) {
+      const firstTenantId = tenants[0].id;
+      setActiveTenantId(firstTenantId);
+      localStorage.setItem(ACTIVE_TENANT_KEY, firstTenantId);
+    }
+  }, [activeTenantId, user?.tenant_id, tenants]);
+
   const handleTenantSwitch = useCallback(
     (tenantId: string) => {
       setActiveTenantId(tenantId);

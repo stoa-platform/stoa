@@ -1,4 +1,5 @@
 """Webhook SQLAlchemy models for subscription event notifications (CAB-315)"""
+
 import enum
 import uuid
 from datetime import datetime
@@ -11,10 +12,12 @@ from src.database import Base
 
 class WebhookEventType(enum.StrEnum):
     """Supported webhook event types"""
+
     SUBSCRIPTION_CREATED = "subscription.created"
     SUBSCRIPTION_APPROVED = "subscription.approved"
     SUBSCRIPTION_REVOKED = "subscription.revoked"
     SUBSCRIPTION_KEY_ROTATED = "subscription.key_rotated"
+    SUBSCRIPTION_REJECTED = "subscription.rejected"
     SUBSCRIPTION_EXPIRED = "subscription.expired"
     DEPLOYMENT_STARTED = "deployment.started"
     DEPLOYMENT_SUCCEEDED = "deployment.succeeded"
@@ -28,6 +31,7 @@ class WebhookEventType(enum.StrEnum):
 
 class WebhookDeliveryStatus(enum.StrEnum):
     """Webhook delivery status"""
+
     PENDING = "pending"
     SUCCESS = "success"
     FAILED = "failed"
@@ -36,6 +40,7 @@ class WebhookDeliveryStatus(enum.StrEnum):
 
 class TenantWebhook(Base):
     """Tenant webhook configuration - defines where to send notifications"""
+
     __tablename__ = "tenant_webhooks"
 
     # Primary key
@@ -65,9 +70,7 @@ class TenantWebhook(Base):
     created_by = Column(String(255), nullable=True)
 
     # Indexes
-    __table_args__ = (
-        Index('ix_tenant_webhooks_tenant_enabled', 'tenant_id', 'enabled'),
-    )
+    __table_args__ = (Index("ix_tenant_webhooks_tenant_enabled", "tenant_id", "enabled"),)
 
     def __repr__(self) -> str:
         return f"<TenantWebhook {self.id} tenant={self.tenant_id} url={self.url[:50]}...>"
@@ -86,6 +89,7 @@ class TenantWebhook(Base):
 
 class WebhookDelivery(Base):
     """Webhook delivery log - tracks each delivery attempt"""
+
     __tablename__ = "webhook_deliveries"
 
     # Primary key
@@ -117,8 +121,8 @@ class WebhookDelivery(Base):
 
     # Indexes
     __table_args__ = (
-        Index('ix_webhook_deliveries_status_retry', 'status', 'next_retry_at'),
-        Index('ix_webhook_deliveries_webhook_created', 'webhook_id', 'created_at'),
+        Index("ix_webhook_deliveries_status_retry", "status", "next_retry_at"),
+        Index("ix_webhook_deliveries_webhook_created", "webhook_id", "created_at"),
     )
 
     def __repr__(self) -> str:

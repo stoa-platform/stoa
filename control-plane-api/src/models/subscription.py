@@ -18,6 +18,7 @@ class SubscriptionStatus(enum.StrEnum):
     SUSPENDED = "suspended"
     REVOKED = "revoked"
     EXPIRED = "expired"
+    REJECTED = "rejected"
 
 
 class ProvisioningStatus(enum.StrEnum):
@@ -91,6 +92,8 @@ class Subscription(Base):
     # Audit fields
     approved_by = Column(String(255), nullable=True)  # Admin user ID who approved
     revoked_by = Column(String(255), nullable=True)  # Admin user ID who revoked
+    rejected_by = Column(String(255), nullable=True)  # Admin user ID who rejected
+    rejected_at = Column(DateTime, nullable=True)
 
     # Gateway provisioning (CAB-800)
     provisioning_status = Column(

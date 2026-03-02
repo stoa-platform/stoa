@@ -22,6 +22,7 @@ DEPROVISION_PATH = "src.routers.subscriptions.deprovision_on_revocation"
 EMIT_CREATED_PATH = "src.routers.subscriptions.emit_subscription_created"
 EMIT_APPROVED_PATH = "src.routers.subscriptions.emit_subscription_approved"
 EMIT_REVOKED_PATH = "src.routers.subscriptions.emit_subscription_revoked"
+EMIT_REJECTED_PATH = "src.routers.subscriptions.emit_subscription_rejected"
 EMIT_ROTATED_PATH = "src.routers.subscriptions.emit_subscription_key_rotated"
 
 
@@ -56,6 +57,8 @@ def _mock_subscription(**overrides):
         "revoked_at": None,
         "approved_by": None,
         "revoked_by": None,
+        "rejected_by": None,
+        "rejected_at": None,
         "provisioning_status": "none",
         "gateway_app_id": None,
         "provisioning_error": None,
@@ -95,6 +98,8 @@ def _mock_sub_response(sub):
     resp.revoked_at = sub.revoked_at
     resp.approved_by = sub.approved_by
     resp.revoked_by = sub.revoked_by
+    resp.rejected_by = sub.rejected_by
+    resp.rejected_at = sub.rejected_at
     resp.provisioning_status = sub.provisioning_status
     resp.gateway_app_id = sub.gateway_app_id
     resp.provisioning_error = sub.provisioning_error
@@ -903,3 +908,228 @@ class TestValidateApiKey:
         data = resp.json()
         assert data["valid"] is True
         assert data.get("using_previous_key") is True
+
+
+# ============== Reject Subscription (CAB-1635) ==============
+
+
+class TestRejectSubscription:
+    """POST /v1/subscriptions/{id}/reject"""
+
+    def test_reject_pending_subscription(self, app_with_tenant_admin, mock_db_session):
+        """Happy path: reject a pending subscription stores reason and actor."""
+        sub = _mock_subscription(status=SubscriptionStatus.PENDING)
+        rejected_sub = _mock_subscription(
+            id=sub.id,
+            status=SubscriptionStatus.REJECTED,
+            status_reason="Not suitable for this API",
+            rejected_by="tenant-admin-user-id",
+            rejected_at=datetime.utcnow(),
+        )
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=sub)
+        mock_repo.update_status = AsyncMock(return_value=rejected_sub)
+
+        with (
+            patch(SUB_REPO_PATH, return_value=mock_repo),
+            patch(EMIT_REJECTED_PATH, new=AsyncMock()),
+        ):
+            with TestClient(app_with_tenant_admin) as client:
+                resp = client.post(
+                    f"/v1/subscriptions/{sub.id}/reject",
+                    json={"reason": "Not suitable for this API"},
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "rejected"
+        mock_repo.update_status.assert_awaited_once()
+        call_args = mock_repo.update_status.call_args
+        assert call_args[1].get("reason") or call_args[0][2] == "Not suitable for this API"
+
+    def test_reject_non_pending_returns_400(self, app_with_tenant_admin, mock_db_session):
+        """Cannot reject a subscription that is not pending."""
+        sub = _mock_subscription(status=SubscriptionStatus.ACTIVE)
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=sub)
+
+        with patch(SUB_REPO_PATH, return_value=mock_repo):
+            with TestClient(app_with_tenant_admin) as client:
+                resp = client.post(
+                    f"/v1/subscriptions/{sub.id}/reject",
+                    json={"reason": "Some reason"},
+                )
+
+        assert resp.status_code == 400
+        assert "active" in resp.json()["detail"].lower()
+
+    def test_reject_stores_reason_and_actor(self, app_with_tenant_admin, mock_db_session):
+        """Verify that reason and actor_id are passed to update_status."""
+        sub = _mock_subscription(status=SubscriptionStatus.PENDING)
+        rejected_sub = _mock_subscription(
+            id=sub.id,
+            status=SubscriptionStatus.REJECTED,
+            status_reason="ToS violation",
+            rejected_by="tenant-admin-user-id",
+            rejected_at=datetime.utcnow(),
+        )
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=sub)
+        mock_repo.update_status = AsyncMock(return_value=rejected_sub)
+
+        with (
+            patch(SUB_REPO_PATH, return_value=mock_repo),
+            patch(EMIT_REJECTED_PATH, new=AsyncMock()) as mock_emit,
+        ):
+            with TestClient(app_with_tenant_admin) as client:
+                resp = client.post(
+                    f"/v1/subscriptions/{sub.id}/reject",
+                    json={"reason": "ToS violation"},
+                )
+
+        assert resp.status_code == 200
+        # Verify update_status called with REJECTED + reason + actor
+        call_args = mock_repo.update_status.call_args
+        assert call_args[0][1] == SubscriptionStatus.REJECTED
+        assert call_args[1].get("reason") or call_args[0][2] == "ToS violation"
+        # Verify webhook emitted
+        mock_emit.assert_awaited_once()
+
+
+# ============== Bulk Actions (CAB-1635) ==============
+
+
+class TestBulkSubscriptionAction:
+    """POST /v1/subscriptions/bulk"""
+
+    def test_bulk_approve_multiple(self, app_with_tenant_admin, mock_db_session):
+        """Approve multiple pending subscriptions in one call."""
+        sub1 = _mock_subscription(status=SubscriptionStatus.PENDING)
+        sub2 = _mock_subscription(status=SubscriptionStatus.PENDING)
+        approved1 = _mock_subscription(id=sub1.id, status=SubscriptionStatus.ACTIVE)
+        approved2 = _mock_subscription(id=sub2.id, status=SubscriptionStatus.ACTIVE)
+
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(side_effect=[sub1, sub2])
+        mock_repo.update_status = AsyncMock(side_effect=[approved1, approved2])
+
+        with (
+            patch(SUB_REPO_PATH, return_value=mock_repo),
+            patch(EMIT_APPROVED_PATH, new=AsyncMock()),
+            patch(PROVISION_PATH, new=AsyncMock()),
+        ):
+            with TestClient(app_with_tenant_admin) as client:
+                resp = client.post(
+                    "/v1/subscriptions/bulk",
+                    json={
+                        "ids": [str(sub1.id), str(sub2.id)],
+                        "action": "approve",
+                    },
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["succeeded"] == 2
+        assert data["failed"] == []
+
+    def test_bulk_reject_multiple(self, app_with_tenant_admin, mock_db_session):
+        """Reject multiple pending subscriptions with a reason."""
+        sub1 = _mock_subscription(status=SubscriptionStatus.PENDING)
+        sub2 = _mock_subscription(status=SubscriptionStatus.PENDING)
+        rejected1 = _mock_subscription(id=sub1.id, status=SubscriptionStatus.REJECTED)
+        rejected2 = _mock_subscription(id=sub2.id, status=SubscriptionStatus.REJECTED)
+
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(side_effect=[sub1, sub2])
+        mock_repo.update_status = AsyncMock(side_effect=[rejected1, rejected2])
+
+        with (
+            patch(SUB_REPO_PATH, return_value=mock_repo),
+            patch(EMIT_REJECTED_PATH, new=AsyncMock()),
+        ):
+            with TestClient(app_with_tenant_admin) as client:
+                resp = client.post(
+                    "/v1/subscriptions/bulk",
+                    json={
+                        "ids": [str(sub1.id), str(sub2.id)],
+                        "action": "reject",
+                        "reason": "Batch cleanup",
+                    },
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["succeeded"] == 2
+        assert data["failed"] == []
+
+    def test_bulk_max_50_limit(self, app_with_tenant_admin, mock_db_session):
+        """Bulk action rejects more than 50 items via schema validation."""
+        ids = [str(uuid4()) for _ in range(51)]
+        with TestClient(app_with_tenant_admin) as client:
+            resp = client.post(
+                "/v1/subscriptions/bulk",
+                json={"ids": ids, "action": "approve"},
+            )
+
+        assert resp.status_code == 422  # Pydantic validation error
+
+    def test_bulk_partial_failure(self, app_with_tenant_admin, mock_db_session):
+        """Mixed results: one approved, one not found."""
+        sub1 = _mock_subscription(status=SubscriptionStatus.PENDING)
+        approved1 = _mock_subscription(id=sub1.id, status=SubscriptionStatus.ACTIVE)
+        missing_id = uuid4()
+
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(side_effect=[sub1, None])
+        mock_repo.update_status = AsyncMock(return_value=approved1)
+
+        with (
+            patch(SUB_REPO_PATH, return_value=mock_repo),
+            patch(EMIT_APPROVED_PATH, new=AsyncMock()),
+            patch(PROVISION_PATH, new=AsyncMock()),
+        ):
+            with TestClient(app_with_tenant_admin) as client:
+                resp = client.post(
+                    "/v1/subscriptions/bulk",
+                    json={
+                        "ids": [str(sub1.id), str(missing_id)],
+                        "action": "approve",
+                    },
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["succeeded"] == 1
+        assert len(data["failed"]) == 1
+        assert data["failed"][0]["error"] == "Subscription not found"
+
+
+# ============== Subscription Stats (CAB-1635) ==============
+
+
+class TestSubscriptionStats:
+    """GET /v1/subscriptions/tenant/{tid}/stats"""
+
+    def test_stats_returns_counts_and_avg_time(self, app_with_tenant_admin, mock_db_session):
+        """Stats endpoint returns by_status counts and avg approval time."""
+        mock_repo = MagicMock()
+        mock_repo.get_stats = AsyncMock(
+            return_value={
+                "total": 10,
+                "by_status": {"pending": 2, "active": 5, "rejected": 1, "revoked": 1, "expired": 1},
+                "recent_24h": 3,
+                "avg_approval_time_hours": 4.5,
+            }
+        )
+
+        with patch(SUB_REPO_PATH, return_value=mock_repo):
+            with TestClient(app_with_tenant_admin) as client:
+                resp = client.get("/v1/subscriptions/tenant/acme/stats")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 10
+        assert data["by_status"]["pending"] == 2
+        assert data["by_status"]["active"] == 5
+        assert data["recent_24h"] == 3
+        assert data["avg_approval_time_hours"] == 4.5

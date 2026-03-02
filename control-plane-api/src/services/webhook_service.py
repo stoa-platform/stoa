@@ -6,6 +6,7 @@ This service handles:
 3. Retry logic with exponential backoff
 4. HMAC signature generation for payload verification
 """
+
 import asyncio
 import hashlib
 import hmac
@@ -74,9 +75,7 @@ class WebhookService:
 
     async def get_webhook(self, webhook_id: UUID) -> TenantWebhook | None:
         """Get a webhook by ID"""
-        result = await self.db.execute(
-            select(TenantWebhook).where(TenantWebhook.id == webhook_id)
-        )
+        result = await self.db.execute(select(TenantWebhook).where(TenantWebhook.id == webhook_id))
         return result.scalar_one_or_none()
 
     async def list_webhooks(
@@ -208,24 +207,34 @@ class WebhookService:
                 "tenant_id": subscription.tenant_id,
                 "subscriber_id": subscription.subscriber_id,
                 "subscriber_email": subscription.subscriber_email,
-                "status": subscription.status.value if hasattr(subscription.status, 'value') else str(subscription.status),
+                "status": (
+                    subscription.status.value if hasattr(subscription.status, "value") else str(subscription.status)
+                ),
             },
         }
 
         # Add event-specific data
         if event_type == WebhookEventType.SUBSCRIPTION_APPROVED.value:
             payload["data"]["approved_by"] = subscription.approved_by
-            payload["data"]["approved_at"] = subscription.approved_at.isoformat() + "Z" if subscription.approved_at else None
+            payload["data"]["approved_at"] = (
+                subscription.approved_at.isoformat() + "Z" if subscription.approved_at else None
+            )
 
         elif event_type == WebhookEventType.SUBSCRIPTION_REVOKED.value:
             payload["data"]["revoked_by"] = subscription.revoked_by
-            payload["data"]["revoked_at"] = subscription.revoked_at.isoformat() + "Z" if subscription.revoked_at else None
+            payload["data"]["revoked_at"] = (
+                subscription.revoked_at.isoformat() + "Z" if subscription.revoked_at else None
+            )
             payload["data"]["reason"] = subscription.status_reason
 
         elif event_type == WebhookEventType.SUBSCRIPTION_KEY_ROTATED.value:
             payload["data"]["rotation_count"] = subscription.rotation_count
-            payload["data"]["last_rotated_at"] = subscription.last_rotated_at.isoformat() + "Z" if subscription.last_rotated_at else None
-            payload["data"]["grace_period_expires_at"] = subscription.previous_key_expires_at.isoformat() + "Z" if subscription.previous_key_expires_at else None
+            payload["data"]["last_rotated_at"] = (
+                subscription.last_rotated_at.isoformat() + "Z" if subscription.last_rotated_at else None
+            )
+            payload["data"]["grace_period_expires_at"] = (
+                subscription.previous_key_expires_at.isoformat() + "Z" if subscription.previous_key_expires_at else None
+            )
 
         # Add any additional data
         if additional_data:
@@ -235,12 +244,8 @@ class WebhookService:
 
     def _generate_signature(self, secret: str, payload: dict) -> str:
         """Generate HMAC-SHA256 signature for the payload"""
-        payload_bytes = json.dumps(payload, sort_keys=True).encode('utf-8')
-        signature = hmac.new(
-            secret.encode('utf-8'),
-            payload_bytes,
-            hashlib.sha256
-        ).hexdigest()
+        payload_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
+        signature = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
         return f"sha256={signature}"
 
     async def _deliver_webhook(
@@ -297,15 +302,21 @@ class WebhookService:
                     else:
                         # Non-2xx response, will retry
                         delivery.error_message = f"HTTP {response.status_code}: {response.text[:500]}"
-                        logger.warning(f"Webhook {webhook.id} returned {response.status_code}, attempt {delivery.attempt_count}/{delivery.max_attempts}")
+                        logger.warning(
+                            f"Webhook {webhook.id} returned {response.status_code}, attempt {delivery.attempt_count}/{delivery.max_attempts}"
+                        )
 
                 except httpx.TimeoutException as e:
                     delivery.error_message = f"Timeout: {e!s}"
-                    logger.warning(f"Webhook {webhook.id} timed out, attempt {delivery.attempt_count}/{delivery.max_attempts}")
+                    logger.warning(
+                        f"Webhook {webhook.id} timed out, attempt {delivery.attempt_count}/{delivery.max_attempts}"
+                    )
 
                 except httpx.RequestError as e:
                     delivery.error_message = f"Request error: {e!s}"
-                    logger.warning(f"Webhook {webhook.id} request failed: {e}, attempt {delivery.attempt_count}/{delivery.max_attempts}")
+                    logger.warning(
+                        f"Webhook {webhook.id} request failed: {e}, attempt {delivery.attempt_count}/{delivery.max_attempts}"
+                    )
 
                 except Exception as e:
                     delivery.error_message = f"Unexpected error: {e!s}"
@@ -325,7 +336,9 @@ class WebhookService:
                     delivery.status = WebhookDeliveryStatus.FAILED.value
                     delivery.next_retry_at = None
                     await self.db.commit()
-                    logger.error(f"Webhook {webhook.id} failed after {delivery.max_attempts} attempts for delivery {delivery.id}")
+                    logger.error(
+                        f"Webhook {webhook.id} failed after {delivery.max_attempts} attempts for delivery {delivery.id}"
+                    )
 
     # ============ Deployment Event Dispatching (CAB-1354) ============
 
@@ -413,9 +426,7 @@ class WebhookService:
 
     async def retry_delivery(self, delivery_id: UUID) -> WebhookDelivery | None:
         """Manually retry a failed delivery"""
-        result = await self.db.execute(
-            select(WebhookDelivery).where(WebhookDelivery.id == delivery_id)
-        )
+        result = await self.db.execute(select(WebhookDelivery).where(WebhookDelivery.id == delivery_id))
         delivery = result.scalar_one_or_none()
         if not delivery:
             return None
@@ -441,6 +452,7 @@ class WebhookService:
 
 
 # ============ Subscription Event Emission Helpers ============
+
 
 async def emit_subscription_created(db: AsyncSession, subscription: Subscription) -> None:
     """Emit subscription.created event"""
@@ -469,6 +481,15 @@ async def emit_subscription_revoked(db: AsyncSession, subscription: Subscription
     )
 
 
+async def emit_subscription_rejected(db: AsyncSession, subscription: Subscription) -> None:
+    """Emit subscription.rejected event"""
+    service = WebhookService(db)
+    await service.dispatch_event(
+        WebhookEventType.SUBSCRIPTION_REJECTED.value,
+        subscription,
+    )
+
+
 async def emit_subscription_key_rotated(
     db: AsyncSession,
     subscription: Subscription,
@@ -485,11 +506,13 @@ async def emit_subscription_key_rotated(
 
 # ============ Deployment Event Emission Helpers (CAB-1354) ============
 
+
 async def emit_deployment_started(db: AsyncSession, deployment) -> None:
     """Emit deployment.started event"""
     service = WebhookService(db)
     await service.dispatch_deployment_event(
-        WebhookEventType.DEPLOYMENT_STARTED.value, deployment,
+        WebhookEventType.DEPLOYMENT_STARTED.value,
+        deployment,
     )
 
 
@@ -497,7 +520,8 @@ async def emit_deployment_succeeded(db: AsyncSession, deployment) -> None:
     """Emit deployment.succeeded event"""
     service = WebhookService(db)
     await service.dispatch_deployment_event(
-        WebhookEventType.DEPLOYMENT_SUCCEEDED.value, deployment,
+        WebhookEventType.DEPLOYMENT_SUCCEEDED.value,
+        deployment,
     )
 
 
@@ -505,7 +529,8 @@ async def emit_deployment_failed(db: AsyncSession, deployment) -> None:
     """Emit deployment.failed event"""
     service = WebhookService(db)
     await service.dispatch_deployment_event(
-        WebhookEventType.DEPLOYMENT_FAILED.value, deployment,
+        WebhookEventType.DEPLOYMENT_FAILED.value,
+        deployment,
     )
 
 
@@ -513,5 +538,6 @@ async def emit_deployment_rolled_back(db: AsyncSession, deployment) -> None:
     """Emit deployment.rolled_back event"""
     service = WebhookService(db)
     await service.dispatch_deployment_event(
-        WebhookEventType.DEPLOYMENT_ROLLED_BACK.value, deployment,
+        WebhookEventType.DEPLOYMENT_ROLLED_BACK.value,
+        deployment,
     )

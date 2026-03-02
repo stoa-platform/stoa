@@ -16,6 +16,7 @@ class SubscriptionStatusEnum(StrEnum):
     SUSPENDED = "suspended"
     REVOKED = "revoked"
     EXPIRED = "expired"
+    REJECTED = "rejected"
 
 
 class ProvisioningStatusEnum(StrEnum):
@@ -82,6 +83,8 @@ class SubscriptionResponse(BaseModel):
     revoked_at: datetime | None
     approved_by: str | None
     revoked_by: str | None
+    rejected_by: str | None = None
+    rejected_at: datetime | None = None
 
     # Gateway provisioning (CAB-800)
     provisioning_status: ProvisioningStatusEnum | None = None
@@ -139,6 +142,46 @@ class APIKeyResponse(BaseModel):
     )
 
 
+class SubscriptionReject(BaseModel):
+    """Schema for rejecting a subscription"""
+
+    reason: str = Field(..., min_length=1, max_length=500)
+
+    model_config = ConfigDict(json_schema_extra={"example": {"reason": "API not suitable for this application"}})
+
+
+class BulkSubscriptionAction(BaseModel):
+    """Schema for bulk approve/reject actions"""
+
+    ids: list[UUID] = Field(..., min_length=1, max_length=50)
+    action: Literal["approve", "reject"] = Field(..., description="Action to perform")
+    reason: str | None = Field(None, max_length=500, description="Reason (required for reject)")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "ids": ["550e8400-e29b-41d4-a716-446655440000"],
+                "action": "approve",
+                "reason": None,
+            }
+        }
+    )
+
+
+class BulkActionFailure(BaseModel):
+    """Schema for a single failed item in bulk action"""
+
+    id: UUID
+    error: str
+
+
+class BulkActionResult(BaseModel):
+    """Schema for bulk action result"""
+
+    succeeded: int
+    failed: list[BulkActionFailure]
+
+
 class SubscriptionStats(BaseModel):
     """Schema for subscription statistics"""
 
@@ -146,6 +189,7 @@ class SubscriptionStats(BaseModel):
     by_status: dict[str, int]
     by_tenant: dict[str, int]
     recent_24h: int
+    avg_approval_time_hours: float | None = None
 
 
 # ============== Key Rotation Schemas (CAB-314) ==============

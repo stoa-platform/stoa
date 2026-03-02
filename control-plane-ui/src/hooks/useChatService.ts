@@ -17,7 +17,10 @@ export function useChatService() {
 
   const sendMessage = useCallback(
     async (message: string): Promise<string> => {
-      const tenantId = user?.tenant_id;
+      // Prefer the UI-selected tenant (Layout stores it in localStorage),
+      // fall back to the Keycloak token claim for non-admin users.
+      const tenantId =
+        localStorage.getItem('stoa-active-tenant') || user?.tenant_id;
       if (!tenantId) throw new Error('No tenant selected');
 
       const token = apiService.getAuthToken();
@@ -80,7 +83,7 @@ export function useChatService() {
 
       return result || '(no response)';
     },
-    [user?.tenant_id]
+    [user]
   );
 
   return { sendMessage };

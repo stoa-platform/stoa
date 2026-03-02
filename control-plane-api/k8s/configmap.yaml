@@ -49,7 +49,7 @@ data:
   GATEWAY_USE_OIDC_PROXY: "true"
 
   # MCP Gateway (internal K8s service for reliable proxy)
-  MCP_GATEWAY_URL: "http://mcp-gateway.stoa-system.svc.cluster.local:80"
+  MCP_GATEWAY_URL: "http://stoa-gateway.stoa-system.svc.cluster.local:80"
 
   # ArgoCD
   ARGOCD_URL: "https://argocd.gostoa.dev"

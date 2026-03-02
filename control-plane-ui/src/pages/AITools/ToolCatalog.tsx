@@ -16,6 +16,7 @@ export function ToolCatalog() {
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
 
   // Filters from URL
@@ -28,8 +29,9 @@ export function ToolCatalog() {
     try {
       setLoading(true);
       setError(null);
+      setServiceUnavailable(false);
 
-      const [toolsResponse, tagsResponse] = await Promise.all([
+      const [toolsResult, tagsResult] = await Promise.allSettled([
         mcpGatewayService.getTools({
           search: searchQuery || undefined,
           tag: selectedTag || undefined,
@@ -39,9 +41,24 @@ export function ToolCatalog() {
         mcpGatewayService.getToolTags(),
       ]);
 
-      setTools(toolsResponse.tools);
-      setTotalCount(toolsResponse.totalCount);
-      setTags(tagsResponse);
+      // Handle tools fetch result
+      if (toolsResult.status === 'fulfilled') {
+        setTools(toolsResult.value.tools);
+        setTotalCount(toolsResult.value.totalCount);
+      } else {
+        console.error('Failed to load tools:', toolsResult.reason);
+        setServiceUnavailable(true);
+        setTools([]);
+        setTotalCount(0);
+      }
+
+      // Handle tags fetch result — graceful degradation
+      if (tagsResult.status === 'fulfilled') {
+        setTags(tagsResult.value);
+      } else {
+        console.warn('Failed to load tags, using empty list');
+        setTags([]);
+      }
     } catch (err) {
       console.error('Failed to load tools:', err);
       setError(err instanceof Error ? err.message : 'Failed to load tools');
@@ -193,8 +210,22 @@ export function ToolCatalog() {
         </div>
       )}
 
+      {/* Service Unavailable */}
+      {!loading && serviceUnavailable && (
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+          <EmptyState
+            variant="service-unavailable"
+            action={{
+              label: 'Retry',
+              onClick: loadTools,
+              icon: <RefreshCw className="w-4 h-4" />,
+            }}
+          />
+        </div>
+      )}
+
       {/* Results */}
-      {!loading && !error && (
+      {!loading && !error && !serviceUnavailable && (
         <>
           {/* Results Count */}
           <div className="flex items-center justify-between text-sm text-neutral-500 dark:text-neutral-400">

@@ -25,17 +25,13 @@ class TestMCPProxyRouter:
     # ============== GET / (list tools) ==============
 
     def test_list_tools_success(self, client_as_tenant_admin: TestClient):
-        """GET / returns tool list from MCP Gateway."""
-        mock_response = {
-            "tools": [
-                {"name": "Linear:create_issue", "description": "Create issue", "tags": ["pm"]},
-            ],
-            "cursor": None,
-            "totalCount": 1,
-        }
+        """GET / returns tool list from stoa-gateway (flat array)."""
+        mock_tools = [
+            {"name": "Linear:create_issue", "description": "Create issue", "tags": ["pm"]},
+        ]
 
         with patch("src.routers.mcp_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
-            mock_proxy.return_value = mock_response
+            mock_proxy.return_value = mock_tools
 
             response = client_as_tenant_admin.get(
                 "/v1/mcp/tools",
@@ -49,29 +45,36 @@ class TestMCPProxyRouter:
         assert data["tools"][0]["name"] == "Linear:create_issue"
 
     def test_list_tools_with_filters(self, client_as_tenant_admin: TestClient):
-        """GET /?tag=x&search=y passes query params to proxy."""
-        with patch("src.routers.mcp_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
-            mock_proxy.return_value = {"tools": [], "cursor": None, "totalCount": 0}
+        """GET /?tag=x&search=y applies client-side filters to tools."""
+        mock_tools = [
+            {"name": "payment-api", "description": "Process payments", "tags": ["finance"]},
+            {"name": "email-sender", "description": "Send emails", "tags": ["comms"]},
+        ]
 
-            client_as_tenant_admin.get(
+        with patch("src.routers.mcp_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
+            mock_proxy.return_value = mock_tools
+
+            response = client_as_tenant_admin.get(
                 "/v1/mcp/tools?tag=finance&search=payment&limit=10",
                 headers={"Authorization": "Bearer test-token"},
             )
 
-        call_args = mock_proxy.call_args
-        params = call_args[1]["params"]
-        assert params["tag"] == "finance"
-        assert params["search"] == "payment"
-        assert params["limit"] == 10
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalCount"] == 1
+        assert data["tools"][0]["name"] == "payment-api"
 
     # ============== GET /tags ==============
 
     def test_get_tool_tags_success(self, client_as_tenant_admin: TestClient):
-        """GET /tags returns tag list from MCP Gateway."""
-        mock_response = {"tags": ["finance", "crm", "devops"], "tagCounts": {"finance": 3}}
+        """GET /tags extracts tags from tool list."""
+        mock_tools = [
+            {"name": "tool-1", "description": "A tool", "tags": ["finance", "crm"]},
+            {"name": "tool-2", "description": "Another", "tags": ["finance", "devops"]},
+        ]
 
         with patch("src.routers.mcp_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
-            mock_proxy.return_value = mock_response
+            mock_proxy.return_value = mock_tools
 
             response = client_as_tenant_admin.get(
                 "/v1/mcp/tools/tags",
@@ -81,38 +84,37 @@ class TestMCPProxyRouter:
         assert response.status_code == 200
         data = response.json()
         assert "finance" in data["tags"]
+        assert data["tagCounts"]["finance"] == 2
 
     # ============== GET /categories ==============
 
     def test_get_tool_categories_success(self, client_as_tenant_admin: TestClient):
-        """GET /categories returns category list from MCP Gateway."""
-        mock_response = {"categories": [{"name": "API Management", "count": 5}]}
-
-        with patch("src.routers.mcp_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
-            mock_proxy.return_value = mock_response
-
-            response = client_as_tenant_admin.get(
-                "/v1/mcp/tools/categories",
-                headers={"Authorization": "Bearer test-token"},
-            )
+        """GET /categories returns empty list (stoa-gateway has no categories)."""
+        response = client_as_tenant_admin.get(
+            "/v1/mcp/tools/categories",
+            headers={"Authorization": "Bearer test-token"},
+        )
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data["categories"]) == 1
+        assert data["categories"] == []
 
     # ============== GET /{tool_name} ==============
 
     def test_get_tool_success(self, client_as_tenant_admin: TestClient):
-        """GET /{name} returns tool details."""
-        mock_response = {
-            "name": "Linear:create_issue",
-            "description": "Create a Linear issue",
-            "inputSchema": {"type": "object"},
-            "tags": ["pm"],
-        }
+        """GET /{name} returns tool details by filtering tool list."""
+        mock_tools = [
+            {
+                "name": "Linear:create_issue",
+                "description": "Create a Linear issue",
+                "inputSchema": {"type": "object"},
+                "tags": ["pm"],
+            },
+            {"name": "Slack:send_message", "description": "Send Slack message", "tags": ["comms"]},
+        ]
 
         with patch("src.routers.mcp_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
-            mock_proxy.return_value = mock_response
+            mock_proxy.return_value = mock_tools
 
             response = client_as_tenant_admin.get(
                 "/v1/mcp/tools/Linear:create_issue",
@@ -125,11 +127,16 @@ class TestMCPProxyRouter:
     # ============== GET /{tool_name}/schema ==============
 
     def test_get_tool_schema_success(self, client_as_tenant_admin: TestClient):
-        """GET /{name}/schema returns tool input schema."""
-        mock_response = {"type": "object", "properties": {"title": {"type": "string"}}}
+        """GET /{name}/schema returns tool input schema by filtering tool list."""
+        mock_tools = [
+            {
+                "name": "Linear:create_issue",
+                "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}}},
+            },
+        ]
 
         with patch("src.routers.mcp_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
-            mock_proxy.return_value = mock_response
+            mock_proxy.return_value = mock_tools
 
             response = client_as_tenant_admin.get(
                 "/v1/mcp/tools/Linear:create_issue/schema",
@@ -137,6 +144,7 @@ class TestMCPProxyRouter:
             )
 
         assert response.status_code == 200
+        assert response.json()["inputSchema"]["type"] == "object"
 
     # ============== POST /{tool_name}/invoke ==============
 
@@ -187,7 +195,7 @@ class TestMCPProxyRouter:
         it received from the security dependency.
         """
         with patch("src.routers.mcp_proxy.proxy_to_mcp", new_callable=AsyncMock) as mock_proxy:
-            mock_proxy.return_value = {"tools": [], "cursor": None, "totalCount": 0}
+            mock_proxy.return_value = []
 
             client_as_tenant_admin.get(
                 "/v1/mcp/tools",

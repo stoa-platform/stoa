@@ -9,7 +9,10 @@
 
 ### Cycle 12 (Feb 27+)
 - ✅ CAB-1633: Wire AI Factory through LLM Gateway Proxy (5 pts) — PRs #1336 (K8s deployment, stoa-parallel, HEGEMON workers), #1339 (skip_validation flag for local dogfood). Prod deployed: envFrom secretRef on gateway pods, `stoa-dogfood.sh --verify` operational
-- ✅ CAB-1632: Switch repo Private → Public (5 pts) — PRs #1331 (sanitize rules, CI fork safety, gitleaks), #1333 (move 25 strategic/demo docs to stoa-strategy). Savings: ~$654/mo GHA billing. Post-switch: gitleaks 0 leaks on 1984 commits, GHAS activated for free
+- ✅ CAB-1632: Switch repo Private → Public (5 pts) — PRs #1331 (sanitize rules, CI fork safety, gitleaks), #1333 (move 25 strategic/demo docs to stoa-strategy), #1337 (restore memory.md/plan.md after git-filter-repo). Post-switch: 7 repos public, 41 bot issues closed, 14 closed PR bodies sanitized (3 business/personal + 11 VPS IPs), git history clean (17 files removed from 1547 commits). Savings: ~$654/mo GHA billing
+- ✅ Prod hotfix: 401 Unauthorized on all api.gostoa.dev endpoints — PR #1328 (auth dependency fix)
+- ✅ Prod fix: duplicate personal tenants + Prometheus NetworkPolicy — PR #1332 (DB-level idempotency, test mock fixes). DB cleanup: removed 3 duplicate tenants + 2 duplicate gateways
+- ✅ chore: update OpenAPI snapshot with 4 LLM usage endpoints — PR #1338 (unblocked CP-API CI/CD on main, 317→321 paths)
 - ✅ CAB-1601: Anthropic Cache Token Tracking (21 pts) — 4 PRs across 4 components:
   - PR #1292: Rust gateway — cache field extraction, cache-aware cost calc, 4 Prometheus counters
   - PR #1303: Python CP API — schema, migration 049, model, repository, service, router

@@ -251,6 +251,7 @@ class TestProvisionPersonalTenant:
 
         mock_repo = AsyncMock()
         mock_repo.get_by_id.return_value = None  # no existing tenant
+        mock_repo.get_personal_tenant_by_owner.return_value = None
         created_tenant = MagicMock()
         created_tenant.id = "free-newuser"
         created_tenant.name = "newuser's workspace"
@@ -349,6 +350,7 @@ class TestProvisionPersonalTenant:
 
         mock_repo = AsyncMock()
         mock_repo.get_by_id.return_value = None
+        mock_repo.get_personal_tenant_by_owner.return_value = None
         created_tenant = MagicMock()
         created_tenant.id = "free-kc-fail-user"
         created_tenant.name = "kc-fail-user's workspace"

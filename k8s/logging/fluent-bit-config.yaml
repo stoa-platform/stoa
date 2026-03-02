@@ -18,6 +18,8 @@ data:
         HTTP_Listen   0.0.0.0
         HTTP_Port     2020
 
+    # --- Gateway Logs (access_log entries from Rust stoa-gateway) ---
+
     [INPUT]
         Name              tail
         Path              /var/log/containers/*stoa-gateway*.log
@@ -66,6 +68,50 @@ data:
         Trace_Error       On
         Retry_Limit       3
 
+    # --- Control Plane API Logs (structlog JSON from FastAPI) ---
+    # Per-tenant index for RBAC isolation: stoa-api-{tenant_id}-YYYY.MM.DD
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*control-plane-api*.log
+        Parser            cri
+        Tag               api.*
+        Refresh_Interval  5
+        Mem_Buf_Limit     5MB
+        Skip_Long_Lines   On
+        Read_from_Head    On
+
+    # Parse structlog JSON output from CP API
+    [FILTER]
+        Name         parser
+        Match        api.*
+        Key_Name     log
+        Parser       json_log
+        Reserve_Data On
+
+    # Extract tenant_id from structlog fields and set per-tenant index prefix
+    # Tenant "oasis" -> index stoa-api-oasis-YYYY.MM.DD
+    # No tenant (platform ops) -> index stoa-api-platform-YYYY.MM.DD
+    [FILTER]
+        Name          lua
+        Match         api.*
+        script        /fluent-bit/etc/tenant_index.lua
+        call          set_tenant_index
+
+    [OUTPUT]
+        Name              opensearch
+        Match             api.*
+        Host              opensearch.opensearch.svc.cluster.local
+        Port              9200
+        HTTP_User         ${OPENSEARCH_USER}
+        HTTP_Passwd       ${OPENSEARCH_PASSWORD}
+        tls               Off
+        Suppress_Type_Name  On
+        Logstash_Format   On
+        Logstash_Prefix_Key _logstash_prefix
+        Trace_Error       On
+        Retry_Limit       3
+
   parsers.conf: |
     [PARSER]
         Name        cri
@@ -95,5 +141,24 @@ data:
         record["logtag"] = nil
         record["target"] = nil
         record["level"] = nil
+        return 1, timestamp, record
+    end
+
+  tenant_index.lua: |
+    -- Set per-tenant OpenSearch index prefix for RBAC isolation.
+    -- CP API structlog includes tenant_id in the JSON payload.
+    -- This filter reads tenant_id and sets _logstash_prefix accordingly:
+    --   tenant_id="oasis"   -> stoa-api-oasis
+    --   tenant_id=nil        -> stoa-api-platform
+    function set_tenant_index(tag, timestamp, record)
+        local tenant = record["tenant_id"]
+        if tenant == nil or tenant == "" then
+            tenant = "platform"
+        else
+            -- Sanitize for OpenSearch index name: lowercase, alphanumeric + dash only
+            tenant = string.lower(tostring(tenant))
+            tenant = string.gsub(tenant, "[^%w%-]", "-")
+        end
+        record["_logstash_prefix"] = "stoa-api-" .. tenant
         return 1, timestamp, record
     end

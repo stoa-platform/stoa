@@ -62,14 +62,23 @@ class TenantRepository:
 
         return []
 
-    async def get_personal_tenant_by_owner(self, user_id: str) -> Tenant | None:
-        """Find a personal tenant by owner user ID (stored in settings JSON)."""
-        result = await self.session.execute(
-            select(Tenant).where(
-                Tenant.settings["owner_user_id"].as_string() == user_id,
-                Tenant.status != TenantStatus.ARCHIVED.value,
-            )
+    async def get_personal_tenant_by_owner(
+        self, user_id: str, *, for_update: bool = False
+    ) -> Tenant | None:
+        """Find a personal tenant by owner user ID (stored in settings JSON).
+
+        Args:
+            user_id: Keycloak user ID to search for.
+            for_update: If True, acquires a row lock (SELECT FOR UPDATE)
+                to prevent race conditions during tenant provisioning.
+        """
+        query = select(Tenant).where(
+            Tenant.settings["owner_user_id"].as_string() == user_id,
+            Tenant.status != TenantStatus.ARCHIVED.value,
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.session.execute(query)
         return result.scalars().first()
 
     async def update(self, tenant: Tenant) -> Tenant:

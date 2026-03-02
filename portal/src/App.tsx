@@ -87,9 +87,7 @@ const APIComparePage = lazy(() =>
   import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
 );
 const SignupPage = lazy(() => import('./pages/signup').then((m) => ({ default: m.SignupPage })));
-const MyAPIsPage = lazy(() =>
-  import('./pages/apis').then((m) => ({ default: m.MyAPIsPage }))
-);
+const MyAPIsPage = lazy(() => import('./pages/apis').then((m) => ({ default: m.MyAPIsPage })));
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {

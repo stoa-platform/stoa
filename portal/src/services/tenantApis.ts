@@ -77,15 +77,8 @@ export const tenantApisService = {
     return response.data;
   },
 
-  async update(
-    tenantId: string,
-    apiId: string,
-    data: TenantAPIUpdatePayload
-  ): Promise<TenantAPI> {
-    const response = await apiClient.put<TenantAPI>(
-      `${basePath(tenantId)}/${apiId}`,
-      data
-    );
+  async update(tenantId: string, apiId: string, data: TenantAPIUpdatePayload): Promise<TenantAPI> {
+    const response = await apiClient.put<TenantAPI>(`${basePath(tenantId)}/${apiId}`, data);
     return response.data;
   },
 

@@ -117,7 +117,10 @@ function RegisterAPIModal({ isOpen, onClose, onSubmit, isLoading, error }: Regis
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="api-name" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              <label
+                htmlFor="api-name"
+                className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+              >
                 Name (slug)
               </label>
               <input
@@ -134,7 +137,10 @@ function RegisterAPIModal({ isOpen, onClose, onSubmit, isLoading, error }: Regis
             </div>
 
             <div>
-              <label htmlFor="api-display-name" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              <label
+                htmlFor="api-display-name"
+                className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+              >
                 Display Name
               </label>
               <input
@@ -150,7 +156,10 @@ function RegisterAPIModal({ isOpen, onClose, onSubmit, isLoading, error }: Regis
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="api-version" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                <label
+                  htmlFor="api-version"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+                >
                   Version
                 </label>
                 <input
@@ -163,7 +172,10 @@ function RegisterAPIModal({ isOpen, onClose, onSubmit, isLoading, error }: Regis
                 />
               </div>
               <div>
-                <label htmlFor="api-tags" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                <label
+                  htmlFor="api-tags"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+                >
                   Tags
                 </label>
                 <input
@@ -178,7 +190,10 @@ function RegisterAPIModal({ isOpen, onClose, onSubmit, isLoading, error }: Regis
             </div>
 
             <div>
-              <label htmlFor="api-backend-url" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              <label
+                htmlFor="api-backend-url"
+                className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+              >
                 Backend URL
               </label>
               <input
@@ -193,7 +208,10 @@ function RegisterAPIModal({ isOpen, onClose, onSubmit, isLoading, error }: Regis
             </div>
 
             <div>
-              <label htmlFor="api-description" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              <label
+                htmlFor="api-description"
+                className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+              >
                 Description
               </label>
               <textarea

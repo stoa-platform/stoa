@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-02 (CAB-1632 repo public + docs migration PR #1331, #1333)
+> Derniere MAJ: 2026-03-02 (prod fix: 401 auth + duplicate tenants + OpenAPI snapshot, PRs #1328, #1332, #1338)
 
 ## ✅ DONE
 
@@ -8,6 +8,9 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 12 (Feb 27+)
+- ✅ Prod hotfix: 401 Unauthorized on all api.gostoa.dev endpoints — PR #1328 (auth dependency fix)
+- ✅ Prod fix: duplicate personal tenants + Prometheus NetworkPolicy — PR #1332 (DB-level idempotency via `get_personal_tenant_by_owner`, `k8s/networkpolicy-monitoring.yaml`, test mock fixes). DB cleanup: removed 3 duplicate tenants + 2 duplicate gateways
+- ✅ chore: update OpenAPI snapshot with 4 LLM usage endpoints — PR #1338 (unblocked CP-API CI/CD on main, 317→321 paths). Full deploy verified: pod running `dev-d3bea9d4`
 - ✅ CAB-1632: Switch repo Private → Public (5 pts) — PRs #1331 (sanitize rules, CI fork safety, gitleaks), #1333 (move 25 strategic/demo docs to stoa-strategy). Savings: ~$654/mo GHA billing. Post-switch: gitleaks 0 leaks on 1984 commits, GHAS activated for free
 - ✅ CAB-1601: Anthropic Cache Token Tracking (21 pts) — 4 PRs across 4 components:
   - PR #1292: Rust gateway — cache field extraction, cache-aware cost calc, 4 Prometheus counters

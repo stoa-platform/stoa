@@ -750,5 +750,5 @@ class TestRegistry:
         from src.adapters.registry import AdapterRegistry
 
         assert AdapterRegistry.has_type("apigee")
-        instance = AdapterRegistry.create("apigee", {"organization": "test"})
+        instance = AdapterRegistry.create("apigee", {"organization": "test"}, instrument=False)
         assert isinstance(instance, ApigeeGatewayAdapter)

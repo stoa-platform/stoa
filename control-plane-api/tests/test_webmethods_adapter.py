@@ -926,5 +926,6 @@ class TestWebMethodsRegistration:
             adapter = AdapterRegistry.create(
                 "webmethods",
                 config={"base_url": "http://wm:5555"},
+                instrument=False,
             )
         assert isinstance(adapter, WebMethodsGatewayAdapter)

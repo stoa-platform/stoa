@@ -601,5 +601,5 @@ class TestRegistry:
         from src.adapters.registry import AdapterRegistry
 
         assert AdapterRegistry.has_type("aws_apigateway")
-        instance = AdapterRegistry.create("aws_apigateway", {"region": "eu-west-1"})
+        instance = AdapterRegistry.create("aws_apigateway", {"region": "eu-west-1"}, instrument=False)
         assert isinstance(instance, AwsApiGatewayAdapter)

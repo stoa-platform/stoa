@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock
 
 from src.adapters.gateway_adapter_interface import GatewayAdapterInterface, AdapterResult
+from src.adapters.metrics import InstrumentedAdapter
 from src.adapters.registry import AdapterRegistry
 
 
@@ -96,12 +97,13 @@ class TestAdapterRegistry:
         assert not AdapterRegistry.has_type("nonexistent_gateway")
 
     def test_register_custom_adapter(self):
-        """Custom adapters can be registered and created."""
+        """Custom adapters can be registered and created (wrapped by InstrumentedAdapter)."""
         AdapterRegistry.register("fake_test", FakeAdapter)
         try:
             assert AdapterRegistry.has_type("fake_test")
             adapter = AdapterRegistry.create("fake_test")
-            assert isinstance(adapter, FakeAdapter)
+            assert isinstance(adapter, InstrumentedAdapter)
+            assert isinstance(adapter._inner, FakeAdapter)
         finally:
             # Clean up to avoid polluting other tests
             AdapterRegistry._adapters.pop("fake_test", None)
@@ -111,12 +113,14 @@ class TestAdapterRegistry:
         AdapterRegistry.register("overwrite_test", FakeAdapter)
         try:
             adapter1 = AdapterRegistry.create("overwrite_test")
-            assert isinstance(adapter1, FakeAdapter)
+            assert isinstance(adapter1, InstrumentedAdapter)
+            assert isinstance(adapter1._inner, FakeAdapter)
 
             # Register again with same key
             AdapterRegistry.register("overwrite_test", FakeAdapter)
             adapter2 = AdapterRegistry.create("overwrite_test")
-            assert isinstance(adapter2, FakeAdapter)
+            assert isinstance(adapter2, InstrumentedAdapter)
+            assert isinstance(adapter2._inner, FakeAdapter)
         finally:
             AdapterRegistry._adapters.pop("overwrite_test", None)
 

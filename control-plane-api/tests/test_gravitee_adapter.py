@@ -724,5 +724,5 @@ class TestGraviteeRegistration:
         from src.adapters.registry import AdapterRegistry
 
         assert AdapterRegistry.has_type("gravitee") is True
-        adapter = AdapterRegistry.create("gravitee", config={"base_url": "http://test:8083"})
+        adapter = AdapterRegistry.create("gravitee", config={"base_url": "http://test:8083"}, instrument=False)
         assert isinstance(adapter, GraviteeGatewayAdapter)

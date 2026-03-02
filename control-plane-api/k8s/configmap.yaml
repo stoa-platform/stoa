@@ -20,11 +20,11 @@ data:
   DEBUG: "false"
   ENVIRONMENT: "production"
 
-  # Keycloak Authentication
-  KEYCLOAK_URL: "https://auth.gostoa.dev"
+  # Keycloak Authentication (internal URL avoids hairpin NAT through LB)
+  KEYCLOAK_URL: "http://keycloak.stoa-system.svc.cluster.local"
   KEYCLOAK_REALM: "stoa"
   KEYCLOAK_CLIENT_ID: "control-plane-api"
-  KEYCLOAK_VERIFY_SSL: "true"
+  KEYCLOAK_VERIFY_SSL: "false"
 
   # GitLab Integration
   GITLAB_URL: "https://gitlab.com"

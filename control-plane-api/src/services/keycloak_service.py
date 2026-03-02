@@ -1,5 +1,6 @@
 """Keycloak service for authentication and client management"""
 
+import functools
 import logging
 
 import httpx
@@ -8,6 +9,29 @@ from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _auto_reconnect(func):
+    """Retry once after re-establishing the Keycloak connection on stale-token errors.
+
+    The python-keycloak library sets ``self.token = None`` when a refresh fails,
+    then crashes with ``AttributeError: 'NoneType' object has no attribute 'get'``
+    on the next admin call. This decorator catches that specific failure,
+    reconnects (which obtains a fresh token), and retries the call once.
+    """
+
+    @functools.wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        try:
+            return await func(self, *args, **kwargs)
+        except AttributeError:
+            if self._admin is None:
+                raise
+            logger.warning("Keycloak admin token stale in %s, reconnecting", func.__name__)
+            await self.connect()
+            return await func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class KeycloakService:
@@ -37,6 +61,7 @@ class KeycloakService:
         self._admin = None
 
     # User operations
+    @_auto_reconnect
     async def get_users(self, tenant_id: str | None = None) -> list[dict]:
         """Get users, optionally filtered by tenant"""
         if not self._admin:
@@ -50,6 +75,7 @@ class KeycloakService:
 
         return users
 
+    @_auto_reconnect
     async def get_user(self, user_id: str) -> dict | None:
         """Get user by ID"""
         if not self._admin:
@@ -60,6 +86,7 @@ class KeycloakService:
         except Exception:
             return None
 
+    @_auto_reconnect
     async def create_user(
         self,
         username: str,
@@ -104,6 +131,7 @@ class KeycloakService:
         logger.info(f"Created user {username} with roles {roles}")
         return user_id
 
+    @_auto_reconnect
     async def update_user(self, user_id: str, updates: dict) -> bool:
         """Update user attributes"""
         if not self._admin:
@@ -112,6 +140,7 @@ class KeycloakService:
         self._admin.update_user(user_id, updates)
         return True
 
+    @_auto_reconnect
     async def delete_user(self, user_id: str) -> bool:
         """Delete a user"""
         if not self._admin:
@@ -122,6 +151,7 @@ class KeycloakService:
         return True
 
     # Role operations
+    @_auto_reconnect
     async def get_roles(self) -> list[dict]:
         """Get all realm roles"""
         if not self._admin:
@@ -129,6 +159,7 @@ class KeycloakService:
 
         return self._admin.get_realm_roles()
 
+    @_auto_reconnect
     async def assign_role(self, user_id: str, role_name: str) -> bool:
         """Assign a role to a user"""
         if not self._admin:
@@ -138,6 +169,7 @@ class KeycloakService:
         self._admin.assign_realm_roles(user_id, [role])
         return True
 
+    @_auto_reconnect
     async def remove_role(self, user_id: str, role_name: str) -> bool:
         """Remove a role from a user"""
         if not self._admin:
@@ -148,6 +180,7 @@ class KeycloakService:
         return True
 
     # Client (Application) operations
+    @_auto_reconnect
     async def get_clients(self, tenant_id: str | None = None) -> list[dict]:
         """Get all clients, optionally filtered by tenant"""
         if not self._admin:
@@ -166,6 +199,7 @@ class KeycloakService:
 
         return clients
 
+    @_auto_reconnect
     async def get_client(self, client_id: str) -> dict | None:
         """Get client by client_id"""
         if not self._admin:
@@ -177,6 +211,7 @@ class KeycloakService:
                 return client
         return None
 
+    @_auto_reconnect
     async def get_client_by_id(self, client_uuid: str) -> dict | None:
         """Get client by Keycloak internal UUID."""
         if not self._admin:
@@ -186,6 +221,7 @@ class KeycloakService:
         except Exception:
             return None
 
+    @_auto_reconnect
     async def create_client(
         self, tenant_id: str, name: str, display_name: str, redirect_uris: list[str], description: str = ""
     ) -> dict:
@@ -237,6 +273,7 @@ class KeycloakService:
             "id": client_uuid,
         }
 
+    @_auto_reconnect
     async def update_client(self, client_uuid: str, updates: dict) -> bool:
         """Update client configuration"""
         if not self._admin:
@@ -245,6 +282,7 @@ class KeycloakService:
         self._admin.update_client(client_uuid, updates)
         return True
 
+    @_auto_reconnect
     async def delete_client(self, client_uuid: str) -> bool:
         """Delete a client"""
         if not self._admin:
@@ -254,6 +292,7 @@ class KeycloakService:
         logger.info(f"Deleted client {client_uuid}")
         return True
 
+    @_auto_reconnect
     async def regenerate_client_secret(self, client_uuid: str) -> str:
         """Regenerate client secret"""
         if not self._admin:
@@ -263,6 +302,7 @@ class KeycloakService:
         return secret_data.get("value")
 
     # Consumer client operations (CAB-1121 Phase 2)
+    @_auto_reconnect
     async def create_consumer_client(
         self,
         tenant_slug: str,
@@ -397,6 +437,7 @@ class KeycloakService:
             "id": client_uuid,
         }
 
+    @_auto_reconnect
     async def create_consumer_client_with_cert(
         self,
         tenant_slug: str,
@@ -499,6 +540,7 @@ class KeycloakService:
             "id": client_uuid,
         }
 
+    @_auto_reconnect
     async def update_consumer_client_cnf(
         self,
         client_id: str,
@@ -545,6 +587,7 @@ class KeycloakService:
         logger.info(f"Updated cnf mapper for client {client_id}")
         return True
 
+    @_auto_reconnect
     async def disable_consumer_client(self, client_id: str) -> bool:
         """
         Disable a consumer's Keycloak client (CAB-864).
@@ -621,6 +664,7 @@ class KeycloakService:
         logger.info(f"Token exchange succeeded for client {client_id}")
         return result
 
+    @_auto_reconnect
     async def delete_consumer_client(self, client_id: str) -> bool:
         """Delete a consumer's Keycloak client by client_id."""
         if not self._admin:
@@ -636,6 +680,7 @@ class KeycloakService:
         return True
 
     # Service Account operations (for MCP access)
+    @_auto_reconnect
     async def create_service_account(
         self,
         user_id: str,
@@ -755,6 +800,7 @@ class KeycloakService:
             "name": name,
         }
 
+    @_auto_reconnect
     async def list_user_service_accounts(self, user_id: str) -> list[dict]:
         """List all service accounts owned by a user"""
         if not self._admin:
@@ -779,6 +825,7 @@ class KeycloakService:
 
         return user_accounts
 
+    @_auto_reconnect
     async def delete_service_account(self, client_uuid: str, user_id: str) -> bool:
         """Delete a service account (only if owned by user)"""
         if not self._admin:
@@ -798,6 +845,7 @@ class KeycloakService:
         return True
 
     # Tenant realm provisioning (CAB-1547)
+    @_auto_reconnect
     async def create_realm(self, realm_name: str, display_name: str) -> str:
         """Create a Keycloak realm for a tenant.
 
@@ -818,6 +866,7 @@ class KeycloakService:
         return realm_name
 
     # Tenant setup
+    @_auto_reconnect
     async def setup_tenant_group(self, tenant_id: str, tenant_name: str) -> str:
         """Create a Keycloak group for the tenant"""
         if not self._admin:
@@ -834,6 +883,7 @@ class KeycloakService:
         logger.info(f"Created group for tenant {tenant_id}")
         return group_id
 
+    @_auto_reconnect
     async def add_user_to_tenant(self, user_id: str, tenant_id: str) -> bool:
         """Add user to tenant group and set tenant_id attribute"""
         if not self._admin:
@@ -851,6 +901,7 @@ class KeycloakService:
 
         return True
 
+    @_auto_reconnect
     async def remove_user_from_group(self, user_id: str, tenant_id: str) -> bool:
         """Remove user from tenant group (idempotent)."""
         if not self._admin:
@@ -867,6 +918,7 @@ class KeycloakService:
                 return False
         return True
 
+    @_auto_reconnect
     async def delete_tenant_group(self, tenant_id: str) -> bool:
         """Delete tenant group from Keycloak (idempotent)."""
         if not self._admin:
@@ -885,6 +937,7 @@ class KeycloakService:
             return False
         return True
 
+    @_auto_reconnect
     async def get_user_roles(self, user_id: str) -> list[str]:
         """Get realm roles for a user, filtering out system roles."""
         if not self._admin:
@@ -894,6 +947,7 @@ class KeycloakService:
         roles = self._admin.get_realm_roles_of_user(user_id)
         return [r["name"] for r in roles if r["name"] not in system_roles]
 
+    @_auto_reconnect
     async def exchange_federation_token(
         self,
         client_id: str,
@@ -945,6 +999,7 @@ class KeycloakService:
             logger.warning("Federation token exchange failed for client '%s': %s", client_id, e)
             return None
 
+    @_auto_reconnect
     async def setup_federation_client(
         self,
         sub_account_id: str,

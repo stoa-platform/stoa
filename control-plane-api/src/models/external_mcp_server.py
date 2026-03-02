@@ -5,6 +5,7 @@ Models for registering and managing external MCP servers
 
 Reference: External MCP Server Registration Plan
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -28,29 +29,33 @@ from src.database import Base
 
 class ExternalMCPTransport(enum.StrEnum):
     """Transport protocol for external MCP server."""
-    SSE = "sse"           # Server-Sent Events (Claude Desktop compatible)
-    HTTP = "http"         # HTTP JSON-RPC
+
+    SSE = "sse"  # Server-Sent Events (Claude Desktop compatible)
+    HTTP = "http"  # HTTP JSON-RPC
     WEBSOCKET = "websocket"  # WebSocket
 
 
 class ExternalMCPAuthType(enum.StrEnum):
     """Authentication type for external MCP server."""
-    NONE = "none"              # No authentication
-    API_KEY = "api_key"        # API key in header
+
+    NONE = "none"  # No authentication
+    API_KEY = "api_key"  # API key in header
     BEARER_TOKEN = "bearer_token"  # Bearer token
-    OAUTH2 = "oauth2"          # OAuth2 flow
+    OAUTH2 = "oauth2"  # OAuth2 flow
 
 
 class ExternalMCPHealthStatus(enum.StrEnum):
     """Health status of external MCP server."""
-    UNKNOWN = "unknown"     # Not yet checked
-    HEALTHY = "healthy"     # Connection successful
-    DEGRADED = "degraded"   # Partial issues
+
+    UNKNOWN = "unknown"  # Not yet checked
+    HEALTHY = "healthy"  # Connection successful
+    DEGRADED = "degraded"  # Partial issues
     UNHEALTHY = "unhealthy"  # Connection failed
 
 
 class ExternalMCPServer(Base):
     """External MCP Server model - registered external servers like Linear, GitHub."""
+
     __tablename__ = "external_mcp_servers"
 
     # Primary key
@@ -58,7 +63,7 @@ class ExternalMCPServer(Base):
 
     # Server identity
     name = Column(String(255), unique=True, nullable=False)  # Slug, e.g., "linear"
-    display_name = Column(String(255), nullable=False)       # "Linear"
+    display_name = Column(String(255), nullable=False)  # "Linear"
     description = Column(Text, nullable=True)
     icon = Column(String(500), nullable=True)  # URL to icon
 
@@ -67,14 +72,14 @@ class ExternalMCPServer(Base):
     transport = Column(
         SQLEnum(ExternalMCPTransport, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=ExternalMCPTransport.SSE
+        default=ExternalMCPTransport.SSE,
     )
 
     # Authentication configuration
     auth_type = Column(
         SQLEnum(ExternalMCPAuthType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=ExternalMCPAuthType.NONE
+        default=ExternalMCPAuthType.NONE,
     )
     credential_vault_path = Column(String(500), nullable=True)  # Path to credentials in Vault
 
@@ -86,7 +91,7 @@ class ExternalMCPServer(Base):
     health_status = Column(
         SQLEnum(ExternalMCPHealthStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=ExternalMCPHealthStatus.UNKNOWN
+        default=ExternalMCPHealthStatus.UNKNOWN,
     )
     last_health_check = Column(DateTime, nullable=True)
     last_sync_at = Column(DateTime, nullable=True)
@@ -100,17 +105,18 @@ class ExternalMCPServer(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(String(255), nullable=True)  # Admin user ID
 
-    # Relationships
-    tools = relationship(
-        "ExternalMCPServerTool",
-        back_populates="server",
-        cascade="all, delete-orphan"
+    # Connector catalog link (null = manually configured server)
+    connector_template_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("mcp_connector_templates.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
+    # Relationships
+    tools = relationship("ExternalMCPServerTool", back_populates="server", cascade="all, delete-orphan")
+
     # Indexes
-    __table_args__ = (
-        Index('ix_external_mcp_servers_tenant_enabled', 'tenant_id', 'enabled'),
-    )
+    __table_args__ = (Index("ix_external_mcp_servers_tenant_enabled", "tenant_id", "enabled"),)
 
     def __repr__(self) -> str:
         return f"<ExternalMCPServer {self.name} url={self.base_url}>"
@@ -118,17 +124,14 @@ class ExternalMCPServer(Base):
 
 class ExternalMCPServerTool(Base):
     """Tool discovered from an external MCP server."""
+
     __tablename__ = "external_mcp_server_tools"
 
     # Primary key
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Server reference
-    server_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("external_mcp_servers.id", ondelete="CASCADE"),
-        nullable=False
-    )
+    server_id = Column(UUID(as_uuid=True), ForeignKey("external_mcp_servers.id", ondelete="CASCADE"), nullable=False)
 
     # Tool identity
     name = Column(String(255), nullable=False)  # Original name from external server
@@ -148,8 +151,8 @@ class ExternalMCPServerTool(Base):
 
     # Indexes
     __table_args__ = (
-        Index('ix_external_mcp_server_tools_server_name', 'server_id', 'name', unique=True),
-        Index('ix_external_mcp_server_tools_namespaced', 'namespaced_name'),
+        Index("ix_external_mcp_server_tools_server_name", "server_id", "name", unique=True),
+        Index("ix_external_mcp_server_tools_namespaced", "namespaced_name"),
     )
 
     def __repr__(self) -> str:

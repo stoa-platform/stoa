@@ -71,6 +71,9 @@ ssh_cmd 'cat > ~/.env.hegemon << "ENVEOF"
 # Path: /anthropic/ANTHROPIC_API_KEY
 export ANTHROPIC_API_KEY=""
 
+# Route Claude API calls through STOA Gateway for metering/budget/kill-switch
+export ANTHROPIC_BASE_URL="https://mcp.gostoa.dev"
+
 # Path: /slack/SLACK_WEBHOOK_URL
 export SLACK_WEBHOOK_URL=""
 

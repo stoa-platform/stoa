@@ -67,25 +67,25 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
               <dt className="text-neutral-500 dark:text-neutral-400">{t('firstCall.appName')}</dt>
               <dd className="font-mono text-neutral-900 dark:text-white">{app.name}</dd>
             </div>
-            {app.clientId && (
+            {app.client_id && (
               <div className="flex justify-between">
                 <dt className="text-neutral-500 dark:text-neutral-400">
                   {t('firstCall.clientId')}
                 </dt>
-                <dd className="font-mono text-neutral-900 dark:text-white">{app.clientId}</dd>
+                <dd className="font-mono text-neutral-900 dark:text-white">{app.client_id}</dd>
               </div>
             )}
-            {app.clientSecret && (
+            {app.client_secret && (
               <div className="flex justify-between items-center">
                 <dt className="text-neutral-500 dark:text-neutral-400">
                   {t('firstCall.clientSecret')}
                 </dt>
                 <dd className="flex items-center gap-2">
                   <code className="font-mono text-xs bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 px-2 py-0.5 rounded">
-                    {app.clientSecret}
+                    {app.client_secret}
                   </code>
                   <button
-                    onClick={() => handleCopy(app.clientSecret!, 'secret')}
+                    onClick={() => handleCopy(app.client_secret!, 'secret')}
                     className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
                     title={t('firstCall.copySecret')}
                   >
@@ -99,7 +99,7 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
               </div>
             )}
           </dl>
-          {app.clientSecret && (
+          {app.client_secret && (
             <p className="mt-3 text-xs text-yellow-600 dark:text-yellow-400">
               {t('firstCall.secretWarning')}
             </p>

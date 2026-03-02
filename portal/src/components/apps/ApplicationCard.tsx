@@ -49,15 +49,16 @@ const dateFormatOptions: Intl.DateTimeFormatOptions = {
 export const ApplicationCard = memo(function ApplicationCard({
   application,
 }: ApplicationCardProps) {
-  const status = statusConfig[application.status] || statusConfig.active;
+  const status =
+    statusConfig[application.status as keyof typeof statusConfig] || statusConfig.active;
   const StatusIcon = status.icon;
 
   // Memoize formatted date
   const formattedDate = useMemo(() => {
-    return new Date(application.createdAt).toLocaleDateString('en-US', dateFormatOptions);
-  }, [application.createdAt]);
+    return new Date(application.created_at).toLocaleDateString('en-US', dateFormatOptions);
+  }, [application.created_at]);
 
-  const subscriptionCount = application.subscriptions?.length || 0;
+  const subscriptionCount = application.api_subscriptions?.length || 0;
 
   return (
     <Link
@@ -72,7 +73,7 @@ export const ApplicationCard = memo(function ApplicationCard({
           <div className="flex items-center gap-2 mt-1">
             <Key className="h-3 w-3 text-neutral-400 dark:text-neutral-500" />
             <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400 truncate">
-              {application.clientId}
+              {application.client_id}
             </span>
           </div>
         </div>
@@ -93,11 +94,11 @@ export const ApplicationCard = memo(function ApplicationCard({
           <span className="text-neutral-500 dark:text-neutral-400">Subscriptions:</span>{' '}
           <span className="font-medium text-neutral-900 dark:text-white">{subscriptionCount}</span>
         </div>
-        {application.callbackUrls && application.callbackUrls.length > 0 && (
+        {application.redirect_uris && application.redirect_uris.length > 0 && (
           <div className="text-sm">
             <span className="text-neutral-500 dark:text-neutral-400">Callbacks:</span>{' '}
             <span className="font-medium text-neutral-900 dark:text-white">
-              {application.callbackUrls.length}
+              {application.redirect_uris.length}
             </span>
           </div>
         )}

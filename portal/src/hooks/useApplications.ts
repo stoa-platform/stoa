@@ -82,7 +82,7 @@ export function useDeleteApplication() {
 export function useRegenerateSecret(id: string) {
   const queryClient = useQueryClient();
 
-  return useMutation<{ clientSecret: string }, Error>({
+  return useMutation<{ client_secret: string }, Error>({
     mutationFn: () => applicationsService.regenerateSecret(id),
     onSuccess: () => {
       // Invalidate the specific application to refresh data

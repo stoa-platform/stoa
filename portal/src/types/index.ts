@@ -230,25 +230,27 @@ export interface APIResponse {
   content?: Record<string, { schema: object }>;
 }
 
-// Consumer Application types
+// Consumer Application types (field names match backend ApplicationResponse — snake_case)
 export interface Application {
   id: string;
   name: string;
+  display_name: string;
   description?: string;
-  clientId: string;
-  clientSecret?: string; // Only shown on creation or regeneration
-  callbackUrls: string[];
-  userId: string;
-  status: 'active' | 'suspended' | 'deleted';
-  subscriptions?: APISubscription[];
-  createdAt: string;
-  updatedAt: string;
+  client_id: string | null;
+  client_secret?: string | null; // Only shown on creation or regeneration
+  tenant_id?: string | null;
+  redirect_uris: string[];
+  status: string;
+  api_subscriptions: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApplicationCreateRequest {
   name: string;
+  display_name: string;
   description?: string;
-  callbackUrls: string[];
+  redirect_uris: string[];
 }
 
 // API Subscription types (for consumer apps)

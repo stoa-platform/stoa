@@ -4,7 +4,15 @@
  * Provides authentication state and RBAC helpers (hasPermission, hasRole, hasScope).
  * Fetches permissions from /v1/me endpoint (single source of truth).
  */
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  ReactNode,
+} from 'react';
 import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import type { User, UserPermissionsResponse } from '../types';
 import { apiClient, setAccessToken } from '../services/api';
@@ -199,24 +207,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const oidc = useOidcAuth();
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const provisioningRef = useRef(false);
+  const fetchingRef = useRef(false);
+  const lastTokenRef = useRef<string | null>(null);
 
   // Auto-provision personal tenant for users without one
   const provisionPersonalTenant = useCallback(async () => {
+    if (provisioningRef.current) return;
+    provisioningRef.current = true;
     try {
-      await apiClient.post('/v1/me/tenant');
-      // Force token refresh to get new tenant_id claim
-      await oidc.signinSilent();
+      const response = await apiClient.post<{ tenant_id: string }>('/v1/me/tenant');
+      // Set tenant_id immediately from API response (don't wait for token refresh)
+      const tenantId = response.data.tenant_id;
+      if (tenantId) {
+        setUser((prev) => (prev ? { ...prev, tenant_id: tenantId } : null));
+      }
+      // Refresh token in background to get tenant_id in JWT for future sessions
+      oidc.signinSilent().catch((e) => {
+        console.warn('[AuthContext] Silent refresh after provisioning failed', e);
+      });
     } catch (error) {
       console.error('[AuthContext] Tenant provisioning failed', error);
+      provisioningRef.current = false;
     }
   }, [oidc]);
 
   // Fetch permissions from backend (single source of truth)
+  // Uses fetchingRef to prevent concurrent/repeated calls (e.g., when oidc object
+  // is recreated every render by react-oidc-context)
   const fetchUserPermissions = useCallback(async (): Promise<void> => {
     if (!oidc.user?.access_token) {
       console.warn('[AuthContext] No access token available for /v1/me');
       return;
     }
+
+    // Prevent concurrent fetches — react-oidc-context recreates oidc object every
+    // render, which can cause cascading re-renders and repeated calls
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
 
     try {
       const response = await apiClient.get<UserPermissionsResponse>('/v1/me');
@@ -245,31 +273,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       });
     } finally {
+      fetchingRef.current = false;
       setIsReady(true);
     }
   }, [oidc.user?.access_token]);
 
-  // Handle OIDC user changes
+  // Handle OIDC user changes — keyed on access_token string (stable primitive).
+  // react-oidc-context recreates the oidc object on every render, so using
+  // oidc.user (object ref) as a dep would fire this effect on every render,
+  // causing an infinite fetchUserPermissions loop.
+  const accessToken = oidc.user?.access_token || null;
   useEffect(() => {
-    if (oidc.user) {
+    // Only re-process when the token actually changes (new login or token refresh)
+    if (accessToken === lastTokenRef.current) return;
+    lastTokenRef.current = accessToken;
+
+    if (oidc.user && accessToken) {
       const extractedUser = extractUserFromToken(oidc.user);
       if (extractedUser) {
-        // Set initial user with roles from token
-        const initialUser: User = {
+        // Use functional update to preserve tenant_id from provisioning
+        // (token may not yet contain the tenant_id claim after KC group assignment)
+        setUser((prev) => ({
           id: extractedUser.id!,
           email: extractedUser.email!,
           name: extractedUser.name!,
-          tenant_id: extractedUser.tenant_id,
+          tenant_id: extractedUser.tenant_id || prev?.tenant_id,
           organization: extractedUser.organization,
           roles: extractedUser.roles || [],
           permissions: derivePermissionsFromRoles(extractedUser.roles || []),
           effective_scopes: deriveScopesFromRoles(extractedUser.roles || []),
           is_admin: extractedUser.is_admin,
-        };
-        setUser(initialUser);
-        setAccessToken(oidc.user.access_token || null);
+        }));
+        setAccessToken(accessToken);
 
-        // Fetch full permissions from backend
+        // Fetch full permissions from backend (once per token)
         fetchUserPermissions();
       }
     } else {
@@ -277,15 +314,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(null);
       setIsReady(false);
     }
-  }, [oidc.user, fetchUserPermissions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- accessToken is the stable trigger; oidc.user is read inside but not a dep (recreated every render)
+  }, [accessToken]);
 
   // Auto-provision personal tenant for self-registered users without one
   useEffect(() => {
-    if (isReady && user && !user.tenant_id) {
-      provisionPersonalTenant().then(() => fetchUserPermissions());
+    if (isReady && user && !user.tenant_id && !provisioningRef.current) {
+      provisionPersonalTenant();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally narrow deps to avoid infinite loop
-  }, [isReady, user?.tenant_id, provisionPersonalTenant, fetchUserPermissions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- narrow deps: only trigger on tenant_id presence
+  }, [isReady, user?.tenant_id]);
 
   // Auto-login if we have auth params in URL (callback from Keycloak)
   useEffect(() => {

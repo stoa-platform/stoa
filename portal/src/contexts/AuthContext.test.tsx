@@ -21,9 +21,11 @@ vi.mock('react-oidc-context', () => ({
 
 // Mock api module
 const mockApiGet = vi.fn();
+const mockApiPost = vi.fn();
 vi.mock('../services/api', () => ({
   apiClient: {
     get: (...args: any[]) => mockApiGet(...args),
+    post: (...args: any[]) => mockApiPost(...args),
   },
   setAccessToken: vi.fn(),
 }));
@@ -42,6 +44,8 @@ function wrapper({ children }: { children: ReactNode }) {
 describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockApiGet.mockRejectedValue(new Error('Not available'));
+    mockApiPost.mockResolvedValue({ data: { tenant_id: 'free-test', created: true } });
     mockOidcState = {
       user: null,
       isAuthenticated: false,
@@ -172,6 +176,73 @@ describe('AuthContext', () => {
 
       expect(result.current.user!.tenant_id).toBe('acme');
       expect(result.current.user!.organization).toBe('Acme Corp');
+    });
+  });
+
+  describe('tenant provisioning', () => {
+    it('should not loop when user has no tenant_id', async () => {
+      const tokenPayload = {
+        sub: 'user-1',
+        realm_access: { roles: ['viewer'] },
+        // No tenant_id — triggers provisioning
+      };
+
+      mockOidcState = {
+        user: {
+          access_token: fakeToken(tokenPayload),
+          profile: { sub: 'user-1', email: 'new@user.com', name: 'New User' },
+          signinSilent: vi.fn(),
+        },
+        isAuthenticated: true,
+        isLoading: false,
+        signinSilent: vi.fn().mockResolvedValue(undefined),
+      };
+
+      mockApiGet.mockRejectedValue(new Error('Not available'));
+      mockApiPost.mockResolvedValue({
+        data: { tenant_id: 'free-new-user', display_name: "New User's workspace", created: true },
+      });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isReady).toBe(true);
+      });
+
+      // Provisioning should be called at most once (not loop)
+      expect(mockApiPost).toHaveBeenCalledTimes(1);
+      expect(mockApiPost).toHaveBeenCalledWith('/v1/me/tenant');
+
+      // tenant_id should be set from API response
+      expect(result.current.user?.tenant_id).toBe('free-new-user');
+    });
+
+    it('should not provision when user already has tenant_id', async () => {
+      const tokenPayload = {
+        sub: 'user-1',
+        realm_access: { roles: ['tenant-admin'] },
+        tenant_id: 'acme',
+      };
+
+      mockOidcState = {
+        user: {
+          access_token: fakeToken(tokenPayload),
+          profile: { sub: 'user-1', email: 'admin@acme.com', name: 'Admin' },
+        },
+        isAuthenticated: true,
+        isLoading: false,
+        signinSilent: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isReady).toBe(true);
+      });
+
+      // Should NOT call POST /v1/me/tenant
+      expect(mockApiPost).not.toHaveBeenCalled();
+      expect(result.current.user?.tenant_id).toBe('acme');
     });
   });
 

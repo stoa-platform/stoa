@@ -54,6 +54,7 @@ import {
   Stethoscope,
   Settings,
   DollarSign,
+  Puzzle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -124,6 +125,13 @@ const navigationSections: NavSection[] = [
         permission: 'apis:read',
         shortcut: ['g', 'w'],
         badge: 'STOA',
+      },
+      {
+        name: 'nav.mcpConnectors',
+        href: '/mcp-connectors',
+        icon: Puzzle,
+        permission: 'admin:servers',
+        badge: 'NEW',
       },
       {
         name: 'nav.externalMcpServers',

@@ -15,6 +15,21 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Create tenants table if it doesn't exist (previously managed via GitOps only)
+    conn = op.get_bind()
+    result = conn.execute(sa.text("SELECT to_regclass('public.tenants')"))
+    if result.scalar() is None:
+        op.create_table(
+            "tenants",
+            sa.Column("id", sa.String(64), primary_key=True),
+            sa.Column("name", sa.String(255), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("status", sa.String(32), server_default="active", nullable=False),
+            sa.Column("settings", sa.JSON(), server_default="{}", nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        )
+
     op.add_column("tenants", sa.Column("provisioning_status", sa.String(32), server_default="pending", nullable=False))
     op.add_column("tenants", sa.Column("provisioning_error", sa.Text(), nullable=True))
     op.add_column("tenants", sa.Column("provisioning_started_at", sa.DateTime(timezone=True), nullable=True))

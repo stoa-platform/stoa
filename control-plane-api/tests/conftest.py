@@ -292,6 +292,8 @@ def sample_subscription_data(sample_subscription_id):
         "revoked_at": None,
         "approved_by": None,
         "revoked_by": None,
+        "rejected_by": None,
+        "rejected_at": None,
         "previous_api_key_hash": None,
         "previous_key_expires_at": None,
         "last_rotated_at": None,

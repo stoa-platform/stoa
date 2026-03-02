@@ -69,8 +69,8 @@ export const applicationsService = {
    * Regenerate client secret
    * Returns the new client_secret (only shown once!)
    */
-  regenerateSecret: async (id: string): Promise<{ clientSecret: string }> => {
-    const response = await apiClient.post<{ clientSecret: string }>(
+  regenerateSecret: async (id: string): Promise<{ client_secret: string }> => {
+    const response = await apiClient.post<{ client_secret: string }>(
       `/v1/applications/${id}/regenerate-secret`
     );
     return response.data;

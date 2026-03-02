@@ -85,8 +85,8 @@ export function MyApplications() {
             </button>
           </div>
           <CredentialsViewer
-            clientId={newlyCreatedApp.clientId}
-            clientSecret={newlyCreatedApp.clientSecret}
+            clientId={newlyCreatedApp.client_id ?? ''}
+            clientSecret={newlyCreatedApp.client_secret}
             showSecretOnce={true}
           />
         </div>

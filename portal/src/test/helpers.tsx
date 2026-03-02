@@ -254,14 +254,16 @@ export const mockAPI = (overrides: Record<string, unknown> = {}) => ({
 export const mockApplication = (overrides: Record<string, unknown> = {}) => ({
   id: 'app-1',
   name: 'My App',
+  display_name: 'My App',
   description: 'Test application',
-  clientId: 'client-abc123',
-  callbackUrls: ['https://app.example.com/callback'],
-  userId: 'user-parzival',
+  client_id: 'client-abc123',
+  client_secret: null as string | null,
+  tenant_id: 'oasis-gunters',
+  redirect_uris: ['https://app.example.com/callback'],
   status: 'active' as const,
-  subscriptions: [],
-  createdAt: '2026-01-15T00:00:00Z',
-  updatedAt: '2026-02-01T00:00:00Z',
+  api_subscriptions: [],
+  created_at: '2026-01-15T00:00:00Z',
+  updated_at: '2026-02-01T00:00:00Z',
   ...overrides,
 });
 

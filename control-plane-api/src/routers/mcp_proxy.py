@@ -12,6 +12,7 @@ Endpoints:
 - GET /v1/mcp/tools/{name}/schema - Get tool input schema
 - POST /v1/mcp/tools/{name}/invoke - Invoke a tool
 """
+
 import logging
 from typing import Any
 
@@ -47,6 +48,14 @@ async def get_http_client() -> httpx.AsyncClient:
             follow_redirects=True,
         )
     return _http_client
+
+
+async def close_http_client() -> None:
+    """Close the MCP proxy httpx client. Called during app shutdown."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+        _http_client = None
 
 
 async def proxy_to_mcp(
@@ -119,8 +128,10 @@ async def proxy_to_mcp(
 # Response Models
 # =============================================================================
 
+
 class MCPToolResponse(BaseModel):
     """MCP Tool response."""
+
     name: str
     description: str | None = None
     inputSchema: dict | None = None
@@ -131,6 +142,7 @@ class MCPToolResponse(BaseModel):
 
 class ListToolsResponse(BaseModel):
     """List tools response."""
+
     tools: list[MCPToolResponse]
     cursor: str | None = None
     totalCount: int = 0
@@ -138,22 +150,26 @@ class ListToolsResponse(BaseModel):
 
 class ListTagsResponse(BaseModel):
     """List tags response."""
+
     tags: list[str]
     tagCounts: dict[str, int] | None = None
 
 
 class ListCategoriesResponse(BaseModel):
     """List categories response."""
+
     categories: list[dict]
 
 
 class ToolInvokeRequest(BaseModel):
     """Tool invocation request."""
+
     arguments: dict[str, Any]
 
 
 class ToolInvokeResponse(BaseModel):
     """Tool invocation response."""
+
     content: list[dict] | None = None
     isError: bool = False
 
@@ -161,6 +177,7 @@ class ToolInvokeResponse(BaseModel):
 # =============================================================================
 # Endpoints
 # =============================================================================
+
 
 @router.get("", response_model=ListToolsResponse)
 async def list_tools(

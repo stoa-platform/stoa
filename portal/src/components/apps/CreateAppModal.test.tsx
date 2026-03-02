@@ -50,8 +50,9 @@ describe('CreateAppModal', () => {
     await waitFor(() => {
       expect(defaultProps.onSubmit).toHaveBeenCalledWith({
         name: 'My New App',
+        display_name: 'My New App',
         description: undefined,
-        callbackUrls: [],
+        redirect_uris: [],
       });
     });
   });
@@ -77,8 +78,9 @@ describe('CreateAppModal', () => {
     await waitFor(() => {
       expect(defaultProps.onSubmit).toHaveBeenCalledWith({
         name: 'App With URLs',
+        display_name: 'App With URLs',
         description: undefined,
-        callbackUrls: ['https://example.com/callback'],
+        redirect_uris: ['https://example.com/callback'],
       });
     });
   });

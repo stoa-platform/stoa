@@ -38,14 +38,14 @@ Analyze the feature and map to STOA components:
 
 | Component | Path | Linear Label ID | Tech | Instance Label |
 |-----------|------|-----------------|------|----------------|
-| **cp-api** | `control-plane-api/` | `3d9dcfcc-2578-447f-ab94-0b00b73022f0` | Python, FastAPI | `instance:backend` |
-| **cp-ui** | `control-plane-ui/` | `1c4d11ff-da26-466d-a2ac-e49786bac927` | React, Console | `instance:frontend` |
-| **portal** | `portal/` | `df33f1d3-bb93-463d-bf60-7d602a6add10` | React, Portal | `instance:frontend` |
-| **gateway** | `stoa-gateway/` | `b14f839d-cde8-4fee-9f1c-894431143b35` | Rust, axum | `instance:mcp` |
+| **cp-api** | `control-plane-api/` | `<LABEL_ID_CP_API>` | Python, FastAPI | `instance:backend` |
+| **cp-ui** | `control-plane-ui/` | `<LABEL_ID_CP_UI>` | React, Console | `instance:frontend` |
+| **portal** | `portal/` | `<LABEL_ID_PORTAL>` | React, Portal | `instance:frontend` |
+| **gateway** | `stoa-gateway/` | `<LABEL_ID_GATEWAY>` | Rust, axum | `instance:mcp` |
 | **operator** | `stoa-operator/` | _(create if needed)_ | Python, kopf | `instance:backend` |
 | **e2e** | `e2e/` | _(create if needed)_ | Playwright | `instance:qa` |
-| **docs** | `stoa-docs` (separate repo) | `8a23f909-d1fb-45be-9516-4e33a72998e1` | Docusaurus | `instance:backend` |
-| **infra** | `charts/`, `k8s/` | `ad81cb7f-31a7-4b9c-ac1f-fe0827bfea03` | Helm, K8s | `instance:backend` |
+| **docs** | `stoa-docs` (separate repo) | `<LABEL_ID_DOCS>` | Docusaurus | `instance:backend` |
+| **infra** | `charts/`, `k8s/` | `<LABEL_ID_INFRA>` | Helm, K8s | `instance:backend` |
 | **keycloak** | `keycloak/`, OAuth/IAM | _(use auth label)_ | Keycloak | `instance:auth` |
 
 ### Instance Dispatch Mapping
@@ -133,9 +133,9 @@ For each component-issue, create a Linear sub-issue:
 linear.create_issue(
   title: "[<component>] <action verb> <what> (<parent-ticket-id>)",
   description: <see template below>,
-  team: "624a9948-a160-4e47-aba5-7f9404d23506",
-  project: "227427af-6844-484d-bb4a-dedeffc68825",
-  assignee: "0543749d-ecde-4edf-aec1-6f372aafafce",
+  team: "<LINEAR_TEAM_ID>",
+  project: "<LINEAR_PROJECT_ID>",
+  assignee: "<LINEAR_ASSIGNEE_ID>",
   parentId: "<parent-issue-id>",
   estimate: <component-specific points>,
   priority: <inherit from parent>,
@@ -150,11 +150,11 @@ Every sub-issue MUST receive an `instance:*` label. Resolve from the component u
 
 | Component | Instance Label ID to add |
 |-----------|--------------------------|
-| `cp-api`, `operator`, `infra`, `docs` | `b60c32eb-3374-4a53-a487-b409bfed2d61` (`instance:backend`) |
-| `cp-ui`, `portal` | `e9434a2f-f313-4223-a042-598185718c7b` (`instance:frontend`) |
-| `keycloak` | `c4bb2546-7bbc-45d9-b5ab-384fd7065d48` (`instance:auth`) |
-| `gateway` | `19497340-8712-45d0-8728-a77c96c592a7` (`instance:mcp`) |
-| `e2e` | `00ba65ee-81e3-40e8-b2d2-38f340617b2f` (`instance:qa`) |
+| `cp-api`, `operator`, `infra`, `docs` | `<LABEL_ID_INSTANCE_BACKEND>` (`instance:backend`) |
+| `cp-ui`, `portal` | `<LABEL_ID_INSTANCE_FRONTEND>` (`instance:frontend`) |
+| `keycloak` | `<LABEL_ID_INSTANCE_AUTH>` (`instance:auth`) |
+| `gateway` | `<LABEL_ID_INSTANCE_MCP>` (`instance:mcp`) |
+| `e2e` | `<LABEL_ID_INSTANCE_QA>` (`instance:qa`) |
 
 **Rules**:
 - Never create a sub-issue without an instance label — the parallel dispatch system depends on it
@@ -269,7 +269,7 @@ linear.create_comment(
 
 Add `needs-split` label removal if it was present:
 ```
-linear.update_issue(parentId, removeLabelIds: ["768f96b2-69f0-4ed3-83de-538f657dd001"])
+linear.update_issue(parentId, removeLabelIds: ["<LABEL_ID_NEEDS_SPLIT>"])
 ```
 
 ## Step 9: Initialize Claim File
@@ -377,30 +377,30 @@ Next steps:
 
 | Component | Label ID |
 |-----------|----------|
-| cp-api | `3d9dcfcc-2578-447f-ab94-0b00b73022f0` |
-| cp-ui | `1c4d11ff-da26-466d-a2ac-e49786bac927` |
-| portal (ui) | `df33f1d3-bb93-463d-bf60-7d602a6add10` |
-| gateway | `b14f839d-cde8-4fee-9f1c-894431143b35` |
-| docs | `8a23f909-d1fb-45be-9516-4e33a72998e1` |
-| infra | `ad81cb7f-31a7-4b9c-ac1f-fe0827bfea03` |
-| flow-ready | `6692a52b-126d-4fce-b480-3fac19751ecb` |
-| mega-ticket | `97f7371c-8ac3-44e6-a0a0-412e81bc959e` |
-| needs-split | `768f96b2-69f0-4ed3-83de-538f657dd001` |
+| cp-api | `<LABEL_ID_CP_API>` |
+| cp-ui | `<LABEL_ID_CP_UI>` |
+| portal (ui) | `<LABEL_ID_PORTAL>` |
+| gateway | `<LABEL_ID_GATEWAY>` |
+| docs | `<LABEL_ID_DOCS>` |
+| infra | `<LABEL_ID_INFRA>` |
+| flow-ready | `<LABEL_ID_FLOW_READY>` |
+| mega-ticket | `<LABEL_ID_MEGA_TICKET>` |
+| needs-split | `<LABEL_ID_NEEDS_SPLIT>` |
 
 ## Instance Label IDs (cached — for parallel dispatch)
 
 | Instance | Label ID |
 |----------|----------|
-| `instance:backend` | `b60c32eb-3374-4a53-a487-b409bfed2d61` |
-| `instance:frontend` | `e9434a2f-f313-4223-a042-598185718c7b` |
-| `instance:auth` | `c4bb2546-7bbc-45d9-b5ab-384fd7065d48` |
-| `instance:mcp` | `19497340-8712-45d0-8728-a77c96c592a7` |
-| `instance:qa` | `00ba65ee-81e3-40e8-b2d2-38f340617b2f` |
+| `instance:backend` | `<LABEL_ID_INSTANCE_BACKEND>` |
+| `instance:frontend` | `<LABEL_ID_INSTANCE_FRONTEND>` |
+| `instance:auth` | `<LABEL_ID_INSTANCE_AUTH>` |
+| `instance:mcp` | `<LABEL_ID_INSTANCE_MCP>` |
+| `instance:qa` | `<LABEL_ID_INSTANCE_QA>` |
 
 ## Linear IDs (cached)
 
 | Entity | ID |
 |--------|----|
-| Team (CAB-ING) | `624a9948-a160-4e47-aba5-7f9404d23506` |
-| Project (STOA Platform) | `227427af-6844-484d-bb4a-dedeffc68825` |
-| Assignee (Christophe) | `0543749d-ecde-4edf-aec1-6f372aafafce` |
+| Team (CAB-ING) | `<LINEAR_TEAM_ID>` |
+| Project (STOA Platform) | `<LINEAR_PROJECT_ID>` |
+| Assignee (<PRIMARY_ASSIGNEE>) | `<LINEAR_ASSIGNEE_ID>` |

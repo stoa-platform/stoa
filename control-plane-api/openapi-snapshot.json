@@ -16107,6 +16107,84 @@
         "title": "ResponseSnapshot",
         "type": "object"
       },
+      "RoleDetail": {
+        "description": "Single role with metadata and permissions.",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "inherits_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inherits From"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "description",
+          "scope",
+          "category",
+          "permissions"
+        ],
+        "title": "RoleDetail",
+        "type": "object"
+      },
+      "RolesResponse": {
+        "description": "All roles with metadata.",
+        "properties": {
+          "aliases": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Aliases",
+            "type": "object"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleDetail"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles",
+          "aliases"
+        ],
+        "title": "RolesResponse",
+        "type": "object"
+      },
       "RollbackCreate": {
         "properties": {
           "target_version": {
@@ -21201,6 +21279,14 @@
             },
             "title": "Permissions",
             "type": "array"
+          },
+          "role_display_names": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Role Display Names",
+            "type": "object"
           },
           "roles": {
             "items": {
@@ -32321,7 +32407,7 @@
     },
     "/v1/mcp/tools": {
       "get": {
-        "description": "List all available MCP tools.\n\nProxies to MCP Gateway with user context for role-based filtering.",
+        "description": "List all available MCP tools.\n\nProxies to stoa-gateway and wraps the flat array into ListToolsResponse.",
         "operationId": "list_tools_v1_mcp_tools_get",
         "parameters": [
           {
@@ -32482,7 +32568,7 @@
     },
     "/v1/mcp/tools/categories": {
       "get": {
-        "description": "Get all available tool categories with counts.\n\nProxies to MCP Gateway.",
+        "description": "Get all available tool categories.\n\nstoa-gateway does not have categories \u2014 returns empty list.",
         "operationId": "get_tool_categories_v1_mcp_tools_categories_get",
         "responses": {
           "200": {
@@ -32509,7 +32595,7 @@
     },
     "/v1/mcp/tools/tags": {
       "get": {
-        "description": "Get all available tool tags with counts.\n\nProxies to MCP Gateway.",
+        "description": "Get all available tool tags with counts.\n\nExtracts tags from tools since stoa-gateway has no dedicated tags endpoint.",
         "operationId": "get_tool_tags_v1_mcp_tools_tags_get",
         "responses": {
           "200": {
@@ -32536,7 +32622,7 @@
     },
     "/v1/mcp/tools/{tool_name}": {
       "get": {
-        "description": "Get details of a specific tool.\n\nProxies to MCP Gateway.",
+        "description": "Get details of a specific tool by name.\n\nFetches all tools and filters client-side since stoa-gateway\nhas no single-tool endpoint.",
         "operationId": "get_tool_v1_mcp_tools__tool_name__get",
         "parameters": [
           {
@@ -32584,7 +32670,7 @@
     },
     "/v1/mcp/tools/{tool_name}/invoke": {
       "post": {
-        "description": "Invoke a tool with the provided arguments.\n\nProxies to MCP Gateway with user context.",
+        "description": "Invoke a tool with the provided arguments.\n\nProxies to stoa-gateway with user context.",
         "operationId": "invoke_tool_v1_mcp_tools__tool_name__invoke_post",
         "parameters": [
           {
@@ -32642,7 +32728,7 @@
     },
     "/v1/mcp/tools/{tool_name}/schema": {
       "get": {
-        "description": "Get the input schema for a tool.\n\nProxies to MCP Gateway.",
+        "description": "Get the input schema for a tool.\n\nFetches the tool and returns its inputSchema field.",
         "operationId": "get_tool_schema_v1_mcp_tools__tool_name__schema_get",
         "parameters": [
           {
@@ -34359,6 +34445,32 @@
         "summary": "List Portal Mcp Servers",
         "tags": [
           "Portal"
+        ]
+      }
+    },
+    "/v1/roles": {
+      "get": {
+        "operationId": "list_roles_v1_roles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List all roles with metadata and permissions",
+        "tags": [
+          "Roles"
         ]
       }
     },

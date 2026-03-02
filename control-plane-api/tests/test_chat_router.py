@@ -71,6 +71,9 @@ def mock_db():
     session.flush = AsyncMock()
     session.delete = AsyncMock()
     session.execute = AsyncMock()
+    # Ensure (await session.execute(q)).scalar_one_or_none() returns None
+    # instead of a coroutine (prevents AttributeError on .settings access).
+    session.execute.return_value.scalar_one_or_none = MagicMock(return_value=None)
     return session
 
 

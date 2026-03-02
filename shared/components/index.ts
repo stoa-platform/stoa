@@ -16,3 +16,4 @@ export * from './StatCard';
 export * from './TimeRangeSelector';
 export * from './TrendIndicator';
 export * from './ScoreGauge';
+export * from './ErrorBoundary';

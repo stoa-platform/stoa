@@ -747,3 +747,73 @@ class TestSetupFederationClient:
         svc._admin.create_client.side_effect = Exception("KC down")
         result = await svc.setup_federation_client("sub-id-12345678", "master", "acme")
         assert result is None
+
+
+# ── Auto-Reconnect Decorator ──
+
+
+class TestAutoReconnect:
+    """Tests for the _auto_reconnect decorator that handles stale Keycloak tokens."""
+
+    async def test_reconnects_on_attribute_error(self, svc):
+        """When admin call raises AttributeError (stale token), decorator reconnects and retries."""
+        call_count = 0
+
+        def get_users_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise AttributeError("'NoneType' object has no attribute 'get'")
+            return [{"id": "u1"}]
+
+        svc._admin.get_users.side_effect = get_users_side_effect
+
+        with patch("src.services.keycloak_service.KeycloakOpenIDConnection"), \
+             patch("src.services.keycloak_service.KeycloakAdmin") as mock_admin_cls:
+            mock_admin_cls.return_value = svc._admin
+            users = await svc.get_users()
+
+        assert len(users) == 1
+        assert call_count == 2  # first call failed, retry succeeded
+
+    async def test_disconnected_still_raises_runtime_error(self, disconnected_svc):
+        """When _admin is None (never connected), RuntimeError propagates — not caught by decorator."""
+        with pytest.raises(RuntimeError, match="not connected"):
+            await disconnected_svc.get_users()
+
+    async def test_retry_failure_propagates(self, svc):
+        """If the retry also raises AttributeError, it propagates to caller."""
+        svc._admin.get_clients.side_effect = AttributeError("stale token")
+
+        with patch("src.services.keycloak_service.KeycloakOpenIDConnection"), \
+             patch("src.services.keycloak_service.KeycloakAdmin") as mock_admin_cls:
+            mock_admin_cls.return_value = svc._admin
+            with pytest.raises(AttributeError):
+                await svc.get_clients()
+
+    async def test_non_attribute_errors_not_caught(self, svc):
+        """Non-AttributeError exceptions (e.g., KeycloakError) propagate immediately."""
+        svc._admin.get_realm_roles.side_effect = RuntimeError("Keycloak 503")
+        with pytest.raises(RuntimeError, match="503"):
+            await svc.get_roles()
+
+    async def test_reconnect_called_once(self, svc):
+        """Decorator calls connect() exactly once on stale-token error."""
+        call_count = 0
+
+        def get_roles_side_effect():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise AttributeError("stale")
+            return [{"name": "admin"}]
+
+        svc._admin.get_realm_roles.side_effect = get_roles_side_effect
+
+        with patch("src.services.keycloak_service.KeycloakOpenIDConnection") as mock_conn, \
+             patch("src.services.keycloak_service.KeycloakAdmin") as mock_admin_cls:
+            mock_admin_cls.return_value = svc._admin
+            roles = await svc.get_roles()
+
+        assert len(roles) == 1
+        mock_conn.assert_called_once()  # connect() called exactly once

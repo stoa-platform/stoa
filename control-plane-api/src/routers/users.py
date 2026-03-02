@@ -295,9 +295,12 @@ async def provision_personal_tenant(
             )
 
     # Idempotent check 2: DB lookup for existing personal tenant owned by this user.
+    # Uses SELECT FOR UPDATE to serialize concurrent requests — prevents duplicates.
     # The JWT tenant_id claim is only set AFTER token refresh (post KC group assignment),
     # so between signup and refresh every call would bypass check 1 and create duplicates.
-    existing_personal = await repo.get_personal_tenant_by_owner(current_user.id)
+    existing_personal = await repo.get_personal_tenant_by_owner(
+        current_user.id, for_update=True
+    )
     if existing_personal:
         return PersonalTenantResponse(
             tenant_id=existing_personal.id,
@@ -318,7 +321,9 @@ async def provision_personal_tenant(
     else:
         raise HTTPException(status_code=409, detail="Could not generate unique tenant ID")
 
-    # Create tenant in DB
+    # Create tenant in DB — unique index ix_tenants_personal_owner_unique
+    # provides a database-level guard against duplicates in addition to
+    # the SELECT FOR UPDATE above.
     tenant = Tenant(
         id=tenant_id,
         name=f"{current_user.username}'s workspace",
@@ -330,7 +335,21 @@ async def provision_personal_tenant(
             "owner_email": current_user.email,
         },
     )
-    tenant = await repo.create(tenant)
+    try:
+        tenant = await repo.create(tenant)
+    except Exception as e:
+        if "ix_tenants_personal_owner_unique" in str(e):
+            # Race condition: another request created the tenant between
+            # our SELECT FOR UPDATE and INSERT. Return the existing one.
+            await db.rollback()
+            existing_personal = await repo.get_personal_tenant_by_owner(current_user.id)
+            if existing_personal:
+                return PersonalTenantResponse(
+                    tenant_id=existing_personal.id,
+                    display_name=existing_personal.name,
+                    created=False,
+                )
+        raise
 
     # Keycloak: create group + assign user + assign viewer role
     try:

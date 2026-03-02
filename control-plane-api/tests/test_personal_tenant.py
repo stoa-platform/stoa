@@ -38,6 +38,7 @@ class TestPersonalTenantProvisioning:
         """Happy path: creates tenant, KC group, assigns user + viewer role."""
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=None)
+        mock_repo.get_personal_tenant_by_owner = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(side_effect=lambda t: t)  # Return the tenant as-is
 
         with (
@@ -110,6 +111,7 @@ class TestPersonalTenantProvisioning:
 
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=None)
+        mock_repo.get_personal_tenant_by_owner = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(side_effect=lambda t: t)
 
         with (
@@ -141,6 +143,7 @@ class TestPersonalTenantProvisioning:
         mock_repo = MagicMock()
         # First call returns existing (conflict), second returns None (available)
         mock_repo.get_by_id = AsyncMock(side_effect=[existing_tenant, None])
+        mock_repo.get_personal_tenant_by_owner = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(side_effect=lambda t: t)
 
         with (
@@ -166,6 +169,7 @@ class TestPersonalTenantProvisioning:
         """Keycloak failure doesn't prevent tenant creation."""
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=None)
+        mock_repo.get_personal_tenant_by_owner = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(side_effect=lambda t: t)
 
         with (

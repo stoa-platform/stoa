@@ -81,7 +81,7 @@ stoaGateway:
   logFormat: json
   # OpenTelemetry Collector endpoint (Grafana Alloy in stoa-monitoring namespace)
   # Set to enable distributed tracing export via OTLP gRPC
-  otelEndpoint: ""  # e.g. "http://stoa-alloy-otlp.stoa-monitoring:4317"
+  otelEndpoint: "http://stoa-alloy-otlp.stoa-monitoring:4317"
 
   # Resources
   resources:

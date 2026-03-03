@@ -1,4 +1,4 @@
-# HEGEMON Gateway Stack — Internal + External STOA Gateways
+# HEGEMON Gateway Stack — Internal + External STOA Gateways + MCP Server
 #
 # Internal Gateway (8090): Worker-to-worker + MCP Server communication
 #   - edge-mcp mode, JWT auth, WebSocket enabled, rate limiting
@@ -7,6 +7,10 @@
 # External Gateway (8091): Worker-to-upstream API communication
 #   - proxy mode, credential injection, circuit breaker, token budget
 #   - Gateway injects real API keys, workers only have consumer keys
+#
+# HEGEMON MCP Server (8092): Read-only MCP tools for AI orchestration
+#   - 3 tools: workers_status, cycle_status, metrics
+#   - SSE transport, accessible via Internal Gateway
 #
 # Both gateways use the same Docker image, configured via env vars.
 # Deploy: docker compose -f docker-compose.gateway.yml up -d
@@ -126,4 +130,35 @@ services:
       driver: json-file
       options:
         max-size: "10m"
+        max-file: "3"
+
+  # ── HEGEMON MCP Server v0 (port 8092) ───────────────────────────────
+  # Purpose: read-only MCP tools for AI agent orchestration
+  # Tools: hegemon_workers_status, hegemon_cycle_status, hegemon_metrics
+  # Transport: SSE, accessible via Internal Gateway on /mcp/sse
+  hegemon-mcp:
+    image: ghcr.io/stoa-platform/hegemon-mcp:latest
+    container_name: hegemon-mcp-server
+    restart: unless-stopped
+    ports:
+      - "8092:8092"
+    environment:
+      HEGEMON_MCP_PORT: "8092"
+      POCKETBASE_URL: "${POCKETBASE_URL:-https://state.gostoa.dev}"
+      LINEAR_API_KEY: "${LINEAR_API_KEY:-}"
+      LINEAR_TEAM_ID: "${LINEAR_TEAM_ID:-}"
+      PROMETHEUS_URL: "${PROMETHEUS_URL:-http://localhost:9090}"
+      RUST_LOG: "hegemon_mcp=info"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8092/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
         max-file: "3"

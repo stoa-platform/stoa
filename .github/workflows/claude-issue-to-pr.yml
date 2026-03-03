@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Guard: skip Council S1 if already validated (prevents double-run on re-label)
       - name: Check Council Already Done
@@ -295,7 +295,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Verify Stage 1 Council
         id: verify-stage1
@@ -538,7 +538,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Guard: verify both Stage 1 and Stage 2 passed (with polling for race condition)
       - name: Verify Plan validation

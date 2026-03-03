@@ -30,7 +30,7 @@ jobs:
     outputs:
       slack_thread_ts: ${{ steps.slack-council.outputs.thread_ts }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Council Validation
         id: council

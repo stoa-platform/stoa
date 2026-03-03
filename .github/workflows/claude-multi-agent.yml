@@ -38,7 +38,7 @@ jobs:
     outputs:
       approved: ${{ steps.council.outputs.approved }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Council Batch Validation
         id: council
@@ -194,7 +194,7 @@ jobs:
       max-parallel: 3  # Max 3 parallel agents (cost control)
       fail-fast: false  # Don't cancel other agents if one fails
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Record Start Time
         run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"

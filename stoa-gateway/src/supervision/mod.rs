@@ -212,7 +212,7 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
         middleware,
-        routing::{delete, get, post, put},
+        routing::{get, put},
         Router,
     };
     use tower::ServiceExt;
@@ -537,8 +537,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), 1024)
             .await
             .expect("body");
-        let json: serde_json::Value =
-            serde_json::from_slice(&body).expect("json");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("json");
         assert_eq!(json["error"], "supervision_blocked");
         assert_eq!(json["tier"], "command");
         assert_eq!(json["method"], "POST");

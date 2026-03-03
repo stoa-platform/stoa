@@ -330,13 +330,18 @@ class TestGetStats:
         mock_recent = MagicMock()
         mock_recent.scalar_one.return_value = 3
 
-        db.execute = AsyncMock(side_effect=[mock_total] + status_mocks + [mock_recent])
+        # Average approval time
+        mock_avg = MagicMock()
+        mock_avg.scalar_one_or_none.return_value = 4.5
+
+        db.execute = AsyncMock(side_effect=[mock_total] + status_mocks + [mock_recent, mock_avg])
 
         repo = SubscriptionRepository(db)
         stats = await repo.get_stats()
         assert stats["total"] == 10
         assert stats["recent_24h"] == 3
         assert isinstance(stats["by_status"], dict)
+        assert stats["avg_approval_time_hours"] == 4.5
 
     async def test_with_tenant(self):
         db = _mock_db()
@@ -349,11 +354,14 @@ class TestGetStats:
             status_mocks.append(m)
         mock_recent = MagicMock()
         mock_recent.scalar_one.return_value = 0
-        db.execute = AsyncMock(side_effect=[mock_total] + status_mocks + [mock_recent])
+        mock_avg = MagicMock()
+        mock_avg.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(side_effect=[mock_total] + status_mocks + [mock_recent, mock_avg])
 
         repo = SubscriptionRepository(db)
         stats = await repo.get_stats(tenant_id="acme")
         assert stats["total"] == 5
+        assert stats["avg_approval_time_hours"] is None
 
 
 # ── delete ──

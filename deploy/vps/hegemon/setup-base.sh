@@ -40,13 +40,24 @@ ssh_cmd "sed -i 's/^PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_confi
   sed -i 's/^#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
   systemctl restart sshd"
 
-# Step 4: Install base packages
-echo "[4/6] Installing packages..."
+# Step 4: Install base packages + Docker
+echo "[4/7] Installing packages..."
 ssh_cmd "apt-get update -qq && apt-get upgrade -y -qq && \
   apt-get install -y -qq \
     tmux git curl jq wget gnupg ca-certificates \
     fail2ban ufw unattended-upgrades \
     build-essential htop"
+
+# Step 4b: Install Docker (for STOA Gateway containers)
+echo "[4b/7] Installing Docker..."
+ssh_cmd "if ! command -v docker &>/dev/null; then
+  curl -fsSL https://get.docker.com | sh
+  usermod -aG docker ${HEGEMON_USER}
+  systemctl enable docker
+  echo 'Docker installed'
+else
+  echo 'Docker already installed'
+fi"
 
 # Step 5: Firewall
 echo "[5/6] Configuring firewall..."

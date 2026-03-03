@@ -469,6 +469,23 @@ pub struct Config {
     #[serde(default)]
     pub llm_router: LlmRouterConfig,
 
+    // === HEGEMON Supervision (CAB-1636) ===
+    /// Enable supervision tier enforcement for HEGEMON workers.
+    /// Env: STOA_SUPERVISION_ENABLED
+    #[serde(default)]
+    pub supervision_enabled: bool,
+
+    /// Webhook URL for CO-PILOT tier mutation notifications (fire-and-forget).
+    /// Env: STOA_SUPERVISION_WEBHOOK_URL
+    #[serde(default)]
+    pub supervision_webhook_url: Option<String>,
+
+    /// Default supervision tier when X-Hegemon-Supervision header is absent.
+    /// Values: "autopilot" (default), "copilot", "command".
+    /// Env: STOA_SUPERVISION_DEFAULT_TIER
+    #[serde(default = "default_supervision_tier")]
+    pub supervision_default_tier: String,
+
     // === LLM Proxy (CAB-1568: STOA Dogfood) ===
     /// Enable the LLM API proxy (passthrough to upstream LLM provider).
     /// Env: STOA_LLM_PROXY_ENABLED
@@ -889,6 +906,10 @@ fn default_mcp_discovery_cache_max_entries() -> u64 {
     256
 }
 
+fn default_supervision_tier() -> String {
+    "autopilot".to_string()
+}
+
 fn default_llm_timeout_ms() -> u64 {
     30_000
 }
@@ -998,6 +1019,9 @@ impl Default for Config {
             llm_enabled: false,
             llm_default_timeout_ms: default_llm_timeout_ms(),
             llm_router: LlmRouterConfig::default(),
+            supervision_enabled: false,
+            supervision_webhook_url: None,
+            supervision_default_tier: default_supervision_tier(),
             llm_proxy_enabled: false,
             llm_proxy_upstream_url: default_llm_proxy_upstream_url(),
             llm_proxy_api_key: None,

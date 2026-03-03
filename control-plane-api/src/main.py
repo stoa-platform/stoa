@@ -51,6 +51,7 @@ from .routers import (
     demo,
     deployments,
     diagnostics,
+    discovery,
     docs_search,
     environments,
     events,
@@ -628,6 +629,9 @@ app.include_router(external_mcp_servers_internal_router)
 
 # MCP Connector Catalog — App Store pattern (pre-configured OAuth connectors)
 app.include_router(mcp_connectors.router)
+
+# API/MCP Discovery — Smart Connector Catalog (CAB-1637)
+app.include_router(discovery.router)
 
 # Tenant-scoped MCP Servers — developer self-service (CAB-1319)
 app.include_router(tenant_mcp_servers_router)

@@ -329,6 +329,16 @@
 
 ---
 
+## Cycle 12 (Mar 3+) — CURRENT
+
+**Theme**: HEGEMON Runtime Integration + Gateway Hardening
+
+### Done
+
+- [x] CAB-1636: [MEGA] HEGEMON Runtime × STOA Gateway Integration (28 pts) — PR #1393 (18 files, 2687 LOC). Supervision middleware, MCP Server v0, Grafana dashboard, integration tests | `instance:mcp`
+
+---
+
 ## Milestones
 
 | Date | Event | Gate |

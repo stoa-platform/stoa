@@ -26,6 +26,7 @@ vi.mock('../services/api', () => ({
     clearAuthToken: vi.fn(),
     setTokenRefresher: vi.fn(),
     getTenants: vi.fn().mockResolvedValue([]),
+    getMe: vi.fn().mockResolvedValue({ roles: [], permissions: [], role_display_names: {} }),
   },
 }));
 
@@ -62,12 +63,18 @@ function createOidcUser(roles: string[], name = 'Parzival', email = 'parzival@oa
 describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(apiService.getMe).mockResolvedValue({
+      roles: [],
+      permissions: [],
+      role_display_names: {},
+    });
     mockOidcState = {
       isAuthenticated: false,
       isLoading: false,
       user: null,
       signinRedirect: mockSigninRedirect,
       signoutRedirect: mockSignoutRedirect,
+      signinSilent: vi.fn().mockResolvedValue(null),
     };
   });
 

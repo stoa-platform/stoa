@@ -6,6 +6,7 @@ export interface User {
   roles: string[];
   tenant_id?: string;
   permissions: string[];
+  role_display_names?: Record<string, string>;
 }
 
 export type Role = 'cpi-admin' | 'tenant-admin' | 'devops' | 'viewer';

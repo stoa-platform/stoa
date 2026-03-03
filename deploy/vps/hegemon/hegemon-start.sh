@@ -12,7 +12,8 @@
 #
 # Env vars (from ~/.env.hegemon):
 #   HEGEMON_ROLE       — instance role (backend, frontend, mcp, auth, qa)
-#   ANTHROPIC_API_KEY  — API key for Claude Code
+#   ANTHROPIC_API_KEY  — API key for Claude Code (only used if gateways not running)
+#   ANTHROPIC_BASE_URL — (auto-set) http://localhost:8091 when external gateway is up
 #   SLACK_WEBHOOK_URL  — (optional) Slack notifications
 #   GH_TOKEN           — GitHub token for gh CLI
 set -euo pipefail
@@ -163,15 +164,35 @@ tmux -L hegemon send-keys -t "${SESSION}:MONITOR" "htop" C-m
 
 log "tmux session created"
 
-# ─── 4. Launch Claude Code in AGENT pane ─────────────────────────────────────
+# ─── 4. Gateway routing (zero-trust credentials) ─────────────────────────────
+# If the external gateway is running, route Claude Code through it.
+# The gateway injects the real Anthropic API key — worker has no direct key.
+GATEWAY_EXTERNAL_URL="http://localhost:8091"
+GATEWAY_INTERNAL_URL="http://localhost:8090"
+
+GATEWAY_ENV=""
+if curl -sf "${GATEWAY_EXTERNAL_URL}/health" > /dev/null 2>&1; then
+  log "External gateway detected — routing via ${GATEWAY_EXTERNAL_URL}"
+  GATEWAY_ENV="export ANTHROPIC_BASE_URL=${GATEWAY_EXTERNAL_URL} && unset ANTHROPIC_API_KEY &&"
+  log "Worker will NOT have direct API key (gateway injects credentials)"
+else
+  log "WARNING: External gateway not running — using direct API key"
+  GATEWAY_ENV=""
+fi
+
+# Supervision header for this worker (default: autopilot)
+SUPERVISION_TIER="${HEGEMON_SUPERVISION_TIER:-autopilot}"
+SUPERVISION_ENV="export X_HEGEMON_SUPERVISION=${SUPERVISION_TIER} &&"
+
+# ─── 5. Launch Claude Code in AGENT pane ─────────────────────────────────────
 PROMPT="Worker ${ROLE^^}: lis memory.md et plan.md, cherche tickets instance:${ROLE} sur Linear, travaille sur le premier disponible."
 
 tmux -L hegemon send-keys -t "${SESSION}:AGENT" \
-  "export PATH=${HOME}/.local/bin:\$PATH && source ~/.env.hegemon && export STOA_INSTANCE=${ROLE} && cd ${STOA_DIR} && claude --permission-mode acceptEdits \"${PROMPT}\"" C-m
+  "export PATH=${HOME}/.local/bin:\$PATH && source ~/.env.hegemon && export STOA_INSTANCE=${ROLE} && ${GATEWAY_ENV} ${SUPERVISION_ENV} cd ${STOA_DIR} && claude --permission-mode acceptEdits \"${PROMPT}\"" C-m
 
 log "Claude Code launched: role=${ROLE}, mode=acceptEdits + settings.json permissions"
 
-# ─── 5. Auto-approve MCP servers prompt (background) ────────────────────────
+# ─── 6. Auto-approve MCP servers prompt (background) ────────────────────────
 # Claude Code shows "Enter to confirm" when new MCP servers are found in .mcp.json.
 # This watcher polls the tmux pane and sends Enter automatically.
 (
@@ -199,7 +220,7 @@ MCP_WATCHER_PID=$!
 log "HEGEMON agent ready: role=${ROLE}, pid=$$, mcp_watcher=${MCP_WATCHER_PID}"
 log "Attach: tmux -L hegemon attach -t ${SESSION}"
 
-# ─── 6. Block: keep process alive for systemd ───────────────────────────────
+# ─── 7. Block: keep process alive for systemd ───────────────────────────────
 # When the tmux session dies, this loop exits, and systemd restarts the service.
 while tmux -L hegemon has-session -t "$SESSION" 2>/dev/null; do
   sleep 30

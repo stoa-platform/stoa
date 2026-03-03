@@ -67,6 +67,32 @@ echo "[Environment]"
 check "env.hegemon exists" "test -f ~/.env.hegemon"
 check "ANTHROPIC_API_KEY"  "source ~/.env.hegemon && test -n \"\$ANTHROPIC_API_KEY\""
 
+# Gateway checks (non-blocking — gateways may not be deployed yet)
+echo ""
+echo "[Gateway]"
+GW_INTERNAL=$(ssh_cmd 'curl -sf http://localhost:8090/health 2>/dev/null && echo OK || echo SKIP')
+GW_EXTERNAL=$(ssh_cmd 'curl -sf http://localhost:8091/health 2>/dev/null && echo OK || echo SKIP')
+if echo "$GW_INTERNAL" | grep -q "OK"; then
+  echo "  [PASS] Internal gateway (8090) healthy"
+  PASS=$((PASS + 1))
+else
+  echo "  [SKIP] Internal gateway (8090) not running"
+fi
+if echo "$GW_EXTERNAL" | grep -q "OK"; then
+  echo "  [PASS] External gateway (8091) healthy"
+  PASS=$((PASS + 1))
+  # Verify no direct API key when gateway is up
+  NO_DIRECT_KEY=$(ssh_cmd 'source ~/.env.hegemon 2>/dev/null; test -z "${ANTHROPIC_API_KEY:-}" && echo NO_KEY || echo HAS_KEY')
+  if echo "$NO_DIRECT_KEY" | grep -q "NO_KEY"; then
+    echo "  [PASS] No direct API key (gateway handles credentials)"
+    PASS=$((PASS + 1))
+  else
+    echo "  [WARN] Worker has direct API key (should be removed when gateway is active)"
+  fi
+else
+  echo "  [SKIP] External gateway (8091) not running"
+fi
+
 # Claude Code functional test
 echo ""
 echo "[Functional]"

@@ -51,6 +51,7 @@ from .routers import (
     demo,
     deployments,
     diagnostics,
+    discovery,
     docs_search,
     environments,
     events,
@@ -630,9 +631,7 @@ app.include_router(external_mcp_servers_internal_router)
 app.include_router(mcp_connectors.router)
 
 # API/MCP Discovery — Smart Connector Catalog (CAB-1637)
-from src.routers import discovery as discovery_router_mod
-
-app.include_router(discovery_router_mod.router)
+app.include_router(discovery.router)
 
 # Tenant-scoped MCP Servers — developer self-service (CAB-1319)
 app.include_router(tenant_mcp_servers_router)

@@ -86,18 +86,8 @@ vi.mock('./pages/apps', () => ({
   ApplicationDetail: () => <div data-testid="app-detail">App Detail</div>,
 }));
 
-vi.mock('./pages/contracts', () => ({
-  ContractListPage: () => <div data-testid="contracts-page">Contracts</div>,
-  ContractDetailPage: () => <div data-testid="contract-detail">Contract Detail</div>,
-  CreateContractPage: () => <div data-testid="create-contract">Create Contract</div>,
-}));
-
 vi.mock('./pages/profile/Profile', () => ({
   ProfilePage: () => <div data-testid="profile-page">Profile</div>,
-}));
-
-vi.mock('./pages/webhooks/WebhooksPage', () => ({
-  WebhooksPage: () => <div data-testid="webhooks-page">Webhooks</div>,
 }));
 
 vi.mock('./pages/usage', () => ({
@@ -315,12 +305,6 @@ describe('App', () => {
       renderApp('/apps');
 
       expect(await screen.findByTestId('apps-page')).toBeInTheDocument();
-    });
-
-    it('should render contracts page on /contracts', async () => {
-      renderApp('/contracts');
-
-      expect(await screen.findByTestId('contracts-page')).toBeInTheDocument();
     });
 
     it('should render usage page on /usage', async () => {

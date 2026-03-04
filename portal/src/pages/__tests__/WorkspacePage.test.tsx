@@ -44,14 +44,6 @@ vi.mock('../subscriptions/MySubscriptions', () => ({
   MySubscriptions: () => <div data-testid="my-subscriptions">My Subscriptions Content</div>,
 }));
 
-vi.mock('../contracts', () => ({
-  ContractListPage: () => <div data-testid="contract-list">Contract List Content</div>,
-}));
-
-vi.mock('../../components/consumers/ApprovalQueue', () => ({
-  ApprovalQueue: () => <div data-testid="approval-queue">Approval Queue Content</div>,
-}));
-
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'WorkspacePage — %s persona',
   (role) => {
@@ -69,9 +61,7 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       renderWithProviders(<WorkspacePage />);
 
       expect(screen.getByText('My Workspace')).toBeInTheDocument();
-      expect(
-        screen.getByText('Manage your apps, subscriptions, and contracts')
-      ).toBeInTheDocument();
+      expect(screen.getByText('Manage your apps and subscriptions')).toBeInTheDocument();
     });
 
     it('default tab is "apps"', async () => {
@@ -82,19 +72,12 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       });
     });
 
-    it('shows correct tabs based on role', () => {
-      const hasApprovals = role === 'cpi-admin' || role === 'tenant-admin';
-
+    it('shows Apps and Subscriptions tabs', () => {
       renderWithProviders(<WorkspacePage />);
 
       expect(screen.getByRole('button', { name: /Apps/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Subscriptions/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Contracts/i })).toBeInTheDocument();
-      if (hasApprovals) {
-        expect(screen.getByRole('button', { name: /Approvals/i })).toBeInTheDocument();
-      } else {
-        expect(screen.queryByRole('button', { name: /Approvals/i })).not.toBeInTheDocument();
-      }
+      expect(screen.queryByRole('button', { name: /Approvals/i })).not.toBeInTheDocument();
     });
 
     it('clicking Subscriptions tab renders subscriptions content', async () => {
@@ -102,40 +85,13 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
 
       renderWithProviders(<WorkspacePage />);
 
-      const subscriptionsTab = screen.getByRole('button', { name: /Subscriptions/i });
+      const subscriptionsTab = screen.getByRole('button', {
+        name: /Subscriptions/i,
+      });
       await user.click(subscriptionsTab);
 
       await waitFor(() => {
         expect(screen.getByTestId('my-subscriptions')).toBeInTheDocument();
-      });
-    });
-
-    it('clicking Contracts tab renders contracts content', async () => {
-      const user = userEvent.setup();
-
-      renderWithProviders(<WorkspacePage />);
-
-      const contractsTab = screen.getByRole('button', { name: /Contracts/i });
-      await user.click(contractsTab);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('contract-list')).toBeInTheDocument();
-      });
-    });
-
-    it('clicking Approvals tab renders approvals content (admin only)', async () => {
-      const hasApprovals = role === 'cpi-admin' || role === 'tenant-admin';
-      if (!hasApprovals) return;
-
-      const user = userEvent.setup();
-
-      renderWithProviders(<WorkspacePage />);
-
-      const approvalsTab = screen.getByRole('button', { name: /Approvals/i });
-      await user.click(approvalsTab);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('approval-queue')).toBeInTheDocument();
       });
     });
 
@@ -144,25 +100,6 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
 
       await waitFor(() => {
         expect(screen.getByTestId('my-subscriptions')).toBeInTheDocument();
-      });
-    });
-
-    it('URL ?tab=contracts activates contracts tab', async () => {
-      renderWithProviders(<WorkspacePage />, { route: '/?tab=contracts' });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('contract-list')).toBeInTheDocument();
-      });
-    });
-
-    it('URL ?tab=approvals activates approvals tab (admin only)', async () => {
-      const hasApprovals = role === 'cpi-admin' || role === 'tenant-admin';
-      if (!hasApprovals) return;
-
-      renderWithProviders(<WorkspacePage />, { route: '/?tab=approvals' });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('approval-queue')).toBeInTheDocument();
       });
     });
 
@@ -176,7 +113,9 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     it('inactive tabs do not have highlighted styling', () => {
       renderWithProviders(<WorkspacePage />);
 
-      const subscriptionsTab = screen.getByRole('button', { name: /Subscriptions/i });
+      const subscriptionsTab = screen.getByRole('button', {
+        name: /Subscriptions/i,
+      });
       expect(subscriptionsTab).toHaveClass('border-transparent');
     });
   }

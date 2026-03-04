@@ -12,7 +12,15 @@ import {
   createAuthMock,
   mockDashboardStats,
   mockDashboardActivity,
+  type PersonaRole,
 } from '../test/helpers';
+
+const PERSONA_NAMES: Record<PersonaRole, string> = {
+  'cpi-admin': 'James Halliday',
+  'tenant-admin': 'Wade Watts',
+  devops: 'Samantha Cook',
+  viewer: 'Helen Harris',
+};
 
 // Mock dashboard hooks
 const mockStatsData = mockDashboardStats();
@@ -60,122 +68,99 @@ vi.mock('../components/dashboard', () => ({
 }));
 
 describe('HomePage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockUseDashboardStats.mockReturnValue({
-      data: mockStatsData,
-      isLoading: false,
-    });
-    mockUseDashboardActivity.mockReturnValue({
-      data: mockActivityData,
-      isLoading: false,
-    });
-    mockUseAuth.mockReturnValue(createAuthMock('tenant-admin'));
-  });
-
-  describe('Component Structure', () => {
-    it('should render all 6 dashboard sections', () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('welcome-header')).toBeInTheDocument();
-      expect(screen.getByTestId('dashboard-stats')).toBeInTheDocument();
-      expect(screen.getByTestId('quick-actions')).toBeInTheDocument();
-      expect(screen.getByTestId('featured-apis')).toBeInTheDocument();
-      expect(screen.getByTestId('featured-ai-tools')).toBeInTheDocument();
-      expect(screen.getByTestId('recent-activity')).toBeInTheDocument();
-    });
-
-    it('should pass user to WelcomeHeader', () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('welcome-header')).toHaveTextContent('Wade Watts');
-    });
-
-    it('should pass stats data to DashboardStats when loaded', () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('dashboard-stats')).toHaveTextContent('Stats loaded');
-    });
-
-    it('should pass activity data to RecentActivity', () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('recent-activity')).toHaveTextContent('2 items');
-    });
-  });
-
-  describe('Loading State', () => {
-    it('should show loading when stats are loading', () => {
-      mockUseDashboardStats.mockReturnValue({
-        data: undefined,
-        isLoading: true,
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      beforeEach(() => {
+        vi.clearAllMocks();
+        mockUseDashboardStats.mockReturnValue({
+          data: mockStatsData,
+          isLoading: false,
+        });
+        mockUseDashboardActivity.mockReturnValue({
+          data: mockActivityData,
+          isLoading: false,
+        });
+        mockUseAuth.mockReturnValue(createAuthMock(role));
       });
 
-      renderWithProviders(<HomePage />);
+      describe('Component Structure', () => {
+        it('should render all 6 dashboard sections', () => {
+          renderWithProviders(<HomePage />);
 
-      expect(screen.getByTestId('dashboard-stats')).toHaveTextContent('Loading stats');
-      expect(screen.getByTestId('recent-activity')).toHaveTextContent('Loading activity');
-    });
+          expect(screen.getByTestId('welcome-header')).toBeInTheDocument();
+          expect(screen.getByTestId('dashboard-stats')).toBeInTheDocument();
+          expect(screen.getByTestId('quick-actions')).toBeInTheDocument();
+          expect(screen.getByTestId('featured-apis')).toBeInTheDocument();
+          expect(screen.getByTestId('featured-ai-tools')).toBeInTheDocument();
+          expect(screen.getByTestId('recent-activity')).toBeInTheDocument();
+        });
 
-    it('should show loading when activity is loading', () => {
-      mockUseDashboardActivity.mockReturnValue({
-        data: undefined,
-        isLoading: true,
+        it('should pass user to WelcomeHeader', () => {
+          renderWithProviders(<HomePage />);
+
+          expect(screen.getByTestId('welcome-header')).toHaveTextContent(PERSONA_NAMES[role]);
+        });
+
+        it('should pass stats data to DashboardStats when loaded', () => {
+          renderWithProviders(<HomePage />);
+
+          expect(screen.getByTestId('dashboard-stats')).toHaveTextContent('Stats loaded');
+        });
+
+        it('should pass activity data to RecentActivity', () => {
+          renderWithProviders(<HomePage />);
+
+          expect(screen.getByTestId('recent-activity')).toHaveTextContent('2 items');
+        });
       });
 
-      renderWithProviders(<HomePage />);
+      describe('Loading State', () => {
+        it('should show loading when stats are loading', () => {
+          mockUseDashboardStats.mockReturnValue({
+            data: undefined,
+            isLoading: true,
+          });
 
-      expect(screen.getByTestId('dashboard-stats')).toHaveTextContent('Loading stats');
-      expect(screen.getByTestId('recent-activity')).toHaveTextContent('Loading activity');
-    });
+          renderWithProviders(<HomePage />);
 
-    it('should pass isLoading=true when either stats or activity loading', () => {
-      mockUseDashboardStats.mockReturnValue({
-        data: mockStatsData,
-        isLoading: true,
+          expect(screen.getByTestId('dashboard-stats')).toHaveTextContent('Loading stats');
+          expect(screen.getByTestId('recent-activity')).toHaveTextContent('Loading activity');
+        });
+
+        it('should show loading when activity is loading', () => {
+          mockUseDashboardActivity.mockReturnValue({
+            data: undefined,
+            isLoading: true,
+          });
+
+          renderWithProviders(<HomePage />);
+
+          expect(screen.getByTestId('dashboard-stats')).toHaveTextContent('Loading stats');
+          expect(screen.getByTestId('recent-activity')).toHaveTextContent('Loading activity');
+        });
+
+        it('should pass isLoading=true when either stats or activity loading', () => {
+          mockUseDashboardStats.mockReturnValue({
+            data: mockStatsData,
+            isLoading: true,
+          });
+          mockUseDashboardActivity.mockReturnValue({
+            data: mockActivityData,
+            isLoading: false,
+          });
+
+          renderWithProviders(<HomePage />);
+
+          expect(screen.getByTestId('dashboard-stats')).toHaveTextContent('Loading stats');
+        });
       });
-      mockUseDashboardActivity.mockReturnValue({
-        data: mockActivityData,
-        isLoading: false,
+
+      it('should render correct persona name in WelcomeHeader', () => {
+        renderWithProviders(<HomePage />);
+
+        expect(screen.getByTestId('welcome-header')).toHaveTextContent(PERSONA_NAMES[role]);
       });
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('dashboard-stats')).toHaveTextContent('Loading stats');
-    });
-  });
-
-  describe('Persona-based Tests', () => {
-    it('should render for cpi-admin (James Halliday)', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('cpi-admin'));
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('welcome-header')).toHaveTextContent('James Halliday');
-    });
-
-    it('should render for tenant-admin (Wade Watts)', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('welcome-header')).toHaveTextContent('Wade Watts');
-    });
-
-    it('should render for devops (Samantha Cook)', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('devops'));
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('welcome-header')).toHaveTextContent('Samantha Cook');
-    });
-
-    it('should render for viewer (Helen Harris)', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('viewer'));
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByTestId('welcome-header')).toHaveTextContent('Helen Harris');
-    });
-  });
+    }
+  );
 });

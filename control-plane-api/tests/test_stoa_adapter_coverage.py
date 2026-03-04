@@ -501,3 +501,129 @@ class TestUpdateQuotaPolicy:
         ):
             result = await adapter.update_quota_policy({}, "sub-1")
         assert result.success is True
+
+
+# ============ Edge Case Tests ============
+
+
+class TestSyncApiEdgeCases:
+    @pytest.mark.asyncio
+    async def test_sync_api_connection_refused(self):
+        """sync_api handles ConnectError gracefully."""
+        adapter = _adapter()
+        adapter._client = AsyncMock()
+        adapter._client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+
+        with patch("src.adapters.stoa.adapter.mappers.map_api_spec_to_stoa", return_value={"id": "r1"}):
+            result = await adapter.sync_api({"name": "test"}, "acme")
+
+        assert result.success is False
+        assert "Connection refused" in result.error
+
+    @pytest.mark.asyncio
+    async def test_sync_api_timeout(self):
+        """sync_api handles TimeoutException."""
+        adapter = _adapter()
+        adapter._client = AsyncMock()
+        adapter._client.post = AsyncMock(
+            side_effect=httpx.TimeoutException("Request timed out")
+        )
+
+        with patch("src.adapters.stoa.adapter.mappers.map_api_spec_to_stoa", return_value={"id": "r1"}):
+            result = await adapter.sync_api({"name": "slow"}, "acme")
+
+        assert result.success is False
+        assert "timed out" in result.error
+
+
+class TestHealthCheckEdgeCases:
+    @pytest.mark.asyncio
+    async def test_health_check_degraded_response(self):
+        """Non-200 health check (e.g. 503 degraded) returns failure."""
+        adapter = _adapter()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 503
+
+        with patch("httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+            instance.get = AsyncMock(return_value=mock_resp)
+            instance.aclose = AsyncMock()
+            MockClient.return_value = instance
+
+            result = await adapter.health_check()
+
+        assert result.success is False
+        assert "503" in result.error
+
+
+class TestSyncConsumerCredentialsEdgeCases:
+    @pytest.mark.asyncio
+    async def test_sync_consumer_credentials_batch(self):
+        """Batch credential sync — all 4 mappings succeed."""
+        adapter = _adapter()
+        adapter._client = AsyncMock()
+        adapter._client.post = AsyncMock(return_value=MagicMock(status_code=200))
+
+        mappings = [
+            {"consumer_id": f"c{i}", "route_id": f"r{i}"} for i in range(4)
+        ]
+        result = await adapter.sync_consumer_credentials(mappings)
+
+        assert result.success is True
+        assert result.data["synced"] == 4
+        assert result.data["total"] == 4
+
+
+class TestUpdateQuotaPolicyEdgeCases:
+    @pytest.mark.asyncio
+    async def test_update_quota_policy_not_found(self):
+        """update_quota_policy handles 404 from upsert_policy."""
+        adapter = _adapter()
+        adapter._client = AsyncMock()
+        adapter._client.post = AsyncMock(return_value=MagicMock(status_code=404, text="Not Found"))
+
+        with (
+            patch(
+                "src.adapters.stoa.adapter.mappers.map_quota_to_policy",
+                return_value={"type": "rate_limit", "id": "pol-missing"},
+            ),
+            patch("src.adapters.stoa.adapter.mappers.map_policy_to_stoa", return_value={"id": "pol-missing"}),
+        ):
+            result = await adapter.update_quota_policy({}, "sub-404")
+
+        assert result.success is False
+        assert "404" in result.error
+
+
+class TestProvisionApplicationEdgeCases:
+    @pytest.mark.asyncio
+    async def test_provision_application_invalid_spec(self):
+        """provision_application handles mapper exception on malformed spec."""
+        adapter = _adapter()
+        adapter._client = AsyncMock()
+
+        with patch(
+            "src.adapters.stoa.adapter.mappers.map_app_spec_to_route",
+            side_effect=KeyError("missing_field"),
+        ):
+            result = await adapter.provision_application({})
+
+        assert result.success is False
+        assert "missing_field" in result.error
+
+
+class TestUpsertPolicyEdgeCases:
+    @pytest.mark.asyncio
+    async def test_upsert_policy_conflict(self):
+        """upsert_policy handles 409 conflict."""
+        adapter = _adapter()
+        adapter._client = AsyncMock()
+        adapter._client.post = AsyncMock(
+            return_value=MagicMock(status_code=409, text="Policy already exists")
+        )
+
+        with patch("src.adapters.stoa.adapter.mappers.map_policy_to_stoa", return_value={"id": "pol-dup"}):
+            result = await adapter.upsert_policy({"type": "rate_limit"})
+
+        assert result.success is False
+        assert "409" in result.error

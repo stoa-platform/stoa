@@ -52,9 +52,9 @@ data:
   # MCP Gateway (internal K8s service for reliable proxy)
   MCP_GATEWAY_URL: "http://stoa-gateway.stoa-system.svc.cluster.local:80"
 
-  # ArgoCD
-  ARGOCD_URL: "https://argocd.gostoa.dev"
-  ARGOCD_VERIFY_SSL: "true"
+  # ArgoCD (internal URL avoids hairpin NAT through LB)
+  ARGOCD_URL: "http://argocd-server.argocd.svc.cluster.local"
+  ARGOCD_VERIFY_SSL: "false"
   ARGOCD_PLATFORM_APPS: "control-plane-api,control-plane-ui,stoa-portal,mcp-gateway,devportal"
 
   # CORS

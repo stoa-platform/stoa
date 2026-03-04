@@ -329,6 +329,20 @@
 
 ---
 
+## Cycle 12 (Mar 3+) — CURRENT
+
+**Theme**: HEGEMON Runtime Integration + Gateway Hardening + Observability
+
+### Done
+
+- [x] CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398 (2 files, 430 LOC). 17 PrometheusRule alerts + AlertManagerConfig. Gap-fill: portal/console, LLM cost, auth anomaly, SLO burn-rate, rollout
+- [x] CAB-1637: API/MCP Discovery — Smart Connector Catalog (13 pts) — PR #1397 (2 files, ~250 LOC). 12 EU APIs + MCP endpoints, auto-detect, search. 21 tests
+- [x] CAB-1634: RBAC Taxonomy v2 (21 pts) — PR #1396 (6 files, ~380 LOC). 32 permissions, 4 domains, RBACContext, 57 tests
+- [x] CAB-1635: OTel Distributed Tracing (21 pts) — PR #1391. Per-tenant spans
+- [x] CAB-1636: [MEGA] HEGEMON Runtime × STOA Gateway Integration (28 pts) — PR #1393 (18 files, 2687 LOC). Supervision middleware, MCP Server v0, Grafana dashboard, integration tests | `instance:mcp`
+
+---
+
 ## Milestones
 
 | Date | Event | Gate |

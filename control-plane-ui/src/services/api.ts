@@ -171,6 +171,17 @@ class ApiService {
     return this.client.delete<T>(url);
   }
 
+  // User profile
+  async getMe(): Promise<{
+    roles: string[];
+    permissions: string[];
+    role_display_names?: Record<string, string>;
+    tenant_id?: string;
+  }> {
+    const { data } = await this.client.get('/v1/me');
+    return data;
+  }
+
   // Tenants
   async getTenants(): Promise<Tenant[]> {
     const { data } = await this.client.get('/v1/tenants');

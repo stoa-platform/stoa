@@ -763,3 +763,35 @@ class TestGetConsumerQuota:
         data = resp.json()
         assert data["usage"]["daily"] == 150
         assert data["usage"]["monthly"] == 4500
+
+
+# ============== Environment Filter (CAB-1665) ==============
+
+
+class TestListConsumersEnvironmentFilter:
+    """GET /v1/consumers/{tenant_id}?environment= — CAB-1665."""
+
+    def test_environment_param_passed_to_repo(self, app_with_tenant_admin, mock_db_session):
+        """When environment is provided, it is forwarded to the repository."""
+        mock_repo = MagicMock()
+        mock_repo.list_by_tenant = AsyncMock(return_value=([], 0))
+
+        with patch(REPO_PATH, return_value=mock_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/consumers/acme?environment=staging")
+
+        assert resp.status_code == 200
+        mock_repo.list_by_tenant.assert_called_once()
+        call_kwargs = mock_repo.list_by_tenant.call_args[1]
+        assert call_kwargs["environment"] == "staging"
+
+    def test_no_environment_param_passes_none(self, app_with_tenant_admin, mock_db_session):
+        """When environment is omitted, None is forwarded (returns all)."""
+        mock_repo = MagicMock()
+        mock_repo.list_by_tenant = AsyncMock(return_value=([], 0))
+
+        with patch(REPO_PATH, return_value=mock_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/consumers/acme")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_repo.list_by_tenant.call_args[1]
+        assert call_kwargs["environment"] is None

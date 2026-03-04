@@ -46,13 +46,21 @@ class SubscriptionRepository:
         return result.scalar_one_or_none()
 
     async def list_by_subscriber(
-        self, subscriber_id: str, status: SubscriptionStatus | None = None, page: int = 1, page_size: int = 20
+        self,
+        subscriber_id: str,
+        status: SubscriptionStatus | None = None,
+        page: int = 1,
+        page_size: int = 20,
+        environment: str | None = None,
     ) -> tuple[list[Subscription], int]:
         """List subscriptions for a subscriber with pagination"""
         query = select(Subscription).where(Subscription.subscriber_id == subscriber_id)
 
         if status:
             query = query.where(Subscription.status == status)
+
+        if environment is not None:
+            query = query.where(Subscription.environment == environment)
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
@@ -69,13 +77,21 @@ class SubscriptionRepository:
         return list(subscriptions), total
 
     async def list_by_tenant(
-        self, tenant_id: str, status: SubscriptionStatus | None = None, page: int = 1, page_size: int = 20
+        self,
+        tenant_id: str,
+        status: SubscriptionStatus | None = None,
+        page: int = 1,
+        page_size: int = 20,
+        environment: str | None = None,
     ) -> tuple[list[Subscription], int]:
         """List subscriptions for a tenant with pagination"""
         query = select(Subscription).where(Subscription.tenant_id == tenant_id)
 
         if status:
             query = query.where(Subscription.status == status)
+
+        if environment is not None:
+            query = query.where(Subscription.environment == environment)
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())

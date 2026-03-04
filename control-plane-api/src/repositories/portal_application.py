@@ -40,11 +40,14 @@ class PortalApplicationRepository:
         status: PortalAppStatus | None = None,
         page: int = 1,
         page_size: int = 20,
+        environment: str | None = None,
     ) -> tuple[list[PortalApplication], int]:
         """List applications by owner with optional status filter and pagination."""
         conditions = [PortalApplication.owner_id == owner_id]
         if status:
             conditions.append(PortalApplication.status == status)
+        if environment is not None:
+            conditions.append(PortalApplication.environment == environment)
 
         # Count
         count_stmt = select(func.count()).select_from(PortalApplication).where(and_(*conditions))

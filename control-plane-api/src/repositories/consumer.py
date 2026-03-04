@@ -69,12 +69,16 @@ class ConsumerRepository:
         search: str | None = None,
         page: int = 1,
         page_size: int = 20,
+        environment: str | None = None,
     ) -> tuple[list[Consumer], int]:
         """List consumers for a tenant with pagination and optional filtering."""
         query = select(Consumer).where(Consumer.tenant_id == tenant_id)
 
         if status:
             query = query.where(Consumer.status == status)
+
+        if environment is not None:
+            query = query.where(Consumer.environment == environment)
 
         if search and search.strip():
             search_term = escape_like(search.strip())

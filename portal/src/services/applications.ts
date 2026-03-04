@@ -11,6 +11,7 @@ export interface ListApplicationsParams {
   page?: number;
   pageSize?: number;
   status?: 'active' | 'suspended';
+  environment?: string;
 }
 
 export const applicationsService = {
@@ -25,6 +26,7 @@ export const applicationsService = {
         page: params?.page || 1,
         page_size: params?.pageSize || 20,
         status: params?.status,
+        environment: params?.environment,
       },
     });
     return response.data;

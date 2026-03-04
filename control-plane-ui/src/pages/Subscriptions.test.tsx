@@ -12,6 +12,15 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 
+vi.mock('../contexts/EnvironmentContext', () => ({
+  useEnvironment: vi.fn(() => ({
+    activeEnvironment: null,
+    activeConfig: null,
+    environments: [],
+    switchEnvironment: vi.fn(),
+  })),
+}));
+
 const mockGetSubscriptions = vi.fn().mockResolvedValue({
   items: [
     {

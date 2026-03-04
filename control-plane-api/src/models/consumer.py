@@ -77,6 +77,9 @@ class Consumer(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Environment scoping (CAB-1665)
+    environment = Column(String(50), nullable=True)
+
     # Audit
     created_by = Column(String(255), nullable=True)
 

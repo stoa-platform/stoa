@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 import { Plus } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { Button } from '@stoa/shared/components/Button';
@@ -15,6 +16,7 @@ const PAGE_SIZE = 12;
 
 export function Applications() {
   const { isReady } = useAuth();
+  const { activeEnvironment } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [applications, setApplications] = useState<Application[]>([]);
@@ -57,7 +59,7 @@ export function Applications() {
       // Parallel loading for better performance
       loadTenantData(selectedTenant);
     }
-  }, [selectedTenant]);
+  }, [selectedTenant, activeEnvironment]);
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -72,7 +74,7 @@ export function Applications() {
 
       // Load applications and APIs in parallel for faster performance
       const [appsData, apisData] = await Promise.all([
-        apiService.getApplications(tenantId).catch((err) => {
+        apiService.getApplications(tenantId, activeEnvironment || undefined).catch((err) => {
           console.error('Failed to load applications:', err);
           return [] as Application[];
         }),

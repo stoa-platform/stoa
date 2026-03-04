@@ -185,6 +185,7 @@ async def list_my_subscriptions(
     status: SubscriptionStatusEnum | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    environment: str | None = Query(None, description="Filter by environment"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -201,6 +202,7 @@ async def list_my_subscriptions(
         status=db_status,
         page=page,
         page_size=page_size,
+        environment=environment,
     )
 
     return SubscriptionListResponse(
@@ -508,6 +510,7 @@ async def list_tenant_subscriptions(
     status: SubscriptionStatusEnum | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    environment: str | None = Query(None, description="Filter by environment"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -527,6 +530,7 @@ async def list_tenant_subscriptions(
         status=db_status,
         page=page,
         page_size=page_size,
+        environment=environment,
     )
 
     return SubscriptionListResponse(

@@ -33,7 +33,11 @@ class Settings(BaseSettings):
     # Keycloak Admin API (for Service Account management)
     # Uses a dedicated admin client with realm-management roles
     KEYCLOAK_ADMIN_CLIENT_ID: str = "admin-cli"
-    KEYCLOAK_ADMIN_CLIENT_SECRET: str = ""
+    # Accepts KEYCLOAK_ADMIN_CLIENT_SECRET or KEYCLOAK_ADMIN_PASSWORD env var
+    KEYCLOAK_ADMIN_CLIENT_SECRET: str = os.getenv(
+        "KEYCLOAK_ADMIN_CLIENT_SECRET",
+        os.getenv("KEYCLOAK_ADMIN_PASSWORD", ""),
+    )
 
     # Slack Notifications (CAB-1413 — deployment event fanout)
     SLACK_WEBHOOK_URL: str = ""  # Incoming webhook URL (fallback)

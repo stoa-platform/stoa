@@ -88,9 +88,9 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Gateway Instances')).toBeInTheDocument();
+        expect(screen.getByText('STOA Edge MCP')).toBeInTheDocument();
+        expect(screen.getByText('Kong DB-less')).toBeInTheDocument();
       });
-      expect(screen.getByText('STOA Edge MCP')).toBeInTheDocument();
-      expect(screen.getByText('Kong DB-less')).toBeInTheDocument();
     });
 
     it('renders cross-tenant traffic section (admin-only)', async () => {
@@ -98,9 +98,9 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Cross-Tenant Traffic')).toBeInTheDocument();
+        expect(screen.getByText('Unique Tenants')).toBeInTheDocument();
+        expect(screen.getByText('Cross-Tenant Calls')).toBeInTheDocument();
       });
-      expect(screen.getByText('Unique Tenants')).toBeInTheDocument();
-      expect(screen.getByText('Cross-Tenant Calls')).toBeInTheDocument();
     });
 
     it('renders policy enforcement section', async () => {
@@ -223,9 +223,9 @@ describe('ProxyOwnerDashboard', () => {
 
         await waitFor(() => {
           expect(screen.getByText('Gateway Instances')).toBeInTheDocument();
+          expect(screen.getByText('Gateways Online')).toBeInTheDocument();
+          expect(screen.getByText('Policy Enforcement')).toBeInTheDocument();
         });
-        expect(screen.getByText('Gateways Online')).toBeInTheDocument();
-        expect(screen.getByText('Policy Enforcement')).toBeInTheDocument();
       });
     }
   );

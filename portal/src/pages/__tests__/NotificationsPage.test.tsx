@@ -76,125 +76,125 @@ const sampleNotifications = [
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'NotificationsPage — %s persona',
   (role) => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock(role));
-    mockNotificationsData.mockReturnValue({
-      notifications: sampleNotifications,
-      unread_count: 1,
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockAuth.mockReturnValue(createAuthMock(role));
+      mockNotificationsData.mockReturnValue({
+        notifications: sampleNotifications,
+        unread_count: 1,
+      });
+      mockMarkAllIsPending.mockReturnValue(false);
     });
-    mockMarkAllIsPending.mockReturnValue(false);
-  });
 
-  it('renders the page heading and subtitle', async () => {
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Notifications')).toBeInTheDocument();
+    it('renders the page heading and subtitle', async () => {
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Notifications')).toBeInTheDocument();
+      });
+      expect(screen.getByText('1 unread')).toBeInTheDocument();
     });
-    expect(screen.getByText('1 unread')).toBeInTheDocument();
-  });
 
-  it('shows "All caught up" when no unread', async () => {
-    mockNotificationsData.mockReturnValue({
-      notifications: [sampleNotifications[1]],
-      unread_count: 0,
+    it('shows "All caught up" when no unread', async () => {
+      mockNotificationsData.mockReturnValue({
+        notifications: [sampleNotifications[1]],
+        unread_count: 0,
+      });
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('All caught up')).toBeInTheDocument();
+      });
     });
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('All caught up')).toBeInTheDocument();
-    });
-  });
 
-  it('renders notification items', async () => {
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('API v2 Released')).toBeInTheDocument();
+    it('renders notification items', async () => {
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('API v2 Released')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Subscription Expiring')).toBeInTheDocument();
+      expect(screen.getByText('API Update')).toBeInTheDocument();
     });
-    expect(screen.getByText('Subscription Expiring')).toBeInTheDocument();
-    expect(screen.getByText('API Update')).toBeInTheDocument();
-  });
 
-  it('shows Mark all read button when unread > 0', async () => {
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Mark all read')).toBeInTheDocument();
+    it('shows Mark all read button when unread > 0', async () => {
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Mark all read')).toBeInTheDocument();
+      });
     });
-  });
 
-  it('hides Mark all read button when no unread', async () => {
-    mockNotificationsData.mockReturnValue({
-      notifications: [sampleNotifications[1]],
-      unread_count: 0,
+    it('hides Mark all read button when no unread', async () => {
+      mockNotificationsData.mockReturnValue({
+        notifications: [sampleNotifications[1]],
+        unread_count: 0,
+      });
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Notifications')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Mark all read')).not.toBeInTheDocument();
     });
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Notifications')).toBeInTheDocument();
-    });
-    expect(screen.queryByText('Mark all read')).not.toBeInTheDocument();
-  });
 
-  it('shows empty state when no notifications', async () => {
-    mockNotificationsData.mockReturnValue({ notifications: [], unread_count: 0 });
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('No notifications yet')).toBeInTheDocument();
+    it('shows empty state when no notifications', async () => {
+      mockNotificationsData.mockReturnValue({ notifications: [], unread_count: 0 });
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('No notifications yet')).toBeInTheDocument();
+      });
     });
-  });
 
-  it('shows filter tabs', async () => {
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('All')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Unread (1)')).toBeInTheDocument();
-  });
-
-  it('filters to unread on tab click', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
+    it('shows filter tabs', async () => {
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('All')).toBeInTheDocument();
+      });
       expect(screen.getByText('Unread (1)')).toBeInTheDocument();
     });
-    await user.click(screen.getByText('Unread (1)'));
-    expect(screen.getByText('API v2 Released')).toBeInTheDocument();
-    expect(screen.queryByText('Subscription Expiring')).not.toBeInTheDocument();
-  });
 
-  it('shows Mark read button on unread notifications', async () => {
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Mark read')).toBeInTheDocument();
+    it('filters to unread on tab click', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Unread (1)')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('Unread (1)'));
+      expect(screen.getByText('API v2 Released')).toBeInTheDocument();
+      expect(screen.queryByText('Subscription Expiring')).not.toBeInTheDocument();
     });
-  });
 
-  it('calls markAsRead on button click', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Mark read')).toBeInTheDocument();
+    it('shows Mark read button on unread notifications', async () => {
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Mark read')).toBeInTheDocument();
+      });
     });
-    await user.click(screen.getByText('Mark read'));
-    expect(mockMarkAsRead).toHaveBeenCalledWith('n1');
-  });
 
-  it('calls markAllAsRead on button click', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<NotificationsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Mark all read')).toBeInTheDocument();
+    it('calls markAsRead on button click', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Mark read')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('Mark read'));
+      expect(mockMarkAsRead).toHaveBeenCalledWith('n1');
     });
-    await user.click(screen.getByText('Mark all read'));
-    expect(mockMarkAllAsRead).toHaveBeenCalled();
-  });
 
-  it('returns null when not authenticated', () => {
-    mockAuth.mockReturnValue({
-      ...createAuthMock('cpi-admin'),
-      isAuthenticated: false,
-      isLoading: false,
+    it('calls markAllAsRead on button click', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<NotificationsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Mark all read')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('Mark all read'));
+      expect(mockMarkAllAsRead).toHaveBeenCalled();
     });
-    const { container } = renderWithProviders(<NotificationsPage />);
-    expect(container.innerHTML).toBe('');
-  });
 
-});
+    it('returns null when not authenticated', () => {
+      mockAuth.mockReturnValue({
+        ...createAuthMock('cpi-admin'),
+        isAuthenticated: false,
+        isLoading: false,
+      });
+      const { container } = renderWithProviders(<NotificationsPage />);
+      expect(container.innerHTML).toBe('');
+    });
+  }
+);

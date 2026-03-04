@@ -41,293 +41,296 @@ vi.mock('../../components/skeletons', () => ({
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'MCPServersPage — %s persona',
   (role) => {
-  let MCPServersPage: React.ComponentType;
-  let mcpServersService: Record<string, ReturnType<typeof vi.fn>>;
-  let mockGetVisibleServers: ReturnType<typeof vi.fn>;
-  let mockFilterServersByRole: ReturnType<typeof vi.fn>;
-  let mockGetMyServerSubscriptions: ReturnType<typeof vi.fn>;
+    let MCPServersPage: React.ComponentType;
+    let mcpServersService: Record<string, ReturnType<typeof vi.fn>>;
+    let mockGetVisibleServers: ReturnType<typeof vi.fn>;
+    let mockFilterServersByRole: ReturnType<typeof vi.fn>;
+    let mockGetMyServerSubscriptions: ReturnType<typeof vi.fn>;
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock(role));
+    beforeEach(async () => {
+      vi.clearAllMocks();
+      mockAuth.mockReturnValue(createAuthMock(role));
 
-    // Dynamic import to get mocked module
-    const pageModule = await import('../servers/MCPServersPage');
-    MCPServersPage = pageModule.MCPServersPage;
+      // Dynamic import to get mocked module
+      const pageModule = await import('../servers/MCPServersPage');
+      MCPServersPage = pageModule.MCPServersPage;
 
-    const serviceModule = await import('../../services/mcpServers');
-    mcpServersService = serviceModule.mcpServersService;
-    mockGetVisibleServers = vi.mocked(mcpServersService.getVisibleServers);
-    mockFilterServersByRole = vi.mocked(mcpServersService.filterServersByRole);
-    mockGetMyServerSubscriptions = vi.mocked(mcpServersService.getMyServerSubscriptions);
+      const serviceModule = await import('../../services/mcpServers');
+      mcpServersService = serviceModule.mcpServersService;
+      mockGetVisibleServers = vi.mocked(mcpServersService.getVisibleServers);
+      mockFilterServersByRole = vi.mocked(mcpServersService.filterServersByRole);
+      mockGetMyServerSubscriptions = vi.mocked(mcpServersService.getMyServerSubscriptions);
 
-    // Default mocks
-    mockGetMyServerSubscriptions.mockResolvedValue([]);
-    mockGetVisibleServers.mockResolvedValue([]); // Default to empty array
-    mockFilterServersByRole.mockReturnValue([]);
-  });
-
-  const createMockServers = (): MCPServer[] => [
-    mockMCPServer({
-      id: 'server-platform',
-      name: 'stoa-platform',
-      displayName: 'STOA Platform Tools',
-      category: 'platform',
-      tools: [
-        {
-          id: 'tool-1',
-          name: 'list-apis',
-          displayName: 'List APIs',
-          description: 'List all APIs',
-          enabled: true,
-          requires_approval: false,
-        },
-        {
-          id: 'tool-2',
-          name: 'create-api',
-          displayName: 'Create API',
-          description: 'Register API',
-          enabled: true,
-          requires_approval: true,
-        },
-      ],
-      visibility: { roles: ['cpi-admin', 'tenant-admin', 'devops'], public: false },
-    }),
-    mockMCPServer({
-      id: 'server-tenant',
-      name: 'crm-apis',
-      displayName: 'CRM Integration',
-      category: 'tenant',
-      tools: [
-        {
-          id: 'tool-3',
-          name: 'customer-search',
-          displayName: 'Search Customers',
-          description: 'Search customers',
-          enabled: true,
-          requires_approval: false,
-        },
-      ],
-      visibility: { public: true },
-    }),
-    mockMCPServer({
-      id: 'server-public',
-      name: 'public-tools',
-      displayName: 'Public Tools',
-      category: 'public',
-      tools: [
-        {
-          id: 'tool-4',
-          name: 'weather',
-          displayName: 'Weather',
-          description: 'Get weather',
-          enabled: true,
-          requires_approval: false,
-        },
-      ],
-      visibility: { public: true },
-    }),
-  ];
-
-  it('renders "AI Tools" heading', async () => {
-    mockGetVisibleServers.mockResolvedValue([]);
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('AI Tools')).toBeInTheDocument();
+      // Default mocks
+      mockGetMyServerSubscriptions.mockResolvedValue([]);
+      mockGetVisibleServers.mockResolvedValue([]); // Default to empty array
+      mockFilterServersByRole.mockReturnValue([]);
     });
-  });
 
-  it('shows loading state with skeleton grid', () => {
-    mockGetVisibleServers.mockImplementation(() => new Promise(() => {})); // Never resolves
+    const createMockServers = (): MCPServer[] => [
+      mockMCPServer({
+        id: 'server-platform',
+        name: 'stoa-platform',
+        displayName: 'STOA Platform Tools',
+        category: 'platform',
+        tools: [
+          {
+            id: 'tool-1',
+            name: 'list-apis',
+            displayName: 'List APIs',
+            description: 'List all APIs',
+            enabled: true,
+            requires_approval: false,
+          },
+          {
+            id: 'tool-2',
+            name: 'create-api',
+            displayName: 'Create API',
+            description: 'Register API',
+            enabled: true,
+            requires_approval: true,
+          },
+        ],
+        visibility: { roles: ['cpi-admin', 'tenant-admin', 'devops'], public: false },
+      }),
+      mockMCPServer({
+        id: 'server-tenant',
+        name: 'crm-apis',
+        displayName: 'CRM Integration',
+        category: 'tenant',
+        tools: [
+          {
+            id: 'tool-3',
+            name: 'customer-search',
+            displayName: 'Search Customers',
+            description: 'Search customers',
+            enabled: true,
+            requires_approval: false,
+          },
+        ],
+        visibility: { public: true },
+      }),
+      mockMCPServer({
+        id: 'server-public',
+        name: 'public-tools',
+        displayName: 'Public Tools',
+        category: 'public',
+        tools: [
+          {
+            id: 'tool-4',
+            name: 'weather',
+            displayName: 'Weather',
+            description: 'Get weather',
+            enabled: true,
+            requires_approval: false,
+          },
+        ],
+        visibility: { public: true },
+      }),
+    ];
 
-    renderWithProviders(<MCPServersPage />);
+    it('renders "AI Tools" heading', async () => {
+      mockGetVisibleServers.mockResolvedValue([]);
 
-    expect(screen.getByTestId('server-skeleton-grid')).toBeInTheDocument();
-    expect(screen.getByText(/Loading 6 servers/)).toBeInTheDocument();
-  });
+      renderWithProviders(<MCPServersPage />);
 
-  it('shows error state with "Try Again" button', async () => {
-    mockGetVisibleServers.mockRejectedValue(new Error('Network error'));
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Failed to load servers')).toBeInTheDocument();
-      expect(screen.getByText('Network error')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Try Again/i })).toBeInTheDocument();
-    });
-  });
-
-  it('shows empty state when no servers match filters', async () => {
-    mockGetVisibleServers.mockResolvedValue([]);
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('No AI Tools Found')).toBeInTheDocument();
-    });
-  });
-
-  it('shows or hides "Admin Access" notice based on role', async () => {
-    const isAdmin = role !== 'viewer';
-    const servers = isAdmin
-      ? createMockServers()
-      : createMockServers().filter((s) => s.category !== 'platform');
-    mockGetVisibleServers.mockResolvedValue(servers);
-
-    renderWithProviders(<MCPServersPage />);
-
-    if (isAdmin) {
       await waitFor(() => {
-        expect(screen.getByText('Admin Access')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Platform Tools/i })).toBeInTheDocument();
+        expect(screen.getByText('AI Tools')).toBeInTheDocument();
       });
-    } else {
-      await waitFor(() => {
-        expect(screen.queryByText('Admin Access')).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /Platform Tools/i })).not.toBeInTheDocument();
-      });
-    }
-  });
-
-  it('renders category tabs: All, Platform (admin), Tenant, Public with counts', async () => {
-    const isAdmin = role !== 'viewer';
-    const servers = isAdmin
-      ? createMockServers()
-      : createMockServers().filter((s) => s.category !== 'platform');
-    mockGetVisibleServers.mockResolvedValue(servers);
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /All Tools/i })).toBeInTheDocument();
-      if (isAdmin) {
-        expect(screen.getByRole('button', { name: /Platform Tools/i })).toBeInTheDocument();
-      }
-      expect(screen.getByRole('button', { name: /Tenant Tools/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Public Tools/i })).toBeInTheDocument();
-    });
-  });
-
-  it('search input exists with placeholder "Search AI tools..."', async () => {
-    mockGetVisibleServers.mockResolvedValue([]);
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      const searchInput = screen.getByPlaceholderText('Search AI tools...');
-      expect(searchInput).toBeInTheDocument();
-    });
-  });
-
-  it('server cards show displayName, description, tools count', async () => {
-    const servers = createMockServers();
-    mockGetVisibleServers.mockResolvedValue(servers);
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      // Check server names via links (more specific than text search)
-      expect(screen.getByRole('link', { name: /STOA Platform Tools/i })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /CRM Integration/i })).toBeInTheDocument();
-
-      // Check tools count
-      expect(screen.getByText('2 tools')).toBeInTheDocument(); // Platform server
-      expect(screen.getAllByText('1 tools')).toHaveLength(2); // CRM + Public servers
-    });
-  });
-
-  it('shows "Subscribed" badge on subscribed servers', async () => {
-    const servers = createMockServers();
-    mockGetVisibleServers.mockResolvedValue(servers);
-    mockGetMyServerSubscriptions.mockResolvedValue([
-      {
-        id: 'sub-1',
-        server_id: 'server-tenant',
-        server: servers[1],
-        tenant_id: 'oasis-gunters',
-        user_id: 'user-parzival',
-        status: 'active',
-        plan: 'free',
-        tool_access: [],
-        api_key_prefix: 'stoa_sk_test',
-        created_at: '2026-01-20T00:00:00Z',
-      },
-    ]);
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Subscribed')).toBeInTheDocument();
-    });
-  });
-
-  it('refresh button exists and triggers reload', async () => {
-    const user = userEvent.setup();
-    const servers = createMockServers();
-    // First call resolves (initial load), second call never resolves (refresh stays loading)
-    mockGetVisibleServers
-      .mockResolvedValueOnce(servers)
-      .mockImplementation(() => new Promise(() => {}));
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Refresh/i })).toBeInTheDocument();
     });
 
-    const refreshButton = screen.getByRole('button', { name: /Refresh/i });
-    await user.click(refreshButton);
+    it('shows loading state with skeleton grid', () => {
+      mockGetVisibleServers.mockImplementation(() => new Promise(() => {})); // Never resolves
 
-    // Should trigger loading state
-    await waitFor(() => {
+      renderWithProviders(<MCPServersPage />);
+
       expect(screen.getByTestId('server-skeleton-grid')).toBeInTheDocument();
-    });
-  });
-
-  it('filters servers by search query', async () => {
-    const user = userEvent.setup();
-    const servers = createMockServers();
-    mockGetVisibleServers.mockResolvedValue(servers);
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('STOA Platform Tools')).toBeInTheDocument();
-      expect(screen.getByText('CRM Integration')).toBeInTheDocument();
+      expect(screen.getByText(/Loading 6 servers/)).toBeInTheDocument();
     });
 
-    const searchInput = screen.getByPlaceholderText('Search AI tools...');
-    await user.type(searchInput, 'CRM');
+    it('shows error state with "Try Again" button', async () => {
+      mockGetVisibleServers.mockRejectedValue(new Error('Network error'));
 
-    await waitFor(() => {
-      expect(screen.getByText('CRM Integration')).toBeInTheDocument();
-      expect(screen.queryByText('STOA Platform Tools')).not.toBeInTheDocument();
-    });
-  });
+      renderWithProviders(<MCPServersPage />);
 
-  it('filters servers by category tab', async () => {
-    const user = userEvent.setup();
-    const servers = createMockServers();
-    mockGetVisibleServers.mockResolvedValue(servers);
-
-    renderWithProviders(<MCPServersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('link', { name: /STOA Platform Tools/i })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /CRM Integration/i })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Failed to load servers')).toBeInTheDocument();
+        expect(screen.getByText('Network error')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Try Again/i })).toBeInTheDocument();
+      });
     });
 
-    const tenantTab = screen.getByRole('button', { name: /Tenant Tools/i });
-    await user.click(tenantTab);
+    it('shows empty state when no servers match filters', async () => {
+      mockGetVisibleServers.mockResolvedValue([]);
 
-    await waitFor(() => {
-      // After clicking Tenant tab, only tenant category servers should be visible
-      expect(screen.getByRole('link', { name: /CRM Integration/i })).toBeInTheDocument();
-      // Platform server link should not be visible
-      expect(screen.queryByRole('link', { name: /STOA Platform Tools/i })).not.toBeInTheDocument();
+      renderWithProviders(<MCPServersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('No AI Tools Found')).toBeInTheDocument();
+      });
     });
-  });
-});
+
+    it('shows or hides "Admin Access" notice based on role', async () => {
+      const isAdmin = role !== 'viewer';
+      const servers = isAdmin
+        ? createMockServers()
+        : createMockServers().filter((s) => s.category !== 'platform');
+      mockGetVisibleServers.mockResolvedValue(servers);
+
+      renderWithProviders(<MCPServersPage />);
+
+      if (isAdmin) {
+        await waitFor(() => {
+          expect(screen.getByText('Admin Access')).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: /Platform Tools/i })).toBeInTheDocument();
+        });
+      } else {
+        await waitFor(() => {
+          expect(screen.queryByText('Admin Access')).not.toBeInTheDocument();
+          expect(screen.queryByRole('button', { name: /Platform Tools/i })).not.toBeInTheDocument();
+        });
+      }
+    });
+
+    it('renders category tabs: All, Platform (admin), Tenant, Public with counts', async () => {
+      const isAdmin = role !== 'viewer';
+      const servers = isAdmin
+        ? createMockServers()
+        : createMockServers().filter((s) => s.category !== 'platform');
+      mockGetVisibleServers.mockResolvedValue(servers);
+
+      renderWithProviders(<MCPServersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /All Tools/i })).toBeInTheDocument();
+        if (isAdmin) {
+          expect(screen.getByRole('button', { name: /Platform Tools/i })).toBeInTheDocument();
+        }
+        expect(screen.getByRole('button', { name: /Tenant Tools/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Public Tools/i })).toBeInTheDocument();
+      });
+    });
+
+    it('search input exists with placeholder "Search AI tools..."', async () => {
+      mockGetVisibleServers.mockResolvedValue([]);
+
+      renderWithProviders(<MCPServersPage />);
+
+      await waitFor(() => {
+        const searchInput = screen.getByPlaceholderText('Search AI tools...');
+        expect(searchInput).toBeInTheDocument();
+      });
+    });
+
+    it('server cards show displayName, description, tools count', async () => {
+      const servers = createMockServers();
+      mockGetVisibleServers.mockResolvedValue(servers);
+
+      renderWithProviders(<MCPServersPage />);
+
+      await waitFor(() => {
+        // Check server names via links (more specific than text search)
+        expect(screen.getByRole('link', { name: /STOA Platform Tools/i })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /CRM Integration/i })).toBeInTheDocument();
+
+        // Check tools count
+        expect(screen.getByText('2 tools')).toBeInTheDocument(); // Platform server
+        expect(screen.getAllByText('1 tools')).toHaveLength(2); // CRM + Public servers
+      });
+    });
+
+    it('shows "Subscribed" badge on subscribed servers', async () => {
+      const servers = createMockServers();
+      mockGetVisibleServers.mockResolvedValue(servers);
+      mockGetMyServerSubscriptions.mockResolvedValue([
+        {
+          id: 'sub-1',
+          server_id: 'server-tenant',
+          server: servers[1],
+          tenant_id: 'oasis-gunters',
+          user_id: 'user-parzival',
+          status: 'active',
+          plan: 'free',
+          tool_access: [],
+          api_key_prefix: 'stoa_sk_test',
+          created_at: '2026-01-20T00:00:00Z',
+        },
+      ]);
+
+      renderWithProviders(<MCPServersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Subscribed')).toBeInTheDocument();
+      });
+    });
+
+    it('refresh button exists and triggers reload', async () => {
+      const user = userEvent.setup();
+      const servers = createMockServers();
+      // First call resolves (initial load), second call never resolves (refresh stays loading)
+      mockGetVisibleServers
+        .mockResolvedValueOnce(servers)
+        .mockImplementation(() => new Promise(() => {}));
+
+      renderWithProviders(<MCPServersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Refresh/i })).toBeInTheDocument();
+      });
+
+      const refreshButton = screen.getByRole('button', { name: /Refresh/i });
+      await user.click(refreshButton);
+
+      // Should trigger loading state
+      await waitFor(() => {
+        expect(screen.getByTestId('server-skeleton-grid')).toBeInTheDocument();
+      });
+    });
+
+    it('filters servers by search query', async () => {
+      const user = userEvent.setup();
+      const servers = createMockServers();
+      mockGetVisibleServers.mockResolvedValue(servers);
+
+      renderWithProviders(<MCPServersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('STOA Platform Tools')).toBeInTheDocument();
+        expect(screen.getByText('CRM Integration')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText('Search AI tools...');
+      await user.type(searchInput, 'CRM');
+
+      await waitFor(() => {
+        expect(screen.getByText('CRM Integration')).toBeInTheDocument();
+        expect(screen.queryByText('STOA Platform Tools')).not.toBeInTheDocument();
+      });
+    });
+
+    it('filters servers by category tab', async () => {
+      const user = userEvent.setup();
+      const servers = createMockServers();
+      mockGetVisibleServers.mockResolvedValue(servers);
+
+      renderWithProviders(<MCPServersPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('link', { name: /STOA Platform Tools/i })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /CRM Integration/i })).toBeInTheDocument();
+      });
+
+      const tenantTab = screen.getByRole('button', { name: /Tenant Tools/i });
+      await user.click(tenantTab);
+
+      await waitFor(() => {
+        // After clicking Tenant tab, only tenant category servers should be visible
+        expect(screen.getByRole('link', { name: /CRM Integration/i })).toBeInTheDocument();
+        // Platform server link should not be visible
+        expect(
+          screen.queryByRole('link', { name: /STOA Platform Tools/i })
+        ).not.toBeInTheDocument();
+      });
+    });
+  }
+);

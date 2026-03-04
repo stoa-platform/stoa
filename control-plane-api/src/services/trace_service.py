@@ -1,7 +1,8 @@
 """Service for managing pipeline traces in PostgreSQL."""
+
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,12 +18,7 @@ class TraceService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(
-        self,
-        trigger_type: str,
-        trigger_source: str,
-        **kwargs
-    ) -> PipelineTraceDB:
+    async def create(self, trigger_type: str, trigger_source: str, **kwargs) -> PipelineTraceDB:
         """Create a new pipeline trace."""
         trace = PipelineTraceDB(
             id=str(uuid.uuid4()),
@@ -30,7 +26,7 @@ class TraceService:
             trigger_source=trigger_source,
             status=TraceStatusDB.IN_PROGRESS,
             steps=[],
-            **kwargs
+            **kwargs,
         )
         self.session.add(trace)
         await self.session.commit()
@@ -40,9 +36,7 @@ class TraceService:
 
     async def get(self, trace_id: str) -> PipelineTraceDB | None:
         """Get a trace by ID."""
-        result = await self.session.execute(
-            select(PipelineTraceDB).where(PipelineTraceDB.id == trace_id)
-        )
+        result = await self.session.execute(select(PipelineTraceDB).where(PipelineTraceDB.id == trace_id))
         return result.scalar_one_or_none()
 
     async def update(self, trace: PipelineTraceDB) -> PipelineTraceDB:
@@ -58,7 +52,7 @@ class TraceService:
         status: str = "pending",
         details: dict | None = None,
         error: str | None = None,
-        duration_ms: int | None = None
+        duration_ms: int | None = None,
     ) -> PipelineTraceDB:
         """Add a step to the trace."""
         step = {
@@ -84,7 +78,7 @@ class TraceService:
         status: str,
         details: dict | None = None,
         error: str | None = None,
-        duration_ms: int | None = None
+        duration_ms: int | None = None,
     ) -> PipelineTraceDB:
         """Update a step in the trace."""
         steps = list(trace.steps)
@@ -104,18 +98,13 @@ class TraceService:
         return trace
 
     async def complete(
-        self,
-        trace: PipelineTraceDB,
-        status: TraceStatusDB = TraceStatusDB.SUCCESS,
-        error_summary: str | None = None
+        self, trace: PipelineTraceDB, status: TraceStatusDB = TraceStatusDB.SUCCESS, error_summary: str | None = None
     ) -> PipelineTraceDB:
         """Mark trace as completed."""
         trace.status = status
         trace.completed_at = datetime.now(UTC)
         if trace.created_at:
-            trace.total_duration_ms = int(
-                (trace.completed_at - trace.created_at).total_seconds() * 1000
-            )
+            trace.total_duration_ms = int((trace.completed_at - trace.created_at).total_seconds() * 1000)
         if error_summary:
             trace.error_summary = error_summary
         await self.session.commit()
@@ -148,9 +137,7 @@ class TraceService:
     async def get_stats(self) -> dict:
         """Get aggregated statistics about traces."""
         # Total count
-        total_result = await self.session.execute(
-            select(func.count(PipelineTraceDB.id))
-        )
+        total_result = await self.session.execute(select(func.count(PipelineTraceDB.id)))
         total = total_result.scalar() or 0
 
         if total == 0:
@@ -165,17 +152,13 @@ class TraceService:
         by_status = {}
         for status in TraceStatusDB:
             count_result = await self.session.execute(
-                select(func.count(PipelineTraceDB.id)).where(
-                    PipelineTraceDB.status == status
-                )
+                select(func.count(PipelineTraceDB.id)).where(PipelineTraceDB.status == status)
             )
             by_status[status.value] = count_result.scalar() or 0
 
         # Average duration
         avg_result = await self.session.execute(
-            select(func.avg(PipelineTraceDB.total_duration_ms)).where(
-                PipelineTraceDB.total_duration_ms.isnot(None)
-            )
+            select(func.avg(PipelineTraceDB.total_duration_ms)).where(PipelineTraceDB.total_duration_ms.isnot(None))
         )
         avg_duration = avg_result.scalar() or 0
 
@@ -188,6 +171,110 @@ class TraceService:
             "by_status": by_status,
             "avg_duration_ms": int(avg_duration),
             "success_rate": round(success_rate, 1),
+        }
+
+    async def get_ai_session_stats(self, days: int = 7, worker: str | None = None) -> dict:
+        """Get aggregated statistics for AI session traces."""
+        since = datetime.now(UTC) - timedelta(days=days)
+
+        base_filter = [
+            PipelineTraceDB.trigger_type == "ai-session",
+            PipelineTraceDB.created_at >= since,
+        ]
+        if worker:
+            base_filter.append(PipelineTraceDB.trigger_source == worker)
+
+        # Total sessions
+        total_result = await self.session.execute(select(func.count(PipelineTraceDB.id)).where(*base_filter))
+        total_sessions = total_result.scalar() or 0
+
+        if total_sessions == 0:
+            return {
+                "days": days,
+                "totals": {
+                    "sessions": 0,
+                    "total_duration_ms": 0,
+                    "avg_duration_ms": 0,
+                    "success_count": 0,
+                    "success_rate": 0,
+                },
+                "workers": [],
+                "daily": [],
+            }
+
+        # Totals
+        agg_result = await self.session.execute(
+            select(
+                func.count(PipelineTraceDB.id),
+                func.sum(PipelineTraceDB.total_duration_ms),
+                func.avg(PipelineTraceDB.total_duration_ms),
+            ).where(*base_filter)
+        )
+        row = agg_result.one()
+        total_count = row[0] or 0
+        total_duration = row[1] or 0
+        avg_duration = row[2] or 0
+
+        success_result = await self.session.execute(
+            select(func.count(PipelineTraceDB.id)).where(*base_filter, PipelineTraceDB.status == TraceStatusDB.SUCCESS)
+        )
+        success_count = success_result.scalar() or 0
+        success_rate = round(success_count / total_count * 100, 1) if total_count > 0 else 0
+
+        # Per-worker stats
+        worker_result = await self.session.execute(
+            select(
+                PipelineTraceDB.trigger_source,
+                func.count(PipelineTraceDB.id),
+                func.sum(PipelineTraceDB.total_duration_ms),
+                func.avg(PipelineTraceDB.total_duration_ms),
+                func.max(PipelineTraceDB.created_at),
+            )
+            .where(*base_filter)
+            .group_by(PipelineTraceDB.trigger_source)
+        )
+        workers = []
+        for w_row in worker_result.all():
+            w_name, w_count, w_total_dur, w_avg_dur, w_last = w_row
+            # Count successes per worker
+            w_success_result = await self.session.execute(
+                select(func.count(PipelineTraceDB.id)).where(
+                    *base_filter,
+                    PipelineTraceDB.trigger_source == w_name,
+                    PipelineTraceDB.status == TraceStatusDB.SUCCESS,
+                )
+            )
+            w_success = w_success_result.scalar() or 0
+            workers.append(
+                {
+                    "worker": w_name,
+                    "sessions": w_count,
+                    "total_duration_ms": int(w_total_dur or 0),
+                    "avg_duration_ms": int(w_avg_dur or 0),
+                    "success_count": w_success,
+                    "success_rate": round(w_success / w_count * 100, 1) if w_count > 0 else 0,
+                    "last_activity": w_last.isoformat() if w_last else None,
+                }
+            )
+
+        # Daily time series
+        date_col = func.date(PipelineTraceDB.created_at).label("day")
+        daily_result = await self.session.execute(
+            select(date_col, func.count(PipelineTraceDB.id)).where(*base_filter).group_by(date_col).order_by(date_col)
+        )
+        daily = [{"date": str(d_row[0]), "sessions": d_row[1]} for d_row in daily_result.all()]
+
+        return {
+            "days": days,
+            "totals": {
+                "sessions": total_count,
+                "total_duration_ms": int(total_duration),
+                "avg_duration_ms": int(avg_duration),
+                "success_count": success_count,
+                "success_rate": success_rate,
+            },
+            "workers": workers,
+            "daily": daily,
         }
 
 

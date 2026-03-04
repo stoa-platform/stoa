@@ -27,6 +27,33 @@ spec:
         - protocol: TCP
           port: 8083
 ---
+# Control Plane API → ArgoCD server (platform status, GitOps sync)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-argocd
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: stoa-system
+          podSelector:
+            matchLabels:
+              app: stoa-control-plane-api
+      ports:
+        - protocol: TCP
+          port: 8080
+---
 # ArgoCD inter-service traffic
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

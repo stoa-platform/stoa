@@ -5,7 +5,7 @@ Feature: Demo - Console Admin Path
   I want to manage applications, subscriptions, and monitor API usage
   So that I can control access to my APIs
 
-  @demo-console
+  @smoke @demo-console
   Scenario: Admin navigates console and monitors APIs
     # 7. Login Console OIDC → dashboard admin
     Given I am logged in to Console as "parzival" from team "high-five"

@@ -10,8 +10,7 @@ import { renderWithProviders, createAuthMock, type PersonaRole } from '../../tes
 vi.mock('../../config', () => ({
   config: {
     features: {
-      enableAPICatalog: true,
-      enableMCPTools: true,
+      enableMarketplace: true,
       enableSubscriptions: true,
       enableGateways: false,
     },
@@ -42,14 +41,15 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       expect(screen.getByText('Discover')).toBeInTheDocument();
     });
 
-    it('renders API Catalog nav item when feature is enabled', () => {
+    it('renders Marketplace nav item when feature is enabled', () => {
       renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.getByText('API Catalog')).toBeInTheDocument();
+      expect(screen.getByText('Marketplace')).toBeInTheDocument();
     });
 
-    it('renders AI Tools nav item when feature is enabled', () => {
+    it('does not render separate API Catalog or AI Tools nav items', () => {
       renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.getByText('AI Tools')).toBeInTheDocument();
+      expect(screen.queryByText('API Catalog')).not.toBeInTheDocument();
+      expect(screen.queryByText('AI Tools')).not.toBeInTheDocument();
     });
 
     it('renders Profile nav item (always visible)', () => {

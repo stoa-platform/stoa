@@ -58,6 +58,7 @@ jobs:
       python-version: '3.11'
       coverage-threshold: 53
       test-markers: not integration
+      runner: self-hosted
     permissions:
       contents: read
       checks: write

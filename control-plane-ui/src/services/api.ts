@@ -53,6 +53,12 @@ import type {
   CredentialMappingCreate,
   CredentialMappingUpdate,
   CredentialMappingListResponse,
+  Contract,
+  ContractCreate,
+  ContractUpdate,
+  ContractListResponse,
+  PublishContractResponse,
+  ProtocolBinding,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -1064,6 +1070,71 @@ class ApiService {
 
   async deleteCredentialMapping(tenantId: string, mappingId: string): Promise<void> {
     await this.client.delete(`/v1/tenants/${tenantId}/credential-mappings/${mappingId}`);
+  }
+
+  // ============ Contracts / UAC (CAB-1649) ============
+
+  async getContracts(tenantId: string): Promise<ContractListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/contracts`);
+    return data;
+  }
+
+  async getContract(tenantId: string, contractId: string): Promise<Contract> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/contracts/${contractId}`);
+    return data;
+  }
+
+  async createContract(tenantId: string, payload: ContractCreate): Promise<Contract> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/contracts`, payload);
+    return data;
+  }
+
+  async publishContract(tenantId: string, contractId: string): Promise<PublishContractResponse> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/contracts/${contractId}/publish`
+    );
+    return data;
+  }
+
+  async updateContract(
+    tenantId: string,
+    contractId: string,
+    payload: ContractUpdate
+  ): Promise<Contract> {
+    const { data } = await this.client.patch(
+      `/v1/tenants/${tenantId}/contracts/${contractId}`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteContract(tenantId: string, contractId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/contracts/${contractId}`);
+  }
+
+  async getContractBindings(tenantId: string, contractId: string): Promise<ProtocolBinding[]> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`
+    );
+    return data;
+  }
+
+  async enableBinding(
+    tenantId: string,
+    contractId: string,
+    protocol: string
+  ): Promise<ProtocolBinding> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`,
+      { protocol }
+    );
+    return data;
+  }
+
+  async disableBinding(tenantId: string, contractId: string, protocol: string): Promise<void> {
+    await this.client.delete(
+      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings/${protocol}`
+    );
   }
 }
 

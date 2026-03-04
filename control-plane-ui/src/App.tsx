@@ -182,6 +182,9 @@ const CredentialMappings = lazy(() =>
   import('./pages/CredentialMappings').then((m) => ({ default: m.CredentialMappings }))
 );
 
+// CAB-1649: Contracts / UAC management
+const Contracts = lazy(() => import('./pages/Contracts').then((m) => ({ default: m.Contracts })));
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -510,6 +513,7 @@ function ProtectedRoutes() {
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
                 <Route path="/webhooks" element={<Webhooks />} />
                 <Route path="/credential-mappings" element={<CredentialMappings />} />
+                <Route path="/contracts" element={<Contracts />} />
               </Routes>
             </Suspense>
           )}

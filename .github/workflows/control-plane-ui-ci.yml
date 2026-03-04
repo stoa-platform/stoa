@@ -61,6 +61,7 @@ jobs:
       run-coverage: true
       run-build: true
       upload-artifact: true
+      runner: self-hosted
     permissions:
       contents: read
       checks: write

@@ -1644,3 +1644,68 @@ export interface CredentialMappingListResponse {
   page: number;
   page_size: number;
 }
+
+// ============ Contract / UAC Types (CAB-1649) ============
+
+export type ProtocolType = 'rest' | 'mcp' | 'graphql' | 'grpc' | 'kafka';
+
+export type ContractStatus = 'draft' | 'published' | 'deprecated';
+
+export interface ProtocolBinding {
+  protocol: ProtocolType;
+  enabled: boolean;
+  endpoint: string | null;
+  playground_url: string | null;
+  tool_name: string | null;
+  operations: string[];
+  proto_file_url: string | null;
+  topic_name: string | null;
+  traffic_24h: number | null;
+}
+
+export interface Contract {
+  id: string;
+  tenant_id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+  version: string;
+  status: ContractStatus;
+  openapi_spec_url: string | null;
+  bindings: ProtocolBinding[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractCreate {
+  name: string;
+  display_name: string;
+  description?: string;
+  version: string;
+  openapi_spec_url?: string;
+  status?: ContractStatus;
+}
+
+export interface ContractUpdate {
+  display_name?: string;
+  description?: string;
+  version?: string;
+  openapi_spec_url?: string;
+  status?: ContractStatus;
+}
+
+export interface GeneratedBinding {
+  protocol: ProtocolType;
+  endpoint: string;
+  tool_name: string | null;
+}
+
+export interface PublishContractResponse {
+  contract: Contract;
+  bindings_generated: GeneratedBinding[];
+}
+
+export interface ContractListResponse {
+  items: Contract[];
+  total: number;
+}

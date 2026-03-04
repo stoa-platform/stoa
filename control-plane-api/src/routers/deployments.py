@@ -1,5 +1,6 @@
 """Deployments router — API deployment management (CAB-1353)"""
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,6 +21,8 @@ from ..schemas.deployment import (
 )
 from ..services.deployment_service import DeploymentService
 from ..services.git_service import git_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/deployments", tags=["Deployments"])
 
@@ -87,6 +90,7 @@ async def create_deployment(
     """
     api_name = request.api_name or request.api_id
     version = request.version or "1.0.0"
+    api_info = None
 
     try:
         api_info = await git_service.get_api(tenant_id, request.api_id)
@@ -108,6 +112,19 @@ async def create_deployment(
         gateway_id=request.gateway_id,
     )
     await db.commit()
+
+    # Update deployment flag in GitLab so the API appears in the environment view
+    env = request.environment.value
+    if env in ("dev", "staging"):
+        try:
+            current_api = api_info or await git_service.get_api(tenant_id, request.api_id)
+            if current_api:
+                deployments = dict(current_api.get("deployments", {}))
+                deployments[env] = True
+                await git_service.update_api(tenant_id, request.api_id, {"deployments": deployments})
+        except Exception as e:
+            logger.warning("Failed to update deployment flag in GitLab for %s: %s", request.api_id, e)
+
     return DeploymentResponse.model_validate(deployment)
 
 

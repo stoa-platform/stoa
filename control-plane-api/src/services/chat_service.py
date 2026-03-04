@@ -22,6 +22,7 @@ from ..models.chat import ChatConversation, ChatMessage
 from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
 from ..services.chat_provider import AnthropicProvider, ChatProviderProtocol
 from ..services.chat_security import (
+    CONVERSATION_TIMEOUT_HOURS,
     JAILBREAK_REFUSAL,
     build_system_prompt,
     detect_jailbreak,
@@ -59,6 +60,7 @@ class ChatService:
         provider: str = "anthropic",
         model: str = "claude-sonnet-4-20250514",
         system_prompt: str | None = None,
+        session_fingerprint: str | None = None,
     ) -> ChatConversation:
         conv = ChatConversation(
             tenant_id=tenant_id,
@@ -68,6 +70,8 @@ class ChatService:
             model=model,
             system_prompt=system_prompt,
             status="active",
+            session_fingerprint=session_fingerprint,
+            last_active_at=datetime.now(UTC),
         )
         self.session.add(conv)
         await self.session.flush()
@@ -290,6 +294,7 @@ class ChatService:
         content: str,
         api_key: str,
         user_roles: list[str] | None = None,
+        session_fingerprint: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Persist user message, call provider with agentic tool loop, persist + stream."""
 
@@ -297,6 +302,25 @@ class ChatService:
         if conv is None:
             yield {"event": "error", "data": {"error": "Conversation not found"}}
             return
+
+        # Session timeout enforcement (CAB-1653)
+        if conv.last_active_at and datetime.now(UTC) - conv.last_active_at > timedelta(
+            hours=CONVERSATION_TIMEOUT_HOURS
+        ):
+            yield {
+                "event": "error",
+                "data": {"error": "Conversation expired due to inactivity"},
+            }
+            return
+
+        # Session fingerprint mismatch warning (CAB-1653) — non-blocking in Phase 1
+        if session_fingerprint and conv.session_fingerprint and session_fingerprint != conv.session_fingerprint:
+            logger.warning(
+                "Session fingerprint mismatch: conversation=%s, expected=%s, got=%s",
+                conversation_id,
+                conv.session_fingerprint[:8],
+                session_fingerprint[:8],
+            )
 
         # Budget enforcement (CAB-288) — check before streaming
         budget = settings.CHAT_TOKEN_BUDGET_DAILY
@@ -461,9 +485,11 @@ class ChatService:
         )
         self.session.add(assistant_msg)
 
-        # Touch conversation updated_at
+        # Touch conversation updated_at + last_active_at (CAB-1653)
         await self.session.execute(
-            update(ChatConversation).where(ChatConversation.id == conv.id).values(updated_at=func.now())
+            update(ChatConversation)
+            .where(ChatConversation.id == conv.id)
+            .values(updated_at=func.now(), last_active_at=func.now())
         )
         await self.session.flush()
 

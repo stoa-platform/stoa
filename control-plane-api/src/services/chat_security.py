@@ -9,6 +9,7 @@ Provides:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from typing import Any
@@ -185,3 +186,20 @@ def sanitize_tool_output(
     output = re.sub(r'"base_url"\s*:\s*"[^"]*"', '"base_url": "[redacted]"', output)
 
     return output
+
+
+# ---------------------------------------------------------------------------
+# Session fingerprint (CAB-1653)
+# ---------------------------------------------------------------------------
+
+CONVERSATION_TIMEOUT_HOURS = 24
+
+
+def compute_session_fingerprint(ip: str, user_agent: str) -> str:
+    """Compute a SHA-256 fingerprint from IP + User-Agent.
+
+    Used for session binding — detects when a conversation is accessed
+    from a different client (potential session hijack).
+    """
+    raw = f"{ip}:{user_agent}"
+    return hashlib.sha256(raw.encode()).hexdigest()

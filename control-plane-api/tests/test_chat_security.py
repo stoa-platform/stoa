@@ -5,11 +5,13 @@ from __future__ import annotations
 import pytest
 
 from src.services.chat_security import (
+    CONVERSATION_TIMEOUT_HOURS,
     JAILBREAK_REFUSAL,
     MAX_OUTPUT_SIZE,
     MAX_PARAM_SIZE,
     SYSTEM_PROMPT_PREFIX,
     build_system_prompt,
+    compute_session_fingerprint,
     detect_jailbreak,
     sanitize_string,
     sanitize_tool_output,
@@ -230,3 +232,34 @@ class TestSanitizeToolOutput:
         assert "a.com" not in result
         assert "b.com" not in result
         assert result.count("[redacted]") == 2
+
+
+# ---------------------------------------------------------------------------
+# Session fingerprint (CAB-1653)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeSessionFingerprint:
+    def test_deterministic(self) -> None:
+        fp1 = compute_session_fingerprint("1.2.3.4", "Mozilla/5.0")
+        fp2 = compute_session_fingerprint("1.2.3.4", "Mozilla/5.0")
+        assert fp1 == fp2
+
+    def test_sha256_hex_format(self) -> None:
+        fp = compute_session_fingerprint("1.2.3.4", "Mozilla/5.0")
+        assert len(fp) == 64
+        assert all(c in "0123456789abcdef" for c in fp)
+
+    def test_different_inputs_differ(self) -> None:
+        fp1 = compute_session_fingerprint("1.2.3.4", "Mozilla/5.0")
+        fp2 = compute_session_fingerprint("5.6.7.8", "Mozilla/5.0")
+        fp3 = compute_session_fingerprint("1.2.3.4", "Chrome/120")
+        assert fp1 != fp2
+        assert fp1 != fp3
+
+    def test_empty_values(self) -> None:
+        fp = compute_session_fingerprint("", "")
+        assert len(fp) == 64
+
+    def test_timeout_constant(self) -> None:
+        assert CONVERSATION_TIMEOUT_HOURS == 24

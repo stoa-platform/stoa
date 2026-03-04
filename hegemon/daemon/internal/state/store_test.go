@@ -3,6 +3,7 @@ package state
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -171,5 +172,147 @@ func TestIsTicketActiveOnlyActiveStatuses(t *testing.T) {
 	active, _ := s.IsTicketActive("CAB-50")
 	if active {
 		t.Error("failed dispatch should not count as active")
+	}
+}
+
+func TestCircuitBreaker(t *testing.T) {
+	s := newTestStore(t)
+	s.SetWorkerIdle("w1")
+
+	// Initial: not paused, 0 fails.
+	paused, err := s.IsWorkerPaused("w1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paused {
+		t.Error("new worker should not be paused")
+	}
+
+	// Increment health fails.
+	count, err := s.IncrHealthFail("w1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("fail count = %d, want 1", count)
+	}
+
+	count, _ = s.IncrHealthFail("w1")
+	if count != 2 {
+		t.Errorf("fail count = %d, want 2", count)
+	}
+
+	count, _ = s.IncrHealthFail("w1")
+	if count != 3 {
+		t.Errorf("fail count = %d, want 3", count)
+	}
+
+	// Pause the worker.
+	until := time.Now().Add(5 * time.Minute)
+	if err := s.SetWorkerPaused("w1", until); err != nil {
+		t.Fatal(err)
+	}
+
+	paused, _ = s.IsWorkerPaused("w1")
+	if !paused {
+		t.Error("worker should be paused after SetWorkerPaused")
+	}
+
+	status, _ := s.GetWorkerStatus("w1")
+	if status != "paused" {
+		t.Errorf("status = %q, want %q", status, "paused")
+	}
+
+	// Reset health fails also clears pause.
+	if err := s.ResetHealthFails("w1"); err != nil {
+		t.Fatal(err)
+	}
+
+	paused, _ = s.IsWorkerPaused("w1")
+	if paused {
+		t.Error("worker should not be paused after ResetHealthFails")
+	}
+}
+
+func TestCircuitBreakerExpired(t *testing.T) {
+	s := newTestStore(t)
+	s.SetWorkerIdle("w1")
+
+	// Set pause in the past → should be treated as not paused.
+	past := time.Now().Add(-1 * time.Minute)
+	if err := s.SetWorkerPaused("w1", past); err != nil {
+		t.Fatal(err)
+	}
+
+	paused, _ := s.IsWorkerPaused("w1")
+	if paused {
+		t.Error("expired pause should not count as paused")
+	}
+}
+
+func TestGetAllWorkerStats(t *testing.T) {
+	s := newTestStore(t)
+	s.SetWorkerIdle("w1")
+	s.SetWorkerIdle("w2")
+	s.SetWorkerBusy("w2", 1)
+	s.IncrHealthFail("w1")
+
+	stats, err := s.GetAllWorkerStats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 2 {
+		t.Fatalf("stats count = %d, want 2", len(stats))
+	}
+
+	// w1 should have 1 fail.
+	for _, ws := range stats {
+		if ws.Name == "w1" && ws.HealthFailCount != 1 {
+			t.Errorf("w1 health_fail_count = %d, want 1", ws.HealthFailCount)
+		}
+		if ws.Name == "w2" && ws.Status != "busy" {
+			t.Errorf("w2 status = %q, want busy", ws.Status)
+		}
+	}
+}
+
+func TestGetQueueDepth(t *testing.T) {
+	s := newTestStore(t)
+
+	depth, err := s.GetQueueDepth()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if depth != 0 {
+		t.Errorf("empty queue depth = %d, want 0", depth)
+	}
+
+	s.CreateDispatch("CAB-1", "T1", 3, "instance:backend", "w1")
+	s.CreateDispatch("CAB-2", "T2", 5, "instance:mcp", "w2")
+
+	depth, _ = s.GetQueueDepth()
+	if depth != 2 {
+		t.Errorf("queue depth = %d, want 2", depth)
+	}
+}
+
+func TestCleanStaleDispatches(t *testing.T) {
+	s := newTestStore(t)
+
+	// Create a dispatch and manually backdate it.
+	id, _ := s.CreateDispatch("CAB-99", "Stale ticket", 3, "instance:backend", "w1")
+	s.db.Exec(`UPDATE dispatches SET started_at = datetime('now', '-3 hours') WHERE id = ?`, id)
+
+	cleaned, err := s.CleanStaleDispatches(2 * time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleaned != 1 {
+		t.Errorf("cleaned = %d, want 1", cleaned)
+	}
+
+	active, _ := s.IsTicketActive("CAB-99")
+	if active {
+		t.Error("stale dispatch should no longer be active")
 	}
 }

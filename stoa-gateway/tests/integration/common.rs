@@ -13,6 +13,7 @@ use stoa_gateway::state::AppState;
 /// Provides convenience methods for making HTTP requests.
 pub struct TestApp {
     router: Router,
+    pub state: AppState,
 }
 
 impl TestApp {
@@ -20,15 +21,15 @@ impl TestApp {
     pub fn new() -> Self {
         let config = Config::default();
         let state = AppState::new(config);
-        let router = stoa_gateway::build_router(state);
-        Self { router }
+        let router = stoa_gateway::build_router(state.clone());
+        Self { router, state }
     }
 
     /// Create a test app with a custom config.
     pub fn with_config(config: Config) -> Self {
         let state = AppState::new(config);
-        let router = stoa_gateway::build_router(state);
-        Self { router }
+        let router = stoa_gateway::build_router(state.clone());
+        Self { router, state }
     }
 
     /// Send a GET request and return (status, body).

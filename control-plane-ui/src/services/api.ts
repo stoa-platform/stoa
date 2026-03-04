@@ -43,6 +43,12 @@ import type {
   SubscriptionStats,
   BulkSubscriptionAction,
   BulkActionResult,
+  TenantWebhook,
+  WebhookCreate,
+  WebhookUpdate,
+  WebhookListResponse,
+  WebhookDeliveryListResponse,
+  WebhookTestResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -961,6 +967,68 @@ class ApiService {
   async bulkSubscriptionAction(payload: BulkSubscriptionAction): Promise<BulkActionResult> {
     const { data } = await this.client.post('/v1/subscriptions/bulk', payload);
     return data;
+  }
+
+  // ============ Webhook Management (CAB-1647) ============
+
+  async getWebhooks(tenantId: string): Promise<WebhookListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/webhooks`);
+    return data;
+  }
+
+  async getWebhook(tenantId: string, webhookId: string): Promise<TenantWebhook> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
+    return data;
+  }
+
+  async createWebhook(tenantId: string, payload: WebhookCreate): Promise<TenantWebhook> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/webhooks`, payload);
+    return data;
+  }
+
+  async updateWebhook(
+    tenantId: string,
+    webhookId: string,
+    payload: WebhookUpdate
+  ): Promise<TenantWebhook> {
+    const { data } = await this.client.patch(
+      `/v1/tenants/${tenantId}/webhooks/${webhookId}`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteWebhook(tenantId: string, webhookId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
+  }
+
+  async testWebhook(tenantId: string, webhookId: string): Promise<WebhookTestResponse> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/webhooks/${webhookId}/test`, {
+      event_type: 'subscription.created',
+    });
+    return data;
+  }
+
+  async getWebhookDeliveries(
+    tenantId: string,
+    webhookId: string,
+    limit = 50
+  ): Promise<WebhookDeliveryListResponse> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries`,
+      { params: { limit } }
+    );
+    return data;
+  }
+
+  async retryWebhookDelivery(
+    tenantId: string,
+    webhookId: string,
+    deliveryId: string
+  ): Promise<void> {
+    await this.client.post(
+      `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries/${deliveryId}/retry`
+    );
   }
 }
 

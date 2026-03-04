@@ -49,7 +49,8 @@
     "subscriptions": "Subscriptions",
     "webhooks": "Webhooks",
     "credentialMappings": "Credential Mappings",
-    "contracts": "Contracts"
+    "contracts": "Contracts",
+    "aiFactory": "AI Factory"
   },
   "layout": {
     "controlPlane": "Control Plane",

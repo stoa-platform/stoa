@@ -497,6 +497,15 @@ class ApiService {
     return data;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getAiSessionStats(days?: number, worker?: string): Promise<any> {
+    const params: Record<string, string | number> = {};
+    if (days) params.days = days;
+    if (worker) params.worker = worker;
+    const { data } = await this.client.get('/v1/traces/stats/ai-sessions', { params });
+    return data;
+  }
+
   // Platform Status (CAB-654)
   async getPlatformStatus(): Promise<PlatformStatusResponse> {
     const { data } = await this.client.get('/v1/platform/status');

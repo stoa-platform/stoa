@@ -153,6 +153,17 @@ func (d *daemon) pollAndDispatch(ctx context.Context) {
 		return
 	}
 
+	// Budget check: skip dispatching if daily cost exceeds limit.
+	if d.cfg.Budget.DailyLimitUSD > 0 {
+		dailyCost, err := d.state.GetDailyCost()
+		if err != nil {
+			log.Printf("WARN budget check: %v", err)
+		} else if dailyCost >= d.cfg.Budget.DailyLimitUSD {
+			log.Printf("BUDGET EXCEEDED: $%.2f / $%.2f — skipping dispatches", dailyCost, d.cfg.Budget.DailyLimitUSD)
+			return
+		}
+	}
+
 	dispatched := 0
 	for _, issue := range issues {
 		if ctx.Err() != nil {
@@ -243,6 +254,13 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 
 	// Release worker.
 	d.state.SetWorkerIdle(w.Name)
+
+	// Record execution cost (best-effort, even on failure).
+	if result != nil && result.CostUSD > 0 {
+		d.state.RecordCost(dispatchID, result.CostUSD)
+		// Check budget thresholds after recording cost.
+		d.checkBudgetThresholds()
+	}
 
 	if err != nil {
 		errMsg := err.Error()
@@ -409,8 +427,38 @@ func (d *daemon) pushMetrics() {
 		log.Printf("WARN metrics: get queue depth: %v", err)
 		return
 	}
-	if err := d.metrics.PushWorkerHealth(stats, queueDepth); err != nil {
+	dailyCost, err := d.state.GetDailyCost()
+	if err != nil {
+		log.Printf("WARN metrics: get daily cost: %v", err)
+	}
+	costByWorker, err := d.state.GetDailyCostByWorker()
+	if err != nil {
+		log.Printf("WARN metrics: get cost by worker: %v", err)
+	}
+	if err := d.metrics.PushWorkerHealth(stats, queueDepth, dailyCost, d.cfg.Budget.DailyLimitUSD, costByWorker); err != nil {
 		log.Printf("WARN metrics push: %v", err)
+	}
+}
+
+// budgetWarned tracks whether the warning has been sent this day to avoid spam.
+var budgetWarned bool
+
+func (d *daemon) checkBudgetThresholds() {
+	if d.cfg.Budget.DailyLimitUSD <= 0 {
+		return
+	}
+	dailyCost, err := d.state.GetDailyCost()
+	if err != nil {
+		return
+	}
+	pct := (dailyCost / d.cfg.Budget.DailyLimitUSD) * 100
+	if dailyCost >= d.cfg.Budget.DailyLimitUSD {
+		d.reporter.NotifyBudgetExceeded(dailyCost, d.cfg.Budget.DailyLimitUSD)
+		log.Printf("BUDGET EXCEEDED: $%.2f / $%.2f", dailyCost, d.cfg.Budget.DailyLimitUSD)
+	} else if pct >= d.cfg.Budget.WarnPercent && !budgetWarned {
+		d.reporter.NotifyBudgetWarning(dailyCost, d.cfg.Budget.DailyLimitUSD)
+		budgetWarned = true
+		log.Printf("BUDGET WARNING: $%.2f / $%.2f (%.0f%%)", dailyCost, d.cfg.Budget.DailyLimitUSD, pct)
 	}
 }
 

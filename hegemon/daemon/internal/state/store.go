@@ -27,6 +27,7 @@ type Dispatch struct {
 	ResultJSON    string
 	PRNumber      int
 	ErrorMessage  string
+	CostUSD       float64
 	CreatedAt     time.Time
 }
 
@@ -71,6 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_dispatches_status ON dispatches(status);
 const migrations = `
 ALTER TABLE worker_status ADD COLUMN health_fail_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE worker_status ADD COLUMN paused_until TEXT;
+ALTER TABLE dispatches ADD COLUMN cost_usd REAL DEFAULT 0;
 `
 
 // New opens (or creates) the SQLite database and runs migrations.
@@ -86,6 +88,7 @@ func New(dbPath string) (*Store, error) {
 	for _, stmt := range []string{
 		"ALTER TABLE worker_status ADD COLUMN health_fail_count INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE worker_status ADD COLUMN paused_until TEXT",
+		"ALTER TABLE dispatches ADD COLUMN cost_usd REAL DEFAULT 0",
 	} {
 		db.Exec(stmt) // ignore "duplicate column" errors
 	}
@@ -326,6 +329,52 @@ func (s *Store) CleanStaleDispatches(maxAge time.Duration) (int64, error) {
 	s.db.Exec(`UPDATE worker_status SET status = 'idle', current_dispatch_id = NULL
 		WHERE current_dispatch_id IN (SELECT id FROM dispatches WHERE status = 'stale')`)
 	return res.RowsAffected()
+}
+
+// RecordCost updates the cost for a completed dispatch.
+func (s *Store) RecordCost(dispatchID int64, costUSD float64) error {
+	_, err := s.db.Exec(`UPDATE dispatches SET cost_usd = ? WHERE id = ?`, costUSD, dispatchID)
+	return err
+}
+
+// GetDailyCost returns the total cost in USD for dispatches completed today (UTC).
+func (s *Store) GetDailyCost() (float64, error) {
+	var total sql.NullFloat64
+	err := s.db.QueryRow(
+		`SELECT SUM(cost_usd) FROM dispatches WHERE date(completed_at) = date('now')`,
+	).Scan(&total)
+	if !total.Valid {
+		return 0, err
+	}
+	return total.Float64, err
+}
+
+// DailyCostByWorker holds per-worker cost data for metrics export.
+type DailyCostByWorker struct {
+	WorkerName string
+	CostUSD    float64
+}
+
+// GetDailyCostByWorker returns cost breakdown per worker for today (UTC).
+func (s *Store) GetDailyCostByWorker() ([]DailyCostByWorker, error) {
+	rows, err := s.db.Query(
+		`SELECT worker_name, COALESCE(SUM(cost_usd), 0) FROM dispatches
+		 WHERE date(completed_at) = date('now') GROUP BY worker_name ORDER BY worker_name`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var costs []DailyCostByWorker
+	for rows.Next() {
+		var c DailyCostByWorker
+		if err := rows.Scan(&c.WorkerName, &c.CostUSD); err != nil {
+			return nil, err
+		}
+		costs = append(costs, c)
+	}
+	return costs, rows.Err()
 }
 
 // GetActiveDispatches returns all dispatches currently in progress.

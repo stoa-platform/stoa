@@ -30,8 +30,8 @@ func (p *Pusher) Enabled() bool {
 	return p.url != ""
 }
 
-// PushWorkerHealth sends worker health gauges to the Pushgateway.
-func (p *Pusher) PushWorkerHealth(stats []state.WorkerHealthStats, queueDepth int) error {
+// PushWorkerHealth sends worker health gauges and cost metrics to the Pushgateway.
+func (p *Pusher) PushWorkerHealth(stats []state.WorkerHealthStats, queueDepth int, dailyCost float64, budgetLimit float64, costByWorker []state.DailyCostByWorker) error {
 	if !p.Enabled() {
 		return nil
 	}
@@ -82,6 +82,28 @@ func (p *Pusher) PushWorkerHealth(stats []state.WorkerHealthStats, queueDepth in
 	b.WriteString("# HELP hegemon_queue_depth Number of active dispatches in queue\n")
 	b.WriteString("# TYPE hegemon_queue_depth gauge\n")
 	fmt.Fprintf(&b, "hegemon_queue_depth %d\n", queueDepth)
+
+	b.WriteString("# HELP hegemon_daily_cost_usd Total cost in USD for today\n")
+	b.WriteString("# TYPE hegemon_daily_cost_usd gauge\n")
+	fmt.Fprintf(&b, "hegemon_daily_cost_usd %f\n", dailyCost)
+
+	if budgetLimit > 0 {
+		remaining := budgetLimit - dailyCost
+		if remaining < 0 {
+			remaining = 0
+		}
+		b.WriteString("# HELP hegemon_budget_remaining_usd Remaining daily budget in USD\n")
+		b.WriteString("# TYPE hegemon_budget_remaining_usd gauge\n")
+		fmt.Fprintf(&b, "hegemon_budget_remaining_usd %f\n", remaining)
+	}
+
+	if len(costByWorker) > 0 {
+		b.WriteString("# HELP hegemon_worker_daily_cost_usd Daily cost per worker in USD\n")
+		b.WriteString("# TYPE hegemon_worker_daily_cost_usd gauge\n")
+		for _, c := range costByWorker {
+			fmt.Fprintf(&b, "hegemon_worker_daily_cost_usd{worker=%q} %f\n", c.WorkerName, c.CostUSD)
+		}
+	}
 
 	return p.push("hegemon_daemon", b.String())
 }

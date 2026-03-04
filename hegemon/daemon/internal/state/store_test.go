@@ -296,6 +296,101 @@ func TestGetQueueDepth(t *testing.T) {
 	}
 }
 
+func TestRecordCostAndGetDailyCost(t *testing.T) {
+	s := newTestStore(t)
+
+	// No dispatches → cost is 0.
+	cost, err := s.GetDailyCost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cost != 0 {
+		t.Errorf("empty daily cost = %f, want 0", cost)
+	}
+
+	// Create two dispatches and record costs.
+	id1, _ := s.CreateDispatch("CAB-1", "T1", 5, "instance:backend", "w1")
+	id2, _ := s.CreateDispatch("CAB-2", "T2", 8, "instance:mcp", "w2")
+
+	s.CompleteDispatch(id1, "completed", "", 1, "")
+	s.CompleteDispatch(id2, "completed", "", 2, "")
+
+	if err := s.RecordCost(id1, 8.50); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordCost(id2, 12.75); err != nil {
+		t.Fatal(err)
+	}
+
+	cost, err = s.GetDailyCost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := 21.25
+	if cost != expected {
+		t.Errorf("daily cost = %f, want %f", cost, expected)
+	}
+}
+
+func TestGetDailyCostByWorker(t *testing.T) {
+	s := newTestStore(t)
+
+	id1, _ := s.CreateDispatch("CAB-1", "T1", 5, "instance:backend", "w1")
+	id2, _ := s.CreateDispatch("CAB-2", "T2", 8, "instance:mcp", "w2")
+	id3, _ := s.CreateDispatch("CAB-3", "T3", 3, "instance:backend", "w1")
+
+	s.CompleteDispatch(id1, "completed", "", 1, "")
+	s.CompleteDispatch(id2, "completed", "", 2, "")
+	s.CompleteDispatch(id3, "completed", "", 3, "")
+
+	s.RecordCost(id1, 10.00)
+	s.RecordCost(id2, 5.00)
+	s.RecordCost(id3, 3.00)
+
+	costs, err := s.GetDailyCostByWorker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(costs) != 2 {
+		t.Fatalf("cost entries = %d, want 2", len(costs))
+	}
+
+	// Ordered by worker_name.
+	for _, c := range costs {
+		switch c.WorkerName {
+		case "w1":
+			if c.CostUSD != 13.00 {
+				t.Errorf("w1 cost = %f, want 13.00", c.CostUSD)
+			}
+		case "w2":
+			if c.CostUSD != 5.00 {
+				t.Errorf("w2 cost = %f, want 5.00", c.CostUSD)
+			}
+		default:
+			t.Errorf("unexpected worker %q", c.WorkerName)
+		}
+	}
+}
+
+func TestGetDailyCostExcludesOtherDays(t *testing.T) {
+	s := newTestStore(t)
+
+	id, _ := s.CreateDispatch("CAB-1", "T1", 5, "instance:backend", "w1")
+	s.CompleteDispatch(id, "completed", "", 1, "")
+	s.RecordCost(id, 15.00)
+
+	// Backdate the completed_at to yesterday.
+	s.db.Exec(`UPDATE dispatches SET completed_at = datetime('now', '-1 day') WHERE id = ?`, id)
+
+	cost, err := s.GetDailyCost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cost != 0 {
+		t.Errorf("yesterday's cost should not count, got %f", cost)
+	}
+}
+
 func TestCleanStaleDispatches(t *testing.T) {
 	s := newTestStore(t)
 

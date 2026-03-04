@@ -41,6 +41,7 @@ from ..schemas.chat import (
     TokenBudgetStatusResponse,
     TokenUsageStatsResponse,
 )
+from ..services.chat_security import compute_session_fingerprint
 from ..services.chat_service import ChatService
 
 logger = logging.getLogger(__name__)
@@ -75,9 +76,13 @@ def _service(db: AsyncSession = Depends(get_db)) -> ChatService:
 async def create_conversation(
     tenant_id: str,
     body: ConversationCreate,
+    request: Request,
     user: User = Depends(get_current_user),
     svc: ChatService = Depends(_service),
 ) -> ConversationResponse:
+    ip = request.client.host if request.client else ""
+    user_agent = request.headers.get("User-Agent", "")
+    fingerprint = compute_session_fingerprint(ip, user_agent) if ip else None
     conv = await svc.create_conversation(
         tenant_id=tenant_id,
         user_id=user.id,
@@ -85,6 +90,7 @@ async def create_conversation(
         provider=body.provider.value,
         model=body.model,
         system_prompt=body.system_prompt,
+        session_fingerprint=fingerprint,
     )
     return ConversationResponse.model_validate(conv)
 
@@ -264,6 +270,10 @@ async def send_message(
             detail="No API key: set X-Provider-Api-Key header or configure tenant key via PUT /provider-key",
         )
 
+    ip = request.client.host if request.client else ""
+    user_agent = request.headers.get("User-Agent", "")
+    fingerprint = compute_session_fingerprint(ip, user_agent) if ip else None
+
     async def event_generator():  # type: ignore[return]
         async for event in svc.send_message(
             conversation_id=conversation_id,
@@ -272,6 +282,7 @@ async def send_message(
             content=body.content,
             api_key=api_key,
             user_roles=user.roles,
+            session_fingerprint=fingerprint,
         ):
             if await request.is_disconnected():
                 break

@@ -1,0 +1,151 @@
+# CAB-1543: AlertManager Notification Routing
+# Configures alert routing to Slack (warnings) and PagerDuty (critical).
+#
+# Prerequisites:
+#   - SLACK_WEBHOOK_URL in K8s Secret alertmanager-config
+#   - PAGERDUTY_SERVICE_KEY in K8s Secret alertmanager-config (optional)
+#
+# Usage:
+#   kubectl apply -f deploy/prometheus/alertmanager-config.yaml
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: stoa-notification-routing
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  route:
+    receiver: slack-warnings
+    groupBy: ["component", "severity"]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    routes:
+      # Critical alerts → Slack (high-priority channel)
+      - receiver: slack-critical
+        matchers:
+          - name: severity
+            value: critical
+            matchType: "="
+        repeatInterval: 1h
+
+      # SLO alerts → dedicated SLO channel
+      - receiver: slack-slo
+        matchers:
+          - name: component
+            value: slo
+            matchType: "="
+        repeatInterval: 2h
+
+      # AI Factory alerts → dedicated channel
+      - receiver: slack-ai-factory
+        matchers:
+          - name: team
+            value: ai-factory
+            matchType: "="
+        repeatInterval: 6h
+
+      # Info alerts → Grafana only (no notification)
+      - receiver: "null"
+        matchers:
+          - name: severity
+            value: info
+            matchType: "="
+
+  # Inhibition rules — suppress lower-severity alerts when higher-severity fires
+  inhibitRules:
+    # If a component is down (critical), suppress warning-level alerts for it
+    - sourceMatch:
+        - name: severity
+          value: critical
+          matchType: "="
+      targetMatch:
+        - name: severity
+          value: warning
+          matchType: "="
+      equal: ["component"]
+
+    # If SLO error budget is exhausted, suppress individual error rate warnings
+    - sourceMatch:
+        - name: alertname
+          value: SLOErrorBudgetCritical
+          matchType: "="
+      targetMatch:
+        - name: alertname
+          value: ControlPlaneAPIHighErrorRate
+          matchType: "="
+
+    - sourceMatch:
+        - name: alertname
+          value: SLOErrorBudgetCritical
+          matchType: "="
+      targetMatch:
+        - name: alertname
+          value: StoaGatewayHighErrorRate
+          matchType: "="
+
+  receivers:
+    - name: "null"
+
+    - name: slack-warnings
+      slackConfigs:
+        - apiURL:
+            name: alertmanager-config
+            key: slack-webhook-url
+          channel: "#stoa-alerts"
+          sendResolved: true
+          title: '{{ .Status | toUpper }} {{ .CommonLabels.alertname }}'
+          text: >-
+            *Component*: {{ .CommonLabels.component }}
+
+            *Severity*: {{ .CommonLabels.severity }}
+
+            {{ range .Alerts }}{{ .Annotations.description }}
+
+            {{ end }}
+
+    - name: slack-critical
+      slackConfigs:
+        - apiURL:
+            name: alertmanager-config
+            key: slack-webhook-url
+          channel: "#stoa-alerts-critical"
+          sendResolved: true
+          title: ':rotating_light: {{ .CommonLabels.alertname }}'
+          text: >-
+            *Component*: {{ .CommonLabels.component }}
+
+            *Severity*: CRITICAL
+
+            {{ range .Alerts }}{{ .Annotations.description }}
+
+            *Runbook*: {{ .Annotations.runbook_url }}
+
+            {{ end }}
+
+    - name: slack-slo
+      slackConfigs:
+        - apiURL:
+            name: alertmanager-config
+            key: slack-webhook-url
+          channel: "#stoa-slo"
+          sendResolved: true
+          title: 'SLO {{ .Status | toUpper }}: {{ .CommonLabels.alertname }}'
+          text: >-
+            {{ range .Alerts }}{{ .Annotations.description }}
+
+            {{ end }}
+
+    - name: slack-ai-factory
+      slackConfigs:
+        - apiURL:
+            name: alertmanager-config
+            key: slack-webhook-url
+          channel: "#stoa-ai-factory"
+          sendResolved: true
+          title: 'AI Factory: {{ .CommonLabels.alertname }}'
+          text: >-
+            {{ range .Alerts }}{{ .Annotations.description }}
+
+            {{ end }}

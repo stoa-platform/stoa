@@ -108,6 +108,7 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Policy Enforcement')).toBeInTheDocument();
+        // 'Active Policies' appears in both KPI cards and Policy Enforcement section
         expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
         expect(screen.getByText('Enforced Today')).toBeInTheDocument();
       });
@@ -222,9 +223,9 @@ describe('ProxyOwnerDashboard', () => {
 
         await waitFor(() => {
           expect(screen.getByText('Gateway Instances')).toBeInTheDocument();
+          expect(screen.getByText('Gateways Online')).toBeInTheDocument();
+          expect(screen.getByText('Policy Enforcement')).toBeInTheDocument();
         });
-        expect(screen.getByText('Gateways Online')).toBeInTheDocument();
-        expect(screen.getByText('Policy Enforcement')).toBeInTheDocument();
       });
     }
   );

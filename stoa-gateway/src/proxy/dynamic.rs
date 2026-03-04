@@ -14,7 +14,7 @@ use std::time::Duration;
 use tracing::{debug, error, instrument, warn};
 
 use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use rand::RngExt;
 use std::cell::RefCell;
 
 use crate::proxy::credentials::{AuthType, BackendCredential};
@@ -54,7 +54,7 @@ async fn resolve_credential_header(
 thread_local! {
     /// Thread-local fast PRNG for traceparent ID generation.
     /// Avoids 2x `getrandom()` syscall per request (uuid::Uuid::new_v4).
-    static TRACE_RNG: RefCell<SmallRng> = RefCell::new(SmallRng::from_os_rng());
+    static TRACE_RNG: RefCell<SmallRng> = RefCell::new(rand::make_rng());
 }
 
 /// Shared reqwest client for dynamic proxy (created once, reused).

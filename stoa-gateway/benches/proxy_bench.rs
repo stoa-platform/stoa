@@ -159,11 +159,11 @@ fn bench_header_copy(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 fn bench_traceparent_gen(c: &mut Criterion) {
     use rand::rngs::SmallRng;
-    use rand::{Rng, SeedableRng};
+    use rand::RngExt;
 
     // Optimized: single 24-byte fill + pre-sized buffer (CAB-1332)
     c.bench_function("traceparent_gen_optimized", |b| {
-        let mut rng = SmallRng::from_os_rng();
+        let mut rng: SmallRng = rand::make_rng();
 
         b.iter(|| {
             let mut bytes = [0u8; 24];
@@ -181,7 +181,7 @@ fn bench_traceparent_gen(c: &mut Criterion) {
 
     // Baseline: two separate fills + format! (old approach)
     c.bench_function("traceparent_gen_format", |b| {
-        let mut rng = SmallRng::from_os_rng();
+        let mut rng: SmallRng = rand::make_rng();
 
         b.iter(|| {
             let mut trace_bytes = [0u8; 16];

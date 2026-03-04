@@ -1,5 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
+import { Star } from 'lucide-react';
 import { useMarketplace, useFeaturedItems } from '../../hooks/useMarketplace';
+import { useFavorites } from '../../hooks/useFavorites';
+import { useAuth } from '../../contexts/AuthContext';
+import { config } from '../../config';
 import {
   MarketplaceSearch,
   MarketplaceFilterBar,
@@ -28,9 +32,14 @@ export function MarketplacePage() {
 
   const { data, isLoading, isError } = useMarketplace(filters);
   const { data: featuredItems } = useFeaturedItems();
+  const { isAuthenticated } = useAuth();
+  const { data: favoritesData } = useFavorites();
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
   const showFeatured = !search && typeFilter === 'all' && !categoryFilter && page === 1;
+  const showFavorites = config.features.enableFavorites && isAuthenticated && showFeatured;
+  const favorites = favoritesData?.favorites ?? [];
+  const previewFavorites = favorites.slice(0, 6);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
@@ -59,6 +68,55 @@ export function MarketplacePage() {
 
       {/* Stats */}
       {data?.stats && <MarketplaceStatsBar stats={data.stats} />}
+
+      {/* My Favorites Preview */}
+      {showFavorites && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                My Favorites
+              </h2>
+            </div>
+            {favorites.length > 0 && (
+              <a
+                href="/favorites"
+                className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+              >
+                View all ({favorites.length})
+              </a>
+            )}
+          </div>
+          {previewFavorites.length === 0 ? (
+            <p className="text-sm text-neutral-400 dark:text-neutral-500 italic">
+              No favorites yet — bookmark items from their detail pages
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {previewFavorites.map((fav) => (
+                <a
+                  key={fav.id}
+                  href={
+                    fav.item_type === 'api' ? `/apis/${fav.item_id}` : `/mcp-servers/${fav.item_id}`
+                  }
+                  className="flex items-center gap-3 p-3 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-primary-300 dark:hover:border-primary-600 transition-colors"
+                >
+                  <Star className="w-4 h-4 text-amber-500 fill-amber-500 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-neutral-900 dark:text-white truncate">
+                      {fav.item_name}
+                    </p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                      {fav.item_type === 'api' ? 'API' : 'MCP Server'}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Search + Filters */}
       <div className="space-y-3">

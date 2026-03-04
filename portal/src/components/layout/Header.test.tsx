@@ -34,66 +34,67 @@ vi.mock('../../hooks/useNotifications', () => ({
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'Header — %s persona',
   (role) => {
-  const onMenuClick = vi.fn();
+    const onMenuClick = vi.fn();
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock(role));
-  });
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockAuth.mockReturnValue(createAuthMock(role));
+    });
 
-  it('renders the header element', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    expect(screen.getByRole('banner')).toBeInTheDocument();
-  });
+    it('renders the header element', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      expect(screen.getByRole('banner')).toBeInTheDocument();
+    });
 
-  it('renders the Open menu button', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    expect(screen.getByRole('button', { name: 'Open menu' })).toBeInTheDocument();
-  });
+    it('renders the Open menu button', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      expect(screen.getByRole('button', { name: 'Open menu' })).toBeInTheDocument();
+    });
 
-  it('calls onMenuClick when the menu button is clicked', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
-    expect(onMenuClick).toHaveBeenCalledOnce();
-  });
+    it('calls onMenuClick when the menu button is clicked', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+      expect(onMenuClick).toHaveBeenCalledOnce();
+    });
 
-  it('renders the STOA logo', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    expect(screen.getByTestId('stoa-logo')).toBeInTheDocument();
-  });
+    it('renders the STOA logo', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      expect(screen.getByTestId('stoa-logo')).toBeInTheDocument();
+    });
 
-  it('renders user menu button', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    expect(screen.getByRole('button', { name: 'User menu' })).toBeInTheDocument();
-  });
+    it('renders user menu button', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      expect(screen.getByRole('button', { name: 'User menu' })).toBeInTheDocument();
+    });
 
-  it('opens dropdown menu when user menu button is clicked', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    fireEvent.click(screen.getByRole('button', { name: 'User menu' }));
-    expect(screen.getByText('Sign out')).toBeInTheDocument();
-    expect(screen.getByText('My Profile')).toBeInTheDocument();
-  });
+    it('opens dropdown menu when user menu button is clicked', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      fireEvent.click(screen.getByRole('button', { name: 'User menu' }));
+      expect(screen.getByText('Sign out')).toBeInTheDocument();
+      expect(screen.getByText('My Profile')).toBeInTheDocument();
+    });
 
-  it('shows user name in dropdown', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    fireEvent.click(screen.getByRole('button', { name: 'User menu' }));
-    const auth = createAuthMock(role);
-    const userName = auth.user?.name ?? '';
-    expect(screen.getAllByText(new RegExp(userName, 'i')).length).toBeGreaterThan(0);
-  });
+    it('shows user name in dropdown', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      fireEvent.click(screen.getByRole('button', { name: 'User menu' }));
+      const auth = createAuthMock(role);
+      const userName = auth.user?.name ?? '';
+      expect(screen.getAllByText(new RegExp(userName, 'i')).length).toBeGreaterThan(0);
+    });
 
-  it('dropdown is not shown by default', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    expect(screen.queryByText('Sign out')).not.toBeInTheDocument();
-  });
+    it('dropdown is not shown by default', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      expect(screen.queryByText('Sign out')).not.toBeInTheDocument();
+    });
 
-  it('renders Console link', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    expect(screen.getByText('Console')).toBeInTheDocument();
-  });
+    it('renders Console link', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      expect(screen.getByText('Console')).toBeInTheDocument();
+    });
 
-  it('renders Notifications button', () => {
-    renderWithProviders(<Header onMenuClick={onMenuClick} />);
-    expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument();
-  });
-});
+    it('renders Notifications button', () => {
+      renderWithProviders(<Header onMenuClick={onMenuClick} />);
+      expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument();
+    });
+  }
+);

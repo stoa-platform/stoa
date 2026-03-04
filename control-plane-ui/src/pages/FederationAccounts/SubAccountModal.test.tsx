@@ -53,108 +53,111 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       mockCreateSubAccount.mockResolvedValue(mockResult);
     });
 
-  it('renders modal title', () => {
-    renderModal();
-    expect(screen.getByText('Create Sub-Account')).toBeInTheDocument();
-  });
-
-  it('submit button disabled when name is empty', () => {
-    renderModal();
-    const submitBtn = screen.getByRole('button', { name: /^create$/i });
-    expect(submitBtn).toBeDisabled();
-  });
-
-  it('submit button enabled when name is filled', () => {
-    renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
-      target: { value: 'New Agent' },
+    it('renders modal title', () => {
+      renderModal();
+      expect(screen.getByText('Create Sub-Account')).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /^create$/i })).not.toBeDisabled();
-  });
 
-  it('calls createSubAccount with correct args on submit', async () => {
-    renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
-      target: { value: 'New Agent' },
+    it('submit button disabled when name is empty', () => {
+      renderModal();
+      const submitBtn = screen.getByRole('button', { name: /^create$/i });
+      expect(submitBtn).toBeDisabled();
     });
-    fireEvent.change(screen.getByPlaceholderText(/Optional description/i), {
-      target: { value: 'Agent for partner' },
+
+    it('submit button enabled when name is filled', () => {
+      renderModal();
+      fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
+        target: { value: 'New Agent' },
+      });
+      expect(screen.getByRole('button', { name: /^create$/i })).not.toBeDisabled();
     });
-    fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
-    await waitFor(() => {
-      expect(mockCreateSubAccount).toHaveBeenCalledWith('oasis-gunters', 'master-1', {
-        name: 'New Agent',
-        description: 'Agent for partner',
+
+    it('calls createSubAccount with correct args on submit', async () => {
+      renderModal();
+      fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
+        target: { value: 'New Agent' },
+      });
+      fireEvent.change(screen.getByPlaceholderText(/Optional description/i), {
+        target: { value: 'Agent for partner' },
+      });
+      fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
+      await waitFor(() => {
+        expect(mockCreateSubAccount).toHaveBeenCalledWith('oasis-gunters', 'master-1', {
+          name: 'New Agent',
+          description: 'Agent for partner',
+        });
       });
     });
-  });
 
-  it('shows success toast and calls onCreated with result on success', async () => {
-    renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
-      target: { value: 'New Agent' },
-    });
-    fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
-    await waitFor(() => {
-      expect(mockSuccess).toHaveBeenCalledWith('Sub-account created', 'New Agent has been created');
-      expect(defaultProps.onCreated).toHaveBeenCalledWith(mockResult);
-    });
-  });
-
-  it('shows error toast on failure', async () => {
-    mockCreateSubAccount.mockRejectedValue(new Error('Quota exceeded'));
-    renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
-      target: { value: 'New Agent' },
-    });
-    fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
-    await waitFor(() => {
-      expect(mockError).toHaveBeenCalledWith('Creation failed', 'Quota exceeded');
-    });
-    expect(defaultProps.onCreated).not.toHaveBeenCalled();
-  });
-
-  it('calls onClose when cancel button clicked', () => {
-    renderModal();
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
-    expect(defaultProps.onClose).toHaveBeenCalledOnce();
-  });
-
-  it('calls onClose when X button clicked', () => {
-    renderModal();
-    const xBtn = screen
-      .getAllByRole('button')
-      .find((btn) => btn.querySelector('svg') && !btn.textContent?.trim());
-    fireEvent.click(xBtn!);
-    expect(defaultProps.onClose).toHaveBeenCalledOnce();
-  });
-
-  it('omits description when blank', async () => {
-    renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
-      target: { value: 'New Agent' },
-    });
-    fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
-    await waitFor(() => {
-      expect(mockCreateSubAccount).toHaveBeenCalledWith('oasis-gunters', 'master-1', {
-        name: 'New Agent',
-        description: undefined,
+    it('shows success toast and calls onCreated with result on success', async () => {
+      renderModal();
+      fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
+        target: { value: 'New Agent' },
+      });
+      fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
+      await waitFor(() => {
+        expect(mockSuccess).toHaveBeenCalledWith(
+          'Sub-account created',
+          'New Agent has been created'
+        );
+        expect(defaultProps.onCreated).toHaveBeenCalledWith(mockResult);
       });
     });
-  });
 
-  it('trims whitespace from name before submitting', async () => {
-    renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
-      target: { value: '  Trimmed Agent  ' },
+    it('shows error toast on failure', async () => {
+      mockCreateSubAccount.mockRejectedValue(new Error('Quota exceeded'));
+      renderModal();
+      fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
+        target: { value: 'New Agent' },
+      });
+      fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
+      await waitFor(() => {
+        expect(mockError).toHaveBeenCalledWith('Creation failed', 'Quota exceeded');
+      });
+      expect(defaultProps.onCreated).not.toHaveBeenCalled();
     });
-    fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
-    await waitFor(() => {
-      expect(mockCreateSubAccount).toHaveBeenCalledWith('oasis-gunters', 'master-1', {
-        name: 'Trimmed Agent',
-        description: undefined,
+
+    it('calls onClose when cancel button clicked', () => {
+      renderModal();
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+      expect(defaultProps.onClose).toHaveBeenCalledOnce();
+    });
+
+    it('calls onClose when X button clicked', () => {
+      renderModal();
+      const xBtn = screen
+        .getAllByRole('button')
+        .find((btn) => btn.querySelector('svg') && !btn.textContent?.trim());
+      fireEvent.click(xBtn!);
+      expect(defaultProps.onClose).toHaveBeenCalledOnce();
+    });
+
+    it('omits description when blank', async () => {
+      renderModal();
+      fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
+        target: { value: 'New Agent' },
+      });
+      fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
+      await waitFor(() => {
+        expect(mockCreateSubAccount).toHaveBeenCalledWith('oasis-gunters', 'master-1', {
+          name: 'New Agent',
+          description: undefined,
+        });
       });
     });
-  });
+
+    it('trims whitespace from name before submitting', async () => {
+      renderModal();
+      fireEvent.change(screen.getByPlaceholderText(/Partner Agent/i), {
+        target: { value: '  Trimmed Agent  ' },
+      });
+      fireEvent.submit(screen.getByRole('button', { name: /^create$/i }).closest('form')!);
+      await waitFor(() => {
+        expect(mockCreateSubAccount).toHaveBeenCalledWith('oasis-gunters', 'master-1', {
+          name: 'Trimmed Agent',
+          description: undefined,
+        });
+      });
+    });
   }
 );

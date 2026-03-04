@@ -15,6 +15,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# RBAC — per-tool role enforcement (CAB-1652)
+# ---------------------------------------------------------------------------
+
+# Mapping of tool name → list of roles allowed to use it.
+# Roles: cpi-admin, tenant-admin, devops, viewer
+TOOL_RBAC: dict[str, list[str]] = {
+    "list_tenants": ["cpi-admin"],
+    "list_apis": ["cpi-admin", "tenant-admin", "devops", "viewer"],
+    "get_api_detail": ["cpi-admin", "tenant-admin", "devops", "viewer"],
+    "list_gateway_instances": ["cpi-admin", "tenant-admin", "devops"],
+    "list_deployments": ["cpi-admin", "tenant-admin", "devops"],
+    "platform_info": ["cpi-admin", "tenant-admin", "devops", "viewer"],
+    "search_docs": ["cpi-admin", "tenant-admin", "devops", "viewer"],
+}
+
+
+def filter_tools_for_role(tools: list[dict[str, Any]], user_roles: list[str]) -> list[dict[str, Any]]:
+    """Return only the tools the user's roles are allowed to use.
+
+    A tool is included if any of the user's roles appears in its RBAC list.
+    Unknown tools (not in TOOL_RBAC) are excluded by default.
+    """
+    return [t for t in tools if _role_allowed(t["name"], user_roles)]
+
+
+def _role_allowed(tool_name: str, user_roles: list[str]) -> bool:
+    """Check if any of the user's roles is allowed to use the given tool."""
+    allowed = TOOL_RBAC.get(tool_name)
+    if allowed is None:
+        return False
+    return any(r in allowed for r in user_roles)
+
+
+# ---------------------------------------------------------------------------
 # Tool definitions (Anthropic tools format)
 # ---------------------------------------------------------------------------
 
@@ -125,8 +159,18 @@ async def execute_tool(
     tool_name: str,
     tool_input: dict[str, Any],
     session: AsyncSession,
+    *,
+    user_roles: list[str] | None = None,
 ) -> str:
-    """Execute a tool call and return the result as a JSON string."""
+    """Execute a tool call and return the result as a JSON string.
+
+    If *user_roles* is provided the call is rejected when the user lacks
+    permission — defence-in-depth alongside ``filter_tools_for_role``.
+    """
+    if user_roles is not None and not _role_allowed(tool_name, user_roles):
+        logger.warning("RBAC denied tool %s for roles %s", tool_name, user_roles)
+        return json.dumps({"error": f"Access denied: insufficient permissions for tool '{tool_name}'"})
+
     try:
         if tool_name == "list_tenants":
             return await _exec_list_tenants(session)

@@ -271,6 +271,7 @@ async def send_message(
             user_id=user.id,
             content=body.content,
             api_key=api_key,
+            user_roles=user.roles,
         ):
             if await request.is_disconnected():
                 break

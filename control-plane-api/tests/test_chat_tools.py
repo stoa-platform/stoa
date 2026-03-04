@@ -10,7 +10,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.chat_tools import CHAT_TOOLS, execute_tool
+from src.services.chat_tools import (
+    CHAT_TOOLS,
+    TOOL_RBAC,
+    _role_allowed,
+    execute_tool,
+    filter_tools_for_role,
+)
 
 # ── CHAT_TOOLS definitions ──
 
@@ -330,12 +336,8 @@ class TestSearchDocsHandler:
         mock_service.search = AsyncMock(return_value=response)
 
         session = AsyncMock()
-        with patch(
-            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
-        ):
-            result = await execute_tool(
-                "search_docs", {"query": "mcp protocol"}, session
-            )
+        with patch("src.routers.docs_search.get_docs_search_service", return_value=mock_service):
+            result = await execute_tool("search_docs", {"query": "mcp protocol"}, session)
 
         data = json.loads(result)
         assert data["query"] == "mcp protocol"
@@ -356,12 +358,8 @@ class TestSearchDocsHandler:
         mock_service.search = AsyncMock(return_value=response)
 
         session = AsyncMock()
-        with patch(
-            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
-        ):
-            result = await execute_tool(
-                "search_docs", {"query": "nonexistent topic xyz"}, session
-            )
+        with patch("src.routers.docs_search.get_docs_search_service", return_value=mock_service):
+            result = await execute_tool("search_docs", {"query": "nonexistent topic xyz"}, session)
 
         data = json.loads(result)
         assert data["total"] == 0
@@ -377,9 +375,7 @@ class TestSearchDocsHandler:
         mock_service.search = AsyncMock(return_value=response)
 
         session = AsyncMock()
-        with patch(
-            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
-        ):
+        with patch("src.routers.docs_search.get_docs_search_service", return_value=mock_service):
             # limit=99 should be clamped to 20
             await execute_tool("search_docs", {"query": "api", "limit": 99}, session)
 
@@ -395,9 +391,7 @@ class TestSearchDocsHandler:
         mock_service.search = AsyncMock(return_value=response)
 
         session = AsyncMock()
-        with patch(
-            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
-        ):
+        with patch("src.routers.docs_search.get_docs_search_service", return_value=mock_service):
             await execute_tool("search_docs", {"query": "gateway"}, session)
 
         mock_service.search.assert_awaited_once_with(query="gateway", limit=5)
@@ -412,10 +406,124 @@ class TestSearchDocsHandler:
         mock_service.search = AsyncMock(return_value=response)
 
         session = AsyncMock()
-        with patch(
-            "src.routers.docs_search.get_docs_search_service", return_value=mock_service
-        ):
+        with patch("src.routers.docs_search.get_docs_search_service", return_value=mock_service):
             # limit=0 should be clamped to 1
             await execute_tool("search_docs", {"query": "test", "limit": 0}, session)
 
         mock_service.search.assert_awaited_once_with(query="test", limit=1)
+
+
+# ── RBAC — per-tool role enforcement (CAB-1652) ──
+
+
+class TestToolRBAC:
+    """Verify TOOL_RBAC mapping covers all tools with correct roles."""
+
+    def test_all_tools_in_rbac(self):
+        tool_names = {t["name"] for t in CHAT_TOOLS}
+        rbac_names = set(TOOL_RBAC.keys())
+        assert rbac_names == tool_names
+
+    def test_list_tenants_admin_only(self):
+        assert TOOL_RBAC["list_tenants"] == ["cpi-admin"]
+
+    def test_list_apis_all_roles(self):
+        assert set(TOOL_RBAC["list_apis"]) == {"cpi-admin", "tenant-admin", "devops", "viewer"}
+
+    def test_gateway_tools_no_viewer(self):
+        for tool in ("list_gateway_instances", "list_deployments"):
+            assert "viewer" not in TOOL_RBAC[tool]
+            assert "cpi-admin" in TOOL_RBAC[tool]
+
+
+class TestRoleAllowed:
+    """Verify _role_allowed helper logic."""
+
+    def test_single_matching_role(self):
+        assert _role_allowed("list_tenants", ["cpi-admin"]) is True
+
+    def test_no_matching_role(self):
+        assert _role_allowed("list_tenants", ["viewer"]) is False
+
+    def test_multiple_roles_one_matches(self):
+        assert _role_allowed("list_tenants", ["viewer", "cpi-admin"]) is True
+
+    def test_unknown_tool_denied(self):
+        assert _role_allowed("nonexistent_tool", ["cpi-admin"]) is False
+
+    def test_empty_roles_denied(self):
+        assert _role_allowed("list_tenants", []) is False
+
+
+class TestFilterToolsForRole:
+    """Verify filter_tools_for_role returns correct tool subsets per persona."""
+
+    def test_cpi_admin_sees_all_tools(self):
+        result = filter_tools_for_role(CHAT_TOOLS, ["cpi-admin"])
+        assert len(result) == 7
+
+    def test_viewer_sees_limited_tools(self):
+        result = filter_tools_for_role(CHAT_TOOLS, ["viewer"])
+        names = {t["name"] for t in result}
+        assert "list_tenants" not in names
+        assert "list_gateway_instances" not in names
+        assert "list_deployments" not in names
+        assert "list_apis" in names
+        assert "platform_info" in names
+        assert "search_docs" in names
+
+    def test_devops_no_list_tenants(self):
+        result = filter_tools_for_role(CHAT_TOOLS, ["devops"])
+        names = {t["name"] for t in result}
+        assert "list_tenants" not in names
+        assert "list_gateway_instances" in names
+
+    def test_tenant_admin_sees_six_tools(self):
+        result = filter_tools_for_role(CHAT_TOOLS, ["tenant-admin"])
+        names = {t["name"] for t in result}
+        assert len(names) == 6
+        assert "list_tenants" not in names
+
+    def test_empty_roles_sees_nothing(self):
+        result = filter_tools_for_role(CHAT_TOOLS, [])
+        assert result == []
+
+    def test_unknown_role_sees_nothing(self):
+        result = filter_tools_for_role(CHAT_TOOLS, ["unknown-role"])
+        assert result == []
+
+
+class TestExecuteToolRBAC:
+    """Verify execute_tool defense-in-depth RBAC check (CAB-1652)."""
+
+    @pytest.fixture()
+    def session(self):
+        return AsyncMock()
+
+    async def test_rbac_denies_unauthorized_tool(self, session):
+        result = await execute_tool("list_tenants", {}, session, user_roles=["viewer"])
+        data = json.loads(result)
+        assert "Access denied" in data["error"]
+
+    async def test_rbac_allows_authorized_tool(self, session):
+        result = await execute_tool("platform_info", {}, session, user_roles=["viewer"])
+        data = json.loads(result)
+        assert data["name"] == "STOA Platform"
+
+    async def test_rbac_none_skips_check(self, session):
+        """When user_roles is None, RBAC check is skipped (backward compat)."""
+        result = await execute_tool("platform_info", {}, session, user_roles=None)
+        data = json.loads(result)
+        assert data["name"] == "STOA Platform"
+
+    async def test_rbac_denies_gateway_tools_for_viewer(self, session):
+        result = await execute_tool("list_gateway_instances", {}, session, user_roles=["viewer"])
+        data = json.loads(result)
+        assert "Access denied" in data["error"]
+
+    @patch("src.services.chat_tools._exec_list_tenants", new_callable=AsyncMock)
+    async def test_rbac_allows_admin_to_list_tenants(self, mock_fn, session):
+        mock_fn.return_value = "[]"
+        result = await execute_tool("list_tenants", {}, session, user_roles=["cpi-admin"])
+        mock_fn.assert_awaited_once()
+        assert result == "[]"

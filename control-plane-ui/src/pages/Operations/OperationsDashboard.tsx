@@ -124,7 +124,7 @@ export function OperationsDashboard() {
           activeAlerts: opsMetrics.active_alerts,
           uptime: opsMetrics.uptime,
         });
-      } catch (err) {
+      } catch (_err) {
         console.warn('Operations metrics unavailable, using defaults');
         // Fallback to defaults if API unavailable
         setOperationsMetrics({

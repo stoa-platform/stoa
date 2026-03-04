@@ -83,6 +83,9 @@ export POCKETBASE_URL="https://state.gostoa.dev"
 # Worker identity
 export HEGEMON_ROLE="worker-1"
 export HEGEMON_HOSTNAME="$(hostname)"
+
+# STOA Console trace ingestion (from Infisical: /hegemon/HEGEMON_INGEST_KEY)
+export HEGEMON_INGEST_KEY=""
 ENVEOF
 chmod 600 ~/.env.hegemon
 grep -q "env.hegemon" ~/.bashrc || echo "source ~/.env.hegemon" >> ~/.bashrc'

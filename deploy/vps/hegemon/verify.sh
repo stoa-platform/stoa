@@ -66,6 +66,7 @@ echo ""
 echo "[Environment]"
 check "env.hegemon exists" "test -f ~/.env.hegemon"
 check "ANTHROPIC_API_KEY"  "source ~/.env.hegemon && test -n \"\$ANTHROPIC_API_KEY\""
+check "HEGEMON_INGEST_KEY" "source ~/.env.hegemon && test -n \"\$HEGEMON_INGEST_KEY\""
 
 # Gateway checks (non-blocking — gateways may not be deployed yet)
 echo ""

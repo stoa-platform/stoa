@@ -43,6 +43,22 @@ import type {
   SubscriptionStats,
   BulkSubscriptionAction,
   BulkActionResult,
+  TenantWebhook,
+  WebhookCreate,
+  WebhookUpdate,
+  WebhookListResponse,
+  WebhookDeliveryListResponse,
+  WebhookTestResponse,
+  CredentialMapping,
+  CredentialMappingCreate,
+  CredentialMappingUpdate,
+  CredentialMappingListResponse,
+  Contract,
+  ContractCreate,
+  ContractUpdate,
+  ContractListResponse,
+  PublishContractResponse,
+  ProtocolBinding,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -449,12 +465,14 @@ class ApiService {
   async getTraces(
     limit?: number,
     tenantId?: string,
-    status?: string
+    status?: string,
+    environment?: string
   ): Promise<{ traces: TraceSummary[]; total: number }> {
     const params: Record<string, any> = {};
     if (limit) params.limit = limit;
     if (tenantId) params.tenant_id = tenantId;
     if (status) params.status = status;
+    if (environment) params.environment = environment;
     const { data } = await this.client.get('/v1/traces', { params });
     return data;
   }
@@ -961,6 +979,164 @@ class ApiService {
   async bulkSubscriptionAction(payload: BulkSubscriptionAction): Promise<BulkActionResult> {
     const { data } = await this.client.post('/v1/subscriptions/bulk', payload);
     return data;
+  }
+
+  // ============ Webhook Management (CAB-1647) ============
+
+  async getWebhooks(tenantId: string): Promise<WebhookListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/webhooks`);
+    return data;
+  }
+
+  async getWebhook(tenantId: string, webhookId: string): Promise<TenantWebhook> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
+    return data;
+  }
+
+  async createWebhook(tenantId: string, payload: WebhookCreate): Promise<TenantWebhook> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/webhooks`, payload);
+    return data;
+  }
+
+  async updateWebhook(
+    tenantId: string,
+    webhookId: string,
+    payload: WebhookUpdate
+  ): Promise<TenantWebhook> {
+    const { data } = await this.client.patch(
+      `/v1/tenants/${tenantId}/webhooks/${webhookId}`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteWebhook(tenantId: string, webhookId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
+  }
+
+  async testWebhook(tenantId: string, webhookId: string): Promise<WebhookTestResponse> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/webhooks/${webhookId}/test`, {
+      event_type: 'subscription.created',
+    });
+    return data;
+  }
+
+  async getWebhookDeliveries(
+    tenantId: string,
+    webhookId: string,
+    limit = 50
+  ): Promise<WebhookDeliveryListResponse> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries`,
+      { params: { limit } }
+    );
+    return data;
+  }
+
+  async retryWebhookDelivery(
+    tenantId: string,
+    webhookId: string,
+    deliveryId: string
+  ): Promise<void> {
+    await this.client.post(
+      `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries/${deliveryId}/retry`
+    );
+  }
+
+  // ============ Credential Mappings (CAB-1648) ============
+
+  async getCredentialMappings(tenantId: string): Promise<CredentialMappingListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/credential-mappings`);
+    return data;
+  }
+
+  async createCredentialMapping(
+    tenantId: string,
+    payload: CredentialMappingCreate
+  ): Promise<CredentialMapping> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/credential-mappings`, payload);
+    return data;
+  }
+
+  async updateCredentialMapping(
+    tenantId: string,
+    mappingId: string,
+    payload: CredentialMappingUpdate
+  ): Promise<CredentialMapping> {
+    const { data } = await this.client.put(
+      `/v1/tenants/${tenantId}/credential-mappings/${mappingId}`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteCredentialMapping(tenantId: string, mappingId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/credential-mappings/${mappingId}`);
+  }
+
+  // ============ Contracts / UAC (CAB-1649) ============
+
+  async getContracts(tenantId: string): Promise<ContractListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/contracts`);
+    return data;
+  }
+
+  async getContract(tenantId: string, contractId: string): Promise<Contract> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/contracts/${contractId}`);
+    return data;
+  }
+
+  async createContract(tenantId: string, payload: ContractCreate): Promise<Contract> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/contracts`, payload);
+    return data;
+  }
+
+  async publishContract(tenantId: string, contractId: string): Promise<PublishContractResponse> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/contracts/${contractId}/publish`
+    );
+    return data;
+  }
+
+  async updateContract(
+    tenantId: string,
+    contractId: string,
+    payload: ContractUpdate
+  ): Promise<Contract> {
+    const { data } = await this.client.patch(
+      `/v1/tenants/${tenantId}/contracts/${contractId}`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteContract(tenantId: string, contractId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/contracts/${contractId}`);
+  }
+
+  async getContractBindings(tenantId: string, contractId: string): Promise<ProtocolBinding[]> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`
+    );
+    return data;
+  }
+
+  async enableBinding(
+    tenantId: string,
+    contractId: string,
+    protocol: string
+  ): Promise<ProtocolBinding> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`,
+      { protocol }
+    );
+    return data;
+  }
+
+  async disableBinding(tenantId: string, contractId: string, protocol: string): Promise<void> {
+    await this.client.delete(
+      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings/${protocol}`
+    );
   }
 }
 

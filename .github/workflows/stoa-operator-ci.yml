@@ -17,3 +17,4 @@ jobs:
       component: stoa-operator
       python-version: '3.11'
       coverage-threshold: 70
+      runner: self-hosted

@@ -127,7 +127,8 @@ class TraceService:
         self,
         limit: int = 50,
         tenant_id: str | None = None,
-        status: TraceStatusDB | None = None
+        status: TraceStatusDB | None = None,
+        environment: str | None = None,
     ) -> list[PipelineTraceDB]:
         """List recent traces with optional filtering."""
         query = select(PipelineTraceDB)
@@ -136,6 +137,8 @@ class TraceService:
             query = query.where(PipelineTraceDB.tenant_id == tenant_id)
         if status:
             query = query.where(PipelineTraceDB.status == status)
+        if environment:
+            query = query.where(PipelineTraceDB.environment == environment)
 
         query = query.order_by(desc(PipelineTraceDB.created_at)).limit(limit)
 

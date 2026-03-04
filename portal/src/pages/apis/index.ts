@@ -7,4 +7,3 @@
 export { APICatalog } from './APICatalog';
 export { APIDetail } from './APIDetail';
 export { APITestingSandbox } from './APITestingSandbox';
-export { MyAPIsPage } from './MyAPIsPage';

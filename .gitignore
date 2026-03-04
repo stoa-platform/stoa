@@ -70,6 +70,7 @@ portal/node_modules/node_modules_CLAUDE_OFF/
 deploy/demo-federation/.env
 scripts/demo-federation/.tokens/
 scripts/demo/certs/
+.coprocessor-t1-results.json
 
 # ============================================
 # Strategy & Confidential (NEVER commit)

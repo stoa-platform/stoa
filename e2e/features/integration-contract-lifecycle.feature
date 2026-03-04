@@ -8,6 +8,7 @@ Feature: Contract Lifecycle — CP API CRUD + Status Transitions
     Given the CP API and gateway are both reachable
     And I obtain a CP API token as "parzival"
 
+  @smoke
   Scenario: Create a draft contract via CP API
     When I create contract "e2e-lifecycle-test" with version "1.0.0" via CP API
     Then the integration response status is 201

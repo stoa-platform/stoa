@@ -16,9 +16,16 @@ type Config struct {
 	Notification  NotificationConfig      `yaml:"notification"`
 	Timeouts      map[int]CustomDuration  `yaml:"timeouts"`
 	HealthCheck   HealthCheckConfig       `yaml:"health_check"`
+	Metrics       MetricsConfig           `yaml:"metrics"`
+	Budget        BudgetConfig            `yaml:"budget"`
 	State         StateConfig             `yaml:"state"`
 	Log           LogConfig               `yaml:"log"`
 	Repo          RepoConfig              `yaml:"repo"`
+}
+
+type BudgetConfig struct {
+	DailyLimitUSD float64 `yaml:"daily_limit_usd"` // Max daily spend; 0 = unlimited
+	WarnPercent   float64 `yaml:"warn_percent"`     // Warn at this % of daily limit (default 80)
 }
 
 type LinearConfig struct {
@@ -48,8 +55,16 @@ type NotificationConfig struct {
 }
 
 type HealthCheckConfig struct {
-	Interval   CustomDuration `yaml:"interval"`
-	SSHTimeout CustomDuration `yaml:"ssh_timeout"`
+	Interval          CustomDuration `yaml:"interval"`
+	SSHTimeout        CustomDuration `yaml:"ssh_timeout"`
+	CircuitThreshold  int            `yaml:"circuit_threshold"`   // consecutive fails before pause (default 3)
+	CircuitPauseSecs  int            `yaml:"circuit_pause_secs"`  // seconds to pause a tripped worker (default 300)
+}
+
+type MetricsConfig struct {
+	PushgatewayURL  string         `yaml:"pushgateway_url"`
+	PushInterval    CustomDuration `yaml:"push_interval"`
+	BasicAuth       string         `yaml:"basic_auth"` // user:pass for Pushgateway
 }
 
 type StateConfig struct {
@@ -117,6 +132,15 @@ func setDefaults(cfg *Config) {
 	if cfg.HealthCheck.SSHTimeout.Duration == 0 {
 		cfg.HealthCheck.SSHTimeout.Duration = 10 * time.Second
 	}
+	if cfg.HealthCheck.CircuitThreshold == 0 {
+		cfg.HealthCheck.CircuitThreshold = 3
+	}
+	if cfg.HealthCheck.CircuitPauseSecs == 0 {
+		cfg.HealthCheck.CircuitPauseSecs = 300 // 5 minutes
+	}
+	if cfg.Metrics.PushInterval.Duration == 0 {
+		cfg.Metrics.PushInterval.Duration = 60 * time.Second
+	}
 	if cfg.State.DBPath == "" {
 		cfg.State.DBPath = "./hegemon.db"
 	}
@@ -131,6 +155,12 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Notification.MaxRetries == 0 {
 		cfg.Notification.MaxRetries = 3
+	}
+	if cfg.Budget.DailyLimitUSD == 0 {
+		cfg.Budget.DailyLimitUSD = 50.0 // Default $50/day
+	}
+	if cfg.Budget.WarnPercent == 0 {
+		cfg.Budget.WarnPercent = 80.0
 	}
 	if cfg.Repo.Path == "" {
 		cfg.Repo.Path = "~/stoa"

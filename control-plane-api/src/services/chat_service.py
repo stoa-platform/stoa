@@ -20,8 +20,16 @@ from sqlalchemy.orm import selectinload
 from ..config import settings
 from ..models.chat import ChatConversation, ChatMessage
 from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
+from ..services.audit_service import AuditService
 from ..services.chat_provider import AnthropicProvider, ChatProviderProtocol
-from ..services.chat_tools import CHAT_TOOLS, execute_tool
+from ..services.chat_security import (
+    CONVERSATION_TIMEOUT_HOURS,
+    JAILBREAK_REFUSAL,
+    build_system_prompt,
+    detect_jailbreak,
+    sanitize_tool_output,
+)
+from ..services.chat_tools import CHAT_TOOLS, execute_tool, filter_tools_for_role
 from ..services.encryption_service import decrypt_auth_config, encrypt_auth_config
 
 logger = logging.getLogger(__name__)
@@ -53,6 +61,7 @@ class ChatService:
         provider: str = "anthropic",
         model: str = "claude-sonnet-4-20250514",
         system_prompt: str | None = None,
+        session_fingerprint: str | None = None,
     ) -> ChatConversation:
         conv = ChatConversation(
             tenant_id=tenant_id,
@@ -62,6 +71,8 @@ class ChatService:
             model=model,
             system_prompt=system_prompt,
             status="active",
+            session_fingerprint=session_fingerprint,
+            last_active_at=datetime.now(UTC),
         )
         self.session.add(conv)
         await self.session.flush()
@@ -283,6 +294,9 @@ class ChatService:
         user_id: str,
         content: str,
         api_key: str,
+        user_roles: list[str] | None = None,
+        session_fingerprint: str | None = None,
+        client_ip: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Persist user message, call provider with agentic tool loop, persist + stream."""
 
@@ -290,6 +304,25 @@ class ChatService:
         if conv is None:
             yield {"event": "error", "data": {"error": "Conversation not found"}}
             return
+
+        # Session timeout enforcement (CAB-1653)
+        if conv.last_active_at and datetime.now(UTC) - conv.last_active_at > timedelta(
+            hours=CONVERSATION_TIMEOUT_HOURS
+        ):
+            yield {
+                "event": "error",
+                "data": {"error": "Conversation expired due to inactivity"},
+            }
+            return
+
+        # Session fingerprint mismatch warning (CAB-1653) — non-blocking in Phase 1
+        if session_fingerprint and conv.session_fingerprint and session_fingerprint != conv.session_fingerprint:
+            logger.warning(
+                "Session fingerprint mismatch: conversation=%s, expected=%s, got=%s",
+                conversation_id,
+                conv.session_fingerprint[:8],
+                session_fingerprint[:8],
+            )
 
         # Budget enforcement (CAB-288) — check before streaming
         budget = settings.CHAT_TOKEN_BUDGET_DAILY
@@ -306,6 +339,24 @@ class ChatService:
                     },
                 }
                 return
+
+        # Jailbreak detection (CAB-1656) — check before persisting
+        jailbreak = detect_jailbreak(content)
+        if jailbreak:
+            logger.warning("Jailbreak attempt detected: pattern=%s, conversation=%s", jailbreak, conversation_id)
+            await self._audit(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                action="chat_message",
+                resource_type="chat_message",
+                resource_id=str(conversation_id),
+                outcome="denied",
+                client_ip=client_ip,
+                details={"jailbreak_pattern": jailbreak},
+            )
+            yield {"event": "message", "data": {"content": JAILBREAK_REFUSAL}}
+            yield {"event": "message_end", "data": {"stop_reason": "end_turn", "input_tokens": 0, "output_tokens": 0}}
+            return
 
         # Persist the user message
         user_msg = ChatMessage(
@@ -349,8 +400,8 @@ class ChatService:
                 api_key=api_key,
                 model=conv.model,
                 messages=history,
-                system_prompt=conv.system_prompt,
-                tools=CHAT_TOOLS,
+                system_prompt=build_system_prompt(conv.system_prompt),
+                tools=filter_tools_for_role(CHAT_TOOLS, user_roles) if user_roles else CHAT_TOOLS,
             ):
                 evt_type = event.get("event", "")
 
@@ -411,13 +462,27 @@ class ChatService:
                 # Execute each tool and build tool_result messages
                 tool_results: list[dict[str, Any]] = []
                 for tc in tool_calls:
-                    result = await execute_tool(tc["tool_name"], tc["input"], self.session)
+                    raw_result = await execute_tool(tc["tool_name"], tc["input"], self.session, user_roles=user_roles)
+                    result = sanitize_tool_output(raw_result, user_roles=user_roles)
                     tool_results.append(
                         {
                             "type": "tool_result",
                             "tool_use_id": tc["tool_use_id"],
                             "content": result,
                         }
+                    )
+                    # Audit tool call (CAB-1654)
+                    has_error = '"error"' in raw_result if isinstance(raw_result, str) else False
+                    await self._audit(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        action="chat_tool_call",
+                        resource_type="chat_tool",
+                        resource_name=tc["tool_name"],
+                        resource_id=str(conversation_id),
+                        outcome="failure" if has_error else "success",
+                        client_ip=client_ip,
+                        details={"tool_name": tc["tool_name"], "input_keys": list(tc["input"].keys())},
                     )
                     yield {
                         "event": "tool_use_result",
@@ -445,9 +510,11 @@ class ChatService:
         )
         self.session.add(assistant_msg)
 
-        # Touch conversation updated_at
+        # Touch conversation updated_at + last_active_at (CAB-1653)
         await self.session.execute(
-            update(ChatConversation).where(ChatConversation.id == conv.id).values(updated_at=func.now())
+            update(ChatConversation)
+            .where(ChatConversation.id == conv.id)
+            .values(updated_at=func.now(), last_active_at=func.now())
         )
         await self.session.flush()
 
@@ -503,6 +570,42 @@ class ChatService:
         tenant.settings = settings
         await self.session.flush()
         return True
+
+    # ------------------------------------------------------------------
+    # Audit helpers (CAB-1654)
+    # ------------------------------------------------------------------
+
+    async def _audit(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        action: str,
+        resource_type: str,
+        resource_id: str | None = None,
+        resource_name: str | None = None,
+        outcome: str = "success",
+        client_ip: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        """Record a chat audit event. Never raises — logs errors instead."""
+        try:
+            svc = AuditService(self.session)
+            await svc.record_event(
+                tenant_id=tenant_id,
+                action=action,
+                method="CHAT",
+                path="/chat",
+                resource_type=resource_type,
+                resource_id=resource_id,
+                resource_name=resource_name,
+                actor_id=user_id,
+                outcome=outcome,
+                client_ip=client_ip,
+                details=details,
+            )
+        except Exception:
+            logger.warning("Failed to record chat audit event", exc_info=True)
 
     # ------------------------------------------------------------------
     # Private helpers

@@ -36,6 +36,8 @@ def _make_conversation(
     status="active",
     system_prompt=None,
     messages=None,
+    session_fingerprint=None,
+    last_active_at=None,
 ):
     conv = MagicMock()
     conv.id = conv_id or uuid4()
@@ -48,6 +50,8 @@ def _make_conversation(
     conv.system_prompt = system_prompt
     conv.messages = messages or []
     conv.updated_at = datetime.now(UTC)
+    conv.session_fingerprint = session_fingerprint
+    conv.last_active_at = last_active_at if last_active_at is not None else datetime.now(UTC)
     return conv
 
 
@@ -680,3 +684,118 @@ class TestEmitMeteringEvent:
                 input_tokens=100,
                 output_tokens=50,
             )
+
+
+# ── Session Binding (CAB-1653) ──
+
+
+class TestSessionBinding:
+    async def test_timeout_expired_yields_error(self):
+        """Conversation inactive >24h should yield an expiry error."""
+        session = _make_session()
+        conv = _make_conversation(
+            last_active_at=datetime.now(UTC) - timedelta(hours=25),
+        )
+        svc = ChatService(session)
+        svc.get_conversation = AsyncMock(return_value=conv)
+
+        events = []
+        async for evt in svc.send_message(
+            conversation_id=conv.id, tenant_id="acme", user_id="user-1",
+            content="hello", api_key="sk-test",
+        ):
+            events.append(evt)
+
+        assert len(events) == 1
+        assert events[0]["event"] == "error"
+        assert "expired" in events[0]["data"]["error"].lower()
+
+    @patch("src.services.chat_service.settings")
+    async def test_not_expired_proceeds(self, mock_settings):
+        """Conversation active within 24h should not yield a timeout error."""
+        mock_settings.CHAT_TOKEN_BUDGET_DAILY = 999999
+
+        session = _make_session()
+        conv = _make_conversation(
+            last_active_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+        svc = ChatService(session)
+        svc.get_conversation = AsyncMock(return_value=conv)
+
+        with patch("src.services.chat_service.ChatTokenUsageRepository") as MockRepo:
+            mock_repo = MockRepo.return_value
+            mock_repo.get_daily_user_usage = AsyncMock(return_value=0)
+
+            events = []
+            async for evt in svc.send_message(
+                conversation_id=conv.id, tenant_id="acme", user_id="user-1",
+                content="hello", api_key="sk-test",
+            ):
+                events.append(evt)
+                if evt.get("event") == "error" and "expired" in evt.get("data", {}).get("error", ""):
+                    break
+                # Stop after first non-timeout event (we just need to verify no timeout)
+                break
+
+        # First event should NOT be a timeout error
+        assert not (events[0]["event"] == "error" and "expired" in events[0]["data"].get("error", ""))
+
+    async def test_no_last_active_skips_timeout(self):
+        """Conversation with last_active_at=None should not trigger timeout."""
+        session = _make_session()
+        conv = _make_conversation(last_active_at=None)
+        # Override MagicMock default for last_active_at
+        conv.last_active_at = None
+        svc = ChatService(session)
+        svc.get_conversation = AsyncMock(return_value=conv)
+
+        events = []
+        async for evt in svc.send_message(
+            conversation_id=conv.id, tenant_id="acme", user_id="user-1",
+            content="hello", api_key="sk-test",
+        ):
+            events.append(evt)
+            break
+
+        # Should proceed past timeout check (may hit budget or other check, but not timeout)
+        if events and events[0]["event"] == "error":
+            assert "expired" not in events[0]["data"].get("error", "").lower()
+
+    @patch("src.services.chat_service.logger")
+    async def test_fingerprint_mismatch_logs_warning(self, mock_logger):
+        """Mismatched fingerprint should log a warning but not block."""
+        session = _make_session()
+        conv = _make_conversation(
+            session_fingerprint="aaa" + "0" * 61,
+            last_active_at=datetime.now(UTC),
+        )
+        svc = ChatService(session)
+        svc.get_conversation = AsyncMock(return_value=conv)
+
+        events = []
+        async for evt in svc.send_message(
+            conversation_id=conv.id, tenant_id="acme", user_id="user-1",
+            content="hello", api_key="sk-test",
+            session_fingerprint="bbb" + "0" * 61,
+        ):
+            events.append(evt)
+            break
+
+        mock_logger.warning.assert_called_once()
+        call_args = mock_logger.warning.call_args[0][0]
+        assert "fingerprint mismatch" in call_args.lower()
+
+    async def test_create_stores_fingerprint(self):
+        """create_conversation should pass fingerprint to the model."""
+        session = _make_session()
+        svc = ChatService(session)
+
+        await svc.create_conversation(
+            tenant_id="acme", user_id="user-1",
+            session_fingerprint="abc123",
+        )
+
+        session.add.assert_called_once()
+        added = session.add.call_args[0][0]
+        assert added.session_fingerprint == "abc123"
+        assert added.last_active_at is not None

@@ -1,0 +1,131 @@
+# Netbox Infrastructure Cartography — VPS 51.254.139.205
+# Deployed alongside n8n, Healthchecks, PocketBase on Traefik reverse proxy
+# Access: https://netbox.gostoa.dev
+#
+# Deploy: scp to VPS, then docker compose up -d
+# Requires: .env file (see .env.template)
+
+services:
+  netbox:
+    image: netboxcommunity/netbox:latest
+    container_name: netbox
+    depends_on:
+      netbox-postgres:
+        condition: service_healthy
+      netbox-redis:
+        condition: service_healthy
+      netbox-redis-cache:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: netbox-postgres
+      DB_NAME: netbox
+      DB_USER: netbox
+      DB_PASSWORD: ${NETBOX_DB_PASSWORD}
+      REDIS_HOST: netbox-redis
+      REDIS_CACHE_HOST: netbox-redis-cache
+      SECRET_KEY: ${NETBOX_SECRET_KEY}
+      SUPERUSER_NAME: admin
+      SUPERUSER_EMAIL: admin@gostoa.dev
+      SUPERUSER_PASSWORD: ${NETBOX_SUPERUSER_PASSWORD}
+      SUPERUSER_API_TOKEN: ${NETBOX_API_TOKEN}
+    volumes:
+      - netbox-media:/opt/netbox/netbox/media
+      - netbox-reports:/opt/netbox/netbox/reports
+      - netbox-scripts:/opt/netbox/netbox/scripts
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.netbox.rule=Host(`netbox.gostoa.dev`)"
+      - "traefik.http.routers.netbox.entrypoints=websecure"
+      - "traefik.http.routers.netbox.tls.certresolver=letsencrypt"
+      - "traefik.http.services.netbox.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/login/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+    networks:
+      - default
+
+  netbox-worker:
+    image: netboxcommunity/netbox:latest
+    container_name: netbox-worker
+    depends_on:
+      netbox:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: netbox-postgres
+      DB_NAME: netbox
+      DB_USER: netbox
+      DB_PASSWORD: ${NETBOX_DB_PASSWORD}
+      REDIS_HOST: netbox-redis
+      REDIS_CACHE_HOST: netbox-redis-cache
+      SECRET_KEY: ${NETBOX_SECRET_KEY}
+    command: /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker
+    volumes:
+      - netbox-media:/opt/netbox/netbox/media
+      - netbox-reports:/opt/netbox/netbox/reports
+      - netbox-scripts:/opt/netbox/netbox/scripts
+    restart: unless-stopped
+    networks:
+      - default
+
+  netbox-postgres:
+    image: postgres:16-alpine
+    container_name: netbox-postgres
+    environment:
+      POSTGRES_DB: netbox
+      POSTGRES_USER: netbox
+      POSTGRES_PASSWORD: ${NETBOX_DB_PASSWORD}
+    volumes:
+      - netbox-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netbox"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - default
+
+  netbox-redis:
+    image: redis:7-alpine
+    container_name: netbox-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - netbox-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - default
+
+  netbox-redis-cache:
+    image: redis:7-alpine
+    container_name: netbox-redis-cache
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - default
+
+volumes:
+  netbox-media:
+  netbox-reports:
+  netbox-scripts:
+  netbox-postgres-data:
+  netbox-redis-data:
+
+networks:
+  default:
+    name: traefik_default
+    external: true

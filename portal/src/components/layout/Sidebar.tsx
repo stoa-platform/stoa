@@ -2,15 +2,11 @@ import { NavLink } from 'react-router-dom';
 import {
   BookOpen,
   User,
-  UserPlus,
   X,
-  Webhook,
   BarChart3,
-  Wrench,
   ExternalLink,
   Activity,
   Briefcase,
-  Server,
   Store,
   Star,
   Bell,
@@ -56,20 +52,6 @@ const sections: NavSection[] = [
         scope: 'stoa:catalog:read',
       },
       {
-        name: 'API Catalog',
-        href: '/apis',
-        icon: BookOpen,
-        enabled: config.features.enableAPICatalog,
-        scope: 'stoa:catalog:read',
-      },
-      {
-        name: 'AI Tools',
-        href: '/servers',
-        icon: Wrench,
-        enabled: config.features.enableMCPTools,
-        scope: 'stoa:catalog:read',
-      },
-      {
         name: 'Compare APIs',
         href: '/api-compare',
         icon: GitCompareArrows,
@@ -88,24 +70,6 @@ const sections: NavSection[] = [
         permission: 'apps:read',
       },
       {
-        name: 'My MCP Servers',
-        href: '/my-servers',
-        icon: Server,
-        scope: 'stoa:catalog:read',
-      },
-      {
-        name: 'My APIs',
-        href: '/my-apis',
-        icon: BookOpen,
-        scope: 'stoa:catalog:read',
-      },
-      {
-        name: 'Register Consumer',
-        href: '/consumers/register',
-        icon: UserPlus,
-        scope: 'stoa:subscriptions:write',
-      },
-      {
         name: 'Usage',
         href: '/usage',
         icon: BarChart3,
@@ -117,13 +81,6 @@ const sections: NavSection[] = [
         href: '/executions',
         icon: Activity,
         scope: 'stoa:metrics:read',
-      },
-      {
-        name: 'Webhooks',
-        href: '/webhooks',
-        icon: Webhook,
-        enabled: config.features.enableSubscriptions,
-        scope: 'stoa:subscriptions:write',
       },
       {
         name: 'Favorites',
@@ -142,13 +99,6 @@ const sections: NavSection[] = [
   {
     title: 'Operations',
     items: [
-      {
-        name: 'Gateways',
-        href: '/gateways',
-        icon: Server,
-        enabled: config.features.enableGateways,
-        scope: 'stoa:admin',
-      },
       {
         name: 'Audit Log',
         href: '/audit-log',

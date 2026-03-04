@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createAuthMock } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
 import { RegisterApiModal } from './RegisterApiModal';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 const mockCreateBackendApi = vi.fn();
 
@@ -22,149 +27,155 @@ const defaultProps = {
   onCreated: vi.fn(),
 };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockCreateBackendApi.mockResolvedValue({});
-});
-
 function getForm(): HTMLFormElement {
   return document.querySelector('form')!;
 }
 
-describe('RegisterApiModal', () => {
-  it('renders form with required fields', () => {
-    render(<RegisterApiModal {...defaultProps} />);
-    expect(screen.getByText('Register Backend API')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('petstore-api')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('https://api.example.com/v1')).toBeInTheDocument();
-  });
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  '%s persona',
+  (role) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      mockCreateBackendApi.mockResolvedValue({});
+    });
 
-  it('renders auth type selector with all options', () => {
-    render(<RegisterApiModal {...defaultProps} />);
-    const select = screen.getByDisplayValue('None');
-    expect(select).toBeInTheDocument();
-    // Check options exist
-    const options = select.querySelectorAll('option');
-    expect(options.length).toBe(5);
-  });
+    it('renders form with required fields', () => {
+      render(<RegisterApiModal {...defaultProps} />);
+      expect(screen.getByText('Register Backend API')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('petstore-api')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('https://api.example.com/v1')).toBeInTheDocument();
+    });
 
-  it('shows API Key config fields when selected', async () => {
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+    it('renders auth type selector with all options', () => {
+      render(<RegisterApiModal {...defaultProps} />);
+      const select = screen.getByDisplayValue('None');
+      expect(select).toBeInTheDocument();
+      // Check options exist
+      const options = select.querySelectorAll('option');
+      expect(options.length).toBe(5);
+    });
 
-    await user.selectOptions(screen.getByDisplayValue('None'), 'api_key');
-    expect(screen.getByText('API Key Configuration')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('X-API-Key')).toBeInTheDocument();
-  });
+    it('shows API Key config fields when selected', async () => {
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-  it('shows Bearer Token field when selected', async () => {
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+      await user.selectOptions(screen.getByDisplayValue('None'), 'api_key');
+      expect(screen.getByText('API Key Configuration')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('X-API-Key')).toBeInTheDocument();
+    });
 
-    await user.selectOptions(screen.getByDisplayValue('None'), 'bearer');
-    expect(screen.getByPlaceholderText('Enter bearer token')).toBeInTheDocument();
-  });
+    it('shows Bearer Token field when selected', async () => {
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-  it('shows Basic Auth fields when selected', async () => {
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+      await user.selectOptions(screen.getByDisplayValue('None'), 'bearer');
+      expect(screen.getByPlaceholderText('Enter bearer token')).toBeInTheDocument();
+    });
 
-    await user.selectOptions(screen.getByDisplayValue('None'), 'basic');
-    expect(screen.getByText('Basic Auth Credentials')).toBeInTheDocument();
-  });
+    it('shows Basic Auth fields when selected', async () => {
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-  it('shows OAuth2 fields when selected', async () => {
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+      await user.selectOptions(screen.getByDisplayValue('None'), 'basic');
+      expect(screen.getByText('Basic Auth Credentials')).toBeInTheDocument();
+    });
 
-    await user.selectOptions(screen.getByDisplayValue('None'), 'oauth2_cc');
-    // The heading appears alongside the option text — use getByRole heading
-    expect(screen.getByPlaceholderText('https://auth.example.com/oauth/token')).toBeInTheDocument();
-  });
+    it('shows OAuth2 fields when selected', async () => {
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-  it('calls onClose when cancel clicked', async () => {
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+      await user.selectOptions(screen.getByDisplayValue('None'), 'oauth2_cc');
+      // The heading appears alongside the option text — use getByRole heading
+      expect(
+        screen.getByPlaceholderText('https://auth.example.com/oauth/token')
+      ).toBeInTheDocument();
+    });
 
-    await user.click(screen.getByText('Cancel'));
-    expect(defaultProps.onClose).toHaveBeenCalled();
-  });
+    it('calls onClose when cancel clicked', async () => {
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-  it('submits form with correct payload', async () => {
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+      await user.click(screen.getByText('Cancel'));
+      expect(defaultProps.onClose).toHaveBeenCalled();
+    });
 
-    await user.type(screen.getByPlaceholderText('petstore-api'), 'my-api');
-    await user.type(
-      screen.getByPlaceholderText('https://api.example.com/v1'),
-      'https://api.test.com'
-    );
+    it('submits form with correct payload', async () => {
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-    // Submit the form directly (button is outside form in the DOM)
-    fireEvent.submit(getForm());
-
-    await waitFor(() => {
-      expect(mockCreateBackendApi).toHaveBeenCalledWith(
-        'tenant-1',
-        expect.objectContaining({
-          name: 'my-api',
-          backend_url: 'https://api.test.com',
-          auth_type: 'none',
-        })
+      await user.type(screen.getByPlaceholderText('petstore-api'), 'my-api');
+      await user.type(
+        screen.getByPlaceholderText('https://api.example.com/v1'),
+        'https://api.test.com'
       );
+
+      // Submit the form directly (button is outside form in the DOM)
+      fireEvent.submit(getForm());
+
+      await waitFor(() => {
+        expect(mockCreateBackendApi).toHaveBeenCalledWith(
+          'tenant-1',
+          expect.objectContaining({
+            name: 'my-api',
+            backend_url: 'https://api.test.com',
+            auth_type: 'none',
+          })
+        );
+      });
     });
-  });
 
-  it('shows error on submit failure', async () => {
-    mockCreateBackendApi.mockRejectedValue(new Error('Network error'));
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+    it('shows error on submit failure', async () => {
+      mockCreateBackendApi.mockRejectedValue(new Error('Network error'));
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-    await user.type(screen.getByPlaceholderText('petstore-api'), 'my-api');
-    await user.type(
-      screen.getByPlaceholderText('https://api.example.com/v1'),
-      'https://api.test.com'
-    );
+      await user.type(screen.getByPlaceholderText('petstore-api'), 'my-api');
+      await user.type(
+        screen.getByPlaceholderText('https://api.example.com/v1'),
+        'https://api.test.com'
+      );
 
-    fireEvent.submit(getForm());
+      fireEvent.submit(getForm());
 
-    await waitFor(() => {
-      expect(screen.getByText('Network error')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Network error')).toBeInTheDocument();
+      });
     });
-  });
 
-  it('calls onCreated after successful submit', async () => {
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+    it('calls onCreated after successful submit', async () => {
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-    await user.type(screen.getByPlaceholderText('petstore-api'), 'my-api');
-    await user.type(
-      screen.getByPlaceholderText('https://api.example.com/v1'),
-      'https://api.test.com'
-    );
+      await user.type(screen.getByPlaceholderText('petstore-api'), 'my-api');
+      await user.type(
+        screen.getByPlaceholderText('https://api.example.com/v1'),
+        'https://api.test.com'
+      );
 
-    fireEvent.submit(getForm());
+      fireEvent.submit(getForm());
 
-    await waitFor(() => {
-      expect(defaultProps.onCreated).toHaveBeenCalled();
+      await waitFor(() => {
+        expect(defaultProps.onCreated).toHaveBeenCalled();
+      });
     });
-  });
 
-  it('shows loading state during submit', async () => {
-    mockCreateBackendApi.mockImplementation(() => new Promise(() => {}));
-    const user = userEvent.setup();
-    render(<RegisterApiModal {...defaultProps} />);
+    it('shows loading state during submit', async () => {
+      mockCreateBackendApi.mockImplementation(() => new Promise(() => {}));
+      const user = userEvent.setup();
+      render(<RegisterApiModal {...defaultProps} />);
 
-    await user.type(screen.getByPlaceholderText('petstore-api'), 'my-api');
-    await user.type(
-      screen.getByPlaceholderText('https://api.example.com/v1'),
-      'https://api.test.com'
-    );
+      await user.type(screen.getByPlaceholderText('petstore-api'), 'my-api');
+      await user.type(
+        screen.getByPlaceholderText('https://api.example.com/v1'),
+        'https://api.test.com'
+      );
 
-    fireEvent.submit(getForm());
+      fireEvent.submit(getForm());
 
-    await waitFor(() => {
-      expect(screen.getByText('Registering...')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Registering...')).toBeInTheDocument();
+      });
     });
-  });
-});
+  }
+);

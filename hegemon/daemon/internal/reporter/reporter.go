@@ -89,10 +89,15 @@ func (r *Reporter) NotifyCompleted(ticketID, title string, result *worker.Result
 		status = "failed"
 	}
 
+	costStr := ""
+	if result.CostUSD > 0 {
+		costStr = fmt.Sprintf(" | $%.2f", result.CostUSD)
+	}
+
 	msg := fmt.Sprintf(
-		"%s *%s* `%s` — %s\n%s | %s | %d files",
+		"%s *%s* `%s` — %s\n%s | %s | %d files%s",
 		emoji, status, ticketID, title, detail,
-		duration.Round(time.Second), result.FilesChanged,
+		duration.Round(time.Second), result.FilesChanged, costStr,
 	)
 
 	if result.Status == "failed" {
@@ -152,6 +157,23 @@ func (r *Reporter) NotifyHealthFailure(workerName, errMsg string) {
 	r.slack(fmt.Sprintf(
 		":warning: *HEGEMON worker unhealthy* `%s`\n%s\n_Next alert in %s_",
 		workerName, errMsg, r.healthCooldown,
+	))
+}
+
+// NotifyBudgetWarning sends a budget warning notification (immediate, P1).
+func (r *Reporter) NotifyBudgetWarning(dailyCost, dailyLimit float64) {
+	pct := (dailyCost / dailyLimit) * 100
+	r.slack(fmt.Sprintf(
+		":warning: *HEGEMON budget warning* — $%.2f / $%.2f (%.0f%%)\nApproaching daily limit. New dispatches may be paused.",
+		dailyCost, dailyLimit, pct,
+	))
+}
+
+// NotifyBudgetExceeded sends a budget exceeded notification (immediate, P0).
+func (r *Reporter) NotifyBudgetExceeded(dailyCost, dailyLimit float64) {
+	r.slack(fmt.Sprintf(
+		":no_entry: *HEGEMON budget exceeded* — $%.2f / $%.2f\nAll new dispatches PAUSED until tomorrow (UTC midnight).",
+		dailyCost, dailyLimit,
 	))
 }
 

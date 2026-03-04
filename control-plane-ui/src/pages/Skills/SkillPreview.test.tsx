@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createAuthMock } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
 import { SkillPreview } from './SkillPreview';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 const mockResolveSkills = vi.fn();
 
@@ -10,12 +15,6 @@ vi.mock('../../services/skillsApi', () => ({
   skillsService: {
     resolveSkills: (...args: unknown[]) => mockResolveSkills(...args),
   },
-}));
-
-vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => ({
-    user: { tenant_id: 'tenant-1' },
-  }),
 }));
 
 function renderComponent() {
@@ -27,10 +26,13 @@ function renderComponent() {
   );
 }
 
-describe('SkillPreview', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  '%s persona',
+  (role) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+    });
 
   it('renders collapsed by default', () => {
     renderComponent();
@@ -70,8 +72,9 @@ describe('SkillPreview', () => {
     await user.type(screen.getByPlaceholderText('e.g. code-review'), 'my-tool');
     fireEvent.click(screen.getByText('Resolve'));
 
+    const expectedTenantId = createAuthMock(role).user?.tenant_id;
     await waitFor(() => {
-      expect(mockResolveSkills).toHaveBeenCalledWith('tenant-1', 'my-tool', undefined);
+      expect(mockResolveSkills).toHaveBeenCalledWith(expectedTenantId, 'my-tool', undefined);
     });
   });
 
@@ -113,4 +116,5 @@ describe('SkillPreview', () => {
     expect(screen.getByText('Team Review')).toBeInTheDocument();
     expect(screen.getByText('Merged Instructions')).toBeInTheDocument();
   });
-});
+  }
+);

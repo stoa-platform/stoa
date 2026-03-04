@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { Sidebar } from './Sidebar';
-import { renderWithProviders, createAuthMock } from '../../test/helpers';
+import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 
 vi.mock('../../config', () => ({
   config: {
@@ -26,12 +26,14 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
-describe('Sidebar', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'Sidebar — %s persona',
+  (role) => {
   const onClose = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseAuth.mockReturnValue(createAuthMock('tenant-admin'));
+    mockUseAuth.mockReturnValue(createAuthMock(role));
   });
 
   it('renders navigation sections', () => {
@@ -84,12 +86,7 @@ describe('Sidebar', () => {
   });
 
   it('filters items based on user scope — viewer without write scope', () => {
-    const viewerMock = createAuthMock('viewer');
-    mockUseAuth.mockReturnValue({
-      ...viewerMock,
-      hasScope: (scope: string) => !scope.includes('write'),
-      hasPermission: () => false,
-    });
+    if (role !== 'viewer') return;
     renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
     // Register Consumer requires stoa:subscriptions:write — should be hidden for viewer
     expect(screen.queryByText('Register Consumer')).not.toBeInTheDocument();

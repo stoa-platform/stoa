@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { Header } from './Header';
-import { renderWithProviders, createAuthMock } from '../../test/helpers';
+import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 
 vi.mock('../../config', () => ({
   config: {
@@ -22,19 +22,23 @@ vi.mock('@stoa/shared/components/ThemeToggle', () => ({
   ThemeToggle: () => <button>Theme</button>,
 }));
 
+const mockAuth = vi.fn();
 vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => createAuthMock('tenant-admin'),
+  useAuth: () => mockAuth(),
 }));
 
 vi.mock('../../hooks/useNotifications', () => ({
   useUnreadCount: () => ({ data: 0 }),
 }));
 
-describe('Header', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'Header — %s persona',
+  (role) => {
   const onMenuClick = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAuth.mockReturnValue(createAuthMock(role));
   });
 
   it('renders the header element', () => {
@@ -73,9 +77,9 @@ describe('Header', () => {
   it('shows user name in dropdown', () => {
     renderWithProviders(<Header onMenuClick={onMenuClick} />);
     fireEvent.click(screen.getByRole('button', { name: 'User menu' }));
-    // createAuthMock('tenant-admin') returns user with name: 'Wade Watts'
-    // The dropdown renders {user?.name} in the header section
-    expect(screen.getAllByText(/wade watts/i).length).toBeGreaterThan(0);
+    const auth = createAuthMock(role);
+    const userName = auth.user?.name ?? '';
+    expect(screen.getAllByText(new RegExp(userName, 'i')).length).toBeGreaterThan(0);
   });
 
   it('dropdown is not shown by default', () => {

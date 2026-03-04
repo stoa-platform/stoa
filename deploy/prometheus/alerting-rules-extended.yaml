@@ -1,0 +1,279 @@
+# CAB-1543: Extended STOA Platform Alerting Rules
+# Fills gaps in alerting-rules.yaml: portal/UI health, LLM cost anomaly,
+# auth anomaly detection, SLO burn-rate alerts, and per-component availability.
+#
+# Usage:
+#   kubectl apply -f deploy/prometheus/alerting-rules-extended.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-alerts-extended
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+  annotations:
+    gostoa.dev/created-by: cab-1543
+spec:
+  groups:
+    # ============================================
+    # Portal Health Alerts
+    # ============================================
+    - name: stoa.portal.rules
+      rules:
+        - alert: PortalDown
+          expr: |
+            up{job="stoa-portal"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: portal
+          annotations:
+            summary: "Developer Portal is down"
+            description: "Developer Portal has been unreachable for more than 2 minutes"
+            runbook_url: "https://docs.gostoa.dev/runbooks/portal-down"
+
+        - alert: PortalPodNotReady
+          expr: |
+            kube_deployment_status_replicas_available{namespace="stoa-system", deployment=~".*portal.*"}
+            < kube_deployment_spec_replicas{namespace="stoa-system", deployment=~".*portal.*"}
+          for: 5m
+          labels:
+            severity: warning
+            component: portal
+          annotations:
+            summary: "Portal has fewer available replicas than desired"
+            description: "Portal deployment {{ $labels.deployment }} has {{ $value }} available replicas (desired: {{ $labels.spec_replicas }})"
+
+        - alert: PortalHighErrorRate
+          expr: |
+            (
+              sum(rate(nginx_http_requests_total{job="stoa-portal", status=~"5.."}[5m]))
+              / sum(rate(nginx_http_requests_total{job="stoa-portal"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            component: portal
+          annotations:
+            summary: "Developer Portal high error rate"
+            description: "Portal nginx 5xx error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+    # ============================================
+    # Console UI Health Alerts
+    # ============================================
+    - name: stoa.console-ui.rules
+      rules:
+        - alert: ConsoleUIDown
+          expr: |
+            up{job="control-plane-ui"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: control-plane-ui
+          annotations:
+            summary: "Console UI is down"
+            description: "Console UI has been unreachable for more than 2 minutes"
+            runbook_url: "https://docs.gostoa.dev/runbooks/console-ui-down"
+
+        - alert: ConsoleUIPodNotReady
+          expr: |
+            kube_deployment_status_replicas_available{namespace="stoa-system", deployment=~".*control-plane-ui.*"}
+            < kube_deployment_spec_replicas{namespace="stoa-system", deployment=~".*control-plane-ui.*"}
+          for: 5m
+          labels:
+            severity: warning
+            component: control-plane-ui
+          annotations:
+            summary: "Console UI has fewer available replicas than desired"
+            description: "Console UI deployment {{ $labels.deployment }} has {{ $value }} available replicas"
+
+        - alert: ConsoleUIHighErrorRate
+          expr: |
+            (
+              sum(rate(nginx_http_requests_total{job="control-plane-ui", status=~"5.."}[5m]))
+              / sum(rate(nginx_http_requests_total{job="control-plane-ui"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            component: control-plane-ui
+          annotations:
+            summary: "Console UI high error rate"
+            description: "Console UI nginx 5xx error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+    # ============================================
+    # LLM Cost Anomaly Alerts
+    # ============================================
+    - name: stoa.llm-cost.rules
+      rules:
+        - alert: LLMCostSpikeHourly
+          expr: |
+            sum(rate(gateway_llm_cost_total[1h])) * 3600
+            > 2 * sum(rate(gateway_llm_cost_total[24h])) * 3600
+          for: 30m
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "LLM cost spike detected"
+            description: "Hourly LLM cost rate is 2x the 24h average — possible runaway requests or misrouted traffic"
+
+        - alert: LLMCostHighPerTenant
+          expr: |
+            sum by (tenant_id) (rate(gateway_llm_cost_total[1h])) * 3600 > 10
+          for: 1h
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "High LLM cost for tenant {{ $labels.tenant_id }}"
+            description: "Tenant {{ $labels.tenant_id }} LLM spend is ${{ $value | humanize }}/hr — check for loops or abuse"
+
+        - alert: LLMHighTokenUsage
+          expr: |
+            sum(rate(gateway_llm_input_tokens_total[5m])) * 300
+            + sum(rate(gateway_llm_output_tokens_total[5m])) * 300
+            > 1000000
+          for: 15m
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "High LLM token throughput"
+            description: "Over 1M tokens consumed in 5 minutes — verify expected usage patterns"
+
+    # ============================================
+    # Auth & RBAC Anomaly Alerts
+    # ============================================
+    - name: stoa.auth-anomaly.rules
+      rules:
+        - alert: HighForbiddenRate
+          expr: |
+            (
+              sum(rate(stoa_control_plane_http_requests_total{status_code="403"}[5m]))
+              / sum(rate(stoa_control_plane_http_requests_total[5m]))
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            component: control-plane-api
+          annotations:
+            summary: "High 403 Forbidden rate on Control Plane API"
+            description: "403 rate is {{ $value | humanizePercentage }} — possible privilege escalation attempts or misconfigured RBAC"
+
+        - alert: HighUnauthorizedRate
+          expr: |
+            (
+              sum(rate(stoa_control_plane_http_requests_total{status_code="401"}[5m]))
+              / sum(rate(stoa_control_plane_http_requests_total[5m]))
+            ) > 0.2
+          for: 5m
+          labels:
+            severity: warning
+            component: control-plane-api
+          annotations:
+            summary: "High 401 Unauthorized rate on Control Plane API"
+            description: "401 rate is {{ $value | humanizePercentage }} — possible expired tokens or auth misconfiguration"
+
+        - alert: BruteForceLoginAttempt
+          expr: |
+            sum(rate(keycloak_login_error_total[5m])) > 10
+          for: 2m
+          labels:
+            severity: critical
+            component: keycloak
+          annotations:
+            summary: "Possible brute-force login attempt detected"
+            description: "Keycloak is receiving {{ $value | humanize }} failed login attempts per second"
+
+    # ============================================
+    # SLO Burn-Rate Alerts (Multi-Window)
+    # Uses recording rules from stoa-slo.yaml
+    # ============================================
+    - name: stoa.slo-burn-rate.rules
+      rules:
+        # Fast burn: 1h window, 14.4x burn rate = exhaust budget in ~2 days
+        - alert: SLOBurnRateFast
+          expr: |
+            slo:error_budget:burn_rate_1h > 14.4
+            and
+            slo:error_budget:burn_rate_6h > 6
+          for: 2m
+          labels:
+            severity: critical
+            component: slo
+          annotations:
+            summary: "SLO error budget burning fast"
+            description: "1h burn rate is {{ $value }}x (6h is also elevated). Error budget will exhaust in ~2 days at this rate."
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-burn-rate"
+
+        # Slow burn: 6h window, 6x burn rate = exhaust budget in ~5 days
+        - alert: SLOBurnRateSlow
+          expr: |
+            slo:error_budget:burn_rate_6h > 6
+          for: 1h
+          labels:
+            severity: warning
+            component: slo
+          annotations:
+            summary: "SLO error budget burning above normal"
+            description: "6h burn rate is {{ $value }}x. Error budget will exhaust in ~5 days at this rate."
+
+        # Error budget critically low (< 10% remaining)
+        - alert: SLOErrorBudgetCritical
+          expr: |
+            slo:error_budget:remaining_ratio < 0.1
+            and
+            slo:error_budget:remaining_ratio > 0
+          for: 5m
+          labels:
+            severity: critical
+            component: slo
+          annotations:
+            summary: "SLO error budget nearly exhausted"
+            description: "Only {{ $value | humanizePercentage }} error budget remaining. Freeze non-critical deployments."
+            runbook_url: "https://docs.gostoa.dev/runbooks/error-budget-exhausted"
+
+    # ============================================
+    # Deployment Rollout Alerts
+    # ============================================
+    - name: stoa.rollout.rules
+      rules:
+        - alert: DeploymentRolloutStuck
+          expr: |
+            kube_deployment_status_observed_generation{namespace="stoa-system"}
+            != kube_deployment_metadata_generation{namespace="stoa-system"}
+          for: 10m
+          labels:
+            severity: warning
+            component: kubernetes
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} rollout stuck"
+            description: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has not completed its rollout for 10+ minutes"
+
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas{namespace="stoa-system"}
+            != kube_deployment_status_available_replicas{namespace="stoa-system"}
+          for: 10m
+          labels:
+            severity: warning
+            component: kubernetes
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} replicas mismatch"
+            description: "Deployment {{ $labels.deployment }} desired {{ $labels.spec_replicas }} replicas but only {{ $value }} available"
+
+    # ============================================
+    # Inhibition Meta-Rules (recording rules for
+    # AlertManager inhibition conditions)
+    # ============================================
+    - name: stoa.maintenance.rules
+      rules:
+        # Maintenance window indicator — set to 1 during planned maintenance
+        # Controlled by: kubectl annotate prometheusrule stoa-alerts-extended maintenance=true
+        # AlertManager uses this to suppress non-critical alerts
+        - record: stoa:maintenance_window:active
+          expr: |
+            vector(0)

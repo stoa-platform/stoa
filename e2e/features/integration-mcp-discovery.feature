@@ -8,6 +8,7 @@ Feature: MCP Discovery — Contract to MCP Tool Pipeline
     Given the CP API and gateway are both reachable
     And I obtain a CP API token as "parzival"
 
+  @smoke
   Scenario: Generate MCP tools from a published contract
     Given I create contract "e2e-mcp-gen" with version "2.0.0" via CP API
     And I update contract "e2e-mcp-gen" status to "published" via CP API

@@ -32,6 +32,9 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
+          env:
+            - name: LOG_TRACE_EXPORT_ENDPOINT
+              value: "http://stoa-alloy-otlp.stoa-monitoring:4317"
           envFrom:
             - configMapRef:
                 name: stoa-control-plane-api-config

@@ -59,10 +59,12 @@ const sampleEntries = [
   },
 ];
 
-describe('AuditLogPage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'AuditLogPage — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock('cpi-admin'));
+    mockAuth.mockReturnValue(createAuthMock(role));
     mockAuditData.mockReturnValue({
       entries: sampleEntries,
       total: 2,
@@ -153,15 +155,4 @@ describe('AuditLogPage', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  describe('Persona-based Tests', () => {
-    const personas: PersonaRole[] = ['cpi-admin', 'tenant-admin', 'devops', 'viewer'];
-
-    it.each(personas)('%s can access audit log page (audit:read)', async (persona) => {
-      mockAuth.mockReturnValue(createAuthMock(persona));
-      renderWithProviders(<AuditLogPage />);
-      await waitFor(() => {
-        expect(screen.getByText('Audit Log')).toBeInTheDocument();
-      });
-    });
-  });
 });

@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { Suspense, lazy, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppWindow, CreditCard, FileCode2, ShieldCheck } from 'lucide-react';
+import { AppWindow, CreditCard, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { config } from '../../config';
 import { loadNamespace } from '../../i18n';
@@ -10,9 +10,6 @@ const MyApplications = lazy(() => import('../apps').then((m) => ({ default: m.My
 const MySubscriptions = lazy(() =>
   import('../subscriptions/MySubscriptions').then((m) => ({ default: m.MySubscriptions }))
 );
-const ContractListPage = lazy(() =>
-  import('../contracts').then((m) => ({ default: m.ContractListPage }))
-);
 const ApprovalQueue = lazy(() =>
   import('../../components/consumers/ApprovalQueue').then((m) => ({ default: m.ApprovalQueue }))
 );
@@ -20,7 +17,6 @@ const ApprovalQueue = lazy(() =>
 const allTabs = [
   { id: 'apps', label: 'Apps', icon: AppWindow, adminOnly: false },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard, adminOnly: false },
-  { id: 'contracts', label: 'Contracts', icon: FileCode2, adminOnly: false },
   { id: 'approvals', label: 'Approvals', icon: ShieldCheck, adminOnly: true },
 ] as const;
 
@@ -65,7 +61,7 @@ export function WorkspacePage() {
           {i18nEnabled ? t('title') : 'My Workspace'}
         </h1>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-          {i18nEnabled ? t('subtitle') : 'Manage your apps, subscriptions, and contracts'}
+          {i18nEnabled ? t('subtitle') : 'Manage your apps and subscriptions'}
         </p>
       </div>
 
@@ -96,7 +92,6 @@ export function WorkspacePage() {
       <Suspense fallback={<TabSkeleton />}>
         {activeTab === 'apps' && <MyApplications />}
         {activeTab === 'subscriptions' && <MySubscriptions />}
-        {activeTab === 'contracts' && <ContractListPage />}
         {activeTab === 'approvals' && <ApprovalQueue />}
       </Suspense>
     </div>

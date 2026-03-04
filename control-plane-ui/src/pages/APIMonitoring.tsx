@@ -628,7 +628,7 @@ export function APIMonitoring() {
       if (!mountedRef.current) return;
       setTransactions(txnResponse.data.transactions);
       setStats(statsResponse.data);
-    } catch (err) {
+    } catch (_err) {
       if (!mountedRef.current) return;
       console.log('Using demo data for transactions');
       // Use demo data

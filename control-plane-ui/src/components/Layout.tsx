@@ -55,6 +55,7 @@ import {
   Settings,
   DollarSign,
   Puzzle,
+  Webhook,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -313,6 +314,12 @@ const navigationSections: NavSection[] = [
         href: '/audience-governance',
         icon: Users,
         permission: 'apis:update',
+      },
+      {
+        name: 'nav.webhooks',
+        href: '/webhooks',
+        icon: Webhook,
+        permission: 'apis:read',
       },
     ],
   },

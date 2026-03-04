@@ -45,7 +45,8 @@
     "securityPosture": "Posture de securite",
     "proxyOwner": "Propriétaire de proxy",
     "llmCost": "Coûts LLM",
-    "subscriptions": "Abonnements"
+    "subscriptions": "Abonnements",
+    "webhooks": "Webhooks"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",

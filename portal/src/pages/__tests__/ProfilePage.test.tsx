@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { ProfilePage } from '../profile/Profile';
 import { renderWithProviders, createAuthMock } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
 
 // Mock AuthContext
 const mockUseAuth = vi.fn();
@@ -16,10 +17,19 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
-describe('ProfilePage', () => {
+const personaData: Record<PersonaRole, { name: string; email: string; org: string; userId: string }> = {
+  'cpi-admin': { name: 'James Halliday', email: 'halliday@gregarious-games.com', org: 'Gregarious Games', userId: 'user-halliday' },
+  'tenant-admin': { name: 'Wade Watts', email: 'parzival@oasis-gunters.com', org: 'OASIS Gunters', userId: 'user-parzival' },
+  'devops': { name: 'Samantha Cook', email: 'art3mis@oasis-gunters.com', org: 'OASIS Gunters', userId: 'user-art3mis' },
+  'viewer': { name: 'Helen Harris', email: 'aech@oasis-gunters.com', org: 'OASIS Gunters', userId: 'user-aech' },
+};
+
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'ProfilePage — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseAuth.mockReturnValue(createAuthMock('tenant-admin'));
+    mockUseAuth.mockReturnValue(createAuthMock(role));
   });
 
   describe('Page Structure', () => {
@@ -33,14 +43,14 @@ describe('ProfilePage', () => {
     it('should render user name in header', () => {
       renderWithProviders(<ProfilePage />);
 
-      const names = screen.getAllByText('Wade Watts');
+      const names = screen.getAllByText(personaData[role].name);
       expect(names.length).toBeGreaterThan(0);
     });
 
     it('should render user email in header', () => {
       renderWithProviders(<ProfilePage />);
 
-      const emails = screen.getAllByText('parzival@oasis-gunters.com');
+      const emails = screen.getAllByText(personaData[role].email);
       expect(emails.length).toBeGreaterThan(0);
     });
   });
@@ -50,7 +60,7 @@ describe('ProfilePage', () => {
       renderWithProviders(<ProfilePage />);
 
       expect(screen.getByText('Full Name')).toBeInTheDocument();
-      const names = screen.getAllByText('Wade Watts');
+      const names = screen.getAllByText(personaData[role].name);
       expect(names.length).toBeGreaterThan(0);
     });
 
@@ -58,7 +68,7 @@ describe('ProfilePage', () => {
       renderWithProviders(<ProfilePage />);
 
       expect(screen.getByText('Email')).toBeInTheDocument();
-      const emails = screen.getAllByText('parzival@oasis-gunters.com');
+      const emails = screen.getAllByText(personaData[role].email);
       expect(emails.length).toBeGreaterThan(0);
     });
 
@@ -66,7 +76,7 @@ describe('ProfilePage', () => {
       renderWithProviders(<ProfilePage />);
 
       expect(screen.getByText('Organization')).toBeInTheDocument();
-      const orgs = screen.getAllByText('OASIS Gunters');
+      const orgs = screen.getAllByText(personaData[role].org);
       expect(orgs.length).toBeGreaterThan(0);
     });
   });
@@ -76,7 +86,7 @@ describe('ProfilePage', () => {
       renderWithProviders(<ProfilePage />);
 
       expect(screen.getByText('User ID')).toBeInTheDocument();
-      expect(screen.getByText('user-parzival')).toBeInTheDocument();
+      expect(screen.getByText(personaData[role].userId)).toBeInTheDocument();
     });
 
     it('should show Authentication method', () => {
@@ -98,63 +108,6 @@ describe('ProfilePage', () => {
       renderWithProviders(<ProfilePage />);
 
       expect(screen.getByText(/API key management will be available soon/)).toBeInTheDocument();
-    });
-  });
-
-  describe('Persona-based Tests', () => {
-    it('should render cpi-admin profile (James Halliday)', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('cpi-admin'));
-
-      renderWithProviders(<ProfilePage />);
-
-      const names = screen.getAllByText('James Halliday');
-      expect(names.length).toBeGreaterThan(0);
-      const emails = screen.getAllByText('halliday@gregarious-games.com');
-      expect(emails.length).toBeGreaterThan(0);
-      expect(screen.getByText('Gregarious Games')).toBeInTheDocument();
-      expect(screen.getByText('user-halliday')).toBeInTheDocument();
-    });
-
-    it('should render tenant-admin profile (Wade Watts)', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
-      renderWithProviders(<ProfilePage />);
-
-      const names = screen.getAllByText('Wade Watts');
-      expect(names.length).toBeGreaterThan(0);
-      const emails = screen.getAllByText('parzival@oasis-gunters.com');
-      expect(emails.length).toBeGreaterThan(0);
-      const orgs = screen.getAllByText('OASIS Gunters');
-      expect(orgs.length).toBeGreaterThan(0);
-      expect(screen.getByText('user-parzival')).toBeInTheDocument();
-    });
-
-    it('should render devops profile (Samantha Cook)', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('devops'));
-
-      renderWithProviders(<ProfilePage />);
-
-      const names = screen.getAllByText('Samantha Cook');
-      expect(names.length).toBeGreaterThan(0);
-      const emails = screen.getAllByText('art3mis@oasis-gunters.com');
-      expect(emails.length).toBeGreaterThan(0);
-      const orgs = screen.getAllByText('OASIS Gunters');
-      expect(orgs.length).toBeGreaterThan(0);
-      expect(screen.getByText('user-art3mis')).toBeInTheDocument();
-    });
-
-    it('should render viewer profile (Helen Harris)', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('viewer'));
-
-      renderWithProviders(<ProfilePage />);
-
-      const names = screen.getAllByText('Helen Harris');
-      expect(names.length).toBeGreaterThan(0);
-      const emails = screen.getAllByText('aech@oasis-gunters.com');
-      expect(emails.length).toBeGreaterThan(0);
-      const orgs = screen.getAllByText('OASIS Gunters');
-      expect(orgs.length).toBeGreaterThan(0);
-      expect(screen.getByText('user-aech')).toBeInTheDocument();
     });
   });
 });

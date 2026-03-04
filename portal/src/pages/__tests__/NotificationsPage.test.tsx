@@ -73,10 +73,12 @@ const sampleNotifications = [
   },
 ];
 
-describe('NotificationsPage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'NotificationsPage — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock('cpi-admin'));
+    mockAuth.mockReturnValue(createAuthMock(role));
     mockNotificationsData.mockReturnValue({
       notifications: sampleNotifications,
       unread_count: 1,
@@ -195,15 +197,4 @@ describe('NotificationsPage', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  describe('Persona-based Tests', () => {
-    const personas: PersonaRole[] = ['cpi-admin', 'tenant-admin', 'devops', 'viewer'];
-
-    it.each(personas)('%s can access notifications page', async (persona) => {
-      mockAuth.mockReturnValue(createAuthMock(persona));
-      renderWithProviders(<NotificationsPage />);
-      await waitFor(() => {
-        expect(screen.getByText('Notifications')).toBeInTheDocument();
-      });
-    });
-  });
 });

@@ -79,10 +79,12 @@ vi.mock('../../components/usage', () => ({
   ),
 }));
 
-describe('UsagePage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'UsagePage — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+    mockAuth.mockReturnValue(createAuthMock(role));
   });
 
   it('renders the Usage Dashboard heading', async () => {
@@ -308,51 +310,4 @@ describe('UsagePage', () => {
     });
   });
 
-  describe('Persona-based Tests', () => {
-    const personas: PersonaRole[] = ['cpi-admin', 'tenant-admin', 'devops', 'viewer'];
-
-    const setupUsageMocks = () => {
-      mockGetSummary.mockResolvedValue({
-        today: {
-          period: 'today',
-          total_calls: 150,
-          success_count: 142,
-          error_count: 8,
-          success_rate: 94.7,
-          avg_latency_ms: 185,
-        },
-        this_week: {
-          period: 'week',
-          total_calls: 1200,
-          success_count: 1150,
-          error_count: 50,
-          success_rate: 95.8,
-          avg_latency_ms: 175,
-        },
-        this_month: {
-          period: 'month',
-          total_calls: 4500,
-          success_count: 4350,
-          error_count: 150,
-          success_rate: 96.7,
-          avg_latency_ms: 190,
-        },
-        top_tools: [],
-        daily_calls: [],
-      });
-      mockGetCalls.mockResolvedValue({ calls: [] });
-      mockGetActiveSubscriptions.mockResolvedValue([]);
-    };
-
-    it.each(personas)('%s can access the usage page (stoa:metrics:read)', async (persona) => {
-      mockAuth.mockReturnValue(createAuthMock(persona));
-      setupUsageMocks();
-
-      renderWithProviders(<UsagePage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Usage Dashboard')).toBeInTheDocument();
-      });
-    });
-  });
 });

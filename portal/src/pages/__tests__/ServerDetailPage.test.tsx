@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAuthMock, renderWithProviders, mockMCPServer } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
 import { Routes, Route } from 'react-router-dom';
 import type { MCPServer } from '../../types';
 
@@ -51,7 +52,9 @@ vi.mock('../../config', () => ({
   },
 }));
 
-describe('ServerDetailPage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'ServerDetailPage — %s persona',
+  (role) => {
   let ServerDetailPage: React.ComponentType;
   let mcpServersService: Record<string, ReturnType<typeof vi.fn>>;
   let mockGetServer: ReturnType<typeof vi.fn>;
@@ -60,6 +63,7 @@ describe('ServerDetailPage', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockAuth.mockReturnValue(createAuthMock(role));
 
     const pageModule = await import('../servers/ServerDetailPage');
     ServerDetailPage = pageModule.ServerDetailPage;
@@ -113,7 +117,7 @@ describe('ServerDetailPage', () => {
   };
 
   it('shows loading state with spinner', () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     mockGetServer.mockImplementation(() => new Promise(() => {})); // Never resolves
 
     renderWithRoute();
@@ -124,7 +128,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('shows error message when server not found', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     mockGetServer.mockResolvedValue(undefined);
 
     renderWithRoute();
@@ -137,7 +141,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('renders server details: displayName, version, status, description', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -152,7 +156,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('renders tools count and category badge', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -165,7 +169,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('renders tools list with displayName and description', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -181,7 +185,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('shows "Select All" toggle before subscription', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -195,7 +199,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('shows "Deselect All" when all tools are selected', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -209,7 +213,7 @@ describe('ServerDetailPage', () => {
 
   it('tool checkboxes work before subscription', async () => {
     const user = userEvent.setup();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -233,7 +237,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('subscribe button shows selected count', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -246,7 +250,7 @@ describe('ServerDetailPage', () => {
 
   it('subscribe button is disabled when 0 tools selected', async () => {
     const user = userEvent.setup();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -267,7 +271,7 @@ describe('ServerDetailPage', () => {
 
   it('shows API key section after successful subscription', async () => {
     const user = userEvent.setup();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
     mockSubscribeToServer.mockResolvedValue({
@@ -304,7 +308,7 @@ describe('ServerDetailPage', () => {
 
   it('shows Claude.ai and Desktop config after subscription', async () => {
     const user = userEvent.setup();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
     mockSubscribeToServer.mockResolvedValue({
@@ -339,7 +343,7 @@ describe('ServerDetailPage', () => {
 
   it('shows Copy buttons for API key and configs', async () => {
     const user = userEvent.setup();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
     mockSubscribeToServer.mockResolvedValue({
@@ -372,7 +376,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('shows tool access status badges when subscribed', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
     mockGetMyServerSubscriptions.mockResolvedValue([
@@ -402,7 +406,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('shows "Back to Servers" breadcrumb link', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
 
@@ -415,7 +419,7 @@ describe('ServerDetailPage', () => {
   });
 
   it('shows subscription management buttons when subscribed', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
+
     const server = createMockServer();
     mockGetServer.mockResolvedValue(server);
     mockGetMyServerSubscriptions.mockResolvedValue([
@@ -443,25 +447,4 @@ describe('ServerDetailPage', () => {
     });
   });
 
-  describe('Persona-based Tests', () => {
-    const personas: import('../../test/helpers').PersonaRole[] = [
-      'cpi-admin',
-      'tenant-admin',
-      'devops',
-      'viewer',
-    ];
-
-    it.each(personas)('%s can view server detail (stoa:catalog:read)', async (persona) => {
-      mockAuth.mockReturnValue(createAuthMock(persona));
-      const server = createMockServer();
-      mockGetServer.mockResolvedValue(server);
-
-      renderWithRoute();
-
-      await waitFor(() => {
-        expect(screen.getByText('STOA Platform Tools')).toBeInTheDocument();
-        expect(screen.getByText('Core STOA administration tools')).toBeInTheDocument();
-      });
-    });
-  });
 });

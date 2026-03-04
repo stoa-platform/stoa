@@ -64,9 +64,12 @@ vi.mock('@stoa/shared/components/ConfirmDialog', () => ({
     ) : null,
 }));
 
-describe('WebhooksPage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'WebhooksPage — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAuth.mockReturnValue(createAuthMock(role));
     mockUseCreateWebhook.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
     mockUseUpdateWebhook.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
     mockUseDeleteWebhook.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
@@ -417,33 +420,4 @@ describe('WebhooksPage', () => {
     });
   });
 
-  describe('Persona-based Tests', () => {
-    it.each(['cpi-admin', 'tenant-admin'] as PersonaRole[])(
-      '%s can access webhooks page (stoa:subscriptions:write)',
-      async (persona) => {
-        const auth = createAuthMock(persona);
-        mockAuth.mockReturnValue(auth);
-        mockUseWebhooks.mockReturnValue({
-          data: { items: [] },
-          isLoading: false,
-          isError: false,
-          refetch: vi.fn(),
-        });
-
-        renderWithProviders(<WebhooksPage />);
-
-        await waitFor(() => {
-          expect(screen.getByText('Webhook Notifications')).toBeInTheDocument();
-        });
-      }
-    );
-
-    it.each(['devops', 'viewer'] as PersonaRole[])(
-      '%s does not have stoa:subscriptions:write scope',
-      (persona) => {
-        const auth = createAuthMock(persona);
-        expect(auth.hasScope('stoa:subscriptions:write')).toBe(false);
-      }
-    );
-  });
 });

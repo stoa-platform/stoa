@@ -316,5 +316,12 @@
   "diagnostics": {
     "title": "Platform Diagnostics",
     "description": "Automated root cause analysis and connectivity testing"
+  },
+  "tokenUsage": {
+    "unavailable": "Token usage unavailable",
+    "title": "Token Budget",
+    "todayUsage": "{{used}} / {{budget}} tokens today",
+    "remaining": "{{remaining}} remaining",
+    "exceeded": "Daily budget exceeded"
   }
 }

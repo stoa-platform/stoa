@@ -45,7 +45,8 @@
     "securityPosture": "Security Posture",
     "proxyOwner": "Proxy Owner",
     "llmCost": "LLM Cost",
-    "subscriptions": "Subscriptions"
+    "subscriptions": "Subscriptions",
+    "webhooks": "Webhooks"
   },
   "layout": {
     "controlPlane": "Control Plane",

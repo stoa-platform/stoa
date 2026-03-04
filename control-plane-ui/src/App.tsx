@@ -174,6 +174,9 @@ const LLMCostDashboard = lazy(() =>
   import('./pages/LLMCost').then((m) => ({ default: m.LLMCostDashboard }))
 );
 
+// CAB-1647: Webhooks management (ported from Portal)
+const Webhooks = lazy(() => import('./pages/Webhooks').then((m) => ({ default: m.Webhooks })));
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -500,6 +503,7 @@ function ProtectedRoutes() {
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
+                <Route path="/webhooks" element={<Webhooks />} />
               </Routes>
             </Suspense>
           )}

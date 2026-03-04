@@ -7,16 +7,20 @@
   "created": {
     "title": "Application Created Successfully!",
     "message": "Your application \"{{name}}\" has been created.",
+    "noCredentials": "Credentials are not available yet. The authentication service may be temporarily unavailable. Please try regenerating credentials later from the application details.",
     "dismiss": "Dismiss"
   },
   "loading": "Loading applications...",
   "error": {
-    "title": "Failed to load applications",
+    "loadFailed": "Failed to load applications",
+    "createFailed": "Failed to create application. Please try again.",
+    "unexpected": "An unexpected error occurred.",
     "tryAgain": "Try Again"
   },
   "empty": {
     "title": "No Applications Yet",
-    "description": "Create your first application to start using APIs. Each application gets its own credentials for authentication."
+    "description": "Create your first application to start using APIs. Each application gets its own credentials for authentication.",
+    "createFirst": "Create Your First Application"
   },
   "count": {
     "one": "1 application",

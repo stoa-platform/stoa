@@ -69,6 +69,7 @@ class ApplicationCreateRequest(BaseModel):
     description: str = ""
     redirect_uris: list[str] = []
     tenant_id: str | None = None  # If not specified, uses user's default tenant
+    environment: str | None = None  # Multi-env registry (CAB-1667)
 
 
 class ApplicationUpdateRequest(BaseModel):
@@ -197,6 +198,7 @@ async def create_application(
         tenant_id=data.tenant_id,
         redirect_uris=data.redirect_uris,
         status=PortalAppStatus.ACTIVE,
+        environment=data.environment,
     )
 
     # Try Keycloak client creation (graceful degradation)

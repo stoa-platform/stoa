@@ -47,7 +47,8 @@
     "llmCost": "Coûts LLM",
     "subscriptions": "Abonnements",
     "webhooks": "Webhooks",
-    "credentialMappings": "Mappages d'identifiants"
+    "credentialMappings": "Mappages d'identifiants",
+    "contracts": "Contrats"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",
@@ -316,5 +317,20 @@
   "diagnostics": {
     "title": "Diagnostics Plateforme",
     "description": "Analyse automatique des causes et tests de connectivité"
+  },
+  "contracts": {
+    "title": "Contrats",
+    "subtitle": "Contrats API Universels — Définir une fois, exposer partout",
+    "createContract": "Créer un contrat",
+    "noContracts": "Aucun contrat configuré",
+    "deleteContract": "Supprimer le contrat",
+    "createNewContract": "Créer un nouveau contrat"
+  },
+  "tokenUsage": {
+    "unavailable": "Utilisation des tokens indisponible",
+    "title": "Budget de tokens",
+    "todayUsage": "{{used}} / {{budget}} tokens aujourd'hui",
+    "remaining": "{{remaining}} restants",
+    "exceeded": "Budget quotidien dépassé"
   }
 }

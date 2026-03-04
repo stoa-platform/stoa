@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ''
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
     outputs:
       test-result:
         description: 'Test job result (success/failure)'
@@ -40,7 +45,7 @@ on:
 jobs:
   test:
     name: Lint and Test (${{ inputs.component }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     outputs:
       result: ${{ steps.set-result.outputs.result }}
     permissions:

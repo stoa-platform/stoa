@@ -47,7 +47,8 @@
     "llmCost": "LLM Cost",
     "subscriptions": "Subscriptions",
     "webhooks": "Webhooks",
-    "credentialMappings": "Credential Mappings"
+    "credentialMappings": "Credential Mappings",
+    "contracts": "Contracts"
   },
   "layout": {
     "controlPlane": "Control Plane",
@@ -316,5 +317,20 @@
   "diagnostics": {
     "title": "Platform Diagnostics",
     "description": "Automated root cause analysis and connectivity testing"
+  },
+  "contracts": {
+    "title": "Contracts",
+    "subtitle": "Universal API Contracts — Define Once, Expose Everywhere",
+    "createContract": "Create Contract",
+    "noContracts": "No contracts configured",
+    "deleteContract": "Delete Contract",
+    "createNewContract": "Create New Contract"
+  },
+  "tokenUsage": {
+    "unavailable": "Token usage unavailable",
+    "title": "Token Budget",
+    "todayUsage": "{{used}} / {{budget}} tokens today",
+    "remaining": "{{remaining}} remaining",
+    "exceeded": "Daily budget exceeded"
   }
 }

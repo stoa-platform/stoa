@@ -47,7 +47,8 @@
     "llmCost": "Coûts LLM",
     "subscriptions": "Abonnements",
     "webhooks": "Webhooks",
-    "credentialMappings": "Mappages d'identifiants"
+    "credentialMappings": "Mappages d'identifiants",
+    "contracts": "Contrats"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",

@@ -57,6 +57,7 @@ import {
   Puzzle,
   Webhook,
   Key,
+  FileText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -326,6 +327,12 @@ const navigationSections: NavSection[] = [
         name: 'nav.credentialMappings',
         href: '/credential-mappings',
         icon: Key,
+        permission: 'apis:read',
+      },
+      {
+        name: 'nav.contracts',
+        href: '/contracts',
+        icon: FileText,
         permission: 'apis:read',
       },
     ],

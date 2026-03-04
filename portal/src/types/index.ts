@@ -253,6 +253,7 @@ export interface ApplicationCreateRequest {
   display_name: string;
   description?: string;
   redirect_uris: string[];
+  environment?: string;
 }
 
 // API Subscription types (for consumer apps)

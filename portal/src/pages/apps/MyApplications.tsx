@@ -36,7 +36,10 @@ export function MyApplications() {
   const handleCreateApp = async (data: ApplicationCreateRequest) => {
     setCreateError(null);
     try {
-      const newApp = await createMutation.mutateAsync(data);
+      const newApp = await createMutation.mutateAsync({
+        ...data,
+        environment: activeEnvironment || undefined,
+      });
       setNewlyCreatedApp(newApp);
       setIsCreateModalOpen(false);
     } catch (err) {

@@ -30,9 +30,7 @@ fn make_catalog_tool(name: &str, description: &str, endpoint: &str) -> Arc<dyn T
         required: vec!["query".to_string()],
     };
 
-    Arc::new(
-        DynamicTool::new(name, description, endpoint, "POST", schema, "default").into_public(),
-    )
+    Arc::new(DynamicTool::new(name, description, endpoint, "POST", schema, "default").into_public())
 }
 
 // ========================================================================
@@ -61,7 +59,10 @@ async fn test_api_bridge_discovered_tool_appears_in_mcp_list() {
     let found = tools
         .iter()
         .any(|t| t["name"].as_str() == Some("billing_api_search"));
-    assert!(found, "Expected billing_api_search in tools/list, got: {body}");
+    assert!(
+        found,
+        "Expected billing_api_search in tools/list, got: {body}"
+    );
 }
 
 // ========================================================================
@@ -119,11 +120,7 @@ async fn test_api_bridge_call_unknown_tool_returns_error() {
     let app = TestApp::new();
 
     // Register one tool but try to call a different name
-    let tool = make_catalog_tool(
-        "catalog_tool_a",
-        "Tool A",
-        "http://localhost:9999/a",
-    );
+    let tool = make_catalog_tool("catalog_tool_a", "Tool A", "http://localhost:9999/a");
     app.state.tool_registry.register(tool);
 
     let (status, body) = app
@@ -174,10 +171,7 @@ async fn test_api_bridge_tools_visible_via_rest_api() {
     assert!(json.is_array(), "REST API returns array, got: {body}");
 
     let tools = json.as_array().expect("array");
-    let names: Vec<&str> = tools
-        .iter()
-        .filter_map(|t| t["name"].as_str())
-        .collect();
+    let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert!(
         names.contains(&"orders_api_list"),

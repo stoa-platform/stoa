@@ -14,6 +14,7 @@ import (
 
 	"github.com/stoa-platform/stoa/hegemon/daemon/internal/config"
 	"github.com/stoa-platform/stoa/hegemon/daemon/internal/linear"
+	"github.com/stoa-platform/stoa/hegemon/daemon/internal/metrics"
 	"github.com/stoa-platform/stoa/hegemon/daemon/internal/reporter"
 	"github.com/stoa-platform/stoa/hegemon/daemon/internal/scheduler"
 	"github.com/stoa-platform/stoa/hegemon/daemon/internal/state"
@@ -49,6 +50,7 @@ type daemon struct {
 	scheduler *scheduler.Scheduler
 	executor  *worker.Executor
 	reporter  *reporter.Reporter
+	metrics   *metrics.Pusher
 	wg        sync.WaitGroup
 }
 
@@ -72,6 +74,7 @@ func newDaemon(cfg *config.Config) (*daemon, error) {
 	)
 	sched := scheduler.New(cfg.Workers, store)
 	exec := worker.New(cfg.Repo.Path, cfg.Repo.Branch)
+	metricsPusher := metrics.New(cfg.Metrics.PushgatewayURL, cfg.Metrics.BasicAuth)
 
 	return &daemon{
 		cfg:       cfg,
@@ -80,6 +83,7 @@ func newDaemon(cfg *config.Config) (*daemon, error) {
 		scheduler: sched,
 		executor:  exec,
 		reporter:  rep,
+		metrics:   metricsPusher,
 	}, nil
 }
 
@@ -97,6 +101,17 @@ func (d *daemon) run(ctx context.Context) error {
 	// Start health checker goroutine.
 	d.wg.Add(1)
 	go d.runHealthChecker(ctx)
+
+	// Start stale dispatch cleanup goroutine (every 30 min).
+	d.wg.Add(1)
+	go d.runStaleCleanup(ctx)
+
+	// Start metrics push goroutine (if Pushgateway configured).
+	if d.metrics.Enabled() {
+		d.wg.Add(1)
+		go d.runMetricsPusher(ctx)
+		log.Printf("Metrics push enabled → %s (every %s)", d.cfg.Metrics.PushgatewayURL, d.cfg.Metrics.PushInterval.Duration)
+	}
 
 	// Main poll loop.
 	ticker := time.NewTicker(d.cfg.Linear.PollInterval.Duration)
@@ -315,15 +330,87 @@ func (d *daemon) runHealthChecker(ctx context.Context) {
 }
 
 func (d *daemon) checkWorkerHealth() {
+	threshold := d.cfg.HealthCheck.CircuitThreshold
+	pauseDur := time.Duration(d.cfg.HealthCheck.CircuitPauseSecs) * time.Second
+
 	for _, w := range d.cfg.Workers {
+		// Skip workers currently paused by circuit breaker.
+		if paused, _ := d.state.IsWorkerPaused(w.Name); paused {
+			continue
+		}
+
 		err := d.executor.Ping(&w, d.cfg.HealthCheck.SSHTimeout.Duration)
 		if err != nil {
 			d.state.SetWorkerHealth(w.Name, false, err.Error())
-			d.reporter.NotifyHealthFailure(w.Name, err.Error())
-			log.Printf("HEALTH FAIL %s: %v", w.Name, err)
+
+			failCount, _ := d.state.IncrHealthFail(w.Name)
+			if failCount >= threshold {
+				// Circuit breaker tripped: pause worker.
+				until := time.Now().Add(pauseDur)
+				d.state.SetWorkerPaused(w.Name, until)
+				d.reporter.NotifyHealthFailure(w.Name,
+					fmt.Sprintf("circuit breaker tripped (%d consecutive fails) — paused until %s",
+						failCount, until.UTC().Format("15:04")))
+				log.Printf("CIRCUIT-BREAK %s: %d fails → paused until %s", w.Name, failCount, until.UTC().Format("15:04:05"))
+			} else {
+				d.reporter.NotifyHealthFailure(w.Name, err.Error())
+				log.Printf("HEALTH FAIL %s (%d/%d): %v", w.Name, failCount, threshold, err)
+			}
 		} else {
 			d.state.SetWorkerHealth(w.Name, true, "")
+			d.state.ResetHealthFails(w.Name)
 		}
+	}
+}
+
+func (d *daemon) runStaleCleanup(ctx context.Context) {
+	defer d.wg.Done()
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cleaned, err := d.state.CleanStaleDispatches(2 * time.Hour)
+			if err != nil {
+				log.Printf("ERROR stale cleanup: %v", err)
+			} else if cleaned > 0 {
+				log.Printf("STALE-CLEANUP: released %d stale dispatches", cleaned)
+			}
+		}
+	}
+}
+
+func (d *daemon) runMetricsPusher(ctx context.Context) {
+	defer d.wg.Done()
+	ticker := time.NewTicker(d.cfg.Metrics.PushInterval.Duration)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			d.pushMetrics()
+		}
+	}
+}
+
+func (d *daemon) pushMetrics() {
+	stats, err := d.state.GetAllWorkerStats()
+	if err != nil {
+		log.Printf("WARN metrics: get worker stats: %v", err)
+		return
+	}
+	queueDepth, err := d.state.GetQueueDepth()
+	if err != nil {
+		log.Printf("WARN metrics: get queue depth: %v", err)
+		return
+	}
+	if err := d.metrics.PushWorkerHealth(stats, queueDepth); err != nil {
+		log.Printf("WARN metrics push: %v", err)
 	}
 }
 

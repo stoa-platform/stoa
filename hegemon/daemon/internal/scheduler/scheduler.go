@@ -49,6 +49,10 @@ func (s *Scheduler) FindAvailableWorker(role string) *config.WorkerConfig {
 		if qs, ok := s.quotaState[w.Name]; ok && now.Before(qs.BackoffAt) {
 			continue
 		}
+		// Skip workers paused by circuit breaker.
+		if paused, _ := s.state.IsWorkerPaused(w.Name); paused {
+			continue
+		}
 		status, err := s.state.GetWorkerStatus(w.Name)
 		if err != nil {
 			continue

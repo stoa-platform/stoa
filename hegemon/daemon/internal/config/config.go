@@ -16,6 +16,7 @@ type Config struct {
 	Notification  NotificationConfig      `yaml:"notification"`
 	Timeouts      map[int]CustomDuration  `yaml:"timeouts"`
 	HealthCheck   HealthCheckConfig       `yaml:"health_check"`
+	Metrics       MetricsConfig           `yaml:"metrics"`
 	State         StateConfig             `yaml:"state"`
 	Log           LogConfig               `yaml:"log"`
 	Repo          RepoConfig              `yaml:"repo"`
@@ -48,8 +49,16 @@ type NotificationConfig struct {
 }
 
 type HealthCheckConfig struct {
-	Interval   CustomDuration `yaml:"interval"`
-	SSHTimeout CustomDuration `yaml:"ssh_timeout"`
+	Interval          CustomDuration `yaml:"interval"`
+	SSHTimeout        CustomDuration `yaml:"ssh_timeout"`
+	CircuitThreshold  int            `yaml:"circuit_threshold"`   // consecutive fails before pause (default 3)
+	CircuitPauseSecs  int            `yaml:"circuit_pause_secs"`  // seconds to pause a tripped worker (default 300)
+}
+
+type MetricsConfig struct {
+	PushgatewayURL  string         `yaml:"pushgateway_url"`
+	PushInterval    CustomDuration `yaml:"push_interval"`
+	BasicAuth       string         `yaml:"basic_auth"` // user:pass for Pushgateway
 }
 
 type StateConfig struct {
@@ -116,6 +125,15 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.HealthCheck.SSHTimeout.Duration == 0 {
 		cfg.HealthCheck.SSHTimeout.Duration = 10 * time.Second
+	}
+	if cfg.HealthCheck.CircuitThreshold == 0 {
+		cfg.HealthCheck.CircuitThreshold = 3
+	}
+	if cfg.HealthCheck.CircuitPauseSecs == 0 {
+		cfg.HealthCheck.CircuitPauseSecs = 300 // 5 minutes
+	}
+	if cfg.Metrics.PushInterval.Duration == 0 {
+		cfg.Metrics.PushInterval.Duration = 60 * time.Second
 	}
 	if cfg.State.DBPath == "" {
 		cfg.State.DBPath = "./hegemon.db"

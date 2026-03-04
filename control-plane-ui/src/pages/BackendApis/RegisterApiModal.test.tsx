@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createAuthMock } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
 import { RegisterApiModal } from './RegisterApiModal';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 const mockCreateBackendApi = vi.fn();
 
@@ -22,16 +27,19 @@ const defaultProps = {
   onCreated: vi.fn(),
 };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockCreateBackendApi.mockResolvedValue({});
-});
-
 function getForm(): HTMLFormElement {
   return document.querySelector('form')!;
 }
 
-describe('RegisterApiModal', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  '%s persona',
+  (role) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      mockCreateBackendApi.mockResolvedValue({});
+    });
+
   it('renders form with required fields', () => {
     render(<RegisterApiModal {...defaultProps} />);
     expect(screen.getByText('Register Backend API')).toBeInTheDocument();
@@ -167,4 +175,5 @@ describe('RegisterApiModal', () => {
       expect(screen.getByText('Registering...')).toBeInTheDocument();
     });
   });
-});
+  }
+);

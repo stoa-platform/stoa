@@ -1,11 +1,24 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createAuthMock } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
 import { SkillFormModal } from './SkillFormModal';
 
-describe('SkillFormModal', () => {
-  const onClose = vi.fn();
-  const onSave = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
+
+const onClose = vi.fn();
+const onSave = vi.fn().mockResolvedValue(undefined);
+
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  '%s persona',
+  (role) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      onSave.mockResolvedValue(undefined);
+    });
 
   it('renders Add Skill title when no skill provided', () => {
     render(<SkillFormModal skill={null} onClose={onClose} onSave={onSave} />);
@@ -113,4 +126,5 @@ describe('SkillFormModal', () => {
     render(<SkillFormModal skill={skill} onClose={onClose} onSave={onSave} />);
     expect(screen.getByDisplayValue('existing-key')).toBeDisabled();
   });
-});
+  }
+);

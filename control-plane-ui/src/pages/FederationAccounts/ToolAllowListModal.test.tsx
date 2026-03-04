@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
-import { renderWithProviders } from '../../test/helpers';
+import { createAuthMock, renderWithProviders } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 // Mock federation service
 const mockGetToolAllowList = vi.fn();
@@ -80,18 +84,21 @@ function renderModal(overrides: Partial<typeof defaultProps> = {}) {
   return renderWithProviders(<ToolAllowListModal {...defaultProps} {...overrides} />);
 }
 
-describe('ToolAllowListModal', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockGetToolAllowList.mockResolvedValue(defaultAllowList);
-    mockGetTools.mockResolvedValue(defaultCatalog);
-    mockUpdateToolAllowList.mockResolvedValue({
-      sub_account_id: 'sub-1',
-      allowed_tools: ['weather-lookup'],
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  '%s persona',
+  (role) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      mockGetToolAllowList.mockResolvedValue(defaultAllowList);
+      mockGetTools.mockResolvedValue(defaultCatalog);
+      mockUpdateToolAllowList.mockResolvedValue({
+        sub_account_id: 'sub-1',
+        allowed_tools: ['weather-lookup'],
+      });
+      defaultProps.onClose = vi.fn();
+      defaultProps.onSaved = vi.fn();
     });
-    defaultProps.onClose = vi.fn();
-    defaultProps.onSaved = vi.fn();
-  });
 
   it('renders title and sub-account name', async () => {
     renderModal();
@@ -209,4 +216,5 @@ describe('ToolAllowListModal', () => {
       expect(screen.queryByText('Save')).not.toBeInTheDocument();
     });
   });
-});
+  }
+);

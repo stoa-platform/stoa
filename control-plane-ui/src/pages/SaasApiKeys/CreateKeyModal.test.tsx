@@ -3,7 +3,12 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+import { createAuthMock } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
 import { CreateKeyModal } from './CreateKeyModal';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 const mockListBackendApis = vi.fn();
 const mockCreateSaasKey = vi.fn();
@@ -36,24 +41,26 @@ function getForm(): HTMLFormElement {
   return document.querySelector('form')!;
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockListBackendApis.mockResolvedValue({
-    items: [
-      { id: 'api-1', name: 'petstore', display_name: 'Petstore API', status: 'active' },
-      { id: 'api-2', name: 'weather', display_name: 'Weather API', status: 'active' },
-      { id: 'api-3', name: 'draft-api', display_name: 'Draft API', status: 'draft' },
-    ],
-    total: 3,
-  });
-  mockCreateSaasKey.mockResolvedValue({
-    id: 'key-1',
-    name: 'test-key',
-    key: 'sk_test_abc123',
-  });
-});
-
-describe('CreateKeyModal', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  '%s persona',
+  (role) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      mockListBackendApis.mockResolvedValue({
+        items: [
+          { id: 'api-1', name: 'petstore', display_name: 'Petstore API', status: 'active' },
+          { id: 'api-2', name: 'weather', display_name: 'Weather API', status: 'active' },
+          { id: 'api-3', name: 'draft-api', display_name: 'Draft API', status: 'draft' },
+        ],
+        total: 3,
+      });
+      mockCreateSaasKey.mockResolvedValue({
+        id: 'key-1',
+        name: 'test-key',
+        key: 'sk_test_abc123',
+      });
+    });
   it('renders form with required fields', () => {
     renderModal();
     expect(screen.getByText('Create API Key')).toBeInTheDocument();
@@ -193,4 +200,5 @@ describe('CreateKeyModal', () => {
       );
     });
   });
-});
+  }
+);

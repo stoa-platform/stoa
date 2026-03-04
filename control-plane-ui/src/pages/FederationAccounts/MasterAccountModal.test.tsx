@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
-import { renderWithProviders } from '../../test/helpers';
+import { createAuthMock, renderWithProviders } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 // Mock federation service
 const mockCreateMasterAccount = vi.fn();
@@ -30,13 +34,16 @@ function renderModal(overrides: Partial<typeof defaultProps> = {}) {
   return renderWithProviders(<MasterAccountModal {...defaultProps} {...overrides} />);
 }
 
-describe('MasterAccountModal', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    defaultProps.onClose = vi.fn();
-    defaultProps.onCreated = vi.fn();
-    mockCreateMasterAccount.mockResolvedValue({ id: 'master-new', name: 'OASIS Federation' });
-  });
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  '%s persona',
+  (role) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      defaultProps.onClose = vi.fn();
+      defaultProps.onCreated = vi.fn();
+      mockCreateMasterAccount.mockResolvedValue({ id: 'master-new', name: 'OASIS Federation' });
+    });
 
   it('renders modal title', () => {
     renderModal();
@@ -149,4 +156,5 @@ describe('MasterAccountModal', () => {
       });
     });
   });
-});
+  }
+);

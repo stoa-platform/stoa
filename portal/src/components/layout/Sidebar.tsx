@@ -4,7 +4,6 @@ import {
   User,
   X,
   BarChart3,
-  Wrench,
   ExternalLink,
   Activity,
   Briefcase,
@@ -50,20 +49,6 @@ const sections: NavSection[] = [
         href: '/marketplace',
         icon: Store,
         enabled: config.features.enableMarketplace,
-        scope: 'stoa:catalog:read',
-      },
-      {
-        name: 'API Catalog',
-        href: '/apis',
-        icon: BookOpen,
-        enabled: config.features.enableAPICatalog,
-        scope: 'stoa:catalog:read',
-      },
-      {
-        name: 'AI Tools',
-        href: '/servers',
-        icon: Wrench,
-        enabled: config.features.enableMCPTools,
         scope: 'stoa:catalog:read',
       },
       {

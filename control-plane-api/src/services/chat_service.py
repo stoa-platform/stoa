@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from ..config import settings
 from ..models.chat import ChatConversation, ChatMessage
 from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
+from ..services.audit_service import AuditService
 from ..services.chat_provider import AnthropicProvider, ChatProviderProtocol
 from ..services.chat_security import (
     CONVERSATION_TIMEOUT_HOURS,
@@ -295,6 +296,7 @@ class ChatService:
         api_key: str,
         user_roles: list[str] | None = None,
         session_fingerprint: str | None = None,
+        client_ip: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Persist user message, call provider with agentic tool loop, persist + stream."""
 
@@ -342,6 +344,16 @@ class ChatService:
         jailbreak = detect_jailbreak(content)
         if jailbreak:
             logger.warning("Jailbreak attempt detected: pattern=%s, conversation=%s", jailbreak, conversation_id)
+            await self._audit(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                action="chat_message",
+                resource_type="chat_message",
+                resource_id=str(conversation_id),
+                outcome="denied",
+                client_ip=client_ip,
+                details={"jailbreak_pattern": jailbreak},
+            )
             yield {"event": "message", "data": {"content": JAILBREAK_REFUSAL}}
             yield {"event": "message_end", "data": {"stop_reason": "end_turn", "input_tokens": 0, "output_tokens": 0}}
             return
@@ -459,6 +471,19 @@ class ChatService:
                             "content": result,
                         }
                     )
+                    # Audit tool call (CAB-1654)
+                    has_error = '"error"' in raw_result if isinstance(raw_result, str) else False
+                    await self._audit(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        action="chat_tool_call",
+                        resource_type="chat_tool",
+                        resource_name=tc["tool_name"],
+                        resource_id=str(conversation_id),
+                        outcome="failure" if has_error else "success",
+                        client_ip=client_ip,
+                        details={"tool_name": tc["tool_name"], "input_keys": list(tc["input"].keys())},
+                    )
                     yield {
                         "event": "tool_use_result",
                         "data": {
@@ -545,6 +570,42 @@ class ChatService:
         tenant.settings = settings
         await self.session.flush()
         return True
+
+    # ------------------------------------------------------------------
+    # Audit helpers (CAB-1654)
+    # ------------------------------------------------------------------
+
+    async def _audit(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        action: str,
+        resource_type: str,
+        resource_id: str | None = None,
+        resource_name: str | None = None,
+        outcome: str = "success",
+        client_ip: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        """Record a chat audit event. Never raises — logs errors instead."""
+        try:
+            svc = AuditService(self.session)
+            await svc.record_event(
+                tenant_id=tenant_id,
+                action=action,
+                method="CHAT",
+                path="/chat",
+                resource_type=resource_type,
+                resource_id=resource_id,
+                resource_name=resource_name,
+                actor_id=user_id,
+                outcome=outcome,
+                client_ip=client_ip,
+                details=details,
+            )
+        except Exception:
+            logger.warning("Failed to record chat audit event", exc_info=True)
 
     # ------------------------------------------------------------------
     # Private helpers

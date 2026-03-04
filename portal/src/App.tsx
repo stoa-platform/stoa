@@ -463,7 +463,7 @@ function AppContent() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/onboarding" element={<OnboardingWizardPage />} />
 
-            {/* Workspace - tabbed view for apps, subscriptions, contracts */}
+            {/* Workspace - tabbed view for apps and subscriptions */}
             <Route
               path="/workspace"
               element={
@@ -497,16 +497,6 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
                   <ServerDetailPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* My MCP Servers - self-service management (CAB-1319) */}
-            <Route
-              path="/my-servers"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <MyMCPServersPage />
                 </ProtectedRoute>
               }
             />
@@ -568,16 +558,8 @@ function AppContent() {
               }
             />
 
-            {/* Redirect legacy /contracts to workspace */}
-            <Route path="/contracts" element={<Navigate to="/workspace?tab=contracts" replace />} />
-            <Route
-              path="/contracts/new"
-              element={
-                <ProtectedRoute scope="stoa:catalog:write">
-                  <CreateContractPage />
-                </ProtectedRoute>
-              }
-            />
+            {/* Redirect legacy /contracts to workspace (ADR-055) */}
+            <Route path="/contracts" element={<Navigate to="/workspace" replace />} />
             <Route
               path="/contracts/:id"
               element={
@@ -607,16 +589,6 @@ function AppContent() {
               }
             />
 
-            {/* Consumer Registration (CAB-1121) */}
-            <Route
-              path="/consumers/register"
-              element={
-                <ProtectedRoute scope="stoa:subscriptions:write">
-                  <ConsumerRegistrationPage />
-                </ProtectedRoute>
-              }
-            />
-
             {/* Gateway Instances (Operations) — admin only */}
             <Route
               path="/gateways"
@@ -633,16 +605,6 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:subscriptions:write">
                   <ServiceAccountsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Credential Mappings — consumer→API backend credentials (CAB-1432) */}
-            <Route
-              path="/credentials"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <CredentialMappingsPage />
                 </ProtectedRoute>
               }
             />
@@ -692,6 +654,16 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Provider routes — redirected to catalog/console (ADR-055) */}
+            <Route path="/my-servers" element={<Navigate to="/servers" replace />} />
+            <Route path="/my-apis" element={<Navigate to="/apis" replace />} />
+            <Route path="/contracts/new" element={<Navigate to="/workspace" replace />} />
+            <Route path="/contracts/:id" element={<Navigate to="/workspace" replace />} />
+            <Route path="/consumers/register" element={<Navigate to="/" replace />} />
+            <Route path="/gateways" element={<Navigate to="/" replace />} />
+            <Route path="/credentials" element={<Navigate to="/" replace />} />
+            <Route path="/webhooks" element={<Navigate to="/" replace />} />
 
             {/* Catch all - redirect to home */}
             <Route path="*" element={<Navigate to="/" replace />} />

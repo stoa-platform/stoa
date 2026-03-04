@@ -1,1 +1,0 @@
-export { CredentialMappingsPage } from './CredentialMappingsPage';

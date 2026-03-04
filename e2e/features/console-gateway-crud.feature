@@ -5,6 +5,7 @@ Feature: Console - Gateway CRUD
   I want to manage gateway instances
   So that I can control the data plane.
 
+  @smoke
   Scenario: Admin creates a new gateway instance
     Given I am logged in to Console as "anorak" platform admin
     And the STOA Console is accessible

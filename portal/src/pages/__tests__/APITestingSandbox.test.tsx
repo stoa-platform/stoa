@@ -49,87 +49,84 @@ vi.mock('../../components/testing', () => ({
 }));
 
 describe('APITestingSandbox', () => {
-  let APITestingSandbox: React.ComponentType;
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      let APITestingSandbox: React.ComponentType;
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
+      beforeEach(async () => {
+        vi.clearAllMocks();
 
-    const pageModule = await import('../apis/APITestingSandbox');
-    APITestingSandbox = pageModule.APITestingSandbox;
-  });
+        const pageModule = await import('../apis/APITestingSandbox');
+        APITestingSandbox = pageModule.APITestingSandbox;
+      });
 
-  const renderWithRoute = (apiId: string = 'api-1') => {
-    return renderWithProviders(
-      <Routes>
-        <Route path="/apis/:id/test" element={<APITestingSandbox />} />
-      </Routes>,
-      { route: `/apis/${apiId}/test` }
-    );
-  };
+      const renderWithRoute = (apiId: string = 'api-1') => {
+        return renderWithProviders(
+          <Routes>
+            <Route path="/apis/:id/test" element={<APITestingSandbox />} />
+          </Routes>,
+          { route: `/apis/${apiId}/test` }
+        );
+      };
 
-  it('shows loading state', () => {
-    mockUseAPI.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+      it('shows loading state', () => {
+        mockUseAPI.mockReturnValue({ data: undefined, isLoading: true, isError: false });
 
-    renderWithRoute();
+        renderWithRoute();
 
-    expect(screen.getByText('Loading API details...')).toBeInTheDocument();
-  });
+        expect(screen.getByText('Loading API details...')).toBeInTheDocument();
+      });
 
-  it('shows error state when API not found', async () => {
-    mockUseAPI.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      isError: true,
-      error: new Error('Not found'),
-    });
+      it('shows error state when API not found', async () => {
+        mockUseAPI.mockReturnValue({
+          data: undefined,
+          isLoading: false,
+          isError: true,
+          error: new Error('Not found'),
+        });
 
-    renderWithRoute();
+        renderWithRoute();
 
-    await waitFor(() => {
-      expect(screen.getByText('Failed to load API')).toBeInTheDocument();
-    });
-  });
+        await waitFor(() => {
+          expect(screen.getByText('Failed to load API')).toBeInTheDocument();
+        });
+      });
 
-  it('renders sandbox heading with API name', async () => {
-    mockUseAPI.mockReturnValue({
-      data: mockAPI({ name: 'Payment API' }),
-      isLoading: false,
-      isError: false,
-    });
+      it('renders sandbox heading with API name', async () => {
+        mockUseAPI.mockReturnValue({
+          data: mockAPI({ name: 'Payment API' }),
+          isLoading: false,
+          isError: false,
+        });
 
-    renderWithRoute();
+        renderWithRoute();
 
-    await waitFor(() => {
-      expect(screen.getByText('API Testing Sandbox')).toBeInTheDocument();
-    });
-  });
+        await waitFor(() => {
+          expect(screen.getByText('API Testing Sandbox')).toBeInTheDocument();
+        });
+      });
 
-  it('renders environment selector and request builder', async () => {
-    mockUseAPI.mockReturnValue({
-      data: mockAPI(),
-      isLoading: false,
-      isError: false,
-    });
+      it('renders environment selector and request builder', async () => {
+        mockUseAPI.mockReturnValue({
+          data: mockAPI(),
+          isLoading: false,
+          isError: false,
+        });
 
-    renderWithRoute();
+        renderWithRoute();
 
-    await waitFor(() => {
-      expect(screen.getByTestId('environment-selector')).toBeInTheDocument();
-      expect(screen.getByTestId('request-builder')).toBeInTheDocument();
-    });
-  });
+        await waitFor(() => {
+          expect(screen.getByTestId('environment-selector')).toBeInTheDocument();
+          expect(screen.getByTestId('request-builder')).toBeInTheDocument();
+        });
+      });
 
-  describe('Persona-based Tests', () => {
-    const allowedPersonas: PersonaRole[] = ['cpi-admin', 'tenant-admin', 'devops'];
-
-    it.each(allowedPersonas)('%s has stoa:tools:execute scope for API testing', (persona) => {
-      const auth = createAuthMock(persona);
-      expect(auth.hasScope('stoa:tools:execute')).toBe(true);
-    });
-
-    it('viewer does not have stoa:tools:execute scope', () => {
-      const auth = createAuthMock('viewer');
-      expect(auth.hasScope('stoa:tools:execute')).toBe(false);
-    });
-  });
+      it('should have correct stoa:tools:execute scope for role', () => {
+        const auth = createAuthMock(role);
+        const expected = role !== 'viewer';
+        expect(auth.hasScope('stoa:tools:execute')).toBe(expected);
+      });
+    }
+  );
 });

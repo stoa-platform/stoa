@@ -8,6 +8,7 @@ Feature: Onboarding Workflows (CAB-593)
     Given the user is authenticated as "cpi-admin"
     And the user navigates to "/workflows"
 
+  @smoke
   Scenario: View workflow templates tab
     Then the "Templates" tab should be active
     And the page should display a list of workflow templates

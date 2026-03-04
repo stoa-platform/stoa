@@ -30,6 +30,24 @@ vi.mock('./contexts/AuthContext', () => ({
   useAuth: () => mockAuth,
 }));
 
+// Mock EnvironmentContext (PortalEnvironmentProvider uses react-oidc-context + fetch)
+vi.mock('./contexts/EnvironmentContext', async () => {
+  const React = await import('react');
+  return {
+    PortalEnvironmentProvider: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    usePortalEnvironment: () => ({
+      activeEnvironment: 'dev',
+      activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+      environments: [],
+      endpoints: null,
+      switchEnvironment: vi.fn(),
+      loading: false,
+      error: null,
+    }),
+  };
+});
+
 // Mock Layout
 vi.mock('./components/layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) => (

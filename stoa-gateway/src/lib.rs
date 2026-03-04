@@ -32,6 +32,7 @@ pub mod security_headers;
 pub mod shadow;
 pub mod skills;
 pub mod state;
+pub mod supervision;
 pub mod telemetry;
 pub mod trace_context;
 pub mod uac;
@@ -286,6 +287,11 @@ pub fn build_router(state: AppState) -> Router {
                 .layer(axum::middleware::from_fn_with_state(
                     state.clone(),
                     quota::quota_middleware,
+                ))
+                // HEGEMON Supervision: runs after quota, before mTLS (CAB-1636)
+                .layer(axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    supervision::supervision_middleware,
                 ));
 
             // mTLS layers: only added when enabled (CAB-1359 perf — skip 2 async calls/req when off)

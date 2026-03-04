@@ -62,97 +62,97 @@ const sampleEntries = [
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'AuditLogPage — %s persona',
   (role) => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock(role));
-    mockAuditData.mockReturnValue({
-      entries: sampleEntries,
-      total: 2,
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockAuth.mockReturnValue(createAuthMock(role));
+      mockAuditData.mockReturnValue({
+        entries: sampleEntries,
+        total: 2,
+      });
     });
-  });
 
-  it('renders the page heading and subtitle', async () => {
-    renderWithProviders(<AuditLogPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Audit Log')).toBeInTheDocument();
+    it('renders the page heading and subtitle', async () => {
+      renderWithProviders(<AuditLogPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Audit Log')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Activity history for your account')).toBeInTheDocument();
     });
-    expect(screen.getByText('Activity history for your account')).toBeInTheDocument();
-  });
 
-  it('renders table column headers', async () => {
-    renderWithProviders(<AuditLogPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Timestamp')).toBeInTheDocument();
+    it('renders table column headers', async () => {
+      renderWithProviders(<AuditLogPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Timestamp')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Action')).toBeInTheDocument();
+      expect(screen.getByText('Resource')).toBeInTheDocument();
+      expect(screen.getByText('Actor')).toBeInTheDocument();
+      expect(screen.getByText('Details')).toBeInTheDocument();
     });
-    expect(screen.getByText('Action')).toBeInTheDocument();
-    expect(screen.getByText('Resource')).toBeInTheDocument();
-    expect(screen.getByText('Actor')).toBeInTheDocument();
-    expect(screen.getByText('Details')).toBeInTheDocument();
-  });
 
-  it('renders audit log entries', async () => {
-    renderWithProviders(<AuditLogPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    it('renders audit log entries', async () => {
+      renderWithProviders(<AuditLogPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Payment API')).toBeInTheDocument();
+      });
+      expect(screen.getByText('prod-key-1')).toBeInTheDocument();
+      expect(screen.getByText('john@example.com')).toBeInTheDocument();
+      expect(screen.getByText('jane@example.com')).toBeInTheDocument();
+      expect(screen.getByText('api.subscribed')).toBeInTheDocument();
+      expect(screen.getByText('key.created')).toBeInTheDocument();
     });
-    expect(screen.getByText('prod-key-1')).toBeInTheDocument();
-    expect(screen.getByText('john@example.com')).toBeInTheDocument();
-    expect(screen.getByText('jane@example.com')).toBeInTheDocument();
-    expect(screen.getByText('api.subscribed')).toBeInTheDocument();
-    expect(screen.getByText('key.created')).toBeInTheDocument();
-  });
 
-  it('shows empty state when no entries', async () => {
-    mockAuditData.mockReturnValue({ entries: [], total: 0 });
-    renderWithProviders(<AuditLogPage />);
-    await waitFor(() => {
-      expect(screen.getByText('No audit log entries found')).toBeInTheDocument();
+    it('shows empty state when no entries', async () => {
+      mockAuditData.mockReturnValue({ entries: [], total: 0 });
+      renderWithProviders(<AuditLogPage />);
+      await waitFor(() => {
+        expect(screen.getByText('No audit log entries found')).toBeInTheDocument();
+      });
     });
-  });
 
-  it('renders search input', async () => {
-    renderWithProviders(<AuditLogPage />);
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText('Search by resource or actor...')).toBeInTheDocument();
+    it('renders search input', async () => {
+      renderWithProviders(<AuditLogPage />);
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('Search by resource or actor...')).toBeInTheDocument();
+      });
     });
-  });
 
-  it('renders action filter dropdown', async () => {
-    renderWithProviders(<AuditLogPage />);
-    await waitFor(() => {
-      expect(screen.getByText('All actions')).toBeInTheDocument();
+    it('renders action filter dropdown', async () => {
+      renderWithProviders(<AuditLogPage />);
+      await waitFor(() => {
+        expect(screen.getByText('All actions')).toBeInTheDocument();
+      });
     });
-  });
 
-  it('shows pagination when total > limit', async () => {
-    mockAuditData.mockReturnValue({
-      entries: sampleEntries,
-      total: 50,
+    it('shows pagination when total > limit', async () => {
+      mockAuditData.mockReturnValue({
+        entries: sampleEntries,
+        total: 50,
+      });
+      renderWithProviders(<AuditLogPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Previous')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Next')).toBeInTheDocument();
     });
-    renderWithProviders(<AuditLogPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Previous')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Next')).toBeInTheDocument();
-  });
 
-  it('hides pagination when total fits in one page', async () => {
-    mockAuditData.mockReturnValue({ entries: sampleEntries, total: 2 });
-    renderWithProviders(<AuditLogPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Audit Log')).toBeInTheDocument();
+    it('hides pagination when total fits in one page', async () => {
+      mockAuditData.mockReturnValue({ entries: sampleEntries, total: 2 });
+      renderWithProviders(<AuditLogPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Audit Log')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Previous')).not.toBeInTheDocument();
     });
-    expect(screen.queryByText('Previous')).not.toBeInTheDocument();
-  });
 
-  it('returns null when not authenticated', () => {
-    mockAuth.mockReturnValue({
-      ...createAuthMock('cpi-admin'),
-      isAuthenticated: false,
-      isLoading: false,
+    it('returns null when not authenticated', () => {
+      mockAuth.mockReturnValue({
+        ...createAuthMock('cpi-admin'),
+        isAuthenticated: false,
+        isLoading: false,
+      });
+      const { container } = renderWithProviders(<AuditLogPage />);
+      expect(container.innerHTML).toBe('');
     });
-    const { container } = renderWithProviders(<AuditLogPage />);
-    expect(container.innerHTML).toBe('');
-  });
-
-});
+  }
+);

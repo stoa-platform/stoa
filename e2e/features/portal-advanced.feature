@@ -5,6 +5,7 @@ Feature: Portal - Advanced features
   I want to access advanced features like service accounts and analytics
   So that I can manage my API integrations.
 
+  @smoke
   Scenario: User views service accounts page
     Given I am logged in as "art3mis" from community "high-five"
     And the STOA Portal is accessible

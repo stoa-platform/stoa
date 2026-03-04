@@ -8,6 +8,7 @@ Feature: Gateway Sync — CP API Contract Reflected at Gateway
     Given the CP API and gateway are both reachable
     And I obtain a CP API token as "parzival"
 
+  @smoke
   Scenario: Published contract with MCP binding appears in gateway discovery
     Given I create contract "e2e-gw-sync" with version "1.0.0" via CP API
     And I update contract "e2e-gw-sync" status to "published" via CP API

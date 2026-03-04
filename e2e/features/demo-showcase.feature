@@ -8,7 +8,7 @@ Feature: Demo Showcase - Ready Player One Live Demo Validation
   # ===========================================================================
   # SCENARIO 1: Full Demo Flow — Portal Browse to Gateway Call
   # ===========================================================================
-  @demo-showcase-1
+  @smoke @demo-showcase-1
   Scenario: Portal user browses catalog and calls the gateway
     Given I am logged in as "art3mis" from tenant "high-five"
     And the STOA Portal is accessible

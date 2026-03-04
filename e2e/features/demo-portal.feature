@@ -5,7 +5,7 @@ Feature: Demo - Portal Consumer Path
   I want to discover, test, and subscribe to an API
   So that I can integrate it into my application
 
-  @demo-portal
+  @smoke @demo-portal
   Scenario: Consumer discovers and tests an API
     # 1. Login OIDC → dashboard
     Given I am logged in as "art3mis" from community "high-five"

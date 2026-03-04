@@ -22,6 +22,21 @@ router = APIRouter(prefix="/v1/environments", tags=["Environments"])
 EnvironmentMode = Literal["full", "read-only", "promote-only"]
 
 
+class PublicEnvironmentSummary(BaseModel):
+    """Public-safe environment info — no auth URLs exposed."""
+
+    name: str
+    label: str
+    mode: EnvironmentMode
+    color: str
+    health_url: str
+
+
+class PublicEnvironmentsResponse(BaseModel):
+    environments: list[PublicEnvironmentSummary]
+    current: str
+
+
 class EnvironmentEndpoints(BaseModel):
     """Connection URLs for a specific environment."""
 
@@ -108,6 +123,30 @@ def _build_default_environments() -> list[EnvironmentConfig]:
             logger.warning("Failed to parse STOA_ENVIRONMENTS", error=str(e))
 
     return defaults
+
+
+@router.get("/public", response_model=PublicEnvironmentsResponse)
+async def list_public_environments() -> PublicEnvironmentsResponse:
+    """List environments with public-safe info only.
+
+    No authentication required. Exposes only health URLs — no keycloak
+    or MCP URLs. Intended for monitoring CronJobs and status dashboards.
+    """
+    envs = _build_default_environments()
+    current = next((e.name for e in envs if e.is_current), settings.ENVIRONMENT)
+    return PublicEnvironmentsResponse(
+        environments=[
+            PublicEnvironmentSummary(
+                name=e.name,
+                label=e.label,
+                mode=e.mode,
+                color=e.color,
+                health_url=f"{e.endpoints.api_url}/health" if e.endpoints else "",
+            )
+            for e in envs
+        ],
+        current=current,
+    )
 
 
 @router.get("", response_model=EnvironmentListResponse)

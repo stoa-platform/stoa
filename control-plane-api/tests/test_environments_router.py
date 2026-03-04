@@ -96,3 +96,45 @@ class TestEnvironmentEndpoints:
 
         # current field references a valid environment name
         assert data["current"] in [e["name"] for e in data["environments"]]
+
+
+class TestPublicEnvironments:
+    """Tests for GET /v1/environments/public — no auth required (CAB-1663)."""
+
+    def test_public_environments_no_auth(self, client):
+        """Public endpoint should return 200 without any Bearer token."""
+        resp = client.get("/v1/environments/public")
+        assert resp.status_code == 200
+
+    def test_public_environments_shape(self, client):
+        """Public response must only expose safe fields, never keycloak_url or mcp_url."""
+        resp = client.get("/v1/environments/public")
+        data = resp.json()
+        assert "environments" in data
+        assert "current" in data
+        assert len(data["environments"]) >= 2
+
+        for env in data["environments"]:
+            # Expected public fields
+            assert "name" in env
+            assert "label" in env
+            assert "mode" in env
+            assert "color" in env
+            assert "health_url" in env
+            # Must NOT expose sensitive fields
+            assert "keycloak_url" not in env
+            assert "mcp_url" not in env
+            assert "endpoints" not in env
+
+    def test_public_environments_health_url_format(self, client):
+        """Each health_url should end with /health and use public-facing URLs."""
+        resp = client.get("/v1/environments/public")
+        for env in resp.json()["environments"]:
+            assert env["health_url"].endswith("/health")
+            # Should use https:// public-facing URLs, not internal K8s service names
+            assert "https://" in env["health_url"] or env["health_url"] == ""
+
+    def test_authenticated_environments_requires_auth(self, client):
+        """GET /v1/environments (authenticated) should return 401 without token."""
+        resp = client.get("/v1/environments")
+        assert resp.status_code == 401

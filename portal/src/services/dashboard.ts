@@ -16,7 +16,7 @@ async function getStats(): Promise<DashboardStats> {
   try {
     const response = await apiClient.get<DashboardStats>('/v1/dashboard/stats');
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     // Fallback: aggregate from existing endpoints
     console.warn('Dashboard stats endpoint not available, using fallback');
     return getFallbackStats();
@@ -75,7 +75,7 @@ async function getRecentActivity(limit: number = 5): Promise<RecentActivityItem[
       { params: { limit } }
     );
     return response.data.activity;
-  } catch (error) {
+  } catch (_error) {
     // Fallback: use recent calls from usage API
     console.warn('Dashboard activity endpoint not available, using fallback');
     return getFallbackActivity(limit);

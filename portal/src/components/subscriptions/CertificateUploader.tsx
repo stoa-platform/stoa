@@ -75,7 +75,7 @@ export function CertificateUploader({
         const validationResult = await uploadCertificate(file);
         setResult(validationResult);
         onCertificateValidated?.(validationResult);
-      } catch (err) {
+      } catch (_err) {
         setError('Failed to validate certificate');
       } finally {
         setIsLoading(false);

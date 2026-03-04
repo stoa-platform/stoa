@@ -174,6 +174,17 @@ const LLMCostDashboard = lazy(() =>
   import('./pages/LLMCost').then((m) => ({ default: m.LLMCostDashboard }))
 );
 
+// CAB-1647: Webhooks management (ported from Portal)
+const Webhooks = lazy(() => import('./pages/Webhooks').then((m) => ({ default: m.Webhooks })));
+
+// CAB-1648: Credential Mappings management (ported from Portal)
+const CredentialMappings = lazy(() =>
+  import('./pages/CredentialMappings').then((m) => ({ default: m.CredentialMappings }))
+);
+
+// CAB-1649: Contracts / UAC management
+const Contracts = lazy(() => import('./pages/Contracts').then((m) => ({ default: m.Contracts })));
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -500,6 +511,9 @@ function ProtectedRoutes() {
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
+                <Route path="/webhooks" element={<Webhooks />} />
+                <Route path="/credential-mappings" element={<CredentialMappings />} />
+                <Route path="/contracts" element={<Contracts />} />
               </Routes>
             </Suspense>
           )}

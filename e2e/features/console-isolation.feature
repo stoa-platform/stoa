@@ -4,7 +4,7 @@ Feature: Console - Tenant isolation
   Background:
     Given the STOA Console is accessible
 
-  @rpo @high-five @critical
+  @smoke @rpo @high-five @critical
   Scenario: High-Five CPI can access the Console API list
     Given I am logged in to Console as "parzival" from team "high-five"
     When I access the API list

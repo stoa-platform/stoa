@@ -141,11 +141,20 @@ export interface BulkRevokeResponse {
 export type Environment = 'dev' | 'staging' | 'prod';
 export type EnvironmentMode = 'full' | 'read-only' | 'promote-only';
 
+export interface EnvironmentEndpoints {
+  api_url: string;
+  keycloak_url: string;
+  keycloak_realm: string;
+  mcp_url: string;
+}
+
 export interface EnvironmentConfig {
-  name: Environment;
+  name: string;
   label: string;
   mode: EnvironmentMode;
-  color: 'green' | 'amber' | 'red';
+  color: string;
+  endpoints?: EnvironmentEndpoints | null;
+  is_current?: boolean;
 }
 
 // Deployment types (CAB-1353 lifecycle API)
@@ -1521,4 +1530,191 @@ export interface BulkActionFailure {
 export interface BulkActionResult {
   succeeded: number;
   failed: BulkActionFailure[];
+}
+
+// ============ Webhook Types (CAB-1647) ============
+
+export type WebhookEventType =
+  | 'subscription.created'
+  | 'subscription.approved'
+  | 'subscription.revoked'
+  | 'subscription.key_rotated'
+  | 'subscription.expired'
+  | '*';
+
+export type WebhookDeliveryStatus = 'pending' | 'success' | 'failed' | 'retrying';
+
+export interface TenantWebhook {
+  id: string;
+  tenant_id: string;
+  name: string;
+  url: string;
+  events: WebhookEventType[];
+  has_secret: boolean;
+  headers?: Record<string, string>;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface WebhookCreate {
+  name: string;
+  url: string;
+  events: WebhookEventType[];
+  secret?: string;
+  headers?: Record<string, string>;
+}
+
+export interface WebhookUpdate {
+  name?: string;
+  url?: string;
+  events?: WebhookEventType[];
+  secret?: string;
+  headers?: Record<string, string>;
+  enabled?: boolean;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  subscription_id?: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  status: WebhookDeliveryStatus;
+  attempt_count: number;
+  max_attempts: number;
+  response_status_code?: number;
+  response_body?: string;
+  error_message?: string;
+  created_at: string;
+  last_attempt_at?: string;
+  next_retry_at?: string;
+  delivered_at?: string;
+}
+
+export interface WebhookTestResponse {
+  success: boolean;
+  status_code?: number;
+  response_body?: string;
+  error?: string;
+  signature_header?: string;
+}
+
+export interface WebhookListResponse {
+  items: TenantWebhook[];
+  total: number;
+}
+
+export interface WebhookDeliveryListResponse {
+  items: WebhookDelivery[];
+  total: number;
+}
+
+// ============ Credential Mapping Types (CAB-1648) ============
+
+export type CredentialAuthType = 'api_key' | 'bearer' | 'basic';
+
+export interface CredentialMapping {
+  id: string;
+  consumer_id: string;
+  api_id: string;
+  tenant_id: string;
+  auth_type: CredentialAuthType;
+  header_name: string;
+  has_credential: boolean;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface CredentialMappingCreate {
+  consumer_id: string;
+  api_id: string;
+  auth_type: CredentialAuthType;
+  header_name: string;
+  credential_value: string;
+  description?: string;
+}
+
+export interface CredentialMappingUpdate {
+  auth_type?: CredentialAuthType;
+  header_name?: string;
+  credential_value?: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+export interface CredentialMappingListResponse {
+  items: CredentialMapping[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// ============ Contract / UAC Types (CAB-1649) ============
+
+export type ProtocolType = 'rest' | 'mcp' | 'graphql' | 'grpc' | 'kafka';
+
+export type ContractStatus = 'draft' | 'published' | 'deprecated';
+
+export interface ProtocolBinding {
+  protocol: ProtocolType;
+  enabled: boolean;
+  endpoint: string | null;
+  playground_url: string | null;
+  tool_name: string | null;
+  operations: string[];
+  proto_file_url: string | null;
+  topic_name: string | null;
+  traffic_24h: number | null;
+}
+
+export interface Contract {
+  id: string;
+  tenant_id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+  version: string;
+  status: ContractStatus;
+  openapi_spec_url: string | null;
+  bindings: ProtocolBinding[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractCreate {
+  name: string;
+  display_name: string;
+  description?: string;
+  version: string;
+  openapi_spec_url?: string;
+  status?: ContractStatus;
+}
+
+export interface ContractUpdate {
+  display_name?: string;
+  description?: string;
+  version?: string;
+  openapi_spec_url?: string;
+  status?: ContractStatus;
+}
+
+export interface GeneratedBinding {
+  protocol: ProtocolType;
+  endpoint: string;
+  tool_name: string | null;
+}
+
+export interface PublishContractResponse {
+  contract: Contract;
+  bindings_generated: GeneratedBinding[];
+}
+
+export interface ContractListResponse {
+  items: Contract[];
+  total: number;
 }

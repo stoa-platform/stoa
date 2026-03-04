@@ -24,6 +24,7 @@ async def list_traces(
     limit: int = Query(50, ge=1, le=200),
     tenant_id: str | None = None,
     status: str | None = None,
+    environment: str | None = Query(None, description="Filter by environment"),
     service: TraceService = Depends(get_service),
 ):
     """
@@ -38,7 +39,7 @@ async def list_traces(
         except ValueError:
             raise HTTPException(400, f"Invalid status: {status}")
 
-    traces = await service.list_recent(limit, tenant_id, trace_status)
+    traces = await service.list_recent(limit, tenant_id, trace_status, environment)
 
     return {
         "traces": [t.to_summary() for t in traces],

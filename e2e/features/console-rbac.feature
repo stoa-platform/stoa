@@ -5,7 +5,7 @@ Feature: Console - RBAC enforcement
   I want to enforce role-based access control
   So that unauthorized users cannot access restricted pages.
 
-  @critical
+  @smoke @critical
   Scenario: Viewer cannot access admin pages
     Given I am logged in to Console as "aech" from team "high-five"
     And the STOA Console is accessible

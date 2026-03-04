@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, lazy, useState } from 'react';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PortalEnvironmentProvider } from './contexts/EnvironmentContext';
 import { ErrorBoundary, SkipLink } from './components/common';
 import { captureException } from './services/errorTracking';
 import { StoaLogo } from '@stoa/shared/components/StoaLogo';
@@ -16,9 +17,6 @@ const MCPServersPage = lazy(() =>
 const ServerDetailPage = lazy(() =>
   import('./pages/servers').then((m) => ({ default: m.ServerDetailPage }))
 );
-const MyMCPServersPage = lazy(() =>
-  import('./pages/servers').then((m) => ({ default: m.MyMCPServersPage }))
-);
 const APICatalog = lazy(() => import('./pages/apis').then((m) => ({ default: m.APICatalog })));
 const APIDetail = lazy(() => import('./pages/apis').then((m) => ({ default: m.APIDetail })));
 const APITestingSandbox = lazy(() =>
@@ -27,17 +25,8 @@ const APITestingSandbox = lazy(() =>
 const ApplicationDetail = lazy(() =>
   import('./pages/apps').then((m) => ({ default: m.ApplicationDetail }))
 );
-const ContractDetailPage = lazy(() =>
-  import('./pages/contracts').then((m) => ({ default: m.ContractDetailPage }))
-);
-const CreateContractPage = lazy(() =>
-  import('./pages/contracts').then((m) => ({ default: m.CreateContractPage }))
-);
 const ProfilePage = lazy(() =>
   import('./pages/profile/Profile').then((m) => ({ default: m.ProfilePage }))
-);
-const WebhooksPage = lazy(() =>
-  import('./pages/webhooks/WebhooksPage').then((m) => ({ default: m.WebhooksPage }))
 );
 const UsagePage = lazy(() => import('./pages/usage').then((m) => ({ default: m.UsagePage })));
 const ServiceAccountsPage = lazy(() =>
@@ -48,12 +37,6 @@ const ServiceAccountsPage = lazy(() =>
 const WorkspacePage = lazy(() =>
   import('./pages/workspace').then((m) => ({ default: m.WorkspacePage }))
 );
-const ConsumerRegistrationPage = lazy(() =>
-  import('./pages/consumers').then((m) => ({ default: m.ConsumerRegistrationPage }))
-);
-const GatewaysPage = lazy(() =>
-  import('./pages/gateways').then((m) => ({ default: m.GatewaysPage }))
-);
 const ExecutionHistoryPage = lazy(() =>
   import('./pages/executions').then((m) => ({ default: m.ExecutionHistoryPage }))
 );
@@ -62,9 +45,6 @@ const UnauthorizedPage = lazy(() =>
 );
 const OnboardingWizardPage = lazy(() =>
   import('./pages/onboarding').then((m) => ({ default: m.OnboardingWizardPage }))
-);
-const CredentialMappingsPage = lazy(() =>
-  import('./pages/credential-mappings').then((m) => ({ default: m.CredentialMappingsPage }))
 );
 const MarketplacePage = lazy(() =>
   import('./pages/marketplace').then((m) => ({ default: m.MarketplacePage }))
@@ -87,7 +67,6 @@ const APIComparePage = lazy(() =>
   import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
 );
 const SignupPage = lazy(() => import('./pages/signup').then((m) => ({ default: m.SignupPage })));
-const MyAPIsPage = lazy(() => import('./pages/apis').then((m) => ({ default: m.MyAPIsPage })));
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -463,7 +442,7 @@ function AppContent() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/onboarding" element={<OnboardingWizardPage />} />
 
-            {/* Workspace - tabbed view for apps, subscriptions, contracts */}
+            {/* Workspace - tabbed view for apps and subscriptions */}
             <Route
               path="/workspace"
               element={
@@ -497,26 +476,6 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
                   <ServerDetailPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* My MCP Servers - self-service management (CAB-1319) */}
-            <Route
-              path="/my-servers"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <MyMCPServersPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* My APIs - tenant self-service (CAB-1634) */}
-            <Route
-              path="/my-apis"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <MyAPIsPage />
                 </ProtectedRoute>
               }
             />
@@ -568,24 +527,8 @@ function AppContent() {
               }
             />
 
-            {/* Redirect legacy /contracts to workspace */}
-            <Route path="/contracts" element={<Navigate to="/workspace?tab=contracts" replace />} />
-            <Route
-              path="/contracts/new"
-              element={
-                <ProtectedRoute scope="stoa:catalog:write">
-                  <CreateContractPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/contracts/:id"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <ContractDetailPage />
-                </ProtectedRoute>
-              }
-            />
+            {/* Redirect legacy /contracts to workspace (ADR-055) */}
+            <Route path="/contracts" element={<Navigate to="/workspace" replace />} />
 
             {/* Usage Dashboard - requires metrics read */}
             <Route
@@ -607,52 +550,12 @@ function AppContent() {
               }
             />
 
-            {/* Consumer Registration (CAB-1121) */}
-            <Route
-              path="/consumers/register"
-              element={
-                <ProtectedRoute scope="stoa:subscriptions:write">
-                  <ConsumerRegistrationPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Gateway Instances (Operations) — admin only */}
-            <Route
-              path="/gateways"
-              element={
-                <ProtectedRoute scope="stoa:admin">
-                  <GatewaysPage />
-                </ProtectedRoute>
-              }
-            />
-
             {/* Service Accounts — kept for backward compat */}
             <Route
               path="/service-accounts"
               element={
                 <ProtectedRoute scope="stoa:subscriptions:write">
                   <ServiceAccountsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Credential Mappings — consumer→API backend credentials (CAB-1432) */}
-            <Route
-              path="/credentials"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <CredentialMappingsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Tenant Admin Routes - requires subscriptions write */}
-            <Route
-              path="/webhooks"
-              element={
-                <ProtectedRoute scope="stoa:subscriptions:write">
-                  <WebhooksPage />
                 </ProtectedRoute>
               }
             />
@@ -693,6 +596,26 @@ function AppContent() {
               }
             />
 
+            {/* Provider routes — redirected to catalog/console (ADR-055) */}
+            <Route path="/my-servers" element={<Navigate to="/servers" replace />} />
+            <Route path="/my-apis" element={<Navigate to="/apis" replace />} />
+            <Route path="/contracts/new" element={<Navigate to="/workspace" replace />} />
+            <Route path="/contracts/:id" element={<Navigate to="/workspace" replace />} />
+            <Route path="/consumers/register" element={<Navigate to="/" replace />} />
+            <Route path="/gateways" element={<Navigate to="/" replace />} />
+            <Route path="/credentials" element={<Navigate to="/" replace />} />
+            <Route path="/webhooks" element={<Navigate to="/" replace />} />
+
+            {/* Provider routes — redirected to catalog/console (ADR-055) */}
+            <Route path="/my-servers" element={<Navigate to="/servers" replace />} />
+            <Route path="/my-apis" element={<Navigate to="/apis" replace />} />
+            <Route path="/contracts/new" element={<Navigate to="/workspace" replace />} />
+            <Route path="/contracts/:id" element={<Navigate to="/workspace" replace />} />
+            <Route path="/consumers/register" element={<Navigate to="/" replace />} />
+            <Route path="/gateways" element={<Navigate to="/" replace />} />
+            <Route path="/credentials" element={<Navigate to="/" replace />} />
+            <Route path="/webhooks" element={<Navigate to="/" replace />} />
+
             {/* Catch all - redirect to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -712,7 +635,9 @@ function App() {
     >
       <SkipLink />
       <AuthProvider>
-        <AppContent />
+        <PortalEnvironmentProvider>
+          <AppContent />
+        </PortalEnvironmentProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

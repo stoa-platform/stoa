@@ -128,6 +128,32 @@ class TestListPolicies:
 
         assert resp.status_code == 200
 
+    def test_list_with_environment_filter(self, app_with_cpi_admin, mock_db_session):
+        """Environment filter is passed to repository (CAB-1664)."""
+        mock_repo = MagicMock()
+        mock_repo.list_all = AsyncMock(return_value=[])
+
+        with patch(POLICY_REPO, return_value=mock_repo), TestClient(app_with_cpi_admin) as client:
+            resp = client.get(f"{BASE}?environment=staging")
+
+        assert resp.status_code == 200
+        mock_repo.list_all.assert_called_once_with(
+            tenant_id=None, policy_type=None, environment="staging"
+        )
+
+    def test_list_without_environment_returns_all(self, app_with_cpi_admin, mock_db_session):
+        """Omitting environment passes None (returns all policies)."""
+        mock_repo = MagicMock()
+        mock_repo.list_all = AsyncMock(return_value=[])
+
+        with patch(POLICY_REPO, return_value=mock_repo), TestClient(app_with_cpi_admin) as client:
+            resp = client.get(BASE)
+
+        assert resp.status_code == 200
+        mock_repo.list_all.assert_called_once_with(
+            tenant_id=None, policy_type=None, environment=None
+        )
+
 
 class TestGetPolicy:
     """Tests for GET /v1/admin/policies/{policy_id}."""

@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: '--all-features'
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
     outputs:
       test-result:
         description: 'Test result (success/failure)'
@@ -29,7 +34,7 @@ env:
 jobs:
   fmt:
     name: Check Formatting
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
     defaults:
@@ -45,7 +50,7 @@ jobs:
 
   clippy:
     name: Clippy Lint
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
     defaults:
@@ -63,7 +68,7 @@ jobs:
 
   test:
     name: Run Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     needs: clippy
     outputs:
       result: ${{ steps.set-result.outputs.result }}
@@ -97,7 +102,7 @@ jobs:
 
   bench-compile:
     name: Compile Benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     needs: clippy
     continue-on-error: true
     permissions:
@@ -118,7 +123,7 @@ jobs:
   audit:
     name: Security Audit
     if: inputs.run-audit
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
     defaults:

@@ -3,8 +3,10 @@
 //! Tests multiple modules working together via the full Axum router.
 //! Uses tower::ServiceExt::oneshot to test without starting a TCP server.
 
+mod api_bridge;
 mod auth;
 mod common;
 mod llm_proxy;
 mod mcp;
 mod quota;
+mod tool_lifecycle;

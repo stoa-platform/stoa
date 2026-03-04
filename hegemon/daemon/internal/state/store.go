@@ -27,6 +27,7 @@ type Dispatch struct {
 	ResultJSON    string
 	PRNumber      int
 	ErrorMessage  string
+	CostUSD       float64
 	CreatedAt     time.Time
 }
 
@@ -52,7 +53,9 @@ CREATE TABLE IF NOT EXISTS worker_status (
     status TEXT NOT NULL DEFAULT 'idle',
     current_dispatch_id INTEGER,
     last_health_at TEXT,
-    last_error TEXT
+    last_error TEXT,
+    health_fail_count INTEGER NOT NULL DEFAULT 0,
+    paused_until TEXT
 );
 
 CREATE TABLE IF NOT EXISTS retry_counts (
@@ -65,6 +68,13 @@ CREATE INDEX IF NOT EXISTS idx_dispatches_ticket ON dispatches(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_dispatches_status ON dispatches(status);
 `
 
+// migrations adds columns that may be missing from older databases.
+const migrations = `
+ALTER TABLE worker_status ADD COLUMN health_fail_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE worker_status ADD COLUMN paused_until TEXT;
+ALTER TABLE dispatches ADD COLUMN cost_usd REAL DEFAULT 0;
+`
+
 // New opens (or creates) the SQLite database and runs migrations.
 func New(dbPath string) (*Store, error) {
 	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)")
@@ -73,6 +83,14 @@ func New(dbPath string) (*Store, error) {
 	}
 	if _, err := db.Exec(schema); err != nil {
 		return nil, fmt.Errorf("init schema: %w", err)
+	}
+	// Best-effort migration for existing databases (columns may already exist).
+	for _, stmt := range []string{
+		"ALTER TABLE worker_status ADD COLUMN health_fail_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE worker_status ADD COLUMN paused_until TEXT",
+		"ALTER TABLE dispatches ADD COLUMN cost_usd REAL DEFAULT 0",
+	} {
+		db.Exec(stmt) // ignore "duplicate column" errors
 	}
 	return &Store{db: db}, nil
 }
@@ -192,6 +210,171 @@ func (s *Store) IncrRetryCount(ticketID string) (int, error) {
 func (s *Store) ResetRetryCount(ticketID string) error {
 	_, err := s.db.Exec(`DELETE FROM retry_counts WHERE ticket_id = ?`, ticketID)
 	return err
+}
+
+// IncrHealthFail increments the consecutive health failure counter for a worker.
+// Returns the new count.
+func (s *Store) IncrHealthFail(name string) (int, error) {
+	_, err := s.db.Exec(
+		`UPDATE worker_status SET health_fail_count = health_fail_count + 1 WHERE name = ?`,
+		name,
+	)
+	if err != nil {
+		return 0, err
+	}
+	var count int
+	err = s.db.QueryRow(`SELECT health_fail_count FROM worker_status WHERE name = ?`, name).Scan(&count)
+	return count, err
+}
+
+// ResetHealthFails resets the consecutive health failure counter (on successful ping).
+func (s *Store) ResetHealthFails(name string) error {
+	_, err := s.db.Exec(
+		`UPDATE worker_status SET health_fail_count = 0, paused_until = NULL WHERE name = ?`,
+		name,
+	)
+	return err
+}
+
+// SetWorkerPaused marks a worker as paused until the given time.
+func (s *Store) SetWorkerPaused(name string, until time.Time) error {
+	_, err := s.db.Exec(
+		`UPDATE worker_status SET status = 'paused', paused_until = ? WHERE name = ?`,
+		until.UTC().Format("2006-01-02 15:04:05"), name,
+	)
+	return err
+}
+
+// IsWorkerPaused checks if a worker is currently paused. Returns false if not paused or pause expired.
+func (s *Store) IsWorkerPaused(name string) (bool, error) {
+	var pausedUntil sql.NullString
+	err := s.db.QueryRow(`SELECT paused_until FROM worker_status WHERE name = ?`, name).Scan(&pausedUntil)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !pausedUntil.Valid || pausedUntil.String == "" {
+		return false, nil
+	}
+	t, err := time.Parse("2006-01-02 15:04:05", pausedUntil.String)
+	if err != nil {
+		return false, nil
+	}
+	return time.Now().UTC().Before(t), nil
+}
+
+// GetWorkerHealthStats returns per-worker health stats for metrics export.
+type WorkerHealthStats struct {
+	Name           string
+	Status         string
+	HealthFailCount int
+	PausedUntil    *time.Time
+	LastHealthAt   *time.Time
+	LastError      string
+}
+
+func (s *Store) GetAllWorkerStats() ([]WorkerHealthStats, error) {
+	rows, err := s.db.Query(
+		`SELECT name, status, health_fail_count, paused_until, last_health_at, COALESCE(last_error, '')
+		 FROM worker_status ORDER BY name`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []WorkerHealthStats
+	for rows.Next() {
+		var ws WorkerHealthStats
+		var pausedUntil, lastHealthAt sql.NullString
+		if err := rows.Scan(&ws.Name, &ws.Status, &ws.HealthFailCount, &pausedUntil, &lastHealthAt, &ws.LastError); err != nil {
+			return nil, err
+		}
+		if pausedUntil.Valid {
+			t, _ := time.Parse("2006-01-02 15:04:05", pausedUntil.String)
+			ws.PausedUntil = &t
+		}
+		if lastHealthAt.Valid {
+			t, _ := time.Parse("2006-01-02 15:04:05", lastHealthAt.String)
+			ws.LastHealthAt = &t
+		}
+		stats = append(stats, ws)
+	}
+	return stats, rows.Err()
+}
+
+// GetQueueDepth returns the number of active (non-completed) dispatches.
+func (s *Store) GetQueueDepth() (int, error) {
+	var count int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM dispatches WHERE status IN ('queued', 'dispatched', 'running')`,
+	).Scan(&count)
+	return count, err
+}
+
+// CleanStaleDispatches marks dispatches older than maxAge as 'stale' and releases workers.
+func (s *Store) CleanStaleDispatches(maxAge time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-maxAge).UTC().Format("2006-01-02 15:04:05")
+	res, err := s.db.Exec(
+		`UPDATE dispatches SET status = 'stale', completed_at = datetime('now'), error_message = 'auto-cleaned: stale dispatch'
+		 WHERE status IN ('dispatched', 'running') AND started_at < ?`,
+		cutoff,
+	)
+	if err != nil {
+		return 0, err
+	}
+	// Release workers that were busy on stale dispatches.
+	s.db.Exec(`UPDATE worker_status SET status = 'idle', current_dispatch_id = NULL
+		WHERE current_dispatch_id IN (SELECT id FROM dispatches WHERE status = 'stale')`)
+	return res.RowsAffected()
+}
+
+// RecordCost updates the cost for a completed dispatch.
+func (s *Store) RecordCost(dispatchID int64, costUSD float64) error {
+	_, err := s.db.Exec(`UPDATE dispatches SET cost_usd = ? WHERE id = ?`, costUSD, dispatchID)
+	return err
+}
+
+// GetDailyCost returns the total cost in USD for dispatches completed today (UTC).
+func (s *Store) GetDailyCost() (float64, error) {
+	var total sql.NullFloat64
+	err := s.db.QueryRow(
+		`SELECT SUM(cost_usd) FROM dispatches WHERE date(completed_at) = date('now')`,
+	).Scan(&total)
+	if !total.Valid {
+		return 0, err
+	}
+	return total.Float64, err
+}
+
+// DailyCostByWorker holds per-worker cost data for metrics export.
+type DailyCostByWorker struct {
+	WorkerName string
+	CostUSD    float64
+}
+
+// GetDailyCostByWorker returns cost breakdown per worker for today (UTC).
+func (s *Store) GetDailyCostByWorker() ([]DailyCostByWorker, error) {
+	rows, err := s.db.Query(
+		`SELECT worker_name, COALESCE(SUM(cost_usd), 0) FROM dispatches
+		 WHERE date(completed_at) = date('now') GROUP BY worker_name ORDER BY worker_name`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var costs []DailyCostByWorker
+	for rows.Next() {
+		var c DailyCostByWorker
+		if err := rows.Scan(&c.WorkerName, &c.CostUSD); err != nil {
+			return nil, err
+		}
+		costs = append(costs, c)
+	}
+	return costs, rows.Err()
 }
 
 // GetActiveDispatches returns all dispatches currently in progress.

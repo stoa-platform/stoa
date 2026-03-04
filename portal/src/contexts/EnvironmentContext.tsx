@@ -7,57 +7,74 @@ import {
   useEffect,
   ReactNode,
 } from 'react';
-import { useAuth } from 'react-oidc-context';
+import { useAuth as useOidcAuth } from 'react-oidc-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { config } from '../config';
-import type { Environment, EnvironmentConfig, EnvironmentEndpoints } from '../types';
 
-const ACTIVE_ENV_KEY = 'stoa-active-environment';
+const ACTIVE_ENV_KEY = 'stoa-portal-active-environment';
 
-const FALLBACK_ENVIRONMENTS: EnvironmentConfig[] = [
+export type PortalEnvironment = 'dev' | 'staging' | 'prod';
+export type PortalEnvironmentMode = 'full' | 'read-only' | 'promote-only';
+
+export interface PortalEnvironmentEndpoints {
+  api_url: string;
+  keycloak_url: string;
+  keycloak_realm: string;
+  mcp_url: string;
+}
+
+export interface PortalEnvironmentConfig {
+  name: string;
+  label: string;
+  mode: PortalEnvironmentMode;
+  color: string;
+  endpoints?: PortalEnvironmentEndpoints | null;
+  is_current?: boolean;
+}
+
+const FALLBACK_ENVIRONMENTS: PortalEnvironmentConfig[] = [
   { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
   { name: 'staging', label: 'Staging', mode: 'full', color: 'amber' },
   { name: 'prod', label: 'Production', mode: 'read-only', color: 'red' },
 ];
 
-/** Map API environment names (e.g. "production") to local keys */
-function toEnvironmentKey(name: string): Environment {
+function toEnvironmentKey(name: string): PortalEnvironment {
   if (name === 'production' || name === 'prod') return 'prod';
   if (name === 'staging') return 'staging';
   return 'dev';
 }
 
-function isValidEnvironment(value: string): value is Environment {
+function isValidEnvironment(value: string): value is PortalEnvironment {
   return value === 'dev' || value === 'staging' || value === 'prod';
 }
 
-interface EnvironmentContextType {
-  activeEnvironment: Environment;
-  activeConfig: EnvironmentConfig;
-  environments: EnvironmentConfig[];
-  endpoints: EnvironmentEndpoints | null;
-  switchEnvironment: (env: Environment) => void;
+interface PortalEnvironmentContextType {
+  activeEnvironment: PortalEnvironment;
+  activeConfig: PortalEnvironmentConfig;
+  environments: PortalEnvironmentConfig[];
+  endpoints: PortalEnvironmentEndpoints | null;
+  switchEnvironment: (env: PortalEnvironment) => void;
   loading: boolean;
   error: string | null;
 }
 
-const EnvironmentContext = createContext<EnvironmentContextType | undefined>(undefined);
+const PortalEnvironmentContext = createContext<PortalEnvironmentContextType | undefined>(undefined);
 
-export function EnvironmentProvider({ children }: { children: ReactNode }) {
+export function PortalEnvironmentProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const oidcAuth = useAuth();
+  const oidcAuth = useOidcAuth();
 
-  const [environments, setEnvironments] = useState<EnvironmentConfig[]>(FALLBACK_ENVIRONMENTS);
+  const [environments, setEnvironments] =
+    useState<PortalEnvironmentConfig[]>(FALLBACK_ENVIRONMENTS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeEnvironment, setActiveEnvironment] = useState<Environment>(() => {
+  const [activeEnvironment, setActiveEnvironment] = useState<PortalEnvironment>(() => {
     const stored = localStorage.getItem(ACTIVE_ENV_KEY);
     if (stored && isValidEnvironment(stored)) return stored;
     return 'dev';
   });
 
-  // Fetch environments from API
   useEffect(() => {
     const token = oidcAuth.user?.access_token;
     if (!token) {
@@ -77,18 +94,18 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
 
         if (cancelled) return;
 
-        const mapped: EnvironmentConfig[] = data.environments.map(
+        const mapped: PortalEnvironmentConfig[] = data.environments.map(
           (env: {
             name: string;
             label: string;
             mode: string;
             color: string;
-            endpoints: EnvironmentEndpoints | null;
+            endpoints: PortalEnvironmentEndpoints | null;
             is_current: boolean;
           }) => ({
             name: toEnvironmentKey(env.name),
             label: env.label,
-            mode: env.mode as EnvironmentConfig['mode'],
+            mode: env.mode as PortalEnvironmentConfig['mode'],
             color: env.color,
             endpoints: env.endpoints ?? null,
             is_current: env.is_current,
@@ -119,7 +136,7 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
   const endpoints = useMemo(() => activeConfig?.endpoints ?? null, [activeConfig]);
 
   const switchEnvironment = useCallback(
-    (env: Environment) => {
+    (env: PortalEnvironment) => {
       setActiveEnvironment(env);
       localStorage.setItem(ACTIVE_ENV_KEY, env);
       queryClient.invalidateQueries();
@@ -127,7 +144,7 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
     [queryClient]
   );
 
-  const value: EnvironmentContextType = useMemo(
+  const value: PortalEnvironmentContextType = useMemo(
     () => ({
       activeEnvironment,
       activeConfig,
@@ -140,13 +157,15 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
     [activeEnvironment, activeConfig, environments, endpoints, switchEnvironment, loading, error]
   );
 
-  return <EnvironmentContext.Provider value={value}>{children}</EnvironmentContext.Provider>;
+  return (
+    <PortalEnvironmentContext.Provider value={value}>{children}</PortalEnvironmentContext.Provider>
+  );
 }
 
-export function useEnvironment() {
-  const context = useContext(EnvironmentContext);
+export function usePortalEnvironment() {
+  const context = useContext(PortalEnvironmentContext);
   if (context === undefined) {
-    throw new Error('useEnvironment must be used within an EnvironmentProvider');
+    throw new Error('usePortalEnvironment must be used within a PortalEnvironmentProvider');
   }
   return context;
 }

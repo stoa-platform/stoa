@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, lazy, useState } from 'react';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PortalEnvironmentProvider } from './contexts/EnvironmentContext';
 import { ErrorBoundary, SkipLink } from './components/common';
 import { captureException } from './services/errorTracking';
 import { StoaLogo } from '@stoa/shared/components/StoaLogo';
@@ -712,7 +713,9 @@ function App() {
     >
       <SkipLink />
       <AuthProvider>
-        <AppContent />
+        <PortalEnvironmentProvider>
+          <AppContent />
+        </PortalEnvironmentProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

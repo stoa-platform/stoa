@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useEnvironment } from '../contexts/EnvironmentContext';
+import type { Environment } from '../types';
 import { useBreadcrumbs } from '../hooks/useBreadcrumbs';
 import { Breadcrumb } from '@stoa/shared/components/Breadcrumb';
 import { useCommandPalette, type CommandItem } from '@stoa/shared/components/CommandPalette';
@@ -482,8 +483,8 @@ export function Layout({ children }: LayoutProps) {
   const envDropdownRef = useRef<HTMLDivElement>(null);
 
   const handleEnvSwitch = useCallback(
-    (env: 'dev' | 'staging' | 'prod') => {
-      switchEnvironment(env);
+    (env: string) => {
+      switchEnvironment(env as Environment);
       setEnvDropdownOpen(false);
     },
     [switchEnvironment]

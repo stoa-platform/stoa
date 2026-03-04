@@ -141,11 +141,20 @@ export interface BulkRevokeResponse {
 export type Environment = 'dev' | 'staging' | 'prod';
 export type EnvironmentMode = 'full' | 'read-only' | 'promote-only';
 
+export interface EnvironmentEndpoints {
+  api_url: string;
+  keycloak_url: string;
+  keycloak_realm: string;
+  mcp_url: string;
+}
+
 export interface EnvironmentConfig {
-  name: Environment;
+  name: string;
   label: string;
   mode: EnvironmentMode;
-  color: 'green' | 'amber' | 'red';
+  color: string;
+  endpoints?: EnvironmentEndpoints | null;
+  is_current?: boolean;
 }
 
 // Deployment types (CAB-1353 lifecycle API)

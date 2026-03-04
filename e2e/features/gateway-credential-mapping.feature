@@ -9,7 +9,7 @@ Feature: Gateway - Per-consumer credential mapping (CAB-1432)
   Background:
     Given a test route "test-route-cm" exists with backend "https://httpbin.org/get"
 
-  @credential-mapping @crud
+  @smoke @credential-mapping @crud
   Scenario: Create a per-consumer credential mapping via admin API
     When I upsert a consumer credential mapping:
       | route_id       | consumer_id | auth_type | header_name | header_value |

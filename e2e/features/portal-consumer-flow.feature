@@ -5,6 +5,7 @@ Feature: Portal - Consumer Flow
   I want to discover, subscribe to, and consume APIs
   So that I can integrate them into my applications.
 
+  @smoke
   Scenario: Consumer browses API catalog and views details
     Given I am logged in as "art3mis" from community "high-five"
     And the STOA Portal is accessible

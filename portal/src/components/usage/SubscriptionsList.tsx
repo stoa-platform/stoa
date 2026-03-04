@@ -113,7 +113,7 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
           <CreditCard className="w-8 h-8 text-neutral-300 dark:text-neutral-600 mx-auto mb-2" />
           <p className="text-neutral-500 dark:text-neutral-400 text-sm">No active subscriptions</p>
           <Link
-            to="/tools"
+            to="/servers"
             className="text-sm text-primary-600 hover:text-primary-700 mt-2 inline-block"
           >
             Browse tools →
@@ -145,7 +145,7 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
               </div>
 
               <Link
-                to={`/tools/${sub.tool_id}`}
+                to={`/servers/${sub.tool_id}`}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded"
               >
                 <ExternalLink className="w-4 h-4 text-neutral-400 dark:text-neutral-500" />

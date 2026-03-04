@@ -67,6 +67,20 @@ vi.mock('@stoa/shared/hooks', () => ({
   useSequenceShortcuts: vi.fn(),
 }));
 
+vi.mock('react-oidc-context', () => ({
+  useAuth: () => ({
+    user: { access_token: 'test-token' },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
+vi.mock('../config', () => ({
+  config: {
+    api: { baseUrl: 'https://api.test' },
+  },
+}));
+
 function renderLayout(children = <div>Page Content</div>) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -85,6 +99,37 @@ function renderLayout(children = <div>Page Content</div>) {
 describe('Layout', () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        environments: [
+          {
+            name: 'dev',
+            label: 'Development',
+            mode: 'full',
+            color: 'green',
+            endpoints: null,
+            is_current: true,
+          },
+          {
+            name: 'staging',
+            label: 'Staging',
+            mode: 'full',
+            color: 'amber',
+            endpoints: null,
+            is_current: false,
+          },
+          {
+            name: 'prod',
+            label: 'Production',
+            mode: 'read-only',
+            color: 'red',
+            endpoints: null,
+            is_current: false,
+          },
+        ],
+      }),
+    } as Response);
   });
 
   it('renders sidebar with navigation items', () => {

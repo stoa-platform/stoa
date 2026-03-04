@@ -1,9 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppWindow, CreditCard } from 'lucide-react';
-import { config } from '../../config';
-import { loadNamespace } from '../../i18n';
 
 const MyApplications = lazy(() => import('../apps').then((m) => ({ default: m.MyApplications })));
 const MySubscriptions = lazy(() =>
@@ -29,16 +27,7 @@ function TabSkeleton() {
 
 export function WorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { t, i18n: i18nInstance } = useTranslation('workspace');
-  const i18nEnabled = config.features.enableI18n;
-
-  useEffect(() => {
-    if (i18nEnabled) {
-      const lng = i18nInstance.language;
-      loadNamespace(lng, 'workspace');
-      if (lng !== 'en') loadNamespace('en', 'workspace');
-    }
-  }, [i18nEnabled, i18nInstance.language]);
+  const { t } = useTranslation('workspace');
   const activeTab = (searchParams.get('tab') as TabId) || 'apps';
 
   const setTab = (tab: TabId) => {
@@ -49,10 +38,10 @@ export function WorkspacePage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
-          {i18nEnabled ? t('title') : 'My Workspace'}
+          {t('title', { defaultValue: 'My Workspace' })}
         </h1>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-          {i18nEnabled ? t('subtitle') : 'Manage your apps and subscriptions'}
+          {t('subtitle', { defaultValue: 'Manage your apps and subscriptions' })}
         </p>
       </div>
 
@@ -72,7 +61,7 @@ export function WorkspacePage() {
                 }`}
               >
                 <tab.icon className="h-4 w-4" />
-                {i18nEnabled ? t(`tabs.${tab.id}`) : tab.label}
+                {t(`tabs.${tab.id}`, { defaultValue: tab.label })}
               </button>
             );
           })}

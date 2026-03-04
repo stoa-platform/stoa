@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { MarketplacePage } from '../marketplace/MarketplacePage';
 import { renderWithProviders, createAuthMock, mockAPI, mockMCPServer } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
 import type { MarketplaceItem, MarketplaceStats, MarketplaceCategory } from '../../types';
 
 // Mock hooks
@@ -99,10 +100,12 @@ const mockStats: MarketplaceStats = {
 
 const mockItems: MarketplaceItem[] = [createMarketplaceItem(), createMCPMarketplaceItem()];
 
-describe('MarketplacePage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'MarketplacePage — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseAuth.mockReturnValue(createAuthMock('tenant-admin'));
+    mockUseAuth.mockReturnValue(createAuthMock(role));
     mockUseMarketplace.mockReturnValue({
       data: { items: mockItems, total: 2, stats: mockStats },
       isLoading: false,
@@ -256,41 +259,4 @@ describe('MarketplacePage', () => {
     });
   });
 
-  describe('Persona-based Tests', () => {
-    it('should render for cpi-admin', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('cpi-admin'));
-
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByText('Marketplace')).toBeInTheDocument();
-      expect(screen.getAllByText('Payment API').length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should render for tenant-admin', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByText('Marketplace')).toBeInTheDocument();
-      expect(screen.getAllByText('Payment API').length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should render for devops', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('devops'));
-
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByText('Marketplace')).toBeInTheDocument();
-      expect(screen.getAllByText('Payment API').length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should render for viewer', () => {
-      mockUseAuth.mockReturnValue(createAuthMock('viewer'));
-
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByText('Marketplace')).toBeInTheDocument();
-      expect(screen.getAllByText('Payment API').length).toBeGreaterThanOrEqual(1);
-    });
-  });
 });

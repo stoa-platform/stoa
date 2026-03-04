@@ -64,10 +64,12 @@ const sampleFavorites = [
   },
 ];
 
-describe('FavoritesPage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'FavoritesPage — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock('cpi-admin'));
+    mockAuth.mockReturnValue(createAuthMock(role));
     mockFavoritesData.mockReturnValue({ favorites: sampleFavorites });
     mockRemoveIsPending.mockReturnValue(false);
   });
@@ -137,15 +139,4 @@ describe('FavoritesPage', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  describe('Persona-based Tests', () => {
-    const personas: PersonaRole[] = ['cpi-admin', 'tenant-admin', 'devops', 'viewer'];
-
-    it.each(personas)('%s can access favorites page', async (persona) => {
-      mockAuth.mockReturnValue(createAuthMock(persona));
-      renderWithProviders(<FavoritesPage />);
-      await waitFor(() => {
-        expect(screen.getByText('Favorites')).toBeInTheDocument();
-      });
-    });
-  });
 });

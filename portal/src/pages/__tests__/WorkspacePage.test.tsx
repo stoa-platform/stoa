@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAuthMock, renderWithProviders } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
 
 // Mock AuthContext
 const mockAuth = vi.fn();
@@ -51,19 +52,20 @@ vi.mock('../../components/consumers/ApprovalQueue', () => ({
   ApprovalQueue: () => <div data-testid="approval-queue">Approval Queue Content</div>,
 }));
 
-describe('WorkspacePage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'WorkspacePage — %s persona',
+  (role) => {
   let WorkspacePage: React.ComponentType;
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockAuth.mockReturnValue(createAuthMock(role));
 
     const pageModule = await import('../workspace/WorkspacePage');
     WorkspacePage = pageModule.WorkspacePage;
   });
 
   it('renders "My Workspace" heading', () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
     renderWithProviders(<WorkspacePage />);
 
     expect(screen.getByText('My Workspace')).toBeInTheDocument();
@@ -71,8 +73,6 @@ describe('WorkspacePage', () => {
   });
 
   it('default tab is "apps"', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
     renderWithProviders(<WorkspacePage />);
 
     await waitFor(() => {
@@ -80,53 +80,23 @@ describe('WorkspacePage', () => {
     });
   });
 
-  it('cpi-admin sees 4 tabs: Apps, Subscriptions, Contracts, Approvals', () => {
-    mockAuth.mockReturnValue(createAuthMock('cpi-admin'));
+  it('shows correct tabs based on role', () => {
+    const hasApprovals = role === 'cpi-admin' || role === 'tenant-admin';
 
     renderWithProviders(<WorkspacePage />);
 
     expect(screen.getByRole('button', { name: /Apps/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Subscriptions/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Contracts/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Approvals/i })).toBeInTheDocument();
-  });
-
-  it('tenant-admin sees 4 tabs: Apps, Subscriptions, Contracts, Approvals', () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
-    renderWithProviders(<WorkspacePage />);
-
-    expect(screen.getByRole('button', { name: /Apps/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Subscriptions/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Contracts/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Approvals/i })).toBeInTheDocument();
-  });
-
-  it('devops sees 3 tabs: Apps, Subscriptions, Contracts (NO Approvals)', () => {
-    mockAuth.mockReturnValue(createAuthMock('devops'));
-
-    renderWithProviders(<WorkspacePage />);
-
-    expect(screen.getByRole('button', { name: /Apps/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Subscriptions/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Contracts/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Approvals/i })).not.toBeInTheDocument();
-  });
-
-  it('viewer sees 3 tabs: Apps, Subscriptions, Contracts (NO Approvals)', () => {
-    mockAuth.mockReturnValue(createAuthMock('viewer'));
-
-    renderWithProviders(<WorkspacePage />);
-
-    expect(screen.getByRole('button', { name: /Apps/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Subscriptions/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Contracts/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Approvals/i })).not.toBeInTheDocument();
+    if (hasApprovals) {
+      expect(screen.getByRole('button', { name: /Approvals/i })).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole('button', { name: /Approvals/i })).not.toBeInTheDocument();
+    }
   });
 
   it('clicking Subscriptions tab renders subscriptions content', async () => {
     const user = userEvent.setup();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
 
     renderWithProviders(<WorkspacePage />);
 
@@ -140,7 +110,6 @@ describe('WorkspacePage', () => {
 
   it('clicking Contracts tab renders contracts content', async () => {
     const user = userEvent.setup();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
 
     renderWithProviders(<WorkspacePage />);
 
@@ -153,8 +122,10 @@ describe('WorkspacePage', () => {
   });
 
   it('clicking Approvals tab renders approvals content (admin only)', async () => {
+    const hasApprovals = role === 'cpi-admin' || role === 'tenant-admin';
+    if (!hasApprovals) return;
+
     const user = userEvent.setup();
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
 
     renderWithProviders(<WorkspacePage />);
 
@@ -167,8 +138,6 @@ describe('WorkspacePage', () => {
   });
 
   it('URL ?tab=subscriptions activates subscriptions tab', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
     renderWithProviders(<WorkspacePage />, { route: '/?tab=subscriptions' });
 
     await waitFor(() => {
@@ -177,8 +146,6 @@ describe('WorkspacePage', () => {
   });
 
   it('URL ?tab=contracts activates contracts tab', async () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
     renderWithProviders(<WorkspacePage />, { route: '/?tab=contracts' });
 
     await waitFor(() => {
@@ -187,7 +154,8 @@ describe('WorkspacePage', () => {
   });
 
   it('URL ?tab=approvals activates approvals tab (admin only)', async () => {
-    mockAuth.mockReturnValue(createAuthMock('cpi-admin'));
+    const hasApprovals = role === 'cpi-admin' || role === 'tenant-admin';
+    if (!hasApprovals) return;
 
     renderWithProviders(<WorkspacePage />, { route: '/?tab=approvals' });
 
@@ -197,8 +165,6 @@ describe('WorkspacePage', () => {
   });
 
   it('active tab has highlighted styling', () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
     renderWithProviders(<WorkspacePage />);
 
     const appsTab = screen.getByRole('button', { name: /Apps/i });
@@ -206,8 +172,6 @@ describe('WorkspacePage', () => {
   });
 
   it('inactive tabs do not have highlighted styling', () => {
-    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
-
     renderWithProviders(<WorkspacePage />);
 
     const subscriptionsTab = screen.getByRole('button', { name: /Subscriptions/i });

@@ -159,7 +159,8 @@ describe('Layout', () => {
 
   it('renders Observability navigation item (CAB-1108)', () => {
     renderLayout();
-    expect(screen.getByText('Observability')).toBeInTheDocument();
+    // Section header + nav item both render "Observability"
+    expect(screen.getAllByText('Observability').length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders Identity navigation item', () => {
@@ -189,8 +190,10 @@ describe('Layout', () => {
   it('renders section headers', () => {
     renderLayout();
     expect(screen.getByText('Overview')).toBeInTheDocument();
-    expect(screen.getByText('Catalog')).toBeInTheDocument();
-    expect(screen.getByText('Insights')).toBeInTheDocument();
+    expect(screen.getByText('API Catalog')).toBeInTheDocument();
+    expect(screen.getByText('AI & MCP')).toBeInTheDocument();
+    expect(screen.getByText('Access')).toBeInTheDocument();
+    expect(screen.getAllByText('Observability').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Governance')).toBeInTheDocument();
   });
 
@@ -225,14 +228,14 @@ describe('Layout', () => {
     // Pre-set localStorage (keys are i18n keys)
     localStorage.setItem(
       'stoa-sidebar-sections',
-      JSON.stringify({ 'nav.overview': false, 'nav.catalog': true })
+      JSON.stringify({ 'nav.overview': false, 'nav.apiCatalog': true })
     );
     renderLayout();
-    // Toggle Catalog to expand
-    const catalogHeader = screen.getByText('Catalog');
+    // Toggle API Catalog to expand
+    const catalogHeader = screen.getByText('API Catalog');
     fireEvent.click(catalogHeader);
     const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
-    expect(stored['nav.catalog']).toBe(false);
+    expect(stored['nav.apiCatalog']).toBe(false);
   });
 
   it('renders tenant selector button', () => {

@@ -19,7 +19,6 @@ import {
   Building2,
   Layers,
   AppWindow,
-  Rocket,
   LogOut,
   User,
   ChevronDown,
@@ -106,7 +105,7 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: 'nav.catalog',
+    title: 'nav.apiCatalog',
     items: [
       {
         name: 'nav.tenants',
@@ -123,6 +122,23 @@ const navigationSections: NavSection[] = [
         shortcut: ['g', 'a'],
       },
       {
+        name: 'nav.backendApis',
+        href: '/backend-apis',
+        icon: Server,
+        permission: 'apis:read',
+      },
+      {
+        name: 'nav.subscriptions',
+        href: '/subscriptions',
+        icon: ClipboardList,
+        permission: 'apps:read',
+      },
+    ],
+  },
+  {
+    title: 'nav.aiMcp',
+    items: [
+      {
         name: 'nav.aiTools',
         href: '/ai-tools',
         icon: Wrench,
@@ -138,11 +154,16 @@ const navigationSections: NavSection[] = [
         badge: 'NEW',
       },
       {
-        name: 'nav.applications',
-        href: '/applications',
-        icon: AppWindow,
-        permission: 'apps:read',
+        name: 'nav.skills',
+        href: '/skills',
+        icon: Sparkles,
+        permission: 'apis:read',
       },
+    ],
+  },
+  {
+    title: 'nav.access',
+    items: [
       {
         name: 'nav.consumers',
         href: '/consumers',
@@ -151,27 +172,28 @@ const navigationSections: NavSection[] = [
         shortcut: ['g', 'c'],
       },
       {
-        name: 'nav.subscriptions',
-        href: '/subscriptions',
-        icon: ClipboardList,
+        name: 'nav.applications',
+        href: '/applications',
+        icon: AppWindow,
         permission: 'apps:read',
-      },
-    ],
-  },
-  {
-    title: 'nav.saas',
-    items: [
-      {
-        name: 'nav.backendApis',
-        href: '/backend-apis',
-        icon: Server,
-        permission: 'apis:read',
       },
       {
         name: 'nav.apiKeys',
         href: '/saas-api-keys',
         icon: KeyRound,
         permission: 'apis:read',
+      },
+      {
+        name: 'nav.credentialMappings',
+        href: '/credential-mappings',
+        icon: Key,
+        permission: 'apis:read',
+      },
+      {
+        name: 'nav.audience',
+        href: '/audience-governance',
+        icon: Users,
+        permission: 'apis:update',
       },
     ],
   },
@@ -216,12 +238,6 @@ const navigationSections: NavSection[] = [
         name: 'nav.federation',
         href: '/federation/accounts',
         icon: Share2,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.skills',
-        href: '/skills',
-        icon: Sparkles,
         permission: 'apis:read',
       },
       {
@@ -292,8 +308,25 @@ const navigationSections: NavSection[] = [
   {
     title: 'nav.governance',
     items: [
-      { name: 'nav.deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
       { name: 'nav.policies', href: '/policies', icon: FileCheck, permission: 'apis:read' },
+      {
+        name: 'nav.contracts',
+        href: '/contracts',
+        icon: FileText,
+        permission: 'apis:read',
+      },
+      {
+        name: 'nav.workflows',
+        href: '/workflows',
+        icon: ListChecks,
+        permission: 'workflows:read',
+      },
+      {
+        name: 'nav.webhooks',
+        href: '/webhooks',
+        icon: Webhook,
+        permission: 'apis:read',
+      },
       {
         name: 'nav.auditLog',
         href: '/audit-log',
@@ -305,36 +338,6 @@ const navigationSections: NavSection[] = [
         href: '/security-posture',
         icon: Shield,
         permission: 'audit:read',
-      },
-      {
-        name: 'nav.workflows',
-        href: '/workflows',
-        icon: ListChecks,
-        permission: 'workflows:read',
-      },
-      {
-        name: 'nav.audience',
-        href: '/audience-governance',
-        icon: Users,
-        permission: 'apis:update',
-      },
-      {
-        name: 'nav.webhooks',
-        href: '/webhooks',
-        icon: Webhook,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.credentialMappings',
-        href: '/credential-mappings',
-        icon: Key,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.contracts',
-        href: '/contracts',
-        icon: FileText,
-        permission: 'apis:read',
       },
     ],
   },
@@ -410,7 +413,9 @@ export function Layout({ children }: LayoutProps) {
     // Default: Gateway open, others closed (keys are i18n keys, stable across languages)
     return {
       'nav.overview': true,
-      'nav.catalog': true,
+      'nav.apiCatalog': true,
+      'nav.aiMcp': true,
+      'nav.access': true,
       'nav.gateway': false,
       'nav.insights': true,
       'nav.governance': true,

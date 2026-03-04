@@ -46,7 +46,8 @@
     "proxyOwner": "Propriétaire de proxy",
     "llmCost": "Coûts LLM",
     "subscriptions": "Abonnements",
-    "webhooks": "Webhooks"
+    "webhooks": "Webhooks",
+    "credentialMappings": "Mappages d'identifiants"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",

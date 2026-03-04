@@ -103,160 +103,160 @@ const mockItems: MarketplaceItem[] = [createMarketplaceItem(), createMCPMarketpl
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'MarketplacePage — %s persona',
   (role) => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockUseAuth.mockReturnValue(createAuthMock(role));
-    mockUseMarketplace.mockReturnValue({
-      data: { items: mockItems, total: 2, stats: mockStats },
-      isLoading: false,
-      isError: false,
-    });
-    mockUseFeaturedItems.mockReturnValue({
-      data: mockItems.map((item) => ({ ...item, featured: true })),
-    });
-  });
-
-  describe('Page Structure', () => {
-    it('should render page header with title', () => {
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByText('Marketplace')).toBeInTheDocument();
-      expect(
-        screen.getByText('Discover APIs and AI tools available on the platform')
-      ).toBeInTheDocument();
-    });
-
-    it('should render search input', () => {
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
-    });
-
-    it('should render type filter buttons', () => {
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'APIs' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'AI Tools' })).toBeInTheDocument();
-    });
-
-    it('should render stats bar', () => {
-      renderWithProviders(<MarketplacePage />);
-
-      // Stats bar shows totalAPIs=1, totalMCPServers=1, totalItems=2
-      expect(screen.getByText('2')).toBeInTheDocument(); // totalItems (unique)
-      expect(screen.getByText('Total')).toBeInTheDocument();
-    });
-  });
-
-  describe('Loading State', () => {
-    it('should show loading spinner when data is loading', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockUseAuth.mockReturnValue(createAuthMock(role));
       mockUseMarketplace.mockReturnValue({
-        data: undefined,
-        isLoading: true,
-        isError: false,
-      });
-
-      const { container } = renderWithProviders(<MarketplacePage />);
-
-      expect(container.querySelector('.animate-spin')).toBeTruthy();
-    });
-  });
-
-  describe('Error State', () => {
-    it('should show error message when fetch fails', () => {
-      mockUseMarketplace.mockReturnValue({
-        data: undefined,
-        isLoading: false,
-        isError: true,
-      });
-
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
-    });
-  });
-
-  describe('Empty State', () => {
-    it('should show empty state when no items match filters', () => {
-      mockUseMarketplace.mockReturnValue({
-        data: { items: [], total: 0, stats: mockStats },
+        data: { items: mockItems, total: 2, stats: mockStats },
         isLoading: false,
         isError: false,
       });
-
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.getByText(/no items match/i)).toBeInTheDocument();
-    });
-  });
-
-  describe('Data State', () => {
-    it('should render marketplace cards', () => {
-      renderWithProviders(<MarketplacePage />);
-
-      // Cards appear in both featured and main grid
-      expect(screen.getAllByText('Payment API').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('STOA Platform Tools').length).toBeGreaterThanOrEqual(1);
+      mockUseFeaturedItems.mockReturnValue({
+        data: mockItems.map((item) => ({ ...item, featured: true })),
+      });
     });
 
-    it('should display results count', () => {
-      renderWithProviders(<MarketplacePage />);
+    describe('Page Structure', () => {
+      it('should render page header with title', () => {
+        renderWithProviders(<MarketplacePage />);
 
-      expect(screen.getByText('2 items found')).toBeInTheDocument();
-    });
-
-    it('should display singular count when one item', () => {
-      mockUseMarketplace.mockReturnValue({
-        data: { items: [mockItems[0]], total: 1, stats: mockStats },
-        isLoading: false,
-        isError: false,
+        expect(screen.getByText('Marketplace')).toBeInTheDocument();
+        expect(
+          screen.getByText('Discover APIs and AI tools available on the platform')
+        ).toBeInTheDocument();
       });
 
-      renderWithProviders(<MarketplacePage />);
+      it('should render search input', () => {
+        renderWithProviders(<MarketplacePage />);
 
-      expect(screen.getByText('1 item found')).toBeInTheDocument();
-    });
-  });
-
-  describe('Featured Section', () => {
-    it('should show featured section on first page without filters', () => {
-      renderWithProviders(<MarketplacePage />);
-
-      // "Featured" appears as h2 heading + card badges; use heading role
-      expect(screen.getByRole('heading', { name: 'Featured' })).toBeInTheDocument();
-    });
-
-    it('should hide featured section when no featured items', () => {
-      mockUseFeaturedItems.mockReturnValue({ data: [] });
-
-      renderWithProviders(<MarketplacePage />);
-
-      expect(screen.queryByText('Featured')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Pagination', () => {
-    it('should show pagination when total pages > 1', () => {
-      mockUseMarketplace.mockReturnValue({
-        data: { items: mockItems, total: 25, stats: mockStats },
-        isLoading: false,
-        isError: false,
+        expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
       });
 
-      renderWithProviders(<MarketplacePage />);
+      it('should render type filter buttons', () => {
+        renderWithProviders(<MarketplacePage />);
 
-      expect(screen.getByText('Previous')).toBeInTheDocument();
-      expect(screen.getByText('Next')).toBeInTheDocument();
-      expect(screen.getByText(/Page 1 of/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'APIs' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'AI Tools' })).toBeInTheDocument();
+      });
+
+      it('should render stats bar', () => {
+        renderWithProviders(<MarketplacePage />);
+
+        // Stats bar shows totalAPIs=1, totalMCPServers=1, totalItems=2
+        expect(screen.getByText('2')).toBeInTheDocument(); // totalItems (unique)
+        expect(screen.getByText('Total')).toBeInTheDocument();
+      });
     });
 
-    it('should not show pagination when total pages = 1', () => {
-      renderWithProviders(<MarketplacePage />);
+    describe('Loading State', () => {
+      it('should show loading spinner when data is loading', () => {
+        mockUseMarketplace.mockReturnValue({
+          data: undefined,
+          isLoading: true,
+          isError: false,
+        });
 
-      expect(screen.queryByText('Previous')).not.toBeInTheDocument();
-      expect(screen.queryByText('Next')).not.toBeInTheDocument();
+        const { container } = renderWithProviders(<MarketplacePage />);
+
+        expect(container.querySelector('.animate-spin')).toBeTruthy();
+      });
     });
-  });
 
-});
+    describe('Error State', () => {
+      it('should show error message when fetch fails', () => {
+        mockUseMarketplace.mockReturnValue({
+          data: undefined,
+          isLoading: false,
+          isError: true,
+        });
+
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
+      });
+    });
+
+    describe('Empty State', () => {
+      it('should show empty state when no items match filters', () => {
+        mockUseMarketplace.mockReturnValue({
+          data: { items: [], total: 0, stats: mockStats },
+          isLoading: false,
+          isError: false,
+        });
+
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.getByText(/no items match/i)).toBeInTheDocument();
+      });
+    });
+
+    describe('Data State', () => {
+      it('should render marketplace cards', () => {
+        renderWithProviders(<MarketplacePage />);
+
+        // Cards appear in both featured and main grid
+        expect(screen.getAllByText('Payment API').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('STOA Platform Tools').length).toBeGreaterThanOrEqual(1);
+      });
+
+      it('should display results count', () => {
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.getByText('2 items found')).toBeInTheDocument();
+      });
+
+      it('should display singular count when one item', () => {
+        mockUseMarketplace.mockReturnValue({
+          data: { items: [mockItems[0]], total: 1, stats: mockStats },
+          isLoading: false,
+          isError: false,
+        });
+
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.getByText('1 item found')).toBeInTheDocument();
+      });
+    });
+
+    describe('Featured Section', () => {
+      it('should show featured section on first page without filters', () => {
+        renderWithProviders(<MarketplacePage />);
+
+        // "Featured" appears as h2 heading + card badges; use heading role
+        expect(screen.getByRole('heading', { name: 'Featured' })).toBeInTheDocument();
+      });
+
+      it('should hide featured section when no featured items', () => {
+        mockUseFeaturedItems.mockReturnValue({ data: [] });
+
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.queryByText('Featured')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Pagination', () => {
+      it('should show pagination when total pages > 1', () => {
+        mockUseMarketplace.mockReturnValue({
+          data: { items: mockItems, total: 25, stats: mockStats },
+          isLoading: false,
+          isError: false,
+        });
+
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.getByText('Previous')).toBeInTheDocument();
+        expect(screen.getByText('Next')).toBeInTheDocument();
+        expect(screen.getByText(/Page 1 of/)).toBeInTheDocument();
+      });
+
+      it('should not show pagination when total pages = 1', () => {
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.queryByText('Previous')).not.toBeInTheDocument();
+        expect(screen.queryByText('Next')).not.toBeInTheDocument();
+      });
+    });
+  }
+);

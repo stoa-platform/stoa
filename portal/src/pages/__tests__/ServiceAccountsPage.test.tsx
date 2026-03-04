@@ -28,62 +28,63 @@ vi.mock('../../services/api', () => ({
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'ServiceAccountsPage — %s persona',
   (role) => {
-  let apiClient: {
-    get: ReturnType<typeof vi.fn>;
-    post: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-  };
+    let apiClient: {
+      get: ReturnType<typeof vi.fn>;
+      post: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+    };
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock(role));
-    const apiModule = await import('../../services/api');
-    apiClient = apiModule.apiClient as typeof apiClient;
-    apiClient.get.mockResolvedValue({ data: [] });
-  });
-
-  it('renders "Service Accounts" heading', async () => {
-    renderWithProviders(<ServiceAccountsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Service Accounts')).toBeInTheDocument();
-    });
-  });
-
-  it('shows empty state when no service accounts', async () => {
-    apiClient.get.mockResolvedValue({ data: [] });
-
-    renderWithProviders(<ServiceAccountsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('No service accounts yet')).toBeInTheDocument();
-      expect(screen.getByText('Create your first service account')).toBeInTheDocument();
-    });
-  });
-
-  it('renders service account list when accounts exist', async () => {
-    apiClient.get.mockResolvedValue({
-      data: [
-        {
-          id: 'sa-1',
-          client_id: 'stoa_sa_abc123',
-          name: 'Claude Desktop',
-          description: 'MCP access for Claude',
-          enabled: true,
-        },
-      ],
+    beforeEach(async () => {
+      vi.clearAllMocks();
+      mockAuth.mockReturnValue(createAuthMock(role));
+      const apiModule = await import('../../services/api');
+      apiClient = apiModule.apiClient as typeof apiClient;
+      apiClient.get.mockResolvedValue({ data: [] });
     });
 
-    renderWithProviders(<ServiceAccountsPage />);
+    it('renders "Service Accounts" heading', async () => {
+      renderWithProviders(<ServiceAccountsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Claude Desktop')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Service Accounts')).toBeInTheDocument();
+      });
     });
-  });
 
-  it('verifies stoa:subscriptions:write scope access per role', () => {
-    const auth = createAuthMock(role);
-    const expected = ['cpi-admin', 'tenant-admin'].includes(role);
-    expect(auth.hasScope('stoa:subscriptions:write')).toBe(expected);
-  });
-});
+    it('shows empty state when no service accounts', async () => {
+      apiClient.get.mockResolvedValue({ data: [] });
+
+      renderWithProviders(<ServiceAccountsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('No service accounts yet')).toBeInTheDocument();
+        expect(screen.getByText('Create your first service account')).toBeInTheDocument();
+      });
+    });
+
+    it('renders service account list when accounts exist', async () => {
+      apiClient.get.mockResolvedValue({
+        data: [
+          {
+            id: 'sa-1',
+            client_id: 'stoa_sa_abc123',
+            name: 'Claude Desktop',
+            description: 'MCP access for Claude',
+            enabled: true,
+          },
+        ],
+      });
+
+      renderWithProviders(<ServiceAccountsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Claude Desktop')).toBeInTheDocument();
+      });
+    });
+
+    it('verifies stoa:subscriptions:write scope access per role', () => {
+      const auth = createAuthMock(role);
+      const expected = ['cpi-admin', 'tenant-admin'].includes(role);
+      expect(auth.hasScope('stoa:subscriptions:write')).toBe(expected);
+    });
+  }
+);

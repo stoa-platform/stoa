@@ -66,71 +66,73 @@ const sampleRateLimits = [
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'RateLimitsPage — %s persona',
   (role) => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock(role));
-    mockRateLimitsData.mockReturnValue({ rate_limits: sampleRateLimits });
-  });
-
-  it('renders the page heading and subtitle', async () => {
-    renderWithProviders(<RateLimitsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Rate Limits')).toBeInTheDocument();
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockAuth.mockReturnValue(createAuthMock(role));
+      mockRateLimitsData.mockReturnValue({ rate_limits: sampleRateLimits });
     });
-    expect(screen.getByText('Monitor your API usage quotas')).toBeInTheDocument();
-  });
 
-  it('renders rate limit cards', async () => {
-    renderWithProviders(<RateLimitsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    it('renders the page heading and subtitle', async () => {
+      renderWithProviders(<RateLimitsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Rate Limits')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Monitor your API usage quotas')).toBeInTheDocument();
     });
-    expect(screen.getByText('Maps API')).toBeInTheDocument();
-  });
 
-  it('renders plan names and periods', async () => {
-    renderWithProviders(<RateLimitsPage />);
-    await waitFor(() => {
-      expect(screen.getByText(/Gold/)).toBeInTheDocument();
+    it('renders rate limit cards', async () => {
+      renderWithProviders(<RateLimitsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Payment API')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Maps API')).toBeInTheDocument();
     });
-    expect(screen.getByText(/Silver/)).toBeInTheDocument();
-    expect(screen.getByText(/per minute/)).toBeInTheDocument();
-    expect(screen.getByText(/per hour/)).toBeInTheDocument();
-  });
 
-  it('renders usage bars with counts', async () => {
-    renderWithProviders(<RateLimitsPage />);
-    await waitFor(() => {
-      expect(screen.getByText(/450/)).toBeInTheDocument();
+    it('renders plan names and periods', async () => {
+      renderWithProviders(<RateLimitsPage />);
+      await waitFor(() => {
+        expect(screen.getByText(/Gold/)).toBeInTheDocument();
+      });
+      expect(screen.getByText(/Silver/)).toBeInTheDocument();
+      expect(screen.getByText(/per minute/)).toBeInTheDocument();
+      expect(screen.getByText(/per hour/)).toBeInTheDocument();
     });
-    expect(screen.getByText(/475/)).toBeInTheDocument();
-  });
 
-  it('renders remaining counts', async () => {
-    renderWithProviders(<RateLimitsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('550 remaining')).toBeInTheDocument();
+    it('renders usage bars with counts', async () => {
+      renderWithProviders(<RateLimitsPage />);
+      await waitFor(() => {
+        expect(screen.getByText(/450/)).toBeInTheDocument();
+      });
+      expect(screen.getByText(/475/)).toBeInTheDocument();
     });
-    expect(screen.getByText('25 remaining')).toBeInTheDocument();
-  });
 
-  it('shows empty state when no rate limits', async () => {
-    mockRateLimitsData.mockReturnValue({ rate_limits: [] });
-    renderWithProviders(<RateLimitsPage />);
-    await waitFor(() => {
-      expect(screen.getByText('No active rate limits')).toBeInTheDocument();
+    it('renders remaining counts', async () => {
+      renderWithProviders(<RateLimitsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('550 remaining')).toBeInTheDocument();
+      });
+      expect(screen.getByText('25 remaining')).toBeInTheDocument();
     });
-    expect(screen.getByText('Subscribe to APIs to see your usage quotas here')).toBeInTheDocument();
-  });
 
-  it('returns null when not authenticated', () => {
-    mockAuth.mockReturnValue({
-      ...createAuthMock('cpi-admin'),
-      isAuthenticated: false,
-      isLoading: false,
+    it('shows empty state when no rate limits', async () => {
+      mockRateLimitsData.mockReturnValue({ rate_limits: [] });
+      renderWithProviders(<RateLimitsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('No active rate limits')).toBeInTheDocument();
+      });
+      expect(
+        screen.getByText('Subscribe to APIs to see your usage quotas here')
+      ).toBeInTheDocument();
     });
-    const { container } = renderWithProviders(<RateLimitsPage />);
-    expect(container.innerHTML).toBe('');
-  });
 
-});
+    it('returns null when not authenticated', () => {
+      mockAuth.mockReturnValue({
+        ...createAuthMock('cpi-admin'),
+        isAuthenticated: false,
+        isLoading: false,
+      });
+      const { container } = renderWithProviders(<RateLimitsPage />);
+      expect(container.innerHTML).toBe('');
+    });
+  }
+);

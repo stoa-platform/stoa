@@ -61,144 +61,144 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
         key: 'sk_test_abc123',
       });
     });
-  it('renders form with required fields', () => {
-    renderModal();
-    expect(screen.getByText('Create API Key')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('my-api-key')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Key for production use')).toBeInTheDocument();
-  });
-
-  it('loads and shows active backend APIs as checkboxes', async () => {
-    renderModal();
-
-    await waitFor(() => {
-      expect(screen.getByText('Petstore API')).toBeInTheDocument();
-      expect(screen.getByText('Weather API')).toBeInTheDocument();
-    });
-    // Draft API should NOT appear (only active APIs shown)
-    expect(screen.queryByText('Draft API')).not.toBeInTheDocument();
-  });
-
-  it('shows empty message when no active APIs', async () => {
-    mockListBackendApis.mockResolvedValue({ items: [], total: 0 });
-    renderModal();
-
-    await waitFor(() => {
-      expect(screen.getByText(/No active backend APIs available/)).toBeInTheDocument();
-    });
-  });
-
-  it('toggles API checkbox selection', async () => {
-    const user = userEvent.setup();
-    renderModal();
-
-    await waitFor(() => {
-      expect(screen.getByText('Petstore API')).toBeInTheDocument();
+    it('renders form with required fields', () => {
+      renderModal();
+      expect(screen.getByText('Create API Key')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('my-api-key')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Key for production use')).toBeInTheDocument();
     });
 
-    const checkboxes = screen.getAllByRole('checkbox');
-    await user.click(checkboxes[0]);
-    expect(checkboxes[0]).toBeChecked();
+    it('loads and shows active backend APIs as checkboxes', async () => {
+      renderModal();
 
-    await user.click(checkboxes[0]);
-    expect(checkboxes[0]).not.toBeChecked();
-  });
-
-  it('calls onClose when cancel clicked', async () => {
-    const user = userEvent.setup();
-    renderModal();
-
-    await user.click(screen.getByText('Cancel'));
-    expect(defaultProps.onClose).toHaveBeenCalled();
-  });
-
-  it('submits form with name and selected APIs', async () => {
-    const user = userEvent.setup();
-    renderModal();
-
-    await user.type(screen.getByPlaceholderText('my-api-key'), 'production-key');
-
-    await waitFor(() => {
-      expect(screen.getByText('Petstore API')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Petstore API')).toBeInTheDocument();
+        expect(screen.getByText('Weather API')).toBeInTheDocument();
+      });
+      // Draft API should NOT appear (only active APIs shown)
+      expect(screen.queryByText('Draft API')).not.toBeInTheDocument();
     });
 
-    const checkboxes = screen.getAllByRole('checkbox');
-    await user.click(checkboxes[0]);
+    it('shows empty message when no active APIs', async () => {
+      mockListBackendApis.mockResolvedValue({ items: [], total: 0 });
+      renderModal();
 
-    // Submit form directly (button is outside form element)
-    fireEvent.submit(getForm());
-
-    await waitFor(() => {
-      expect(mockCreateSaasKey).toHaveBeenCalledWith(
-        'tenant-1',
-        expect.objectContaining({
-          name: 'production-key',
-          allowed_backend_api_ids: ['api-1'],
-        })
-      );
+      await waitFor(() => {
+        expect(screen.getByText(/No active backend APIs available/)).toBeInTheDocument();
+      });
     });
-  });
 
-  it('calls onCreated with result after successful submit', async () => {
-    const user = userEvent.setup();
-    renderModal();
+    it('toggles API checkbox selection', async () => {
+      const user = userEvent.setup();
+      renderModal();
 
-    await user.type(screen.getByPlaceholderText('my-api-key'), 'test-key');
+      await waitFor(() => {
+        expect(screen.getByText('Petstore API')).toBeInTheDocument();
+      });
 
-    fireEvent.submit(getForm());
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[0]);
+      expect(checkboxes[0]).toBeChecked();
 
-    await waitFor(() => {
-      expect(defaultProps.onCreated).toHaveBeenCalledWith(
-        expect.objectContaining({ key: 'sk_test_abc123' })
-      );
+      await user.click(checkboxes[0]);
+      expect(checkboxes[0]).not.toBeChecked();
     });
-  });
 
-  it('shows error on submit failure', async () => {
-    mockCreateSaasKey.mockRejectedValue(new Error('Rate limit exceeded'));
-    const user = userEvent.setup();
-    renderModal();
+    it('calls onClose when cancel clicked', async () => {
+      const user = userEvent.setup();
+      renderModal();
 
-    await user.type(screen.getByPlaceholderText('my-api-key'), 'test-key');
-
-    fireEvent.submit(getForm());
-
-    await waitFor(() => {
-      expect(screen.getByText('Rate limit exceeded')).toBeInTheDocument();
+      await user.click(screen.getByText('Cancel'));
+      expect(defaultProps.onClose).toHaveBeenCalled();
     });
-  });
 
-  it('shows loading state during submit', async () => {
-    mockCreateSaasKey.mockImplementation(() => new Promise(() => {}));
-    const user = userEvent.setup();
-    renderModal();
+    it('submits form with name and selected APIs', async () => {
+      const user = userEvent.setup();
+      renderModal();
 
-    await user.type(screen.getByPlaceholderText('my-api-key'), 'test-key');
+      await user.type(screen.getByPlaceholderText('my-api-key'), 'production-key');
 
-    fireEvent.submit(getForm());
+      await waitFor(() => {
+        expect(screen.getByText('Petstore API')).toBeInTheDocument();
+      });
 
-    await waitFor(() => {
-      expect(screen.getByText('Creating...')).toBeInTheDocument();
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[0]);
+
+      // Submit form directly (button is outside form element)
+      fireEvent.submit(getForm());
+
+      await waitFor(() => {
+        expect(mockCreateSaasKey).toHaveBeenCalledWith(
+          'tenant-1',
+          expect.objectContaining({
+            name: 'production-key',
+            allowed_backend_api_ids: ['api-1'],
+          })
+        );
+      });
     });
-  });
 
-  it('passes rate limit when set', async () => {
-    const user = userEvent.setup();
-    renderModal();
+    it('calls onCreated with result after successful submit', async () => {
+      const user = userEvent.setup();
+      renderModal();
 
-    await user.type(screen.getByPlaceholderText('my-api-key'), 'test-key');
-    await user.type(screen.getByPlaceholderText('No limit'), '100');
+      await user.type(screen.getByPlaceholderText('my-api-key'), 'test-key');
 
-    fireEvent.submit(getForm());
+      fireEvent.submit(getForm());
 
-    await waitFor(() => {
-      expect(mockCreateSaasKey).toHaveBeenCalledWith(
-        'tenant-1',
-        expect.objectContaining({
-          rate_limit_rpm: 100,
-        })
-      );
+      await waitFor(() => {
+        expect(defaultProps.onCreated).toHaveBeenCalledWith(
+          expect.objectContaining({ key: 'sk_test_abc123' })
+        );
+      });
     });
-  });
+
+    it('shows error on submit failure', async () => {
+      mockCreateSaasKey.mockRejectedValue(new Error('Rate limit exceeded'));
+      const user = userEvent.setup();
+      renderModal();
+
+      await user.type(screen.getByPlaceholderText('my-api-key'), 'test-key');
+
+      fireEvent.submit(getForm());
+
+      await waitFor(() => {
+        expect(screen.getByText('Rate limit exceeded')).toBeInTheDocument();
+      });
+    });
+
+    it('shows loading state during submit', async () => {
+      mockCreateSaasKey.mockImplementation(() => new Promise(() => {}));
+      const user = userEvent.setup();
+      renderModal();
+
+      await user.type(screen.getByPlaceholderText('my-api-key'), 'test-key');
+
+      fireEvent.submit(getForm());
+
+      await waitFor(() => {
+        expect(screen.getByText('Creating...')).toBeInTheDocument();
+      });
+    });
+
+    it('passes rate limit when set', async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      await user.type(screen.getByPlaceholderText('my-api-key'), 'test-key');
+      await user.type(screen.getByPlaceholderText('No limit'), '100');
+
+      fireEvent.submit(getForm());
+
+      await waitFor(() => {
+        expect(mockCreateSaasKey).toHaveBeenCalledWith(
+          'tenant-1',
+          expect.objectContaining({
+            rate_limit_rpm: 100,
+          })
+        );
+      });
+    });
   }
 );

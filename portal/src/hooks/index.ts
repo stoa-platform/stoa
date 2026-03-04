@@ -7,4 +7,3 @@
 export * from './useAPIs';
 export * from './useApplications';
 export * from './useSubscriptions';
-export * from './useTools';

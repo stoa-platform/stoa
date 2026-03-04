@@ -77,10 +77,10 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Gateways Online')).toBeInTheDocument();
+        expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Requests (24h)').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Violations (24h)').length).toBeGreaterThanOrEqual(1);
       });
-      expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('Requests (24h)').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('Violations (24h)').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders gateway instances table', async () => {
@@ -88,9 +88,9 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Gateway Instances')).toBeInTheDocument();
+        expect(screen.getByText('STOA Edge MCP')).toBeInTheDocument();
+        expect(screen.getByText('Kong DB-less')).toBeInTheDocument();
       });
-      expect(screen.getByText('STOA Edge MCP')).toBeInTheDocument();
-      expect(screen.getByText('Kong DB-less')).toBeInTheDocument();
     });
 
     it('renders cross-tenant traffic section (admin-only)', async () => {
@@ -98,9 +98,9 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Cross-Tenant Traffic')).toBeInTheDocument();
+        expect(screen.getByText('Unique Tenants')).toBeInTheDocument();
+        expect(screen.getByText('Cross-Tenant Calls')).toBeInTheDocument();
       });
-      expect(screen.getByText('Unique Tenants')).toBeInTheDocument();
-      expect(screen.getByText('Cross-Tenant Calls')).toBeInTheDocument();
     });
 
     it('renders policy enforcement section', async () => {
@@ -108,10 +108,9 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Policy Enforcement')).toBeInTheDocument();
+        expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText('Enforced Today')).toBeInTheDocument();
       });
-      // 'Active Policies' appears in both KPI cards and Policy Enforcement section
-      expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Enforced Today')).toBeInTheDocument();
     });
 
     it('has a refresh button', async () => {

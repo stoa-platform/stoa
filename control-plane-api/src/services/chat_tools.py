@@ -171,6 +171,13 @@ async def execute_tool(
         logger.warning("RBAC denied tool %s for roles %s", tool_name, user_roles)
         return json.dumps({"error": f"Access denied: insufficient permissions for tool '{tool_name}'"})
 
+    # Input validation and sanitization (CAB-1656)
+    from ..services.chat_security import validate_tool_input
+
+    tool_input, violations = validate_tool_input(tool_input)
+    if violations:
+        logger.info("Tool input sanitized for %s: %s", tool_name, violations)
+
     try:
         if tool_name == "list_tenants":
             return await _exec_list_tenants(session)

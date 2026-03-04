@@ -244,6 +244,26 @@ pub static SENDER_CONSTRAINT_CHECKS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_sender_constraint_checks_total metric")
 });
 
+// === HEGEMON Supervision Metrics (CAB-1636) ===
+
+/// Counter of HEGEMON supervision decisions by tier and action.
+/// Labels: tier (autopilot|copilot|command), action (pass|notify|block).
+pub static SUPERVISION_DECISIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_hegemon_supervision_decisions_total",
+        "Total HEGEMON supervision decisions by tier and action",
+        &["tier", "action"]
+    )
+    .expect("Failed to create stoa_hegemon_supervision_decisions_total metric")
+});
+
+/// Record a supervision decision.
+pub fn record_supervision_decision(tier: &str, action: &str) {
+    SUPERVISION_DECISIONS_TOTAL
+        .with_label_values(&[tier, action])
+        .inc();
+}
+
 // === Tool Discovery Metrics (CAB-1558) ===
 
 /// Histogram of tool discovery (CP sync) durations in seconds, per tenant and outcome.
@@ -612,6 +632,7 @@ pub fn init_all_metrics() {
     Lazy::force(&FEDERATION_REQUESTS_TOTAL);
     Lazy::force(&DPOP_VALIDATIONS_TOTAL);
     Lazy::force(&SENDER_CONSTRAINT_CHECKS_TOTAL);
+    Lazy::force(&SUPERVISION_DECISIONS_TOTAL);
 }
 
 /// Get the total number of MCP tool calls across all labels.

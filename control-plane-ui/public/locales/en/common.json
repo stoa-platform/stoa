@@ -46,7 +46,8 @@
     "proxyOwner": "Proxy Owner",
     "llmCost": "LLM Cost",
     "subscriptions": "Subscriptions",
-    "webhooks": "Webhooks"
+    "webhooks": "Webhooks",
+    "credentialMappings": "Credential Mappings"
   },
   "layout": {
     "controlPlane": "Control Plane",

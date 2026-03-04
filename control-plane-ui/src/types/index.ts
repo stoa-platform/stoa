@@ -1601,3 +1601,46 @@ export interface WebhookDeliveryListResponse {
   items: WebhookDelivery[];
   total: number;
 }
+
+// ============ Credential Mapping Types (CAB-1648) ============
+
+export type CredentialAuthType = 'api_key' | 'bearer' | 'basic';
+
+export interface CredentialMapping {
+  id: string;
+  consumer_id: string;
+  api_id: string;
+  tenant_id: string;
+  auth_type: CredentialAuthType;
+  header_name: string;
+  has_credential: boolean;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface CredentialMappingCreate {
+  consumer_id: string;
+  api_id: string;
+  auth_type: CredentialAuthType;
+  header_name: string;
+  credential_value: string;
+  description?: string;
+}
+
+export interface CredentialMappingUpdate {
+  auth_type?: CredentialAuthType;
+  header_name?: string;
+  credential_value?: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+export interface CredentialMappingListResponse {
+  items: CredentialMapping[];
+  total: number;
+  page: number;
+  page_size: number;
+}

@@ -49,6 +49,10 @@ import type {
   WebhookListResponse,
   WebhookDeliveryListResponse,
   WebhookTestResponse,
+  CredentialMapping,
+  CredentialMappingCreate,
+  CredentialMappingUpdate,
+  CredentialMappingListResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -1029,6 +1033,37 @@ class ApiService {
     await this.client.post(
       `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries/${deliveryId}/retry`
     );
+  }
+
+  // ============ Credential Mappings (CAB-1648) ============
+
+  async getCredentialMappings(tenantId: string): Promise<CredentialMappingListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/credential-mappings`);
+    return data;
+  }
+
+  async createCredentialMapping(
+    tenantId: string,
+    payload: CredentialMappingCreate
+  ): Promise<CredentialMapping> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/credential-mappings`, payload);
+    return data;
+  }
+
+  async updateCredentialMapping(
+    tenantId: string,
+    mappingId: string,
+    payload: CredentialMappingUpdate
+  ): Promise<CredentialMapping> {
+    const { data } = await this.client.put(
+      `/v1/tenants/${tenantId}/credential-mappings/${mappingId}`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteCredentialMapping(tenantId: string, mappingId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/credential-mappings/${mappingId}`);
   }
 }
 

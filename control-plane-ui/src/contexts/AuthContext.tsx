@@ -138,7 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Skip re-extraction if token hasn't changed (StrictMode + silent renew)
       if (token && token !== prevTokenRef.current) {
         prevTokenRef.current = token;
-        setUser(extractUserFromToken(oidc.user));
+        const tokenUser = extractUserFromToken(oidc.user);
+        setUser(tokenUser);
         apiService.setAuthToken(token);
         mcpGatewayService.setAuthToken(token);
         setIsReady(true);
@@ -148,6 +149,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           queryFn: () => apiService.getTenants(),
           staleTime: 5 * 60 * 1000, // 5 minutes
         });
+        // CAB-1634: Enrich user with role display names from /v1/me
+        apiService
+          .getMe()
+          .then((me) => {
+            if (me.role_display_names) {
+              setUser((prev) =>
+                prev ? { ...prev, role_display_names: me.role_display_names } : prev
+              );
+            }
+          })
+          .catch(() => {
+            // Non-critical: display names are cosmetic, raw roles still work
+          });
       } else if (!token) {
         setUser(extractUserFromToken(oidc.user));
       }

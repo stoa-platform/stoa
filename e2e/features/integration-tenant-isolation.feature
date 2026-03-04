@@ -7,6 +7,7 @@ Feature: Tenant Isolation — Contracts Scoped per Tenant
   Background:
     Given the CP API and gateway are both reachable
 
+  @smoke
   Scenario: Tenant admin sees only their own contracts
     Given I obtain a CP API token as "parzival"
     And I create contract "e2e-iso-highfive" with version "1.0.0" via CP API

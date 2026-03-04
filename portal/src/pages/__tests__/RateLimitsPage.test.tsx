@@ -63,10 +63,12 @@ const sampleRateLimits = [
   },
 ];
 
-describe('RateLimitsPage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'RateLimitsPage — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAuth.mockReturnValue(createAuthMock('cpi-admin'));
+    mockAuth.mockReturnValue(createAuthMock(role));
     mockRateLimitsData.mockReturnValue({ rate_limits: sampleRateLimits });
   });
 
@@ -131,15 +133,4 @@ describe('RateLimitsPage', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  describe('Persona-based Tests', () => {
-    const personas: PersonaRole[] = ['cpi-admin', 'tenant-admin', 'devops', 'viewer'];
-
-    it.each(personas)('%s can access rate limits page (stoa:metrics:read)', async (persona) => {
-      mockAuth.mockReturnValue(createAuthMock(persona));
-      renderWithProviders(<RateLimitsPage />);
-      await waitFor(() => {
-        expect(screen.getByText('Rate Limits')).toBeInTheDocument();
-      });
-    });
-  });
 });

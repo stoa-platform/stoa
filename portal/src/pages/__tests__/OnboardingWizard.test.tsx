@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders, createAuthMock } from '../../test/helpers';
+import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 import { OnboardingWizardPage } from '../onboarding';
 
 // Mock hooks
@@ -53,8 +53,9 @@ vi.mock('../../hooks/useAPIs', () => ({
   }),
 }));
 
+const mockAuth = vi.fn();
 vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => createAuthMock('cpi-admin'),
+  useAuth: () => mockAuth(),
 }));
 
 vi.mock('../../i18n', () => ({
@@ -75,9 +76,12 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-describe('OnboardingWizard', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'OnboardingWizard — %s persona',
+  (role) => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAuth.mockReturnValue(createAuthMock(role));
     mockCreateApp.mockResolvedValue({
       id: 'app-1',
       name: 'my-app',

@@ -10,6 +10,12 @@ import { screen, waitFor } from '@testing-library/react';
 import { ServiceAccountsPage } from '../service-accounts/ServiceAccountsPage';
 import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 
+// Mock AuthContext
+const mockAuth = vi.fn();
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => mockAuth(),
+}));
+
 // Mock apiClient
 vi.mock('../../services/api', () => ({
   apiClient: {
@@ -19,7 +25,9 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
-describe('ServiceAccountsPage', () => {
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  'ServiceAccountsPage — %s persona',
+  (role) => {
   let apiClient: {
     get: ReturnType<typeof vi.fn>;
     post: ReturnType<typeof vi.fn>;
@@ -28,6 +36,7 @@ describe('ServiceAccountsPage', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockAuth.mockReturnValue(createAuthMock(role));
     const apiModule = await import('../../services/api');
     apiClient = apiModule.apiClient as typeof apiClient;
     apiClient.get.mockResolvedValue({ data: [] });
@@ -72,29 +81,9 @@ describe('ServiceAccountsPage', () => {
     });
   });
 
-  describe('Persona-based Tests', () => {
-    it.each(['cpi-admin', 'tenant-admin'] as PersonaRole[])(
-      '%s has stoa:subscriptions:write scope for service accounts',
-      (persona) => {
-        const auth = createAuthMock(persona);
-        expect(auth.hasScope('stoa:subscriptions:write')).toBe(true);
-      }
-    );
-
-    it.each(['devops', 'viewer'] as PersonaRole[])(
-      '%s does not have stoa:subscriptions:write scope',
-      (persona) => {
-        const auth = createAuthMock(persona);
-        expect(auth.hasScope('stoa:subscriptions:write')).toBe(false);
-      }
-    );
-
-    it('cpi-admin can render service accounts page', async () => {
-      renderWithProviders(<ServiceAccountsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Service Accounts')).toBeInTheDocument();
-      });
-    });
+  it('verifies stoa:subscriptions:write scope access per role', () => {
+    const auth = createAuthMock(role);
+    const expected = ['cpi-admin', 'tenant-admin'].includes(role);
+    expect(auth.hasScope('stoa:subscriptions:write')).toBe(expected);
   });
 });

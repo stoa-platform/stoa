@@ -93,6 +93,9 @@ const TenantDashboard = lazy(() =>
 const BusinessDashboard = lazy(() =>
   import('./pages/Business').then((m) => ({ default: m.BusinessDashboard }))
 );
+const HegemonDashboard = lazy(() =>
+  import('./pages/HegemonDashboard').then((m) => ({ default: m.HegemonDashboard }))
+);
 
 // Native observability dashboards (replace iframe embeds)
 const PlatformMetrics = lazy(() =>
@@ -509,6 +512,7 @@ function ProtectedRoutes() {
                 {/* Wave 1: Dashboard pages */}
                 <Route path="/security-posture" element={<SecurityPostureDashboard />} />
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
+                <Route path="/hegemon" element={<HegemonDashboard />} />
                 <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
                 <Route path="/webhooks" element={<Webhooks />} />

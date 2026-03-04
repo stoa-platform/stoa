@@ -1,13 +1,48 @@
 """Pipeline traces API endpoints for end-to-end monitoring (PostgreSQL)"""
+
 import logging
+import os
 import random
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models.traces_db import TraceStatusDB
 from ..services.trace_service import TraceService
+
+HEGEMON_INGEST_KEY = os.environ.get("HEGEMON_INGEST_KEY", "")
+
+
+# ============ Ingest Schemas ============
+
+
+class AISessionStep(BaseModel):
+    """A step in an AI session trace."""
+
+    name: str
+    status: str = "success"
+    duration_ms: int | None = None
+    details: dict | None = None
+    error: str | None = None
+
+
+class AISessionIngestRequest(BaseModel):
+    """Request body for AI session trace ingestion."""
+
+    trigger_type: str = Field("ai-session", pattern="^ai-session$")
+    trigger_source: str = Field(..., description="Worker role, e.g. hegemon-backend")
+    tenant_id: str = Field("hegemon")
+    api_name: str = Field(..., description="Ticket ID, e.g. CAB-1528")
+    environment: str = Field("production")
+    git_branch: str | None = None
+    git_author: str | None = None
+    total_duration_ms: int | None = None
+    status: str = Field("success", description="success or failed")
+    steps: list[AISessionStep] = Field(default_factory=list)
+    metadata: dict | None = Field(None, description="AI-specific: tokens, cost, model, turns, etc.")
+
 
 logger = logging.getLogger(__name__)
 
@@ -108,15 +143,17 @@ async def get_trace_timeline(
 
     timeline = []
     for step in trace.steps:
-        timeline.append({
-            "name": step.get("name"),
-            "status": step.get("status"),
-            "started_at": step.get("started_at"),
-            "completed_at": step.get("completed_at"),
-            "duration_ms": step.get("duration_ms"),
-            "error": step.get("error"),
-            "details": step.get("details"),
-        })
+        timeline.append(
+            {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "started_at": step.get("started_at"),
+                "completed_at": step.get("completed_at"),
+                "duration_ms": step.get("duration_ms"),
+                "error": step.get("error"),
+                "details": step.get("details"),
+            }
+        )
 
     return {
         "trace_id": trace.id,
@@ -140,7 +177,99 @@ async def get_trace_timeline(
     }
 
 
+# ============ AI Session Ingest ============
+
+
+async def _verify_ingest_key(
+    x_stoa_api_key: str = Header(..., alias="X-STOA-API-KEY"),
+) -> str:
+    """Verify the ingest API key."""
+    if not HEGEMON_INGEST_KEY:
+        raise HTTPException(503, "Ingest endpoint not configured")
+    if x_stoa_api_key != HEGEMON_INGEST_KEY:
+        raise HTTPException(401, "Invalid API key")
+    return x_stoa_api_key
+
+
+@router.post("/ingest")
+async def ingest_ai_session(
+    body: AISessionIngestRequest,
+    _key: str = Depends(_verify_ingest_key),
+    service: TraceService = Depends(get_service),
+):
+    """
+    Ingest a completed AI session trace from a worker.
+
+    Workers push completed session summaries via this endpoint.
+    Auth: X-STOA-API-KEY header.
+    """
+    trace_status = TraceStatusDB.SUCCESS
+    if body.status == "failed":
+        trace_status = TraceStatusDB.FAILED
+
+    trace = await service.create(
+        trigger_type=body.trigger_type,
+        trigger_source=body.trigger_source,
+        tenant_id=body.tenant_id,
+        api_name=body.api_name,
+        environment=body.environment,
+        git_branch=body.git_branch,
+        git_author=body.git_author,
+    )
+
+    # Add metadata as a "session-summary" step
+    if body.metadata:
+        await service.add_step(
+            trace,
+            name="session-summary",
+            status="success",
+            duration_ms=body.total_duration_ms,
+            details=body.metadata,
+        )
+
+    # Add reported steps
+    for step in body.steps:
+        await service.add_step(
+            trace,
+            name=step.name,
+            status=step.status,
+            duration_ms=step.duration_ms,
+            details=step.details,
+            error=step.error,
+        )
+
+    # Complete the trace
+    error_summary = None
+    if trace_status == TraceStatusDB.FAILED:
+        failed_steps = [s.name for s in body.steps if s.status == "failed"]
+        error_summary = f"Session failed at: {', '.join(failed_steps)}" if failed_steps else "Session failed"
+
+    await service.complete(trace, trace_status, error_summary)
+    trace = await service.get(trace.id)
+
+    return {
+        "ingested": True,
+        "trace_id": trace.id,
+        "status": trace.status.value,
+    }
+
+
+@router.get("/stats/ai-sessions")
+async def get_ai_session_stats(
+    days: int = Query(7, ge=1, le=90),
+    worker: str | None = Query(None, description="Filter by worker (trigger_source)"),
+    service: TraceService = Depends(get_service),
+):
+    """
+    Get AI session-specific aggregated statistics.
+
+    Returns per-worker stats, daily time series, and totals.
+    """
+    return await service.get_ai_session_stats(days, worker)
+
+
 # ============ Demo Endpoints ============
+
 
 @router.post("/demo")
 async def create_demo_trace(
@@ -156,24 +285,28 @@ async def create_demo_trace(
         trigger_type="gitlab-push",
         trigger_source="gitlab",
         git_commit_sha=f"{random.randint(1000000, 9999999):07x}abc",
-        git_commit_message=random.choice([
-            "feat: add new API endpoint for user management",
-            "fix: resolve authentication token expiry issue",
-            "chore: update dependencies to latest versions",
-            "refactor: improve database query performance",
-            "docs: update API documentation",
-            "feat: implement rate limiting for API Gateway",
-            "fix: handle edge case in payment processing",
-        ]),
+        git_commit_message=random.choice(
+            [
+                "feat: add new API endpoint for user management",
+                "fix: resolve authentication token expiry issue",
+                "chore: update dependencies to latest versions",
+                "refactor: improve database query performance",
+                "docs: update API documentation",
+                "feat: implement rate limiting for API Gateway",
+                "fix: handle edge case in payment processing",
+            ]
+        ),
         git_branch="main",
         git_author=random.choice(["alice", "bob", "charlie", "diana", "eve"]),
         git_author_email="dev@gostoa.dev",
-        git_project=random.choice([
-            "stoa/api-definitions",
-            "stoa/customer-service",
-            "stoa/order-service",
-            "stoa/payment-gateway",
-        ]),
+        git_project=random.choice(
+            [
+                "stoa/api-definitions",
+                "stoa/customer-service",
+                "stoa/order-service",
+                "stoa/payment-gateway",
+            ]
+        ),
         git_files_changed=[
             f"tenants/acme/apis/{random.choice(['customer-api', 'order-api', 'payment-api'])}/openapi.yaml"
         ],

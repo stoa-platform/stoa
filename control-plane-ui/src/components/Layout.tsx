@@ -58,6 +58,7 @@ import {
   Webhook,
   Key,
   FileText,
+  Bot,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -302,6 +303,12 @@ const navigationSections: NavSection[] = [
         href: '/analytics',
         icon: BarChart3,
         permission: 'apis:read',
+      },
+      {
+        name: 'nav.aiFactory',
+        href: '/hegemon',
+        icon: Bot,
+        permission: 'tenants:read',
       },
     ],
   },

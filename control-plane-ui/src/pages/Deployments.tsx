@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 import { config } from '../config';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
@@ -376,6 +377,7 @@ function TraceRow({
 
 function PipelineTracesTab() {
   const { isReady } = useAuth();
+  const { activeEnvironment } = useEnvironment();
   const [traces, setTraces] = useState<TraceSummary[]>([]);
   const [stats, setStats] = useState<TraceStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -385,7 +387,7 @@ function PipelineTracesTab() {
   const loadData = useCallback(async () => {
     try {
       const [tracesData, statsData] = await Promise.all([
-        apiService.getTraces(50),
+        apiService.getTraces(50, undefined, undefined, activeEnvironment),
         apiService.getTraceStats(),
       ]);
       setTraces(tracesData.traces);
@@ -395,7 +397,7 @@ function PipelineTracesTab() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeEnvironment]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -501,6 +503,7 @@ function PipelineTracesTab() {
 
 function DeploymentHistoryTab() {
   const { isReady, hasPermission } = useAuth();
+  const { activeEnvironment } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [deployments, setDeployments] = useState<Deployment[]>([]);
@@ -509,7 +512,6 @@ function DeploymentHistoryTab() {
   const [apis, setApis] = useState<API[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
   const [selectedApi, setSelectedApi] = useState<string>('');
-  const [selectedEnv, setSelectedEnv] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -538,7 +540,7 @@ function DeploymentHistoryTab() {
       setLoading(true);
       const result = await apiService.listDeployments(selectedTenant, {
         api_id: selectedApi || undefined,
-        environment: selectedEnv || undefined,
+        environment: activeEnvironment || undefined,
         status: selectedStatus || undefined,
         page,
         page_size: pageSize,
@@ -553,7 +555,7 @@ function DeploymentHistoryTab() {
     } finally {
       setLoading(false);
     }
-  }, [selectedTenant, selectedApi, selectedEnv, selectedStatus, page]);
+  }, [selectedTenant, selectedApi, activeEnvironment, selectedStatus, page]);
 
   useEffect(() => {
     if (isReady) loadTenants();
@@ -728,19 +730,9 @@ function DeploymentHistoryTab() {
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Environment
             </label>
-            <select
-              value={selectedEnv}
-              onChange={(e) => {
-                setSelectedEnv(e.target.value);
-                setPage(1);
-              }}
-              className="w-40 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">All</option>
-              <option value="dev">Dev</option>
-              <option value="staging">Staging</option>
-              <option value="production">Production</option>
-            </select>
+            <div className="w-40 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-neutral-50 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm capitalize">
+              {activeEnvironment || 'All'}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">

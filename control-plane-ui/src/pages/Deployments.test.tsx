@@ -9,6 +9,20 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 
+// Mock EnvironmentContext
+vi.mock('../contexts/EnvironmentContext', () => ({
+  useEnvironment: vi.fn(() => ({
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+    environments: [
+      { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+      { name: 'staging', label: 'Staging', mode: 'full', color: 'amber' },
+      { name: 'prod', label: 'Production', mode: 'read-only', color: 'red' },
+    ],
+    switchEnvironment: vi.fn(),
+  })),
+}));
+
 // Mock useDeployEvents hook (SSE)
 const mockLoadHistoricalLogs = vi.fn().mockResolvedValue(undefined);
 const mockDeployStates: Record<string, unknown> = {};
@@ -249,7 +263,7 @@ describe('DeploymentHistoryTab', () => {
     await waitFor(() => {
       expect(mockListDeployments).toHaveBeenCalledWith('oasis-gunters', {
         api_id: undefined,
-        environment: undefined,
+        environment: 'dev',
         status: undefined,
         page: 1,
         page_size: 20,

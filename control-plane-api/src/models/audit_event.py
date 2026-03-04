@@ -28,6 +28,11 @@ class AuditAction(enum.StrEnum):
     CONFIG_CHANGE = "config_change"
     EXPORT = "export"
     DEPLOY = "deploy"
+    CHAT_MESSAGE = "chat_message"
+    CHAT_TOOL_CALL = "chat_tool_call"
+    CHAT_CONVERSATION_CREATE = "chat_conversation_create"
+    CHAT_CONVERSATION_DELETE = "chat_conversation_delete"
+    CHAT_CONVERSATION_PURGE = "chat_conversation_purge"
 
 
 class AuditOutcome(enum.StrEnum):

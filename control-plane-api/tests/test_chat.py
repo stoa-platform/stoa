@@ -17,6 +17,7 @@ from __future__ import annotations
 import contextlib
 import json
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -314,6 +315,7 @@ class TestChatServiceAutoTitle:
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
         fake_conv.title = "New conversation"
+        fake_conv.last_active_at = datetime.now(UTC)
 
         mock_events = [
             {"event": "message_start", "data": {"message_id": "m1", "model": "test"}},
@@ -355,6 +357,7 @@ class TestChatServiceAutoTitle:
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
         fake_conv.title = "New conversation"
+        fake_conv.last_active_at = datetime.now(UTC)
 
         mock_events = [
             {"event": "message_start", "data": {"message_id": "m1", "model": "test"}},
@@ -397,6 +400,7 @@ class TestChatServiceAutoTitle:
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
         fake_conv.title = "My Chat"
+        fake_conv.last_active_at = datetime.now(UTC)
 
         mock_events = [
             {"event": "message_start", "data": {"message_id": "m1", "model": "test"}},
@@ -513,6 +517,7 @@ class TestChatServiceSendMessage:
         fake_conv.system_prompt = None
         fake_conv.model = "some-model"
         fake_conv.title = "My Chat"
+        fake_conv.last_active_at = datetime.now(UTC)
 
         with patch.object(chat_service, "get_conversation", return_value=fake_conv):
             events = []
@@ -537,6 +542,7 @@ class TestChatServiceSendMessage:
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
         fake_conv.title = "My Chat"
+        fake_conv.last_active_at = datetime.now(UTC)
 
         mock_events = [
             {"event": "message_start", "data": {"message_id": "msg-1", "model": "claude-sonnet-4-20250514"}},
@@ -856,6 +862,7 @@ class TestAgenticLoop:
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
         fake_conv.title = "My Chat"
+        fake_conv.last_active_at = datetime.now(UTC)
 
         call_count = 0
 
@@ -916,6 +923,7 @@ class TestAgenticLoop:
         fake_conv.system_prompt = None
         fake_conv.model = "claude-sonnet-4-20250514"
         fake_conv.title = "My Chat"
+        fake_conv.last_active_at = datetime.now(UTC)
 
         call_count = 0
 

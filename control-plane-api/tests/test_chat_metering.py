@@ -267,6 +267,7 @@ class TestBudgetEnforcement:
         mock_conv.model = "claude-sonnet-4-20250514"
         mock_conv.system_prompt = None
         mock_conv.messages = []
+        mock_conv.last_active_at = datetime.now(UTC)
 
         conv_result = MagicMock()
         conv_result.scalar_one_or_none.return_value = mock_conv
@@ -314,6 +315,7 @@ class TestBudgetEnforcement:
         mock_conv.model = "claude-sonnet-4-20250514"
         mock_conv.system_prompt = None
         mock_conv.messages = []
+        mock_conv.last_active_at = datetime.now(UTC)
 
         conv_result = MagicMock()
         conv_result.scalar_one_or_none.return_value = mock_conv

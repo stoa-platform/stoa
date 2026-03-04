@@ -74,7 +74,7 @@ export function MyApplications() {
                 {t('created.title')}
               </h2>
               <p className="text-sm text-green-700 dark:text-green-400 mt-1">
-                {t('created.subtitle', { name: newlyCreatedApp.name })}
+                {t('created.message', { name: newlyCreatedApp.name })}
               </p>
             </div>
             <button
@@ -84,11 +84,23 @@ export function MyApplications() {
               {t('created.dismiss')}
             </button>
           </div>
-          <CredentialsViewer
-            clientId={newlyCreatedApp.client_id ?? ''}
-            clientSecret={newlyCreatedApp.client_secret}
-            showSecretOnce={true}
-          />
+          {newlyCreatedApp.client_id ? (
+            <CredentialsViewer
+              clientId={newlyCreatedApp.client_id}
+              clientSecret={newlyCreatedApp.client_secret}
+              showSecretOnce={true}
+            />
+          ) : (
+            <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                {t('created.noCredentials', {
+                  defaultValue:
+                    'Credentials are not available yet. The authentication service may be temporarily unavailable. Please try regenerating credentials later from the application details.',
+                })}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

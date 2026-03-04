@@ -77,10 +77,10 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Gateways Online')).toBeInTheDocument();
+        expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Requests (24h)').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Violations (24h)').length).toBeGreaterThanOrEqual(1);
       });
-      expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('Requests (24h)').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('Violations (24h)').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders gateway instances table', async () => {
@@ -108,10 +108,10 @@ describe('ProxyOwnerDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Policy Enforcement')).toBeInTheDocument();
+        // 'Active Policies' appears in both KPI cards and Policy Enforcement section
+        expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText('Enforced Today')).toBeInTheDocument();
       });
-      // 'Active Policies' appears in both KPI cards and Policy Enforcement section
-      expect(screen.getAllByText('Active Policies').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Enforced Today')).toBeInTheDocument();
     });
 
     it('has a refresh button', async () => {

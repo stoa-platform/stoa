@@ -17,9 +17,15 @@ type Config struct {
 	Timeouts      map[int]CustomDuration  `yaml:"timeouts"`
 	HealthCheck   HealthCheckConfig       `yaml:"health_check"`
 	Metrics       MetricsConfig           `yaml:"metrics"`
+	Budget        BudgetConfig            `yaml:"budget"`
 	State         StateConfig             `yaml:"state"`
 	Log           LogConfig               `yaml:"log"`
 	Repo          RepoConfig              `yaml:"repo"`
+}
+
+type BudgetConfig struct {
+	DailyLimitUSD float64 `yaml:"daily_limit_usd"` // Max daily spend; 0 = unlimited
+	WarnPercent   float64 `yaml:"warn_percent"`     // Warn at this % of daily limit (default 80)
 }
 
 type LinearConfig struct {
@@ -149,6 +155,12 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Notification.MaxRetries == 0 {
 		cfg.Notification.MaxRetries = 3
+	}
+	if cfg.Budget.DailyLimitUSD == 0 {
+		cfg.Budget.DailyLimitUSD = 50.0 // Default $50/day
+	}
+	if cfg.Budget.WarnPercent == 0 {
+		cfg.Budget.WarnPercent = 80.0
 	}
 	if cfg.Repo.Path == "" {
 		cfg.Repo.Path = "~/stoa"

@@ -10,15 +10,20 @@ import { screen } from '@testing-library/react';
 import { MarketplacePage } from '../marketplace/MarketplacePage';
 import { renderWithProviders, createAuthMock, mockAPI, mockMCPServer } from '../../test/helpers';
 import type { PersonaRole } from '../../test/helpers';
-import type { MarketplaceItem, MarketplaceStats, MarketplaceCategory } from '../../types';
+import type { MarketplaceItem, MarketplaceStats, MarketplaceCategory, Favorite } from '../../types';
 
 // Mock hooks
 const mockUseMarketplace = vi.fn();
 const mockUseFeaturedItems = vi.fn();
+const mockUseFavorites = vi.fn();
 
 vi.mock('../../hooks/useMarketplace', () => ({
   useMarketplace: (filters: Record<string, unknown>) => mockUseMarketplace(filters),
   useFeaturedItems: () => mockUseFeaturedItems(),
+}));
+
+vi.mock('../../hooks/useFavorites', () => ({
+  useFavorites: () => mockUseFavorites(),
 }));
 
 // Mock AuthContext
@@ -44,7 +49,7 @@ vi.mock('../../config', () => ({
   config: {
     api: { baseUrl: 'https://api.gostoa.dev', timeout: 30000 },
     mcp: { baseUrl: 'https://mcp.gostoa.dev', timeout: 30000 },
-    features: { enableI18n: false, enableMarketplace: true },
+    features: { enableI18n: false, enableMarketplace: true, enableFavorites: true },
   },
 }));
 
@@ -100,6 +105,25 @@ const mockStats: MarketplaceStats = {
 
 const mockItems: MarketplaceItem[] = [createMarketplaceItem(), createMCPMarketplaceItem()];
 
+const mockFavoritesList: Favorite[] = [
+  {
+    id: 'fav-1',
+    item_type: 'api',
+    item_id: 'api-1',
+    item_name: 'Payment API',
+    item_description: 'Process payments',
+    added_at: '2026-02-01T00:00:00Z',
+  },
+  {
+    id: 'fav-2',
+    item_type: 'mcp_server',
+    item_id: 'server-1',
+    item_name: 'STOA Tools',
+    item_description: 'Core tools',
+    added_at: '2026-02-02T00:00:00Z',
+  },
+];
+
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'MarketplacePage — %s persona',
   (role) => {
@@ -113,6 +137,10 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       });
       mockUseFeaturedItems.mockReturnValue({
         data: mockItems.map((item) => ({ ...item, featured: true })),
+      });
+      mockUseFavorites.mockReturnValue({
+        data: { favorites: mockFavoritesList, total: 2 },
+        isLoading: false,
       });
     });
 
@@ -233,6 +261,47 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
         renderWithProviders(<MarketplacePage />);
 
         expect(screen.queryByText('Featured')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Favorites Section', () => {
+      it('should show favorites section when authenticated and enableFavorites=true', () => {
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.getByRole('heading', { name: 'My Favorites' })).toBeInTheDocument();
+        expect(screen.getByText('View all (2)')).toBeInTheDocument();
+      });
+
+      it('should hide favorites section when not authenticated', () => {
+        mockUseAuth.mockReturnValue({ ...createAuthMock(role), isAuthenticated: false });
+
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.queryByRole('heading', { name: 'My Favorites' })).not.toBeInTheDocument();
+      });
+
+      it('should show empty state when no favorites', () => {
+        mockUseFavorites.mockReturnValue({
+          data: { favorites: [], total: 0 },
+          isLoading: false,
+        });
+
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.getByText(/no favorites yet/i)).toBeInTheDocument();
+      });
+
+      it('should render favorite cards with correct links', () => {
+        renderWithProviders(<MarketplacePage />);
+
+        // Favorites section contains links with href to detail pages
+        const allLinks = screen.getAllByRole('link');
+        const favApiLink = allLinks.find((el) => el.getAttribute('href') === '/apis/api-1');
+        const favServerLink = allLinks.find(
+          (el) => el.getAttribute('href') === '/mcp-servers/server-1'
+        );
+        expect(favApiLink).toBeDefined();
+        expect(favServerLink).toBeDefined();
       });
     });
 

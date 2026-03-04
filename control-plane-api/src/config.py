@@ -148,9 +148,17 @@ class Settings(BaseSettings):
     # Chat Token Budget (CAB-288) — 0 = unlimited
     CHAT_TOKEN_BUDGET_DAILY: int = 0
 
+    # Multi-environment registry (CAB-1659)
+    # JSON array of environment configs. If empty, defaults are generated from BASE_DOMAIN.
+    STOA_ENVIRONMENTS: str = ""
+
     # CORS - comma-separated list of allowed origins
+    # Includes all known environment UI origins for multi-backend switching
     CORS_ORIGINS: str = (
-        f"https://console.{_BASE_DOMAIN},https://portal.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
+        f"https://console.{_BASE_DOMAIN},https://portal.{_BASE_DOMAIN},"
+        f"https://staging-console.{_BASE_DOMAIN},https://staging-portal.{_BASE_DOMAIN},"
+        f"https://dev-console.{_BASE_DOMAIN},https://dev-portal.{_BASE_DOMAIN},"
+        "http://localhost:3000,http://localhost:5173"
     )
 
     # Rate Limiting

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-02 (CAB-1633 LLM proxy wiring PRs #1336, #1339)
+> Derniere MAJ: 2026-03-03 (CAB-1636 HEGEMON Gateway Integration PR #1393)
 
 ## ✅ DONE
 
@@ -8,6 +8,7 @@
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
 ### Cycle 12 (Feb 27+)
+- ✅ CAB-1636: [MEGA] HEGEMON Runtime × STOA Gateway Integration (28 pts) — PR #1393 (18 files, 2687 LOC). 3 phases: P1 gateway deploy configs + Keycloak runbook, P2 supervision middleware (3 tiers: AUTOPILOT/CO-PILOT/COMMAND, 15 tests) + Grafana dashboard (6 panels) + integration tests (7 scenarios), P3 HEGEMON MCP Server v0 (3 read-only tools: workers_status, cycle_status, metrics, 13 tests). Full CI/CD: prod + staging deployed, smoke tests green
 - ✅ CAB-1633: Wire AI Factory through LLM Gateway Proxy (5 pts) — PRs #1336 (K8s deployment, stoa-parallel, HEGEMON workers), #1339 (skip_validation flag for local dogfood). Prod deployed: envFrom secretRef on gateway pods, `stoa-dogfood.sh --verify` operational
 - ✅ CAB-1632: Switch repo Private → Public (5 pts) — PRs #1331 (sanitize rules, CI fork safety, gitleaks), #1333 (move 25 strategic/demo docs to stoa-strategy), #1337 (restore memory.md/plan.md after git-filter-repo). Post-switch: 7 repos public, 41 bot issues closed, 14 closed PR bodies sanitized (3 business/personal + 11 VPS IPs), git history clean (17 files removed from 1547 commits). Savings: ~$654/mo GHA billing
 - ✅ Prod hotfix: 401 Unauthorized on all api.gostoa.dev endpoints — PR #1328 (auth dependency fix)

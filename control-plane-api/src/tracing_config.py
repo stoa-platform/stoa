@@ -10,14 +10,46 @@ to Grafana Alloy, which forwards them to Tempo. Grafana then provides:
 - Metrics-to-Traces correlation (via exemplars)
 """
 
-import logging
+from __future__ import annotations
 
+import logging
+from typing import TYPE_CHECKING
+
+import structlog
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+if TYPE_CHECKING:
+    from opentelemetry.context import Context
+    from opentelemetry.sdk.trace import ReadableSpan, Span
+
 logger = logging.getLogger(__name__)
+
+
+class TenantSpanProcessor(SpanProcessor):
+    """Enrich every span with tenant_id from structlog request context.
+
+    Auth middleware binds tenant_id via structlog.contextvars.bind_contextvars().
+    This processor reads it and sets the ``tenant.id`` span attribute so traces
+    can be filtered per-tenant in Grafana Tempo.
+    """
+
+    def on_start(self, span: Span, parent_context: Context | None = None) -> None:
+        ctx = structlog.contextvars.get_contextvars()
+        tenant_id = ctx.get("tenant_id")
+        if tenant_id:
+            span.set_attribute("tenant.id", tenant_id)
+
+    def on_end(self, span: ReadableSpan) -> None:
+        pass
+
+    def shutdown(self) -> None:
+        pass
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return True
 
 
 def configure_tracing(app, settings) -> None:
@@ -31,17 +63,20 @@ def configure_tracing(app, settings) -> None:
         logger.info("OTel tracing disabled (LOG_TRACE_EXPORT_ENDPOINT not set)")
         return
 
-    resource = Resource.create({
-        "service.name": "control-plane-api",
-        "service.version": settings.VERSION,
-        "deployment.environment": settings.ENVIRONMENT,
-    })
+    resource = Resource.create(
+        {
+            "service.name": "control-plane-api",
+            "service.version": settings.VERSION,
+            "deployment.environment": settings.ENVIRONMENT,
+        }
+    )
 
     provider = TracerProvider(resource=resource)
 
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
     exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
+    provider.add_span_processor(TenantSpanProcessor())
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
 

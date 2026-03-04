@@ -69,13 +69,14 @@ async def create_policy(
 async def list_policies(
     tenant_id: str | None = Query(None, description="Filter by tenant"),
     policy_type: str | None = Query(None, description="Filter by type"),
+    environment: str | None = Query(None, description="Filter by environment"),
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """List gateway policies."""
     repo = GatewayPolicyRepository(db)
     pt = PolicyType(policy_type) if policy_type else None
-    policies = await repo.list_all(tenant_id=tenant_id, policy_type=pt)
+    policies = await repo.list_all(tenant_id=tenant_id, policy_type=pt, environment=environment)
     return [_to_response(p) for p in policies]
 
 

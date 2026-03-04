@@ -250,6 +250,47 @@ class TestDemoTrace:
         assert len(data["traces"]) == 10
 
 
+class TestListTracesEnvironmentFilter:
+    """Tests for GET /v1/traces?environment= filter (CAB-1664)."""
+
+    def test_list_traces_with_environment_filter(self, app_with_cpi_admin, mock_db_session):
+        """Environment filter is passed to service."""
+        mock_svc = MagicMock()
+        mock_svc.list_recent = AsyncMock(return_value=[])
+
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces?environment=staging")
+
+        assert resp.status_code == 200
+        mock_svc.list_recent.assert_called_once_with(50, None, None, "staging")
+
+    def test_list_traces_without_environment_filter(self, app_with_cpi_admin, mock_db_session):
+        """Omitting environment passes None to service."""
+        mock_svc = MagicMock()
+        mock_svc.list_recent = AsyncMock(return_value=[])
+
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces")
+
+        assert resp.status_code == 200
+        mock_svc.list_recent.assert_called_once_with(50, None, None, None)
+
+    def test_list_traces_environment_combined_with_other_filters(self, app_with_cpi_admin, mock_db_session):
+        """Environment filter works alongside tenant and status filters."""
+        mock_svc = MagicMock()
+        mock_svc.list_recent = AsyncMock(return_value=[])
+
+        with patch(SVC_PATH, return_value=mock_svc), TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/traces?tenant_id=acme&status=success&environment=prod&limit=10")
+
+        assert resp.status_code == 200
+        # Verify environment is passed as 4th positional arg
+        call_args = mock_svc.list_recent.call_args
+        assert call_args[0][0] == 10  # limit
+        assert call_args[0][1] == "acme"  # tenant_id
+        assert call_args[0][3] == "prod"  # environment
+
+
 class TestListTracesEmpty:
     """Tests for empty trace list scenarios."""
 

@@ -31,6 +31,7 @@ data:
   GITLAB_DEFAULT_BRANCH: "main"
 
   # stoa-catalog: Source of truth for APIs (Portal catalog)
+  GITLAB_PROJECT_ID: "47495759"
   GITLAB_CATALOG_PROJECT_ID: "47495759"
   GITLAB_CATALOG_PROJECT_PATH: "cab6961310/stoa-catalog"
 

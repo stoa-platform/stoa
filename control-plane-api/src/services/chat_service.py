@@ -21,7 +21,7 @@ from ..config import settings
 from ..models.chat import ChatConversation, ChatMessage
 from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
 from ..services.chat_provider import AnthropicProvider, ChatProviderProtocol
-from ..services.chat_tools import CHAT_TOOLS, execute_tool
+from ..services.chat_tools import CHAT_TOOLS, execute_tool, filter_tools_for_role
 from ..services.encryption_service import decrypt_auth_config, encrypt_auth_config
 
 logger = logging.getLogger(__name__)
@@ -283,6 +283,7 @@ class ChatService:
         user_id: str,
         content: str,
         api_key: str,
+        user_roles: list[str] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Persist user message, call provider with agentic tool loop, persist + stream."""
 
@@ -350,7 +351,7 @@ class ChatService:
                 model=conv.model,
                 messages=history,
                 system_prompt=conv.system_prompt,
-                tools=CHAT_TOOLS,
+                tools=filter_tools_for_role(CHAT_TOOLS, user_roles) if user_roles else CHAT_TOOLS,
             ):
                 evt_type = event.get("event", "")
 
@@ -411,7 +412,7 @@ class ChatService:
                 # Execute each tool and build tool_result messages
                 tool_results: list[dict[str, Any]] = []
                 for tc in tool_calls:
-                    result = await execute_tool(tc["tool_name"], tc["input"], self.session)
+                    result = await execute_tool(tc["tool_name"], tc["input"], self.session, user_roles=user_roles)
                     tool_results.append(
                         {
                             "type": "tool_result",

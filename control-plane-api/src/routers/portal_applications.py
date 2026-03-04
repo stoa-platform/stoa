@@ -69,6 +69,7 @@ class ApplicationCreateRequest(BaseModel):
     description: str = ""
     redirect_uris: list[str] = []
     tenant_id: str | None = None  # If not specified, uses user's default tenant
+    environment: str | None = None  # Multi-env registry (CAB-1667)
 
 
 class ApplicationUpdateRequest(BaseModel):
@@ -126,6 +127,7 @@ async def list_applications(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100, alias="page_size"),
     status: str | None = Query(None),
+    environment: str | None = Query(None, description="Filter by environment"),
 ):
     """
     List user's applications.
@@ -140,6 +142,7 @@ async def list_applications(
         status=status_filter,
         page=page,
         page_size=page_size,
+        environment=environment,
     )
 
     return ApplicationsListResponse(
@@ -195,6 +198,7 @@ async def create_application(
         tenant_id=data.tenant_id,
         redirect_uris=data.redirect_uris,
         status=PortalAppStatus.ACTIVE,
+        environment=data.environment,
     )
 
     # Try Keycloak client creation (graceful degradation)

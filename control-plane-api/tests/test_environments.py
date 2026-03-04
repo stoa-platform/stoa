@@ -8,7 +8,7 @@ class TestListEnvironments:
         envs = resp.json()["environments"]
         assert len(envs) == 3
         names = [e["name"] for e in envs]
-        assert names == ["dev", "staging", "prod"]
+        assert names == ["production", "staging", "dev"]
 
     def test_environments_contain_expected_fields(self, client_as_tenant_admin):
         resp = client_as_tenant_admin.get("/v1/environments")

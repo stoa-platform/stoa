@@ -1133,3 +1133,58 @@ class TestSubscriptionStats:
         assert data["by_status"]["active"] == 5
         assert data["recent_24h"] == 3
         assert data["avg_approval_time_hours"] == 4.5
+
+
+# ============== Environment Filter (CAB-1665) ==============
+
+
+class TestSubscriptionsEnvironmentFilter:
+    """Environment query param on list endpoints — CAB-1665."""
+
+    def test_list_my_with_environment(self, app_with_tenant_admin, mock_db_session):
+        """GET /v1/subscriptions/my?environment=prod forwards to repo."""
+        mock_sub_repo = MagicMock()
+        mock_sub_repo.list_by_subscriber = AsyncMock(return_value=([], 0))
+
+        with patch(SUB_REPO_PATH, return_value=mock_sub_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/subscriptions/my?environment=prod")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_sub_repo.list_by_subscriber.call_args[1]
+        assert call_kwargs["environment"] == "prod"
+
+    def test_list_my_without_environment(self, app_with_tenant_admin, mock_db_session):
+        """GET /v1/subscriptions/my without environment passes None."""
+        mock_sub_repo = MagicMock()
+        mock_sub_repo.list_by_subscriber = AsyncMock(return_value=([], 0))
+
+        with patch(SUB_REPO_PATH, return_value=mock_sub_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/subscriptions/my")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_sub_repo.list_by_subscriber.call_args[1]
+        assert call_kwargs["environment"] is None
+
+    def test_list_tenant_with_environment(self, app_with_tenant_admin, mock_db_session):
+        """GET /v1/subscriptions/tenant/{id}?environment=staging forwards to repo."""
+        mock_sub_repo = MagicMock()
+        mock_sub_repo.list_by_tenant = AsyncMock(return_value=([], 0))
+
+        with patch(SUB_REPO_PATH, return_value=mock_sub_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/subscriptions/tenant/acme?environment=staging")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_sub_repo.list_by_tenant.call_args[1]
+        assert call_kwargs["environment"] == "staging"
+
+    def test_list_tenant_without_environment(self, app_with_tenant_admin, mock_db_session):
+        """GET /v1/subscriptions/tenant/{id} without environment passes None."""
+        mock_sub_repo = MagicMock()
+        mock_sub_repo.list_by_tenant = AsyncMock(return_value=([], 0))
+
+        with patch(SUB_REPO_PATH, return_value=mock_sub_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/subscriptions/tenant/acme")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_sub_repo.list_by_tenant.call_args[1]
+        assert call_kwargs["environment"] is None

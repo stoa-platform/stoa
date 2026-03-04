@@ -268,9 +268,9 @@ class ApiService {
   }
 
   // Applications
-  async getApplications(tenantId: string): Promise<Application[]> {
+  async getApplications(tenantId: string, environment?: string): Promise<Application[]> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/applications`, {
-      params: { page: 1, page_size: 100 },
+      params: { page: 1, page_size: 100, environment },
     });
     return data.items ?? data;
   }
@@ -299,9 +299,9 @@ class ApiService {
   }
 
   // Consumers (CAB-864 — mTLS Self-Service)
-  async getConsumers(tenantId: string): Promise<Consumer[]> {
+  async getConsumers(tenantId: string, environment?: string): Promise<Consumer[]> {
     const { data } = await this.client.get(`/v1/consumers/${tenantId}`, {
-      params: { page: 1, page_size: 100 },
+      params: { page: 1, page_size: 100, environment },
     });
     return data.items ?? data;
   }
@@ -949,10 +949,11 @@ class ApiService {
     tenantId: string,
     status?: string,
     page = 1,
-    pageSize = 20
+    pageSize = 20,
+    environment?: string
   ): Promise<SubscriptionListResponse> {
     const { data } = await this.client.get(`/v1/subscriptions/tenant/${tenantId}`, {
-      params: { status, page, page_size: pageSize },
+      params: { status, page, page_size: pageSize, environment },
     });
     return data;
   }

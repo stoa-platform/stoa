@@ -40,6 +40,7 @@ class PortalApplication(Base):
         default=PortalAppStatus.ACTIVE,
     )
     redirect_uris = Column(JSONB, nullable=False, default=list)
+    environment = Column(String(50), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

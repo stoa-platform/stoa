@@ -95,6 +95,9 @@ class Subscription(Base):
     rejected_by = Column(String(255), nullable=True)  # Admin user ID who rejected
     rejected_at = Column(DateTime, nullable=True)
 
+    # Environment scoping (CAB-1665)
+    environment = Column(String(50), nullable=True)
+
     # Gateway provisioning (CAB-800)
     provisioning_status = Column(
         SQLEnum(ProvisioningStatus, values_callable=lambda x: [e.value for e in x]),

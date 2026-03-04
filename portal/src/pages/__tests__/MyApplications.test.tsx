@@ -27,6 +27,17 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => mockAuth(),
 }));
 
+// Mock EnvironmentContext
+vi.mock('../../contexts/EnvironmentContext', () => ({
+  usePortalEnvironment: () => ({
+    activeEnvironment: null,
+    activeConfig: null,
+    environments: [],
+    endpoints: null,
+    switchEnvironment: vi.fn(),
+  }),
+}));
+
 // Mock useApplications hook
 const mockApplicationsData = vi.fn();
 const mockRefetch = vi.fn();

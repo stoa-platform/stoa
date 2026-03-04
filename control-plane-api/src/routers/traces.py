@@ -380,3 +380,108 @@ async def create_demo_traces_batch(
         "created": count,
         "traces": traces,
     }
+
+
+@router.post("/demo/ai-sessions")
+async def create_demo_ai_sessions(
+    count: int = Query(8, ge=1, le=30),
+    service: TraceService = Depends(get_service),
+):
+    """Create demo AI session traces for the Hegemon dashboard."""
+    workers = [
+        ("hegemon-backend", "backend"),
+        ("hegemon-frontend", "frontend"),
+        ("hegemon-mcp", "mcp"),
+        ("hegemon-auth", "auth"),
+        ("hegemon-qa", "qa"),
+    ]
+    tickets = [
+        "CAB-1528",
+        "CAB-1530",
+        "CAB-1535",
+        "CAB-1540",
+        "CAB-1547",
+        "CAB-1551",
+        "CAB-1555",
+        "CAB-1560",
+        "CAB-1562",
+        "CAB-1565",
+        "CAB-1570",
+        "CAB-1580",
+    ]
+    models = ["claude-opus-4-6", "claude-sonnet-4-6"]
+    statuses_pool = [TraceStatusDB.SUCCESS] * 7 + [TraceStatusDB.FAILED] * 2 + [TraceStatusDB.IN_PROGRESS]
+
+    results = []
+    for _i in range(count):
+        worker_name, worker_role = random.choice(workers)
+        ticket = random.choice(tickets)
+        final_status = random.choice(statuses_pool)
+        duration = random.randint(300_000, 2_400_000)
+        model = random.choice(models)
+        turns = random.randint(8, 45)
+        tokens = random.randint(15_000, 120_000)
+        cost = round(tokens * 0.00005 * (3 if "opus" in model else 1), 2)
+        files = random.randint(2, 15)
+        loc = random.randint(30, 400)
+
+        trace = await service.create(
+            trigger_type="ai-session",
+            trigger_source=worker_name,
+            tenant_id="hegemon",
+            api_name=ticket,
+            environment="production",
+            git_branch=f"feat/{ticket.lower()}-auto",
+            git_author=f"hegemon-worker-{random.randint(1, 5)}",
+        )
+
+        # Session summary metadata
+        await service.add_step(
+            trace,
+            name="session-summary",
+            status="success",
+            duration_ms=duration,
+            details={
+                "total_tokens": tokens,
+                "cost_usd": cost,
+                "model": model,
+                "turns": turns,
+                "worker_role": worker_role,
+                "files_changed": files,
+                "loc": loc,
+            },
+        )
+
+        # Realistic pipeline steps
+        steps = [
+            ("claimed", "success", random.randint(100, 2000)),
+            ("planning", "success", random.randint(30_000, 120_000)),
+            ("coding", "success", random.randint(60_000, 600_000)),
+            ("testing", "success", random.randint(30_000, 180_000)),
+            ("pr-created", "success", random.randint(5_000, 30_000)),
+        ]
+        if final_status == TraceStatusDB.SUCCESS:
+            steps.append(("ci-green", "success", random.randint(120_000, 300_000)))
+            steps.append(("merged", "success", random.randint(5_000, 30_000)))
+        elif final_status == TraceStatusDB.FAILED:
+            steps.append(("ci-green", "failed", random.randint(120_000, 300_000)))
+
+        for step_name, step_status, step_dur in steps:
+            await service.add_step(
+                trace,
+                name=step_name,
+                status=step_status,
+                duration_ms=step_dur,
+                details={"pr": random.randint(1100, 1500)} if step_name == "pr-created" else None,
+                error="CI failed: test_consumer.py::test_create FAILED" if step_status == "failed" else None,
+            )
+
+        error_summary = None
+        if final_status == TraceStatusDB.FAILED:
+            error_summary = "CI pipeline failed"
+        await service.complete(trace, final_status, error_summary)
+        trace = await service.get(trace.id)
+
+        results.append({"trace_id": trace.id, "status": trace.status.value, "worker": worker_name, "ticket": ticket})
+
+    return {"created": count, "traces": results}

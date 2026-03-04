@@ -1,0 +1,340 @@
+# STOA Certified Operator — Professional Tier
+# Focus: Operate & troubleshoot STOA Platform
+# Passing score: 80% (24/30)
+
+tier: professional
+title: "STOA Certified Operator — Professional"
+description: "Operate, troubleshoot, and optimize the STOA Platform in production environments."
+passing_score: 80
+time_limit_minutes: 60
+
+questions:
+  - id: P01
+    category: troubleshooting
+    question: "A pod is in CrashLoopBackOff after deploy. What is the first diagnostic command?"
+    choices:
+      a: "kubectl delete pod"
+      b: "kubectl logs --previous <pod>"
+      c: "kubectl restart deployment"
+      d: "helm rollback"
+    answer: b
+    explanation: "kubectl logs --previous shows logs from the crashed container, revealing the root cause before taking action."
+
+  - id: P02
+    category: troubleshooting
+    question: "Kyverno blocks a deployment with 'privileged: false not set'. What is the fix?"
+    choices:
+      a: "Disable Kyverno"
+      b: "Add privileged: true to securityContext"
+      c: "Add explicit privileged: false to every container securityContext"
+      d: "Remove the securityContext block entirely"
+    answer: c
+    explanation: "Kyverno enforce policy requires EXPLICIT privileged: false. Omitting it (even though false is default) causes rejection."
+
+  - id: P03
+    category: troubleshooting
+    question: "A single-replica deployment deadlocks during RollingUpdate. What is the root cause?"
+    choices:
+      a: "Insufficient CPU"
+      b: "maxSurge: 1, maxUnavailable: 0 on a constrained cluster"
+      c: "Liveness probe too aggressive"
+      d: "Image pull backoff"
+    answer: b
+    explanation: "maxSurge:1 maxUnavailable:0 requires a new pod before killing old — impossible if cluster has no room. Use maxSurge:0 maxUnavailable:1."
+
+  - id: P04
+    category: gateway
+    question: "stoa-gateway returns 403 'Backend URL blocked'. What is the cause?"
+    choices:
+      a: "Authentication failure"
+      b: "SSRF blocklist blocks localhost/private IPs"
+      c: "Rate limit exceeded"
+      d: "Missing API key"
+    answer: b
+    explanation: "stoa-gateway has an SSRF blocklist that blocks localhost and private IPs. Use container names or public IPs instead."
+
+  - id: P05
+    category: gateway
+    question: "What are the 4 gateway modes defined in ADR-024?"
+    choices:
+      a: "proxy, reverse-proxy, sidecar, mesh"
+      b: "edge-mcp, sidecar, proxy, shadow"
+      c: "ingress, egress, mesh, bridge"
+      d: "standalone, clustered, federated, hybrid"
+    answer: b
+    explanation: "ADR-024 defines edge-mcp (current), sidecar (Q2), proxy (Q3), shadow (deferred)."
+
+  - id: P06
+    category: gateway
+    question: "How does stoa-gateway handle MCP OAuth 2.1 discovery?"
+    choices:
+      a: "Direct Keycloak metadata"
+      b: "RFC 9728 → RFC 8414 → DCR → Token chain via gateway proxy"
+      c: "Manual token configuration"
+      d: "API key only"
+    answer: b
+    explanation: "Gateway serves curated OAuth metadata and proxies DCR/token endpoints to Keycloak, adding PKCE support for public clients."
+
+  - id: P07
+    category: observability
+    question: "What is the Gateway Arena scoring formula for Layer 0?"
+    choices:
+      a: "Average of all latencies"
+      b: "0.15*Base + 0.25*Burst50 + 0.25*Burst100 + 0.15*Avail + 0.10*Error + 0.10*Consistency"
+      c: "P99 latency only"
+      d: "Requests per second"
+    answer: b
+    explanation: "The Arena composite score weights burst handling heavily (50% for Burst50+100), with availability, error rate, and consistency."
+
+  - id: P08
+    category: observability
+    question: "How does Gateway Arena ensure fair benchmarking across gateways?"
+    choices:
+      a: "Same hardware for all gateways"
+      b: "Local nginx echo backend (static JSON, <1ms) so benchmarks measure pure gateway overhead"
+      c: "Identical configuration files"
+      d: "Same number of workers"
+    answer: b
+    explanation: "A shared nginx echo server returns static JSON in <1ms, isolating gateway overhead from backend/network latency."
+
+  - id: P09
+    category: observability
+    question: "What are the 3 CUJs (Critical User Journeys) in Gateway Arena Layer 2?"
+    choices:
+      a: "Login, Search, Checkout"
+      b: "API Health Chain, Auth Flow, MCP Discovery→Call"
+      c: "Create API, Deploy API, Test API"
+      d: "Register, Subscribe, Consume"
+    answer: b
+    explanation: "Layer 2 verifies: (1) /health on API+Gateway+KC, (2) OIDC client_credentials token flow, (3) MCP capabilities+tools."
+
+  - id: P10
+    category: security
+    question: "Why must MCP/OAuth paths bypass mTLS Stage 1 middleware?"
+    choices:
+      a: "Performance optimization"
+      b: "mTLS returns 401 before OAuth WWW-Authenticate challenge, breaking client discovery"
+      c: "mTLS is not supported for OAuth"
+      d: "Certificate rotation issues"
+    answer: b
+    explanation: "Without bypass, MTLS_CERT_REQUIRED (401) is returned before the OAuth challenge. Claude.ai never sees OAuth discovery."
+
+  - id: P11
+    category: security
+    question: "What happens when Claude.ai sends a 'scope' field in the DCR payload to Keycloak?"
+    choices:
+      a: "Scopes are additive"
+      b: "Keycloak replaces all realm defaults with only the requested scopes"
+      c: "Scopes are ignored"
+      d: "Registration fails"
+    answer: b
+    explanation: "Keycloak REPLACES defaults. The gateway strips the scope field before forwarding to preserve all realm default scopes."
+
+  - id: P12
+    category: adapters
+    question: "How does Kong DB-less mode handle API mutations?"
+    choices:
+      a: "Direct CRUD on Admin API"
+      b: "GET current state → merge changes → POST /config (atomic reload)"
+      c: "Update database directly"
+      d: "Restart Kong process"
+    answer: b
+    explanation: "Kong DB-less Admin API is read-only for writes. All changes go through full declarative config reload via POST /config."
+
+  - id: P13
+    category: adapters
+    question: "What is the Gravitee API lifecycle sequence?"
+    choices:
+      a: "Create → Deploy"
+      b: "Create → Start → Deploy"
+      c: "Create → Plan → Publish Plan → Deploy → Start"
+      d: "Import → Activate"
+    answer: c
+    explanation: "Gravitee V4 APIs require: create API → create plan → publish plan → deploy API → start API."
+
+  - id: P14
+    category: adapters
+    question: "Why must webMethods OpenAPI specs be 3.0.x and not 3.1.0?"
+    choices:
+      a: "Licensing restriction"
+      b: "webMethods import only supports OpenAPI 3.0.x, not 3.1.0"
+      c: "Performance reasons"
+      d: "Schema validation difference"
+    answer: b
+    explanation: "webMethods API Gateway trial (10.15) only supports OpenAPI 3.0.x. Specs must be converted from 3.1.0 to 3.0.3 before import."
+
+  - id: P15
+    category: ci_cd
+    question: "What is the correct CI pipeline order for UI components?"
+    choices:
+      a: "ci → docker → deploy"
+      b: "ci → docker → apply-manifest → deploy"
+      c: "ci → deploy → docker"
+      d: "docker → ci → deploy"
+    answer: b
+    explanation: "apply-manifest between docker and deploy ensures the K8s manifest is updated before rollout. Without it, only the image changes."
+
+  - id: P16
+    category: ci_cd
+    question: "What happens if you use 'kubectl apply --server-side' on Helm-migrated resources?"
+    choices:
+      a: "Works correctly"
+      b: "Creates duplicate resources"
+      c: "Merges fields, creating invalid specs (e.g., both value and valueFrom)"
+      d: "No effect"
+    answer: c
+    explanation: "Server-side apply merges fields from different managers, which can create invalid combinations like both value and valueFrom on the same env var."
+
+  - id: P17
+    category: ci_cd
+    question: "How does Release Please determine version bumps?"
+    choices:
+      a: "Manual version file edits"
+      b: "Parsing conventional commit prefixes (feat → minor, fix → patch)"
+      c: "Tag-based versioning"
+      d: "Calendar versioning"
+    answer: b
+    explanation: "Release Please parses conventional commits: feat: → minor bump, fix: → patch bump. Breaking changes (!) → major bump."
+
+  - id: P18
+    category: operations
+    question: "What is the HEGEMON daemon's circuit breaker threshold?"
+    choices:
+      a: "1 failure"
+      b: "3 consecutive health check failures"
+      c: "5 consecutive failures"
+      d: "10% error rate"
+    answer: b
+    explanation: "Default circuit_threshold is 3 consecutive fails, then worker is paused for circuit_pause_secs (default 300s)."
+
+  - id: P19
+    category: operations
+    question: "How does HEGEMON handle stale dispatches?"
+    choices:
+      a: "Manual cleanup only"
+      b: "CleanStaleDispatches marks dispatches older than threshold as timed_out"
+      c: "Automatic retry"
+      d: "Ignored"
+    answer: b
+    explanation: "CleanStaleDispatches finds active dispatches older than the threshold (e.g., 2h) and marks them as timed_out."
+
+  - id: P20
+    category: operations
+    question: "What is the purpose of the HEGEMON daily budget enforcement?"
+    choices:
+      a: "Limit API requests"
+      b: "Prevent runaway LLM token costs by blocking dispatches when daily spend exceeds limit"
+      c: "Limit number of PRs"
+      d: "Rate limit Slack notifications"
+    answer: b
+    explanation: "HEGEMON_DAILY_BUDGET (default $50) blocks all new dispatches when daily accumulated LLM costs exceed the threshold."
+
+  - id: P21
+    category: architecture
+    question: "What is the UAC (Universal API Contract) workflow?"
+    choices:
+      a: "Write code for each gateway"
+      b: "Define once in CP API → adapters translate to each gateway's native format"
+      c: "Import from each gateway and merge"
+      d: "Manual configuration per gateway"
+    answer: b
+    explanation: "UAC: define API/policy/app once in the Control Plane → gateway adapters translate to Kong, Gravitee, webMethods, etc."
+
+  - id: P22
+    category: architecture
+    question: "How many gateway adapter methods does the GatewayAdapterInterface define?"
+    choices:
+      a: "8"
+      b: "12"
+      c: "16"
+      d: "20"
+    answer: c
+    explanation: "16 abstract methods: lifecycle (3), APIs (3), policies (3), applications (3), plus optional auth/alias/config/backup (4)."
+
+  - id: P23
+    category: security
+    question: "What is the Infisical authentication chain for CLI access?"
+    choices:
+      a: "API key only"
+      b: "Cloudflare Access → Machine Identity (Client ID + Secret) → JWT"
+      c: "SSH key"
+      d: "Username/password"
+    answer: b
+    explanation: "Layer 1: Cloudflare Access (Service Token). Layer 2: Machine Identity Universal Auth (Client ID + Secret → 24h JWT). Layer 3: RBAC."
+
+  - id: P24
+    category: security
+    question: "Why should agents NEVER autonomously rotate passwords?"
+    choices:
+      a: "Performance impact"
+      b: "Uncoordinated change breaks the service chain (KC → API → Gateway → E2E)"
+      c: "Logging limitation"
+      d: "Not technically possible"
+    answer: b
+    explanation: "Password changes affect multiple services. An uncoordinated change breaks the credential chain. Human-only operation."
+
+  - id: P25
+    category: observability
+    question: "What distributed tracing standard does stoa-gateway implement?"
+    choices:
+      a: "Zipkin B3 headers"
+      b: "W3C traceparent header injection"
+      c: "AWS X-Ray segments"
+      d: "OpenTracing span context"
+    answer: b
+    explanation: "stoa-gateway injects W3C traceparent headers (OpenTelemetry standard) for distributed tracing across services."
+
+  - id: P26
+    category: operations
+    question: "How does the AI Factory Council validation work?"
+    choices:
+      a: "Single reviewer approval"
+      b: "4 personas (Chucky, OSS Killer, Archi, Saul) score >= 8.0/10 required"
+      c: "Automated test suite"
+      d: "Majority vote"
+    answer: b
+    explanation: "Council uses 4 personas (risk, value, architecture, compliance) with a >= 8.0 average score threshold for Go verdict."
+
+  - id: P27
+    category: ci_cd
+    question: "What is the purpose of the model-router.sh in CI pipelines?"
+    choices:
+      a: "Route HTTP requests"
+      b: "Select Claude model tier based on ticket estimate and mode"
+      c: "Load balance between workers"
+      d: "Choose test framework"
+    answer: b
+    explanation: "model-router.sh selects Sonnet (<=5 pts) or Opus (>5 pts), with Ship mode getting fewer turns. Saves ~60% on small tickets."
+
+  - id: P28
+    category: troubleshooting
+    question: "nginx proxy_pass with static hostname crashes at startup. What is the fix?"
+    choices:
+      a: "Add upstream block"
+      b: "Use variables for proxy_pass backends (resolved at request time, not startup)"
+      c: "Increase DNS timeout"
+      d: "Use IP address instead"
+    answer: b
+    explanation: "Static hostnames are resolved at startup. If DNS fails, nginx crashes. Variables defer resolution to request time."
+
+  - id: P29
+    category: troubleshooting
+    question: "ArgoCD shows OutOfSync with 'spec.selector: immutable'. How do you fix it?"
+    choices:
+      a: "Force sync"
+      b: "Delete the deployment, let ArgoCD recreate it"
+      c: "Edit the selector in place"
+      d: "Rollback ArgoCD"
+    answer: b
+    explanation: "K8s selectors are immutable. The only fix is delete + recreate. ArgoCD will recreate from the desired state."
+
+  - id: P30
+    category: operations
+    question: "What is the recommended PR size limit for STOA contributions?"
+    choices:
+      a: "No limit"
+      b: "500 LOC"
+      c: "300 LOC (Stripe micro-PR standard)"
+      d: "1000 LOC"
+    answer: c
+    explanation: "STOA follows Stripe's micro-PR standard: ideal <50 LOC, acceptable <150, max 300. Over 300 must be split."

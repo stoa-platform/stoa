@@ -245,6 +245,13 @@ async def ingest_ai_session(
         error_summary = f"Session failed at: {', '.join(failed_steps)}" if failed_steps else "Session failed"
 
     await service.complete(trace, trace_status, error_summary)
+
+    # Override duration with the worker's reported value (complete() calculates ~0ms
+    # since create+complete happen in the same request)
+    if body.total_duration_ms is not None:
+        trace.total_duration_ms = body.total_duration_ms
+        await service.session.commit()
+
     trace = await service.get(trace.id)
 
     return {

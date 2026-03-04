@@ -48,8 +48,8 @@ interface WorkerStats {
 // HELPERS
 // =============================================================================
 
-function formatDuration(ms: number | null): string {
-  if (!ms) return '—';
+function formatDuration(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined) return '—';
   if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
   const h = Math.floor(ms / 3_600_000);
@@ -185,7 +185,9 @@ function SessionRow({ trace }: { trace: TraceSummary }) {
         <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
           {trace.api_name || '—'}
         </td>
-        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{trace.trigger_type}</td>
+        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+          {trace.trigger_source || trace.trigger_type}
+        </td>
         <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
           {formatDuration(trace.total_duration_ms ?? null)}
         </td>
@@ -193,15 +195,35 @@ function SessionRow({ trace }: { trace: TraceSummary }) {
       </tr>
       {expanded && (
         <tr className="border-b border-gray-100 dark:border-gray-700">
-          <td colSpan={6} className="bg-gray-50 px-8 py-3 dark:bg-gray-800/30">
-            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
-              <span className="flex items-center gap-1">
-                <Hash className="h-3.5 w-3.5" /> {trace.id.slice(0, 8)}
-              </span>
-              {trace.trigger_type && (
+          <td colSpan={6} className="bg-gray-50 px-8 py-4 dark:bg-gray-800/30">
+            <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+              <div className="flex flex-wrap items-center gap-4">
                 <span className="flex items-center gap-1">
-                  <GitBranch className="h-3.5 w-3.5" /> {trace.trigger_type}
+                  <Hash className="h-3.5 w-3.5" /> {trace.id.slice(0, 8)}
                 </span>
+                {trace.trigger_source && (
+                  <span className="flex items-center gap-1">
+                    <Cpu className="h-3.5 w-3.5" /> {trace.trigger_source}
+                  </span>
+                )}
+                {trace.git_author && (
+                  <span className="flex items-center gap-1">
+                    <GitBranch className="h-3.5 w-3.5" /> {trace.git_author}
+                  </span>
+                )}
+                {trace.git_commit_sha && (
+                  <span className="font-mono text-xs">{trace.git_commit_sha}</span>
+                )}
+              </div>
+              {(trace.steps_count > 0 || trace.steps_completed > 0) && (
+                <div className="flex items-center gap-3 text-xs">
+                  <span>
+                    Steps: {trace.steps_completed}/{trace.steps_count} completed
+                  </span>
+                  {trace.steps_failed > 0 && (
+                    <span className="text-red-500">{trace.steps_failed} failed</span>
+                  )}
+                </div>
               )}
             </div>
           </td>
@@ -335,7 +357,7 @@ export function HegemonDashboard() {
                       <th className="w-10 px-4 py-3" />
                       <th className="w-10 px-4 py-3">Status</th>
                       <th className="px-4 py-3">Ticket</th>
-                      <th className="px-4 py-3">Source</th>
+                      <th className="px-4 py-3">Worker</th>
                       <th className="px-4 py-3">Duration</th>
                       <th className="px-4 py-3">Tenant</th>
                     </tr>

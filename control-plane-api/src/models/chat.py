@@ -21,6 +21,8 @@ class ChatConversation(Base):
     model = Column(String(100), nullable=False, default="claude-sonnet-4-20250514")
     system_prompt = Column(Text, nullable=True)
     status = Column(String(20), nullable=False, default="active", server_default="active")
+    session_fingerprint = Column(String(64), nullable=True)
+    last_active_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime(timezone=True),

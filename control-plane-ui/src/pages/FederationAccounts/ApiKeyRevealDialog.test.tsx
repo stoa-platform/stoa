@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, act } from '@testing-library/react';
-import { renderWithProviders } from '../../test/helpers';
+import { createAuthMock, renderWithProviders } from '../../test/helpers';
+import type { PersonaRole } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
 import { ApiKeyRevealDialog } from './ApiKeyRevealDialog';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 const defaultProps = {
   apiKey: 'sk-test-abc123xyz789',
@@ -13,12 +17,15 @@ function renderDialog(overrides: Partial<typeof defaultProps> = {}) {
   return renderWithProviders(<ApiKeyRevealDialog {...defaultProps} {...overrides} />);
 }
 
-describe('ApiKeyRevealDialog', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    defaultProps.onClose = vi.fn();
-    vi.mocked(navigator.clipboard.writeText).mockResolvedValue(undefined);
-  });
+describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+  '%s persona',
+  (role) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      defaultProps.onClose = vi.fn();
+      vi.mocked(navigator.clipboard.writeText).mockResolvedValue(undefined);
+    });
 
   it('renders the dialog title with account name', () => {
     renderDialog();
@@ -66,4 +73,5 @@ describe('ApiKeyRevealDialog', () => {
     renderDialog({ name: 'Sub-Account Alpha' });
     expect(screen.getByText('API Key for Sub-Account Alpha')).toBeInTheDocument();
   });
-});
+  }
+);

@@ -41,16 +41,23 @@ class KeycloakService:
         self._admin: KeycloakAdmin | None = None
 
     async def connect(self):
-        """Initialize Keycloak admin connection"""
+        """Initialize Keycloak admin connection.
+
+        Uses Resource Owner Password Grant with admin-cli (public client).
+        Authenticates on master realm, then targets the configured realm
+        for client/user management.
+        """
         try:
             conn = KeycloakOpenIDConnection(
                 server_url=settings.KEYCLOAK_URL,
-                realm_name=settings.KEYCLOAK_REALM,
+                realm_name="master",
                 client_id=settings.KEYCLOAK_ADMIN_CLIENT_ID,
-                client_secret_key=settings.KEYCLOAK_ADMIN_CLIENT_SECRET,
-                verify=True,
+                username="admin",
+                password=settings.KEYCLOAK_ADMIN_CLIENT_SECRET,
+                verify=settings.KEYCLOAK_VERIFY_SSL,
             )
             self._admin = KeycloakAdmin(connection=conn)
+            self._admin.connection.realm_name = settings.KEYCLOAK_REALM
             logger.info(f"Connected to Keycloak realm: {settings.KEYCLOAK_REALM}")
         except Exception as e:
             logger.error(f"Failed to connect to Keycloak: {e}")

@@ -465,12 +465,14 @@ class ApiService {
   async getTraces(
     limit?: number,
     tenantId?: string,
-    status?: string
+    status?: string,
+    environment?: string
   ): Promise<{ traces: TraceSummary[]; total: number }> {
     const params: Record<string, any> = {};
     if (limit) params.limit = limit;
     if (tenantId) params.tenant_id = tenantId;
     if (status) params.status = status;
+    if (environment) params.environment = environment;
     const { data } = await this.client.get('/v1/traces', { params });
     return data;
   }

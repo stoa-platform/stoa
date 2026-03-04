@@ -5,6 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.models.gateway_instance import GatewayInstance
 from src.models.gateway_policy import GatewayPolicy, GatewayPolicyBinding, PolicyType
 
 
@@ -34,6 +35,7 @@ class GatewayPolicyRepository:
         self,
         tenant_id: str | None = None,
         policy_type: PolicyType | None = None,
+        environment: str | None = None,
     ) -> list[GatewayPolicy]:
         """List policies with optional filters, ordered by priority."""
         query = select(GatewayPolicy).options(selectinload(GatewayPolicy.bindings))
@@ -48,6 +50,15 @@ class GatewayPolicyRepository:
             )
         if policy_type is not None:
             query = query.where(GatewayPolicy.policy_type == policy_type)
+        if environment is not None:
+            # Filter policies that have at least one binding to a gateway in this environment
+            query = query.where(
+                GatewayPolicy.id.in_(
+                    select(GatewayPolicyBinding.policy_id)
+                    .join(GatewayInstance, GatewayPolicyBinding.gateway_instance_id == GatewayInstance.id)
+                    .where(GatewayInstance.environment == environment)
+                )
+            )
 
         query = query.order_by(GatewayPolicy.priority, GatewayPolicy.name)
         result = await self.session.execute(query)

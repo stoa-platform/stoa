@@ -109,7 +109,7 @@ jobs:
 
       # Try to download baseline from the most recent main push
       - name: Download baseline artifact
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v16
         with:
           name: perf-baseline-.*
           name_is_regexp: true

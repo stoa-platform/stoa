@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
 import { useDebounce } from '../hooks/useDebounce';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -24,6 +25,7 @@ const statusColors: Record<string, string> = {
 
 export function Consumers() {
   const { isReady } = useAuth();
+  const { activeEnvironment } = useEnvironment();
   const { canEdit, canDelete } = useEnvironmentMode();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const toast = useToastActions();
@@ -63,8 +65,8 @@ export function Consumers() {
     isLoading: consumersLoading,
     error: consumersError,
   } = useQuery({
-    queryKey: ['consumers', activeTenant],
-    queryFn: () => apiService.getConsumers(activeTenant),
+    queryKey: ['consumers', activeTenant, activeEnvironment],
+    queryFn: () => apiService.getConsumers(activeTenant, activeEnvironment || undefined),
     enabled: !!activeTenant,
   });
 

@@ -394,3 +394,38 @@ class TestRegenerateSecret:
             resp = client.post(f"/v1/applications/{uuid.uuid4()}/regenerate-secret")
 
         assert resp.status_code == 404
+
+
+# ============== Environment Filter (CAB-1665) ==============
+
+
+class TestListApplicationsEnvironmentFilter:
+    """GET /v1/applications?environment= — CAB-1665."""
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_environment_param_passed_to_repo(self, mock_repo_cls, app_with_tenant_admin):
+        """When environment is provided, it is forwarded to the repository."""
+        mock_repo = AsyncMock()
+        mock_repo.list_by_owner.return_value = ([], 0)
+        mock_repo_cls.return_value = mock_repo
+
+        with TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/applications?environment=dev")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_repo.list_by_owner.call_args[1]
+        assert call_kwargs["environment"] == "dev"
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_no_environment_param_passes_none(self, mock_repo_cls, app_with_tenant_admin):
+        """When environment is omitted, None is forwarded (returns all)."""
+        mock_repo = AsyncMock()
+        mock_repo.list_by_owner.return_value = ([], 0)
+        mock_repo_cls.return_value = mock_repo
+
+        with TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/applications")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_repo.list_by_owner.call_args[1]
+        assert call_kwargs["environment"] is None

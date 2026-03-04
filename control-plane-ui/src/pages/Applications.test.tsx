@@ -14,6 +14,15 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 
+vi.mock('../contexts/EnvironmentContext', () => ({
+  useEnvironment: vi.fn(() => ({
+    activeEnvironment: null,
+    activeConfig: null,
+    environments: [],
+    switchEnvironment: vi.fn(),
+  })),
+}));
+
 vi.mock('../services/api', () => ({
   apiService: {
     getTenants: vi.fn().mockResolvedValue([

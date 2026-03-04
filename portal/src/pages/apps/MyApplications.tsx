@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Plus, AppWindow, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useApplications, useCreateApplication } from '../../hooks/useApplications';
+import { usePortalEnvironment } from '../../contexts/EnvironmentContext';
 import { ApplicationCard } from '../../components/apps/ApplicationCard';
 import { CreateAppModal } from '../../components/apps/CreateAppModal';
 import { CredentialsViewer } from '../../components/apps/CredentialsViewer';
@@ -15,11 +16,20 @@ import type { Application, ApplicationCreateRequest } from '../../types';
 
 export function MyApplications() {
   const { t } = useTranslation('apps');
+  const { activeEnvironment } = usePortalEnvironment();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newlyCreatedApp, setNewlyCreatedApp] = useState<Application | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const { data: applications, isLoading, isError, error, refetch } = useApplications();
+  const {
+    data: applications,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useApplications({
+    environment: activeEnvironment || undefined,
+  });
 
   const createMutation = useCreateApplication();
 

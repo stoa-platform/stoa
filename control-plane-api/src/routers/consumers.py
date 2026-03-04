@@ -132,6 +132,7 @@ async def list_consumers(
     tenant_id: str,
     status: ConsumerStatusEnum | None = None,
     search: str | None = Query(None, max_length=255),
+    environment: str | None = Query(None, description="Filter by environment"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),
@@ -150,6 +151,7 @@ async def list_consumers(
         search=search,
         page=page,
         page_size=page_size,
+        environment=environment,
     )
 
     return ConsumerListResponse(

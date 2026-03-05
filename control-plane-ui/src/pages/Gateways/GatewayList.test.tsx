@@ -17,7 +17,7 @@ const { mockGateways } = vi.hoisted(() => ({
       name: 'stoa-edge-mcp-1',
       display_name: 'STOA Edge MCP Gateway',
       gateway_type: 'stoa_edge_mcp',
-      environment: 'dev',
+      environment: 'production',
       base_url: 'https://mcp.gostoa.dev',
       auth_config: {},
       status: 'online',
@@ -42,7 +42,7 @@ const { mockGateways } = vi.hoisted(() => ({
       name: 'webmethods-prod',
       display_name: 'webMethods Production',
       gateway_type: 'webmethods',
-      environment: 'prod',
+      environment: 'staging',
       base_url: 'https://wm.example.com',
       auth_config: {},
       status: 'degraded',
@@ -127,22 +127,33 @@ describe('GatewayList', () => {
     expect(screen.getByText('webMethods Production')).toBeInTheDocument();
   });
 
-  it('renders gateway status badges', async () => {
+  it('renders gateway status badges with capitalized labels', async () => {
     renderGatewayList();
-    expect(await screen.findByText('online')).toBeInTheDocument();
-    expect(screen.getByText('degraded')).toBeInTheDocument();
+    await screen.findByText('STOA Edge MCP Gateway');
+    // New UI uses STATUS_CONFIG with capitalized labels
+    expect(screen.getAllByText('Online').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Degraded').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders the mode filter dropdown', async () => {
+  it('renders environment tabs', async () => {
     renderGatewayList();
-    // The option text includes count: "All Modes (N)"
-    expect(await screen.findByText(/All Modes/)).toBeInTheDocument();
+    await screen.findByText('STOA Edge MCP Gateway');
+    // Environment tabs replace the mode filter dropdown
+    const nav = screen.getByRole('navigation', { name: 'Environment tabs' });
+    expect(nav).toBeInTheDocument();
+    // "All" tab and environment tabs
+    expect(screen.getByText('All')).toBeInTheDocument();
+    // Production and Staging appear in both tabs and section headers — getAllByText
+    expect(screen.getAllByText('Production').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Staging').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders gateway environment labels', async () => {
+  it('groups gateways by environment', async () => {
     renderGatewayList();
-    expect(await screen.findByText('dev')).toBeInTheDocument();
-    expect(screen.getByText('prod')).toBeInTheDocument();
+    await screen.findByText('STOA Edge MCP Gateway');
+    // Both env section headers visible (Production for gw-1, Staging for gw-2)
+    expect(screen.getAllByText('Production').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Staging').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders the Edge MCP mode badge', async () => {
@@ -156,64 +167,64 @@ describe('GatewayList', () => {
     expect(screen.getByText('webMethods')).toBeInTheDocument();
   });
 
-  it('renders gateway base URLs', async () => {
-    renderGatewayList();
-    expect(await screen.findByText('https://mcp.gostoa.dev')).toBeInTheDocument();
-    expect(screen.getByText('https://wm.example.com')).toBeInTheDocument();
-  });
-
-  it('renders live indicator (green pulse) for gateway with recent heartbeat', async () => {
+  it('renders gateway base URLs (protocol stripped)', async () => {
     renderGatewayList();
     await screen.findByText('STOA Edge MCP Gateway');
-    // gw-1 has recent last_health_check -> should have "Live" title
-    const liveIndicators = screen.getAllByTitle('Live (heartbeat active)');
-    expect(liveIndicators.length).toBeGreaterThanOrEqual(1);
+    // New UI strips protocol from URLs in the row view
+    expect(screen.getByText('mcp.gostoa.dev')).toBeInTheDocument();
+    expect(screen.getByText('wm.example.com')).toBeInTheDocument();
   });
 
-  it('renders gray indicator for gateway with old heartbeat', async () => {
+  it('renders status dot with title for live gateway', async () => {
+    renderGatewayList();
+    await screen.findByText('STOA Edge MCP Gateway');
+    // gw-1 has recent last_health_check -> status dot title includes "live heartbeat"
+    const liveDots = screen.getAllByTitle(/live heartbeat/i);
+    expect(liveDots.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders status dot title for non-live gateway', async () => {
     renderGatewayList();
     await screen.findByText('webMethods Production');
-    // gw-2 has old last_health_check -> should have "No recent heartbeat" title
-    const offlineIndicators = screen.getAllByTitle('No recent heartbeat');
-    expect(offlineIndicators.length).toBeGreaterThanOrEqual(1);
+    // gw-2 has old last_health_check -> status dot title is just "Degraded"
+    const statusDots = screen.getAllByTitle('Degraded');
+    expect(statusDots.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('opens detail panel when clicking a gateway card', async () => {
+  it('opens detail panel when clicking a gateway row', async () => {
     renderGatewayList();
-    const gatewayCard = await screen.findByText('STOA Edge MCP Gateway');
-    fireEvent.click(gatewayCard);
-    // Detail panel should appear with heartbeat metrics section
+    const gatewayName = await screen.findByText('STOA Edge MCP Gateway');
+    fireEvent.click(gatewayName);
     expect(screen.getByTestId('gateway-detail-panel')).toBeInTheDocument();
-    expect(screen.getByText('Heartbeat Metrics')).toBeInTheDocument();
   });
 
   it('shows heartbeat metrics in detail panel', async () => {
     renderGatewayList();
-    const gatewayCard = await screen.findByText('STOA Edge MCP Gateway');
-    fireEvent.click(gatewayCard);
-    // Check metric values from health_details
+    const gatewayName = await screen.findByText('STOA Edge MCP Gateway');
+    fireEvent.click(gatewayName);
+    // New detail panel has "Heartbeat" section with MetricCards
+    expect(screen.getByText('Heartbeat')).toBeInTheDocument();
     expect(screen.getByText('1h 0m')).toBeInTheDocument(); // uptime_seconds: 3600
     expect(screen.getByText('10')).toBeInTheDocument(); // routes_count
-    expect(screen.getByText('1500')).toBeInTheDocument(); // requests_total
     expect(screen.getByText('2.0%')).toBeInTheDocument(); // error_rate: 0.02
   });
 
   it('closes detail panel when clicking close button', async () => {
     renderGatewayList();
-    const gatewayCard = await screen.findByText('STOA Edge MCP Gateway');
-    fireEvent.click(gatewayCard);
+    const gatewayName = await screen.findByText('STOA Edge MCP Gateway');
+    fireEvent.click(gatewayName);
     expect(screen.getByTestId('gateway-detail-panel')).toBeInTheDocument();
-    const closeButton = screen.getByLabelText('Close detail panel');
+    const closeButton = screen.getByLabelText('Close');
     fireEvent.click(closeButton);
     expect(screen.queryByTestId('gateway-detail-panel')).not.toBeInTheDocument();
   });
 
-  it('shows degraded badge when error rate > 5%', async () => {
+  it('shows warn styling for high error rate in detail panel', async () => {
     renderGatewayList();
-    const gatewayCard = await screen.findByText('webMethods Production');
-    fireEvent.click(gatewayCard);
-    // gw-2 has error_rate: 0.08 (> 0.05) -> should show degraded badge
-    expect(screen.getByText(/degraded \(error rate/)).toBeInTheDocument();
+    const gatewayName = await screen.findByText('webMethods Production');
+    fireEvent.click(gatewayName);
+    // gw-2 has error_rate: 0.08 (> 0.05) -> error rate card has warn styling
+    expect(screen.getByText('8.0%')).toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

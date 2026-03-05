@@ -8,6 +8,35 @@ from pydantic import BaseModel
 from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
 from ..services.git_service import git_service
 
+
+class TreeItem(BaseModel):
+    name: str
+    type: str
+    path: str
+
+
+class TreeListResponse(BaseModel):
+    items: list[TreeItem]
+
+
+class FileContentResponse(BaseModel):
+    items: list[dict]
+
+
+class FileActionResponse(BaseModel):
+    path: str
+    action: str
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class MergeResultResponse(BaseModel):
+    message: str
+    iid: int
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/git", tags=["Git"])

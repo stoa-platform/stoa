@@ -66,7 +66,7 @@ async def list_budgets(
 
 
 @router.get("/{budget_id}", response_model=DepartmentBudgetResponse)
-async def get_budget(
+async def get_billing_budget(
     tenant_id: str,
     budget_id: UUID,
     user: User = Depends(get_current_user),
@@ -84,7 +84,7 @@ async def get_budget(
 
 
 @router.put("/{budget_id}", response_model=DepartmentBudgetResponse)
-async def update_budget(
+async def update_billing_budget(
     tenant_id: str,
     budget_id: UUID,
     request: DepartmentBudgetUpdate,

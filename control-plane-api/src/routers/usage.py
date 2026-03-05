@@ -12,10 +12,12 @@ Data Sources (CAB-840):
 - Loki: Logs (call history, activity feed)
 - PostgreSQL: Subscription data, tool counts
 """
+
 import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from ..auth import User, get_current_user
 from ..database import get_db
@@ -46,10 +48,9 @@ _dashboard_cache = TTLCache(default_ttl_seconds=30, max_size=100)
 # GET /v1/usage/me - Résumé complet de mon usage
 # ============================================================
 
+
 @router.get("/me", response_model=UsageSummary)
-async def get_my_usage_summary(
-    current_user: User = Depends(get_current_user)
-) -> UsageSummary:
+async def get_my_usage_summary(current_user: User = Depends(get_current_user)) -> UsageSummary:
     """
     Retourne le résumé d'usage pour l'utilisateur connecté.
 
@@ -71,15 +72,13 @@ async def get_my_usage_summary(
         return await metrics_service.get_usage_summary(user_id, tenant_id)
     except Exception as e:
         logger.error(f"Failed to fetch usage summary: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="Usage metrics temporarily unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Usage metrics temporarily unavailable")
 
 
 # ============================================================
 # GET /v1/usage/me/calls - Mes derniers appels
 # ============================================================
+
 
 @router.get("/me/calls", response_model=UsageCallsResponse)
 async def get_my_calls(
@@ -89,7 +88,7 @@ async def get_my_calls(
     tool_id: str | None = Query(default=None, description="Filter by tool ID"),
     from_date: datetime | None = Query(default=None, description="Start date filter"),
     to_date: datetime | None = Query(default=None, description="End date filter"),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> UsageCallsResponse:
     """
     Retourne la liste paginée des derniers appels MCP de l'utilisateur.
@@ -121,20 +120,17 @@ async def get_my_calls(
         )
     except Exception as e:
         logger.error(f"Failed to fetch calls: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="Call history temporarily unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Call history temporarily unavailable")
 
 
 # ============================================================
 # GET /v1/usage/me/subscriptions - Mes subscriptions actives
 # ============================================================
 
+
 @router.get("/me/subscriptions", response_model=list[ActiveSubscription])
 async def get_my_active_subscriptions(
-    current_user: User = Depends(get_current_user),
-    db=Depends(get_db)
+    current_user: User = Depends(get_current_user), db=Depends(get_db)
 ) -> list[ActiveSubscription]:
     """
     Retourne la liste des subscriptions actives de l'utilisateur.
@@ -151,21 +147,16 @@ async def get_my_active_subscriptions(
         return await metrics_service.get_active_subscriptions(user_id, db)
     except Exception as e:
         logger.error(f"Failed to fetch subscriptions: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="Subscription data temporarily unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Subscription data temporarily unavailable")
 
 
 # ============================================================
 # Dashboard Endpoints (CAB-299)
 # ============================================================
 
+
 @dashboard_router.get("/stats", response_model=DashboardStats)
-async def get_dashboard_stats(
-    current_user: User = Depends(get_current_user),
-    db=Depends(get_db)
-) -> DashboardStats:
+async def get_dashboard_stats(current_user: User = Depends(get_current_user), db=Depends(get_db)) -> DashboardStats:
     """
     Retourne les statistiques agrégées pour la home page du Portal.
 
@@ -196,16 +187,13 @@ async def get_dashboard_stats(
         return result
     except Exception as e:
         logger.error(f"Failed to fetch dashboard stats: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="Dashboard stats temporarily unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Dashboard stats temporarily unavailable")
 
 
 @dashboard_router.get("/activity", response_model=DashboardActivityResponse)
 async def get_dashboard_activity(
     limit: int = Query(default=5, ge=1, le=20, description="Number of activities to return"),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> DashboardActivityResponse:
     """
     Retourne l'activité récente pour la home page du Portal.
@@ -224,21 +212,39 @@ async def get_dashboard_activity(
         return DashboardActivityResponse(activity=activity)
     except Exception as e:
         logger.error(f"Failed to fetch dashboard activity: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="Activity feed temporarily unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Activity feed temporarily unavailable")
+
+
+class TokenUsageResponse(BaseModel):
+    """Token usage per tenant."""
+
+    tenant_id: str
+    time_range: str
+    total_tokens: int = 0
+    by_tool: dict[str, int] = {}
+
+
+class TokenUsageCompareResponse(BaseModel):
+    """Token usage comparison."""
+
+    tenant_id: str
+    time_range: str
+    total_before: int = 0
+    total_after: int = 0
+    total_saved: int = 0
+    by_tool: dict[str, dict] = {}
 
 
 # ============================================================
 # GET /v1/usage/tokens - Token consumption (CAB-881)
 # ============================================================
 
-@router.get("/tokens")
+
+@router.get("/tokens", response_model=TokenUsageResponse)
 async def get_token_usage(
     time_range: str = Query(default="24h", description="Time range: 1h, 6h, 24h, 7d, 30d"),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Return token consumption for the authenticated tenant.
 
     Queries Prometheus for stoa_mcp_gateway_tokens_by_tenant metrics.
@@ -291,11 +297,12 @@ async def get_token_usage(
 # GET /v1/usage/tokens/compare - Before/after optimization (CAB-881)
 # ============================================================
 
-@router.get("/tokens/compare")
+
+@router.get("/tokens/compare", response_model=TokenUsageCompareResponse)
 async def get_token_usage_compare(
     time_range: str = Query(default="24h", description="Time range: 1h, 6h, 24h, 7d, 30d"),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Compare token consumption before and after transformation.
 
     Uses the transformer_reduction_ratio metric to compute savings.
@@ -318,7 +325,7 @@ async def get_token_usage_compare(
     # Total tokens (after transformation — what was actually sent)
     query_after = f'sum by (tool_name) (increase({prefix}_tokens_by_tenant{{tenant_id="{tenant_id}"}}[{time_range}]))'
     # Avg reduction ratio per tool
-    query_ratio = f'avg by (tool_name) ({prefix}_transformer_reduction_ratio{{}})'
+    query_ratio = f"avg by (tool_name) ({prefix}_transformer_reduction_ratio{{}})"
 
     try:
         result_after = await prom._query(query_after)

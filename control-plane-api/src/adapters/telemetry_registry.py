@@ -38,3 +38,16 @@ class TelemetryAdapterRegistry:
     @classmethod
     def list_types(cls) -> list[str]:
         return list(cls._adapters.keys())
+
+
+def register_default_adapters() -> None:
+    """Register all built-in telemetry adapters."""
+    from .gravitee.telemetry import GraviteeTelemetryAdapter
+    from .kong.telemetry import KongTelemetryAdapter
+    from .stoa.telemetry import StoaTelemetryAdapter
+    from .webmethods.telemetry import WebMethodsTelemetryAdapter
+
+    TelemetryAdapterRegistry.register("stoa", StoaTelemetryAdapter)
+    TelemetryAdapterRegistry.register("kong", KongTelemetryAdapter)
+    TelemetryAdapterRegistry.register("gravitee", GraviteeTelemetryAdapter)
+    TelemetryAdapterRegistry.register("webmethods", WebMethodsTelemetryAdapter)

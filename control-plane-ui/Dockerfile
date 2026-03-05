@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy shared package first (monorepo dependency)
 COPY shared/package*.json ./shared/
-RUN cd shared && npm ci --ignore-scripts
+RUN cd shared && npm ci --ignore-scripts --legacy-peer-deps
 
 # Copy main package files
 COPY control-plane-ui/package*.json ./control-plane-ui/

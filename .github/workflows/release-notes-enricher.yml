@@ -24,8 +24,9 @@ jobs:
     if: vars.DISABLE_RELEASE_ENRICHER != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 2
 
@@ -40,18 +41,19 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           # Extract PR number from squash merge commit (GitHub adds "(#NNN)" suffix)
-          PR_NUM=$(echo "$COMMIT_MSG" | head -1 | grep -oP '\(#\K[0-9]+(?=\))' || echo "")
+          PR_NUM=$(echo "$COMMIT_MSG" | head -1 | sed -n 's/.*(\#\([0-9]*\)).*/\1/p')
           echo "pr_num=$PR_NUM" >> "$GITHUB_OUTPUT"
 
           # Extract conventional commit type and scope
-          COMMIT_TYPE=$(echo "$COMMIT_MSG" | head -1 | grep -oP '^[a-z]+(?=[\(!:])' || echo "other")
-          COMMIT_SCOPE=$(echo "$COMMIT_MSG" | head -1 | grep -oP '(?<=\()[a-z-]+(?=\))' || echo "")
+          COMMIT_TYPE=$(echo "$COMMIT_MSG" | head -1 | sed -n 's/^\([a-z]*\)[(!:].*/\1/p')
+          COMMIT_TYPE="${COMMIT_TYPE:-other}"
+          COMMIT_SCOPE=$(echo "$COMMIT_MSG" | head -1 | sed -n 's/^[a-z]*(\([a-z,-]*\)).*/\1/p')
           echo "commit_type=$COMMIT_TYPE" >> "$GITHUB_OUTPUT"
           echo "commit_scope=$COMMIT_SCOPE" >> "$GITHUB_OUTPUT"
 
           # Detect breaking change
           IS_BREAKING="false"
-          if echo "$COMMIT_MSG" | head -1 | grep -qP '^[a-z]+!'; then
+          if echo "$COMMIT_MSG" | head -1 | grep -qE '^[a-z]+!'; then
             IS_BREAKING="true"
           fi
           if echo "$COMMIT_MSG" | grep -qi 'BREAKING CHANGE:'; then
@@ -86,7 +88,7 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           # Extract ticket ID (CAB-XXXX) from commit or PR body
-          TICKET_ID=$(echo "$COMMIT_MSG" "$PR_BODY" | grep -oP 'CAB-\d+' | head -1 || echo "")
+          TICKET_ID=$(echo "$COMMIT_MSG" "$PR_BODY" | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
           echo "ticket_id=$TICKET_ID" >> "$GITHUB_OUTPUT"
 
           # Get files changed
@@ -101,7 +103,7 @@ jobs:
           SKIP="false"
           if [ "${{ steps.extract.outputs.is_breaking }}" = "true" ]; then
             SKIP="false"
-          elif echo "$TYPE" | grep -qP '^(chore|ci|test|style|build)$'; then
+          elif echo "$TYPE" | grep -qE '^(chore|ci|test|style|build)$'; then
             SKIP="true"
           fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
@@ -223,6 +225,7 @@ jobs:
       - name: Job summary
         if: always()
         run: |
+          RP_PR="${{ steps.find-rp-pr.outputs.rp_pr }}"
           {
             echo "## Release Notes Enricher"
             echo ""
@@ -235,5 +238,5 @@ jobs:
             echo "| Ticket | ${{ steps.extract.outputs.ticket_id }} |"
             echo "| PR | #${{ steps.extract.outputs.pr_num }} |"
             echo "| Skipped | ${{ steps.filter.outputs.skip }} |"
-            echo "| RP PR | ${{ steps.find-rp-pr.outputs.rp_pr || 'none' }} |"
+            echo "| RP PR | ${RP_PR:-none} |"
           } >> "$GITHUB_STEP_SUMMARY"

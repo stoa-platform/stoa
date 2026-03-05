@@ -3,16 +3,21 @@
 exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
 {
   "buttons": [
+    "Refresh",
     "+ Register Gateway",
-    "Health Check",
-    "Delete",
-    "Health Check",
-    "Delete",
+    "All21",
+    "Production11",
+    "Staging101",
+    "Development0",
+    "",
+    "",
+    "",
+    "",
   ],
   "headings": [
     "Gateway Registry",
-    "STOA Edge MCP Gateway",
-    "webMethods Production",
+    "Production",
+    "Staging",
   ],
   "links": [],
 }
@@ -21,16 +26,21 @@ exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot
 exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`] = `
 {
   "buttons": [
+    "Refresh",
     "+ Register Gateway",
-    "Health Check",
-    "Delete",
-    "Health Check",
-    "Delete",
+    "All21",
+    "Production11",
+    "Staging101",
+    "Development0",
+    "",
+    "",
+    "",
+    "",
   ],
   "headings": [
     "Gateway Registry",
-    "STOA Edge MCP Gateway",
-    "webMethods Production",
+    "Production",
+    "Staging",
   ],
   "links": [],
 }
@@ -39,16 +49,21 @@ exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`
 exports[`GatewayList > snapshot: tenant-admin persona > matches structural snapshot 1`] = `
 {
   "buttons": [
+    "Refresh",
     "+ Register Gateway",
-    "Health Check",
-    "Delete",
-    "Health Check",
-    "Delete",
+    "All21",
+    "Production11",
+    "Staging101",
+    "Development0",
+    "",
+    "",
+    "",
+    "",
   ],
   "headings": [
     "Gateway Registry",
-    "STOA Edge MCP Gateway",
-    "webMethods Production",
+    "Production",
+    "Staging",
   ],
   "links": [],
 }
@@ -57,16 +72,21 @@ exports[`GatewayList > snapshot: tenant-admin persona > matches structural snaps
 exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`] = `
 {
   "buttons": [
+    "Refresh",
     "+ Register Gateway",
-    "Health Check",
-    "Delete",
-    "Health Check",
-    "Delete",
+    "All21",
+    "Production11",
+    "Staging101",
+    "Development0",
+    "",
+    "",
+    "",
+    "",
   ],
   "headings": [
     "Gateway Registry",
-    "STOA Edge MCP Gateway",
-    "webMethods Production",
+    "Production",
+    "Staging",
   ],
   "links": [],
 }

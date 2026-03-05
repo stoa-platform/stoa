@@ -9,6 +9,7 @@ use crate::auth::api_key::ApiKeyValidator;
 use crate::auth::jwt::{JwtValidator, JwtValidatorConfig};
 use crate::auth::mtls::MtlsStats;
 use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
+use crate::auth::subscription::SubscriptionValidator;
 use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
@@ -52,6 +53,8 @@ pub struct AppState {
     pub pending_requests: Arc<PendingRequestTracker>,
     pub rate_limiter: Arc<RateLimiter>,
     pub api_key_validator: Arc<ApiKeyValidator>,
+    /// OAuth2 subscription validator — validates JWT azp claim against active subscriptions
+    pub subscription_validator: Arc<SubscriptionValidator>,
     pub uac_enforcer: Arc<UacEnforcer>,
     pub control_plane: Arc<ToolProxyClient>,
     pub route_registry: Arc<RouteRegistry>,
@@ -447,6 +450,12 @@ impl AppState {
             .build()
             .unwrap_or_default();
 
+        // OAuth2 subscription validator — reuses shared HTTP client (Council adj #6)
+        let subscription_validator = Arc::new(SubscriptionValidator::new(
+            config.control_plane_url.clone().unwrap_or_default(),
+            http_client.clone(),
+        ));
+
         // Keycloak admin token cache: 4-min TTL, max 64 entries (CAB-1542)
         let admin_token_cache = moka::sync::Cache::builder()
             .max_capacity(64)
@@ -503,6 +512,7 @@ impl AppState {
             pending_requests: Arc::new(PendingRequestTracker::new()),
             rate_limiter,
             api_key_validator,
+            subscription_validator,
             uac_enforcer,
             control_plane,
             route_registry,

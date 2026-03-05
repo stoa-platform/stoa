@@ -5,6 +5,7 @@ Enables the Console to display real-time sync status and health.
 
 Uses OIDC authentication - forwards user's Keycloak token to ArgoCD.
 """
+
 import asyncio
 import logging
 from datetime import datetime
@@ -32,8 +33,10 @@ router = APIRouter(prefix="/v1/platform", tags=["Platform"])
 # Response Models
 # ============================================================================
 
+
 class ComponentStatus(BaseModel):
     """Status of a single platform component."""
+
     name: str
     display_name: str
     sync_status: str  # Synced, OutOfSync, Unknown
@@ -45,6 +48,7 @@ class ComponentStatus(BaseModel):
 
 class GitOpsStatus(BaseModel):
     """Overall GitOps sync status."""
+
     status: str  # healthy, degraded, syncing
     components: list[ComponentStatus]
     checked_at: str
@@ -52,6 +56,7 @@ class GitOpsStatus(BaseModel):
 
 class PlatformEvent(BaseModel):
     """Platform deployment event."""
+
     id: int | None = None
     component: str
     event_type: str  # sync, deploy, rollback
@@ -64,6 +69,7 @@ class PlatformEvent(BaseModel):
 
 class ExternalLinks(BaseModel):
     """External tool URLs for quick access."""
+
     argocd: str
     grafana: str
     prometheus: str
@@ -72,6 +78,7 @@ class ExternalLinks(BaseModel):
 
 class DiffResource(BaseModel):
     """Resource diff for OutOfSync applications."""
+
     name: str
     namespace: str | None = None
     kind: str
@@ -83,6 +90,7 @@ class DiffResource(BaseModel):
 
 class ApplicationDiffResponse(BaseModel):
     """Diff response for an application."""
+
     application: str
     total_resources: int
     diff_count: int
@@ -91,6 +99,7 @@ class ApplicationDiffResponse(BaseModel):
 
 class PlatformStatusResponse(BaseModel):
     """Complete platform status response."""
+
     gitops: GitOpsStatus
     events: list[PlatformEvent]
     external_links: ExternalLinks
@@ -100,6 +109,7 @@ class PlatformStatusResponse(BaseModel):
 # ============================================================================
 # Endpoints
 # ============================================================================
+
 
 @router.get("/status", response_model=PlatformStatusResponse)
 async def get_platform_status(
@@ -152,16 +162,18 @@ async def get_platform_status(
         for component in status_data.get("components", [])[:3]:
             comp_events = app_events_map.get(component["name"], [])
             for event in comp_events[:2]:  # Max 2 events per component
-                events.append(PlatformEvent(
-                    id=event.get("id"),
-                    component=component["name"],
-                    event_type="sync",
-                    status="success" if component["sync_status"] == "Synced" else "in_progress",
-                    revision=event.get("revision", ""),
-                    message=None,
-                    timestamp=event.get("deployed_at", datetime.utcnow().isoformat() + "Z"),
-                    actor=None,
-                ))
+                events.append(
+                    PlatformEvent(
+                        id=event.get("id"),
+                        component=component["name"],
+                        event_type="sync",
+                        status="success" if component["sync_status"] == "Synced" else "in_progress",
+                        revision=event.get("revision", ""),
+                        message=None,
+                        timestamp=event.get("deployed_at", datetime.utcnow().isoformat() + "Z"),
+                        actor=None,
+                    )
+                )
 
         # Sort events by timestamp (most recent first)
         events.sort(key=lambda x: x.timestamp, reverse=True)
@@ -169,14 +181,12 @@ async def get_platform_status(
         response = PlatformStatusResponse(
             gitops=GitOpsStatus(
                 status=status_data["status"],
-                components=[
-                    ComponentStatus(**comp) for comp in status_data["components"]
-                ],
+                components=[ComponentStatus(**comp) for comp in status_data["components"]],
                 checked_at=status_data["checked_at"],
             ),
             events=events[:10],  # Limit to 10 most recent events
             external_links=ExternalLinks(
-                argocd=settings.ARGOCD_URL,
+                argocd=settings.ARGOCD_EXTERNAL_URL,
                 grafana=settings.GRAFANA_URL,
                 prometheus=settings.PROMETHEUS_URL,
                 logs=settings.LOGS_URL,
@@ -308,16 +318,18 @@ async def list_platform_events(
                 logger.debug(f"Could not get events for {app_name}: {result}")
                 continue
             for event in result:
-                events.append(PlatformEvent(
-                    id=event.get("id"),
-                    component=app_name,
-                    event_type="sync",
-                    status="success",
-                    revision=event.get("revision", ""),
-                    message=None,
-                    timestamp=event.get("deployed_at", datetime.utcnow().isoformat() + "Z"),
-                    actor=None,
-                ))
+                events.append(
+                    PlatformEvent(
+                        id=event.get("id"),
+                        component=app_name,
+                        event_type="sync",
+                        status="success",
+                        revision=event.get("revision", ""),
+                        message=None,
+                        timestamp=event.get("deployed_at", datetime.utcnow().isoformat() + "Z"),
+                        actor=None,
+                    )
+                )
 
         # Sort by timestamp and limit
         events.sort(key=lambda x: x.timestamp, reverse=True)
@@ -350,15 +362,17 @@ async def get_component_diff(
 
         resources = []
         for resource in diff_result.get("resources", []):
-            resources.append(DiffResource(
-                name=resource.get("name", ""),
-                namespace=resource.get("namespace"),
-                kind=resource.get("kind", ""),
-                group=resource.get("group"),
-                status=resource.get("status", ""),
-                health=resource.get("health"),
-                diff=resource.get("diff"),
-            ))
+            resources.append(
+                DiffResource(
+                    name=resource.get("name", ""),
+                    namespace=resource.get("namespace"),
+                    kind=resource.get("kind", ""),
+                    group=resource.get("group"),
+                    status=resource.get("status", ""),
+                    health=resource.get("health"),
+                    diff=resource.get("diff"),
+                )
+            )
 
         return ApplicationDiffResponse(
             application=name,
@@ -375,6 +389,7 @@ async def get_component_diff(
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
 
 def _get_mock_status(error: str | None = None) -> PlatformStatusResponse:
     """
@@ -432,7 +447,7 @@ def _get_mock_status(error: str | None = None) -> PlatformStatusResponse:
         ),
         events=[],
         external_links=ExternalLinks(
-            argocd=settings.ARGOCD_URL,
+            argocd=settings.ARGOCD_EXTERNAL_URL,
             grafana=settings.GRAFANA_URL,
             prometheus=settings.PROMETHEUS_URL,
             logs=settings.LOGS_URL,

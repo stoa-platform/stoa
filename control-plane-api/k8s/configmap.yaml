@@ -54,8 +54,9 @@ data:
 
   # ArgoCD (internal URL avoids hairpin NAT through LB)
   ARGOCD_URL: "http://argocd-server.argocd.svc.cluster.local"
+  ARGOCD_EXTERNAL_URL: "https://argocd.gostoa.dev"
   ARGOCD_VERIFY_SSL: "false"
-  ARGOCD_PLATFORM_APPS: "control-plane-api,control-plane-ui,stoa-portal,mcp-gateway,devportal"
+  ARGOCD_PLATFORM_APPS: "stoa-gateway"
 
   # CORS
   CORS_ORIGINS: "https://console.gostoa.dev,https://portal.gostoa.dev,http://localhost:3000,http://localhost:5173"

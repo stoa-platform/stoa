@@ -1,8 +1,9 @@
 """ArgoCD service for GitOps observability (CAB-654)
 
 Provides access to Argo CD Application status for platform monitoring.
-Uses OIDC authentication - forwards user's Keycloak token to ArgoCD.
+Uses a static API token (stoa-api service account) for reliable auth.
 """
+
 import asyncio
 import logging
 from datetime import datetime
@@ -20,32 +21,39 @@ ARGOCD_CALL_TIMEOUT = 5.0
 class ArgoCDService:
     """Service for Argo CD operations and status monitoring.
 
-    Uses OIDC authentication by forwarding the user's Keycloak token.
-    ArgoCD is configured to accept tokens from the same Keycloak realm.
+    Uses a static API token from the stoa-api ArgoCD service account.
+    Falls back to user's OIDC token for write operations (sync).
     """
 
     def __init__(self):
         self._base_url: str = settings.ARGOCD_URL.rstrip("/")
+        self._static_token: str = settings.ARGOCD_TOKEN
 
     @property
     def is_connected(self) -> bool:
         """Check if service is configured"""
         return bool(self._base_url)
 
+    def _get_token(self, auth_token: str | None = None) -> str:
+        """Return static token if available, else fall back to user token."""
+        return self._static_token or auth_token or ""
+
     async def connect(self):
-        """Initialize ArgoCD service (no-op, uses per-request auth)"""
-        logger.info(f"ArgoCD service configured for {self._base_url} (OIDC auth)")
+        """Initialize ArgoCD service"""
+        auth_mode = "API token" if self._static_token else "OIDC passthrough"
+        logger.info(f"ArgoCD service configured for {self._base_url} ({auth_mode})")
 
     async def disconnect(self):
-        """Cleanup (no-op for OIDC mode)"""
+        """Cleanup (no-op)"""
         pass
 
     async def _request(self, auth_token: str, method: str, path: str, **kwargs) -> dict:
-        """Make authenticated request to ArgoCD with user's token."""
+        """Make authenticated request to ArgoCD."""
+        token = self._get_token(auth_token)
         async with httpx.AsyncClient(
             base_url=f"{self._base_url}/api/v1",
             headers={
-                "Authorization": f"Bearer {auth_token}",
+                "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
             },
             timeout=ARGOCD_CALL_TIMEOUT,
@@ -55,14 +63,15 @@ class ArgoCDService:
             response.raise_for_status()
             return response.json()
 
-    async def health_check(self, auth_token: str) -> bool:
+    async def health_check(self, auth_token: str | None = None) -> bool:
         """Check if ArgoCD is healthy and reachable"""
         try:
             # Version endpoint is at /api/version (not /api/v1/version)
+            token = self._get_token(auth_token)
             async with httpx.AsyncClient(
                 base_url=self._base_url,
                 headers={
-                    "Authorization": f"Bearer {auth_token}",
+                    "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
                 },
                 timeout=ARGOCD_CALL_TIMEOUT,
@@ -129,7 +138,9 @@ class ArgoCDService:
             "conditions": status.get("conditions", []),
         }
 
-    async def get_platform_status(self, auth_token: str, app_names: list[str] | None = None, include_events: bool = False) -> dict:
+    async def get_platform_status(
+        self, auth_token: str, app_names: list[str] | None = None, include_events: bool = False
+    ) -> dict:
         """
         Get aggregated platform status for multiple applications.
 
@@ -159,27 +170,46 @@ class ArgoCDService:
         for app_name, result in zip(app_names, results, strict=False):
             if isinstance(result, httpx.HTTPStatusError):
                 if result.response.status_code == 404:
-                    components.append({
-                        "name": app_name,
-                        "display_name": app_name,
-                        "sync_status": "NotFound",
-                        "health_status": "Unknown",
-                        "revision": "",
-                        "last_sync": None,
-                        "message": "Application not found",
-                    })
+                    components.append(
+                        {
+                            "name": app_name,
+                            "display_name": app_name,
+                            "sync_status": "NotFound",
+                            "health_status": "Unknown",
+                            "revision": "",
+                            "last_sync": None,
+                            "message": "Application not found",
+                        }
+                    )
                 elif result.response.status_code in (401, 403):
-                    components.append({
-                        "name": app_name,
-                        "display_name": app_name,
-                        "sync_status": "Error",
-                        "health_status": "Unknown",
-                        "revision": "",
-                        "last_sync": None,
-                        "message": "Access denied - check ArgoCD RBAC",
-                    })
+                    components.append(
+                        {
+                            "name": app_name,
+                            "display_name": app_name,
+                            "sync_status": "Error",
+                            "health_status": "Unknown",
+                            "revision": "",
+                            "last_sync": None,
+                            "message": "Access denied - check ArgoCD RBAC",
+                        }
+                    )
                 else:
-                    components.append({
+                    components.append(
+                        {
+                            "name": app_name,
+                            "display_name": app_name,
+                            "sync_status": "Error",
+                            "health_status": "Unknown",
+                            "revision": "",
+                            "last_sync": None,
+                            "message": str(result),
+                        }
+                    )
+                overall_healthy = False
+            elif isinstance(result, Exception):
+                logger.warning(f"Failed to get status for {app_name}: {result}")
+                components.append(
+                    {
                         "name": app_name,
                         "display_name": app_name,
                         "sync_status": "Error",
@@ -187,19 +217,8 @@ class ArgoCDService:
                         "revision": "",
                         "last_sync": None,
                         "message": str(result),
-                    })
-                overall_healthy = False
-            elif isinstance(result, Exception):
-                logger.warning(f"Failed to get status for {app_name}: {result}")
-                components.append({
-                    "name": app_name,
-                    "display_name": app_name,
-                    "sync_status": "Error",
-                    "health_status": "Unknown",
-                    "revision": "",
-                    "last_sync": None,
-                    "message": str(result),
-                })
+                    }
+                )
                 overall_healthy = False
             else:
                 app = result
@@ -217,15 +236,21 @@ class ArgoCDService:
                 op_state = status.get("operationState", {})
                 last_sync = op_state.get("finishedAt") if op_state else None
 
-                components.append({
-                    "name": app_name,
-                    "display_name": spec.get("destination", {}).get("namespace", app_name),
-                    "sync_status": sync_status,
-                    "health_status": health_status,
-                    "revision": status.get("sync", {}).get("revision", "")[:8] if status.get("sync", {}).get("revision") else "",
-                    "last_sync": last_sync,
-                    "message": health_status if health_status != "Healthy" else None,
-                })
+                components.append(
+                    {
+                        "name": app_name,
+                        "display_name": spec.get("destination", {}).get("namespace", app_name),
+                        "sync_status": sync_status,
+                        "health_status": health_status,
+                        "revision": (
+                            status.get("sync", {}).get("revision", "")[:8]
+                            if status.get("sync", {}).get("revision")
+                            else ""
+                        ),
+                        "last_sync": last_sync,
+                        "message": health_status if health_status != "Healthy" else None,
+                    }
+                )
 
                 if include_events:
                     app_events[app_name] = self._extract_events(app, limit=5)
@@ -234,8 +259,7 @@ class ArgoCDService:
         failed = [c["name"] for c in components if c["sync_status"] in ("Error", "NotFound")]
         if failed:
             logger.warning(
-                f"Platform status partial failure: {len(failed)}/{len(app_names)} apps failed: "
-                + ", ".join(failed)
+                f"Platform status partial failure: {len(failed)}/{len(app_names)} apps failed: " + ", ".join(failed)
             )
 
         if overall_healthy and overall_synced:
@@ -276,12 +300,14 @@ class ArgoCDService:
         events = []
         for entry in history[-limit:]:
             revision = entry.get("revision", "")
-            events.append({
-                "id": entry.get("id"),
-                "revision": revision[:8] if revision else "",
-                "deployed_at": entry.get("deployedAt"),
-                "source": entry.get("source", {}).get("repoURL", ""),
-            })
+            events.append(
+                {
+                    "id": entry.get("id"),
+                    "revision": revision[:8] if revision else "",
+                    "deployed_at": entry.get("deployedAt"),
+                    "source": entry.get("source", {}).get("repoURL", ""),
+                }
+            )
 
         return list(reversed(events))
 
@@ -304,10 +330,7 @@ class ArgoCDService:
             "dryRun": False,
         }
 
-        logger.info(f"Triggering sync for application {name}", extra={
-            "revision": revision,
-            "prune": prune
-        })
+        logger.info(f"Triggering sync for application {name}", extra={"revision": revision, "prune": prune})
 
         return await self._request(auth_token, "POST", f"/applications/{name}/sync", json=payload)
 
@@ -328,15 +351,17 @@ class ArgoCDService:
         diff_resources = []
         for resource in resources:
             if resource.get("diff") or resource.get("status") == "OutOfSync":
-                diff_resources.append({
-                    "name": resource.get("name"),
-                    "namespace": resource.get("namespace"),
-                    "kind": resource.get("kind"),
-                    "group": resource.get("group"),
-                    "status": resource.get("status"),
-                    "health": resource.get("health", {}).get("status"),
-                    "diff": resource.get("diff"),
-                })
+                diff_resources.append(
+                    {
+                        "name": resource.get("name"),
+                        "namespace": resource.get("namespace"),
+                        "kind": resource.get("kind"),
+                        "group": resource.get("group"),
+                        "status": resource.get("status"),
+                        "health": resource.get("health", {}).get("status"),
+                        "diff": resource.get("diff"),
+                    }
+                )
 
         return {
             "application": name,
@@ -371,7 +396,7 @@ class ArgoCDService:
                 "healthy_count": healthy,
                 "degraded_count": degraded,
                 "apps": components,
-                "argocd_url": settings.ARGOCD_URL,
+                "argocd_url": settings.ARGOCD_EXTERNAL_URL,
             }
         except Exception as e:
             logger.error(f"Failed to get sync summary: {e}")
@@ -382,7 +407,7 @@ class ArgoCDService:
                 "healthy_count": 0,
                 "degraded_count": 0,
                 "apps": [],
-                "argocd_url": settings.ARGOCD_URL,
+                "argocd_url": settings.ARGOCD_EXTERNAL_URL,
                 "error": str(e),
             }
 

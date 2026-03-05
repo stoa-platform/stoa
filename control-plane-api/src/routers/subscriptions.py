@@ -98,20 +98,30 @@ async def create_subscription(
             detail=f"Subscription already exists for this application and API (status: {existing.status.value})",
         )
 
-    # Look up PortalApplication to get keycloak_client_id
-    oauth_client_id = None
+    # Look up PortalApplication to get keycloak_client_id (REQUIRED for OAuth2 flow)
+    app_repo = PortalApplicationRepository(db)
     try:
-        app_repo = PortalApplicationRepository(db)
         portal_app = await app_repo.get_by_id(UUID(request.application_id))
-        if portal_app and portal_app.keycloak_client_id:
-            oauth_client_id = portal_app.keycloak_client_id
-        else:
-            logger.warning(
-                f"PortalApplication {request.application_id} has no keycloak_client_id. "
-                f"Subscription will be created without oauth_client_id."
-            )
     except (ValueError, Exception) as e:
-        logger.warning(f"Could not look up PortalApplication {request.application_id}: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid application_id: {e}",
+        )
+
+    if not portal_app:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found. Please create an application first.",
+        )
+
+    if not portal_app.keycloak_client_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Application has no OAuth2 client configured. "
+            "Please regenerate credentials in My Applications.",
+        )
+
+    oauth_client_id = portal_app.keycloak_client_id
 
     # Create subscription (no API key — OAuth2 only)
     subscription = Subscription(
@@ -157,9 +167,10 @@ async def create_subscription(
                 should_auto_approve = True
             elif plan.auto_approve_roles:
                 should_auto_approve = any(role in plan.auto_approve_roles for role in user.roles)
-        except (ValueError, AttributeError):
-            # Invalid UUID or lookup error → treat as free tier
-            should_auto_approve = True
+        except (ValueError, AttributeError) as e:
+            # Invalid UUID or lookup error → fail-secure, keep PENDING
+            logger.error(f"Plan lookup failed for plan_id={request.plan_id}: {e}")
+            should_auto_approve = False
     else:
         # No plan = free/default → auto-approve
         should_auto_approve = True
@@ -180,7 +191,20 @@ async def create_subscription(
 
             correlation_id = str(uuid_mod.uuid4())
             auth_token = _extract_auth_token(raw_request)
-            asyncio.create_task(provision_on_approval(db, subscription, auth_token, correlation_id))
+            try:
+                await asyncio.wait_for(
+                    provision_on_approval(db, subscription, auth_token, correlation_id),
+                    timeout=10.0,
+                )
+            except TimeoutError:
+                from ..models.subscription import ProvisioningStatus
+
+                subscription.provisioning_status = ProvisioningStatus.FAILED
+                subscription.provisioning_error = "Gateway provisioning timed out"
+                await db.commit()
+                logger.error(f"Provisioning timeout for subscription {subscription.id}")
+            except Exception as prov_err:
+                logger.warning(f"Provisioning failed for subscription {subscription.id}: {prov_err}")
         except Exception as e:
             logger.warning(f"Auto-approve failed, subscription stays PENDING: {e}")
     else:

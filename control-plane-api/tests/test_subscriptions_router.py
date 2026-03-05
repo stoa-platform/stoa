@@ -33,7 +33,7 @@ def _mock_subscription(**overrides):
     sid = uuid4()
     defaults = {
         "id": sid,
-        "application_id": "app-1",
+        "application_id": "00000000-0000-4000-8000-000000000001",
         "application_name": "Test App",
         "subscriber_id": "tenant-admin-user-id",
         "subscriber_email": "admin@acme.com",
@@ -145,7 +145,7 @@ class TestCreateSubscription:
                 resp = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-1",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test App",
                         "api_id": "api-1",
                         "api_name": "Test API",
@@ -158,7 +158,7 @@ class TestCreateSubscription:
         data = resp.json()
         # OAuth2 flow: no API key returned, subscription response instead
         assert "id" in data
-        assert data["application_id"] == "app-1"
+        assert data["application_id"] == "00000000-0000-4000-8000-000000000001"
 
     def test_create_409_existing_subscription(self, app_with_tenant_admin, mock_db_session):
         existing = _mock_subscription()
@@ -170,7 +170,7 @@ class TestCreateSubscription:
                 resp = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-1",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test App",
                         "api_id": "api-1",
                         "api_name": "Test API",
@@ -205,7 +205,7 @@ class TestCreateSubscription:
                 resp = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-1",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test App",
                         "api_id": "api-1",
                         "api_name": "Test API",

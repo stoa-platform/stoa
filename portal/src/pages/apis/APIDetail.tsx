@@ -581,16 +581,30 @@ export function APIDetail() {
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full p-6">
               <div className="text-center mb-6">
-                <div className="mx-auto w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
-                  <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
+                <div
+                  className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                    subscriptionResult.provisioningStatus === 'failed'
+                      ? 'bg-red-100 dark:bg-red-900/30'
+                      : 'bg-green-100 dark:bg-green-900/30'
+                  }`}
+                >
+                  {subscriptionResult.provisioningStatus === 'failed' ? (
+                    <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  ) : (
+                    <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  )}
                 </div>
                 <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
-                  Subscription Created!
+                  {subscriptionResult.provisioningStatus === 'failed'
+                    ? 'Subscription Created (Provisioning Issue)'
+                    : 'Subscription Created!'}
                 </h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                   {subscriptionResult.subscription.status === 'pending'
                     ? 'Your subscription is pending approval from the API provider.'
-                    : 'Your subscription is now active. Use your application credentials to authenticate.'}
+                    : subscriptionResult.provisioningStatus === 'failed'
+                      ? 'Your subscription is active but gateway provisioning encountered an issue.'
+                      : 'Your subscription is now active. Use your application credentials to authenticate.'}
                 </p>
               </div>
 
@@ -603,6 +617,29 @@ export function APIDetail() {
                       approved.
                     </p>
                   </div>
+                </div>
+              )}
+
+              {subscriptionResult.provisioningStatus === 'failed' && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-700 dark:text-red-400">
+                      {subscriptionResult.provisioningError ||
+                        'Gateway provisioning failed. Please contact your administrator.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {subscriptionResult.oauthClientId && (
+                <div className="bg-neutral-50 dark:bg-neutral-700 rounded-lg p-4 mb-4">
+                  <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+                    OAuth2 Client ID
+                  </p>
+                  <code className="text-sm text-neutral-900 dark:text-white break-all">
+                    {subscriptionResult.oauthClientId}
+                  </code>
                 </div>
               )}
 

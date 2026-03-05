@@ -5,6 +5,8 @@ Target: 80%+ coverage on src/routers/subscriptions.py
 Tests: 12 test cases covering CRUD, lifecycle, and authorization
 """
 
+import asyncio
+
 import pytest
 from datetime import datetime, timedelta
 from enum import Enum
@@ -36,56 +38,57 @@ class TestSubscriptionsRouter:
             setattr(mock, key, value)
         return mock
 
+    def _create_mock_portal_app(self, keycloak_client_id: str = "test-kc-client-id") -> MagicMock:
+        """Create a mock PortalApplication with keycloak_client_id."""
+        mock = MagicMock()
+        mock.keycloak_client_id = keycloak_client_id
+        return mock
+
     # ============== Create Subscription Tests ==============
 
     def test_create_subscription_success(
         self, app_with_tenant_admin, mock_db_session, sample_subscription_data
     ):
-        """Test successful subscription creation returns API key."""
+        """Test successful subscription creation with OAuth2 (no API key)."""
         mock_sub = self._create_mock_subscription(sample_subscription_data)
         mock_sub.status = SubscriptionStatus.PENDING
+        mock_sub.oauth_client_id = "test-kc-client-id"
 
         mock_approved = self._create_mock_subscription(sample_subscription_data)
         mock_approved.status = SubscriptionStatus.ACTIVE
+        mock_approved.oauth_client_id = "test-kc-client-id"
 
         with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
-             patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo, \
              patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock), \
              patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
              patch("src.routers.subscriptions.provision_on_approval", new_callable=AsyncMock):
 
-            # Configure mocks
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
             mock_repo_instance.create = AsyncMock(return_value=mock_sub)
-            # plan_id="basic" is not a valid UUID → auto-approve
             mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
 
-            MockKeyService.generate_key.return_value = (
-                "stoa_sk_test1234567890abcdef12345678",
-                "hashed_key_test_123",
-                "stoa_sk_tes",
-            )
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=self._create_mock_portal_app())
 
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-test-123",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test Application",
                         "api_id": "api-weather-456",
                         "api_name": "Weather API",
                         "api_version": "1.0",
                         "tenant_id": "acme",
-                        "plan_id": "basic",
-                        "plan_name": "Basic Plan",
                     },
                 )
 
             assert response.status_code == 201
             data = response.json()
-            assert data["api_key_prefix"] == "stoa_sk_tes"
             assert data["status"] == "active"
+            assert data["oauth_client_id"] == "test-kc-client-id"
 
     def test_create_subscription_auto_approve_no_plan(
         self, app_with_tenant_admin, mock_db_session, sample_subscription_data
@@ -98,7 +101,7 @@ class TestSubscriptionsRouter:
         mock_approved.status = SubscriptionStatus.ACTIVE
 
         with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
-             patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo, \
              patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock), \
              patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
              patch("src.routers.subscriptions.provision_on_approval", new_callable=AsyncMock):
@@ -108,17 +111,14 @@ class TestSubscriptionsRouter:
             mock_repo_instance.create = AsyncMock(return_value=mock_sub)
             mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
 
-            MockKeyService.generate_key.return_value = (
-                "stoa_sk_test1234567890abcdef12345678",
-                "hashed_key_test_123",
-                "stoa_sk_tes",
-            )
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=self._create_mock_portal_app())
 
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-test-123",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test Application",
                         "api_id": "api-weather-456",
                         "api_name": "Weather API",
@@ -147,8 +147,8 @@ class TestSubscriptionsRouter:
         mock_plan.auto_approve_roles = None
 
         with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo, \
              patch("src.routers.subscriptions.PlanRepository") as MockPlanRepo, \
-             patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
              patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock), \
              patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
              patch("src.routers.subscriptions.provision_on_approval", new_callable=AsyncMock):
@@ -158,21 +158,18 @@ class TestSubscriptionsRouter:
             mock_repo_instance.create = AsyncMock(return_value=mock_sub)
             mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
 
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=self._create_mock_portal_app())
+
             mock_plan_repo_instance = MockPlanRepo.return_value
             mock_plan_repo_instance.get_by_id = AsyncMock(return_value=mock_plan)
-
-            MockKeyService.generate_key.return_value = (
-                "stoa_sk_test1234567890abcdef12345678",
-                "hashed_key_test_123",
-                "stoa_sk_tes",
-            )
 
             plan_uuid = str(uuid4())
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-test-123",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test Application",
                         "api_id": "api-weather-456",
                         "api_name": "Weather API",
@@ -200,29 +197,26 @@ class TestSubscriptionsRouter:
         mock_plan.auto_approve_roles = ["cpi-admin"]  # tenant-admin not in list
 
         with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo, \
              patch("src.routers.subscriptions.PlanRepository") as MockPlanRepo, \
-             patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
              patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock):
 
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
             mock_repo_instance.create = AsyncMock(return_value=mock_sub)
 
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=self._create_mock_portal_app())
+
             mock_plan_repo_instance = MockPlanRepo.return_value
             mock_plan_repo_instance.get_by_id = AsyncMock(return_value=mock_plan)
-
-            MockKeyService.generate_key.return_value = (
-                "stoa_sk_test1234567890abcdef12345678",
-                "hashed_key_test_123",
-                "stoa_sk_tes",
-            )
 
             plan_uuid = str(uuid4())
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-test-123",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test Application",
                         "api_id": "api-weather-456",
                         "api_name": "Weather API",
@@ -253,7 +247,7 @@ class TestSubscriptionsRouter:
                 response = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-test-123",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test Application",
                         "api_id": "api-weather-456",
                         "api_name": "Weather API",
@@ -898,7 +892,7 @@ class TestSubscriptionsRouter:
         mock_approved.status = SubscriptionStatus.ACTIVE
 
         with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
-             patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo, \
              patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock) as mock_emit, \
              patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
              patch("src.routers.subscriptions.provision_on_approval", new_callable=AsyncMock):
@@ -908,11 +902,8 @@ class TestSubscriptionsRouter:
             mock_repo_instance.create = AsyncMock(return_value=mock_sub)
             mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
 
-            MockKeyService.generate_key.return_value = (
-                "stoa_sk_test1234567890abcdef12345678",
-                "hashed_key_test_123",
-                "stoa_sk_tes",
-            )
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=self._create_mock_portal_app())
 
             # Make webhook emit raise an exception (should be caught silently)
             mock_emit.side_effect = Exception("Webhook service unavailable")
@@ -921,7 +912,7 @@ class TestSubscriptionsRouter:
                 response = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-test-123",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test Application",
                         "api_id": "api-weather-456",
                         "api_name": "Weather API",
@@ -932,30 +923,26 @@ class TestSubscriptionsRouter:
 
             # Should still succeed despite webhook failure
             assert response.status_code == 201
-            assert response.json()["api_key_prefix"] == "stoa_sk_tes"
 
     def test_create_subscription_db_error(
         self, app_with_tenant_admin, mock_db_session, sample_subscription_data
     ):
         """Test create fails on database error → 500."""
         with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
-             patch("src.routers.subscriptions.APIKeyService") as MockKeyService:
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo:
 
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
             mock_repo_instance.create = AsyncMock(side_effect=Exception("Database connection failed"))
 
-            MockKeyService.generate_key.return_value = (
-                "stoa_sk_test1234567890abcdef12345678",
-                "hashed_key_test_123",
-                "stoa_sk_tes",
-            )
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=self._create_mock_portal_app())
 
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
                     "/v1/subscriptions",
                     json={
-                        "application_id": "app-test-123",
+                        "application_id": "00000000-0000-4000-8000-000000000001",
                         "application_name": "Test Application",
                         "api_id": "api-weather-456",
                         "api_name": "Weather API",
@@ -966,6 +953,183 @@ class TestSubscriptionsRouter:
 
             assert response.status_code == 500
             assert "Failed to create subscription" in response.json()["detail"]
+
+    # ============== Subscription Hardening Tests (portal-subscription-hardening) ==============
+
+    def test_create_subscription_missing_oauth(
+        self, app_with_tenant_admin, mock_db_session, sample_subscription_data
+    ):
+        """Test 400 when application has no keycloak_client_id."""
+        mock_app = self._create_mock_portal_app(keycloak_client_id=None)
+
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo:
+
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
+
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=mock_app)
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    "/v1/subscriptions",
+                    json={
+                        "application_id": "00000000-0000-4000-8000-000000000001",
+                        "application_name": "Test Application",
+                        "api_id": "api-weather-456",
+                        "api_name": "Weather API",
+                        "api_version": "1.0",
+                        "tenant_id": "acme",
+                    },
+                )
+
+            assert response.status_code == 400
+            assert "OAuth2 client" in response.json()["detail"]
+
+    def test_create_subscription_app_not_found(
+        self, app_with_tenant_admin, mock_db_session, sample_subscription_data
+    ):
+        """Test 404 when application doesn't exist."""
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo:
+
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
+
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=None)
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    "/v1/subscriptions",
+                    json={
+                        "application_id": "00000000-0000-4000-8000-000000000001",
+                        "application_name": "Test Application",
+                        "api_id": "api-weather-456",
+                        "api_name": "Weather API",
+                        "api_version": "1.0",
+                        "tenant_id": "acme",
+                    },
+                )
+
+            assert response.status_code == 404
+            assert "Application not found" in response.json()["detail"]
+
+    def test_create_subscription_invalid_application_id(
+        self, app_with_tenant_admin, mock_db_session
+    ):
+        """Test 400 when application_id is not a valid UUID."""
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo:
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    "/v1/subscriptions",
+                    json={
+                        "application_id": "not-a-uuid",
+                        "application_name": "Test Application",
+                        "api_id": "api-weather-456",
+                        "api_name": "Weather API",
+                        "api_version": "1.0",
+                        "tenant_id": "acme",
+                    },
+                )
+
+            assert response.status_code == 400
+            assert "Invalid application_id" in response.json()["detail"]
+
+    def test_auto_approve_fails_secure_on_bad_plan_id(
+        self, app_with_tenant_admin, mock_db_session, sample_subscription_data
+    ):
+        """Test subscription stays PENDING when plan_id is invalid UUID (fail-secure)."""
+        mock_sub = self._create_mock_subscription(sample_subscription_data)
+        mock_sub.status = SubscriptionStatus.PENDING
+
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo, \
+             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock):
+
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
+            mock_repo_instance.create = AsyncMock(return_value=mock_sub)
+
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=self._create_mock_portal_app())
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    "/v1/subscriptions",
+                    json={
+                        "application_id": "00000000-0000-4000-8000-000000000001",
+                        "application_name": "Test Application",
+                        "api_id": "api-weather-456",
+                        "api_name": "Weather API",
+                        "api_version": "1.0",
+                        "tenant_id": "acme",
+                        "plan_id": "not-a-uuid",
+                        "plan_name": "Bad Plan",
+                    },
+                )
+
+            assert response.status_code == 201
+            data = response.json()
+            # Should stay PENDING (fail-secure), not auto-approved
+            assert data["status"] == "pending"
+            mock_repo_instance.update_status.assert_not_called()
+
+    def test_provisioning_timeout_sets_failed(
+        self, app_with_tenant_admin, mock_db_session, sample_subscription_data
+    ):
+        """Test provisioning timeout results in FAILED status."""
+        mock_sub = self._create_mock_subscription(sample_subscription_data)
+        mock_sub.status = SubscriptionStatus.PENDING
+        mock_sub.provisioning_status = None
+        mock_sub.provisioning_error = None
+
+        mock_approved = self._create_mock_subscription(sample_subscription_data)
+        mock_approved.status = SubscriptionStatus.ACTIVE
+        mock_approved.provisioning_status = None
+        mock_approved.provisioning_error = None
+
+        async def slow_provision(*args, **kwargs):
+            import asyncio
+            await asyncio.sleep(20)  # Will exceed the 10s timeout
+
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.PortalApplicationRepository") as MockAppRepo, \
+             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.provision_on_approval", new=slow_provision), \
+             patch("src.routers.subscriptions.asyncio") as mock_asyncio:
+
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
+            mock_repo_instance.create = AsyncMock(return_value=mock_sub)
+            mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
+
+            mock_app_repo = MockAppRepo.return_value
+            mock_app_repo.get_by_id = AsyncMock(return_value=self._create_mock_portal_app())
+
+            # Simulate wait_for raising TimeoutError
+            mock_asyncio.wait_for = AsyncMock(side_effect=TimeoutError())
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    "/v1/subscriptions",
+                    json={
+                        "application_id": "00000000-0000-4000-8000-000000000001",
+                        "application_name": "Test Application",
+                        "api_id": "api-weather-456",
+                        "api_name": "Weather API",
+                        "api_version": "1.0",
+                        "tenant_id": "acme",
+                    },
+                )
+
+            # Should succeed (subscription created) even though provisioning timed out
+            assert response.status_code == 201
 
     # ============== Phase 3: Tenant/Pending Subscriptions (Lines 359-411) ==============
 

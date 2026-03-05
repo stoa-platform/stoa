@@ -271,7 +271,7 @@ def sample_subscription_data(sample_subscription_id):
     """Sample subscription data for testing."""
     return {
         "id": sample_subscription_id,
-        "application_id": "app-test-123",
+        "application_id": "00000000-0000-4000-8000-000000000001",
         "application_name": "Test Application",
         "subscriber_id": "tenant-admin-user-id",
         "subscriber_email": "admin@acme.com",

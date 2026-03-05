@@ -141,7 +141,7 @@ class TestResolveAdapter:
             "kong", config={"base_url": "https://kong.example.com", "auth_config": {"token": "secret"}}
         )
 
-    async def test_no_deployment_returns_default(self):
+    async def test_no_deployment_returns_none(self):
         db = _make_db()
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.get_primary_for_api = AsyncMock(return_value=None)
@@ -149,12 +149,10 @@ class TestResolveAdapter:
         with patch("src.repositories.gateway_deployment.GatewayDeploymentRepository", return_value=mock_deploy_repo):
             result = await _resolve_adapter(db, "api-1", "tenant-1")
 
-        # Should return _default_adapter (module-level webmethods)
-        from src.services.provisioning_service import _default_adapter
+        # No deployment → None (virtual provisioning)
+        assert result is None
 
-        assert result is _default_adapter
-
-    async def test_no_gateway_returns_default(self):
+    async def test_no_gateway_returns_none(self):
         db = _make_db()
         deployment = MagicMock()
         deployment.gateway_instance_id = "gw-missing"
@@ -171,11 +169,10 @@ class TestResolveAdapter:
         ):
             result = await _resolve_adapter(db, "api-1", "tenant-1")
 
-        from src.services.provisioning_service import _default_adapter
+        # No gateway instance → None (virtual provisioning)
+        assert result is None
 
-        assert result is _default_adapter
-
-    async def test_exception_returns_default(self):
+    async def test_exception_returns_none(self):
         db = _make_db()
 
         with patch(
@@ -184,9 +181,8 @@ class TestResolveAdapter:
         ):
             result = await _resolve_adapter(db, "api-1", "tenant-1")
 
-        from src.services.provisioning_service import _default_adapter
-
-        assert result is _default_adapter
+        # Exception → None (virtual provisioning fallback)
+        assert result is None
 
 
 # ─────────────────────────────────────────────

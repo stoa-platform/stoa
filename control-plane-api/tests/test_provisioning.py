@@ -353,8 +353,8 @@ class TestResolveAdapter:
     """Tests for _resolve_adapter helper."""
 
     @pytest.mark.asyncio
-    async def test_resolve_returns_default_when_no_deployment(self):
-        """Falls back to default adapter when no gateway deployment exists."""
+    async def test_resolve_returns_none_when_no_deployment(self):
+        """Returns None when no gateway deployment exists (virtual provisioning)."""
         db = AsyncMock()
 
         with (
@@ -370,14 +370,14 @@ class TestResolveAdapter:
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_primary_for_api = AsyncMock(return_value=None)
 
-            from src.services.provisioning_service import _resolve_adapter, _default_adapter
+            from src.services.provisioning_service import _resolve_adapter
 
             adapter = await _resolve_adapter(db, "api-123", "acme")
-            assert adapter is _default_adapter
+            assert adapter is None
 
     @pytest.mark.asyncio
-    async def test_resolve_returns_default_on_exception(self):
-        """Falls back to default adapter when resolution fails."""
+    async def test_resolve_returns_none_on_exception(self):
+        """Returns None when resolution fails (virtual provisioning fallback)."""
         db = AsyncMock()
 
         with patch(
@@ -387,10 +387,10 @@ class TestResolveAdapter:
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_primary_for_api = AsyncMock(side_effect=Exception("DB error"))
 
-            from src.services.provisioning_service import _resolve_adapter, _default_adapter
+            from src.services.provisioning_service import _resolve_adapter
 
             adapter = await _resolve_adapter(db, "api-123", "acme")
-            assert adapter is _default_adapter
+            assert adapter is None
 
 
 class TestGatewayAdminServiceProvisioning:

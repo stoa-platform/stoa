@@ -34,11 +34,13 @@ _default_adapter = AdapterRegistry.create("webmethods")
 gateway_service = _default_adapter._svc
 
 
-async def _resolve_adapter(db: AsyncSession, api_id: str, tenant_id: str) -> GatewayAdapterInterface:
+async def _resolve_adapter(
+    db: AsyncSession, api_id: str, tenant_id: str
+) -> GatewayAdapterInterface | None:
     """Resolve the gateway adapter for an API.
 
     Looks up gateway_deployments to find which gateway the API is deployed to.
-    Falls back to the default webMethods adapter if no deployment exists.
+    Returns None if no gateway deployment exists (virtual provisioning — no gateway route needed).
     """
     try:
         from ..repositories.gateway_deployment import GatewayDeploymentRepository
@@ -48,21 +50,31 @@ async def _resolve_adapter(db: AsyncSession, api_id: str, tenant_id: str) -> Gat
         deployment = await deploy_repo.get_primary_for_api(api_id, tenant_id)
 
         if not deployment:
-            return _default_adapter
+            logger.info(
+                "No gateway deployment for API %s in tenant %s — skipping gateway provisioning",
+                api_id,
+                tenant_id,
+            )
+            return None
 
         gw_repo = GatewayInstanceRepository(db)
         gateway = await gw_repo.get_by_id(deployment.gateway_instance_id)
 
         if not gateway:
-            return _default_adapter
+            logger.warning(
+                "Gateway instance %s not found for deployment %s",
+                deployment.gateway_instance_id,
+                deployment.id,
+            )
+            return None
 
         return AdapterRegistry.create(
             gateway.gateway_type.value,
             config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
         )
     except Exception as e:
-        logger.warning("Failed to resolve gateway adapter, using default: %s", e)
-        return _default_adapter
+        logger.error("Failed to resolve gateway adapter for API %s: %s", api_id, e)
+        return None
 
 
 async def provision_on_approval(
@@ -90,6 +102,19 @@ async def provision_on_approval(
     await db.commit()
 
     adapter = await _resolve_adapter(db, subscription.api_id, subscription.tenant_id)
+
+    # No gateway deployment → virtual provisioning (OAuth2-only, no gateway route)
+    if adapter is None:
+        subscription.provisioning_status = ProvisioningStatus.READY
+        subscription.provisioning_error = None
+        subscription.provisioned_at = datetime.utcnow()
+        await db.commit()
+        logger.info(
+            "Virtual provisioning for subscription %s (no gateway deployment)",
+            subscription.id,
+            extra={"correlation_id": correlation_id, "tenant_id": subscription.tenant_id},
+        )
+        return
 
     # Build base app_spec
     app_spec = {

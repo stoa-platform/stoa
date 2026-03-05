@@ -40,7 +40,8 @@ export interface APISubscriptionResponse {
   tenant_id: string;
   plan_id: string | null;
   plan_name: string | null;
-  api_key_prefix: string;
+  api_key_prefix: string | null;
+  oauth_client_id: string | null;
   status: APISubscriptionStatus;
   status_reason: string | null;
   created_at: string;
@@ -50,13 +51,6 @@ export interface APISubscriptionResponse {
   revoked_at: string | null;
   approved_by: string | null;
   revoked_by: string | null;
-}
-
-export interface APIKeyResponse {
-  subscription_id: string;
-  api_key: string; // Full API key - shown only once!
-  api_key_prefix: string;
-  expires_at: string | null;
 }
 
 export interface APISubscriptionListResponse {
@@ -74,19 +68,6 @@ export interface ListAPISubscriptionsParams {
   application_id?: string; // Server-side filter when backend supports it
 }
 
-export interface KeyRotationRequest {
-  grace_period_hours?: number; // Default 24, max 168
-}
-
-export interface KeyRotationResponse {
-  subscription_id: string;
-  new_api_key: string;
-  new_api_key_prefix: string;
-  old_key_expires_at: string;
-  grace_period_hours: number;
-  rotation_count: number;
-}
-
 // ============ Helper Functions ============
 
 function transformToAPISubscription(response: APISubscriptionResponse): APISubscription {
@@ -101,7 +82,7 @@ function transformToAPISubscription(response: APISubscriptionResponse): APISubsc
     planId: response.plan_id || undefined,
     planName: response.plan_name || undefined,
     status: response.status,
-    apiKeyPrefix: response.api_key_prefix,
+    apiKeyPrefix: response.api_key_prefix || undefined,
     createdAt: response.created_at,
     expiresAt: response.expires_at || undefined,
   };
@@ -114,10 +95,12 @@ export const apiSubscriptionsService = {
    * Create a new API subscription
    * POST /v1/subscriptions
    *
-   * Returns the API key (shown only once!)
+   * Returns the subscription (uses OAuth2, no API key generated).
    */
-  createSubscription: async (data: CreateAPISubscriptionRequest): Promise<APIKeyResponse> => {
-    const response = await apiClient.post<APIKeyResponse>('/v1/subscriptions', data);
+  createSubscription: async (
+    data: CreateAPISubscriptionRequest
+  ): Promise<APISubscriptionResponse> => {
+    const response = await apiClient.post<APISubscriptionResponse>('/v1/subscriptions', data);
     return response.data;
   },
 
@@ -154,38 +137,6 @@ export const apiSubscriptionsService = {
    */
   cancelSubscription: async (id: string): Promise<void> => {
     await apiClient.delete(`/v1/subscriptions/${id}`);
-  },
-
-  /**
-   * Rotate API key with grace period
-   * POST /v1/subscriptions/{id}/rotate-key
-   *
-   * Returns the new API key (shown only once!)
-   */
-  rotateKey: async (id: string, request?: KeyRotationRequest): Promise<KeyRotationResponse> => {
-    const response = await apiClient.post<KeyRotationResponse>(
-      `/v1/subscriptions/${id}/rotate-key`,
-      request || { grace_period_hours: 24 }
-    );
-    return response.data;
-  },
-
-  /**
-   * Get subscription with rotation info
-   * GET /v1/subscriptions/{id}/rotation-info
-   */
-  getRotationInfo: async (
-    id: string
-  ): Promise<
-    APISubscriptionResponse & {
-      previous_key_expires_at: string | null;
-      last_rotated_at: string | null;
-      rotation_count: number;
-      has_active_grace_period: boolean;
-    }
-  > => {
-    const response = await apiClient.get(`/v1/subscriptions/${id}/rotation-info`);
-    return response.data;
   },
 
   // ============ Tenant Admin: Approval Queue (CAB-1121) ============

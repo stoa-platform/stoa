@@ -25,7 +25,7 @@ describe('apiSubscriptionsService', () => {
   });
 
   describe('createSubscription', () => {
-    it('should call POST /v1/subscriptions and return API key', async () => {
+    it('should call POST /v1/subscriptions and return subscription', async () => {
       const createData = {
         application_id: 'app-1',
         application_name: 'My App',
@@ -35,9 +35,16 @@ describe('apiSubscriptionsService', () => {
         tenant_id: 'acme',
       };
       const mockResponse = {
-        subscription_id: 'sub-1',
-        api_key: 'sk-live-xyz',
-        api_key_prefix: 'sk-live',
+        id: 'sub-1',
+        application_id: 'app-1',
+        application_name: 'My App',
+        api_id: 'api-1',
+        api_name: 'Payments',
+        api_version: '2.0',
+        tenant_id: 'acme',
+        oauth_client_id: 'kc-client-1',
+        status: 'pending',
+        created_at: '2026-01-01T00:00:00Z',
         expires_at: null,
       };
       mockPost.mockResolvedValueOnce({ data: mockResponse });
@@ -45,7 +52,8 @@ describe('apiSubscriptionsService', () => {
       const result = await apiSubscriptionsService.createSubscription(createData);
 
       expect(mockPost).toHaveBeenCalledWith('/v1/subscriptions', createData);
-      expect(result.api_key).toBe('sk-live-xyz');
+      expect(result.id).toBe('sub-1');
+      expect(result.status).toBe('pending');
     });
   });
 
@@ -97,49 +105,6 @@ describe('apiSubscriptionsService', () => {
       await apiSubscriptionsService.cancelSubscription('sub-1');
 
       expect(mockDelete).toHaveBeenCalledWith('/v1/subscriptions/sub-1');
-    });
-  });
-
-  describe('rotateKey', () => {
-    it('should call POST /v1/subscriptions/:id/rotate-key with default grace', async () => {
-      const mockResponse = {
-        subscription_id: 'sub-1',
-        new_api_key: 'sk-new',
-        new_api_key_prefix: 'sk-ne',
-        old_key_expires_at: '2026-02-08T12:00:00Z',
-        grace_period_hours: 24,
-        rotation_count: 1,
-      };
-      mockPost.mockResolvedValueOnce({ data: mockResponse });
-
-      const result = await apiSubscriptionsService.rotateKey('sub-1');
-
-      expect(mockPost).toHaveBeenCalledWith('/v1/subscriptions/sub-1/rotate-key', {
-        grace_period_hours: 24,
-      });
-      expect(result.new_api_key).toBe('sk-new');
-    });
-
-    it('should pass custom grace period', async () => {
-      mockPost.mockResolvedValueOnce({ data: { new_api_key: 'sk-r' } });
-
-      await apiSubscriptionsService.rotateKey('sub-1', { grace_period_hours: 48 });
-
-      expect(mockPost).toHaveBeenCalledWith('/v1/subscriptions/sub-1/rotate-key', {
-        grace_period_hours: 48,
-      });
-    });
-  });
-
-  describe('getRotationInfo', () => {
-    it('should call GET /v1/subscriptions/:id/rotation-info', async () => {
-      const mockInfo = { id: 'sub-1', rotation_count: 3, has_active_grace_period: true };
-      mockGet.mockResolvedValueOnce({ data: mockInfo });
-
-      const result = await apiSubscriptionsService.getRotationInfo('sub-1');
-
-      expect(mockGet).toHaveBeenCalledWith('/v1/subscriptions/sub-1/rotation-info');
-      expect(result.rotation_count).toBe(3);
     });
   });
 

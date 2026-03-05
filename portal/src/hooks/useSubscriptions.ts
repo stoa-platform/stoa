@@ -188,7 +188,6 @@ export function useSubscriptionRotationInfo(id: string | undefined) {
 import {
   apiSubscriptionsService,
   CreateAPISubscriptionRequest,
-  KeyRotationResponse as APIKeyRotationResponse,
 } from '../services/apiSubscriptions';
 
 export interface SubscribeToAPIRequest {
@@ -204,13 +203,11 @@ export interface SubscribeToAPIRequest {
 
 export interface SubscribeToAPIResponse {
   subscription: APISubscription;
-  apiKey: string; // Full API key - shown only once!
-  apiKeyPrefix: string;
 }
 
 /**
  * Hook to subscribe an application to an API
- * Returns the subscription AND the API key (shown only once!)
+ * Uses OAuth2 client_credentials — no API key generated.
  */
 export function useSubscribe() {
   const queryClient = useQueryClient();
@@ -230,22 +227,20 @@ export function useSubscribe() {
 
       const response = await apiSubscriptionsService.createSubscription(request);
 
-      // Return both the subscription info and the API key
       const subscription: APISubscription = {
-        id: response.subscription_id,
-        applicationId: data.applicationId,
-        apiId: data.apiId,
-        status: 'active',
-        plan: 'free', // Default plan
-        createdAt: new Date().toISOString(),
+        id: response.id,
+        applicationId: response.application_id,
+        applicationName: response.application_name,
+        apiId: response.api_id,
+        apiName: response.api_name,
+        apiVersion: response.api_version,
+        tenantId: response.tenant_id,
+        status: response.status,
+        createdAt: response.created_at,
         expiresAt: response.expires_at || undefined,
       };
 
-      return {
-        subscription,
-        apiKey: response.api_key,
-        apiKeyPrefix: response.api_key_prefix,
-      };
+      return { subscription };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });
@@ -290,7 +285,7 @@ export function useApplicationSubscriptions(applicationId: string | undefined) {
         planId: item.plan_id || undefined,
         planName: item.plan_name || undefined,
         status: item.status,
-        apiKeyPrefix: item.api_key_prefix,
+        apiKeyPrefix: item.api_key_prefix || undefined,
         createdAt: item.created_at,
         expiresAt: item.expires_at || undefined,
       }));
@@ -310,25 +305,6 @@ export function useCancelSubscription() {
 
   return useMutation<void, Error, string>({
     mutationFn: (subscriptionId) => apiSubscriptionsService.cancelSubscription(subscriptionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['my-api-subscriptions'] });
-    },
-  });
-}
-
-/**
- * Hook to rotate API key for an API subscription
- */
-export function useRotateAPISubscriptionKey() {
-  const queryClient = useQueryClient();
-
-  return useMutation<APIKeyRotationResponse, Error, { id: string; gracePeriodHours?: number }>({
-    mutationFn: ({ id, gracePeriodHours }) =>
-      apiSubscriptionsService.rotateKey(
-        id,
-        gracePeriodHours ? { grace_period_hours: gracePeriodHours } : undefined
-      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['my-api-subscriptions'] });

@@ -9,7 +9,7 @@ Feature: Gateway - Per-consumer credential mapping (CAB-1432)
   Background:
     Given a test route "test-route-cm" exists with backend "https://httpbin.org/get"
 
-  @smoke @credential-mapping @crud
+  @smoke @credential-mapping @crud @regression
   Scenario: Create a per-consumer credential mapping via admin API
     When I upsert a consumer credential mapping:
       | route_id       | consumer_id | auth_type | header_name | header_value |
@@ -17,7 +17,7 @@ Feature: Gateway - Per-consumer credential mapping (CAB-1432)
     Then the credential mapping response status is 200
     And the consumer credential list contains 1 entry for route "test-route-cm"
 
-  @credential-mapping @injection @critical
+  @credential-mapping @injection @critical @regression
   Scenario: Gateway injects correct backend credential for consumer A
     Given a consumer credential mapping exists:
       | route_id       | consumer_id | auth_type | header_name | header_value   |

@@ -49,8 +49,20 @@ Feature/fix tickets MUST include Playwright scenario updates in the same PR:
 
 No "we'll add E2E later" tickets. If E2E infra blocks the PR, tag `@wip` and document in DoD.
 
+### Regression Test Rule
+Every `fix()` PR MUST include a dedicated regression test that reproduces the original bug:
+- **Python**: `test_regression_cab_XXXX_short_description()` in `tests/test_regression_*.py`
+- **TypeScript**: `describe('regression/CAB-XXXX', ...)` in `src/__tests__/regression/`
+- **Rust**: `fn regression_description()` inline in `#[cfg(test)] mod tests`
+- **E2E**: Add `@regression` tag to scenarios that guard against specific bug fixes
+
+Each regression test MUST document: PR number, ticket ID, root cause, and the invariant being protected.
+
+CI enforces this via the `regression-guard.yml` workflow (warning mode — non-blocking).
+
 ### Detection
 When reviewing a PR, check:
 1. Modified files in `src/pages/` → corresponding `.test.tsx` exists?
 2. New `vi.mock('AuthContext')` inline → should use `createAuthMock` from helpers?
 3. Coverage diff → threshold still met?
+4. PR title starts with `fix(` → regression test present?

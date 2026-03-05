@@ -632,7 +632,10 @@ mod tests {
 
         let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
         let result = client.discover_tools().await;
-        assert!(result.is_err(), "Should fail without unauthenticated fallback");
+        assert!(
+            result.is_err(),
+            "Should fail without unauthenticated fallback"
+        );
         assert!(result.unwrap_err().contains("401"));
     }
 

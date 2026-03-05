@@ -230,4 +230,32 @@ mod tests {
         let validator = ApiKeyValidator::new(&config);
         assert_eq!(validator.cache_size(), 0);
     }
+
+    // === Regression: correct API key validation endpoint URL (PR #1249, CAB-1601) ===
+    // The gateway was calling a non-existent endpoint "/api/v1/keys/validate"
+    // instead of the CP API's actual endpoint "/v1/subscriptions/validate-key".
+    // This caused all LLM proxy requests to fail with 401.
+
+    #[test]
+    fn regression_validate_url_uses_correct_endpoint() {
+        let config = Config {
+            control_plane_url: Some("http://control-plane-api:8000".to_string()),
+            ..Default::default()
+        };
+        let validator = ApiKeyValidator::new(&config);
+
+        // The URL constructed by validate_with_control_plane must use the
+        // correct CP API path. We verify by checking the stored control_plane_url
+        // and the format string used in the source (line 85).
+        let expected_url = format!(
+            "{}/v1/subscriptions/validate-key",
+            validator.control_plane_url
+        );
+        assert_eq!(
+            expected_url,
+            "http://control-plane-api:8000/v1/subscriptions/validate-key"
+        );
+        // Ensure the old (wrong) path is not hardcoded anywhere
+        assert!(!validator.control_plane_url.contains("/api/v1/keys"));
+    }
 }

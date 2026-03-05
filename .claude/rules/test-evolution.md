@@ -49,8 +49,34 @@ Feature/fix tickets MUST include Playwright scenario updates in the same PR:
 
 No "we'll add E2E later" tickets. If E2E infra blocks the PR, tag `@wip` and document in DoD.
 
+### Regression Test Convention
+Fix PRs (commits with `fix()` prefix or containing "fix"/"bug" in PR body) MUST include regression tests:
+
+#### Unit/Integration Tests
+- Naming: `test_regression_cab_XXXX.py` (for Python) or `test_regression_cab_XXXX.ts` (for TypeScript)
+- Location: same directory as unit tests for the affected component
+- Content: minimal reproduction of the bug + assertion that the fix works
+- Example: `test_regression_cab_1234.py` for CAB-1234 (auth loop fix)
+
+#### E2E/Playwright Tests
+- Tag scenarios with `@regression` for E2E scenarios that verify a bug fix
+- Location: `e2e/features/*.feature` file relevant to the component
+- Naming: descriptive scenario name that includes the fix scope
+- Example scenario in `console-rbac.feature`:
+  ```gherkin
+  @regression
+  Scenario: Fixed — RBAC bypass in API list (CAB-1234)
+    Given I am logged in as "viewer"
+    When I try to access admin-only APIs
+    Then I see only my accessible APIs
+  ```
+
+**Regression Guard CI Check** (warning mode): The `regression-guard.yml` workflow detects fix PRs and checks for regression tests. Missing tests trigger a PR annotation (non-blocking).
+
 ### Detection
 When reviewing a PR, check:
 1. Modified files in `src/pages/` → corresponding `.test.tsx` exists?
 2. New `vi.mock('AuthContext')` inline → should use `createAuthMock` from helpers?
 3. Coverage diff → threshold still met?
+4. Commit prefix is `fix()` or PR contains "fix"/"bug" → regression tests present?
+5. E2E scenarios for bug fixes → tagged with `@regression`?

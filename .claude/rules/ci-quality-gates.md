@@ -168,6 +168,25 @@ cargo clippy --all-targets --all-features -- \
 | Cargo audit | stoa-gateway | Non-blocking (`continue-on-error: true`) |
 | pip-audit / npm audit | All components | Non-blocking |
 
+## Regression Guard (regression-guard.yml)
+
+**Purpose**: Verify that fix PRs include regression tests to prevent future regressions.
+
+| Trigger | Scope | Blocking? |
+|---------|-------|-----------|
+| PR with `fix()` prefix in title | All fix PRs | No (warning only) |
+| PR with "fix" or "bug" in body | All fix-related PRs | No (warning only) |
+| Detection | Checks for `test_regression_*` files or `@regression` tagged scenarios | Non-blocking |
+
+**When PR is detected as a fix**:
+- Workflow checks for regression tests in changed files
+- Missing tests → PR annotation with suggestion
+- See `test-evolution.md` for regression test naming conventions
+
+**Naming Convention** (see `test-evolution.md` Regression Test Convention):
+- Unit tests: `test_regression_cab_XXXX.py` (Python) or `test_regression_cab_XXXX.ts` (TypeScript)
+- E2E tests: Gherkin scenarios tagged with `@regression`
+
 ## K8s Deploy Pipeline
 
 Every component CI MUST have `apply-manifest` between `docker` and `deploy`:

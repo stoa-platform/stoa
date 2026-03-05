@@ -35,11 +35,13 @@ globs: ".claude/**"
 | **Council S1** (ticket pertinence) | `claude-sonnet-4-6` | Structured eval, 5 turns |
 | **Council S2** (plan validation) | `claude-sonnet-4-6` | Structured eval, 10 turns |
 | **Autopilot scan** (backlog scoring) | `claude-haiku-4-5-20251001` | Quick scoring, high volume |
-| **Implementation ≤5pts** (L1/L3 pipeline) | `claude-sonnet-4-6` | Small tickets, Sonnet sufficient |
-| **Implementation >5pts** (L1/L3 pipeline) | `claude-opus-4-6` | Complex tickets hit max_turns with Sonnet (100% failure on 6+ pts) |
+| **Implementation ≤3pts** (L1/L3 pipeline) | `claude-haiku-4-5-20251001` | Trivial tickets, 80% cheaper, 20 turns |
+| **Implementation 4-5pts** (L1/L3 pipeline) | `claude-opus-4-6` | Medium tickets, 20 turns |
+| **Implementation 6-8pts** (L1/L3 pipeline) | `claude-opus-4-6` | Complex tickets, 30 turns (100% Sonnet failure on 6+ pts) |
+| **Implementation >8pts** (L1/L3 pipeline) | `claude-opus-4-6` | Large tickets, 40 turns |
 | **Auto-review** (PR review) | `claude-sonnet-4-6` | Read-only, structured output |
 
-**Rules**: Max 3-4 subagents active. Prefer haiku for `Explore`. CI implementation stays Sonnet (lighter context = no looping problem).
+**Rules**: Max 3-4 subagents active. Prefer haiku for `Explore`. CI model routing via `scripts/ai-ops/model-router.sh`.
 
 ## Token Observatory (HEGEMON auto-tracked)
 

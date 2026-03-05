@@ -4,322 +4,60 @@ globs: "blog/**,docs/**,*.mdx"
 
 # SEO Content & Community Strategy
 
-## Scope
+## Content Types
 
-Rules for generating blog posts, documentation, and community content on **stoa-docs** (docs.gostoa.dev). Complements `content-compliance.md` (legal/competitive rules) and `documentation.md` (where docs live).
+| Type | Cadence | Min Words | SEO Pattern |
+|------|---------|-----------|-------------|
+| Tutorial | Weekly (Tue) | 1500 | Long-tail, step-by-step, code blocks |
+| Comparison | Biweekly (Thu) | 1200 | vs-keyword, feature tables, disclaimers |
+| Glossary | Monthly | 2000 | A-Z, dense internal links |
+| News/Update | Monthly | 800 | Timely, short, link-rich |
 
-## A. Content Types & Templates
-
-### 4 Content Types
-
-| Type | Cadence | Target Audience | SEO Pattern | Min Words |
-|------|---------|----------------|-------------|-----------|
-| **Tutorial** | Weekly (Tue) | Developers searching "how to X" | Long-tail keywords, step-by-step, code blocks | 1500 |
-| **Comparison** | Biweekly (Thu) | Architects evaluating alternatives | vs-keyword, feature tables, disclaimers | 1200 |
-| **Glossary** | Monthly | Beginners searching definitions | A-Z format, dense internal links | 2000 |
-| **News/Update** | Monthly | Community staying current | Timely, short, link-rich | 800 |
-
-### Front-Matter Template (mandatory for all blog posts)
+## Front-Matter (mandatory)
 
 ```yaml
 ---
 slug: <kebab-case-seo-url>
-title: "<Keyword-First Title (max 60 chars)>"
-description: "<Pain point opener, practitioner tone (max 155 chars)>"
+title: "<Keyword-First (max 60 chars)>"
+description: "<Pain point opener (max 155 chars)>"
 authors: [stoa-team]
 tags: [<2-5 from tags.yml>]
-unlisted: true          # ← ADD if post date > today, REMOVE when date arrives
-keywords:
-  - <primary keyword>
-  - <3-5 secondary keywords>
-  - <2-3 long-tail variations>
+unlisted: true          # ADD if date > today, REMOVE when date arrives
+keywords: [<primary>, <3-5 secondary>]
 ---
 <!-- last verified: YYYY-MM -->
 ```
 
-**Rules**:
-- `slug` = URL-friendly, keyword-rich, no dates (Docusaurus prepends date from filename)
-- `tags` = only tags that exist in `blog/tags.yml` (build fails otherwise)
-- `unlisted` = **MANDATORY** for future-dated posts (date > today). Omit for posts publishing today
-- `keywords` = for SEO research tracking, not rendered but used by AI Factory to plan content
-- `<!-- last verified: YYYY-MM -->` = required on any article with comparative claims
+Title: keyword-first, max 60 chars, power words (vs/benchmark/migrate), no brand, year when relevant, numbers when possible. Description: pain point opener, practitioner tone, no filler.
 
-### Title Rules (CTR-optimized — mandatory)
+## Scheduled Posts
 
-Docusaurus appends " | STOA — Open-Source AI API Gateway" to every page. Google truncates at ~60 chars total.
+Future-dated posts get `unlisted: true` (not `draft: true` — keeps URLs alive for cross-links). `scripts/manage-scheduled-posts.sh` manages this. Daily CI cron publishes when date arrives.
 
-| Rule | Do | Don't |
-|------|----|-------|
-| **Max 60 chars** | "MCP vs Function Calling: Which Wins in 2026?" | "A Comprehensive Guide to MCP vs Function Calling vs LangChain for AI Agents (2026)" |
-| **Keyword-first** | "Axway Migration to Open Source (2026)" | "How to Migrate from Axway to Open Source" |
-| **Power words** | vs, benchmark, migrate, why, how, patterns, checklist | guide, introduction, overview, comprehensive |
-| **Opinionated angle** | "Why Proxy Throughput Is the Wrong Benchmark" | "API Gateway Benchmark Comparison" |
-| **No brand in title** | "Multi-Tenant API Gateway on Kubernetes" | "STOA Multi-Tenant API Gateway on Kubernetes" |
-| **Year when relevant** | "Open Source API Gateways 2026" | "Open Source API Gateways" |
-| **Numbers when possible** | "5 Authentication Patterns for AI Agents" | "Authentication Patterns for AI Agents" |
+Tags: `release, announcement, feature, security, breaking-change, mcp, community, roadmap, architecture, migration, compliance, comparison, ai, open-source, tutorial, education, docker, quickstart, api-gateway`. Never invent — add to `blog/tags.yml` first. Filename: `blog/YYYY-MM-DD-<slug>.md`.
 
-### Description Rules (CTR-optimized — mandatory)
+## Hub & Spoke (3 Pillars)
 
-The meta description is what Google shows under the title. It must compel the click.
+| Pillar | Hub | Spokes |
+|--------|-----|--------|
+| API Gateway Migration | `api-gateway-migration-guide-2026` | 8 (webMethods, MuleSoft, DataPower, Apigee, Kong, Axway, WSO2, Layer7) |
+| MCP & AI Agents | `what-is-mcp-gateway` | 3 published + 2 TODO |
+| Open Source API Mgmt | `open-source-api-gateway-2026` | 7 (sovereignty, DORA, multi-tenant, Apache-2, API keys, security, GitOps) |
 
-| Rule | Do | Don't |
-|------|----|-------|
-| **Max 155 chars** | "Kong lacks native MCP support. We benchmark both on tool discovery, OAuth 2.1, and governance." | Long paragraph that gets truncated |
-| **Pain point opener** | "Still on DataPower? Protocol translation and sidecar approach for zero disruption." | "This article covers DataPower migration." |
-| **Practitioner tone** | "We tested all three protocols in production." | "A comparison of three protocols." |
-| **Concrete benefit** | "Map every policy to open-source equivalents with this phased roadmap." | "Learn about migration strategies." |
-| **No filler phrases** | Direct statement | "In this article...", "This post covers...", "Read on to discover..." |
-| **No buzzwords** | Specific capabilities | "revolutionary", "cutting-edge", "game-changing" |
+Rules: every spoke links to hub, every hub links to all spokes, cross-pillar encouraged, never guess links (verify with `npm run build`).
 
-### Scheduled Posts (Future-Dated Articles)
+## Quality Gates
 
-Docusaurus has no native scheduling. STOA uses a prebuild script + daily CI cron.
+10 checks: build clean, front-matter complete, word count met, min 3 internal links, hub link present, content compliance (no P0/P1), last-verified tag on comparisons, valid tags, no broken links, answer-first format. Pre-commit: `cd stoa-docs && npm run build 2>&1 | grep -E "broken|error|warning"` → must be empty.
 
-**How it works**:
-1. `scripts/manage-scheduled-posts.sh` runs before every build (`prebuild` hook)
-2. Posts with future dates get `unlisted: true` (hidden from listings/feeds, but URL works)
-3. When the date arrives, the daily CI cron rebuilds and removes `unlisted: true`
-4. Posts with manual `draft: true` are never touched by the script
+## Subagent Pattern
 
-**Rules for AI Factory (MANDATORY when writing blog posts)**:
-- When creating a blog post with a future date, ALWAYS add `unlisted: true` in frontmatter — Claude handles this, the prebuild script is only a safety net
-- When the post date is today or past, do NOT add `unlisted: true`
-- When creating a post that should stay hidden regardless of date (e.g., unreleased feature), use `draft: true`
-- Never use both `draft: true` and `unlisted: true` — Docusaurus forbids it
-- After writing any blog post, always run `npm run build` to verify (the prebuild hook also runs the script as double-check)
+Blog post flow: choose topic → research → prepare context for `docs-writer` (front-matter, valid link list, hub, word count, compliance rules) → generate → `npm run build` (ALWAYS — subagents guess wrong links) → `content-reviewer` if competitors mentioned → fix → commit.
 
-**Why unlisted (not draft)**:
-- `draft: true` hides the post completely — breaks cross-links from published posts
-- `unlisted: true` keeps the URL alive — cross-links work, but post is hidden from listings/RSS/sitemap
-- This matches the Vercel/Supabase "launch week" pattern for pre-published content
+## Search Optimization
 
-**Commands**:
-```bash
-./scripts/manage-scheduled-posts.sh --status  # See all posts with dates + visibility
-./scripts/manage-scheduled-posts.sh --check   # Dry-run: what would change?
-./scripts/manage-scheduled-posts.sh --apply   # Apply changes (run by prebuild)
-```
+Already implemented: llms.txt, JSON-LD (TechArticle + BreadcrumbList), sitemap. Rules: answer-first format, FAQ section (3-5 Q&A), structured H2/H3, code blocks, comparison tables, anchor links. Update llms.txt after each blog batch.
 
-### Available Tags (from `blog/tags.yml`)
+## Community Strategy
 
-```
-release, announcement, feature, security, breaking-change, mcp, community,
-roadmap, architecture, migration, compliance, comparison, ai, open-source,
-tutorial, education, docker, quickstart, api-gateway
-```
-
-Never invent tags. If a new tag is needed, add it to `blog/tags.yml` first.
-
-### Article Filename Convention
-
-```
-blog/YYYY-MM-DD-<slug>.md
-```
-
-Example: `blog/2026-02-18-kong-vs-stoa-mcp-gateway.md`
-
-For articles with images, use directory format:
-```
-blog/YYYY-MM-DD-<slug>/index.md
-blog/YYYY-MM-DD-<slug>/diagram.png
-```
-
-## B. Hub & Spoke Model (Pillar-Cluster SEO)
-
-Every article belongs to a content pillar. Hubs are comprehensive articles; spokes are focused sub-topics that link back to the hub.
-
-### 3 Pillars
-
-| Pillar | Hub(s) | Spokes | Status |
-|--------|--------|--------|--------|
-| API Gateway Migration | `api-gateway-migration-guide-2026` | 8 spokes (webMethods, MuleSoft, DataPower, Apigee, Kong, Axway, WSO2, Layer7) | All published |
-| MCP & AI Agents | `what-is-mcp-gateway`, `connecting-ai-agents-enterprise-apis` | 3 published + 2 TODO | In progress |
-| Open Source API Management | `open-source-api-gateway-2026` | 7 spokes (sovereignty, DORA, multi-tenant, Apache-2, API keys, security, GitOps) | All published |
-
-Full article inventory: see `PLAN-SEO.md` in stoa-docs repo.
-
-### Linking Rules
-
-1. **Every spoke MUST link to its hub** (at least once, ideally in intro + conclusion)
-2. **Every hub MUST link to all its published spokes** (update hub when new spoke published)
-3. **Cross-pillar links encouraged** (e.g., migration article links to MCP tutorial)
-4. **Docs cross-links**: blog posts should link to relevant `/docs/` pages when deeper reference exists
-5. **Never guess internal links** — verify paths exist before committing (see Section D)
-
-### Valid Internal Link Paths (reference)
-
-Blog posts link to each other using relative paths:
-```markdown
-[MCP Gateway Guide](/blog/what-is-mcp-gateway)
-[Docker Tutorial](/blog/mcp-gateway-quickstart-docker)
-```
-
-Docs pages use full paths:
-```markdown
-[Quick Start](/docs/guides/quickstart)
-[Architecture Overview](/docs/concepts/architecture)
-[Migration Guide](/docs/guides/migration/)
-[ADR-024 Gateway Modes](/docs/architecture/adr/adr-024-gateway-unified-modes)
-```
-
-## C. Quality Gates (Content-Specific)
-
-Run these checks before committing any blog post or docs change.
-
-| # | Check | Pass Criteria | Verification |
-|---|-------|---------------|-------------|
-| 1 | Build clean | Zero errors, zero broken links | `npm run build` in stoa-docs |
-| 2 | Front-matter complete | `slug`, `title`, `description`, `tags`, `keywords` all present | Grep front-matter fields |
-| 3 | Word count | Tutorial >=1500, Comparison >=1200, Glossary >=2000, News >=800 | `wc -w <file>` |
-| 4 | Internal links | Min 3 internal links per article | Manual count |
-| 5 | Hub link present | Article links to its pillar hub | Grep for hub slug |
-| 6 | Content compliance | Zero P0/P1 violations | `content-reviewer` agent scan |
-| 7 | Last verified tag | Present on any comparative claim | Grep `<!-- last verified` |
-| 8 | Tags valid | All tags exist in `tags.yml` | `npm run build` (catches invalid tags) |
-| 9 | No broken links | All internal links resolve | `npm run build` (Docusaurus reports broken links) |
-| 10 | Answer-first format | Article starts with 2-3 sentence summary | Manual check (intro before `<!-- truncate -->`) |
-
-### Pre-Commit Checklist
-
-```bash
-cd stoa-docs
-npm run build 2>&1 | grep -E "broken|error|warning"
-# Must return empty (zero issues)
-```
-
-## D. Subagent Delegation Pattern for Content
-
-### Pattern: Blog Post Generation
-
-```
-1. [Inline] Choose article type + topic from PLAN-SEO.md or editorial calendar
-2. [Inline] Research: identify target keywords, existing content, hub to link
-3. [Inline] Prepare context package for docs-writer (see below)
-4. [docs-writer/sonnet] Generate article draft
-5. [Inline] ALWAYS run `npm run build` in stoa-docs after writing
-6. [Inline] Fix broken links (subagents WILL guess wrong paths)
-7. [content-reviewer/sonnet] Compliance scan (if article mentions competitors)
-8. [Inline] Fix any P0/P1 violations
-9. [Inline] Commit + PR (Ship mode for blog posts, Show for structural changes)
-```
-
-### Context Package for docs-writer
-
-When delegating to `docs-writer`, ALWAYS provide:
-
-1. **Front-matter template** (filled with chosen topic, keywords, tags)
-2. **Valid link list** — extract from build or provide known-good paths:
-   ```
-   Blog: /blog/what-is-mcp-gateway, /blog/open-source-api-gateway-2026, ...
-   Docs: /docs/guides/quickstart, /docs/concepts/architecture, ...
-   ```
-3. **Hub article** — which pillar hub to link back to
-4. **Word count target** — minimum for the content type
-5. **Compliance summary** — "no pricing, no 'better than', disclaimer required if comparing"
-6. **Existing articles** — list of published articles to avoid duplication
-
-### Critical Gotcha: Subagents Guess Wrong Links
-
-Subagents do NOT have the stoa-docs sitemap in context. They WILL invent paths like `/docs/guides/mcp-protocol` when the real path is `/docs/guides/fiches/mcp-protocol`.
-
-**Prevention**:
-- Always provide a valid link list in the context package
-- Always run `npm run build` after subagent writes (catches broken links)
-- Never skip the build step, even for "simple" articles
-
-## E. Search Everywhere Optimization
-
-Optimize for both traditional search (Google) AND AI engines (ChatGPT, Claude, Perplexity).
-
-### Already Implemented
-- **llms.txt** on stoa-web (gostoa.dev/llms.txt, gostoa.dev/llms-full.txt)
-- **JSON-LD** on stoa-docs: TechArticle + BreadcrumbList on every page
-- **Sitemap** auto-generated by Docusaurus, submitted to GSC
-
-### Content Format Rules
-
-| Rule | Why | How |
-|------|-----|-----|
-| **Answer-first** | Featured snippet + AI citation | Start every article with 2-3 sentence summary answering the title question |
-| **FAQ section** | People Also Ask + AI training | Add `## FAQ` with 3-5 Q&A pairs at end of tutorials and comparisons |
-| **Structured headings** | Crawlability + AI parsing | Use H2/H3 hierarchy, never skip levels, use keywords in headings |
-| **Code blocks** | Developer search intent | Include runnable code examples in tutorials |
-| **Tables** | Scannable + AI-extractable | Use comparison tables for feature comparisons |
-| **Internal anchor links** | Deep linking + navigation | Add `{#section-id}` anchors for key sections |
-
-### FAQ Template
-
-```markdown
-## FAQ
-
-### What is [topic]?
-[2-3 sentence definition. Link to glossary or concept page.]
-
-### How does [topic] compare to [alternative]?
-[Brief comparison. Link to comparison article if exists.]
-
-### Can I use [topic] with [technology]?
-[Yes/no with brief explanation. Link to relevant tutorial.]
-```
-
-### llms.txt Updates
-
-After publishing a batch of blog posts, update:
-1. `stoa-web/public/llms.txt` — add new article titles + URLs
-2. `stoa-web/public/llms-full.txt` — add article summaries
-
-Cadence: after every blog batch (not per-article).
-
-## F. Community Strategy
-
-### Tactics (Supabase/Vercel-inspired)
-
-| Tactic | Implementation | Cadence |
-|--------|---------------|---------|
-| **Launch Week** | Bundle 5 features, daily blog post for 1 week | Quarterly |
-| **Community Spotlight** | Blog post featuring OSS contributor or early adopter | Monthly |
-| **Changelog** | Public changelog blog post per release | Per release |
-| **GitHub Discussions** | Respond to issues, feature requests, Q&A | Ongoing |
-| **llms.txt refresh** | Update AI discovery files with new content | Per blog batch |
-| **GSC monitoring** | Check indexation, impressions, CTR, coverage | Weekly |
-
-### Launch Week Template
-
-```
-Monday:    Feature announcement #1 (blog + demo GIF)
-Tuesday:   Feature announcement #2 (blog + code example)
-Wednesday: Technical deep-dive (ADR or architecture post)
-Thursday:  Community spotlight or migration success story
-Friday:    Recap + roadmap preview
-```
-
-### GSC Monitoring Checklist (weekly)
-
-1. **Indexation**: pages indexed vs submitted (target: >80%)
-2. **Impressions**: week-over-week trend (target: growing)
-3. **CTR**: average click-through rate (target: >2%)
-4. **Coverage errors**: fix any crawl errors immediately
-5. **Top queries**: identify new keyword opportunities
-
-### Community Content Rules
-
-- **Spotlight posts** require explicit permission from the featured person/org
-- **Never name clients** without written authorization (see `opsec.md`)
-- Use "an enterprise customer" or "a European financial institution" for anonymized references
-- **Discord/Slack invites**: only link to official channels listed in stoa-docs community page
-- **Contributor recognition**: always credit by GitHub handle, link to their PR
-
-## G. Editorial Calendar Integration
-
-See `PLAN-SEO.md` in stoa-docs repo for:
-- Pre-researched topic bank (40+ topics with target keywords)
-- Weekly rotation: Tutorial (Tue) -> Comparison (Thu biweekly) -> Glossary (monthly) -> News (monthly)
-- Seasonal hooks: DORA deadlines (Q1), KubeCon (Q2), year-in-review (Q4)
-
-### How to Pick the Next Article
-
-1. Check `PLAN-SEO.md` subject bank for next unclaimed topic
-2. Verify the hub & spoke mapping — prioritize spokes for incomplete pillars
-3. Check GSC for keyword opportunities (queries with impressions but low CTR)
-4. If a hub has <3 spokes, prioritize spoke creation over new hubs
-5. Mark chosen topic as "in progress" in PLAN-SEO.md before writing
+Tactics: launch weeks (quarterly, 5 features over 5 days), community spotlights (monthly), changelogs (per release), GitHub Discussions. GSC monitoring weekly (indexation >80%, CTR >2%). Never name clients without authorization. Credit contributors by GitHub handle. Editorial calendar in `PLAN-SEO.md` (stoa-docs repo).

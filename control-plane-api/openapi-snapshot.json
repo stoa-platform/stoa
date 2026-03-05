@@ -47271,6 +47271,68 @@
         ]
       }
     },
+    "/v1/traces/export/ai-sessions": {
+      "get": {
+        "description": "Export AI session traces as CSV.\n\nReturns a downloadable CSV with session details including cost, tokens, and model.",
+        "operationId": "export_ai_sessions_csv",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by worker (trigger_source)",
+            "in": "query",
+            "name": "worker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by worker (trigger_source)",
+              "title": "Worker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Ai Sessions Csv",
+        "tags": [
+          "Traces"
+        ]
+      }
+    },
     "/v1/traces/ingest": {
       "post": {
         "description": "Ingest a completed AI session trace from a worker.\n\nWorkers push completed session summaries via this endpoint.\nAuth: X-STOA-API-KEY header.",
@@ -47368,7 +47430,7 @@
     },
     "/v1/traces/stats/ai-sessions": {
       "get": {
-        "description": "Get AI session-specific aggregated statistics.\n\nReturns per-worker stats, daily time series, and totals.",
+        "description": "Get AI session-specific aggregated statistics.\n\nReturns per-worker stats, daily time series, totals, model breakdown, and WoW cost delta.",
         "operationId": "get_ai_session_stats",
         "parameters": [
           {

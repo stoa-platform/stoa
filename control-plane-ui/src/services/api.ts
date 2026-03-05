@@ -506,6 +506,17 @@ class ApiService {
     return data;
   }
 
+  async exportAiSessionsCsv(days?: number, worker?: string): Promise<Blob> {
+    const params: Record<string, string | number> = {};
+    if (days) params.days = days;
+    if (worker) params.worker = worker;
+    const { data } = await this.client.get('/v1/traces/export/ai-sessions', {
+      params,
+      responseType: 'blob',
+    });
+    return data;
+  }
+
   // Platform Status (CAB-654)
   async getPlatformStatus(): Promise<PlatformStatusResponse> {
     const { data } = await this.client.get('/v1/platform/status');

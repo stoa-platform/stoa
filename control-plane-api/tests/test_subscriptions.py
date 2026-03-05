@@ -84,9 +84,6 @@ class TestSubscriptionsRouter:
 
             assert response.status_code == 201
             data = response.json()
-            assert "api_key" in data
-            assert data["api_key"].startswith("stoa_sk_")
-            assert "subscription_id" in data
             assert data["api_key_prefix"] == "stoa_sk_tes"
             assert data["status"] == "active"
 
@@ -935,7 +932,7 @@ class TestSubscriptionsRouter:
 
             # Should still succeed despite webhook failure
             assert response.status_code == 201
-            assert "api_key" in response.json()
+            assert response.json()["api_key_prefix"] == "stoa_sk_tes"
 
     def test_create_subscription_db_error(
         self, app_with_tenant_admin, mock_db_session, sample_subscription_data

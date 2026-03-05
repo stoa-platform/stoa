@@ -298,6 +298,8 @@ def sample_subscription_data(sample_subscription_id):
         "previous_key_expires_at": None,
         "last_rotated_at": None,
         "rotation_count": 0,
+        # OAuth2 client credentials (CAB-1458)
+        "oauth_client_id": None,
         # Gateway provisioning (CAB-800)
         "provisioning_status": "none",
         "gateway_app_id": None,

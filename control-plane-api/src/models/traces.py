@@ -1,4 +1,5 @@
 """Pipeline trace models for end-to-end monitoring"""
+
 import uuid
 from datetime import datetime
 from enum import StrEnum
@@ -16,6 +17,7 @@ class TraceStatus(StrEnum):
 
 class TraceStep(BaseModel):
     """Individual step in a pipeline trace"""
+
     name: str
     status: TraceStatus = TraceStatus.PENDING
     started_at: datetime | None = None
@@ -48,6 +50,7 @@ class TraceStep(BaseModel):
 
 class PipelineTrace(BaseModel):
     """Complete pipeline trace from trigger to completion"""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
     # Trigger info
@@ -186,8 +189,12 @@ class TraceStore:
         for status in TraceStatus:
             by_status[status.value] = len([t for t in traces if t.status == status])
 
-        completed = [t for t in traces if t.total_duration_ms]
-        avg_duration = sum(t.total_duration_ms for t in completed) / len(completed) if completed else 0
+        completed = [t for t in traces if t.total_duration_ms is not None]
+        avg_duration = (
+            sum(t.total_duration_ms for t in completed if t.total_duration_ms is not None) / len(completed)
+            if completed
+            else 0
+        )
 
         total_finished = by_status.get("success", 0) + by_status.get("failed", 0)
         success_rate = (by_status.get("success", 0) / total_finished * 100) if total_finished > 0 else 0

@@ -6,6 +6,7 @@ Resolves ${VARIABLE} placeholders in API configurations using:
 3. Default values (${VAR:default_value})
 4. Vault references (vault:secret/path#key)
 """
+
 import logging
 import re
 from typing import Any
@@ -13,10 +14,10 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Pattern for ${VAR} or ${VAR:default}
-VARIABLE_PATTERN = re.compile(r'\$\{([A-Z_][A-Z0-9_]*?)(?::([^}]*))?\}')
+VARIABLE_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*?)(?::([^}]*))?\}")
 
 # Pattern for vault references
-VAULT_PATTERN = re.compile(r'^vault:(.+)#(.+)$')
+VAULT_PATTERN = re.compile(r"^vault:(.+)#(.+)$")
 
 
 class VariableResolver:
@@ -55,6 +56,7 @@ class VariableResolver:
             >>> resolver.resolve_string("${BACKEND_URL}/api", {"BACKEND_URL": "https://api.example.com"})
             'https://api.example.com/api'
         """
+
         def replace_var(match):
             var_name = match.group(1)
             default = match.group(2)
@@ -70,7 +72,7 @@ class VariableResolver:
 
         return VARIABLE_PATTERN.sub(replace_var, template)
 
-    def resolve_dict(self, template: dict, variables: dict[str, str]) -> dict:
+    def resolve_dict(self, template: dict[str, Any], variables: dict[str, str]) -> dict[str, Any]:
         """
         Recursively resolve variables in a dictionary.
 
@@ -81,7 +83,7 @@ class VariableResolver:
         Returns:
             New dictionary with all variables resolved
         """
-        result = {}
+        result: dict[str, Any] = {}
         for key, value in template.items():
             if isinstance(value, str):
                 result[key] = self.resolve_string(value, variables)
@@ -89,16 +91,18 @@ class VariableResolver:
                 result[key] = self.resolve_dict(value, variables)
             elif isinstance(value, list):
                 result[key] = [
-                    self.resolve_string(item, variables) if isinstance(item, str)
-                    else self.resolve_dict(item, variables) if isinstance(item, dict)
-                    else item
+                    (
+                        self.resolve_string(item, variables)
+                        if isinstance(item, str)
+                        else self.resolve_dict(item, variables) if isinstance(item, dict) else item
+                    )
                     for item in value
                 ]
             else:
                 result[key] = value
         return result
 
-    def merge_configs(self, *configs: dict) -> dict:
+    def merge_configs(self, *configs: dict[str, Any]) -> dict[str, Any]:
         """
         Deep merge multiple configuration dictionaries.
 
@@ -110,13 +114,13 @@ class VariableResolver:
         Returns:
             Merged configuration dictionary
         """
-        result = {}
+        result: dict[str, Any] = {}
         for config in configs:
             if config:
                 result = self._deep_merge(result, config)
         return result
 
-    def _deep_merge(self, base: dict, override: dict) -> dict:
+    def _deep_merge(self, base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
         """Deep merge two dictionaries."""
         result = base.copy()
         for key, value in override.items():
@@ -203,9 +207,9 @@ class VariableResolver:
 
         return resolved
 
-    async def _resolve_vault_refs_in_dict(self, data: dict) -> dict:
+    async def _resolve_vault_refs_in_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         """Recursively resolve vault: references in a dictionary."""
-        result = {}
+        result: dict[str, Any] = {}
         for key, value in data.items():
             if isinstance(value, str) and value.startswith("vault:"):
                 resolved = await self.resolve_vault_reference(value)
@@ -214,8 +218,15 @@ class VariableResolver:
                 result[key] = await self._resolve_vault_refs_in_dict(value)
             elif isinstance(value, list):
                 result[key] = [
-                    await self._resolve_vault_refs_in_dict(item) if isinstance(item, dict)
-                    else (await self.resolve_vault_reference(item) if isinstance(item, str) and item.startswith("vault:") else item)
+                    (
+                        await self._resolve_vault_refs_in_dict(item)
+                        if isinstance(item, dict)
+                        else (
+                            await self.resolve_vault_reference(item)
+                            if isinstance(item, str) and item.startswith("vault:")
+                            else item
+                        )
+                    )
                     for item in value
                 ]
             else:
@@ -279,7 +290,7 @@ class VariableResolver:
             # Check if variable is provided or has a default in the template
             if var not in variables:
                 # Check if the variable has a default value in the template
-                pattern = re.compile(rf'\$\{{{var}:([^}}]*)\}}')
+                pattern = re.compile(rf"\$\{{{var}:([^}}]*)\}}")
                 has_default = False
 
                 def check_defaults(data, _pattern=pattern):

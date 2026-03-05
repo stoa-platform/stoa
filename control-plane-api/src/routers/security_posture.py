@@ -11,6 +11,7 @@ Provides REST API for:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel as _BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
@@ -23,6 +24,46 @@ from ..schemas.security_posture import (
     SetBaselineRequest,
 )
 from ..services.security_scanner_service import security_scanner_service
+
+
+class SecurityScoreResponse(_BaseModel):
+    """Security score result."""
+
+    score: int = 0
+    grade: str = ""
+    breakdown: dict = {}
+
+
+class StatusResponse(_BaseModel):
+    """Simple status response."""
+
+    status: str
+
+
+class CountResponse(_BaseModel):
+    """Count response."""
+
+    ingested: int = 0
+
+
+class ScanIdResponse(_BaseModel):
+    """Scan creation response."""
+
+    scan_id: str
+
+
+class TokenBindingResponse(_BaseModel):
+    """Token binding status."""
+
+    strategy: str
+    label: str
+    description: str
+    dpop_enforced: bool = False
+    mtls_enforced: bool = False
+    dpop_available: bool = True
+    mtls_available: bool = True
+    replay_protection: bool = False
+
 
 router = APIRouter(prefix="/v1/security", tags=["Security Posture"])
 
@@ -68,7 +109,7 @@ async def list_findings(
     )
 
 
-@router.post("/{tenant_id}/findings/ingest", status_code=201)
+@router.post("/{tenant_id}/findings/ingest", status_code=201, response_model=CountResponse)
 @require_tenant_access
 async def ingest_findings(
     tenant_id: str,
@@ -88,7 +129,7 @@ async def ingest_findings(
     return {"ingested": count}
 
 
-@router.post("/{tenant_id}/findings/{finding_id}/resolve")
+@router.post("/{tenant_id}/findings/{finding_id}/resolve", response_model=StatusResponse)
 @require_tenant_access
 async def resolve_finding(
     tenant_id: str,
@@ -119,7 +160,7 @@ async def get_scan_history(
     return await security_scanner_service.get_scan_history(tenant_id, db, limit=limit)
 
 
-@router.post("/{tenant_id}/scans", status_code=201)
+@router.post("/{tenant_id}/scans", status_code=201, response_model=ScanIdResponse)
 @require_tenant_access
 async def create_scan(
     tenant_id: str,
@@ -147,7 +188,7 @@ async def get_drift_report(
     return await security_scanner_service.detect_drift(tenant_id, db)
 
 
-@router.put("/{tenant_id}/baseline")
+@router.put("/{tenant_id}/baseline", response_model=StatusResponse)
 @require_tenant_access
 async def set_baseline(
     tenant_id: str,
@@ -195,7 +236,7 @@ async def get_secrets_health(
 # --- Token Binding (CAB-438) ---
 
 
-@router.get("/{tenant_id}/token-binding")
+@router.get("/{tenant_id}/token-binding", response_model=TokenBindingResponse)
 @require_tenant_access
 async def get_token_binding_status(
     tenant_id: str,

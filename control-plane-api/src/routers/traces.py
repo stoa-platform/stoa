@@ -44,6 +44,71 @@ class AISessionIngestRequest(BaseModel):
     metadata: dict | None = Field(None, description="AI-specific: tokens, cost, model, turns, etc.")
 
 
+class TraceListResponse(BaseModel):
+    """Paginated trace list."""
+
+    traces: list[dict] = []
+    total: int = 0
+
+
+class TraceLiveResponse(BaseModel):
+    """Live traces response."""
+
+    traces: list[dict] = []
+    count: int = 0
+
+
+class TraceIngestResponse(BaseModel):
+    """Trace ingest confirmation."""
+
+    ingested: bool
+    trace_id: str
+    status: str
+
+
+class TraceTimelineStep(BaseModel):
+    """A step in a trace timeline."""
+
+    name: str | None = None
+    status: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    duration_ms: int | None = None
+    error: str | None = None
+    details: dict | None = None
+
+
+class TraceTimelineTrigger(BaseModel):
+    """Trace trigger info."""
+
+    type: str | None = None
+    source: str | None = None
+    author: str | None = None
+    commit: str | None = None
+    message: str | None = None
+
+
+class TraceTimelineTarget(BaseModel):
+    """Trace target info."""
+
+    tenant_id: str | None = None
+    api_name: str | None = None
+    environment: str | None = None
+
+
+class TraceTimelineResponse(BaseModel):
+    """Timeline view of a trace."""
+
+    trace_id: str
+    trigger: TraceTimelineTrigger
+    target: TraceTimelineTarget
+    status: str
+    created_at: str | None = None
+    total_duration_ms: int | None = None
+    timeline: list[TraceTimelineStep] = []
+    error_summary: str | None = None
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/traces", tags=["Traces"])
@@ -54,7 +119,7 @@ async def get_service(db: AsyncSession = Depends(get_db)) -> TraceService:
     return TraceService(db)
 
 
-@router.get("")
+@router.get("", response_model=TraceListResponse)
 async def list_traces(
     limit: int = Query(50, ge=1, le=200),
     tenant_id: str | None = None,
@@ -94,7 +159,7 @@ async def get_trace_stats(
     return await service.get_stats()
 
 
-@router.get("/live")
+@router.get("/live", response_model=TraceLiveResponse)
 async def get_live_traces(
     service: TraceService = Depends(get_service),
 ):
@@ -127,7 +192,7 @@ async def get_trace(
     return trace.to_dict()
 
 
-@router.get("/{trace_id}/timeline")
+@router.get("/{trace_id}/timeline", response_model=TraceTimelineResponse)
 async def get_trace_timeline(
     trace_id: str,
     service: TraceService = Depends(get_service),
@@ -191,7 +256,7 @@ async def _verify_ingest_key(
     return x_stoa_api_key
 
 
-@router.post("/ingest")
+@router.post("/ingest", response_model=TraceIngestResponse)
 async def ingest_ai_session(
     body: AISessionIngestRequest,
     _key: str = Depends(_verify_ingest_key),
@@ -278,7 +343,7 @@ async def get_ai_session_stats(
 # ============ Demo Endpoints ============
 
 
-@router.post("/demo")
+@router.post("/demo", include_in_schema=False)
 async def create_demo_trace(
     service: TraceService = Depends(get_service),
 ):
@@ -372,7 +437,7 @@ async def create_demo_trace(
     }
 
 
-@router.post("/demo/batch")
+@router.post("/demo/batch", include_in_schema=False)
 async def create_demo_traces_batch(
     count: int = Query(10, ge=1, le=50),
     service: TraceService = Depends(get_service),
@@ -389,7 +454,7 @@ async def create_demo_traces_batch(
     }
 
 
-@router.post("/demo/ai-sessions")
+@router.post("/demo/ai-sessions", include_in_schema=False)
 async def create_demo_ai_sessions(
     count: int = Query(8, ge=1, le=30),
     service: TraceService = Depends(get_service),

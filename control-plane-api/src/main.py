@@ -130,6 +130,12 @@ from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.gateway_health_worker import gateway_health_worker
 from .workers.sync_engine import sync_engine
 
+
+def custom_generate_unique_id(route):
+    """Generate clean operationIds from route name instead of module path."""
+    return route.name
+
+
 # Configure structured logging (CAB-281)
 configure_logging()
 logger = get_logger(__name__)
@@ -390,6 +396,7 @@ app = FastAPI(
     description=API_DESCRIPTION,
     version=settings.VERSION,
     lifespan=lifespan,
+    generate_unique_id_function=custom_generate_unique_id,
     openapi_tags=[
         {"name": "Tenants", "description": "Tenant management operations"},
         {"name": "APIs", "description": "API lifecycle management"},
@@ -398,7 +405,7 @@ app = FastAPI(
             "description": "Application and subscription management",
         },
         {"name": "Deployments", "description": "Deployment operations and status"},
-        {"name": "Git", "description": "GitLab integration (commits, MRs, files)"},
+        {"name": "Git", "description": "GitLab integration (commits, MRs, files) — Advanced"},
         {"name": "Events", "description": "Real-time event streaming (SSE)"},
         {"name": "Webhooks", "description": "GitLab webhook handlers for GitOps"},
         {"name": "Traces", "description": "Pipeline monitoring and tracing"},

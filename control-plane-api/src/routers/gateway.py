@@ -9,6 +9,7 @@ Benefits:
 - Role-based access control via Keycloak
 - Centralized API management through Control-Plane
 """
+
 import logging
 from typing import Any
 
@@ -31,6 +32,7 @@ security = HTTPBearer(auto_error=True)
 # ============================================================================
 # Models
 # ============================================================================
+
 
 class GatewayAPIResponse(BaseModel):
     id: str
@@ -59,6 +61,7 @@ class ImportAPIRequest(BaseModel):
 
     Uses Gateway-native field names for compatibility with existing playbooks.
     """
+
     apiName: str
     apiVersion: str
     url: str | None = None  # URL to fetch OpenAPI spec from
@@ -68,6 +71,7 @@ class ImportAPIRequest(BaseModel):
 
 class ImportAPIResponse(BaseModel):
     """Response model for imported API."""
+
     success: bool
     api_id: str | None = None
     api_name: str
@@ -93,13 +97,30 @@ class OIDCConfigResponse(BaseModel):
     message: str = ""
 
 
+class GatewayActionResponse(BaseModel):
+    """Generic gateway action result."""
+
+    success: bool
+    message: str
+    result: dict | None = None
+
+
+class GatewayHealthResponse(BaseModel):
+    """Gateway health status."""
+
+    status: str
+    proxy_mode: bool | None = None
+    proxy_url: str | None = None
+    gateway_health: dict | None = None
+    error: str | None = None
+
+
 # ============================================================================
 # Helper to get raw JWT token
 # ============================================================================
 
-async def get_auth_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> str:
+
+async def get_auth_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     """Extract raw JWT token from Authorization header."""
     return credentials.credentials
 
@@ -107,6 +128,7 @@ async def get_auth_token(
 # ============================================================================
 # API Operations
 # ============================================================================
+
 
 @router.get("/apis", response_model=PaginatedResponse[GatewayAPIResponse])
 @require_permission(Permission.APIS_READ)
@@ -145,9 +167,7 @@ async def list_gateway_apis(
 @router.post("/apis", response_model=ImportAPIResponse)
 @require_permission(Permission.APIS_CREATE)
 async def import_gateway_api(
-    request: ImportAPIRequest,
-    user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
+    request: ImportAPIRequest, user: User = Depends(get_current_user), token: str = Depends(get_auth_token)
 ):
     """Import an API from OpenAPI specification into the Gateway.
 
@@ -162,10 +182,7 @@ async def import_gateway_api(
     """
     try:
         if not request.url and not request.apiDefinition:
-            raise HTTPException(
-                status_code=400,
-                detail="Either url or apiDefinition must be provided"
-            )
+            raise HTTPException(status_code=400, detail="Either url or apiDefinition must be provided")
 
         result = await gateway_service.import_api(
             api_name=request.apiName,
@@ -196,11 +213,7 @@ async def import_gateway_api(
 
 @router.get("/apis/{api_id}")
 @require_permission(Permission.APIS_READ)
-async def get_gateway_api(
-    api_id: str,
-    user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
-):
+async def get_gateway_api(api_id: str, user: User = Depends(get_current_user), token: str = Depends(get_auth_token)):
     """Get API details from Gateway.
 
     Requires: cpi-admin or devops role
@@ -217,12 +230,10 @@ async def get_gateway_api(
         raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
-@router.put("/apis/{api_id}/activate")
+@router.put("/apis/{api_id}/activate", response_model=GatewayActionResponse)
 @require_permission(Permission.APIS_PROMOTE)
 async def activate_gateway_api(
-    api_id: str,
-    user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
+    api_id: str, user: User = Depends(get_current_user), token: str = Depends(get_auth_token)
 ):
     """Activate an API in the Gateway.
 
@@ -237,12 +248,10 @@ async def activate_gateway_api(
         raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
-@router.put("/apis/{api_id}/deactivate")
+@router.put("/apis/{api_id}/deactivate", response_model=GatewayActionResponse)
 @require_permission(Permission.APIS_PROMOTE)
 async def deactivate_gateway_api(
-    api_id: str,
-    user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
+    api_id: str, user: User = Depends(get_current_user), token: str = Depends(get_auth_token)
 ):
     """Deactivate an API in the Gateway.
 
@@ -259,11 +268,7 @@ async def deactivate_gateway_api(
 
 @router.delete("/apis/{api_id}")
 @require_permission(Permission.APIS_DELETE)
-async def delete_gateway_api(
-    api_id: str,
-    user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
-):
+async def delete_gateway_api(api_id: str, user: User = Depends(get_current_user), token: str = Depends(get_auth_token)):
     """Delete an API from the Gateway.
 
     Requires: cpi-admin role
@@ -280,6 +285,7 @@ async def delete_gateway_api(
 # ============================================================================
 # Application Operations
 # ============================================================================
+
 
 @router.get("/applications", response_model=PaginatedResponse[GatewayApplicationResponse])
 @require_permission(Permission.APIS_READ)
@@ -317,12 +323,10 @@ async def list_gateway_applications(
 # Scope Operations
 # ============================================================================
 
+
 @router.get("/scopes", response_model=list[GatewayScopeResponse])
 @require_permission(Permission.APIS_READ)
-async def list_gateway_scopes(
-    user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
-):
+async def list_gateway_scopes(user: User = Depends(get_current_user), token: str = Depends(get_auth_token)):
     """List all OAuth scopes configured in the Gateway.
 
     Requires: cpi-admin role
@@ -346,12 +350,11 @@ async def list_gateway_scopes(
 # High-Level OIDC Configuration
 # ============================================================================
 
+
 @router.post("/configure-oidc", response_model=OIDCConfigResponse)
 @require_permission(Permission.APIS_CREATE)
 async def configure_api_oidc(
-    config: OIDCConfigRequest,
-    user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
+    config: OIDCConfigRequest, user: User = Depends(get_current_user), token: str = Depends(get_auth_token)
 ):
     """Configure OIDC authentication for an API in the Gateway.
 
@@ -376,10 +379,7 @@ async def configure_api_oidc(
             auth_token=token,
         )
 
-        logger.info(
-            f"User {user.username} configured OIDC for API {config.api_name} "
-            f"(tenant: {config.tenant_id})"
-        )
+        logger.info(f"User {user.username} configured OIDC for API {config.api_name} " f"(tenant: {config.tenant_id})")
 
         return OIDCConfigResponse(
             success=True,
@@ -398,11 +398,9 @@ async def configure_api_oidc(
 # Health Check
 # ============================================================================
 
-@router.get("/health")
-async def gateway_health(
-    user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
-):
+
+@router.get("/health", response_model=GatewayHealthResponse)
+async def gateway_health(user: User = Depends(get_current_user), token: str = Depends(get_auth_token)):
     """Check Gateway health status via OIDC proxy.
 
     This validates that:

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -13,9 +13,12 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  DollarSign,
+  Zap,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { TraceSummary } from '../types';
+import { SparklineChart } from '../components/charts/SparklineChart';
 
 // =============================================================================
 // TYPES
@@ -29,9 +32,12 @@ interface AISessionStats {
     avg_duration_ms: number;
     success_count: number;
     success_rate: number;
+    total_cost_usd: number;
+    total_tokens: number;
+    avg_cost_per_session: number;
   };
   workers: WorkerStats[];
-  daily: { date: string; sessions: number }[];
+  daily: { date: string; sessions: number; cost_usd: number; tokens: number }[];
 }
 
 interface WorkerStats {
@@ -42,6 +48,10 @@ interface WorkerStats {
   success_count: number;
   success_rate: number;
   last_activity: string | null;
+  total_cost_usd: number;
+  total_tokens: number;
+  avg_cost_usd: number;
+  primary_model: string | null;
 }
 
 // =============================================================================
@@ -65,6 +75,27 @@ function timeAgo(iso: string | null): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+function formatCost(usd: number | null | undefined): string {
+  if (usd === null || usd === undefined || usd === 0) return '$0';
+  if (usd < 0.01) return '<$0.01';
+  return `$${usd.toFixed(2)}`;
+}
+
+function formatTokens(n: number | null | undefined): string {
+  if (n === null || n === undefined || n === 0) return '0';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+  return String(n);
+}
+
+function shortModel(model: string | null | undefined): string {
+  if (!model) return '—';
+  if (model.includes('opus')) return 'Opus';
+  if (model.includes('sonnet')) return 'Sonnet';
+  if (model.includes('haiku')) return 'Haiku';
+  return model;
 }
 
 // =============================================================================
@@ -130,7 +161,7 @@ function WorkerCard({ worker }: { worker: WorkerStats }) {
           {isActive ? 'Active' : 'Idle'}
         </span>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+      <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
         <div>
           <span className="text-gray-500 dark:text-gray-400">Sessions</span>
           <p className="font-medium text-gray-900 dark:text-white">{worker.sessions}</p>
@@ -140,9 +171,21 @@ function WorkerCard({ worker }: { worker: WorkerStats }) {
           <p className="font-medium text-gray-900 dark:text-white">{worker.success_rate}%</p>
         </div>
         <div>
+          <span className="text-gray-500 dark:text-gray-400">Cost</span>
+          <p className="font-medium text-gray-900 dark:text-white">
+            {formatCost(worker.total_cost_usd)}
+          </p>
+        </div>
+        <div>
           <span className="text-gray-500 dark:text-gray-400">Avg Duration</span>
           <p className="font-medium text-gray-900 dark:text-white">
             {formatDuration(worker.avg_duration_ms)}
+          </p>
+        </div>
+        <div>
+          <span className="text-gray-500 dark:text-gray-400">Model</span>
+          <p className="font-medium text-gray-900 dark:text-white">
+            {shortModel(worker.primary_model)}
           </p>
         </div>
         <div>
@@ -225,11 +268,69 @@ function SessionRow({ trace }: { trace: TraceSummary }) {
                   )}
                 </div>
               )}
+              {(trace.cost_usd != null || trace.model) && (
+                <div className="flex items-center gap-3 text-xs">
+                  {trace.cost_usd != null && (
+                    <span className="flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" /> {formatCost(trace.cost_usd)}
+                    </span>
+                  )}
+                  {trace.total_tokens != null && (
+                    <span className="flex items-center gap-1">
+                      <Zap className="h-3 w-3" /> {formatTokens(trace.total_tokens)} tokens
+                    </span>
+                  )}
+                  {trace.model && (
+                    <span className="rounded bg-gray-200 px-1.5 py-0.5 text-xs dark:bg-gray-700">
+                      {shortModel(trace.model)}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+// =============================================================================
+// DAILY COST CHART
+// =============================================================================
+
+function DailyCostChart({
+  daily,
+}: {
+  daily: { date: string; sessions: number; cost_usd: number; tokens: number }[];
+}) {
+  const sparklineData = useMemo(
+    () =>
+      daily.map((d) => ({
+        timestamp: new Date(d.date).getTime() / 1000,
+        value: d.cost_usd,
+      })),
+    [daily]
+  );
+
+  const totalCost = daily.reduce((sum, d) => sum + d.cost_usd, 0);
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Daily Cost</h2>
+        <span className="text-sm text-gray-500 dark:text-gray-400">
+          {formatCost(totalCost)} total
+        </span>
+      </div>
+      <div className="mt-3 flex items-end gap-4">
+        <SparklineChart data={sparklineData} color="#10b981" height={64} width={600} />
+        <div className="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+          <span>{daily[0]?.date}</span>
+          <span>{daily[daily.length - 1]?.date}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -312,7 +413,7 @@ export function HegemonDashboard() {
       ) : stats ? (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             <StatCard label="Total Sessions" value={stats.totals.sessions} icon={Hash} />
             <StatCard
               label="Success Rate"
@@ -325,8 +426,22 @@ export function HegemonDashboard() {
               value={formatDuration(stats.totals.avg_duration_ms)}
               icon={Clock}
             />
+            <StatCard
+              label="Total Cost"
+              value={formatCost(stats.totals.total_cost_usd)}
+              icon={DollarSign}
+              accent="text-emerald-600"
+            />
+            <StatCard
+              label="Total Tokens"
+              value={formatTokens(stats.totals.total_tokens)}
+              icon={Zap}
+            />
             <StatCard label="Workers" value={stats.workers.length} icon={Cpu} />
           </div>
+
+          {/* Daily Cost Chart */}
+          {stats.daily.length > 1 && <DailyCostChart daily={stats.daily} />}
 
           {/* Worker Cards */}
           {stats.workers.length > 0 && (

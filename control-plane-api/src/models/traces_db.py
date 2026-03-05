@@ -1,4 +1,5 @@
 """SQLAlchemy models for pipeline traces (PostgreSQL persistence)"""
+
 import enum
 import uuid
 from datetime import UTC, datetime
@@ -12,6 +13,7 @@ from ..database import Base
 
 class TraceStatusDB(enum.StrEnum):
     """Trace status enum for database."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     SUCCESS = "success"
@@ -21,6 +23,7 @@ class TraceStatusDB(enum.StrEnum):
 
 class PipelineTraceDB(Base):
     """SQLAlchemy model for pipeline traces."""
+
     __tablename__ = "pipeline_traces"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -46,9 +49,7 @@ class PipelineTraceDB(Base):
 
     # Timing
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        default=lambda: datetime.now(UTC)
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total_duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -58,7 +59,7 @@ class PipelineTraceDB(Base):
         Enum(TraceStatusDB, values_callable=lambda x: [e.value for e in x], name="tracestatus", create_type=False),
         nullable=False,
         default=TraceStatusDB.PENDING,
-        index=True
+        index=True,
     )
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -67,16 +68,24 @@ class PipelineTraceDB(Base):
 
     # Additional indexes
     __table_args__ = (
-        Index('idx_traces_created_at', 'created_at'),
-        Index('idx_traces_trigger_type', 'trigger_type'),
+        Index("idx_traces_created_at", "created_at"),
+        Index("idx_traces_trigger_type", "trigger_type"),
     )
+
+    def _get_session_metadata(self) -> dict | None:
+        """Extract metadata from the 'session-summary' step if present."""
+        for step in self.steps:
+            if step.get("name") == "session-summary" and step.get("details"):
+                return step["details"]
+        return None
 
     def to_summary(self) -> dict:
         """Return a summary for list views."""
         steps_completed = len([s for s in self.steps if s.get("status") == "success"])
         steps_failed = len([s for s in self.steps if s.get("status") == "failed"])
 
-        return {
+        meta = self._get_session_metadata()
+        summary: dict = {
             "id": self.id,
             "trigger_type": self.trigger_type,
             "trigger_source": self.trigger_source,
@@ -92,6 +101,11 @@ class PipelineTraceDB(Base):
             "steps_completed": steps_completed,
             "steps_failed": steps_failed,
         }
+        if meta:
+            summary["cost_usd"] = meta.get("cost_usd")
+            summary["total_tokens"] = meta.get("total_tokens")
+            summary["model"] = meta.get("model")
+        return summary
 
     def to_dict(self) -> dict:
         """Return full trace as dict."""

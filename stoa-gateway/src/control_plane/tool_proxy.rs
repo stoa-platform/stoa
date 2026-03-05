@@ -225,14 +225,12 @@ impl ToolProxyClient {
 
     async fn discover_tools_inner(&self) -> Result<Vec<RemoteToolDef>, String> {
         if self.oidc.is_some() {
-            match self.discover_authenticated().await {
-                Ok(tools) => return Ok(tools),
-                Err(e) => {
-                    warn!(error = %e, "Authenticated discovery failed, trying unauthenticated");
-                }
-            }
+            // When OIDC is configured, use authenticated discovery only.
+            // Unauthenticated fallback would always 401 since the endpoint requires auth.
+            self.discover_authenticated().await
+        } else {
+            self.discover_unauthenticated().await
         }
-        self.discover_unauthenticated().await
     }
 
     async fn discover_authenticated(&self) -> Result<Vec<RemoteToolDef>, String> {
@@ -604,7 +602,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_discover_tools_authenticated_with_fallback() {
+    async fn test_discover_tools_authenticated_failure_no_fallback() {
         let mock_server = MockServer::start().await;
 
         // Token endpoint
@@ -618,20 +616,11 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Authenticated endpoint returns 401 → triggers fallback
+        // Authenticated endpoint returns 401 — no unauthenticated fallback
         Mock::given(method("GET"))
             .and(path("/v1/mcp/tools"))
             .and(header("Authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(401))
-            .mount(&mock_server)
-            .await;
-
-        // Unauthenticated fallback works
-        Mock::given(method("GET"))
-            .and(path("/v1/mcp/tools"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "tools": [{"name": "fallback_tool", "description": "ok", "inputSchema": {}}]
-            })))
             .mount(&mock_server)
             .await;
 
@@ -642,9 +631,9 @@ mod tests {
         };
 
         let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
-        let tools = client.discover_tools().await.unwrap();
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].name, "fallback_tool");
+        let result = client.discover_tools().await;
+        assert!(result.is_err(), "Should fail without unauthenticated fallback");
+        assert!(result.unwrap_err().contains("401"));
     }
 
     #[tokio::test]

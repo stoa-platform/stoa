@@ -18,7 +18,6 @@ import {
   useMyAPISubscriptions,
   useApplicationSubscriptions,
   useCancelSubscription,
-  useRotateAPISubscriptionKey,
 } from './useSubscriptions';
 
 vi.mock('../services/subscriptions', () => ({
@@ -43,7 +42,6 @@ vi.mock('../services/apiSubscriptions', () => ({
     getMySubscriptionsFormatted: vi.fn(),
     listMySubscriptions: vi.fn(),
     cancelSubscription: vi.fn(),
-    rotateKey: vi.fn(),
   },
 }));
 
@@ -315,9 +313,16 @@ describe('API Subscription Hooks', () => {
   describe('useSubscribe', () => {
     it('should subscribe to an API', async () => {
       vi.mocked(apiSubscriptionsService.createSubscription).mockResolvedValueOnce({
-        subscription_id: 'sub-api-1',
-        api_key: 'sk_api_123',
-        api_key_prefix: 'sk_api_',
+        id: 'sub-api-1',
+        application_id: 'app-1',
+        application_name: 'My App',
+        api_id: 'api-1',
+        api_name: 'Payment API',
+        api_version: '1.0',
+        tenant_id: 'oasis',
+        oauth_client_id: 'kc-client-1',
+        status: 'pending',
+        created_at: '2026-01-01T00:00:00Z',
         expires_at: null,
       } as any);
 
@@ -335,8 +340,8 @@ describe('API Subscription Hooks', () => {
       });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data?.apiKey).toBe('sk_api_123');
       expect(result.current.data?.subscription.id).toBe('sub-api-1');
+      expect(result.current.data?.subscription.status).toBe('pending');
     });
   });
 
@@ -406,27 +411,6 @@ describe('API Subscription Hooks', () => {
       });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    });
-  });
-
-  describe('useRotateAPISubscriptionKey', () => {
-    it('should rotate API subscription key', async () => {
-      vi.mocked(apiSubscriptionsService.rotateKey).mockResolvedValueOnce({
-        new_api_key: 'sk_rotated',
-      } as any);
-
-      const { result } = renderHook(() => useRotateAPISubscriptionKey(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        result.current.mutate({ id: 'sub-1', gracePeriodHours: 48 });
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(apiSubscriptionsService.rotateKey).toHaveBeenCalledWith('sub-1', {
-        grace_period_hours: 48,
-      });
     });
   });
 });

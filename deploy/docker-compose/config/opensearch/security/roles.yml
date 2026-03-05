@@ -1,75 +1,105 @@
 # =============================================================================
-# STOA Platform - OpenSearch Roles (Multi-Tenant)
+# STOA Platform - OpenSearch Roles (Multi-Tenant with DLS/FLS)
 # =============================================================================
-# CAB-1114 Phase 3: Per-tenant index isolation for STOA Logs
+# CAB-1114: Per-tenant index isolation
+# CAB-1684: DLS on shared indices + FLS for viewer (PII exclusion)
+# =============================================================================
+# Role templates: replace {tenant_id} for new tenants via provisioner API
+# DLS: tenant_id filter on shared stoa-gw-*/stoa-api-*/stoa-audit-* indices
+# FLS: viewer excludes request_body, response_body, auth_token (PII fields)
 # =============================================================================
 
 _meta:
   type: "roles"
   config_version: 2
 
-# ---------------------------------------------------------------------------
-# Platform admin: access to ALL tenant log indices
-# Mapped to: cpi-admin realm role (halliday, morrow)
-# ---------------------------------------------------------------------------
+# Platform admin: full access to ALL STOA indices, no DLS/FLS
 stoa_logs_admin:
   reserved: false
   cluster_permissions:
     - "cluster_composite_ops_ro"
   index_permissions:
-    - index_patterns:
-        - "stoa-logs-*"
-      allowed_actions:
-        - "read"
-        - "search"
-    - index_patterns:
-        - ".kibana*"
-        - ".opensearch_dashboards*"
-      allowed_actions:
-        - "read"
-        - "write"
-        - "create_index"
+    - index_patterns: ["stoa-*"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: [".kibana*", ".opensearch_dashboards*"]
+      allowed_actions: ["read", "write", "create_index"]
 
-# ---------------------------------------------------------------------------
-# Tenant: oasis-gunters
-# Mapped to: parzival, art3mis, aech
-# ---------------------------------------------------------------------------
+# --- Seed tenant: oasis-gunters (tenant-admin role with DLS) ---
 stoa_logs_tenant_oasis_gunters:
   reserved: false
-  cluster_permissions:
-    - "cluster_composite_ops_ro"
+  cluster_permissions: ["cluster_composite_ops_ro"]
   index_permissions:
-    - index_patterns:
-        - "stoa-logs-oasis-gunters-*"
-      allowed_actions:
-        - "read"
-        - "search"
-    - index_patterns:
-        - ".kibana*"
-        - ".opensearch_dashboards*"
-      allowed_actions:
-        - "read"
-        - "write"
-        - "create_index"
+    - index_patterns: ["stoa-*-oasis-gunters-*"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: ["stoa-gw-*", "stoa-api-*", "stoa-audit-*"]
+      dls: '{"bool":{"must":{"term":{"tenant_id":"oasis-gunters"}}}}'
+      allowed_actions: ["read", "search"]
+    - index_patterns: [".kibana*", ".opensearch_dashboards*"]
+      allowed_actions: ["read", "write", "create_index"]
 
-# ---------------------------------------------------------------------------
-# Tenant: ioi-sixers
-# Mapped to: sorrento, sixer42
-# ---------------------------------------------------------------------------
+# --- Seed tenant: oasis-gunters (devops: DLS, read-only dashboards) ---
+stoa_logs_devops_oasis_gunters:
+  reserved: false
+  cluster_permissions: ["cluster_composite_ops_ro"]
+  index_permissions:
+    - index_patterns: ["stoa-*-oasis-gunters-*"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: ["stoa-gw-*", "stoa-api-*", "stoa-audit-*"]
+      dls: '{"bool":{"must":{"term":{"tenant_id":"oasis-gunters"}}}}'
+      allowed_actions: ["read", "search"]
+    - index_patterns: [".kibana*", ".opensearch_dashboards*"]
+      allowed_actions: ["read"]
+
+# --- Seed tenant: oasis-gunters (viewer: DLS + FLS hides PII) ---
+stoa_logs_viewer_oasis_gunters:
+  reserved: false
+  cluster_permissions: ["cluster_composite_ops_ro"]
+  index_permissions:
+    - index_patterns: ["stoa-*-oasis-gunters-*"]
+      fls: ["-request_body", "-response_body", "-auth_token"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: ["stoa-gw-*", "stoa-api-*", "stoa-audit-*"]
+      dls: '{"bool":{"must":{"term":{"tenant_id":"oasis-gunters"}}}}'
+      fls: ["-request_body", "-response_body", "-auth_token"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: [".kibana*", ".opensearch_dashboards*"]
+      allowed_actions: ["read"]
+
+# --- Seed tenant: ioi-sixers (same pattern, all 3 roles) ---
 stoa_logs_tenant_ioi_sixers:
   reserved: false
-  cluster_permissions:
-    - "cluster_composite_ops_ro"
+  cluster_permissions: ["cluster_composite_ops_ro"]
   index_permissions:
-    - index_patterns:
-        - "stoa-logs-ioi-sixers-*"
-      allowed_actions:
-        - "read"
-        - "search"
-    - index_patterns:
-        - ".kibana*"
-        - ".opensearch_dashboards*"
-      allowed_actions:
-        - "read"
-        - "write"
-        - "create_index"
+    - index_patterns: ["stoa-*-ioi-sixers-*"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: ["stoa-gw-*", "stoa-api-*", "stoa-audit-*"]
+      dls: '{"bool":{"must":{"term":{"tenant_id":"ioi-sixers"}}}}'
+      allowed_actions: ["read", "search"]
+    - index_patterns: [".kibana*", ".opensearch_dashboards*"]
+      allowed_actions: ["read", "write", "create_index"]
+
+stoa_logs_devops_ioi_sixers:
+  reserved: false
+  cluster_permissions: ["cluster_composite_ops_ro"]
+  index_permissions:
+    - index_patterns: ["stoa-*-ioi-sixers-*"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: ["stoa-gw-*", "stoa-api-*", "stoa-audit-*"]
+      dls: '{"bool":{"must":{"term":{"tenant_id":"ioi-sixers"}}}}'
+      allowed_actions: ["read", "search"]
+    - index_patterns: [".kibana*", ".opensearch_dashboards*"]
+      allowed_actions: ["read"]
+
+stoa_logs_viewer_ioi_sixers:
+  reserved: false
+  cluster_permissions: ["cluster_composite_ops_ro"]
+  index_permissions:
+    - index_patterns: ["stoa-*-ioi-sixers-*"]
+      fls: ["-request_body", "-response_body", "-auth_token"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: ["stoa-gw-*", "stoa-api-*", "stoa-audit-*"]
+      dls: '{"bool":{"must":{"term":{"tenant_id":"ioi-sixers"}}}}'
+      fls: ["-request_body", "-response_body", "-auth_token"]
+      allowed_actions: ["read", "search"]
+    - index_patterns: [".kibana*", ".opensearch_dashboards*"]
+      allowed_actions: ["read"]

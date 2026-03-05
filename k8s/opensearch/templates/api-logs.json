@@ -1,0 +1,32 @@
+{
+  "index_patterns": ["stoa-api-*"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index.plugins.index_state_management.rollover_alias": "stoa-api"
+    },
+    "mappings": {
+      "_meta": {
+        "schema_version": 1,
+        "managed_by": "stoa-platform",
+        "ticket": "CAB-1684"
+      },
+      "dynamic": "strict",
+      "properties": {
+        "timestamp": { "type": "date" },
+        "tenant_id": { "type": "keyword" },
+        "endpoint": { "type": "keyword" },
+        "user_id": { "type": "keyword" },
+        "level": { "type": "keyword" },
+        "message": { "type": "text" },
+        "trace_id": { "type": "keyword" },
+        "request_body": {
+          "type": "text",
+          "meta": { "pii": "true" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "index_patterns": ["stoa-gw-*"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index.plugins.index_state_management.rollover_alias": "stoa-gw"
+    },
+    "mappings": {
+      "_meta": {
+        "schema_version": 1,
+        "managed_by": "stoa-platform",
+        "ticket": "CAB-1684"
+      },
+      "dynamic": "strict",
+      "properties": {
+        "timestamp": { "type": "date" },
+        "gateway_type": { "type": "keyword" },
+        "gateway_id": { "type": "keyword" },
+        "tenant_id": { "type": "keyword" },
+        "method": { "type": "keyword" },
+        "path": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 512 } } },
+        "status": { "type": "integer" },
+        "latency_ms": { "type": "float" },
+        "trace_id": { "type": "keyword" },
+        "request_id": { "type": "keyword" },
+        "user_agent": { "type": "text" },
+        "source_ip": { "type": "ip" },
+        "request_body": {
+          "type": "text",
+          "meta": { "pii": "true" }
+        },
+        "response_body": {
+          "type": "text",
+          "meta": { "pii": "true" }
+        },
+        "auth_token": {
+          "type": "text",
+          "meta": { "pii": "true" }
+        }
+      }
+    }
+  }
+}

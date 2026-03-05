@@ -2,6 +2,7 @@
 # STOA Platform - OpenSearch Roles Mapping
 # =============================================================================
 # CAB-1114 Phase 3: Map Keycloak users/roles to OpenSearch roles
+# CAB-1684: Added devops + viewer role mappings with DLS/FLS
 # =============================================================================
 # Mapping uses 'users' (preferred_username from JWT subject_key) for
 # tenant-specific roles, since backend_roles (realm roles like tenant-admin)
@@ -33,13 +34,15 @@ kibana_user:
     - "devops"
     - "viewer"
 
-# Platform admins see all tenant logs
+# Platform admins see all tenant logs (no DLS/FLS)
 stoa_logs_admin:
   reserved: false
   backend_roles:
     - "cpi-admin"
 
-# Oasis Gunters tenant members
+# ---------------------------------------------------------------------------
+# Tenant: oasis-gunters
+# ---------------------------------------------------------------------------
 stoa_logs_tenant_oasis_gunters:
   reserved: false
   users:
@@ -47,9 +50,27 @@ stoa_logs_tenant_oasis_gunters:
     - "art3mis"
     - "aech"
 
-# IOI Sixers tenant members
+stoa_logs_devops_oasis_gunters:
+  reserved: false
+  users: []
+
+stoa_logs_viewer_oasis_gunters:
+  reserved: false
+  users: []
+
+# ---------------------------------------------------------------------------
+# Tenant: ioi-sixers
+# ---------------------------------------------------------------------------
 stoa_logs_tenant_ioi_sixers:
   reserved: false
   users:
     - "sorrento"
     - "sixer42"
+
+stoa_logs_devops_ioi_sixers:
+  reserved: false
+  users: []
+
+stoa_logs_viewer_ioi_sixers:
+  reserved: false
+  users: []

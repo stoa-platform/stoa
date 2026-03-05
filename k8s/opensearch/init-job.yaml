@@ -1,0 +1,109 @@
+---
+# =============================================================================
+# OpenSearch Init Job — Idempotent bootstrap of templates + ISM policies
+# =============================================================================
+# CAB-1684: Apply index templates, ISM policies via REST API
+# Prerequisites:
+#   kubectl create configmap opensearch-templates \
+#     --from-file=k8s/opensearch/templates/ -n stoa-system --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl create configmap opensearch-ism \
+#     --from-file=k8s/opensearch/ism/ -n stoa-system --dry-run=client -o yaml | kubectl apply -f -
+# Usage: kubectl apply -f k8s/opensearch/init-job.yaml
+# Re-run safe: all PUT operations are idempotent
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opensearch-init
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: opensearch-init
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/managed-by: stoa-platform
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opensearch-init
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: init
+          image: curlimages/curl:8.5.0
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: OS_URL
+              value: "https://opensearch.stoa-system.svc:9200"
+            - name: OS_USER
+              value: "admin"
+            - name: OS_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-credentials
+                  key: admin-password
+                  optional: true
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              CURL="curl -sk -u ${OS_USER}:${OS_PASS:-admin}"
+              echo "=== OpenSearch Init Job (CAB-1684) ==="
+
+              # Wait for cluster readiness
+              for i in $(seq 1 30); do
+                $CURL "$OS_URL/_cluster/health" | grep -q '"status"' && break
+                echo "Waiting for cluster... ($i/30)"; sleep 5
+              done
+
+              # Apply index templates
+              for f in /config/templates/*.json; do
+                name="stoa-$(basename "$f" .json | sed 's/-logs//')"
+                echo "--- Template: $name"
+                $CURL -X PUT "$OS_URL/_index_template/$name" \
+                  -H "Content-Type: application/json" -d @"$f"
+                echo ""
+              done
+
+              # Apply ISM policies
+              for f in /config/ism/*.json; do
+                name="stoa-tier-$(basename "$f" .json | sed 's/-tier//')"
+                echo "--- ISM: $name"
+                $CURL -X PUT "$OS_URL/_plugins/_ism/policies/$name" \
+                  -H "Content-Type: application/json" -d @"$f"
+                echo ""
+              done
+
+              echo "=== Verify ==="
+              $CURL "$OS_URL/_index_template/stoa-*?pretty" | head -5
+              $CURL "$OS_URL/_plugins/_ism/policies?pretty" | head -5
+              echo "=== Init complete ==="
+          volumeMounts:
+            - name: templates
+              mountPath: /config/templates
+              readOnly: true
+            - name: ism
+              mountPath: /config/ism
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: templates
+          configMap:
+            name: opensearch-templates
+        - name: ism
+          configMap:
+            name: opensearch-ism
+        - name: tmp
+          emptyDir: {}

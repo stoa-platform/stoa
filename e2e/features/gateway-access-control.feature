@@ -1,33 +1,33 @@
 @gateway @runtime @security
 Feature: Gateway - Runtime access control
 
-  @rpo @authorized @smoke
+  @rpo @authorized @smoke @regression
   Scenario: Health endpoint is accessible
     When I call "GET /health/ready"
     Then I receive a 200 response
 
-  @rpo @unauthorized @negative
+  @rpo @unauthorized @negative @regression
   Scenario: Protected endpoint requires authentication
     When I call "GET /v1/portal/apis" without API key
     Then I receive an auth error
 
-  @rpo @invalid-key @negative
+  @rpo @invalid-key @negative @regression
   Scenario: Invalid bearer token is rejected
     Given I have an invalid API key
     When I call "GET /v1/portal/apis"
     Then I receive an auth error
 
-  @rpo @isolation @critical
+  @rpo @isolation @critical @regression
   Scenario: Admin endpoints require authentication
     When I call "GET /v1/admin/prospects" without API key
     Then I receive an auth error
 
-  @rate-limiting
+  @rate-limiting @regression
   Scenario: Multiple rapid calls do not crash the gateway
     When I make many health check calls
     Then the gateway remains responsive
 
-  @token-expiry
+  @token-expiry @regression
   Scenario: Expired token is rejected on protected endpoint
     Given I have an expired access token
     When I call "GET /v1/me"

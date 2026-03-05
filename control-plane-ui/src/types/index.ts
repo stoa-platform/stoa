@@ -287,6 +287,9 @@ export interface TraceSummary {
   steps_count: number;
   steps_completed: number;
   steps_failed: number;
+  cost_usd?: number;
+  total_tokens?: number;
+  model?: string;
 }
 
 export interface PipelineTrace {

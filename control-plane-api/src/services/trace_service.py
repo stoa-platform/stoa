@@ -173,6 +173,14 @@ class TraceService:
             "success_rate": round(success_rate, 1),
         }
 
+    @staticmethod
+    def _extract_session_metadata(trace: PipelineTraceDB) -> dict | None:
+        """Extract cost/tokens/model from the 'session-summary' step details."""
+        for step in trace.steps:
+            if step.get("name") == "session-summary" and step.get("details"):
+                return step["details"]
+        return None
+
     async def get_ai_session_stats(self, days: int = 7, worker: str | None = None) -> dict:
         """Get aggregated statistics for AI session traces."""
         since = datetime.now(UTC) - timedelta(days=days)
@@ -197,10 +205,17 @@ class TraceService:
                     "avg_duration_ms": 0,
                     "success_count": 0,
                     "success_rate": 0,
+                    "total_cost_usd": 0,
+                    "total_tokens": 0,
+                    "avg_cost_per_session": 0,
                 },
                 "workers": [],
                 "daily": [],
             }
+
+        # Fetch all matching traces for cost/token extraction
+        all_traces_result = await self.session.execute(select(PipelineTraceDB).where(*base_filter))
+        all_traces = list(all_traces_result.scalars().all())
 
         # Totals
         agg_result = await self.session.execute(
@@ -220,6 +235,42 @@ class TraceService:
         )
         success_count = success_result.scalar() or 0
         success_rate = round(success_count / total_count * 100, 1) if total_count > 0 else 0
+
+        # Aggregate cost/token data from session-summary steps
+        total_cost = 0.0
+        total_tokens = 0
+        # Per-worker accumulators: {worker_name: {cost, tokens, models}}
+        worker_cost_map: dict[str, dict] = {}
+        # Daily cost accumulators: {date_str: {cost, tokens}}
+        daily_cost_map: dict[str, dict] = {}
+
+        for trace in all_traces:
+            meta = self._extract_session_metadata(trace)
+            cost = meta.get("cost_usd", 0) if meta else 0
+            tokens = meta.get("total_tokens", 0) if meta else 0
+            model = meta.get("model") if meta else None
+
+            total_cost += cost or 0
+            total_tokens += tokens or 0
+
+            # Per-worker accumulation
+            w_name = trace.trigger_source
+            if w_name not in worker_cost_map:
+                worker_cost_map[w_name] = {"cost": 0.0, "tokens": 0, "models": {}}
+            worker_cost_map[w_name]["cost"] += cost or 0
+            worker_cost_map[w_name]["tokens"] += tokens or 0
+            if model:
+                worker_cost_map[w_name]["models"][model] = worker_cost_map[w_name]["models"].get(model, 0) + 1
+
+            # Daily accumulation
+            if trace.created_at:
+                day_str = str(trace.created_at.date())
+                if day_str not in daily_cost_map:
+                    daily_cost_map[day_str] = {"cost": 0.0, "tokens": 0}
+                daily_cost_map[day_str]["cost"] += cost or 0
+                daily_cost_map[day_str]["tokens"] += tokens or 0
+
+        avg_cost = round(total_cost / total_count, 2) if total_count > 0 else 0
 
         # Per-worker stats
         worker_result = await self.session.execute(
@@ -245,6 +296,12 @@ class TraceService:
                 )
             )
             w_success = w_success_result.scalar() or 0
+
+            # Cost/token data from accumulator
+            w_cost_data = worker_cost_map.get(w_name, {"cost": 0, "tokens": 0, "models": {}})
+            w_models = w_cost_data["models"]
+            primary_model = max(w_models, key=w_models.get) if w_models else None
+
             workers.append(
                 {
                     "worker": w_name,
@@ -254,6 +311,10 @@ class TraceService:
                     "success_count": w_success,
                     "success_rate": round(w_success / w_count * 100, 1) if w_count > 0 else 0,
                     "last_activity": w_last.isoformat() if w_last else None,
+                    "total_cost_usd": round(w_cost_data["cost"], 2),
+                    "total_tokens": w_cost_data["tokens"],
+                    "avg_cost_usd": round(w_cost_data["cost"] / w_count, 2) if w_count > 0 else 0,
+                    "primary_model": primary_model,
                 }
             )
 
@@ -262,7 +323,18 @@ class TraceService:
         daily_result = await self.session.execute(
             select(date_col, func.count(PipelineTraceDB.id)).where(*base_filter).group_by(date_col).order_by(date_col)
         )
-        daily = [{"date": str(d_row[0]), "sessions": d_row[1]} for d_row in daily_result.all()]
+        daily = []
+        for d_row in daily_result.all():
+            day_str = str(d_row[0])
+            day_cost = daily_cost_map.get(day_str, {"cost": 0, "tokens": 0})
+            daily.append(
+                {
+                    "date": day_str,
+                    "sessions": d_row[1],
+                    "cost_usd": round(day_cost["cost"], 2),
+                    "tokens": day_cost["tokens"],
+                }
+            )
 
         return {
             "days": days,
@@ -272,6 +344,9 @@ class TraceService:
                 "avg_duration_ms": int(avg_duration),
                 "success_count": success_count,
                 "success_rate": success_rate,
+                "total_cost_usd": round(total_cost, 2),
+                "total_tokens": total_tokens,
+                "avg_cost_per_session": avg_cost,
             },
             "workers": workers,
             "daily": daily,

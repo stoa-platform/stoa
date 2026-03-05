@@ -1,0 +1,146 @@
+# =============================================================================
+# GitHub Actions: Regression Guard — CAB-1675 Phase 5
+# =============================================================================
+# Verifies that all PRs with `fix()` prefix or "fix"/"bug" in body
+# have corresponding regression tests (test_regression_cab_XXXX pattern).
+# Currently in warning mode (non-blocking).
+# =============================================================================
+
+name: Regression Guard
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regression-guard:
+    name: Check Regression Tests
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Get PR metadata
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          TITLE="${{ github.event.pull_request.title }}"
+          BODY="${{ github.event.pull_request.body }}"
+
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "body=$BODY" >> $GITHUB_OUTPUT
+
+          # Check if title has fix() prefix
+          if [[ "$TITLE" =~ ^fix\( ]]; then
+            echo "is_fix_commit=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_fix_commit=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if body contains "fix" or "bug" keywords
+          if [[ "$BODY" =~ (fix|bug|regression) ]]; then
+            echo "is_fix_related=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_fix_related=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get changed files
+        id: changed
+        run: |
+          # Get list of changed files
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..HEAD)
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+
+          # Check if any test_regression_* files were added/modified
+          REGRESSION_TESTS=$(echo "$FILES" | grep -E 'test_regression_|@regression' || echo "")
+          echo "regression_tests=$REGRESSION_TESTS" >> $GITHUB_OUTPUT
+
+      - name: Extract ticket ID from PR
+        id: ticket
+        run: |
+          TITLE="${{ steps.pr.outputs.title }}"
+          BODY="${{ steps.pr.outputs.body }}"
+
+          # Try to extract CAB-XXXX from title or body
+          TICKET=$(echo "$TITLE $BODY" | grep -oE 'CAB-[0-9]+' | head -1)
+          echo "id=$TICKET" >> $GITHUB_OUTPUT
+
+      - name: Check regression tests
+        id: check
+        run: |
+          IS_FIX_COMMIT="${{ steps.pr.outputs.is_fix_commit }}"
+          IS_FIX_RELATED="${{ steps.pr.outputs.is_fix_related }}"
+          REGRESSION_TESTS="${{ steps.changed.outputs.regression_tests }}"
+          TICKET="${{ steps.ticket.outputs.id }}"
+
+          # Determine if this is a fix PR
+          IS_FIX_PR="false"
+          if [[ "$IS_FIX_COMMIT" == "true" ]] || [[ "$IS_FIX_RELATED" == "true" ]]; then
+            IS_FIX_PR="true"
+          fi
+
+          echo "is_fix_pr=$IS_FIX_PR" >> $GITHUB_OUTPUT
+
+          if [[ "$IS_FIX_PR" == "true" ]]; then
+            if [[ -n "$REGRESSION_TESTS" ]]; then
+              echo "status=pass" >> $GITHUB_OUTPUT
+              echo "message=✅ Regression tests found for fix PR"
+            else
+              echo "status=warn" >> $GITHUB_OUTPUT
+              echo "message=⚠️ Fix PR detected but no regression tests found (test_regression_$TICKET)"
+            fi
+          else
+            echo "status=skip" >> $GITHUB_OUTPUT
+            echo "message=⊘ Not a fix-related PR, skipping regression check"
+          fi
+
+      - name: Post annotation
+        if: steps.check.outputs.status != 'skip'
+        run: |
+          STATUS="${{ steps.check.outputs.status }}"
+          MESSAGE="${{ steps.check.outputs.message }}"
+
+          echo "## Regression Guard" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "$MESSAGE" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$STATUS" == "warn" ]]; then
+            echo "### Recommendation" >> $GITHUB_STEP_SUMMARY
+            echo "For fix PRs, consider adding regression tests to prevent future regressions." >> $GITHUB_STEP_SUMMARY
+            echo "Naming convention: \`test_regression_cab_XXXX\` or tag scenarios with \`@regression\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment on PR
+        if: steps.check.outputs.status == 'warn'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const status = '${{ steps.check.outputs.status }}';
+            const message = '${{ steps.check.outputs.message }}';
+            const ticket = '${{ steps.ticket.outputs.id }}';
+
+            if (status === 'warn') {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `${message}\n\n**Suggestion**: Add regression tests with naming pattern \`test_regression_${ticket}\` or tag E2E scenarios with \`@regression\` to prevent future regressions.\n\n_This is a non-blocking check. See [\`test-evolution.md\`](.claude/rules/test-evolution.md) for regression testing conventions._`
+              });
+            }

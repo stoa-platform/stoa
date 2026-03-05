@@ -36,6 +36,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install shared dependencies
+        run: cd shared && npm ci --ignore-scripts --legacy-peer-deps
+
       - name: Install Console dependencies
         working-directory: control-plane-ui
         run: npm ci

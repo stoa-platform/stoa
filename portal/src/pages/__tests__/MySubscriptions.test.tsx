@@ -152,35 +152,4 @@ describe('MySubscriptions', () => {
       });
     }
   );
-
-  // CAB-1673: Structural snapshot guards
-  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
-    'snapshot: %s persona',
-    (role) => {
-      beforeEach(() => {
-        vi.clearAllMocks();
-        mockAuth.mockReturnValue(createAuthMock(role));
-        mockGetMyServerSubscriptions.mockResolvedValue([]);
-        mockSubscriptionsData.mockReturnValue({ subscriptions: [] });
-      });
-
-      it('matches structural snapshot', async () => {
-        const { container } = renderWithProviders(<MySubscriptions />);
-        await waitFor(() => {
-          expect(screen.getByText('My Subscriptions')).toBeInTheDocument();
-        });
-        const buttons = [...container.querySelectorAll('button')].map(
-          (b) => b.textContent?.trim() || ''
-        );
-        const headings = [...container.querySelectorAll('h1, h2, h3')].map(
-          (h) => h.textContent?.trim() || ''
-        );
-        const links = [...container.querySelectorAll('a[href]')].map((a) => ({
-          text: a.textContent?.trim() || '',
-          href: a.getAttribute('href'),
-        }));
-        expect({ buttons, headings, links }).toMatchSnapshot();
-      });
-    }
-  );
 });

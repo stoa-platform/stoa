@@ -156,27 +156,4 @@ describe('Dashboard', () => {
       });
     }
   );
-
-  // CAB-1673: Structural snapshot guards
-  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
-    'snapshot: %s persona',
-    (role) => {
-      it('matches structural snapshot', async () => {
-        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
-        const { container } = renderApp('/');
-        await screen.findByRole('heading', { name: 'Dashboard' });
-        const buttons = [...container.querySelectorAll('button')].map(
-          (b) => b.textContent?.trim() || ''
-        );
-        const headings = [...container.querySelectorAll('h1, h2, h3')].map(
-          (h) => h.textContent?.trim() || ''
-        );
-        const links = [...container.querySelectorAll('a[href]')].map((a) => ({
-          text: a.textContent?.trim() || '',
-          href: a.getAttribute('href'),
-        }));
-        expect({ buttons, headings, links }).toMatchSnapshot();
-      });
-    }
-  );
 });

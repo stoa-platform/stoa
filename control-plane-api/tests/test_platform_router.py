@@ -16,6 +16,7 @@ def _mock_settings():
     """Return mock settings with expected attributes."""
     s = MagicMock()
     s.ARGOCD_URL = "https://argocd.gostoa.dev"
+    s.ARGOCD_EXTERNAL_URL = "https://argocd.gostoa.dev"
     s.GRAFANA_URL = "https://grafana.gostoa.dev"
     s.PROMETHEUS_URL = "https://prometheus.gostoa.dev"
     s.LOGS_URL = "https://logs.gostoa.dev"

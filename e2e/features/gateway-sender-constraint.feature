@@ -16,7 +16,7 @@ Feature: Gateway - Sender-Constraint Middleware (CAB-1607)
   # Bypass paths — these should NOT trigger sender-constraint checks
   # -----------------------------------------------------------------------
 
-  @smoke
+  @smoke @regression
   Scenario: Health endpoint bypasses sender-constraint
     When I call "GET /health" without any credentials
     Then the proxy returns status other than 401
@@ -30,10 +30,12 @@ Feature: Gateway - Sender-Constraint Middleware (CAB-1607)
     When I call "GET /metrics" without any credentials
     Then the proxy returns status other than 401
 
+  @regression
   Scenario: OAuth endpoints bypass sender-constraint
     When I call "GET /.well-known/oauth-protected-resource" without any credentials
     Then the proxy returns status other than 401
 
+  @regression
   Scenario: MCP capabilities bypass sender-constraint
     When I call "GET /mcp/capabilities" without any credentials
     Then the proxy returns status other than 401

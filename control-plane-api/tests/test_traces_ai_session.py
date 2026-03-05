@@ -72,6 +72,7 @@ class TestIngestEndpoint:
         mock_svc.add_step = AsyncMock(return_value=trace)
         mock_svc.complete = AsyncMock(return_value=trace)
         mock_svc.get = AsyncMock(return_value=trace)
+        mock_svc.session.commit = AsyncMock()
 
         with (
             patch(SVC_PATH, return_value=mock_svc),
@@ -99,6 +100,7 @@ class TestIngestEndpoint:
         mock_svc.add_step = AsyncMock(return_value=trace)
         mock_svc.complete = AsyncMock(return_value=trace)
         mock_svc.get = AsyncMock(return_value=trace)
+        mock_svc.session.commit = AsyncMock()
 
         body = {
             **VALID_INGEST_BODY,
@@ -199,6 +201,7 @@ class TestIngestEndpoint:
         mock_svc.add_step = AsyncMock(return_value=trace)
         mock_svc.complete = AsyncMock(return_value=trace)
         mock_svc.get = AsyncMock(return_value=trace)
+        mock_svc.session.commit = AsyncMock()
 
         body = {**VALID_INGEST_BODY, "metadata": None}
 
@@ -225,6 +228,7 @@ class TestIngestEndpoint:
         mock_svc.add_step = AsyncMock(return_value=trace)
         mock_svc.complete = AsyncMock(return_value=trace)
         mock_svc.get = AsyncMock(return_value=trace)
+        mock_svc.session.commit = AsyncMock()
 
         body = {**VALID_INGEST_BODY, "steps": []}
 

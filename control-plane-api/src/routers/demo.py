@@ -21,7 +21,7 @@ from ..database import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v1/demo", tags=["Demo"])
+router = APIRouter(prefix="/v1/demo", tags=["Demo"], include_in_schema=False)
 
 
 class DemoStatusResponse(BaseModel):

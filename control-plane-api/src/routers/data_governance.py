@@ -45,7 +45,7 @@ async def get_governance_matrix(
 
 
 @router.get("/drift", response_model=DriftReportResponse)
-async def get_drift_report(
+async def get_governance_drift_report(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(["cpi-admin"])),
 ) -> DriftReportResponse:

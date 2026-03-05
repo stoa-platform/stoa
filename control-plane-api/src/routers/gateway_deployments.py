@@ -1,8 +1,10 @@
 """API routes for gateway deployment management (cpi-admin)."""
+
 import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +21,16 @@ from src.schemas.gateway import (
 from src.services.gateway_deployment_service import GatewayDeploymentService
 
 logger = logging.getLogger(__name__)
+
+
+class CatalogEntry(BaseModel):
+    """API catalog entry for deploy dialog."""
+
+    id: str
+    api_name: str
+    tenant_id: str
+    version: str | None = None
+
 
 router = APIRouter(
     prefix="/v1/admin/deployments",
@@ -80,7 +92,7 @@ async def get_deployment_status(
     )
 
 
-@router.get("/catalog-entries")
+@router.get("/catalog-entries", response_model=list[CatalogEntry])
 async def list_catalog_entries(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin"])),
@@ -95,10 +107,7 @@ async def list_catalog_entries(
         .limit(200)
     )
     rows = result.all()
-    return [
-        {"id": str(r.id), "api_name": r.api_name, "tenant_id": r.tenant_id, "version": r.version}
-        for r in rows
-    ]
+    return [{"id": str(r.id), "api_name": r.api_name, "tenant_id": r.tenant_id, "version": r.version} for r in rows]
 
 
 @router.get("/{deployment_id}", response_model=GatewayDeploymentResponse)

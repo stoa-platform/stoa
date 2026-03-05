@@ -31,6 +31,21 @@ class DeploymentResult(BaseModel):
     error: str | None = None
 
 
+class EventHistoryResponse(BaseModel):
+    """Event history placeholder."""
+
+    events: list[dict] = []
+    message: str = ""
+
+
+class DeploymentResultAck(BaseModel):
+    """Deployment result acknowledgement."""
+
+    status: str
+    api_name: str
+    deployment_status: str
+
+
 # Event types that can be streamed
 EVENT_TYPES = [
     "api-created",
@@ -125,7 +140,7 @@ async def stream_events(
 
 
 # REST endpoints for event history
-@router.get("/history/{tenant_id}")
+@router.get("/history/{tenant_id}", response_model=EventHistoryResponse)
 @require_tenant_access
 async def get_event_history(
     tenant_id: str, event_type: str | None = None, limit: int = 100, user: User = Depends(get_current_user)
@@ -141,7 +156,7 @@ async def get_event_history(
     }
 
 
-@router.post("/deployment-result")
+@router.post("/deployment-result", response_model=DeploymentResultAck)
 async def receive_deployment_result(result: DeploymentResult):
     """
     Receive deployment result notification from gateway adapters.

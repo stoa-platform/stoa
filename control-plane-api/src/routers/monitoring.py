@@ -5,6 +5,7 @@ import random
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 
 from ..auth import User, get_current_user
 from ..schemas.monitoring import (
@@ -220,12 +221,20 @@ def generate_stats() -> APITransactionStats:
     )
 
 
+class TransactionListResponse(BaseModel):
+    """Transaction list with demo mode indicator."""
+
+    transactions: list[dict] = []
+    total: int = 0
+    demo_mode: bool = False
+
+
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
 
 
-@router.get("/transactions")
+@router.get("/transactions", response_model=TransactionListResponse)
 async def list_transactions(
     limit: int = Query(50, ge=1, le=200),
     api_name: str | None = None,

@@ -30,7 +30,41 @@ REQUIRED_PATHS = [
     "/v1/admin/gateways",
     "/v1/mcp/servers",
     "/health",
+    # CAB-1671: expanded contract coverage for 10 critical routers
+    "/v1/consumers",
+    "/v1/contracts",
+    "/v1/portal",
+    "/v1/platform",
 ]
+
+# CAB-1671: Core response schemas that MUST exist in the OpenAPI spec.
+# Any removal is a breaking change.
+REQUIRED_SCHEMAS = [
+    "TenantResponse",
+    "SubscriptionResponse",
+    "ContractResponse",
+    "GatewayInstanceResponse",
+    "MCPServerResponse",
+    "PlatformStatusResponse",
+    # Phase 1 additions
+    "APIResponse",
+    "ConsumerResponse",
+    "DeploymentResponse",
+    "ConsumerListResponse",
+    "DeploymentListResponse",
+]
+
+# CAB-1671: Required fields per schema — catches silent field removals.
+REQUIRED_FIELDS = {
+    "TenantResponse": ["id", "name", "status"],
+    "SubscriptionResponse": ["id", "status", "api_id"],
+    "ContractResponse": ["id", "name", "status", "tenant_id"],
+    "GatewayInstanceResponse": ["id", "name", "gateway_type", "status"],
+    "PlatformStatusResponse": ["gitops", "timestamp"],
+    "APIResponse": ["id", "name", "tenant_id"],
+    "ConsumerResponse": ["id", "name", "tenant_id", "status"],
+    "DeploymentResponse": ["id", "tenant_id", "status"],
+}
 
 
 class TestOpenAPIContract:
@@ -106,7 +140,7 @@ class TestOpenAPIContract:
                 diffs.append(f"  {name}: +{sorted(added)} -{sorted(removed)}")
 
         assert not diffs, (
-            f"Schema properties changed. Update the snapshot.\n" + "\n".join(diffs[:10])
+            "Schema properties changed. Update the snapshot.\n" + "\n".join(diffs[:10])
         )
 
     def test_openapi_schema_has_required_paths(self):
@@ -124,18 +158,78 @@ class TestOpenAPIContract:
         assert live["info"]["version"] == settings.VERSION
 
     def test_openapi_schema_has_core_schemas(self):
-        """Core response schemas must exist."""
+        """Core response schemas must exist (CAB-1671: expanded list)."""
         live = self._get_live_schema()
         schemas = live.get("components", {}).get("schemas", {})
 
-        core_schemas = [
-            "TenantResponse",
-            "SubscriptionResponse",
-            "ContractResponse",
-            "GatewayInstanceResponse",
-            "MCPServerResponse",
-            "PlatformStatusResponse",
-        ]
-
-        for schema_name in core_schemas:
+        for schema_name in REQUIRED_SCHEMAS:
             assert schema_name in schemas, f"Core schema '{schema_name}' not found in OpenAPI"
+
+    def test_openapi_schema_required_fields(self):
+        """Required fields per schema must exist — catches silent field removals (CAB-1671)."""
+        live = self._get_live_schema()
+        schemas = live.get("components", {}).get("schemas", {})
+
+        for schema_name, required_fields in REQUIRED_FIELDS.items():
+            assert schema_name in schemas, f"Schema '{schema_name}' not found"
+            props = set(schemas[schema_name].get("properties", {}).keys())
+            for field in required_fields:
+                assert field in props, (
+                    f"Required field '{field}' missing from schema '{schema_name}'. "
+                    f"Available: {sorted(props)[:15]}"
+                )
+
+    def test_openapi_schema_field_types_stable(self):
+        """Field types must not change silently — catches type regressions (CAB-1671)."""
+        with open(SNAPSHOT_PATH) as f:
+            snapshot = json.load(f)
+
+        live = self._get_live_schema()
+
+        snapshot_schemas = snapshot.get("components", {}).get("schemas", {})
+        live_schemas = live.get("components", {}).get("schemas", {})
+
+        type_diffs = []
+        for name in sorted(set(snapshot_schemas) & set(live_schemas)):
+            if name in self.PYDANTIC_INTERNAL_SCHEMAS:
+                continue
+            snap_props = snapshot_schemas[name].get("properties", {})
+            live_props = live_schemas[name].get("properties", {})
+            for prop_name in sorted(set(snap_props) & set(live_props)):
+                snap_type = snap_props[prop_name].get("type")
+                live_type = live_props[prop_name].get("type")
+                if snap_type and live_type and snap_type != live_type:
+                    type_diffs.append(
+                        f"  {name}.{prop_name}: {snap_type} -> {live_type}"
+                    )
+
+        assert not type_diffs, (
+            "Schema field types changed. Update the snapshot.\n"
+            + "\n".join(type_diffs[:10])
+        )
+
+    def test_openapi_methods_stable(self):
+        """HTTP methods per path must not change silently (CAB-1671)."""
+        with open(SNAPSHOT_PATH) as f:
+            snapshot = json.load(f)
+
+        live = self._get_live_schema()
+
+        snapshot_paths = snapshot.get("paths", {})
+        live_paths = live.get("paths", {})
+
+        method_diffs = []
+        for path in sorted(set(snapshot_paths) & set(live_paths)):
+            snap_methods = set(snapshot_paths[path].keys())
+            live_methods = set(live_paths[path].keys())
+            added = live_methods - snap_methods
+            removed = snap_methods - live_methods
+            if added or removed:
+                method_diffs.append(
+                    f"  {path}: +{sorted(added)} -{sorted(removed)}"
+                )
+
+        assert not method_diffs, (
+            "HTTP methods changed on existing paths. Update the snapshot.\n"
+            + "\n".join(method_diffs[:10])
+        )

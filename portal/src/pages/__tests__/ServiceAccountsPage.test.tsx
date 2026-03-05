@@ -86,5 +86,25 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       const expected = ['cpi-admin', 'tenant-admin'].includes(role);
       expect(auth.hasScope('stoa:subscriptions:write')).toBe(expected);
     });
+
+    // CAB-1673: Structural snapshot guard
+    it('matches structural snapshot', async () => {
+      apiClient.get.mockResolvedValue({ data: [] });
+      const { container } = renderWithProviders(<ServiceAccountsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Service Accounts')).toBeInTheDocument();
+      });
+      const buttons = [...container.querySelectorAll('button')].map(
+        (b) => b.textContent?.trim() || ''
+      );
+      const headings = [...container.querySelectorAll('h1, h2, h3')].map(
+        (h) => h.textContent?.trim() || ''
+      );
+      const links = [...container.querySelectorAll('a[href]')].map((a) => ({
+        text: a.textContent?.trim() || '',
+        href: a.getAttribute('href'),
+      }));
+      expect({ buttons, headings, links }).toMatchSnapshot();
+    });
   }
 );

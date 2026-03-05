@@ -1,0 +1,69 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`OnboardingWizard — cpi-admin persona > matches structural snapshot (step 1) 1`] = `
+{
+  "buttons": [
+    "chooseUseCase.mcpAgentchooseUseCase.mcpAgentDesc",
+    "chooseUseCase.restApichooseUseCase.restApiDesc",
+    "chooseUseCase.bothchooseUseCase.bothDesc",
+  ],
+  "headings": [
+    "chooseUseCase.title",
+    "chooseUseCase.mcpAgent",
+    "chooseUseCase.restApi",
+    "chooseUseCase.both",
+  ],
+  "links": [],
+}
+`;
+
+exports[`OnboardingWizard — devops persona > matches structural snapshot (step 1) 1`] = `
+{
+  "buttons": [
+    "chooseUseCase.mcpAgentchooseUseCase.mcpAgentDesc",
+    "chooseUseCase.restApichooseUseCase.restApiDesc",
+    "chooseUseCase.bothchooseUseCase.bothDesc",
+  ],
+  "headings": [
+    "chooseUseCase.title",
+    "chooseUseCase.mcpAgent",
+    "chooseUseCase.restApi",
+    "chooseUseCase.both",
+  ],
+  "links": [],
+}
+`;
+
+exports[`OnboardingWizard — tenant-admin persona > matches structural snapshot (step 1) 1`] = `
+{
+  "buttons": [
+    "chooseUseCase.mcpAgentchooseUseCase.mcpAgentDesc",
+    "chooseUseCase.restApichooseUseCase.restApiDesc",
+    "chooseUseCase.bothchooseUseCase.bothDesc",
+  ],
+  "headings": [
+    "chooseUseCase.title",
+    "chooseUseCase.mcpAgent",
+    "chooseUseCase.restApi",
+    "chooseUseCase.both",
+  ],
+  "links": [],
+}
+`;
+
+exports[`OnboardingWizard — viewer persona > matches structural snapshot (step 1) 1`] = `
+{
+  "buttons": [
+    "chooseUseCase.mcpAgentchooseUseCase.mcpAgentDesc",
+    "chooseUseCase.restApichooseUseCase.restApiDesc",
+    "chooseUseCase.bothchooseUseCase.bothDesc",
+  ],
+  "headings": [
+    "chooseUseCase.title",
+    "chooseUseCase.mcpAgent",
+    "chooseUseCase.restApi",
+    "chooseUseCase.both",
+  ],
+  "links": [],
+}
+`;

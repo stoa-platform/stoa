@@ -1,0 +1,43 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AdminSettings > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Edit",
+  ],
+  "headings": [
+    "Platform Settings",
+  ],
+  "links": [],
+}
+`;
+
+exports[`AdminSettings > snapshot: devops persona > matches structural snapshot 1`] = `
+{
+  "buttons": [],
+  "headings": [
+    "Access Denied",
+  ],
+  "links": [],
+}
+`;
+
+exports[`AdminSettings > snapshot: tenant-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [],
+  "headings": [
+    "Access Denied",
+  ],
+  "links": [],
+}
+`;
+
+exports[`AdminSettings > snapshot: viewer persona > matches structural snapshot 1`] = `
+{
+  "buttons": [],
+  "headings": [
+    "Access Denied",
+  ],
+  "links": [],
+}
+`;

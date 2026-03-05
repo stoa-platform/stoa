@@ -1,0 +1,73 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "+ Register Gateway",
+    "Health Check",
+    "Delete",
+    "Health Check",
+    "Delete",
+  ],
+  "headings": [
+    "Gateway Registry",
+    "STOA Edge MCP Gateway",
+    "webMethods Production",
+  ],
+  "links": [],
+}
+`;
+
+exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "+ Register Gateway",
+    "Health Check",
+    "Delete",
+    "Health Check",
+    "Delete",
+  ],
+  "headings": [
+    "Gateway Registry",
+    "STOA Edge MCP Gateway",
+    "webMethods Production",
+  ],
+  "links": [],
+}
+`;
+
+exports[`GatewayList > snapshot: tenant-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "+ Register Gateway",
+    "Health Check",
+    "Delete",
+    "Health Check",
+    "Delete",
+  ],
+  "headings": [
+    "Gateway Registry",
+    "STOA Edge MCP Gateway",
+    "webMethods Production",
+  ],
+  "links": [],
+}
+`;
+
+exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "+ Register Gateway",
+    "Health Check",
+    "Delete",
+    "Health Check",
+    "Delete",
+  ],
+  "headings": [
+    "Gateway Registry",
+    "STOA Edge MCP Gateway",
+    "webMethods Production",
+  ],
+  "links": [],
+}
+`;

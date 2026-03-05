@@ -1,0 +1,49 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Tenants > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [],
+  "headings": [
+    "Tenants",
+    "Oasis Gunters",
+    "IOI Sixers",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Tenants > snapshot: devops persona > matches structural snapshot 1`] = `
+{
+  "buttons": [],
+  "headings": [
+    "Tenants",
+    "Oasis Gunters",
+    "IOI Sixers",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Tenants > snapshot: tenant-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [],
+  "headings": [
+    "Tenants",
+    "Oasis Gunters",
+    "IOI Sixers",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Tenants > snapshot: viewer persona > matches structural snapshot 1`] = `
+{
+  "buttons": [],
+  "headings": [
+    "Tenants",
+    "Oasis Gunters",
+    "IOI Sixers",
+  ],
+  "links": [],
+}
+`;

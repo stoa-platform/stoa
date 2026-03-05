@@ -1,0 +1,49 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`APIs > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Create API",
+  ],
+  "headings": [
+    "APIs",
+  ],
+  "links": [],
+}
+`;
+
+exports[`APIs > snapshot: devops persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Create API",
+  ],
+  "headings": [
+    "APIs",
+  ],
+  "links": [],
+}
+`;
+
+exports[`APIs > snapshot: tenant-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Create API",
+  ],
+  "headings": [
+    "APIs",
+  ],
+  "links": [],
+}
+`;
+
+exports[`APIs > snapshot: viewer persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Create API",
+  ],
+  "headings": [
+    "APIs",
+  ],
+  "links": [],
+}
+`;

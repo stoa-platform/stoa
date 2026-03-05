@@ -1,0 +1,57 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Deployments > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Pipeline Traces",
+    "Deployment History",
+    "GitLab Config",
+  ],
+  "headings": [
+    "Deployments",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Deployments > snapshot: devops persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Pipeline Traces",
+    "Deployment History",
+    "GitLab Config",
+  ],
+  "headings": [
+    "Deployments",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Deployments > snapshot: tenant-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Pipeline Traces",
+    "Deployment History",
+    "GitLab Config",
+  ],
+  "headings": [
+    "Deployments",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Deployments > snapshot: viewer persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Pipeline Traces",
+    "Deployment History",
+    "GitLab Config",
+  ],
+  "headings": [
+    "Deployments",
+  ],
+  "links": [],
+}
+`;

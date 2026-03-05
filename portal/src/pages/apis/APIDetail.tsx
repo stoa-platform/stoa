@@ -25,7 +25,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { useAPI, useOpenAPISpec } from '../../hooks/useAPIs';
-import { useSubscribe, SubscribeToAPIResponse } from '../../hooks/useSubscriptions';
+import { useSubscribe, type SubscribeToAPIResponse } from '../../hooks/useSubscriptions';
 import { SubscribeModal, SubscribeFormData } from '../../components/subscriptions/SubscribeModal';
 import { config } from '../../config';
 import { ChatCompletionsEnrichment } from '../../components/apis/ChatCompletionsEnrichment';
@@ -66,7 +66,6 @@ export function APIDetail() {
   const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const [subscriptionResult, setSubscriptionResult] = useState<SubscribeToAPIResponse | null>(null);
-  const [copiedApiKey, setCopiedApiKey] = useState(false);
   const [preselectedPlan, setPreselectedPlan] = useState<string | undefined>(undefined);
 
   const { data: api, isLoading, isError, error } = useAPI(id);
@@ -566,7 +565,7 @@ export function APIDetail() {
         defaultPlan={preselectedPlan}
       />
 
-      {/* Subscription Success Modal - Shows API Key (only once!) */}
+      {/* Subscription Success Modal */}
       {subscriptionResult && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div
@@ -589,45 +588,37 @@ export function APIDetail() {
                   Subscription Created!
                 </h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-                  Your API key is shown below. Save it now - it won't be shown again.
+                  {subscriptionResult.subscription.status === 'pending'
+                    ? 'Your subscription is pending approval from the API provider.'
+                    : 'Your subscription is now active. Use your application credentials to authenticate.'}
                 </p>
               </div>
 
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-amber-800 dark:text-amber-300">
-                    <strong>Important:</strong> Copy and save this API key now. For security
-                    reasons, it cannot be displayed again.
-                  </p>
+              {subscriptionResult.subscription.status === 'pending' && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
+                  <div className="flex items-start gap-2">
+                    <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-800 dark:text-amber-300">
+                      The API provider will review your request. You&apos;ll be notified once it is
+                      approved.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="mb-6">
-                <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                  Your API Key
-                </span>
-                <div className="flex items-center gap-2">
-                  <code
-                    className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm font-mono break-all text-neutral-900 dark:text-white"
-                    aria-label="API Key"
+              <div className="bg-neutral-50 dark:bg-neutral-700 rounded-lg p-4 mb-6">
+                <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                  This API uses OAuth2 authentication. Use your application&apos;s{' '}
+                  <strong>client_id</strong> and <strong>client_secret</strong> to obtain a Bearer
+                  token via the client_credentials flow.
+                </p>
+                <div className="mt-3">
+                  <Link
+                    to="/apps"
+                    className="text-sm text-primary-600 hover:text-primary-700 font-medium"
                   >
-                    {subscriptionResult.apiKey}
-                  </code>
-                  <button
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(subscriptionResult.apiKey);
-                      setCopiedApiKey(true);
-                      setTimeout(() => setCopiedApiKey(false), 2000);
-                    }}
-                    className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg"
-                  >
-                    {copiedApiKey ? (
-                      <Check className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <Copy className="h-5 w-5" />
-                    )}
-                  </button>
+                    View My Applications &rarr;
+                  </Link>
                 </div>
               </div>
 

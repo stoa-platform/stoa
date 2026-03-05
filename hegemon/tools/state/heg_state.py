@@ -17,7 +17,7 @@ Usage:
     heg-state brief  [--project stoa]
     heg-state ticket-upsert CAB-1350 --title "..." --status InProgress [--estimate 5] [--component gateway]
     heg-state ticket-ls [--cycle current] [--status InProgress] [--component gateway]
-    heg-state ticket-sync --from-remote
+    heg-state ticket-sync --from-remote | --from-linear
     heg-state council-cache CAB-1350 --score 8.5 --verdict Go --hash abc123
     heg-state council-check CAB-1350 --hash abc123
     heg-state queue add CAB-1550 CAB-1551 --priority 1
@@ -37,6 +37,7 @@ import json
 import os
 import platform
 import sqlite3
+import ssl
 import sys
 import time
 import urllib.error
@@ -573,6 +574,45 @@ def cmd_cleanup(args: argparse.Namespace) -> None:
     conn.commit()
     conn.close()
 
+    # Cleanup stale .claude/claims/*.json files
+    if getattr(args, "claims_dir", False):
+        _cleanup_claims_dir(hours)
+
+
+def _cleanup_claims_dir(max_age_hours: int = 168) -> None:
+    """Remove stale .claude/claims/*.json files.
+
+    A claim file is stale if it's older than max_age_hours AND either:
+    - completed_at is set (phase is done), OR
+    - owner is null (abandoned/released)
+    """
+    claims_dir = Path.cwd() / ".claude" / "claims"
+    if not claims_dir.exists():
+        return
+
+    cutoff = time.time() - (max_age_hours * 3600)
+    cleaned = 0
+
+    for claim_file in claims_dir.glob("*.json"):
+        if claim_file.name.endswith(".lock"):
+            continue
+        if claim_file.stat().st_mtime > cutoff:
+            continue
+
+        try:
+            data = json.loads(claim_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        # Only remove completed or abandoned claims
+        if data.get("completed_at") or not data.get("owner"):
+            claim_file.unlink()
+            print(f"Cleaned claim file: {claim_file.name}")
+            cleaned += 1
+
+    if cleaned:
+        print(f"Cleaned {cleaned} stale claim files.")
+
 
 # ── Dual-write backward compat ───────────────────────────────────
 
@@ -795,8 +835,163 @@ def cmd_ticket_ls(args: argparse.Namespace) -> None:
         print(f"{r['id']:<14} {r['status'] or '-':<14} {est:<5} {pri:<5} {component:<12} {cycle:<10} {title}")
 
 
+def _sync_from_linear(conn: sqlite3.Connection) -> int:
+    """Fetch current cycle tickets from Linear GraphQL API into SQLite.
+
+    Returns number of tickets synced. Uses only stdlib (urllib).
+    """
+    api_key = os.environ.get("LINEAR_API_KEY", "")
+    if not api_key:
+        print("LINEAR_API_KEY not set — skipping Linear sync.", file=sys.stderr)
+        return 0
+
+    # Team ID for CAB-ING (cached from Linear, overridable via env)
+    team_id = os.environ.get("LINEAR_TEAM_ID", "624a9948-a160-4e47-aba5-7f9404d23506")
+
+    # GraphQL query: current cycle issues with labels + parent
+    query = """query($teamId: String!) {
+      team(id: $teamId) {
+        activeCycle {
+          number
+          issues {
+            nodes {
+              identifier
+              title
+              state { name }
+              estimate
+              priority
+              labels { nodes { name } }
+              parent { identifier }
+              description
+            }
+          }
+        }
+      }
+    }"""
+
+    payload = json.dumps({
+        "query": query,
+        "variables": {"teamId": team_id},
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.linear.app/graphql",
+        data=payload,
+        headers={
+            "Authorization": api_key,
+            "Content-Type": "application/json",
+        },
+    )
+
+    # macOS system Python may lack certifi certs — build SSL context upfront
+    try:
+        ctx = ssl.create_default_context()
+        resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    except (urllib.error.URLError, OSError):
+        # Fallback: skip verification (common on macOS with brew python)
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        try:
+            resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            print(f"Linear API request failed: {e}", file=sys.stderr)
+            return 0
+
+    try:
+        data = json.loads(resp.read())
+    except (ValueError, OSError) as e:
+        print(f"Linear API response parse failed: {e}", file=sys.stderr)
+        return 0
+
+    # Navigate response safely
+    team = data.get("data", {}).get("team")
+    if not team:
+        errors = data.get("errors", [])
+        if errors:
+            print(f"Linear API error: {errors[0].get('message', 'unknown')}", file=sys.stderr)
+        return 0
+
+    cycle = team.get("activeCycle")
+    if not cycle:
+        print("No active cycle found on Linear.", file=sys.stderr)
+        return 0
+
+    issues = cycle.get("issues", {}).get("nodes", [])
+    if not issues:
+        return 0
+
+    # Linear state → normalized status
+    state_map = {
+        "todo": "Todo",
+        "in progress": "InProgress",
+        "done": "Done",
+        "canceled": "Done",
+        "cancelled": "Done",
+        "blocked": "Blocked",
+        "backlog": "Todo",
+        "triage": "Todo",
+    }
+
+    total = 0
+    for issue in issues:
+        identifier = issue.get("identifier", "")
+        if not identifier:
+            continue
+
+        # Extract component from instance:* labels
+        component = ""
+        labels = issue.get("labels", {}).get("nodes", [])
+        for label in labels:
+            name = label.get("name", "")
+            if name.startswith("instance:"):
+                component = name.removeprefix("instance:")
+                break
+
+        # Map Linear state to normalized status
+        raw_state = (issue.get("state", {}).get("name", "") or "").lower()
+        status = state_map.get(raw_state, "Todo")
+
+        # Summary: first 100 chars of description
+        desc = issue.get("description") or ""
+        summary = desc[:100].replace("\n", " ").strip()
+        if len(desc) > 100:
+            summary += "..."
+
+        conn.execute(
+            """INSERT OR REPLACE INTO tickets
+               (id, title, status, estimate, priority, component, summary, dod_items, parent_id, cycle, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (identifier,
+             issue.get("title", ""),
+             status,
+             issue.get("estimate"),
+             issue.get("priority"),
+             component,
+             summary,
+             "[]",
+             (issue.get("parent") or {}).get("identifier", ""),
+             "current",
+             _now()),
+        )
+        total += 1
+
+    conn.commit()
+    return total
+
+
 def cmd_ticket_sync(args: argparse.Namespace) -> None:
-    """Pull all records from PocketBase tickets collection into local SQLite."""
+    """Pull tickets from Linear or PocketBase into local SQLite."""
+    from_linear = getattr(args, "from_linear", False)
+
+    if from_linear:
+        conn = _connect()
+        total = _sync_from_linear(conn)
+        conn.close()
+        print(f"Synced {total} tickets from Linear (cycle: current)")
+        return
+
+    # Existing PocketBase sync (--from-remote)
     if not _remote_enabled():
         print("Remote not configured. Set HEGEMON_REMOTE_URL + HEGEMON_REMOTE_PASSWORD.", file=sys.stderr)
         sys.exit(1)
@@ -1298,6 +1493,8 @@ def main() -> None:
     # cleanup
     p = sub.add_parser("cleanup", help="Remove stale sessions and claims")
     p.add_argument("--stale", default="2h", help="Stale threshold (e.g., 2h, 24h)")
+    p.add_argument("--claims-dir", action="store_true", dest="claims_dir",
+                    help="Also clean stale .claude/claims/*.json files (>7 days, completed or abandoned)")
 
     # import
     p = sub.add_parser("import-claims", help="Import .claude/claims/*.json into SQLite")
@@ -1334,7 +1531,11 @@ def main() -> None:
     p.add_argument("--component")
 
     # ticket-sync
-    p = sub.add_parser("ticket-sync", help="Pull tickets from PocketBase into local SQLite")
+    p = sub.add_parser("ticket-sync", help="Pull tickets from PocketBase or Linear into local SQLite")
+    p.add_argument("--from-linear", action="store_true", dest="from_linear",
+                    help="Sync from Linear GraphQL API (requires LINEAR_API_KEY)")
+    p.add_argument("--from-remote", action="store_true",
+                    help="Sync from PocketBase (default if no flag)")
 
     # council-cache
     p = sub.add_parser("council-cache", help="Cache a council evaluation result")

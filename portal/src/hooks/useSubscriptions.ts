@@ -203,6 +203,9 @@ export interface SubscribeToAPIRequest {
 
 export interface SubscribeToAPIResponse {
   subscription: APISubscription;
+  oauthClientId: string | null;
+  provisioningStatus: string | null;
+  provisioningError: string | null;
 }
 
 /**
@@ -240,7 +243,12 @@ export function useSubscribe() {
         expiresAt: response.expires_at || undefined,
       };
 
-      return { subscription };
+      return {
+        subscription,
+        oauthClientId: response.oauth_client_id,
+        provisioningStatus: response.provisioning_status ?? null,
+        provisioningError: response.provisioning_error ?? null,
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });

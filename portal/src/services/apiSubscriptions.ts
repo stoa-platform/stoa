@@ -51,6 +51,8 @@ export interface APISubscriptionResponse {
   revoked_at: string | null;
   approved_by: string | null;
   revoked_by: string | null;
+  provisioning_status: string | null;
+  provisioning_error: string | null;
 }
 
 export interface APISubscriptionListResponse {

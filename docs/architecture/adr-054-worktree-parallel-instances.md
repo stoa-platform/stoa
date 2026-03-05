@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-03-05
 - **Decision Makers**: Christophe Aboulicam
-- **Ticket**: CAB-1676
+- **Ticket**: [CAB-1676](https://linear.app/hlfh-workspace/issue/CAB-1676)
 
 ## Context
 

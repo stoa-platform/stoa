@@ -1,4 +1,5 @@
 """Email notification service for STOA Platform"""
+
 import logging
 import os
 import smtplib
@@ -22,13 +23,7 @@ class EmailService:
         self.enabled = os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false").lower() == "true"
         self.portal_url = os.getenv("PORTAL_URL", "https://portal.gostoa.dev")
 
-    async def send_email(
-        self,
-        to_email: str,
-        subject: str,
-        html_body: str,
-        text_body: str | None = None
-    ) -> bool:
+    async def send_email(self, to_email: str, subject: str, html_body: str, text_body: str | None = None) -> bool:
         """
         Send an email notification.
 
@@ -74,7 +69,7 @@ class EmailService:
         application_name: str,
         new_api_key: str,
         old_key_expires_at: datetime,
-        grace_period_hours: int
+        grace_period_hours: int,
     ) -> bool:
         """
         Send API key rotation notification email.
@@ -189,6 +184,100 @@ If you did not request this key rotation, please contact support immediately.
 """
 
         return await self.send_email(to_email, subject, html_body, text_body)
+
+    async def send_subscription_pending_notification(
+        self,
+        to_emails: list[str],
+        subscription_id: str,
+        api_name: str,
+        application_name: str,
+        subscriber_email: str,
+        tenant_id: str,
+    ) -> bool:
+        """
+        Notify tenant admins that a new subscription request is pending approval.
+
+        Sends to all provided admin emails. Returns True if at least one email succeeded.
+        """
+        console_url = os.getenv("CONSOLE_URL", "https://console.gostoa.dev")
+        subject = f"[STOA] New Subscription Request - {api_name}"
+
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: #1a73e8; color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px; }}
+        .info {{ background: #d1ecf1; border: 1px solid #17a2b8; border-radius: 4px; padding: 15px; margin: 20px 0; }}
+        .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+        code {{ background: #e9ecef; padding: 2px 6px; border-radius: 4px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="margin: 0;">New Subscription Request</h1>
+        </div>
+        <div class="content">
+            <p>A new subscription request has been submitted and requires your approval.</p>
+
+            <h3>Details</h3>
+            <ul>
+                <li><strong>API:</strong> {api_name}</li>
+                <li><strong>Application:</strong> {application_name}</li>
+                <li><strong>Subscriber:</strong> {subscriber_email}</li>
+                <li><strong>Tenant:</strong> {tenant_id}</li>
+                <li><strong>Subscription ID:</strong> <code>{subscription_id}</code></li>
+            </ul>
+
+            <div class="info">
+                <strong>Action Required:</strong> Please review and approve or reject this subscription
+                in the STOA Console.
+            </div>
+
+            <p>
+                <a href="{console_url}/subscriptions?status=pending&tenant={tenant_id}"
+                   style="display: inline-block; background: #1a73e8; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
+                    Review Subscription
+                </a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>This is an automated message from the STOA Platform.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+        text_body = f"""
+New Subscription Request - {api_name}
+
+A new subscription request has been submitted and requires your approval.
+
+Details:
+- API: {api_name}
+- Application: {application_name}
+- Subscriber: {subscriber_email}
+- Tenant: {tenant_id}
+- Subscription ID: {subscription_id}
+
+Please review and approve or reject this subscription in the STOA Console:
+{console_url}/subscriptions?status=pending&tenant={tenant_id}
+
+---
+This is an automated message from the STOA Platform.
+"""
+
+        any_sent = False
+        for email in to_emails:
+            result = await self.send_email(email, subject, html_body, text_body)
+            if result:
+                any_sent = True
+        return any_sent
 
 
 # Singleton instance

@@ -45,6 +45,19 @@ class SubscriptionRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_oauth_client_and_api(self, oauth_client_id: str, api_id: str) -> Subscription | None:
+        """Get active subscription by OAuth2 client_id + API (for gateway validation)."""
+        result = await self.session.execute(
+            select(Subscription).where(
+                and_(
+                    Subscription.oauth_client_id == oauth_client_id,
+                    Subscription.api_id == api_id,
+                    Subscription.status == SubscriptionStatus.ACTIVE,
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def list_by_subscriber(
         self,
         subscriber_id: str,

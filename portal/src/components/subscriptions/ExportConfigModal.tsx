@@ -2,7 +2,7 @@
  * Export Config Modal (CAB-296)
  *
  * Allows users to export MCP configuration for Claude Desktop / Cursor.
- * Supports both API Key and OAuth2 (client credentials) authentication.
+ * Uses OAuth2 (client credentials) authentication.
  */
 
 import { useState } from 'react';
@@ -15,8 +15,6 @@ import {
   AlertCircle,
   FileJson,
   Terminal,
-  Key,
-  Shield,
   ExternalLink,
 } from 'lucide-react';
 import type { MCPSubscription } from '../../types';
@@ -27,16 +25,12 @@ interface ExportConfigModalProps {
   onClose: () => void;
 }
 
-type AuthMethod = 'apiKey' | 'oauth2';
-
 // STOA logo URL for Claude Desktop display
 const STOA_LOGO_URL =
   'https://raw.githubusercontent.com/stoa-platform/stoa/main/docs/assets/logo.svg';
 const MCP_GATEWAY_URL = 'https://mcp.gostoa.dev';
 
 export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfigModalProps) {
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('oauth2');
-  const [apiKey, setApiKey] = useState('');
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [copied, setCopied] = useState(false);
@@ -49,30 +43,9 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
 
   const serverName = `stoa-${toolSlug}`;
 
-  // Build MCP config based on auth method
+  // Build MCP config using OAuth2 client credentials
   const buildConfig = () => {
-    if (authMethod === 'apiKey' && apiKey.trim()) {
-      // API Key auth - uses Bearer token directly
-      return {
-        mcpServers: {
-          [serverName]: {
-            url: `${MCP_GATEWAY_URL}/mcp/sse`,
-            transport: 'sse',
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-            },
-            metadata: {
-              icon: STOA_LOGO_URL,
-              title: `STOA - ${subscription.tool_id}`,
-            },
-          },
-        },
-      };
-    }
-
-    if (authMethod === 'oauth2' && clientId.trim() && clientSecret.trim()) {
-      // OAuth2 Client Credentials - uses Basic Auth
-      // Note: Claude Desktop may need the bridge for this to work
+    if (clientId.trim() && clientSecret.trim()) {
       return {
         mcpServers: {
           [serverName]: {
@@ -124,7 +97,6 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
   };
 
   const handleClose = () => {
-    setApiKey('');
     setClientId('');
     setClientSecret('');
     onClose();
@@ -132,10 +104,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
 
   if (!isOpen) return null;
 
-  const isValid =
-    authMethod === 'apiKey'
-      ? apiKey.trim().length > 0
-      : clientId.trim().length > 0 && clientSecret.trim().length > 0;
+  const isValid = clientId.trim().length > 0 && clientSecret.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -192,126 +161,58 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                   <p className="text-sm text-neutral-600 dark:text-neutral-400">
                     <span className="font-medium">Tool:</span> {subscription.tool_id}
                   </p>
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-0.5">
-                    <span className="font-medium">Key Prefix:</span>{' '}
-                    <code className="bg-neutral-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded text-xs">
-                      {subscription.api_key_prefix}...
-                    </code>
-                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Auth Method Selection */}
-            <div role="radiogroup" aria-labelledby="auth-method-label">
-              <span
-                id="auth-method-label"
-                className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
-              >
-                Authentication Method
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setAuthMethod('oauth2')}
-                  className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
-                    authMethod === 'oauth2'
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                      : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
-                  }`}
-                >
-                  <Shield className="h-4 w-4" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium">OAuth2</p>
-                    <p className="text-xs opacity-70">Client Credentials</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setAuthMethod('apiKey')}
-                  className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
-                    authMethod === 'apiKey'
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                      : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
-                  }`}
-                >
-                  <Key className="h-4 w-4" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium">API Key</p>
-                    <p className="text-xs opacity-70">Bearer Token</p>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Auth Inputs */}
-            {authMethod === 'apiKey' ? (
+            {/* OAuth2 Credentials */}
+            <div className="space-y-3">
               <div>
                 <label
-                  htmlFor="apiKey"
+                  htmlFor="clientId"
                   className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
                 >
-                  API Key
+                  Client ID
                 </label>
                 <input
-                  id="apiKey"
+                  id="clientId"
+                  type="text"
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  placeholder="stoa-mcp-client"
+                  className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:bg-neutral-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="clientSecret"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+                >
+                  Client Secret
+                </label>
+                <input
+                  id="clientSecret"
                   type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="stoa_sk_..."
+                  value={clientSecret}
+                  onChange={(e) => setClientSecret(e.target.value)}
+                  placeholder="your-client-secret"
                   className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm dark:bg-neutral-800 dark:text-white"
                 />
-                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                  Use "Reveal Key" first if you don't have your API key.
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Create service accounts in your profile.
                 </p>
+                <Link
+                  to="/service-accounts"
+                  onClick={handleClose}
+                  className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  Manage Service Accounts
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <label
-                    htmlFor="clientId"
-                    className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
-                  >
-                    Client ID
-                  </label>
-                  <input
-                    id="clientId"
-                    type="text"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    placeholder="stoa-mcp-client"
-                    className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:bg-neutral-800 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="clientSecret"
-                    className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
-                  >
-                    Client Secret
-                  </label>
-                  <input
-                    id="clientSecret"
-                    type="password"
-                    value={clientSecret}
-                    onChange={(e) => setClientSecret(e.target.value)}
-                    placeholder="your-client-secret"
-                    className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm dark:bg-neutral-800 dark:text-white"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    Create service accounts in your profile.
-                  </p>
-                  <Link
-                    to="/service-accounts"
-                    onClick={handleClose}
-                    className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium"
-                  >
-                    Manage Service Accounts
-                    <ExternalLink className="h-3 w-3" />
-                  </Link>
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Config Preview */}
             {config && (
@@ -357,21 +258,17 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
               <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-amber-700 dark:text-amber-400">
-                  {authMethod === 'apiKey' ? (
-                    <p>Use "Reveal Key" first if you don't have your API key saved.</p>
-                  ) : (
-                    <p>
-                      Don't have credentials?{' '}
-                      <Link
-                        to="/service-accounts"
-                        onClick={handleClose}
-                        className="text-amber-800 dark:text-amber-300 underline hover:no-underline font-medium"
-                      >
-                        Create a Service Account
-                      </Link>{' '}
-                      to get your client_id and client_secret.
-                    </p>
-                  )}
+                  <p>
+                    Don't have credentials?{' '}
+                    <Link
+                      to="/service-accounts"
+                      onClick={handleClose}
+                      className="text-amber-800 dark:text-amber-300 underline hover:no-underline font-medium"
+                    >
+                      Create a Service Account
+                    </Link>{' '}
+                    to get your client_id and client_secret.
+                  </p>
                 </div>
               </div>
             )}

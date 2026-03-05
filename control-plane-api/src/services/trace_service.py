@@ -1,13 +1,21 @@
 """Service for managing pipeline traces in PostgreSQL."""
 
+import csv
+import io
 import logging
+import os
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.traces_db import PipelineTraceDB, TraceStatusDB
+
+PUSHGATEWAY_URL = os.environ.get("PUSHGATEWAY_URL", "")
+COST_ALERT_THRESHOLD_USD = float(os.environ.get("HEGEMON_COST_ALERT_THRESHOLD", "50.0"))
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +280,51 @@ class TraceService:
 
         avg_cost = round(total_cost / total_count, 2) if total_count > 0 else 0
 
+        # By-model aggregation (CAB-1692)
+        model_map: dict[str, dict] = {}
+        for trace in all_traces:
+            meta = self._extract_session_metadata(trace)
+            model = (meta.get("model") if meta else None) or "unknown"
+            if model not in model_map:
+                model_map[model] = {"sessions": 0, "cost": 0.0, "tokens": 0}
+            model_map[model]["sessions"] += 1
+            model_map[model]["cost"] += (meta.get("cost_usd", 0) if meta else 0) or 0
+            model_map[model]["tokens"] += (meta.get("total_tokens", 0) if meta else 0) or 0
+
+        by_model = [
+            {
+                "model": m,
+                "sessions": d["sessions"],
+                "cost_usd": round(d["cost"], 2),
+                "tokens": d["tokens"],
+            }
+            for m, d in sorted(model_map.items(), key=lambda x: x[1]["cost"], reverse=True)
+        ]
+
+        # Week-over-week cost delta (CAB-1693)
+        prev_since = since - timedelta(days=days)
+        prev_filter = [
+            PipelineTraceDB.trigger_type == "ai-session",
+            PipelineTraceDB.created_at >= prev_since,
+            PipelineTraceDB.created_at < since,
+        ]
+        if worker:
+            prev_filter.append(PipelineTraceDB.trigger_source == worker)
+
+        prev_traces_result = await self.session.execute(select(PipelineTraceDB).where(*prev_filter))
+        prev_traces = list(prev_traces_result.scalars().all())
+
+        prev_cost = 0.0
+        prev_tokens = 0
+        for trace in prev_traces:
+            meta = self._extract_session_metadata(trace)
+            prev_cost += (meta.get("cost_usd", 0) if meta else 0) or 0
+            prev_tokens += (meta.get("total_tokens", 0) if meta else 0) or 0
+
+        cost_delta_usd = round(total_cost - prev_cost, 2)
+        cost_delta_pct = round((total_cost - prev_cost) / prev_cost * 100, 1) if prev_cost > 0 else 0.0
+        tokens_delta = total_tokens - prev_tokens
+
         # Per-worker stats
         worker_result = await self.session.execute(
             select(
@@ -347,10 +400,152 @@ class TraceService:
                 "total_cost_usd": round(total_cost, 2),
                 "total_tokens": total_tokens,
                 "avg_cost_per_session": avg_cost,
+                "cost_delta_usd": cost_delta_usd,
+                "cost_delta_pct": cost_delta_pct,
+                "tokens_delta": tokens_delta,
+                "prev_cost_usd": round(prev_cost, 2),
             },
+            "by_model": by_model,
             "workers": workers,
             "daily": daily,
         }
+
+    async def export_ai_sessions_csv(self, days: int = 7, worker: str | None = None) -> str:
+        """Export AI session traces as CSV string."""
+        since = datetime.now(UTC) - timedelta(days=days)
+        base_filter = [
+            PipelineTraceDB.trigger_type == "ai-session",
+            PipelineTraceDB.created_at >= since,
+        ]
+        if worker:
+            base_filter.append(PipelineTraceDB.trigger_source == worker)
+
+        result = await self.session.execute(
+            select(PipelineTraceDB).where(*base_filter).order_by(desc(PipelineTraceDB.created_at))
+        )
+        traces = list(result.scalars().all())
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            ["id", "worker", "ticket", "status", "created_at", "duration_ms", "cost_usd", "tokens", "model", "branch"]
+        )
+        for trace in traces:
+            meta = self._extract_session_metadata(trace)
+            writer.writerow(
+                [
+                    trace.id,
+                    trace.trigger_source,
+                    trace.api_name or "",
+                    trace.status.value,
+                    trace.created_at.isoformat() if trace.created_at else "",
+                    trace.total_duration_ms or "",
+                    meta.get("cost_usd", "") if meta else "",
+                    meta.get("total_tokens", "") if meta else "",
+                    meta.get("model", "") if meta else "",
+                    trace.git_branch or "",
+                ]
+            )
+        return output.getvalue()
+
+    async def check_cost_alert(self) -> dict | None:
+        """Check if today's cost exceeds threshold. Returns alert info or None."""
+        today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        base_filter = [
+            PipelineTraceDB.trigger_type == "ai-session",
+            PipelineTraceDB.created_at >= today_start,
+        ]
+        result = await self.session.execute(select(PipelineTraceDB).where(*base_filter))
+        traces = list(result.scalars().all())
+
+        today_cost = 0.0
+        for trace in traces:
+            meta = self._extract_session_metadata(trace)
+            today_cost += (meta.get("cost_usd", 0) if meta else 0) or 0
+
+        if today_cost >= COST_ALERT_THRESHOLD_USD:
+            return {
+                "alert": True,
+                "today_cost_usd": round(today_cost, 2),
+                "threshold_usd": COST_ALERT_THRESHOLD_USD,
+                "sessions_today": len(traces),
+            }
+        return None
+
+    async def push_cost_metrics(self) -> bool:
+        """Push aggregated cost metrics to Pushgateway."""
+        if not PUSHGATEWAY_URL:
+            logger.debug("PUSHGATEWAY_URL not configured, skipping metrics push")
+            return False
+
+        stats = await self.get_ai_session_stats(days=1)
+        totals = stats["totals"]
+
+        metrics = (
+            "# HELP hegemon_cost_usd_total Total Hegemon AI session cost in USD\n"
+            "# TYPE hegemon_cost_usd_total gauge\n"
+            f'hegemon_cost_usd_total {totals["total_cost_usd"]}\n'
+            "# HELP hegemon_tokens_total Total tokens consumed by Hegemon sessions\n"
+            "# TYPE hegemon_tokens_total gauge\n"
+            f'hegemon_tokens_total {totals["total_tokens"]}\n'
+            "# HELP hegemon_sessions_total Total Hegemon sessions today\n"
+            "# TYPE hegemon_sessions_total gauge\n"
+            f'hegemon_sessions_total {totals["sessions"]}\n'
+            "# HELP hegemon_cost_per_session_usd Average cost per session\n"
+            "# TYPE hegemon_cost_per_session_usd gauge\n"
+            f'hegemon_cost_per_session_usd {totals["avg_cost_per_session"]}\n'
+            "# HELP hegemon_success_rate Success rate percentage\n"
+            "# TYPE hegemon_success_rate gauge\n"
+            f'hegemon_success_rate {totals["success_rate"]}\n'
+        )
+
+        # Per-model metrics
+        for model_stat in stats.get("by_model", []):
+            model_label = model_stat["model"].replace('"', '\\"')
+            metrics += (
+                f'hegemon_cost_by_model_usd{{model="{model_label}"}} {model_stat["cost_usd"]}\n'
+                f'hegemon_tokens_by_model{{model="{model_label}"}} {model_stat["tokens"]}\n'
+                f'hegemon_sessions_by_model{{model="{model_label}"}} {model_stat["sessions"]}\n'
+            )
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.put(
+                    f"{PUSHGATEWAY_URL}/metrics/job/hegemon_ai_factory",
+                    content=metrics,
+                    headers={"Content-Type": "text/plain"},
+                )
+                resp.raise_for_status()
+                logger.info("Pushed Hegemon cost metrics to Pushgateway")
+                return True
+        except Exception as e:
+            logger.warning(f"Failed to push metrics to Pushgateway: {e}")
+            return False
+
+    @staticmethod
+    async def send_cost_alert_slack(alert: dict) -> bool:
+        """Send cost alert to Slack webhook."""
+        if not SLACK_WEBHOOK_URL:
+            logger.debug("SLACK_WEBHOOK_URL not configured, skipping cost alert")
+            return False
+
+        payload = {
+            "text": (
+                f":warning: *Hegemon Cost Alert*\n"
+                f"Today's spend: *${alert['today_cost_usd']:.2f}* "
+                f"(threshold: ${alert['threshold_usd']:.2f})\n"
+                f"Sessions today: {alert['sessions_today']}"
+            ),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(SLACK_WEBHOOK_URL, json=payload)
+                resp.raise_for_status()
+                logger.info("Sent Hegemon cost alert to Slack")
+                return True
+        except Exception as e:
+            logger.warning(f"Failed to send cost alert to Slack: {e}")
+            return False
 
 
 # Dependency injection helper

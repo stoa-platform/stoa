@@ -5,6 +5,7 @@ import os
 import random
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -319,6 +320,20 @@ async def ingest_ai_session(
 
     trace = await service.get(trace.id)
 
+    # Check cost alert threshold (CAB-1691) — fire-and-forget
+    try:
+        alert = await service.check_cost_alert()
+        if alert:
+            await service.send_cost_alert_slack(alert)
+    except Exception as e:
+        logger.warning(f"Cost alert check failed (non-blocking): {e}")
+
+    # Push metrics to Pushgateway (CAB-1695) — fire-and-forget
+    try:
+        await service.push_cost_metrics()
+    except Exception as e:
+        logger.warning(f"Pushgateway push failed (non-blocking): {e}")
+
     return {
         "ingested": True,
         "trace_id": trace.id,
@@ -335,9 +350,28 @@ async def get_ai_session_stats(
     """
     Get AI session-specific aggregated statistics.
 
-    Returns per-worker stats, daily time series, and totals.
+    Returns per-worker stats, daily time series, totals, model breakdown, and WoW cost delta.
     """
     return await service.get_ai_session_stats(days, worker)
+
+
+@router.get("/export/ai-sessions")
+async def export_ai_sessions_csv(
+    days: int = Query(7, ge=1, le=90),
+    worker: str | None = Query(None, description="Filter by worker (trigger_source)"),
+    service: TraceService = Depends(get_service),
+):
+    """
+    Export AI session traces as CSV.
+
+    Returns a downloadable CSV with session details including cost, tokens, and model.
+    """
+    csv_content = await service.export_ai_sessions_csv(days, worker)
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=hegemon-sessions-{days}d.csv"},
+    )
 
 
 # ============ Demo Endpoints ============

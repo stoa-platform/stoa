@@ -94,10 +94,12 @@ class Settings(BaseSettings):
     MCP_GATEWAY_URL: str = "http://stoa-gateway.stoa-system.svc.cluster.local:80"
 
     # ArgoCD (GitOps Observability - CAB-654)
-    # Uses OIDC authentication - forwards user's Keycloak token to ArgoCD
+    # Uses static API token (stoa-api service account) for platform status
     ARGOCD_URL: str = f"https://argocd.{_BASE_DOMAIN}"
+    ARGOCD_EXTERNAL_URL: str = f"https://argocd.{_BASE_DOMAIN}"
+    ARGOCD_TOKEN: str = ""
     ARGOCD_VERIFY_SSL: bool = True
-    ARGOCD_PLATFORM_APPS: str = "control-plane-api,control-plane-ui,stoa-portal,mcp-gateway,devportal"
+    ARGOCD_PLATFORM_APPS: str = "stoa-gateway"
 
     # External Observability URLs (CAB-654)
     GRAFANA_URL: str = f"https://grafana.{_BASE_DOMAIN}"

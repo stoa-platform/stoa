@@ -7,7 +7,7 @@ Feature: Consumer Onboarding — Full E2E Flow
   Background:
     Given the STOA Portal is accessible
 
-  @smoke
+  @smoke @regression
   Scenario: Consumer registers on the portal
     Given I am logged in as "art3mis" from community "high-five"
     When I navigate to the consumer registration page
@@ -16,7 +16,7 @@ Feature: Consumer Onboarding — Full E2E Flow
     Then the consumer registration is successful
     And I see the consumer credentials modal
 
-  @smoke
+  @smoke @regression
   Scenario: Consumer subscribes to an API with a plan
     Given I am logged in as "art3mis" from community "high-five"
     When I access the API catalog

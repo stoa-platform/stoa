@@ -148,6 +148,24 @@ cargo clippy --all-targets --all-features -- \
   -W clippy::panic
 ```
 
+## Regression Guard (regression-guard.yml)
+
+Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and checks for regression tests.
+
+| Detection | Source |
+|-----------|--------|
+| Title prefix `fix(` or `hotfix(` | PR title |
+| Keywords: regression, bug fix, fixes #, fixes CAB-, root cause | PR body |
+
+| Test pattern | Language |
+|--------------|----------|
+| `test_regression_*` files | Python |
+| `regression/*.test.ts(x)` files | TypeScript |
+| `fn regression_*` functions in `.rs` diff | Rust |
+| `@regression` tag in `.feature` diff | E2E (Playwright BDD) |
+
+**Mode**: Warning (non-blocking annotation). Promotes to blocking after stabilization.
+
 ## Docker Build
 
 | Setting | Value |

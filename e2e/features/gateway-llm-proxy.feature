@@ -18,13 +18,13 @@ Feature: Gateway - LLM Proxy (CAB-1601)
   # Authentication — these tests work without upstream LLM configuration
   # -----------------------------------------------------------------------
 
-  @smoke @security
+  @smoke @security @regression
   Scenario: LLM proxy rejects request without API key
     When I call the LLM proxy "POST /v1/messages" without any API key
     Then the proxy returns status 401
     And the response body contains "Missing API key"
 
-  @security
+  @security @regression
   Scenario: LLM proxy rejects request with invalid API key
     When I call the LLM proxy "POST /v1/messages" with API key "invalid-key-xyz"
     Then the proxy returns status 401
@@ -52,14 +52,14 @@ Feature: Gateway - LLM Proxy (CAB-1601)
   # Format detection — verifies the gateway distinguishes API formats
   # -----------------------------------------------------------------------
 
-  @smoke
+  @smoke @regression
   Scenario: LLM proxy detects Anthropic format from /v1/messages path
     Given I have a valid STOA LLM subscription API key
     When I send an Anthropic-format request to "/v1/messages"
     Then the response format is Anthropic or a proxy error
     And the proxy returns status other than 404
 
-  @smoke
+  @smoke @regression
   Scenario: LLM proxy detects OpenAI format from /v1/chat/completions path
     Given I have a valid STOA LLM subscription API key
     When I send an OpenAI-format request to "/v1/chat/completions"

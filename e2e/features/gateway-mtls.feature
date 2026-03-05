@@ -7,18 +7,18 @@ Feature: Gateway - mTLS Certificate Binding (RFC 8705)
   Background:
     Given I have a cert-bound token for consumer "api-consumer-001"
 
-  @smoke @mtls
+  @smoke @mtls @regression
   Scenario: Valid cert-bound token with matching certificate
     When I call "POST /mcp/v1/tools/invoke" with mTLS headers
     Then I receive a 200 response
 
-  @security @mtls
+  @security @mtls @regression
   Scenario: Stolen token with wrong certificate is rejected
     When I call "POST /mcp/v1/tools/invoke" with wrong mTLS certificate
     Then I receive a 403 error
     And the error message contains "MTLS_BINDING_MISMATCH"
 
-  @security @mtls
+  @security @mtls @regression
   Scenario: Token without certificate on protected route
     When I call "POST /mcp/v1/tools/invoke" without mTLS certificate
     Then I receive a 401 error

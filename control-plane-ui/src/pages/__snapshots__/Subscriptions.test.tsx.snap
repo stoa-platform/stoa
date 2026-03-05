@@ -1,0 +1,69 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Subscriptions > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Pending",
+    "Active",
+    "Suspended",
+    "Revoked",
+    "Rejected",
+    "All",
+  ],
+  "headings": [
+    "Subscriptions",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Subscriptions > snapshot: devops persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Pending",
+    "Active",
+    "Suspended",
+    "Revoked",
+    "Rejected",
+    "All",
+  ],
+  "headings": [
+    "Subscriptions",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Subscriptions > snapshot: tenant-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Pending",
+    "Active",
+    "Suspended",
+    "Revoked",
+    "Rejected",
+    "All",
+  ],
+  "headings": [
+    "Subscriptions",
+  ],
+  "links": [],
+}
+`;
+
+exports[`Subscriptions > snapshot: viewer persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "Pending",
+    "Active",
+    "Suspended",
+    "Revoked",
+    "Rejected",
+    "All",
+  ],
+  "headings": [
+    "Subscriptions",
+  ],
+  "links": [],
+}
+`;

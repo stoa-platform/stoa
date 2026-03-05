@@ -8,6 +8,5 @@
 
 export { SubscribeModal } from './SubscribeModal';
 export { SubscriptionCard } from './SubscriptionCard';
-export { ApiKeyModal } from './ApiKeyModal';
 export { CertificateUploader } from './CertificateUploader';
 export { ExportConfigModal } from './ExportConfigModal';

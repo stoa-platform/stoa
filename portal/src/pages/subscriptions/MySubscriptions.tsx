@@ -20,7 +20,6 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  Eye,
   Shield,
   Download,
   Server,
@@ -30,13 +29,7 @@ import {
 import { ConfirmDialog } from '@stoa/shared/components/ConfirmDialog';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { Button } from '@stoa/shared/components/Button';
-import {
-  useSubscriptions,
-  useRevokeSubscription,
-  useRotateApiKey,
-} from '../../hooks/useSubscriptions';
-import { RevealKeyModal } from '../../components/subscriptions/RevealKeyModal';
-import { RotateKeyModal } from '../../components/subscriptions/RotateKeyModal';
+import { useSubscriptions, useRevokeSubscription } from '../../hooks/useSubscriptions';
 import { ExportConfigModal } from '../../components/subscriptions/ExportConfigModal';
 import { mcpServersService } from '../../services/mcpServers';
 import { useAuth } from '../../contexts/AuthContext';
@@ -88,7 +81,7 @@ const statusConfig: Record<
 };
 
 type ModalState = {
-  type: 'reveal' | 'rotate' | 'export';
+  type: 'export';
   subscription: MCPSubscription;
 } | null;
 
@@ -140,7 +133,6 @@ export function MySubscriptions() {
   } = useSubscriptions();
 
   const revokeMutation = useRevokeSubscription();
-  const rotateKeyMutation = useRotateApiKey();
 
   const handleRevokeSubscription = (subscriptionId: string) => {
     setRevokeState((prev) => ({ ...prev, confirmId: subscriptionId }));
@@ -151,7 +143,7 @@ export function MySubscriptions() {
     setRevokeState((prev) => ({ ...prev, revokingId: prev.confirmId }));
     try {
       await revokeMutation.mutateAsync(revokeState.confirmId);
-      toast.success('Subscription revoked', 'Your API key has been invalidated.');
+      toast.success('Subscription revoked', 'Your subscription has been deactivated.');
     } catch (err) {
       toast.error(
         'Failed to revoke subscription',
@@ -392,7 +384,8 @@ export function MySubscriptions() {
                 No Server Subscriptions
               </h2>
               <p className="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
-                Subscribe to an MCP Server to get access to all its tools with a single API key.
+                Subscribe to an MCP Server to get access to all its tools with your OAuth2
+                credentials.
               </p>
               <Link
                 to="/servers"
@@ -444,13 +437,6 @@ export function MySubscriptions() {
                         {enabledTools} / {totalTools} tools enabled
                       </span>
                     </div>
-
-                    {/* API Key prefix */}
-                    {sub.api_key_prefix && (
-                      <div className="mt-2 font-mono text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 px-2 py-1 rounded inline-block">
-                        {sub.api_key_prefix}...
-                      </div>
-                    )}
 
                     <div className="text-sm text-neutral-500 dark:text-neutral-400 space-y-1 mt-3">
                       <p>Created: {new Date(sub.created_at).toLocaleDateString()}</p>
@@ -555,12 +541,6 @@ export function MySubscriptions() {
                       {subscription.tool_id}
                     </h3>
 
-                    {subscription.api_key_prefix && (
-                      <div className="mt-2 font-mono text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 px-2 py-1 rounded inline-block">
-                        {subscription.api_key_prefix}...
-                      </div>
-                    )}
-
                     <div className="text-sm text-neutral-500 dark:text-neutral-400 space-y-1 mt-2">
                       <p>Created: {new Date(subscription.created_at).toLocaleDateString()}</p>
                       {subscription.usage_count !== undefined && (
@@ -577,13 +557,6 @@ export function MySubscriptions() {
 
                     {subscription.status === 'active' && (
                       <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700 flex items-center justify-between">
-                        <button
-                          onClick={() => setActiveModal({ type: 'reveal', subscription })}
-                          className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
-                        >
-                          <Eye className="h-3 w-3" />
-                          Reveal Key
-                        </button>
                         <button
                           onClick={() => setActiveModal({ type: 'export', subscription })}
                           className="inline-flex items-center gap-1 text-sm text-green-600 hover:text-green-700 font-medium"
@@ -608,32 +581,6 @@ export function MySubscriptions() {
         </>
       )}
 
-      {/* Reveal Key Modal */}
-      {activeModal?.type === 'reveal' && (
-        <RevealKeyModal
-          subscription={activeModal.subscription}
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-        />
-      )}
-
-      {/* Rotate Key Modal */}
-      {activeModal?.type === 'rotate' && (
-        <RotateKeyModal
-          subscription={activeModal.subscription}
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          onRotate={async (gracePeriodHours) => {
-            const result = await rotateKeyMutation.mutateAsync({
-              id: activeModal.subscription.id,
-              gracePeriodHours,
-            });
-            return result;
-          }}
-          isRotating={rotateKeyMutation.isPending}
-        />
-      )}
-
       {/* Export Config Modal */}
       {activeModal?.type === 'export' && (
         <ExportConfigModal
@@ -647,7 +594,7 @@ export function MySubscriptions() {
       <ConfirmDialog
         open={!!revokeState.confirmId}
         title="Revoke Subscription"
-        message="Are you sure you want to revoke this subscription? Your API key will be invalidated immediately."
+        message="Are you sure you want to revoke this subscription? Access will be deactivated immediately."
         confirmLabel="Revoke"
         variant="danger"
         onConfirm={confirmRevoke}

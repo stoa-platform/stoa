@@ -39,6 +39,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Verify commit signatures
         run: |
@@ -49,7 +50,15 @@ jobs:
           TOTAL=0
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            COMMITS=$(git log --format="%H" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            # Verify both SHAs exist in the fetched history
+            if git cat-file -e "$BASE_SHA" 2>/dev/null && git cat-file -e "$HEAD_SHA" 2>/dev/null; then
+              COMMITS=$(git log --format="%H" "${BASE_SHA}..${HEAD_SHA}")
+            else
+              echo "::warning::Could not resolve PR commit range, falling back to last 10 commits"
+              COMMITS=$(git log --format="%H" -10)
+            fi
           else
             COMMITS=$(git log --format="%H" -10)
           fi

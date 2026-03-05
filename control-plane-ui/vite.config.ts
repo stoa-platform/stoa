@@ -8,6 +8,12 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@stoa/shared': path.resolve(__dirname, '../shared'),
+      // Force shared/ components to resolve peer deps from console (not shared/node_modules)
+      react: path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+      'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime'),
+      'react/jsx-dev-runtime': path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime'),
+      'lucide-react': path.resolve(__dirname, 'node_modules/lucide-react'),
     },
   },
   server: {

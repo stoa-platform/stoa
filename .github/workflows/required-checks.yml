@@ -1,0 +1,186 @@
+# =============================================================================
+# GitHub Actions: Required Checks — Branch Protection Gates
+# =============================================================================
+# Lightweight workflow containing the 3 branch-protection required checks.
+# Extracted from security-scan.yml to avoid trigger delays caused by the
+# heavy 15-job security workflow (SAST, container scans, dependency audits).
+#
+# NO concurrency group — each PR run completes independently, no cancellation.
+# =============================================================================
+
+name: Required Checks
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ==========================================================================
+  # 1. Verify Signed Commits (warning only)
+  # ==========================================================================
+  verify-signatures:
+    name: Verify Signed Commits
+    runs-on: ubuntu-latest
+    continue-on-error: true # Warning only
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify commit signatures
+        run: |
+          echo "## Commit Signature Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          UNSIGNED=0
+          TOTAL=0
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            if git cat-file -e "$BASE_SHA" 2>/dev/null && git cat-file -e "$HEAD_SHA" 2>/dev/null; then
+              COMMITS=$(git log --format="%H" "${BASE_SHA}..${HEAD_SHA}")
+            else
+              echo "::warning::Could not resolve PR commit range, falling back to last 10 commits"
+              COMMITS=$(git log --format="%H" -10)
+            fi
+          else
+            COMMITS=$(git log --format="%H" -10)
+          fi
+
+          for COMMIT in $COMMITS; do
+            TOTAL=$((TOTAL + 1))
+            if git verify-commit "$COMMIT" 2>/dev/null; then
+              echo "| \`${COMMIT:0:8}\` | :white_check_mark: Signed |" >> $GITHUB_STEP_SUMMARY
+            else
+              UNSIGNED=$((UNSIGNED + 1))
+              echo "| \`${COMMIT:0:8}\` | :warning: Unsigned |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**$UNSIGNED/$TOTAL commits unsigned**" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$UNSIGNED" -gt 0 ]; then
+            echo "::warning::$UNSIGNED out of $TOTAL commits are not signed"
+          fi
+
+  # ==========================================================================
+  # 2. License Compliance (Trivy SPDX)
+  # ==========================================================================
+  license-compliance:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    continue-on-error: true # Warning only for copyleft
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Cache Trivy DB
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-trivy-
+
+      - name: Scan licenses
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'spdx-json'
+          output: 'licenses.spdx.json'
+          scanners: 'license'
+
+      - name: Check for copyleft licenses
+        run: |
+          echo "## License Compliance" >> $GITHUB_STEP_SUMMARY
+          if [ -f licenses.spdx.json ]; then
+            COPYLEFT=$(cat licenses.spdx.json | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          copyleft = ['GPL-2.0', 'GPL-3.0', 'AGPL-3.0', 'LGPL-2.1', 'LGPL-3.0', 'SSPL-1.0', 'EUPL-1.2']
+          pkgs = data.get('packages', [])
+          found = []
+          for p in pkgs:
+            lic = p.get('licenseDeclared', '') or p.get('licenseConcluded', '')
+            for c in copyleft:
+              if c in lic:
+                found.append(f\"{p.get('name', '?')}: {lic}\")
+          for f in found:
+            print(f)
+          " 2>/dev/null || echo "")  # intentional: python parse may fail on unexpected spdx format
+            if [ -n "$COPYLEFT" ]; then
+              echo "::warning::Copyleft licenses detected:"
+              echo "$COPYLEFT"
+              echo "$COPYLEFT" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "No copyleft licenses detected :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+      - name: Upload license report
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: always()
+        with:
+          name: license-report
+          path: licenses.spdx.json
+          retention-days: 30
+
+  # ==========================================================================
+  # 3. SBOM Generation (Trivy CycloneDX + SPDX)
+  # ==========================================================================
+  sbom-generation:
+    name: SBOM Generation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Cache Trivy DB
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-trivy-
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'cyclonedx'
+          output: 'sbom-cyclonedx.json'
+
+      - name: Generate SPDX SBOM
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'spdx-json'
+          output: 'sbom-spdx.json'
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: sbom
+          path: |
+            sbom-cyclonedx.json
+            sbom-spdx.json
+          retention-days: 90
+
+      - name: SBOM summary
+        run: |
+          echo "## SBOM Generation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Format | File |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| CycloneDX | sbom-cyclonedx.json |" >> $GITHUB_STEP_SUMMARY
+          echo "| SPDX | sbom-spdx.json |" >> $GITHUB_STEP_SUMMARY

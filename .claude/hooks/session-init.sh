@@ -15,8 +15,13 @@ if [ ! -x "$HEG_STATE" ]; then
     HEG_STATE="python3 ${PROJECT_DIR}/hegemon/tools/state/heg_state.py"
 fi
 
-# Generate brief from HEGEMON state store (0 tokens — pure bash/python)
+# Sync tickets from Linear + generate brief (rate-limited, best-effort)
 if [ -f "$STATE_DB" ]; then
+    # Only sync if brief is older than 5 minutes (avoid hammering Linear API)
+    if [ ! -f "$BRIEF_FILE" ] || [ "$(find "$BRIEF_FILE" -mmin +5 2>/dev/null)" ]; then
+        $HEG_STATE ticket-sync --from-linear 2>/dev/null || true
+        $HEG_STATE cleanup --stale 2h 2>/dev/null || true
+    fi
     $HEG_STATE brief --project stoa > "$BRIEF_FILE" 2>/dev/null || true
 fi
 

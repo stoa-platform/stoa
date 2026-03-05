@@ -18,6 +18,7 @@ Usage:
     heg-state ticket-upsert CAB-1350 --title "..." --status InProgress [--estimate 5] [--component gateway]
     heg-state ticket-ls [--cycle current] [--status InProgress] [--component gateway]
     heg-state ticket-sync --from-remote
+    heg-state ticket-sync --from-linear
     heg-state council-cache CAB-1350 --score 8.5 --verdict Go --hash abc123
     heg-state council-check CAB-1350 --hash abc123
     heg-state queue add CAB-1550 CAB-1551 --priority 1
@@ -795,8 +796,158 @@ def cmd_ticket_ls(args: argparse.Namespace) -> None:
         print(f"{r['id']:<14} {r['status'] or '-':<14} {est:<5} {pri:<5} {component:<12} {cycle:<10} {title}")
 
 
+def _sync_from_linear() -> int:
+    """Fetch current cycle tickets from Linear GraphQL API into local SQLite.
+
+    Returns number of tickets synced. Requires LINEAR_API_KEY env var.
+    Uses stdlib urllib only (no external dependencies).
+    """
+    import ssl
+
+    api_key = os.environ.get("LINEAR_API_KEY", "")
+    if not api_key:
+        print("LINEAR_API_KEY not set, skipping Linear sync.", file=sys.stderr)
+        return 0
+
+    # Discover team ID dynamically (first team with key matching project prefix)
+    team_id = os.environ.get("LINEAR_TEAM_ID", "")
+    if not team_id:
+        teams_q = '{"query": "{ teams { nodes { id key } } }"}'
+        teams_req = urllib.request.Request(
+            "https://api.linear.app/graphql",
+            data=teams_q.encode("utf-8"),
+            headers={"Authorization": api_key, "Content-Type": "application/json"},
+        )
+        try:
+            import ssl as _ssl
+            _ctx = _ssl.create_default_context()
+            for _cp in [os.environ.get("SSL_CERT_FILE", ""), "/etc/ssl/cert.pem",
+                        "/etc/ssl/certs/ca-certificates.crt"]:
+                if _cp and os.path.exists(_cp):
+                    _ctx.load_verify_locations(_cp)
+                    break
+            teams_resp = urllib.request.urlopen(teams_req, timeout=10, context=_ctx)
+            teams_data = json.loads(teams_resp.read())
+            for t in teams_data.get("data", {}).get("teams", {}).get("nodes", []):
+                if t.get("key") == "CAB":
+                    team_id = t["id"]
+                    break
+        except Exception:
+            pass
+    if not team_id:
+        print("Could not find Linear team. Set LINEAR_TEAM_ID.", file=sys.stderr)
+        return 0
+
+    query = """
+    query($teamId: String!) {
+      team(id: $teamId) {
+        activeCycle {
+          number
+          issues {
+            nodes {
+              identifier
+              title
+              state { name }
+              estimate
+              priority
+              labels { nodes { name } }
+              parent { identifier }
+              description
+            }
+          }
+        }
+      }
+    }
+    """
+    payload = json.dumps({"query": query, "variables": {"teamId": team_id}}).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.linear.app/graphql",
+        data=payload,
+        headers={
+            "Authorization": api_key,
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        ctx = ssl.create_default_context()
+        for cert_path in [
+            os.environ.get("SSL_CERT_FILE", ""),
+            "/etc/ssl/cert.pem",
+            "/etc/ssl/certs/ca-certificates.crt",
+        ]:
+            if cert_path and os.path.exists(cert_path):
+                ctx.load_verify_locations(cert_path)
+                break
+        resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+        result = json.loads(resp.read())
+    except Exception as e:
+        print(f"Linear API error: {e}", file=sys.stderr)
+        return 0
+
+    team = result.get("data", {}).get("team")
+    if not team:
+        print("Team not found in Linear.", file=sys.stderr)
+        return 0
+
+    cycle = team.get("activeCycle")
+    if not cycle:
+        print("No active cycle found.", file=sys.stderr)
+        return 0
+
+    issues = cycle.get("issues", {}).get("nodes", [])
+    if not issues:
+        print("No issues in current cycle.", file=sys.stderr)
+        return 0
+
+    status_map = {
+        "Todo": "Todo", "In Progress": "InProgress", "Done": "Done",
+        "Canceled": "Done", "Blocked": "Blocked", "Backlog": "Todo", "Triage": "Todo",
+    }
+
+    conn = _connect()
+    synced = 0
+    for issue in issues:
+        identifier = issue.get("identifier", "")
+        title = issue.get("title", "")
+        state_name = issue.get("state", {}).get("name", "")
+        status = status_map.get(state_name, state_name)
+        estimate = issue.get("estimate")
+        priority = issue.get("priority")
+        labels = [n.get("name", "") for n in issue.get("labels", {}).get("nodes", [])]
+
+        component = ""
+        for label in labels:
+            if label.startswith("instance:"):
+                component = label.replace("instance:", "")
+                break
+
+        desc = issue.get("description") or ""
+        summary = desc[:120].replace("\n", " ").strip()
+        parent_id = issue.get("parent", {}).get("identifier", "") if issue.get("parent") else ""
+
+        conn.execute(
+            """INSERT OR REPLACE INTO tickets
+               (id, title, status, estimate, priority, component, summary, dod_items, parent_id, cycle, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (identifier, title, status, estimate, priority, component, summary,
+             "[]", parent_id, "current", _now()),
+        )
+        synced += 1
+
+    conn.commit()
+    conn.close()
+    return synced
+
+
 def cmd_ticket_sync(args: argparse.Namespace) -> None:
-    """Pull all records from PocketBase tickets collection into local SQLite."""
+    """Pull tickets into local SQLite from PocketBase or Linear."""
+    if getattr(args, "from_linear", False):
+        count = _sync_from_linear()
+        if count > 0:
+            print(f"Synced {count} tickets from Linear (cycle: current)")
+        return
+
     if not _remote_enabled():
         print("Remote not configured. Set HEGEMON_REMOTE_URL + HEGEMON_REMOTE_PASSWORD.", file=sys.stderr)
         sys.exit(1)
@@ -1334,7 +1485,8 @@ def main() -> None:
     p.add_argument("--component")
 
     # ticket-sync
-    p = sub.add_parser("ticket-sync", help="Pull tickets from PocketBase into local SQLite")
+    p = sub.add_parser("ticket-sync", help="Pull tickets into local SQLite")
+    p.add_argument("--from-linear", action="store_true", help="Sync from Linear API (current cycle)")
 
     # council-cache
     p = sub.add_parser("council-cache", help="Cache a council evaluation result")

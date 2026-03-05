@@ -15,3 +15,4 @@ pub mod mtls;
 pub mod oidc;
 pub mod rbac;
 pub mod sender_constraint;
+pub mod subscription;

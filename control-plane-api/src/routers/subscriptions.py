@@ -6,7 +6,7 @@ import math
 import uuid as uuid_mod
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,9 +14,9 @@ from ..auth import User, get_current_user
 from ..database import get_db
 from ..models.subscription import Subscription, SubscriptionStatus
 from ..repositories.plan import PlanRepository
+from ..repositories.portal_application import PortalApplicationRepository
 from ..repositories.subscription import SubscriptionRepository
 from ..schemas.subscription import (
-    APIKeyResponse,
     BulkActionFailure,
     BulkActionResult,
     BulkSubscriptionAction,
@@ -30,6 +30,8 @@ from ..schemas.subscription import (
     SubscriptionRevoke,
     SubscriptionStats,
     SubscriptionStatusEnum,
+    SubscriptionValidateOAuthRequest,
+    SubscriptionValidateOAuthResponse,
     SubscriptionWithRotationInfo,
     TTLExtendRequest,
     TTLExtendResponse,
@@ -69,7 +71,7 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
 # ============== Subscriber Endpoints (Developer Portal) ==============
 
 
-@router.post("", response_model=APIKeyResponse, status_code=201)
+@router.post("", response_model=SubscriptionResponse, status_code=201)
 async def create_subscription(
     request: SubscriptionCreate,
     raw_request: Request,
@@ -81,9 +83,10 @@ async def create_subscription(
 
     This endpoint is called by the Developer Portal when a user subscribes
     to an API. The subscription starts in PENDING status and must be
-    approved by an API admin.
+    approved by a tenant admin.
 
-    Returns the API key (shown only once!).
+    Uses OAuth2 client_credentials flow — no API key is generated.
+    The consumer's Application keycloak_client_id is stored as oauth_client_id.
     """
     repo = SubscriptionRepository(db)
 
@@ -95,10 +98,22 @@ async def create_subscription(
             detail=f"Subscription already exists for this application and API (status: {existing.status.value})",
         )
 
-    # Generate API key
-    api_key, api_key_hash, api_key_prefix = APIKeyService.generate_key()
+    # Look up PortalApplication to get keycloak_client_id
+    oauth_client_id = None
+    try:
+        app_repo = PortalApplicationRepository(db)
+        portal_app = await app_repo.get_by_id(UUID(request.application_id))
+        if portal_app and portal_app.keycloak_client_id:
+            oauth_client_id = portal_app.keycloak_client_id
+        else:
+            logger.warning(
+                f"PortalApplication {request.application_id} has no keycloak_client_id. "
+                f"Subscription will be created without oauth_client_id."
+            )
+    except (ValueError, Exception) as e:
+        logger.warning(f"Could not look up PortalApplication {request.application_id}: {e}")
 
-    # Create subscription
+    # Create subscription (no API key — OAuth2 only)
     subscription = Subscription(
         application_id=request.application_id,
         application_name=request.application_name,
@@ -110,8 +125,7 @@ async def create_subscription(
         tenant_id=request.tenant_id,
         plan_id=request.plan_id,
         plan_name=request.plan_name,
-        api_key_hash=api_key_hash,
-        api_key_prefix=api_key_prefix,
+        oauth_client_id=oauth_client_id,
         status=SubscriptionStatus.PENDING,
     )
 
@@ -119,7 +133,7 @@ async def create_subscription(
         subscription = await repo.create(subscription)
         logger.info(
             f"Created subscription {subscription.id} for app={request.application_name} "
-            f"api={request.api_name} user={user.email}"
+            f"api={request.api_name} user={user.email} oauth_client_id={oauth_client_id}"
         )
 
         # Emit webhook event (CAB-315)
@@ -169,15 +183,48 @@ async def create_subscription(
             asyncio.create_task(provision_on_approval(db, subscription, auth_token, correlation_id))
         except Exception as e:
             logger.warning(f"Auto-approve failed, subscription stays PENDING: {e}")
+    else:
+        # Subscription requires approval — notify tenant admins
+        try:
+            asyncio.create_task(_notify_tenant_admins(db, subscription))
+        except Exception as e:
+            logger.warning(f"Failed to schedule admin notification: {e}")
 
-    # Return API key (shown only once!)
-    return APIKeyResponse(
-        subscription_id=subscription.id,
-        api_key=api_key,
-        api_key_prefix=api_key_prefix,
-        expires_at=subscription.expires_at,
-        status=subscription.status.value,
-    )
+    return SubscriptionResponse.model_validate(subscription)
+
+
+async def _notify_tenant_admins(db: AsyncSession, subscription: Subscription) -> None:
+    """Send email notification to tenant admins about a pending subscription."""
+    try:
+        from ..repositories.tenant import TenantRepository
+
+        admin_emails: list[str] = []
+
+        # Try to get tenant admin contact from the tenant record
+        try:
+            tenant_repo = TenantRepository(db)
+            tenant = await tenant_repo.get_by_id(subscription.tenant_id)
+            if tenant and getattr(tenant, "admin_email", None):
+                admin_emails = [tenant.admin_email]
+        except Exception:
+            logger.debug(f"Could not look up tenant for {subscription.tenant_id}")
+
+        if admin_emails:
+            await email_service.send_subscription_pending_notification(
+                to_emails=admin_emails,
+                subscription_id=str(subscription.id),
+                api_name=subscription.api_name,
+                application_name=subscription.application_name,
+                subscriber_email=subscription.subscriber_email,
+                tenant_id=subscription.tenant_id,
+            )
+        else:
+            logger.info(
+                f"No tenant admin emails found for {subscription.tenant_id}. "
+                f"Subscription {subscription.id} pending approval (no email sent)."
+            )
+    except Exception as e:
+        logger.warning(f"Failed to notify tenant admins for subscription {subscription.id}: {e}")
 
 
 @router.get("/my", response_model=SubscriptionListResponse)
@@ -271,15 +318,19 @@ async def cancel_subscription(
 # ============== Key Rotation Endpoint (CAB-314) ==============
 
 
-@router.post("/{subscription_id}/rotate-key", response_model=KeyRotationResponse)
+@router.post("/{subscription_id}/rotate-key", response_model=KeyRotationResponse, deprecated=True)
 async def rotate_api_key(
     subscription_id: UUID,
+    response: Response,
     request: KeyRotationRequest = KeyRotationRequest(),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Rotate the API key for a subscription with grace period.
+
+    **Deprecated**: API keys are being replaced by OAuth2 client_credentials flow.
+    Use Application OAuth2 credentials instead.
 
     The old key remains valid for the specified grace period (default 24 hours).
     During the grace period, both old and new keys are accepted.
@@ -288,6 +339,9 @@ async def rotate_api_key(
     Returns the new API key (shown only once!) and grace period information.
     An email notification is sent to the subscriber with the new key.
     """
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = "2026-06-01"
+    logger.warning("Deprecated endpoint rotate-key called for subscription %s.", subscription_id)
     repo = SubscriptionRepository(db)
     subscription = await repo.get_by_id(subscription_id)
 
@@ -909,14 +963,17 @@ class _ValidateKeyBody(BaseModel):
     api_key: str
 
 
-@router.post("/validate-key")
+@router.post("/validate-key", deprecated=True)
 async def validate_api_key(
+    response: Response,
     body: _ValidateKeyBody | None = None,
     api_key: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Validate an API key (used by the Gateway).
+
+    **Deprecated**: Use POST /validate-subscription with OAuth2 client_id instead.
 
     This is an internal endpoint for the API Gateway to validate
     incoming API keys and get subscription details.
@@ -927,6 +984,10 @@ async def validate_api_key(
 
     Supports grace period: during key rotation, both old and new keys are valid.
     """
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = "2026-06-01"
+    response.headers["Link"] = '</v1/subscriptions/validate-subscription>; rel="successor-version"'
+    logger.warning("Deprecated endpoint /validate-key called. Migrate to /validate-subscription.")
     # Body takes precedence (query params are masked by PII middleware)
     key = (body.api_key if body else None) or api_key
     if not key:
@@ -970,8 +1031,8 @@ async def validate_api_key(
     if subscription.expires_at and now > subscription.expires_at:
         raise HTTPException(status_code=403, detail="Subscription expired")
 
-    # Build response with grace period info
-    response = {
+    # Build result with grace period info
+    result = {
         "valid": True,
         "subscription_id": str(subscription.id),
         "application_id": subscription.application_id,
@@ -986,8 +1047,50 @@ async def validate_api_key(
 
     # Add grace period warning if using old key
     if is_previous_key:
-        response["warning"] = "Using deprecated API key during grace period"
-        response["key_expires_at"] = subscription.previous_key_expires_at.isoformat()
-        response["using_previous_key"] = True
+        result["warning"] = "Using deprecated API key during grace period"
+        result["key_expires_at"] = subscription.previous_key_expires_at.isoformat()
+        result["using_previous_key"] = True
 
-    return response
+    return result
+
+
+# ============== OAuth2 Subscription Validation Endpoint (Gateway) ==============
+
+
+@router.post("/validate-subscription", response_model=SubscriptionValidateOAuthResponse)
+async def validate_subscription_oauth(
+    body: SubscriptionValidateOAuthRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Validate a subscription via OAuth2 client_id (used by the Gateway).
+
+    The Gateway calls this after JWT validation to check if the token's
+    ``azp`` (authorized party) claim has an active subscription for the target API.
+    """
+    repo = SubscriptionRepository(db)
+
+    subscription = await repo.get_by_oauth_client_and_api(body.oauth_client_id, body.api_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="No active subscription found for this client and API")
+
+    # Check subscription expiration
+    from datetime import datetime
+
+    now = datetime.utcnow()
+    if subscription.expires_at and now > subscription.expires_at:
+        raise HTTPException(status_code=403, detail="Subscription expired")
+
+    return SubscriptionValidateOAuthResponse(
+        valid=True,
+        subscription_id=str(subscription.id),
+        application_id=subscription.application_id,
+        application_name=subscription.application_name,
+        subscriber_id=subscription.subscriber_id,
+        api_id=subscription.api_id,
+        api_name=subscription.api_name,
+        tenant_id=subscription.tenant_id,
+        plan_id=subscription.plan_id,
+        plan_name=subscription.plan_name,
+    )

@@ -21,6 +21,7 @@ use tracing::{debug, warn};
 
 use super::claims::Claims;
 use super::jwt::{JwtError, JwtValidator, ValidatedToken};
+use super::subscription::SubscriptionValidator;
 
 // =============================================================================
 // Auth State
@@ -247,6 +248,91 @@ pub async fn optional_auth(
 }
 
 // =============================================================================
+// Subscription Middleware
+// =============================================================================
+
+/// State for subscription validation middleware.
+#[derive(Clone)]
+pub struct SubscriptionState {
+    /// Subscription validator (cache + CP API client)
+    pub validator: Arc<SubscriptionValidator>,
+}
+
+/// Subscription validation middleware.
+///
+/// Runs AFTER JWT auth middleware. Extracts `azp` claim from the authenticated
+/// user's JWT and validates that an active subscription exists for the target API.
+///
+/// The `target_api_id` is read from request extensions (set by route matching).
+/// If not present, the middleware is skipped (non-proxy routes).
+///
+/// Returns 401 if `azp` claim is missing, 403 if no active subscription.
+pub async fn subscription_middleware(
+    State(sub_state): State<SubscriptionState>,
+    mut request: Request<Body>,
+    next: Next,
+) -> Result<Response, AuthError> {
+    // Only check subscription if there's an authenticated user
+    let user = match request.extensions().get::<AuthenticatedUser>() {
+        Some(user) => user.clone(),
+        None => {
+            // No authenticated user — skip subscription check (JWT middleware handles auth)
+            return Ok(next.run(request).await);
+        }
+    };
+
+    // Only check subscription if route has a target_api_id
+    let api_id = match request.extensions().get::<TargetApiId>() {
+        Some(target) => target.0.clone(),
+        None => {
+            // No target API — not a proxied route, skip subscription check
+            return Ok(next.run(request).await);
+        }
+    };
+
+    // Extract azp (authorized party) = Keycloak client_id
+    let azp = match &user.claims.azp {
+        Some(azp) => azp.clone(),
+        None => {
+            warn!(
+                user_id = %user.user_id,
+                "Missing azp claim in JWT — subscription validation failed"
+            );
+            return Err(AuthError::unauthorized("Missing azp claim in JWT"));
+        }
+    };
+
+    // Validate subscription
+    match sub_state.validator.validate(&azp, &api_id).await {
+        Ok(info) => {
+            debug!(
+                oauth_client_id = %azp,
+                api_id = %api_id,
+                subscription_id = %info.subscription_id,
+                "Subscription validated"
+            );
+            request.extensions_mut().insert(info);
+        }
+        Err(e) => {
+            warn!(
+                oauth_client_id = %azp,
+                api_id = %api_id,
+                error = %e,
+                "Subscription validation failed"
+            );
+            return Err(AuthError::forbidden(&e.to_string()));
+        }
+    }
+
+    Ok(next.run(request).await)
+}
+
+/// Marker type injected into request extensions by route matching
+/// to identify the target API for subscription validation.
+#[derive(Debug, Clone)]
+pub struct TargetApiId(pub String);
+
+// =============================================================================
 // Extractor
 // =============================================================================
 
@@ -388,5 +474,25 @@ mod tests {
     fn test_auth_error_forbidden() {
         let error = AuthError::forbidden("Access denied");
         assert_eq!(error.error, "forbidden");
+    }
+
+    #[test]
+    fn test_target_api_id_clone() {
+        let target = TargetApiId("api-weather".to_string());
+        let cloned = target.clone();
+        assert_eq!(cloned.0, "api-weather");
+    }
+
+    #[test]
+    fn test_subscription_state_clone() {
+        let validator = Arc::new(SubscriptionValidator::new(
+            "http://localhost:8000".into(),
+            reqwest::Client::new(),
+        ));
+        let state = SubscriptionState {
+            validator: validator.clone(),
+        };
+        let cloned = state.clone();
+        assert_eq!(cloned.validator.cache_size(), 0);
     }
 }

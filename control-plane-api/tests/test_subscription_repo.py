@@ -126,6 +126,32 @@ class TestGetByApplicationAndApi:
         assert result is None
 
 
+# ── get_by_oauth_client_and_api ──
+
+
+class TestGetByOAuthClientAndApi:
+    async def test_found(self):
+        db = _mock_db()
+        sub = _mock_sub()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = sub
+        db.execute = AsyncMock(return_value=mock_result)
+
+        repo = SubscriptionRepository(db)
+        result = await repo.get_by_oauth_client_and_api("kc-client-123", "api-1")
+        assert result is sub
+
+    async def test_not_found(self):
+        db = _mock_db()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=mock_result)
+
+        repo = SubscriptionRepository(db)
+        result = await repo.get_by_oauth_client_and_api("unknown", "api-x")
+        assert result is None
+
+
 # ── list_by_subscriber ──
 
 

@@ -323,11 +323,6 @@ export function ServerDetailPage() {
                   {subscription.status === 'active' ? 'Subscribed' : 'Pending'}
                 </span>
               </div>
-              {subscription.api_key_prefix && (
-                <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                  Key: {subscription.api_key_prefix}...
-                </div>
-              )}
             </div>
           )}
         </div>

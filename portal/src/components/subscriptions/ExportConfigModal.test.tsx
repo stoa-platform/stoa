@@ -48,19 +48,12 @@ describe('ExportConfigModal', () => {
   it('should show tool info', () => {
     renderModal();
     expect(screen.getByText('Weather Tool')).toBeInTheDocument();
-    expect(screen.getByText(/stoa_sk_1234/)).toBeInTheDocument();
   });
 
-  it('should default to OAuth2 auth method', () => {
+  it('should show OAuth2 credential fields', () => {
     renderModal();
     expect(screen.getByText('Client ID')).toBeInTheDocument();
     expect(screen.getByText('Client Secret')).toBeInTheDocument();
-  });
-
-  it('should switch to API Key auth method', () => {
-    renderModal();
-    fireEvent.click(screen.getByText('API Key'));
-    expect(screen.getByPlaceholderText('stoa_sk_...')).toBeInTheDocument();
   });
 
   it('should show validation warning when fields empty', () => {
@@ -68,17 +61,7 @@ describe('ExportConfigModal', () => {
     expect(screen.getByText(/Don't have credentials/)).toBeInTheDocument();
   });
 
-  it('should generate config preview when API key entered', () => {
-    renderModal();
-    fireEvent.click(screen.getByText('API Key'));
-    fireEvent.change(screen.getByPlaceholderText('stoa_sk_...'), {
-      target: { value: 'stoa_sk_test123' },
-    });
-    expect(screen.getByText('Config ready to download!')).toBeInTheDocument();
-    expect(screen.getByText('Configuration Preview')).toBeInTheDocument();
-  });
-
-  it('should generate config for OAuth2 when both fields filled', () => {
+  it('should generate config preview when both OAuth2 fields filled', () => {
     renderModal();
     fireEvent.change(screen.getByPlaceholderText('stoa-mcp-client'), {
       target: { value: 'my-client' },
@@ -87,6 +70,7 @@ describe('ExportConfigModal', () => {
       target: { value: 'secret-123' },
     });
     expect(screen.getByText('Config ready to download!')).toBeInTheDocument();
+    expect(screen.getByText('Configuration Preview')).toBeInTheDocument();
   });
 
   it('should copy config to clipboard', async () => {
@@ -94,9 +78,11 @@ describe('ExportConfigModal', () => {
     Object.assign(navigator, { clipboard: { writeText } });
 
     renderModal();
-    fireEvent.click(screen.getByText('API Key'));
-    fireEvent.change(screen.getByPlaceholderText('stoa_sk_...'), {
-      target: { value: 'test-key' },
+    fireEvent.change(screen.getByPlaceholderText('stoa-mcp-client'), {
+      target: { value: 'my-client' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('your-client-secret'), {
+      target: { value: 'secret-123' },
     });
     fireEvent.click(screen.getByText('Copy'));
     expect(writeText).toHaveBeenCalled();

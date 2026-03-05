@@ -15,6 +15,7 @@ from src.models.subscription import SubscriptionStatus
 SUB_REPO_PATH = "src.routers.subscriptions.SubscriptionRepository"
 PLAN_REPO_PATH = "src.routers.subscriptions.PlanRepository"
 API_KEY_SVC_PATH = "src.routers.subscriptions.APIKeyService"
+PORTAL_APP_REPO_PATH = "src.routers.subscriptions.PortalApplicationRepository"
 EMAIL_SVC_PATH = "src.routers.subscriptions.email_service"
 KAFKA_SVC_PATH = "src.routers.subscriptions.kafka_service"
 PROVISION_PATH = "src.routers.subscriptions.provision_on_approval"
@@ -44,6 +45,7 @@ def _mock_subscription(**overrides):
         "plan_name": "Basic",
         "api_key_hash": "hash123",
         "api_key_prefix": "stoa_sk_",
+        "oauth_client_id": "kc-client-app-1",
         "status": SubscriptionStatus.ACTIVE,
         "status_reason": None,
         "expires_at": None,
@@ -88,6 +90,7 @@ def _mock_sub_response(sub):
     resp.tenant_id = sub.tenant_id
     resp.plan_id = sub.plan_id
     resp.plan_name = sub.plan_name
+    resp.oauth_client_id = getattr(sub, "oauth_client_id", None)
     resp.api_key_prefix = sub.api_key_prefix
     resp.status = SubscriptionStatusEnum(sub.status.value)
     resp.status_reason = sub.status_reason
@@ -125,15 +128,19 @@ class TestCreateSubscription:
         mock_plan.requires_approval = False
         mock_plan_repo.get_by_id = AsyncMock(return_value=mock_plan)
 
+        mock_portal_app_repo = MagicMock()
+        mock_portal_app = MagicMock()
+        mock_portal_app.keycloak_client_id = "kc-client-app-1"
+        mock_portal_app_repo.get_by_id = AsyncMock(return_value=mock_portal_app)
+
         with (
             patch(SUB_REPO_PATH, return_value=mock_sub_repo),
             patch(PLAN_REPO_PATH, return_value=mock_plan_repo),
-            patch(API_KEY_SVC_PATH) as MockKey,
+            patch(PORTAL_APP_REPO_PATH, return_value=mock_portal_app_repo),
             patch(EMIT_CREATED_PATH, new=AsyncMock()),
             patch(EMIT_APPROVED_PATH, new=AsyncMock()),
             patch(PROVISION_PATH, new=AsyncMock()),
         ):
-            MockKey.generate_key.return_value = ("stoa_sk_fullkey", "hash", "stoa_sk_")
             with TestClient(app_with_tenant_admin) as client:
                 resp = client.post(
                     "/v1/subscriptions",
@@ -149,19 +156,16 @@ class TestCreateSubscription:
 
         assert resp.status_code == 201
         data = resp.json()
-        assert "api_key" in data
-        assert "subscription_id" in data
+        # OAuth2 flow: no API key returned, subscription response instead
+        assert "id" in data
+        assert data["application_id"] == "app-1"
 
     def test_create_409_existing_subscription(self, app_with_tenant_admin, mock_db_session):
         existing = _mock_subscription()
         mock_sub_repo = MagicMock()
         mock_sub_repo.get_by_application_and_api = AsyncMock(return_value=existing)
 
-        with (
-            patch(SUB_REPO_PATH, return_value=mock_sub_repo),
-            patch(API_KEY_SVC_PATH) as MockKey,
-        ):
-            MockKey.generate_key.return_value = ("stoa_sk_fullkey", "hash", "stoa_sk_")
+        with patch(SUB_REPO_PATH, return_value=mock_sub_repo):
             with TestClient(app_with_tenant_admin) as client:
                 resp = client.post(
                     "/v1/subscriptions",
@@ -185,14 +189,18 @@ class TestCreateSubscription:
         mock_sub_repo.create = AsyncMock(return_value=sub)
         mock_sub_repo.update_status = AsyncMock(return_value=sub)
 
+        mock_portal_app_repo = MagicMock()
+        mock_portal_app = MagicMock()
+        mock_portal_app.keycloak_client_id = "kc-client-app-1"
+        mock_portal_app_repo.get_by_id = AsyncMock(return_value=mock_portal_app)
+
         with (
             patch(SUB_REPO_PATH, return_value=mock_sub_repo),
-            patch(API_KEY_SVC_PATH) as MockKey,
+            patch(PORTAL_APP_REPO_PATH, return_value=mock_portal_app_repo),
             patch(EMIT_CREATED_PATH, new=AsyncMock()),
             patch(EMIT_APPROVED_PATH, new=AsyncMock()),
             patch(PROVISION_PATH, new=AsyncMock()),
         ):
-            MockKey.generate_key.return_value = ("stoa_sk_fullkey", "hash", "stoa_sk_")
             with TestClient(app_with_tenant_admin) as client:
                 resp = client.post(
                     "/v1/subscriptions",
@@ -1188,3 +1196,61 @@ class TestSubscriptionsEnvironmentFilter:
         assert resp.status_code == 200
         call_kwargs = mock_sub_repo.list_by_tenant.call_args[1]
         assert call_kwargs["environment"] is None
+
+
+# ── validate-subscription (OAuth2) ──
+
+
+class TestValidateSubscriptionOAuth:
+    """POST /v1/subscriptions/validate-subscription."""
+
+    def test_validate_success(self, app_with_tenant_admin, mock_db_session):
+        """Returns valid subscription info for active subscription."""
+        sub = _mock_subscription(oauth_client_id="kc-client-123", api_id="api-weather")
+        mock_sub_repo = MagicMock()
+        mock_sub_repo.get_by_oauth_client_and_api = AsyncMock(return_value=sub)
+
+        with patch(SUB_REPO_PATH, return_value=mock_sub_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.post(
+                "/v1/subscriptions/validate-subscription",
+                json={"oauth_client_id": "kc-client-123", "api_id": "api-weather"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is True
+        assert data["subscription_id"] == str(sub.id)
+        assert data["api_id"] == "api-weather"
+
+    def test_validate_not_found(self, app_with_tenant_admin, mock_db_session):
+        """Returns 404 when no active subscription exists."""
+        mock_sub_repo = MagicMock()
+        mock_sub_repo.get_by_oauth_client_and_api = AsyncMock(return_value=None)
+
+        with patch(SUB_REPO_PATH, return_value=mock_sub_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.post(
+                "/v1/subscriptions/validate-subscription",
+                json={"oauth_client_id": "unknown-client", "api_id": "api-weather"},
+            )
+
+        assert resp.status_code == 404
+        assert "No active subscription" in resp.json()["detail"]
+
+    def test_validate_expired(self, app_with_tenant_admin, mock_db_session):
+        """Returns 403 when subscription is expired."""
+        sub = _mock_subscription(
+            oauth_client_id="kc-client-123",
+            api_id="api-weather",
+            expires_at=datetime.utcnow() - timedelta(hours=1),
+        )
+        mock_sub_repo = MagicMock()
+        mock_sub_repo.get_by_oauth_client_and_api = AsyncMock(return_value=sub)
+
+        with patch(SUB_REPO_PATH, return_value=mock_sub_repo), TestClient(app_with_tenant_admin) as client:
+            resp = client.post(
+                "/v1/subscriptions/validate-subscription",
+                json={"oauth_client_id": "kc-client-123", "api_id": "api-weather"},
+            )
+
+        assert resp.status_code == 403
+        assert "expired" in resp.json()["detail"].lower()

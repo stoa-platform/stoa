@@ -30,7 +30,6 @@ vi.mock('../../services/mcpServers', () => ({
 // Mock hooks
 const mockSubscriptionsData = vi.fn();
 const mockRevokeMutation = vi.fn();
-const mockRotateKeyMutation = vi.fn();
 
 vi.mock('../../hooks/useSubscriptions', () => ({
   useSubscriptions: () => ({
@@ -41,10 +40,6 @@ vi.mock('../../hooks/useSubscriptions', () => ({
   }),
   useRevokeSubscription: () => ({
     mutateAsync: mockRevokeMutation,
-  }),
-  useRotateApiKey: () => ({
-    mutateAsync: mockRotateKeyMutation,
-    isPending: false,
   }),
 }));
 
@@ -66,24 +61,6 @@ vi.mock('@stoa/shared/components/Toast', () => ({
 }));
 
 // Mock subscription components
-vi.mock('../../components/subscriptions/RevealKeyModal', () => ({
-  RevealKeyModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? (
-      <div data-testid="reveal-key-modal">
-        <button onClick={onClose}>Close</button>
-      </div>
-    ) : null,
-}));
-
-vi.mock('../../components/subscriptions/RotateKeyModal', () => ({
-  RotateKeyModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? (
-      <div data-testid="rotate-key-modal">
-        <button onClick={onClose}>Close</button>
-      </div>
-    ) : null,
-}));
-
 vi.mock('../../components/subscriptions/ExportConfigModal', () => ({
   ExportConfigModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
     isOpen ? (

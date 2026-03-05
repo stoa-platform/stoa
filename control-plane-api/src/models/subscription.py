@@ -60,9 +60,12 @@ class Subscription(Base):
     plan_id = Column(String(255), nullable=True)
     plan_name = Column(String(255), nullable=True, default="default")
 
-    # API Key (hashed for security)
-    api_key_hash = Column(String(512), nullable=False, unique=True)
-    api_key_prefix = Column(String(20), nullable=False)  # Prefix: stoa_sk_ + 4 hex
+    # OAuth2 client reference (from PortalApplication.keycloak_client_id)
+    oauth_client_id = Column(String(255), nullable=True, index=True)
+
+    # API Key (hashed for security) — nullable for OAuth2-only subscriptions
+    api_key_hash = Column(String(512), nullable=True)
+    api_key_prefix = Column(String(20), nullable=True)  # Prefix: stoa_sk_ + 4 hex
 
     # Key rotation with grace period (CAB-314)
     previous_api_key_hash = Column(String(512), nullable=True, index=True)  # Old key during grace period
@@ -115,6 +118,7 @@ class Subscription(Base):
         Index("ix_subscriptions_subscriber_status", "subscriber_id", "status"),
         Index("ix_subscriptions_application_api", "application_id", "api_id"),
         Index("ix_subscriptions_provisioning_status", "provisioning_status"),
+        Index("ix_subscriptions_oauth_client_api", "oauth_client_id", "api_id"),
     )
 
     def __repr__(self) -> str:

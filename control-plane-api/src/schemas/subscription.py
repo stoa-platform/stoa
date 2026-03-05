@@ -73,7 +73,8 @@ class SubscriptionResponse(BaseModel):
     tenant_id: str
     plan_id: str | None
     plan_name: str | None
-    api_key_prefix: str
+    oauth_client_id: str | None = None
+    api_key_prefix: str | None = None
     status: SubscriptionStatusEnum
     status_reason: str | None
     created_at: datetime
@@ -266,3 +267,37 @@ class TTLExtendResponse(BaseModel):
     remaining_extensions: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============== OAuth2 Subscription Validation Schemas ==============
+
+
+class SubscriptionValidateOAuthRequest(BaseModel):
+    """Schema for validating a subscription via OAuth2 client_id (used by Gateway)."""
+
+    oauth_client_id: str = Field(..., min_length=1, max_length=255, description="Keycloak client_id (JWT azp claim)")
+    api_id: str = Field(..., min_length=1, max_length=255, description="Target API identifier")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "oauth_client_id": "stoa-portal-app-abc123",
+                "api_id": "api-456",
+            }
+        }
+    )
+
+
+class SubscriptionValidateOAuthResponse(BaseModel):
+    """Schema for OAuth2 subscription validation response."""
+
+    valid: bool
+    subscription_id: str
+    application_id: str
+    application_name: str
+    subscriber_id: str
+    api_id: str
+    api_name: str
+    tenant_id: str
+    plan_id: str | None = None
+    plan_name: str | None = None

@@ -40,15 +40,17 @@ A change is NOT done until the pod is updated on EKS. The complete lifecycle:
 
 Each workflow only triggers on its own component paths:
 - `control-plane-api/**`, `control-plane-ui/**` + `shared/**`, `portal/**` + `shared/**`, `stoa-gateway/**`, `mcp-gateway/**`
-- `security-scan.yml` runs on **ALL** PRs (no path filter)
-- Docs-only changes (`*.md`, `.claude/**`) trigger security-scan but NOT component CI
+- `required-checks.yml` + `security-scan.yml` run on **ALL** PRs (no path filter)
+- Docs-only changes (`*.md`, `.claude/**`) trigger these but NOT component CI
 
 ### Required checks (branch protection)
 
-3 required checks from `security-scan.yml` (runs on all PRs):
+3 required checks from `required-checks.yml` (lightweight, no concurrency group):
 1. **License Compliance** — Trivy SPDX scan
 2. **SBOM Generation** — CycloneDX + SPDX
 3. **Verify Signed Commits** — signature check
+
+> `security-scan.yml` runs the heavy jobs (SAST, dependency audit, secrets, container scan) in parallel but is NOT required for merge.
 
 ### Post-merge verification
 

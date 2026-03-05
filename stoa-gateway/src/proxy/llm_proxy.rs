@@ -1225,4 +1225,64 @@ data: {"type":"message_stop"}
             other => panic!("Expected Error for missing API key, got: {other:?}"),
         }
     }
+
+    // === Regression: trailing slash in upstream base URL (PR #1256, CAB-1601) ===
+    // Mistral upstream was configured as "https://api.mistral.ai/v1" which,
+    // combined with request_path "/v1/chat/completions", produced a double
+    // path: "https://api.mistral.ai/v1/v1/chat/completions" → 404.
+    // The fix: trim_end_matches('/') on the base URL.
+
+    #[test]
+    fn regression_trailing_slash_in_static_upstream_url() {
+        let config = crate::config::Config {
+            llm_proxy_enabled: true,
+            llm_proxy_upstream_url: "https://api.anthropic.com/".to_string(),
+            llm_proxy_mistral_upstream_url: "https://api.mistral.ai/v1/".to_string(),
+            ..Default::default()
+        };
+        let state = AppState::new(config);
+
+        let result = resolve_upstream(&state, LlmApiFormat::Anthropic, "any-sub", "/v1/messages");
+
+        match result {
+            UpstreamResolution::Static { url, .. } => {
+                assert!(
+                    !url.contains("//v1"),
+                    "URL must not have double slash before path: {url}"
+                );
+                assert_eq!(url, "https://api.anthropic.com/v1/messages");
+            }
+            other => panic!("Expected Static resolution, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn regression_non_azure_provider_trims_trailing_slash() {
+        let provider = make_openai_provider("openai-main");
+        let mut provider_clone = provider.clone();
+        provider_clone.base_url = "https://api.openai.com/".to_string();
+        let mapping = crate::llm::SubscriptionMapping::from_pairs(vec![(
+            "sub-slash".to_string(),
+            "openai-main".to_string(),
+        )]);
+
+        let state = make_test_state(true, vec![provider_clone], mapping);
+
+        let result = resolve_upstream(
+            &state,
+            LlmApiFormat::OpenAiCompat,
+            "sub-slash",
+            "/v1/chat/completions",
+        );
+
+        match result {
+            UpstreamResolution::Static { url, .. } => {
+                assert!(
+                    !url.contains("//v1"),
+                    "URL must not have double slash from trailing slash in base_url: {url}"
+                );
+            }
+            other => panic!("Expected Static resolution, got: {other:?}"),
+        }
+    }
 }

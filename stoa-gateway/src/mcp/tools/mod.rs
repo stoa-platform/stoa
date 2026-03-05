@@ -895,6 +895,43 @@ mod tests {
         assert!(registry.try_start_refresh("acme"));
     }
 
+    // === Regression: mark_loaded prevents retry storm on failure (PR #1228, CAB-1558) ===
+    // Before the fix, a failed discovery left the tenant in "never loaded" state.
+    // Every subsequent tool-not-found request re-triggered synchronous HTTP calls
+    // to the control plane, causing a retry storm under arena benchmarks.
+    // The fix: call mark_loaded() in both success and error paths.
+
+    #[test]
+    fn regression_mark_loaded_prevents_retry_storm_on_failure() {
+        let registry = ToolRegistry::new();
+        // Tenant never loaded → is_stale returns true
+        assert!(registry.is_stale("failing-tenant", std::time::Duration::from_secs(300)));
+
+        // Simulate the error path: discovery fails, but we still mark_loaded
+        // (this is what refresh_tools_for_tenant does after PR #1228)
+        registry.mark_loaded("failing-tenant");
+
+        // After mark_loaded, is_stale must return false (no retry storm)
+        assert!(
+            !registry.is_stale("failing-tenant", std::time::Duration::from_secs(300)),
+            "Tenant must be marked as loaded even after discovery failure to prevent retry storm"
+        );
+    }
+
+    #[test]
+    fn regression_has_been_loaded_true_after_error_path() {
+        let registry = ToolRegistry::new();
+        assert!(!registry.has_been_loaded("error-tenant"));
+
+        // The error path in refresh_tools_for_tenant calls mark_loaded
+        registry.mark_loaded("error-tenant");
+
+        assert!(
+            registry.has_been_loaded("error-tenant"),
+            "has_been_loaded must return true after error-path mark_loaded (CAB-1558)"
+        );
+    }
+
     // === Alias Tests (CAB-606) ===
 
     #[test]

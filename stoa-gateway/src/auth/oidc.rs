@@ -508,4 +508,39 @@ mod tests {
         assert_eq!(config.audience, "stoa-mcp");
         assert_eq!(config.jwks_cache_ttl, Duration::from_secs(300));
     }
+
+    // === Regression: hairpin NAT bypass (PR #819) ===
+    // Pods on OVH MKS cannot reach the external LB IP from inside the
+    // cluster. rewrite_base() rewrites the scheme+host to an internal URL
+    // while preserving the path. Without this, /ready returns 503.
+
+    #[test]
+    fn regression_rewrite_base_preserves_path() {
+        let result = rewrite_base(
+            "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration",
+            "http://keycloak.stoa-system.svc.cluster.local",
+        );
+        assert_eq!(
+            result,
+            "http://keycloak.stoa-system.svc.cluster.local/realms/stoa/.well-known/openid-configuration"
+        );
+    }
+
+    #[test]
+    fn regression_rewrite_base_strips_trailing_slash_from_base() {
+        let result = rewrite_base(
+            "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/certs",
+            "http://keycloak.stoa-system.svc.cluster.local/",
+        );
+        assert_eq!(
+            result,
+            "http://keycloak.stoa-system.svc.cluster.local/realms/stoa/protocol/openid-connect/certs"
+        );
+    }
+
+    #[test]
+    fn regression_rewrite_base_root_path_only() {
+        let result = rewrite_base("https://auth.gostoa.dev", "http://internal:8080");
+        assert_eq!(result, "http://internal:8080");
+    }
 }

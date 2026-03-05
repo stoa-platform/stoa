@@ -313,4 +313,40 @@ describe('APICatalog', () => {
       });
     }
   );
+
+  // CAB-1673: Structural snapshot guards
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    'snapshot: %s persona',
+    (role) => {
+      beforeEach(() => {
+        vi.clearAllMocks();
+        mockUseAuth.mockReturnValue(createAuthMock(role));
+        mockUseAPIs.mockReturnValue({
+          data: { items: [mockAPI({ id: 'api-1', name: 'Payment API' })], total: 1 },
+          isLoading: false,
+          isError: false,
+          error: null,
+          refetch: vi.fn(),
+        });
+        mockUseAPICategories.mockReturnValue({ data: ['Finance'], isLoading: false });
+        mockUseUniverses.mockReturnValue({ data: ['production'] });
+        mockUseQueryClient.mockReturnValue({ prefetchQuery: vi.fn() });
+      });
+
+      it('matches structural snapshot', () => {
+        const { container } = renderWithProviders(<APICatalog />);
+        const buttons = [...container.querySelectorAll('button')].map(
+          (b) => b.textContent?.trim() || ''
+        );
+        const headings = [...container.querySelectorAll('h1, h2, h3')].map(
+          (h) => h.textContent?.trim() || ''
+        );
+        const links = [...container.querySelectorAll('a[href]')].map((a) => ({
+          text: a.textContent?.trim() || '',
+          href: a.getAttribute('href'),
+        }));
+        expect({ buttons, headings, links }).toMatchSnapshot();
+      });
+    }
+  );
 });

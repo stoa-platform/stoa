@@ -229,5 +229,21 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
         expect(screen.getByText('firstCall.mcpConfig')).toBeInTheDocument();
       });
     });
+
+    // CAB-1673: Structural snapshot guard
+    it('matches structural snapshot (step 1)', () => {
+      const { container } = renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
+      const buttons = [...container.querySelectorAll('button')].map(
+        (b) => b.textContent?.trim() || ''
+      );
+      const headings = [...container.querySelectorAll('h1, h2, h3')].map(
+        (h) => h.textContent?.trim() || ''
+      );
+      const links = [...container.querySelectorAll('a[href]')].map((a) => ({
+        text: a.textContent?.trim() || '',
+        href: a.getAttribute('href'),
+      }));
+      expect({ buttons, headings, links }).toMatchSnapshot();
+    });
   }
 );

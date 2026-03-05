@@ -1,0 +1,61 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MyApplications > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "",
+    "createApp",
+    "empty.createFirst",
+  ],
+  "headings": [
+    "title",
+    "empty.title",
+  ],
+  "links": [],
+}
+`;
+
+exports[`MyApplications > snapshot: devops persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "",
+    "createApp",
+    "empty.createFirst",
+  ],
+  "headings": [
+    "title",
+    "empty.title",
+  ],
+  "links": [],
+}
+`;
+
+exports[`MyApplications > snapshot: tenant-admin persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "",
+    "createApp",
+    "empty.createFirst",
+  ],
+  "headings": [
+    "title",
+    "empty.title",
+  ],
+  "links": [],
+}
+`;
+
+exports[`MyApplications > snapshot: viewer persona > matches structural snapshot 1`] = `
+{
+  "buttons": [
+    "",
+    "createApp",
+    "empty.createFirst",
+  ],
+  "headings": [
+    "title",
+    "empty.title",
+  ],
+  "links": [],
+}
+`;

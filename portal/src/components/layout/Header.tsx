@@ -7,7 +7,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { config } from '../../config';
 import { useUnreadCount } from '../../hooks/useNotifications';
 import { LanguageToggle } from './LanguageToggle';
-import { EnvironmentSelector } from './EnvironmentSelector';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -75,9 +74,6 @@ export function Header({ onMenuClick }: HeaderProps) {
             <ExternalLink className="h-3 w-3" aria-hidden="true" />
             <span className="sr-only">(opens in new tab)</span>
           </a>
-
-          {/* Environment selector */}
-          <EnvironmentSelector />
 
           {/* Theme toggle */}
           <ThemeToggle size="md" />

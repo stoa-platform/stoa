@@ -15951,6 +15951,466 @@
         "title": "ProvisioningStatusEnum",
         "type": "string"
       },
+      "ProxyBackendAuthTypeEnum": {
+        "description": "Authentication type for API responses.",
+        "enum": [
+          "api_key",
+          "bearer",
+          "basic",
+          "oauth2_cc"
+        ],
+        "title": "ProxyBackendAuthTypeEnum",
+        "type": "string"
+      },
+      "ProxyBackendCreate": {
+        "description": "Schema for registering a new proxy backend.",
+        "example": {
+          "auth_type": "api_key",
+          "base_url": "https://n8n.gostoa.dev",
+          "credential_ref": "api-proxy:n8n",
+          "display_name": "n8n Workflow Automation",
+          "health_endpoint": "/healthz",
+          "name": "n8n",
+          "rate_limit_rpm": 60
+        },
+        "properties": {
+          "auth_type": {
+            "$ref": "#/components/schemas/ProxyBackendAuthTypeEnum",
+            "default": "api_key"
+          },
+          "base_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Base Url",
+            "type": "string"
+          },
+          "circuit_breaker_enabled": {
+            "default": true,
+            "title": "Circuit Breaker Enabled",
+            "type": "boolean"
+          },
+          "credential_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Ref"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "fallback_direct": {
+            "default": false,
+            "title": "Fallback Direct",
+            "type": "boolean"
+          },
+          "health_endpoint": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Endpoint"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Name",
+            "type": "string"
+          },
+          "rate_limit_rpm": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Rate Limit Rpm",
+            "type": "integer"
+          },
+          "timeout_secs": {
+            "default": 30,
+            "maximum": 300.0,
+            "minimum": 1.0,
+            "title": "Timeout Secs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "base_url"
+        ],
+        "title": "ProxyBackendCreate",
+        "type": "object"
+      },
+      "ProxyBackendHealthStatus": {
+        "description": "Health check result for a proxy backend.",
+        "properties": {
+          "backend_name": {
+            "title": "Backend Name",
+            "type": "string"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "healthy": {
+            "title": "Healthy",
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          }
+        },
+        "required": [
+          "backend_name",
+          "healthy",
+          "checked_at"
+        ],
+        "title": "ProxyBackendHealthStatus",
+        "type": "object"
+      },
+      "ProxyBackendListResponse": {
+        "description": "Schema for paginated proxy backend list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProxyBackendResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ProxyBackendListResponse",
+        "type": "object"
+      },
+      "ProxyBackendResponse": {
+        "description": "Schema for proxy backend response.",
+        "properties": {
+          "auth_type": {
+            "$ref": "#/components/schemas/ProxyBackendAuthTypeEnum"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "circuit_breaker_enabled": {
+            "title": "Circuit Breaker Enabled",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "credential_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Ref"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "fallback_direct": {
+            "title": "Fallback Direct",
+            "type": "boolean"
+          },
+          "health_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Endpoint"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rate_limit_rpm": {
+            "title": "Rate Limit Rpm",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProxyBackendStatusEnum"
+          },
+          "timeout_secs": {
+            "title": "Timeout Secs",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "display_name",
+          "description",
+          "base_url",
+          "health_endpoint",
+          "auth_type",
+          "credential_ref",
+          "rate_limit_rpm",
+          "circuit_breaker_enabled",
+          "fallback_direct",
+          "timeout_secs",
+          "status",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProxyBackendResponse",
+        "type": "object"
+      },
+      "ProxyBackendStatusEnum": {
+        "description": "Backend status for API responses.",
+        "enum": [
+          "active",
+          "disabled"
+        ],
+        "title": "ProxyBackendStatusEnum",
+        "type": "string"
+      },
+      "ProxyBackendUpdate": {
+        "description": "Schema for updating an existing proxy backend.",
+        "properties": {
+          "auth_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProxyBackendAuthTypeEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "circuit_breaker_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Circuit Breaker Enabled"
+          },
+          "credential_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Ref"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "fallback_direct": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Direct"
+          },
+          "health_endpoint": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Endpoint"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "rate_limit_rpm": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Rpm"
+          },
+          "timeout_secs": {
+            "anyOf": [
+              {
+                "maximum": 300.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Secs"
+          }
+        },
+        "title": "ProxyBackendUpdate",
+        "type": "object"
+      },
       "PublicEnvironmentSummary": {
         "description": "Public-safe environment info \u2014 no auth URLs exposed.",
         "properties": {
@@ -36937,6 +37397,295 @@
         "summary": "List Portal Mcp Servers",
         "tags": [
           "Portal"
+        ]
+      }
+    },
+    "/v1/proxy-backends": {
+      "get": {
+        "description": "List all registered proxy backends.",
+        "operationId": "list_proxy_backends",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "active_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Active Only",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyBackendListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Proxy Backends",
+        "tags": [
+          "Proxy Backends"
+        ]
+      },
+      "post": {
+        "description": "Register a new proxy backend. Requires cpi-admin role.",
+        "operationId": "create_proxy_backend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyBackendCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyBackendResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Proxy Backend",
+        "tags": [
+          "Proxy Backends"
+        ]
+      }
+    },
+    "/v1/proxy-backends/{backend_id}": {
+      "delete": {
+        "description": "Delete a proxy backend. Requires cpi-admin role.",
+        "operationId": "delete_proxy_backend",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backend_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Backend Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Proxy Backend",
+        "tags": [
+          "Proxy Backends"
+        ]
+      },
+      "get": {
+        "description": "Get a specific proxy backend by ID.",
+        "operationId": "get_proxy_backend",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backend_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Backend Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyBackendResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Proxy Backend",
+        "tags": [
+          "Proxy Backends"
+        ]
+      },
+      "put": {
+        "description": "Update a proxy backend. Requires cpi-admin role.",
+        "operationId": "update_proxy_backend",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backend_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Backend Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyBackendUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyBackendResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Proxy Backend",
+        "tags": [
+          "Proxy Backends"
+        ]
+      }
+    },
+    "/v1/proxy-backends/{backend_id}/health": {
+      "get": {
+        "description": "Check health of a proxy backend. Cached for 30s.",
+        "operationId": "check_proxy_backend_health",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backend_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Backend Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyBackendHealthStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Proxy Backend Health",
+        "tags": [
+          "Proxy Backends"
         ]
       }
     },

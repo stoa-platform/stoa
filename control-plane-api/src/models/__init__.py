@@ -58,6 +58,7 @@ from .plan import Plan, PlanStatus
 from .portal_application import PortalApplication, PortalAppStatus
 from .prospect_event import EventType, ProspectEvent
 from .prospect_feedback import ProspectFeedback
+from .proxy_backend import ProxyBackend, ProxyBackendAuthType, ProxyBackendStatus
 from .saas_api_key import SaasApiKey, SaasApiKeyStatus
 from .security_event import SecurityEvent
 from .skill import Skill, SkillScope

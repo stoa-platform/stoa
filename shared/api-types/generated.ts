@@ -4653,6 +4653,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/proxy-backends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Proxy Backends
+         * @description List all registered proxy backends.
+         */
+        get: operations["list_proxy_backends"];
+        put?: never;
+        /**
+         * Create Proxy Backend
+         * @description Register a new proxy backend. Requires cpi-admin role.
+         */
+        post: operations["create_proxy_backend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/proxy-backends/{backend_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Proxy Backend
+         * @description Get a specific proxy backend by ID.
+         */
+        get: operations["get_proxy_backend"];
+        /**
+         * Update Proxy Backend
+         * @description Update a proxy backend. Requires cpi-admin role.
+         */
+        put: operations["update_proxy_backend"];
+        post?: never;
+        /**
+         * Delete Proxy Backend
+         * @description Delete a proxy backend. Requires cpi-admin role.
+         */
+        delete: operations["delete_proxy_backend"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/proxy-backends/{backend_id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Proxy Backend Health
+         * @description Check health of a proxy backend. Cached for 30s.
+         */
+        get: operations["check_proxy_backend_health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/roles": {
         parameters: {
             query?: never;
@@ -14824,6 +14896,170 @@ export interface components {
          * @enum {string}
          */
         ProvisioningStatusEnum: "none" | "pending" | "provisioning" | "ready" | "failed" | "deprovisioning" | "deprovisioned";
+        /**
+         * ProxyBackendAuthTypeEnum
+         * @description Authentication type for API responses.
+         * @enum {string}
+         */
+        ProxyBackendAuthTypeEnum: "api_key" | "bearer" | "basic" | "oauth2_cc";
+        /**
+         * ProxyBackendCreate
+         * @description Schema for registering a new proxy backend.
+         * @example {
+         *       "auth_type": "api_key",
+         *       "base_url": "https://n8n.gostoa.dev",
+         *       "credential_ref": "api-proxy:n8n",
+         *       "display_name": "n8n Workflow Automation",
+         *       "health_endpoint": "/healthz",
+         *       "name": "n8n",
+         *       "rate_limit_rpm": 60
+         *     }
+         */
+        ProxyBackendCreate: {
+            /** @default api_key */
+            auth_type: components["schemas"]["ProxyBackendAuthTypeEnum"];
+            /** Base Url */
+            base_url: string;
+            /**
+             * Circuit Breaker Enabled
+             * @default true
+             */
+            circuit_breaker_enabled: boolean;
+            /** Credential Ref */
+            credential_ref?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Fallback Direct
+             * @default false
+             */
+            fallback_direct: boolean;
+            /** Health Endpoint */
+            health_endpoint?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Rate Limit Rpm
+             * @default 0
+             */
+            rate_limit_rpm: number;
+            /**
+             * Timeout Secs
+             * @default 30
+             */
+            timeout_secs: number;
+        };
+        /**
+         * ProxyBackendHealthStatus
+         * @description Health check result for a proxy backend.
+         */
+        ProxyBackendHealthStatus: {
+            /** Backend Name */
+            backend_name: string;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Error */
+            error?: string | null;
+            /** Healthy */
+            healthy: boolean;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Status Code */
+            status_code?: number | null;
+        };
+        /**
+         * ProxyBackendListResponse
+         * @description Schema for paginated proxy backend list.
+         */
+        ProxyBackendListResponse: {
+            /** Items */
+            items: components["schemas"]["ProxyBackendResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ProxyBackendResponse
+         * @description Schema for proxy backend response.
+         */
+        ProxyBackendResponse: {
+            auth_type: components["schemas"]["ProxyBackendAuthTypeEnum"];
+            /** Base Url */
+            base_url: string;
+            /** Circuit Breaker Enabled */
+            circuit_breaker_enabled: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Credential Ref */
+            credential_ref: string | null;
+            /** Description */
+            description: string | null;
+            /** Display Name */
+            display_name: string | null;
+            /** Fallback Direct */
+            fallback_direct: boolean;
+            /** Health Endpoint */
+            health_endpoint: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Rate Limit Rpm */
+            rate_limit_rpm: number;
+            status: components["schemas"]["ProxyBackendStatusEnum"];
+            /** Timeout Secs */
+            timeout_secs: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ProxyBackendStatusEnum
+         * @description Backend status for API responses.
+         * @enum {string}
+         */
+        ProxyBackendStatusEnum: "active" | "disabled";
+        /**
+         * ProxyBackendUpdate
+         * @description Schema for updating an existing proxy backend.
+         */
+        ProxyBackendUpdate: {
+            auth_type?: components["schemas"]["ProxyBackendAuthTypeEnum"] | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Circuit Breaker Enabled */
+            circuit_breaker_enabled?: boolean | null;
+            /** Credential Ref */
+            credential_ref?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Fallback Direct */
+            fallback_direct?: boolean | null;
+            /** Health Endpoint */
+            health_endpoint?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Rate Limit Rpm */
+            rate_limit_rpm?: number | null;
+            /** Timeout Secs */
+            timeout_secs?: number | null;
+        };
         /**
          * PublicEnvironmentSummary
          * @description Public-safe environment info — no auth URLs exposed.
@@ -26050,6 +26286,196 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PortalMCPServersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_proxy_backends: {
+        parameters: {
+            query?: {
+                active_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyBackendListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_proxy_backend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProxyBackendCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyBackendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_proxy_backend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                backend_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyBackendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_proxy_backend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                backend_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProxyBackendUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyBackendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_proxy_backend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                backend_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_proxy_backend_health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                backend_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyBackendHealthStatus"];
                 };
             };
             /** @description Validation Error */

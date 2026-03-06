@@ -80,6 +80,7 @@ from .routers import (
     platform,
     portal,
     portal_applications,
+    proxy_backends,
     quotas,
     reconciliation,
     roles,
@@ -798,6 +799,9 @@ if settings.DOCS_SEARCH_ENABLED:
 # Chat Agent — Anthropic integration (CAB-286)
 if settings.CHAT_ENABLED:
     app.include_router(chat.router)
+
+# Proxy Backends — internal API backend registry for STOA Gateway (CAB-1725)
+app.include_router(proxy_backends.router)
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)

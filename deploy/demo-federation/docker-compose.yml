@@ -58,21 +58,22 @@ services:
   #   demo-org-gamma    - Tenant realm, federated via LDAP
   # ==========================================================================
   keycloak:
-    image: quay.io/keycloak/keycloak:23.0
+    image: quay.io/keycloak/keycloak:26.5.3
     container_name: stoa-federation-keycloak
     command: start-dev --import-realm
     ports:
       - "${PORT_KEYCLOAK:-8080}:8080"
     environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
       KC_SPI_REALM_DEFAULT__SSL__REQUIRED: "none"
-      KC_FEATURES: "token-exchange,admin-fine-grained-authz"
+      # FAPI 2.0: token exchange + DPoP + PAR (CAB-1733)
+      KC_FEATURES: "token-exchange,dpop,par,admin-fine-grained-authz"
     volumes:
       - ./keycloak/idp-source-alpha.json:/opt/keycloak/data/import/01-idp-source-alpha.json:ro
       - ./keycloak/idp-source-beta.json:/opt/keycloak/data/import/02-idp-source-beta.json:ro

@@ -271,10 +271,10 @@ services:
   - name: keycloak
     displayName: Keycloak (OIDC)
     type: identity
-    tech: Keycloak 23
+    tech: Keycloak 26
     path: null
     containerPort: 8080
-    image: quay.io/keycloak/keycloak:23.0
+    image: quay.io/keycloak/keycloak:26.5.3
     deploy:
       prod:
         cluster: ovh-mks

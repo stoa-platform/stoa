@@ -127,6 +127,11 @@ pub struct Config {
     #[serde(default)]
     pub otel_endpoint: Option<String>,
 
+    /// Enable OpenTelemetry at runtime (requires `otel` feature at compile time).
+    /// Env: STOA_OTEL_ENABLED (default: false)
+    #[serde(default)]
+    pub otel_enabled: bool,
+
     /// Head-based sampling rate for OTel traces (0.0 = none, 1.0 = all).
     /// Env: STOA_OTEL_SAMPLE_RATE
     #[serde(default = "default_otel_sample_rate")]
@@ -1056,6 +1061,7 @@ impl Default for Config {
             policy_enabled: default_policy_enabled(),
             log_level: Some("info".to_string()),
             log_format: Some("json".to_string()),
+            otel_enabled: false,
             otel_endpoint: None,
             otel_sample_rate: default_otel_sample_rate(),
             gateway_mode: GatewayMode::default(),

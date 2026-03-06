@@ -76,6 +76,7 @@ pub async fn authorization_server_metadata(State(state): State<AppState>) -> Jso
         "issuer": kc_base,
         "authorization_endpoint": format!("{}/protocol/openid-connect/auth", kc_base),
         "token_endpoint": format!("{}/oauth/token", gateway_url),
+        "pushed_authorization_request_endpoint": format!("{}/oauth/par", gateway_url),
         "registration_endpoint": format!("{}/oauth/register", gateway_url),
         "jwks_uri": format!("{}/protocol/openid-connect/certs", kc_base),
         "scopes_supported": [
@@ -95,10 +96,12 @@ pub async fn authorization_server_metadata(State(state): State<AppState>) -> Jso
         "token_endpoint_auth_methods_supported": [
             "none",
             "client_secret_basic",
-            "client_secret_post"
+            "client_secret_post",
+            "private_key_jwt"
         ],
         "code_challenge_methods_supported": ["S256"],
-        "subject_types_supported": ["public"]
+        "subject_types_supported": ["public"],
+        "require_pushed_authorization_requests": false
     }))
 }
 
@@ -152,11 +155,15 @@ pub async fn openid_configuration(
         StatusCode::BAD_GATEWAY
     })?;
 
-    // Override token and registration endpoints to point to gateway proxy
+    // Override token, registration, and PAR endpoints to point to gateway proxy
     if let Some(obj) = oidc_config.as_object_mut() {
         obj.insert(
             "token_endpoint".to_string(),
             json!(format!("{}/oauth/token", gateway_url)),
+        );
+        obj.insert(
+            "pushed_authorization_request_endpoint".to_string(),
+            json!(format!("{}/oauth/par", gateway_url)),
         );
         obj.insert(
             "registration_endpoint".to_string(),
@@ -251,6 +258,24 @@ mod tests {
         assert_eq!(meta["response_types_supported"][0], "code");
         assert_eq!(meta["code_challenge_methods_supported"][0], "S256");
         assert_eq!(meta["subject_types_supported"][0], "public");
+    }
+
+    #[tokio::test]
+    async fn test_authorization_server_metadata_par_endpoint() {
+        let state = test_state(Some("https://kc.test"), Some("https://gw.test"));
+        let Json(meta) = authorization_server_metadata(State(state)).await;
+        // RFC 9126: PAR endpoint advertised in metadata (FAPI 2.0)
+        assert_eq!(
+            meta["pushed_authorization_request_endpoint"],
+            "https://gw.test/oauth/par"
+        );
+        // FAPI 2.0: private_key_jwt supported
+        let auth_methods = meta["token_endpoint_auth_methods_supported"]
+            .as_array()
+            .unwrap();
+        assert!(auth_methods.iter().any(|v| v == "private_key_jwt"));
+        // PAR not required by default (dual-mode transition)
+        assert_eq!(meta["require_pushed_authorization_requests"], false);
     }
 
     #[tokio::test]

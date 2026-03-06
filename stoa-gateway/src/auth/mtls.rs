@@ -1086,6 +1086,7 @@ mod tests {
         ));
         assert!(is_mtls_bypass_path("/oauth/register"));
         assert!(is_mtls_bypass_path("/oauth/token"));
+        assert!(is_mtls_bypass_path("/oauth/par"));
         assert!(is_mtls_bypass_path("/oauth/authorize"));
     }
 

@@ -1,9 +1,11 @@
-//! OAuth Token + DCR Proxy
+//! OAuth Token + DCR + PAR Proxy
 //!
 //! CAB-1094: Proxy OAuth endpoints to Keycloak for Claude.ai MCP connector.
 //! CAB-1606: RFC 7592 — Dynamic Client Registration Management Protocol.
+//! CAB-1733: RFC 9126 — Pushed Authorization Requests (PAR) for FAPI 2.0.
 //!
 //! - POST /oauth/token — transparent proxy to Keycloak token endpoint
+//! - POST /oauth/par — PAR proxy to Keycloak (RFC 9126, FAPI 2.0)
 //! - POST /oauth/register — DCR proxy + public client patch for PKCE (RFC 7591)
 //! - GET  /oauth/register/:client_id — read client metadata (RFC 7592)
 //! - PUT  /oauth/register/:client_id — update client metadata (RFC 7592)
@@ -102,6 +104,94 @@ pub async fn token_proxy(
             Json(json!({"error": "server_error", "error_description": msg})),
         )
             .into_response(),
+    }
+}
+
+/// POST /oauth/par
+///
+/// RFC 9126 — Pushed Authorization Requests.
+/// Proxies PAR requests to Keycloak, enabling FAPI 2.0 clients to push
+/// authorization parameters server-to-server before redirecting the user agent.
+/// Returns a `request_uri` that the client uses in the authorization request.
+pub async fn par_proxy(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    let config = &state.config;
+
+    let keycloak_url = match config.keycloak_url.as_deref() {
+        Some(url) => url.trim_end_matches('/'),
+        None => {
+            warn!("Keycloak URL not configured — cannot proxy PAR request");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "server_error", "error_description": "Identity provider not configured"})),
+            )
+                .into_response();
+        }
+    };
+    let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
+    let par_url = format!(
+        "{}/realms/{}/protocol/openid-connect/ext/par/request",
+        keycloak_url, realm
+    );
+
+    debug!(url = %par_url, "Proxying PAR request to Keycloak");
+
+    let client = state.http_client.clone();
+    let via_value = build_via_value();
+
+    let content_type = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/x-www-form-urlencoded")
+        .to_string();
+
+    let result = with_keycloak_resilience(&state.circuit_breakers, "oauth-par", || {
+        let c = client.clone();
+        let url = par_url.clone();
+        let ct = content_type.clone();
+        let b = body.clone();
+        let via = via_value.clone();
+        async move {
+            c.post(&url)
+                .header("content-type", ct)
+                .header("Via", via)
+                .body(b.to_vec())
+                .send()
+                .await
+                .map_err(|e| e.to_string())
+        }
+    })
+    .await;
+
+    match result {
+        Ok(resp) => {
+            let status = resp.status();
+            let resp_content_type = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/json")
+                .to_string();
+            let body = resp.bytes().await.unwrap_or_default();
+
+            info!(
+                status = %status,
+                "PAR proxy response from Keycloak"
+            );
+
+            let mut response = (status, body).into_response();
+            if let Ok(ct_val) = resp_content_type.parse() {
+                response.headers_mut().insert("content-type", ct_val);
+            }
+            response
+        }
+        Err((status, msg)) => {
+            error!(error = %msg, "PAR proxy failed");
+            (
+                status,
+                Json(json!({"error": "server_error", "error_description": msg})),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -741,6 +831,7 @@ mod tests {
         use axum::routing::get;
         Router::new()
             .route("/oauth/token", post(token_proxy))
+            .route("/oauth/par", post(par_proxy))
             .route("/oauth/register", post(register_proxy))
             .route(
                 "/oauth/register/:client_id",
@@ -1462,5 +1553,103 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // === par_proxy tests (RFC 9126, CAB-1733) ===
+
+    #[tokio::test]
+    async fn test_par_proxy_no_keycloak_url() {
+        let state = test_state_with_keycloak(None);
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/par")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(
+                        "client_id=test&response_type=code&redirect_uri=http://localhost/cb",
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"], "server_error");
+    }
+
+    #[tokio::test]
+    async fn test_par_proxy_success() {
+        let mock_server = MockServer::start().await;
+
+        // Keycloak returns a PAR response with request_uri
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/protocol/openid-connect/ext/par/request"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "request_uri": "urn:ietf:params:oauth:request_uri:abc123",
+                "expires_in": 60
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/par")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(
+                        "client_id=test&response_type=code&redirect_uri=http://localhost/cb&code_challenge=abc&code_challenge_method=S256",
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["request_uri"]
+            .as_str()
+            .unwrap()
+            .starts_with("urn:ietf:params:oauth:request_uri:"));
+        assert_eq!(json["expires_in"], 60);
+    }
+
+    #[tokio::test]
+    async fn test_par_proxy_forwards_content_type() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/protocol/openid-connect/ext/par/request"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+                "error": "invalid_request",
+                "error_description": "Missing required parameter"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/par")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("client_id=test"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        // PAR returns 400 for invalid requests — proxy passes it through
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

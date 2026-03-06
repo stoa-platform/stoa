@@ -63,7 +63,7 @@ services:
       retries: 3
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.1
+    image: quay.io/keycloak/keycloak:26.5.3
     ports:
       - "18083:8080"
     environment:
@@ -71,6 +71,8 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
+      # FAPI 2.0: token exchange + DPoP + PAR (CAB-1733)
+      KC_FEATURES: "token-exchange,dpop,par"
     command: start-dev
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200\\|UP'"]

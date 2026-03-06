@@ -528,7 +528,7 @@ impl AppState {
 
         // Initialize HEGEMON agent gateway (CAB-1709)
         let hegemon = if config.hegemon_enabled {
-            let heg = crate::hegemon::HegemonState::new(&config);
+            let heg = crate::hegemon::HegemonState::new(&config, metering_producer.clone());
             tracing::info!("HEGEMON agent gateway enabled");
             Some(Arc::new(heg))
         } else {

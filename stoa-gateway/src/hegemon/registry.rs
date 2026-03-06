@@ -86,7 +86,7 @@ impl AgentRegistry {
     }
 
     /// List all agents as serializable summaries.
-    fn list(&self) -> Vec<AgentSummary> {
+    pub fn list(&self) -> Vec<AgentSummary> {
         let agents = self.agents.read();
         let mut result: Vec<_> = agents
             .iter()

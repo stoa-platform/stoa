@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # =========================================================================
 # Gateway Instance Schemas
@@ -53,6 +53,16 @@ class GatewayInstanceResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("capabilities", "tags", mode="before")
+    @classmethod
+    def coerce_to_list(cls, v: object) -> list[str]:
+        """Handle JSONB columns that may be stored as dict instead of list."""
+        if isinstance(v, dict):
+            return [k for k, val in v.items() if val]
+        if v is None:
+            return []
+        return list(v)
 
 
 class GatewayHealthCheckResponse(BaseModel):

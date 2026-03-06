@@ -336,19 +336,20 @@
 ### In Progress
 
 - [~] CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10, 5 subs
-  - **Phase 1** (parallel) [owner: —]
-    - [ ] CAB-1739 [gateway] PAR proxy endpoint RFC 9126 (5 pts)
-    - [ ] CAB-1741 [infra] Unify KC to 26.5.3 + FAPI profiles (3 pts)
-    - [ ] CAB-1742 [gateway] OTel runtime toggle (3 pts)
-    - [ ] CAB-1743 [docs] FAPI 2.0 architecture guide (5 pts)
+  - **Phase 1** (parallel) [owner: —] — PR #1526
+    - [x] CAB-1739 [gateway] PAR proxy endpoint RFC 9126 (5 pts) — PR #1526
+    - [x] CAB-1741 [infra] Unify KC to 26.5.3 + FAPI profiles (3 pts) — PR #1526
+    - [x] CAB-1742 [gateway] OTel runtime toggle (3 pts) — PR #1526
+    - [ ] CAB-1743 [docs] FAPI 2.0 architecture guide (5 pts) — ADR-056 drafted, needs stoa-docs PR
   - **Phase 2** (after Phase 1) [owner: —]
     - [ ] CAB-1740 [gateway] private_key_jwt client auth RFC 7523 (8 pts)
 
 ### Todo
 
-- [ ] CAB-1731: fix(ui): honest environment scoping — remove guards from cross-env pages (13 pts) — Council 8.88/10
-
 ### Done
+
+- [x] CAB-1725: fix(api): correct proxy backend health endpoints (5 pts) — PR #1530
+- [x] CAB-1731: fix(ui): honest environment scoping — remove guards from cross-env pages (13 pts) — PR #1518
 
 - [x] CAB-1705: [MEGA] Multi-Environment UX Harmonization — Console & Portal (21 pts) — PRs #1507, #1510, #1515
 - [x] CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398 (2 files, 430 LOC). 17 PrometheusRule alerts + AlertManagerConfig. Gap-fill: portal/console, LLM cost, auth anomaly, SLO burn-rate, rollout

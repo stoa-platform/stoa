@@ -195,6 +195,12 @@ pub fn build_router(state: AppState) -> Router {
         // CAB-1718: HEGEMON claims admin
         .route("/hegemon/claims", get(hegemon::claims::list_claims))
         .route("/hegemon/claims/:mega_id", get(hegemon::claims::get_claims))
+        // CAB-1720/1721: HEGEMON metering + dashboard admin
+        .route(
+            "/hegemon/dashboard",
+            get(hegemon::dashboard::fleet_dashboard),
+        )
+        .route("/hegemon/events", get(hegemon::metering::list_events))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

@@ -53,6 +53,7 @@ describe('CreateAppModal', () => {
         display_name: 'My New App',
         description: undefined,
         redirect_uris: [],
+        security_profile: 'oauth2_public',
       });
     });
   });
@@ -81,6 +82,7 @@ describe('CreateAppModal', () => {
         display_name: 'App With URLs',
         description: undefined,
         redirect_uris: ['https://example.com/callback'],
+        security_profile: 'oauth2_public',
       });
     });
   });

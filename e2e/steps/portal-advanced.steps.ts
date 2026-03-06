@@ -54,6 +54,34 @@ When('I create an application named {string}', async ({ page }, appName: string)
   await page.waitForLoadState('networkidle');
 });
 
+When(
+  'I create an application named {string} with security profile {string}',
+  async ({ page }, appName: string, profile: string) => {
+    const createButton = page.locator(
+      'button:has-text("Create"), button:has-text("New Application"), button:has-text("Nouvelle")',
+    );
+    await expect(createButton).toBeVisible({ timeout: 10000 });
+    await createButton.click();
+
+    const nameInput = page
+      .locator('input[name="name"], input[placeholder*="name"], input[placeholder*="nom"]')
+      .first();
+    await expect(nameInput).toBeVisible({ timeout: 5000 });
+    await nameInput.fill(appName);
+
+    // Select security profile from dropdown
+    const profileSelect = page.locator('#security-profile');
+    await expect(profileSelect).toBeVisible({ timeout: 5000 });
+    await profileSelect.selectOption(profile);
+
+    const submitButton = page.locator(
+      'button[type="submit"], button:has-text("Create"), button:has-text("Save")',
+    );
+    await submitButton.click();
+    await page.waitForLoadState('networkidle');
+  },
+);
+
 Then('the application {string} appears in the list', async ({ page }, appName: string) => {
   const appEntry = page.locator(`text=${appName}`).first();
   await expect(appEntry).toBeVisible({ timeout: 10000 });

@@ -20,6 +20,18 @@ import {
   useCancelSubscription,
 } from './useSubscriptions';
 
+vi.mock('../contexts/EnvironmentContext', () => ({
+  usePortalEnvironment: () => ({
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+    environments: [],
+    endpoints: null,
+    switchEnvironment: vi.fn(),
+    loading: false,
+    error: null,
+  }),
+}));
+
 vi.mock('../services/subscriptions', () => ({
   subscriptionsService: {
     listSubscriptions: vi.fn(),

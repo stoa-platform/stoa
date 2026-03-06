@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePortalEnvironment } from '../contexts/EnvironmentContext';
 import {
   subscriptionsService,
   ListSubscriptionsParams,
@@ -28,8 +29,9 @@ import type {
  * Hook to list user's MCP subscriptions
  */
 export function useSubscriptions(params?: ListSubscriptionsParams) {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<SubscriptionsListResponse>({
-    queryKey: ['subscriptions', params],
+    queryKey: [activeEnvironment, 'subscriptions', params],
     queryFn: () => subscriptionsService.listSubscriptions(params),
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -39,8 +41,9 @@ export function useSubscriptions(params?: ListSubscriptionsParams) {
  * Hook to get a single subscription by ID
  */
 export function useSubscription(id: string | undefined) {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<MCPSubscription>({
-    queryKey: ['subscription', id],
+    queryKey: [activeEnvironment, 'subscription', id],
     queryFn: () => subscriptionsService.getSubscription(id!),
     enabled: !!id,
     staleTime: 60 * 1000, // 1 minute
@@ -51,8 +54,9 @@ export function useSubscription(id: string | undefined) {
  * Hook to get my subscriptions (convenience wrapper)
  */
 export function useMySubscriptions() {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<MCPSubscription[]>({
-    queryKey: ['subscriptions', 'my'],
+    queryKey: [activeEnvironment, 'subscriptions', 'my'],
     queryFn: () => subscriptionsService.getMySubscriptions(),
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -107,8 +111,9 @@ export function useRegenerateApiKey() {
  * Hook to get claude_desktop_config.json export
  */
 export function useSubscriptionConfig(id: string | undefined) {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<MCPSubscriptionConfig>({
-    queryKey: ['subscription', id, 'config'],
+    queryKey: [activeEnvironment, 'subscription', id, 'config'],
     queryFn: () => subscriptionsService.getConfigExport(id!),
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes - config doesn't change often
@@ -172,8 +177,9 @@ export function useRotateApiKey() {
  * Hook to get subscription with rotation info
  */
 export function useSubscriptionRotationInfo(id: string | undefined) {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<MCPSubscription>({
-    queryKey: ['subscription', id, 'rotation-info'],
+    queryKey: [activeEnvironment, 'subscription', id, 'rotation-info'],
     queryFn: () => subscriptionsService.getRotationInfo(id!),
     enabled: !!id,
     staleTime: 30 * 1000, // 30 seconds
@@ -261,8 +267,9 @@ export function useSubscribe() {
  * Hook to get my API subscriptions
  */
 export function useMyAPISubscriptions() {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<APISubscription[]>({
-    queryKey: ['my-api-subscriptions'],
+    queryKey: [activeEnvironment, 'my-api-subscriptions'],
     queryFn: () => apiSubscriptionsService.getMySubscriptionsFormatted(),
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -274,8 +281,9 @@ export function useMyAPISubscriptions() {
  * Falls back to client-side filtering if backend doesn't fully support it
  */
 export function useApplicationSubscriptions(applicationId: string | undefined) {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<APISubscription[]>({
-    queryKey: ['my-api-subscriptions', { application_id: applicationId }],
+    queryKey: [activeEnvironment, 'my-api-subscriptions', { application_id: applicationId }],
     queryFn: async () => {
       if (!applicationId) return [];
       // Request with application_id filter for server-side filtering

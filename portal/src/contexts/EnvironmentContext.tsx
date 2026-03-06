@@ -10,6 +10,7 @@ import {
 import { useAuth as useOidcAuth } from 'react-oidc-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { config } from '../config';
+import { setApiBaseUrl } from '../services/api';
 
 const ACTIVE_ENV_KEY = 'stoa-portal-active-environment';
 
@@ -114,6 +115,14 @@ export function PortalEnvironmentProvider({ children }: { children: ReactNode })
 
         setEnvironments(mapped);
         setError(null);
+
+        // Set initial API base URL for the active environment
+        const stored = localStorage.getItem(ACTIVE_ENV_KEY);
+        const initialEnvName = stored && isValidEnvironment(stored) ? stored : 'dev';
+        const initialEnv = mapped.find((e) => e.name === initialEnvName) ?? mapped[0];
+        if (initialEnv?.endpoints?.api_url) {
+          setApiBaseUrl(initialEnv.endpoints.api_url);
+        }
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to fetch environments');
@@ -137,11 +146,32 @@ export function PortalEnvironmentProvider({ children }: { children: ReactNode })
 
   const switchEnvironment = useCallback(
     (env: PortalEnvironment) => {
+      const newConfig = environments.find((e) => e.name === env);
+
+      // Update API base URL for the new environment
+      if (newConfig?.endpoints?.api_url) {
+        setApiBaseUrl(newConfig.endpoints.api_url);
+      } else {
+        setApiBaseUrl(config.api.baseUrl);
+      }
+
+      // Cross-env auth: if Keycloak URL differs, force re-authentication
+      const currentKcUrl = activeConfig?.endpoints?.keycloak_url;
+      const newKcUrl = newConfig?.endpoints?.keycloak_url;
+      if (currentKcUrl && newKcUrl && currentKcUrl !== newKcUrl) {
+        // Different Keycloak instance — token is invalid for new env
+        setActiveEnvironment(env);
+        localStorage.setItem(ACTIVE_ENV_KEY, env);
+        queryClient.invalidateQueries();
+        void oidcAuth.signinRedirect();
+        return;
+      }
+
       setActiveEnvironment(env);
       localStorage.setItem(ACTIVE_ENV_KEY, env);
       queryClient.invalidateQueries();
     },
-    [queryClient]
+    [queryClient, environments, activeConfig, oidcAuth]
   );
 
   const value: PortalEnvironmentContextType = useMemo(

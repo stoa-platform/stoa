@@ -25,6 +25,21 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
+vi.mock('../../contexts/EnvironmentContext', () => ({
+  usePortalEnvironment: () => ({
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+    environments: [
+      { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+      { name: 'staging', label: 'Staging', mode: 'full', color: 'amber' },
+    ],
+    endpoints: null,
+    switchEnvironment: vi.fn(),
+    loading: false,
+    error: null,
+  }),
+}));
+
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'Sidebar — %s persona',
   (role) => {

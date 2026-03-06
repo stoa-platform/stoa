@@ -6,14 +6,16 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { applicationsService, ListApplicationsParams } from '../services/applications';
+import { usePortalEnvironment } from '../contexts/EnvironmentContext';
 import type { Application, ApplicationCreateRequest, PaginatedResponse } from '../types';
 
 /**
  * Hook to list user's applications
  */
 export function useApplications(params?: ListApplicationsParams) {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<PaginatedResponse<Application>>({
-    queryKey: ['applications', params],
+    queryKey: [activeEnvironment, 'applications', params],
     queryFn: () => applicationsService.listApplications(params),
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -23,8 +25,9 @@ export function useApplications(params?: ListApplicationsParams) {
  * Hook to get a single application by ID
  */
 export function useApplication(id: string | undefined) {
+  const { activeEnvironment } = usePortalEnvironment();
   return useQuery<Application>({
-    queryKey: ['application', id],
+    queryKey: [activeEnvironment, 'application', id],
     queryFn: () => applicationsService.getApplication(id!),
     enabled: !!id,
     staleTime: 60 * 1000, // 1 minute

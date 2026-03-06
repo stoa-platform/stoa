@@ -11,6 +11,7 @@ import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { useSequenceShortcuts } from '@stoa/shared/hooks';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useTheme } from '@stoa/shared/contexts';
+import { EnvironmentChrome } from '@stoa/shared/components/EnvironmentChrome';
 import { useTranslation } from 'react-i18next';
 import { LanguageToggle } from './LanguageToggle';
 import { apiService } from '../services/api';
@@ -853,8 +854,27 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <div className="lg:pl-64">
+        {/* Environment chrome bar (Stripe-inspired, ADR-040) */}
+        <EnvironmentChrome
+          current={{
+            name: activeEnvironment,
+            label: activeConfig.label,
+            mode: activeConfig.mode,
+            color: activeConfig.color,
+          }}
+          environments={environments.map((env) => ({
+            name: env.name,
+            label: env.label,
+            mode: env.mode,
+            color: env.color,
+          }))}
+          onSwitch={(name) => handleEnvSwitch(name)}
+          variant="admin"
+          className="sticky top-0 z-50"
+        />
+
         {/* Header */}
-        <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 sm:px-6 shadow-sm dark:shadow-none">
+        <header className="sticky top-[36px] z-40 flex h-16 items-center gap-4 border-b bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 sm:px-6 shadow-sm dark:shadow-none">
           {/* Mobile menu button */}
           <button
             onClick={() => setSidebarOpen(true)}

@@ -103,13 +103,13 @@ def upgrade() -> None:
         INSERT INTO proxy_backends (name, display_name, base_url, health_endpoint, auth_type, credential_ref, rate_limit_rpm)
         VALUES
             ('n8n', 'n8n Workflow Automation', 'https://n8n.gostoa.dev', '/healthz', 'api_key', 'api-proxy:n8n', 60),
-            ('linear', 'Linear Project Management', 'https://api.linear.app', '/graphql', 'bearer', 'api-proxy:linear', 120),
+            ('linear', 'Linear Project Management', 'https://api.linear.app', '/', 'bearer', 'api-proxy:linear', 120),
             ('github', 'GitHub API', 'https://api.github.com', '/', 'bearer', 'api-proxy:github', 300),
             ('slack-bot', 'Slack Bot API', 'https://slack.com/api', '/api.test', 'bearer', 'api-proxy:slack-bot', 120),
             ('slack-webhook', 'Slack Incoming Webhook', 'https://hooks.slack.com', NULL, 'bearer', 'api-proxy:slack-webhook', 30),
             ('infisical', 'Infisical Secrets Manager', 'https://vault.gostoa.dev', '/api/status', 'bearer', 'api-proxy:infisical', 60),
-            ('cloudflare', 'Cloudflare API', 'https://api.cloudflare.com/client/v4', '/user/tokens/verify', 'bearer', 'api-proxy:cloudflare', 120),
-            ('pushgateway', 'Prometheus Pushgateway', 'https://pushgateway.gostoa.dev', '/-/healthy', 'basic', 'api-proxy:pushgateway', 60)
+            ('cloudflare', 'Cloudflare API', 'https://api.cloudflare.com/client/v4', '/', 'bearer', 'api-proxy:cloudflare', 120),
+            ('pushgateway', 'Prometheus Pushgateway', 'https://pushgateway.gostoa.dev', NULL, 'basic', 'api-proxy:pushgateway', 60)
         ON CONFLICT (name) DO NOTHING
         """)
     )

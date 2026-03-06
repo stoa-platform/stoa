@@ -18,6 +18,7 @@ import {
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
 import { TenantBadge } from './TenantBadge';
+import { EnvironmentSelector } from './EnvironmentSelector';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -235,6 +236,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Footer info */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+          {/* Environment selector (mobile) */}
+          <EnvironmentSelector variant="mobile" />
           {/* Tenant context badge */}
           <TenantBadge className="mb-3" />
           <a

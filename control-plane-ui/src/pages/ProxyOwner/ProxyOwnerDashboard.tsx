@@ -191,7 +191,7 @@ export function ProxyOwnerDashboard() {
       setError(null);
 
       // Fetch gateway instances for health overview
-      const gwResponse = await apiService.get('/v1/gateway-instances');
+      const gwResponse = await apiService.get('/v1/admin/gateways');
       const instances = gwResponse.data?.items || gwResponse.data || [];
 
       // Map real gateway data to our health model

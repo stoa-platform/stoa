@@ -189,6 +189,9 @@ mod tests {
             cnf: None,
             sub_account_id: None,
             master_account_id: None,
+            worker_name: None,
+            worker_roles: None,
+            supervision_tier: None,
         }
     }
 
@@ -217,6 +220,9 @@ mod tests {
             cnf: None,
             sub_account_id: None,
             master_account_id: None,
+            worker_name: None,
+            worker_roles: None,
+            supervision_tier: None,
         }
     }
 

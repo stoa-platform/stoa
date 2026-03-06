@@ -309,6 +309,7 @@ pub async fn subscription_middleware(
                 oauth_client_id = %azp,
                 api_id = %api_id,
                 subscription_id = %info.subscription_id,
+                security_profile = %info.security_profile,
                 "Subscription validated"
             );
             request.extensions_mut().insert(info);

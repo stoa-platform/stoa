@@ -192,6 +192,9 @@ pub fn build_router(state: AppState) -> Router {
         )
         // CAB-1716: HEGEMON budget admin
         .route("/hegemon/budget", get(hegemon::budget::list_budgets))
+        // CAB-1718: HEGEMON claims admin
+        .route("/hegemon/claims", get(hegemon::claims::list_claims))
+        .route("/hegemon/claims/:mega_id", get(hegemon::claims::get_claims))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -319,6 +322,19 @@ pub fn build_router(state: AppState) -> Router {
                 .route(
                     "/hegemon/budget/record",
                     post(hegemon::budget::budget_record),
+                )
+                // CAB-1718: HEGEMON claim coordination endpoints
+                .route(
+                    "/hegemon/claims/:mega_id/reserve",
+                    post(hegemon::claims::reserve_claim),
+                )
+                .route(
+                    "/hegemon/claims/:mega_id/release",
+                    post(hegemon::claims::release_claim),
+                )
+                .route(
+                    "/hegemon/claims/:mega_id/heartbeat",
+                    post(hegemon::claims::heartbeat_claim),
                 )
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)

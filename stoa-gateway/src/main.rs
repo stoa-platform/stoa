@@ -205,21 +205,25 @@ fn init_tracing(config: &Config) {
 
     #[cfg(feature = "otel")]
     {
-        use stoa_gateway::telemetry::{init_telemetry_tracer, TelemetryConfig};
+        if config.otel_enabled {
+            use stoa_gateway::telemetry::{init_telemetry_tracer, TelemetryConfig};
 
-        let telem_config = TelemetryConfig {
-            otlp_endpoint: config.otel_endpoint.clone(),
-            sample_rate: config.otel_sample_rate,
-            ..TelemetryConfig::default()
-        };
-        if let Some(tracer) = init_telemetry_tracer(&telem_config) {
-            let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
-            tracing_subscriber::registry()
-                .with(filter)
-                .with(fmt_layer)
-                .with(otel_layer)
-                .init();
-            return;
+            let telem_config = TelemetryConfig {
+                otlp_endpoint: config.otel_endpoint.clone(),
+                sample_rate: config.otel_sample_rate,
+                ..TelemetryConfig::default()
+            };
+            if let Some(tracer) = init_telemetry_tracer(&telem_config) {
+                let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+                tracing_subscriber::registry()
+                    .with(filter)
+                    .with(fmt_layer)
+                    .with(otel_layer)
+                    .init();
+                return;
+            }
+        } else {
+            stoa_gateway::telemetry::init_telemetry_noop();
         }
     }
 

@@ -55,14 +55,14 @@ services:
   # Authentication (Keycloak)
   # ==========================================================================
   keycloak:
-    image: quay.io/keycloak/keycloak:23.0
+    image: quay.io/keycloak/keycloak:26.5.3
     container_name: stoa-keycloak
     command: start-dev --import-realm
     ports:
       - "${PORT_KEYCLOAK:-8080}:8080"
     environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /
       # Phase 3: Reverse proxy configuration (CAB-1108)
@@ -72,8 +72,8 @@ services:
       # Phase 2: Allow iframe embedding in Console (CAB-1108)
       KC_SPI_X_FRAME_OPTIONS: ""
       KC_SPI_CONTENT_SECURITY_POLICY: "frame-ancestors 'self' http://localhost:* https://console.gostoa.dev"
-      # Federation: token exchange + fine-grained authz (ADR-026)
-      KC_FEATURES: "token-exchange,admin-fine-grained-authz"
+      # FAPI 2.0: token exchange + DPoP + PAR (CAB-1733)
+      KC_FEATURES: "token-exchange,dpop,par,admin-fine-grained-authz"
     volumes:
       # Main STOA realm
       - ./init/keycloak-realm.json:/opt/keycloak/data/import/01-stoa-realm.json:ro

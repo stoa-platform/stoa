@@ -237,6 +237,8 @@ pub fn build_router(state: AppState) -> Router {
                     get(oauth::discovery::openid_configuration),
                 )
                 .route("/oauth/token", post(oauth::proxy::token_proxy))
+                // RFC 9126 — Pushed Authorization Requests (CAB-1733, FAPI 2.0)
+                .route("/oauth/par", post(oauth::proxy::par_proxy))
                 .route("/oauth/register", post(oauth::proxy::register_proxy))
                 // RFC 7592 — Dynamic Client Registration Management (CAB-1606)
                 .route(

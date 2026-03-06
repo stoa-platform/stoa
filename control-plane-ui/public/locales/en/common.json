@@ -50,6 +50,7 @@
     "webhooks": "Webhooks",
     "credentialMappings": "Credential Mappings",
     "contracts": "Contracts",
+    "internalApis": "Internal APIs",
     "aiFactory": "AI Factory"
   },
   "layout": {

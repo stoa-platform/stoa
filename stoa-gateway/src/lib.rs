@@ -14,6 +14,7 @@ pub mod git;
 pub mod governance;
 pub mod guardrails;
 pub mod handlers;
+pub mod hegemon;
 pub mod k8s;
 pub mod llm;
 pub mod mcp;
@@ -178,6 +179,51 @@ pub fn build_router(state: AppState) -> Router {
             admin::admin_auth,
         ));
 
+    // HEGEMON claim coordination (CAB-1718)
+    let claim_store = std::sync::Arc::new(hegemon::claims::ClaimStore::new());
+
+    // Load persisted claims if file exists
+    let claims_path = std::path::Path::new("hegemon-claims.json");
+    if claims_path.exists() {
+        if let Ok(data) = std::fs::read(claims_path) {
+            claim_store.load_from_json(&data);
+        }
+    }
+
+    // Spawn stale claim reaper (2h timeout)
+    hegemon::claims::ClaimStore::spawn_stale_reaper(claim_store.clone());
+
+    // Graceful shutdown: flush claims to disk
+    {
+        let cs = claim_store.clone();
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c().await.ok();
+            let data = cs.flush_to_json();
+            if let Err(e) = std::fs::write("hegemon-claims.json", &data) {
+                tracing::error!(error = %e, "Failed to persist claims on shutdown");
+            } else {
+                tracing::info!("Claims flushed to hegemon-claims.json");
+            }
+        });
+    }
+
+    let hegemon_router = Router::new()
+        .route("/claims", get(hegemon::claims::list_claims))
+        .route("/claims/:mega_id", get(hegemon::claims::get_claim))
+        .route(
+            "/claims/:mega_id/reserve",
+            post(hegemon::claims::reserve_claim),
+        )
+        .route(
+            "/claims/:mega_id/release",
+            post(hegemon::claims::release_claim),
+        )
+        .route(
+            "/claims/:mega_id/heartbeat",
+            post(hegemon::claims::heartbeat_claim),
+        )
+        .with_state(claim_store);
+
     // Common routes for all modes: health, metrics, admin
     let base = Router::new()
         .route("/health", get(health))
@@ -186,6 +232,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics))
         .nest("/admin", admin_router)
+        .nest("/hegemon", hegemon_router)
         // HTTP metrics middleware: records method, path, status, duration for ALL requests.
         // Also triggers auto-RCA on 5xx responses (CAB-1542 Phase 3).
         .layer(axum::middleware::from_fn_with_state(

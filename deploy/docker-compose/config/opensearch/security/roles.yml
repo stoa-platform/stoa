@@ -73,3 +73,139 @@ stoa_logs_tenant_ioi_sixers:
         - "read"
         - "write"
         - "create_index"
+
+# =============================================================================
+# Gateway Telemetry Logs — CAB-1684
+# =============================================================================
+# DLS (Document-Level Security) scopes tenant-admin/devops to their own tenant.
+# FLS (Field-Level Security) excludes PII fields for viewer role.
+# Template roles — provisioner (CAB-1685) creates per-tenant instances.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Platform admin: access to ALL gateway telemetry indices
+# Mapped to: cpi-admin realm role
+# ---------------------------------------------------------------------------
+stoa_gw_admin:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-gw-*"
+      allowed_actions:
+        - "read"
+        - "search"
+    - index_patterns:
+        - ".kibana*"
+        - ".opensearch_dashboards*"
+      allowed_actions:
+        - "read"
+        - "write"
+        - "create_index"
+
+# ---------------------------------------------------------------------------
+# Gateway log writer: bulk index permission for telemetry pipeline
+# Mapped to: internal service account (control-plane-api)
+# ---------------------------------------------------------------------------
+stoa_gw_writer:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-gw-*"
+      allowed_actions:
+        - "crud"
+        - "create_index"
+
+# ---------------------------------------------------------------------------
+# Template: tenant-scoped gateway log reader (DLS)
+# Provisioner creates per-tenant instances:
+#   stoa_gw_tenant_{tenant_id} with DLS filter on tenant_id
+# ---------------------------------------------------------------------------
+# Example (demo tenant, created by init script):
+stoa_gw_tenant_oasis_gunters:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-gw-*"
+      dls: '{"term": {"tenant_id": "oasis-gunters"}}'
+      allowed_actions:
+        - "read"
+        - "search"
+    - index_patterns:
+        - ".kibana*"
+        - ".opensearch_dashboards*"
+      allowed_actions:
+        - "read"
+        - "write"
+        - "create_index"
+
+stoa_gw_tenant_ioi_sixers:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-gw-*"
+      dls: '{"term": {"tenant_id": "ioi-sixers"}}'
+      allowed_actions:
+        - "read"
+        - "search"
+    - index_patterns:
+        - ".kibana*"
+        - ".opensearch_dashboards*"
+      allowed_actions:
+        - "read"
+        - "write"
+        - "create_index"
+
+# ---------------------------------------------------------------------------
+# Template: tenant-scoped viewer (DLS + FLS, excludes PII)
+# Provisioner creates per-tenant instances:
+#   stoa_gw_viewer_{tenant_id} with DLS + FLS excluding PII fields
+# ---------------------------------------------------------------------------
+stoa_gw_viewer_oasis_gunters:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-gw-*"
+      dls: '{"term": {"tenant_id": "oasis-gunters"}}'
+      fls:
+        - "~request_body"
+        - "~response_body"
+        - "~auth_token"
+      allowed_actions:
+        - "read"
+        - "search"
+    - index_patterns:
+        - ".kibana*"
+        - ".opensearch_dashboards*"
+      allowed_actions:
+        - "read"
+
+stoa_gw_viewer_ioi_sixers:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-gw-*"
+      dls: '{"term": {"tenant_id": "ioi-sixers"}}'
+      fls:
+        - "~request_body"
+        - "~response_body"
+        - "~auth_token"
+      allowed_actions:
+        - "read"
+        - "search"
+    - index_patterns:
+        - ".kibana*"
+        - ".opensearch_dashboards*"
+      allowed_actions:
+        - "read"

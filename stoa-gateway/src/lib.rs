@@ -181,6 +181,15 @@ pub fn build_router(state: AppState) -> Router {
             "/hegemon/agents/:name/tier",
             post(hegemon::registry::update_agent_tier),
         )
+        // CAB-1713/1714: HEGEMON dispatch admin
+        .route(
+            "/hegemon/dispatches",
+            get(hegemon::dispatch::list_dispatches),
+        )
+        .route(
+            "/hegemon/dispatches/:id",
+            get(hegemon::dispatch::get_dispatch),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -297,6 +306,12 @@ pub fn build_router(state: AppState) -> Router {
                 // Uses catch-all since axum doesn't allow {param}/{*rest}.
                 .route("/proxy/*path", axum::routing::any(api_proxy_handler))
                 .route("/admin/api-proxy/backends", get(list_api_proxy_backends))
+                // CAB-1713/1714: HEGEMON dispatch endpoints
+                .route("/hegemon/dispatch", post(hegemon::dispatch::dispatch_job))
+                .route(
+                    "/hegemon/dispatch/:id/result",
+                    post(hegemon::dispatch::dispatch_result),
+                )
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)

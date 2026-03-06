@@ -5,10 +5,11 @@
  */
 
 import { useState } from 'react';
-import { Plus, AppWindow, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, AppWindow, Loader2, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useApplications, useCreateApplication } from '../../hooks/useApplications';
 import { usePortalEnvironment } from '../../contexts/EnvironmentContext';
+import { useEnvironmentMode } from '../../hooks/useEnvironmentMode';
 import { ApplicationCard } from '../../components/apps/ApplicationCard';
 import { CreateAppModal } from '../../components/apps/CreateAppModal';
 import { CredentialsViewer } from '../../components/apps/CredentialsViewer';
@@ -17,6 +18,7 @@ import type { Application, ApplicationCreateRequest } from '../../types';
 export function MyApplications() {
   const { t } = useTranslation('apps');
   const { activeEnvironment } = usePortalEnvironment();
+  const { canCreate, isReadOnly } = useEnvironmentMode();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newlyCreatedApp, setNewlyCreatedApp] = useState<Application | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -53,6 +55,16 @@ export function MyApplications() {
 
   return (
     <div className="space-y-6">
+      {/* Read-only environment banner */}
+      {isReadOnly && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400">
+          <Lock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+          <span>
+            This environment is read-only. Creating or modifying applications is disabled.
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -70,7 +82,8 @@ export function MyApplications() {
           </button>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            disabled={!canCreate}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="h-4 w-4" />
             {t('createApp')}
@@ -162,7 +175,8 @@ export function MyApplications() {
           </p>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            disabled={!canCreate}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="h-4 w-4" />
             {t('empty.createFirst')}

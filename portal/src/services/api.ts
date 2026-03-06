@@ -8,6 +8,23 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '../config';
 import { getFriendlyErrorMessage } from '@stoa/shared/utils';
 
+// Dynamic base URL — updated by EnvironmentContext on env switch
+let currentBaseUrl: string = config.api.baseUrl;
+
+/**
+ * Update the API base URL (called by EnvironmentContext on environment switch)
+ */
+export function setApiBaseUrl(url: string) {
+  currentBaseUrl = url;
+}
+
+/**
+ * Get the current API base URL
+ */
+export function getApiBaseUrl(): string {
+  return currentBaseUrl;
+}
+
 // Create axios instance with base configuration
 export const apiClient: AxiosInstance = axios.create({
   baseURL: config.api.baseUrl,
@@ -35,9 +52,10 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
-// Request interceptor - adds Authorization header
+// Request interceptor - sets dynamic baseURL and adds Authorization header
 apiClient.interceptors.request.use(
   (config) => {
+    config.baseURL = currentBaseUrl;
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }

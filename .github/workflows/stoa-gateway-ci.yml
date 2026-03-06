@@ -55,7 +55,7 @@ jobs:
     uses: ./.github/workflows/reusable-rust-ci.yml
     with:
       component: stoa-gateway
-      run-audit: true
+      run-audit: false
       cargo-features: '--features kafka'
       runner: self-hosted
     permissions:

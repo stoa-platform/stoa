@@ -32,8 +32,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Dedup gate: skip if ticket already has a council:ticket-* label.
+      # Prevents re-running council when multiple webhooks fire for the same ticket
+      # (label changes, sort order, comments all trigger Linear webhooks).
+      - name: Check if already council-validated
+        id: dedup
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          TICKET_ID: ${{ github.event.client_payload.ticket_id }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ] || [ -z "$TICKET_ID" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          LABELS=$(curl -s -X POST https://api.linear.app/graphql \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { labels { nodes { name } } } } }\"}" \
+            | jq -r '[.data.issues.nodes[0].labels.nodes[].name] | join(",")' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "council:ticket-"; then
+            echo "::notice::$TICKET_ID already has council label ($LABELS) — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$TICKET_ID labels: $LABELS — proceeding with council"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Council Validation
         id: council
+        if: steps.dedup.outputs.skip != 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
@@ -281,7 +308,7 @@ jobs:
       # Notify Slack + Metrics — Council report (info-only) + queue notification
       - name: Slack Council Report
         id: slack-council
-        if: always()
+        if: always() && steps.dedup.outputs.skip != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -335,7 +362,7 @@ jobs:
           push_metrics_council "linear-dispatch" "$TICKET" "${SCORE:-0}" "$VERDICT_LC"
 
       - name: Write Job Summary — Council
-        if: always()
+        if: always() && steps.dedup.outputs.skip != 'true'
         run: |
           source scripts/ai-ops/ai-factory-notify.sh
           write_job_summary "${{ github.event.client_payload.ticket_id }}" \

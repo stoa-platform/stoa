@@ -72,6 +72,53 @@ spec:
               value: "300"
             - name: STOA_LLM_PROXY_METERING_URL
               value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
+            # --- API Proxy backends (CAB-1728: dogfooding low-risk) ---
+            - name: STOA_API_PROXY_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_REQUIRE_AUTH
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_PUSHGATEWAY_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_PUSHGATEWAY_BASE_URL
+              value: "http://pushgateway.monitoring.svc:9091"
+            - name: STOA_API_PROXY_BACKENDS_PUSHGATEWAY_AUTH_TYPE
+              value: "api_key"
+            - name: STOA_API_PROXY_BACKENDS_PUSHGATEWAY_RATE_LIMIT_RPM
+              value: "0"
+            - name: STOA_API_PROXY_BACKENDS_PUSHGATEWAY_TIMEOUT_SECS
+              value: "60"
+            - name: STOA_API_PROXY_BACKENDS_HEALTHCHECKS_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_HEALTHCHECKS_BASE_URL
+              value: "https://hc.gostoa.dev"
+            - name: STOA_API_PROXY_BACKENDS_HEALTHCHECKS_AUTH_TYPE
+              value: "api_key"
+            - name: STOA_API_PROXY_BACKENDS_HEALTHCHECKS_RATE_LIMIT_RPM
+              value: "100"
+            - name: STOA_API_PROXY_BACKENDS_HEALTHCHECKS_TIMEOUT_SECS
+              value: "10"
+            - name: STOA_API_PROXY_BACKENDS_N8N_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_N8N_BASE_URL
+              value: "https://n8n.gostoa.dev"
+            - name: STOA_API_PROXY_BACKENDS_N8N_AUTH_TYPE
+              value: "api_key"
+            - name: STOA_API_PROXY_BACKENDS_N8N_AUTH_HEADER
+              value: "X-N8N-API-KEY"
+            - name: STOA_API_PROXY_BACKENDS_N8N_RATE_LIMIT_RPM
+              value: "60"
+            - name: STOA_API_PROXY_BACKENDS_N8N_TIMEOUT_SECS
+              value: "30"
+            - name: STOA_API_PROXY_BACKENDS_CLOUDFLARE_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_CLOUDFLARE_BASE_URL
+              value: "https://api.cloudflare.com/client/v4"
+            - name: STOA_API_PROXY_BACKENDS_CLOUDFLARE_AUTH_TYPE
+              value: "bearer"
+            - name: STOA_API_PROXY_BACKENDS_CLOUDFLARE_RATE_LIMIT_RPM
+              value: "200"
+            - name: STOA_API_PROXY_BACKENDS_CLOUDFLARE_TIMEOUT_SECS
+              value: "30"
           # REQUIRED for auto-registration (ADR-028):
           # The Secret `stoa-gateway-secrets` MUST contain:
           #   STOA_CONTROL_PLANE_API_KEY - API key matching one entry in

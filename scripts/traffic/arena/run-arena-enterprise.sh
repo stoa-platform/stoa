@@ -153,25 +153,33 @@ while IFS= read -r line; do
 done < "$SCORER_STDERR"
 
 # ---------------------------------------------------------------------------
-# Push to Pushgateway
+# Push to Pushgateway (via STOA Gateway proxy with direct fallback)
 # ---------------------------------------------------------------------------
-PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/gateway_arena_enterprise/instance/${ARENA_INSTANCE}"
+PROXY_LIB="$(dirname "$0")/../../ops/stoa-proxy.sh"
+# shellcheck source=/dev/null
+[[ -f "$PROXY_LIB" ]] && source "$PROXY_LIB"
 RESPONSE_FILE="$WORK_DIR/push_response.txt"
-CURL_AUTH=""
-if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
-  CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
-fi
-HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" -X PUT --data-binary @"$METRICS_FILE" \
-  -H "Content-Type: text/plain" $CURL_AUTH "$PUSH_URL" 2>/dev/null)
-[ -z "$HTTP_CODE" ] && HTTP_CODE="000"
+JOB_PATH="gateway_arena_enterprise/instance/${ARENA_INSTANCE}"
 
-if [ "$HTTP_CODE" -lt 300 ] && [ "$HTTP_CODE" != "000" ]; then
+if type stoa_proxy_push_metrics &>/dev/null && stoa_proxy_push_metrics "$JOB_PATH" "$METRICS_FILE" "$RESPONSE_FILE"; then
   METRIC_LINES=$(wc -l < "$METRICS_FILE" | tr -d ' ')
-  log_json "\"Pushed $METRIC_LINES enterprise metric lines to $PUSH_URL (HTTP $HTTP_CODE)\""
+  log_json "\"Pushed $METRIC_LINES enterprise metric lines via proxy (job=${JOB_PATH})\""
 else
-  RESP_BODY=$(cat "$RESPONSE_FILE" 2>/dev/null | head -c 500 | tr '"' "'")
-  METRIC_SIZE=$(wc -c < "$METRICS_FILE" | tr -d ' ')
-  log_json "\"WARNING: Pushgateway returned HTTP $HTTP_CODE (payload ${METRIC_SIZE} bytes): $RESP_BODY\""
+  # Direct fallback
+  PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/${JOB_PATH}"
+  CURL_AUTH=""
+  [ -n "${PUSHGATEWAY_AUTH:-}" ] && CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
+  HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" -X PUT --data-binary @"$METRICS_FILE" \
+    -H "Content-Type: text/plain" $CURL_AUTH "$PUSH_URL" 2>/dev/null)
+  [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
+  if [ "$HTTP_CODE" -lt 300 ] && [ "$HTTP_CODE" != "000" ]; then
+    METRIC_LINES=$(wc -l < "$METRICS_FILE" | tr -d ' ')
+    log_json "\"Pushed $METRIC_LINES enterprise metric lines to $PUSH_URL (HTTP $HTTP_CODE)\""
+  else
+    RESP_BODY=$(cat "$RESPONSE_FILE" 2>/dev/null | head -c 500 | tr '"' "'")
+    METRIC_SIZE=$(wc -c < "$METRICS_FILE" | tr -d ' ')
+    log_json "\"WARNING: Pushgateway returned HTTP $HTTP_CODE (payload ${METRIC_SIZE} bytes): $RESP_BODY\""
+  fi
 fi
 
 # Cleanup

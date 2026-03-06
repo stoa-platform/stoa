@@ -276,29 +276,51 @@ _react_slack() {
 
 _push_metrics() {
   # Internal: push Prometheus text format metrics to Pushgateway.
-  # Graceful degradation if PUSHGATEWAY_URL is unset.
+  # Tries STOA Gateway proxy first, falls back to direct Pushgateway.
+  # Graceful degradation if neither is configured.
   # $1 = job path suffix (e.g., "workflow/linear-dispatch/stage/council")
   # $2 = metrics text (Prometheus exposition format)
   local JOB_PATH="${1:?}" METRICS_TEXT="${2:?}"
   # $() strips trailing newlines but Pushgateway requires one
   METRICS_TEXT="${METRICS_TEXT}"$'\n'
+
+  local FULL_JOB="ai_factory/${JOB_PATH}"
+  local HTTP_CODE=""
+  local TMP_METRICS
+  TMP_METRICS=$(mktemp)
+  printf '%s\n' "$METRICS_TEXT" > "$TMP_METRICS"
+
+  # Try STOA Gateway proxy first
+  local PROXY_LIB
+  PROXY_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../ops" 2>/dev/null && pwd)/stoa-proxy.sh"
+  # shellcheck source=/dev/null
+  if [[ -f "$PROXY_LIB" ]] && [[ -n "${STOA_PROXY_URL:-}" ]]; then
+    source "$PROXY_LIB" 2>/dev/null || true
+    if type stoa_proxy_push_metrics &>/dev/null && stoa_proxy_push_metrics "$FULL_JOB" "$TMP_METRICS" /dev/null 2>/dev/null; then
+      rm -f "$TMP_METRICS"
+      return 0
+    fi
+  fi
+
+  # Direct fallback
   if [ -z "${PUSHGATEWAY_URL:-}" ]; then
     echo "::notice::PUSHGATEWAY_URL not configured — skipping metrics push"
+    rm -f "$TMP_METRICS"
     return 0
   fi
-  local PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/ai_factory/${JOB_PATH}"
-  local HTTP_CODE
+  local PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/${FULL_JOB}"
   if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
-    HTTP_CODE=$(printf '%s\n' "$METRICS_TEXT" | curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      --data-binary @- \
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary @"$TMP_METRICS" \
       -H "Content-Type: text/plain" \
       -u "${PUSHGATEWAY_AUTH}" "$PUSH_URL" 2>/dev/null)
   else
-    HTTP_CODE=$(printf '%s\n' "$METRICS_TEXT" | curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      --data-binary @- \
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary @"$TMP_METRICS" \
       -H "Content-Type: text/plain" \
       "$PUSH_URL" 2>/dev/null)
   fi
+  rm -f "$TMP_METRICS"
   [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
   if [ "$HTTP_CODE" -ge 300 ] || [ "$HTTP_CODE" = "000" ]; then
     echo "::warning::Pushgateway returned HTTP ${HTTP_CODE} (non-blocking)"

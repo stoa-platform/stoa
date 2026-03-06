@@ -3,6 +3,7 @@
 //! CAB-1094: Proxy OAuth endpoints to Keycloak for Claude.ai MCP connector.
 //! CAB-1606: RFC 7592 — Dynamic Client Registration Management Protocol.
 //! CAB-1733: RFC 9126 — Pushed Authorization Requests (PAR) for FAPI 2.0.
+//! CAB-1740: RFC 7523 — JWT Bearer client assertion detection + validation.
 //!
 //! - POST /oauth/token — transparent proxy to Keycloak token endpoint
 //! - POST /oauth/par — PAR proxy to Keycloak (RFC 9126, FAPI 2.0)
@@ -21,6 +22,7 @@ use axum::{
 use serde_json::{json, Value};
 use tracing::{debug, error, info, warn};
 
+use super::client_auth;
 use crate::proxy::hardening::{build_via_value, with_keycloak_resilience};
 use crate::state::AppState;
 
@@ -28,12 +30,48 @@ use crate::state::AppState;
 ///
 /// Transparent proxy to Keycloak token endpoint.
 /// Forwards body as-is, returns Keycloak response as-is.
+///
+/// When the request contains `client_assertion` + `client_assertion_type` (RFC 7523),
+/// the gateway validates the assertion format and claims before forwarding to Keycloak.
+/// Keycloak performs the actual signature verification using the client's registered JWKS.
 pub async fn token_proxy(
     State(state): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
     let config = &state.config;
+
+    // RFC 7523: Detect and validate JWT Bearer client assertion (private_key_jwt)
+    // Parse early for format validation + observability; Keycloak handles signature verification.
+    match client_auth::parse_client_assertion(&body) {
+        Ok(Some(assertion)) => {
+            let client_id = if assertion.client_id.is_empty() {
+                "(from JWT iss)"
+            } else {
+                &assertion.client_id
+            };
+            info!(
+                client_id = %client_id,
+                auth_method = "private_key_jwt",
+                "Token request using JWT Bearer client authentication (RFC 7523)"
+            );
+        }
+        Ok(None) => {
+            // Standard auth (client_secret_basic, client_secret_post, or none/public)
+            debug!("Token request using standard client authentication");
+        }
+        Err(e) => {
+            warn!(error = %e, "Invalid client_assertion in token request");
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": "invalid_client",
+                    "error_description": format!("Client assertion validation failed: {}", e)
+                })),
+            )
+                .into_response();
+        }
+    }
 
     let keycloak_url = match config.keycloak_url.as_deref() {
         Some(url) => url.trim_end_matches('/'),
@@ -1651,5 +1689,94 @@ mod tests {
             .unwrap();
         // PAR returns 400 for invalid requests — proxy passes it through
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // === client_assertion (RFC 7523) in token_proxy tests ===
+
+    #[tokio::test]
+    async fn test_token_proxy_rejects_invalid_assertion_type() {
+        let state = test_state_with_keycloak(Some("http://127.0.0.1:1"));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(
+                        "grant_type=authorization_code&client_assertion_type=wrong&client_assertion=eyJ.test.jwt"
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"], "invalid_client");
+    }
+
+    #[tokio::test]
+    async fn test_token_proxy_rejects_assertion_without_type() {
+        let state = test_state_with_keycloak(Some("http://127.0.0.1:1"));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(
+                        "grant_type=authorization_code&client_assertion=eyJ.test.jwt",
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_token_proxy_forwards_valid_assertion_to_keycloak() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/protocol/openid-connect/token"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"access_token": "fapi-token", "token_type": "Bearer"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+
+        // Valid assertion type + assertion — should be forwarded to KC
+        let body = format!(
+            "grant_type=authorization_code&client_id=fapi-client&client_assertion_type={}&client_assertion=eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3QifQ.eyJpc3MiOiJmYXBpLWNsaWVudCIsInN1YiI6ImZhcGktY2xpZW50IiwiYXVkIjoiaHR0cHM6Ly9tY3AuZ29zdG9hLmRldi9vYXV0aC90b2tlbiIsImV4cCI6OTk5OTk5OTk5OSwianRpIjoidW5pcXVlLWlkIn0.fake-signature",
+            super::client_auth::JWT_BEARER_ASSERTION_TYPE
+        );
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Gateway forwards to KC (format is valid, KC does signature check)
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["access_token"], "fapi-token");
     }
 }

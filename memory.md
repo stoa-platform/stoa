@@ -1,13 +1,19 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-04 (CAB-1543 Observability Alerts PR #1398)
+> Derniere MAJ: 2026-03-06 (CAB-1733 FAPI 2.0 Spike + Decomposition)
 
 ## ✅ DONE
 
 > Full history: 1305+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
 > Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
 
-### Cycle 12 (Feb 27+)
+### Cycle 12 (Mar 3+)
+- 🔴 CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10
+  - Spike DONE: `docs/spikes/SPIKE-FAPI-2-COMPATIBILITY.md`
+  - ADR-056 DONE: FAPI 2.0 Architecture (stoa-docs)
+  - KC 26.5.3 sufficient, no upgrade needed. Decomposed: 5 subs (CAB-1739-1743)
+
+### Cycle 12 (Feb 27+) — older items
 - ✅ CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398 (2 files, 430 LOC). 17 new PrometheusRule alerts + AlertManagerConfig CRD. Gap-fill: portal/console health, LLM cost anomaly, auth/RBAC anomaly, SLO multi-window burn-rate, deployment rollout. 4 Slack channels + inhibition rules
 - ✅ CAB-1637: API/MCP Discovery — Smart Connector Catalog (13 pts) — PR #1397 (2 files, ~250 LOC). Curated catalog of 12 EU APIs + MCP endpoints, auto-detect from URL, search by keyword. 3 endpoints: /catalog, /detect, /search. 21 unit tests
 - ✅ CAB-1634: RBAC Taxonomy v2 (21 pts) — PR #1396 (6 files, ~380 LOC). 32 granular permissions, 4 resource domains (api, subscription, analytics, admin), RBACContext + permission inheritance, 57 unit tests

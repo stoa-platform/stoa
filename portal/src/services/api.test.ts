@@ -25,7 +25,7 @@ vi.mock('../config', () => ({
   },
 }));
 
-import { setAccessToken, getAccessToken, apiClient } from './api';
+import { setAccessToken, getAccessToken, setApiBaseUrl, getApiBaseUrl, apiClient } from './api';
 import axios from 'axios';
 
 // Capture interceptor handlers registered at module init (before clearAllMocks wipes them)
@@ -72,17 +72,38 @@ describe('api module', () => {
     });
   });
 
+  describe('dynamic base URL', () => {
+    it('should update base URL via setApiBaseUrl', () => {
+      setApiBaseUrl('https://staging-api.test.dev');
+      expect(getApiBaseUrl()).toBe('https://staging-api.test.dev');
+    });
+
+    it('should apply current base URL in request interceptor', () => {
+      setApiBaseUrl('https://staging-api.test.dev');
+      const config = { headers: {} as any, baseURL: '' };
+      const result = requestHandler(config);
+      expect(result.baseURL).toBe('https://staging-api.test.dev');
+    });
+
+    it('should switch between environments', () => {
+      setApiBaseUrl('https://staging-api.test.dev');
+      expect(getApiBaseUrl()).toBe('https://staging-api.test.dev');
+      setApiBaseUrl('https://dev-api.test.dev');
+      expect(getApiBaseUrl()).toBe('https://dev-api.test.dev');
+    });
+  });
+
   describe('request interceptor', () => {
     it('should add Authorization header when token is set', () => {
       setAccessToken('bearer-token');
-      const config = { headers: {} as any };
+      const config = { headers: {} as any, baseURL: '' };
       const result = requestHandler(config);
       expect(result.headers.Authorization).toBe('Bearer bearer-token');
     });
 
     it('should not add Authorization header when token is null', () => {
       setAccessToken(null);
-      const config = { headers: {} as any };
+      const config = { headers: {} as any, baseURL: '' };
       const result = requestHandler(config);
       expect(result.headers.Authorization).toBeUndefined();
     });

@@ -30,11 +30,13 @@ vi.mock('../../contexts/AuthContext', () => ({
 // Mock EnvironmentContext
 vi.mock('../../contexts/EnvironmentContext', () => ({
   usePortalEnvironment: () => ({
-    activeEnvironment: null,
-    activeConfig: null,
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
     environments: [],
     endpoints: null,
     switchEnvironment: vi.fn(),
+    loading: false,
+    error: null,
   }),
 }));
 

@@ -91,7 +91,6 @@ pcap = ["pnet"]                              # Port mirror capture (raw packets)
 [dev-dependencies]
 criterion = "0.8"
 insta = { version = "1", features = ["json", "redactions"] }
-openssl = "0.10"                              # RSA keygen for JWT client_assertion tests
 tokio-test = "0.4"
 tower = { version = "0.5", features = ["util"] }
 wiremock = "0.6"

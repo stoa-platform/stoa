@@ -392,25 +392,63 @@ mod tests {
     use super::*;
     use jsonwebtoken::{encode, EncodingKey, Header};
 
-    /// Helper: generate an RSA key pair for testing.
+    /// Static RSA 2048 key pair for testing (DO NOT use in production).
+    /// Generated once with `openssl genrsa 2048`, avoids openssl system dependency in CI.
+    const TEST_RSA_PRIVATE_PEM: &str = "-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAxUa9q/L+ewhQKY4Wiwnro6SWh7rjBSf25tGX8Akp8eSrC6/V
+ctOua6zs5qiqkdoPozTf3zife5lzCtYzDIeu+DwvvUAzUXZHXjS1UxnMcYNIvUvf
+myjhEaLyuHrqjzKFDzAbJ295m+QiuZ9ld2E90Cds81f3LDInOrBnRj3JfFkT/wkp
+H5RIifnMAiXpxWJgdUmZBjouCczHRWzJFFe33R6lI37BVqgMten0LBxQsEg51oGB
+sYyHHW4WIKCALZDv1ErKaxxp2lxQZkpUjYOjLg1Sbqiw5cSDUeKTDv2osLTdJ+B6
+yYuSJJwhv6QNWYytBfLDSULk/zrSBfCdo3LHAQIDAQABAoIBAAw36L3Ycq+l9NmT
+COVHCbTAqBhbYE3QoymaAgciWSpHyXqDgyTN1K3rd5+EYy6eBvWKvAIqQpH0H8iE
+OmSQd4s9Ro9qFVeae9p7SR7+0D9YVFIxm6WDdVerXA1GIyaX+F7nwcnKLSn1Kfut
+Ujpv79U3aOeEO21NxKldVUMn5uWcLppuKxugitwvQk7IHCMnxiR1SdSA52025RpR
+Y3CZK8leryv9zFBFtvViMgvpZGfotXaOugshJH0blwm8G9/3VH0UoK8OgT6uwK78
+oSeyQvzPiRuZF5xa7IGogyTQE3SVsBa5fqQ18mpyon8I/o6Omr5zL1F+c4dsF3Vv
+A7qT5fECgYEA9CyA3lqOoEWToIIqv21phJyGN9KhCPf30rdgEV8mP/+ffz+LpFOL
+if2+pDu5zcgeyKMQjGpeKPvrWPwKDIlk4s6t6wZGciuXnXwJkrERKoVf5wpf9rV6
+7laksXv44YjYYSJGBn4BkBmvSg/sASrwI4Q6HIImhU1cQDBwWdCeYZECgYEAztTC
+FZN96BQUt5S4XGpSpFrxA/GiHOQOIXlYDoLMWkWFxIFQ459/Fpn/MTO162GHzBL3
+9FBBVwoig6qzt3KCHnFChpbfdsgwbMBxOXtjvLOaRX2mFV6hAwj/VlpplJOFvPv5
+5MToydPU2C4kDg4c7hkTNImD3DxoeBercusTVnECgYB9anZuv1jO3a3sHa/TT2GJ
+adROy/NG5gb2xpWjlpnQ+X11ILCbIQZlRF4tgTf4iLe3GnqfhOsEZhEGTb7jnZai
+IMKYG0sHzXg8vb81B5nnm0YdJ+kOkTypOvuw5hp5zY5GphINt58Z4vd0NSVlnCZo
+N7yZdAhRI+EkXzz2BP+04QKBgQDJKOxLB9Qg78bmdeKJH2+ZIkneyBgfeT61F8uo
+8VXHRm6/m/YMLIfyd3xXYi/A6m6k8J3wJE4oVVcUL+XyuZAMA6PsOrjEUhem7dQx
+T+zFDvkwNPBfQFXhGdMdLXoaYxBjqb513X17LmeIiffPI7LHb+PZ6RUyEh6ZDoxV
+jISWQQKBgEQksTI6ef6jg44qwqQA2ew2SEAyY5JzOERiQJjRl+q7+Ju0XM1HhwoV
+TPrZxYMzJbu0Vtw0cn7OZL/tWMPSLcHkpJkNhPUOAhZs82tYBevuuZ1mxs/5nkwo
+2YHoRmnYJalBnDUzJcxS0iuSZukwxJ1TsJI20S+n5kvGFV951YBp
+-----END RSA PRIVATE KEY-----";
+
+    const TEST_RSA_PUBLIC_PEM: &str = "-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxUa9q/L+ewhQKY4Wiwnr
+o6SWh7rjBSf25tGX8Akp8eSrC6/VctOua6zs5qiqkdoPozTf3zife5lzCtYzDIeu
++DwvvUAzUXZHXjS1UxnMcYNIvUvfmyjhEaLyuHrqjzKFDzAbJ295m+QiuZ9ld2E9
+0Cds81f3LDInOrBnRj3JfFkT/wkpH5RIifnMAiXpxWJgdUmZBjouCczHRWzJFFe3
+3R6lI37BVqgMten0LBxQsEg51oGBsYyHHW4WIKCALZDv1ErKaxxp2lxQZkpUjYOj
+Lg1Sbqiw5cSDUeKTDv2osLTdJ+B6yYuSJJwhv6QNWYytBfLDSULk/zrSBfCdo3LH
+AQIDAQAB
+-----END PUBLIC KEY-----";
+
+    // Precomputed JWK components for the test key above (base64url-encoded n and e).
+    const TEST_RSA_N: &str = "xUa9q_L-ewhQKY4Wiwnro6SWh7rjBSf25tGX8Akp8eSrC6_VctOua6zs5qiqkdoPozTf3zife5lzCtYzDIeu-DwvvUAzUXZHXjS1UxnMcYNIvUvfmyjhEaLyuHrqjzKFDzAbJ295m-QiuZ9ld2E90Cds81f3LDInOrBnRj3JfFkT_wkpH5RIifnMAiXpxWJgdUmZBjouCczHRWzJFFe33R6lI37BVqgMten0LBxQsEg51oGBsYyHHW4WIKCALZDv1ErKaxxp2lxQZkpUjYOjLg1Sbqiw5cSDUeKTDv2osLTdJ-B6yYuSJJwhv6QNWYytBfLDSULk_zrSBfCdo3LHAQ";
+    const TEST_RSA_E: &str = "AQAB";
+
+    /// Helper: get the static test RSA key pair.
     fn test_rsa_keys() -> (EncodingKey, DecodingKey, String, String) {
-        // Use a small RSA key for test speed (DO NOT use in production)
-        let rsa = openssl::rsa::Rsa::generate(2048).expect("RSA keygen");
-        let private_pem = rsa.private_key_to_pem().expect("private PEM");
-        let public_pem = rsa.public_key_to_pem().expect("public PEM");
-        let n = base64_url_encode(&rsa.n().to_vec());
-        let e = base64_url_encode(&rsa.e().to_vec());
+        let encoding_key =
+            EncodingKey::from_rsa_pem(TEST_RSA_PRIVATE_PEM.as_bytes()).expect("encoding key");
+        let decoding_key =
+            DecodingKey::from_rsa_pem(TEST_RSA_PUBLIC_PEM.as_bytes()).expect("decoding key");
 
-        let encoding_key = EncodingKey::from_rsa_pem(&private_pem).expect("encoding key");
-        let decoding_key = DecodingKey::from_rsa_pem(&public_pem).expect("decoding key");
-
-        (encoding_key, decoding_key, n, e)
-    }
-
-    fn base64_url_encode(bytes: &[u8]) -> String {
-        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-        use base64::Engine;
-        URL_SAFE_NO_PAD.encode(bytes)
+        (
+            encoding_key,
+            decoding_key,
+            TEST_RSA_N.to_string(),
+            TEST_RSA_E.to_string(),
+        )
     }
 
     fn make_test_jwks(kid: &str, n: &str, e: &str) -> Jwks {
@@ -714,11 +752,12 @@ mod tests {
 
     #[test]
     fn test_validate_wrong_key_fails_signature() {
-        // Sign with one key, verify with a different one
+        // Sign with the test key, verify against a JWKS with a different modulus
         let (enc_key, _, _, _) = test_rsa_keys();
-        let (_, _, n2, e2) = test_rsa_keys();
         let kid = "test-key-1";
-        let jwks = make_test_jwks(kid, &n2, &e2); // different key
+        // Use a bogus modulus — different from the actual test key
+        let wrong_n = "zZZ9q_L-ewhQKY4Wiwnro6SWh7rjBSf25tGX8Akp8eSrC6_VctOua6zs5qiqkdoPozTf3zife5lzCtYzDIeu-DwvvUAzUXZHXjS1UxnMcYNIvUvfmyjhEaLyuHrqjzKFDzAbJ295m-QiuZ9ld2E90Cds81f3LDInOrBnRj3JfFkT_wkpH5RIifnMAiXpxWJgdUmZBjouCczHRWzJFFe33R6lI37BVqgMten0LBxQsEg51oGBsYyHHW4WIKCALZDv1ErKaxxp2lxQZkpUjYOjLg1Sbqiw5cSDUeKTDv2osLTdJ-B6yYuSJJwhv6QNWYytBfLDSULk_zrSBfCdo3LHAQ";
+        let jwks = make_test_jwks(kid, wrong_n, TEST_RSA_E);
         let token_endpoint = "https://mcp.gostoa.dev/oauth/token";
 
         let claims = ClientAssertionClaims {

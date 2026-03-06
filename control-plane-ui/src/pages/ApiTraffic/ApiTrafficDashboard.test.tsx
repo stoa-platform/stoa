@@ -16,6 +16,10 @@ vi.mock('../../services/proxyBackendService', () => ({
   },
 }));
 
+vi.mock('../../config', () => ({
+  config: { services: { grafana: { url: '/grafana/' } } },
+}));
+
 const mockBackends = {
   items: [
     {

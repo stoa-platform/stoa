@@ -140,14 +140,31 @@ jobs:
           COV_PCT=$(grep -oP 'TOTAL\s+\d+\s+\d+\s+\K[\d.]+' /tmp/cov-summary.txt || echo "0")
           echo "coverage_pct=$COV_PCT" >> $GITHUB_OUTPUT
           echo "Coverage: $COV_PCT%"
+      - name: Enforce coverage threshold
+        run: |
+          COV_PCT="${{ steps.extract.outputs.coverage_pct }}"
+          THRESHOLD=60
+          echo "Coverage: ${COV_PCT}% (threshold: ${THRESHOLD}%)"
+          if [ "$(echo "$COV_PCT < $THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "::error::Coverage ${COV_PCT}% is below threshold ${THRESHOLD}%"
+            exit 1
+          fi
       - name: Coverage summary
         if: always()
         run: |
           COV_PCT="${{ steps.extract.outputs.coverage_pct }}"
+          THRESHOLD=60
+          if [ "$(echo "$COV_PCT < $THRESHOLD" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
+            STATUS="⚠️ BELOW THRESHOLD"
+          else
+            STATUS="✅ PASS"
+          fi
           echo "## Code Coverage" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Line coverage | ${COV_PCT}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Threshold | ${THRESHOLD}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${STATUS} |" >> $GITHUB_STEP_SUMMARY
 
   bench-compile:
     name: Compile Benchmarks

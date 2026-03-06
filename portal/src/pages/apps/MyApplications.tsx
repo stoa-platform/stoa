@@ -110,7 +110,14 @@ export function MyApplications() {
               {t('created.dismiss')}
             </button>
           </div>
-          {newlyCreatedApp.client_id ? (
+          {newlyCreatedApp.security_profile === 'api_key' && newlyCreatedApp.api_key ? (
+            <CredentialsViewer
+              clientId={newlyCreatedApp.api_key_prefix || 'stoa_sk_'}
+              clientSecret={newlyCreatedApp.api_key}
+              showSecretOnce={true}
+              labels={{ id: 'API Key Prefix', secret: 'API Key' }}
+            />
+          ) : newlyCreatedApp.client_id ? (
             <CredentialsViewer
               clientId={newlyCreatedApp.client_id}
               clientSecret={newlyCreatedApp.client_secret}

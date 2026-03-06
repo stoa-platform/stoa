@@ -5,9 +5,37 @@
  */
 
 import { useState } from 'react';
-import { X, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2, AlertCircle, Shield } from 'lucide-react';
 import { Button } from '@stoa/shared/components/Button';
-import type { ApplicationCreateRequest } from '../../types';
+import type { ApplicationCreateRequest, SecurityProfile } from '../../types';
+
+const SECURITY_PROFILES: { value: SecurityProfile; label: string; description: string }[] = [
+  {
+    value: 'oauth2_public',
+    label: 'OAuth2 Public (PKCE)',
+    description: 'Browser/mobile apps — no client secret, uses PKCE',
+  },
+  {
+    value: 'oauth2_confidential',
+    label: 'OAuth2 Confidential',
+    description: 'Server-side apps — client secret required',
+  },
+  {
+    value: 'api_key',
+    label: 'API Key',
+    description: 'Simple key auth — no OAuth, key shown once',
+  },
+  {
+    value: 'fapi_baseline',
+    label: 'FAPI Baseline',
+    description: 'Financial-grade — private_key_jwt + PKCE (requires JWKS URI)',
+  },
+  {
+    value: 'fapi_advanced',
+    label: 'FAPI Advanced',
+    description: 'Financial-grade — private_key_jwt + PKCE + DPoP (requires JWKS URI)',
+  },
+];
 
 interface CreateAppModalProps {
   isOpen: boolean;
@@ -26,6 +54,8 @@ export function CreateAppModal({
 }: CreateAppModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [securityProfile, setSecurityProfile] = useState<SecurityProfile>('oauth2_public');
+  const [jwksUri, setJwksUri] = useState('');
   const [callbackUrls, setCallbackUrls] = useState<string[]>(['']);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,11 +63,15 @@ export function CreateAppModal({
 
     const filteredCallbackUrls = callbackUrls.filter((url) => url.trim() !== '');
 
+    const isFapi = securityProfile === 'fapi_baseline' || securityProfile === 'fapi_advanced';
+
     await onSubmit({
       name: name.trim(),
       display_name: name.trim(),
       description: description.trim() || undefined,
       redirect_uris: filteredCallbackUrls,
+      security_profile: securityProfile,
+      jwks_uri: isFapi && jwksUri.trim() ? jwksUri.trim() : undefined,
     });
   };
 
@@ -58,6 +92,8 @@ export function CreateAppModal({
   const resetForm = () => {
     setName('');
     setDescription('');
+    setSecurityProfile('oauth2_public');
+    setJwksUri('');
     setCallbackUrls(['']);
   };
 
@@ -149,6 +185,61 @@ export function CreateAppModal({
                 />
               </div>
 
+              {/* Security Profile */}
+              <div>
+                <label
+                  htmlFor="security-profile"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Shield className="h-4 w-4" />
+                    Security Profile
+                  </span>
+                </label>
+                <select
+                  id="security-profile"
+                  value={securityProfile}
+                  onChange={(e) => setSecurityProfile(e.target.value as SecurityProfile)}
+                  disabled={isLoading}
+                  className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed appearance-none cursor-pointer"
+                >
+                  {SECURITY_PROFILES.map((profile) => (
+                    <option key={profile.value} value={profile.value}>
+                      {profile.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  {SECURITY_PROFILES.find((p) => p.value === securityProfile)?.description}
+                </p>
+              </div>
+
+              {/* JWKS URI (only for FAPI profiles) */}
+              {(securityProfile === 'fapi_baseline' || securityProfile === 'fapi_advanced') && (
+                <div>
+                  <label
+                    htmlFor="jwks-uri"
+                    className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+                  >
+                    JWKS URI <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="jwks-uri"
+                    type="url"
+                    value={jwksUri}
+                    onChange={(e) => setJwksUri(e.target.value)}
+                    placeholder="https://your-app.com/.well-known/jwks.json"
+                    required
+                    disabled={isLoading}
+                    className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    Public endpoint serving your JSON Web Key Set for private_key_jwt
+                    authentication.
+                  </p>
+                </div>
+              )}
+
               {/* Callback URLs */}
               <div>
                 <label
@@ -197,9 +288,23 @@ export function CreateAppModal({
               {/* Info box */}
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm text-blue-700 dark:text-blue-400">
-                  After creating the application, you'll receive a <strong>Client ID</strong> and{' '}
-                  <strong>Client Secret</strong>. The secret will only be shown once, so make sure
-                  to copy it immediately.
+                  {securityProfile === 'api_key' ? (
+                    <>
+                      After creating the application, you'll receive an <strong>API Key</strong>.
+                      The key will only be shown once, so make sure to copy it immediately.
+                    </>
+                  ) : securityProfile === 'oauth2_public' ? (
+                    <>
+                      After creating the application, you'll receive a <strong>Client ID</strong>.
+                      Public clients use PKCE — no client secret is needed.
+                    </>
+                  ) : (
+                    <>
+                      After creating the application, you'll receive a <strong>Client ID</strong>{' '}
+                      and <strong>Client Secret</strong>. The secret will only be shown once, so
+                      make sure to copy it immediately.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -209,7 +314,15 @@ export function CreateAppModal({
               <Button variant="secondary" onClick={handleClose} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={!name.trim()} loading={isLoading}>
+              <Button
+                type="submit"
+                disabled={
+                  !name.trim() ||
+                  ((securityProfile === 'fapi_baseline' || securityProfile === 'fapi_advanced') &&
+                    !jwksUri.trim())
+                }
+                loading={isLoading}
+              >
                 {isLoading ? 'Creating...' : 'Create Application'}
               </Button>
             </div>

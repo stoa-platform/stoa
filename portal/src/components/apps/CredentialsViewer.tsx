@@ -13,6 +13,7 @@ interface CredentialsViewerProps {
   onRegenerateSecret?: () => Promise<string | undefined>;
   isRegenerating?: boolean;
   showSecretOnce?: boolean; // For newly created apps where secret is shown once
+  labels?: { id?: string; secret?: string }; // Custom labels (e.g., for API Key profile)
 }
 
 export function CredentialsViewer({
@@ -21,6 +22,7 @@ export function CredentialsViewer({
   onRegenerateSecret,
   isRegenerating = false,
   showSecretOnce = false,
+  labels,
 }: CredentialsViewerProps) {
   const [showSecret, setShowSecret] = useState(showSecretOnce);
   const [copiedField, setCopiedField] = useState<'id' | 'secret' | null>(null);
@@ -55,7 +57,7 @@ export function CredentialsViewer({
           id="client-id-label"
           className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
         >
-          Client ID
+          {labels?.id || 'Client ID'}
         </span>
         <div className="flex items-center gap-2">
           <div
@@ -85,7 +87,7 @@ export function CredentialsViewer({
           id="client-secret-label"
           className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
         >
-          Client Secret
+          {labels?.secret || 'Client Secret'}
         </span>
         {displaySecret ? (
           <div className="space-y-2">

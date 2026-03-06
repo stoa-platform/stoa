@@ -104,10 +104,10 @@ export const config = {
       },
     },
     grafana: {
-      url: import.meta.env.VITE_GRAFANA_URL || '/grafana/',
+      url: import.meta.env.VITE_GRAFANA_URL || `https://grafana.${BASE_DOMAIN}`,
       arenaDashboardUrl:
         import.meta.env.VITE_ARENA_DASHBOARD_URL ||
-        '/grafana/d/gateway-arena/gateway-arena-leaderboard',
+        `https://grafana.${BASE_DOMAIN}/d/gateway-arena/gateway-arena-leaderboard`,
     },
     prometheus: {
       url: import.meta.env.VITE_PROMETHEUS_URL || `https://prometheus.${BASE_DOMAIN}`,

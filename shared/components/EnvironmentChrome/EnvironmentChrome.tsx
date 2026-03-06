@@ -77,14 +77,17 @@ export function EnvironmentChrome({
   }
 
   return (
-    <div className={`${colors.chrome} ${colors.chromeText} ${className}`}>
+    <div className={`${colors.chrome} ${colors.chromeText} ${className}`} data-testid="env-chrome">
       <div className="flex items-center justify-between h-9 px-4 sm:px-6">
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold tracking-wide uppercase">
             {getEnvLabel(current.name, portalLabels)}
           </span>
           {isReadOnly && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-white/20">
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-white/20"
+              data-testid="env-readonly-badge"
+            >
               <Lock className="h-3 w-3" />
               READ ONLY
             </span>
@@ -106,6 +109,7 @@ export function EnvironmentChrome({
               aria-haspopup="listbox"
               aria-expanded={dropdownOpen}
               aria-label="Switch environment"
+              data-testid="env-switcher"
             >
               <span className="hidden sm:inline">Switch</span>
               <ChevronDown

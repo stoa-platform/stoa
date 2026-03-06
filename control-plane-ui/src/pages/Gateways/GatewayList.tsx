@@ -361,7 +361,10 @@ export function GatewayList() {
 
       {/* Read-only notice */}
       {isReadOnly && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 rounded-lg text-sm text-amber-700 dark:text-amber-400">
+        <div
+          className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 rounded-lg text-sm text-amber-700 dark:text-amber-400"
+          data-testid="readonly-notice"
+        >
           This environment is read-only. Gateway registration and deletion are disabled.
         </div>
       )}

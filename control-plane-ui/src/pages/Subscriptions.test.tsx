@@ -21,6 +21,16 @@ vi.mock('../contexts/EnvironmentContext', () => ({
   })),
 }));
 
+vi.mock('../hooks/useEnvironmentMode', () => ({
+  useEnvironmentMode: () => ({
+    canCreate: true,
+    canEdit: true,
+    canDelete: true,
+    canDeploy: true,
+    isReadOnly: false,
+  }),
+}));
+
 const mockGetSubscriptions = vi.fn().mockResolvedValue({
   items: [
     {

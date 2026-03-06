@@ -192,6 +192,12 @@ pub fn build_router(state: AppState) -> Router {
         )
         // CAB-1716: HEGEMON budget admin
         .route("/hegemon/budget", get(hegemon::budget::list_budgets))
+        // CAB-1720/1721: HEGEMON metering + dashboard admin
+        .route(
+            "/hegemon/dashboard",
+            get(hegemon::dashboard::fleet_dashboard),
+        )
+        .route("/hegemon/events", get(hegemon::metering::list_events))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

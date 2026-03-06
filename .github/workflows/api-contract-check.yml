@@ -1,0 +1,55 @@
+# =============================================================================
+# API Contract Drift Detection
+# =============================================================================
+# Verifies shared/api-types/generated.ts matches control-plane-api/openapi-snapshot.json
+# Fails if types are out of sync (regenerate: cd shared && npm run generate:api-types)
+# =============================================================================
+
+name: API Contract Check
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'control-plane-api/openapi-snapshot.json'
+      - 'shared/api-types/**'
+      - 'shared/package.json'
+      - '.github/workflows/api-contract-check.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check-drift:
+    name: API Type Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+      - name: Install openapi-typescript
+        working-directory: shared
+        run: npm install --no-save openapi-typescript
+      - name: Generate types from current spec
+        working-directory: shared
+        run: npx openapi-typescript ../control-plane-api/openapi-snapshot.json -o /tmp/generated-check.ts
+      - name: Check for drift
+        run: |
+          if ! diff -q shared/api-types/generated.ts /tmp/generated-check.ts > /dev/null 2>&1; then
+            echo "::error::API types are out of sync with openapi-snapshot.json"
+            echo ""
+            echo "The generated types in shared/api-types/generated.ts do not match"
+            echo "the current OpenAPI spec in control-plane-api/openapi-snapshot.json."
+            echo ""
+            echo "To fix: cd shared && npm run generate:api-types && git add api-types/"
+            echo ""
+            diff shared/api-types/generated.ts /tmp/generated-check.ts | head -50
+            exit 1
+          fi
+          echo "API types are in sync."

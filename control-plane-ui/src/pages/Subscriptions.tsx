@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useEnvironment } from '../contexts/EnvironmentContext';
+import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
 import { useDebounce } from '../hooks/useDebounce';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
@@ -35,6 +36,7 @@ const statusColors: Record<SubscriptionStatus, string> = {
 export function Subscriptions() {
   const { isReady } = useAuth();
   const { activeEnvironment } = useEnvironment();
+  const { canEdit } = useEnvironmentMode();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
 
@@ -294,7 +296,12 @@ export function Subscriptions() {
             <span className="text-sm text-neutral-500 dark:text-neutral-400">
               {selectedIds.size} selected
             </span>
-            <Button size="sm" onClick={handleBulkApprove} disabled={actionLoading}>
+            <Button
+              size="sm"
+              onClick={handleBulkApprove}
+              disabled={actionLoading || !canEdit}
+              title={!canEdit ? 'Read-only environment' : undefined}
+            >
               Approve ({selectedIds.size})
             </Button>
             <Button
@@ -304,7 +311,8 @@ export function Subscriptions() {
                 setBulkRejectReason('');
                 setBulkRejectOpen(true);
               }}
-              disabled={actionLoading}
+              disabled={actionLoading || !canEdit}
+              title={!canEdit ? 'Read-only environment' : undefined}
             >
               Reject ({selectedIds.size})
             </Button>
@@ -440,14 +448,16 @@ export function Subscriptions() {
                         <>
                           <button
                             onClick={() => handleApprove(sub)}
-                            disabled={actionLoading}
+                            disabled={actionLoading || !canEdit}
+                            title={!canEdit ? 'Read-only environment' : undefined}
                             className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium disabled:opacity-50"
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => openRejectModal(sub)}
-                            disabled={actionLoading}
+                            disabled={actionLoading || !canEdit}
+                            title={!canEdit ? 'Read-only environment' : undefined}
                             className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium disabled:opacity-50"
                           >
                             Reject

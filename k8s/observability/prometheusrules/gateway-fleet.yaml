@@ -1,0 +1,139 @@
+# =============================================================================
+# Gateway Fleet Alerts — Per-gateway health + Per-tenant quota
+# =============================================================================
+# CAB-1687: PrometheusRules for gateway fleet observability
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-gateway-fleet-alerts
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/name: stoa-gateway-fleet-alerts
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: observability
+spec:
+  groups:
+    # -----------------------------------------------------------------
+    # Per-Gateway Health Alerts
+    # -----------------------------------------------------------------
+    - name: stoa.gateway.health
+      interval: 1m
+      rules:
+        - record: stoa:gateway:error_rate:5m
+          expr: |
+            sum(rate(stoa_http_requests_total{status=~"5.."}[5m])) by (instance)
+            /
+            sum(rate(stoa_http_requests_total[5m])) by (instance)
+
+        - record: stoa:gateway:p95_latency:5m
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le, instance)
+            ) * 1000
+
+        - alert: GatewayInstanceDown
+          expr: up{job=~".*stoa-gateway.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: gateway
+          annotations:
+            summary: "Gateway instance {{ $labels.instance }} is down"
+            description: "Gateway {{ $labels.instance }} has been unreachable for 2 minutes."
+
+        - alert: GatewayHighErrorRate
+          expr: stoa:gateway:error_rate:5m > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            component: gateway
+          annotations:
+            summary: "Gateway {{ $labels.instance }} error rate above 5%"
+            description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes."
+
+        - alert: GatewayHighErrorRateCritical
+          expr: stoa:gateway:error_rate:5m > 0.15
+          for: 2m
+          labels:
+            severity: critical
+            component: gateway
+          annotations:
+            summary: "Gateway {{ $labels.instance }} error rate above 15%"
+            description: "Error rate is {{ $value | humanizePercentage }}. Immediate investigation required."
+
+        - alert: GatewayHighLatency
+          expr: stoa:gateway:p95_latency:5m > 500
+          for: 5m
+          labels:
+            severity: warning
+            component: gateway
+          annotations:
+            summary: "Gateway {{ $labels.instance }} P95 latency above 500ms"
+            description: "P95 latency is {{ $value }}ms for the last 5 minutes."
+
+        - alert: GatewayArenaScoreDrop
+          expr: gateway_arena_score < 60
+          for: 30m
+          labels:
+            severity: warning
+            component: gateway-arena
+          annotations:
+            summary: "Arena score for {{ $labels.gateway }} dropped below 60"
+            description: "Arena L0 proxy score is {{ $value }}. Check gateway performance."
+
+    # -----------------------------------------------------------------
+    # Per-Tenant Quota Alerts
+    # -----------------------------------------------------------------
+    - name: stoa.tenant.quota
+      interval: 1m
+      rules:
+        - record: stoa:tenant:rps:5m
+          expr: |
+            sum(rate(stoa_http_requests_total[5m])) by (tenant)
+
+        - record: stoa:tenant:error_rate:5m
+          expr: |
+            sum(rate(stoa_http_requests_total{status=~"5.."}[5m])) by (tenant)
+            /
+            sum(rate(stoa_http_requests_total[5m])) by (tenant)
+
+        - alert: TenantHighErrorRate
+          expr: stoa:tenant:error_rate:5m > 0.10
+          for: 5m
+          labels:
+            severity: warning
+            component: tenant
+          annotations:
+            summary: "Tenant {{ $labels.tenant }} error rate above 10%"
+            description: "Error rate is {{ $value | humanizePercentage }} for tenant {{ $labels.tenant }}."
+
+        - alert: TenantTrafficSpike
+          expr: |
+            stoa:tenant:rps:5m > 2 * avg_over_time(stoa:tenant:rps:5m[1h] offset 5m)
+          for: 5m
+          labels:
+            severity: info
+            component: tenant
+          annotations:
+            summary: "Traffic spike detected for tenant {{ $labels.tenant }}"
+            description: "Current RPS ({{ $value }}) is 2x the 1-hour average."
+
+    # -----------------------------------------------------------------
+    # Observability Config Drift Alert
+    # -----------------------------------------------------------------
+    - name: stoa.observability.drift
+      interval: 5m
+      rules:
+        - alert: ObservabilityConfigDrift
+          expr: |
+            count(
+              kube_configmap_info{namespace="stoa-monitoring", configmap=~"stoa-dashboard-.*"}
+            ) == 0
+          for: 10m
+          labels:
+            severity: warning
+            component: observability
+          annotations:
+            summary: "No Grafana dashboard ConfigMaps found in stoa-monitoring"
+            description: "Expected dashboard ConfigMaps are missing. Check ArgoCD sync status for stoa-observability app."

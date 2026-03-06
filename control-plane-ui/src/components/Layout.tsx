@@ -247,6 +247,12 @@ const navigationSections: NavSection[] = [
         icon: Stethoscope,
         permission: 'tenants:read',
       },
+      {
+        name: 'nav.internalApis',
+        href: '/internal-apis',
+        icon: Puzzle,
+        permission: 'tenants:read',
+      },
     ],
   },
   {

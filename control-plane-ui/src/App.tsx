@@ -188,6 +188,11 @@ const CredentialMappings = lazy(() =>
 // CAB-1649: Contracts / UAC management
 const Contracts = lazy(() => import('./pages/Contracts').then((m) => ({ default: m.Contracts })));
 
+// CAB-1727: Internal APIs (proxy backends) page
+const InternalApisList = lazy(() =>
+  import('./pages/InternalApis').then((m) => ({ default: m.InternalApisList }))
+);
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -518,6 +523,7 @@ function ProtectedRoutes() {
                 <Route path="/webhooks" element={<Webhooks />} />
                 <Route path="/credential-mappings" element={<CredentialMappings />} />
                 <Route path="/contracts" element={<Contracts />} />
+                <Route path="/internal-apis" element={<InternalApisList />} />
               </Routes>
             </Suspense>
           )}

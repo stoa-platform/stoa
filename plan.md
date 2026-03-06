@@ -333,6 +333,17 @@
 
 **Theme**: HEGEMON Runtime Integration + Gateway Hardening + Observability
 
+### In Progress
+
+- [~] CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10, 5 subs
+  - **Phase 1** (parallel) [owner: —]
+    - [ ] CAB-1739 [gateway] PAR proxy endpoint RFC 9126 (5 pts)
+    - [ ] CAB-1741 [infra] Unify KC to 26.5.3 + FAPI profiles (3 pts)
+    - [ ] CAB-1742 [gateway] OTel runtime toggle (3 pts)
+    - [ ] CAB-1743 [docs] FAPI 2.0 architecture guide (5 pts)
+  - **Phase 2** (after Phase 1) [owner: —]
+    - [ ] CAB-1740 [gateway] private_key_jwt client auth RFC 7523 (8 pts)
+
 ### Todo
 
 - [ ] CAB-1731: fix(ui): honest environment scoping — remove guards from cross-env pages (13 pts) — Council 8.88/10

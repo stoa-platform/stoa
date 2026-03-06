@@ -14,6 +14,7 @@ Metrics:
 import logging
 import time
 
+from opentelemetry import trace
 from prometheus_client import Counter, Histogram
 
 from .gateway_adapter_interface import AdapterResult, GatewayAdapterInterface
@@ -117,41 +118,57 @@ class InstrumentedAdapter(GatewayAdapterInterface):
         return getattr(self._inner, name)
 
     async def _record(self, operation: str, coro):
-        """Execute a coroutine and record metrics around it."""
-        start = time.perf_counter()
-        status = "success"
-        try:
-            result = await coro
-            if isinstance(result, AdapterResult) and not result.success:
+        """Execute a coroutine and record metrics + OTel spans around it."""
+        tracer = trace.get_tracer("stoa.adapter")
+        with tracer.start_as_current_span(
+            f"adapter.{operation}",
+            attributes={
+                "adapter.gateway_type": self._gateway_type,
+                "adapter.operation": operation,
+            },
+        ) as span:
+            start = time.perf_counter()
+            status = "success"
+            try:
+                result = await coro
+                if isinstance(result, AdapterResult) and not result.success:
+                    status = "error"
+                    span.set_attribute("adapter.error", result.error or "unknown")
+                return result
+            except TimeoutError:
+                status = "timeout"
+                span.set_attribute("adapter.error", "timeout")
+                span.set_status(trace.StatusCode.ERROR, "timeout")
+                raise
+            except Exception as exc:
                 status = "error"
-            return result
-        except TimeoutError:
-            status = "timeout"
-            raise
-        except Exception:
-            status = "error"
-            raise
-        finally:
-            duration = time.perf_counter() - start
-            ADAPTER_OPERATIONS_TOTAL.labels(
-                gateway_type=self._gateway_type,
-                operation=operation,
-                status=status,
-            ).inc()
-            ADAPTER_OPERATION_DURATION.labels(
-                gateway_type=self._gateway_type,
-                operation=operation,
-            ).observe(duration)
+                span.set_attribute("adapter.error", str(exc))
+                span.set_status(trace.StatusCode.ERROR, str(exc))
+                raise
+            finally:
+                duration = time.perf_counter() - start
+                span.set_attribute("adapter.duration_ms", duration * 1000)
+                span.set_attribute("adapter.status", status)
 
-            # Dedicated health check metrics
-            if operation == "health_check":
-                ADAPTER_HEALTH_CHECKS_TOTAL.labels(
+                ADAPTER_OPERATIONS_TOTAL.labels(
                     gateway_type=self._gateway_type,
+                    operation=operation,
                     status=status,
                 ).inc()
-                ADAPTER_HEALTH_CHECK_LATENCY.labels(
+                ADAPTER_OPERATION_DURATION.labels(
                     gateway_type=self._gateway_type,
+                    operation=operation,
                 ).observe(duration)
+
+                # Dedicated health check metrics
+                if operation == "health_check":
+                    ADAPTER_HEALTH_CHECKS_TOTAL.labels(
+                        gateway_type=self._gateway_type,
+                        status=status,
+                    ).inc()
+                    ADAPTER_HEALTH_CHECK_LATENCY.labels(
+                        gateway_type=self._gateway_type,
+                    ).observe(duration)
 
     # --- Lifecycle ---
 

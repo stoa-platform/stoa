@@ -53,3 +53,44 @@ stoa_logs_tenant_ioi_sixers:
   users:
     - "sorrento"
     - "sixer42"
+
+# =============================================================================
+# Gateway Telemetry Logs — CAB-1684
+# =============================================================================
+
+# Platform admins see all gateway telemetry
+stoa_gw_admin:
+  reserved: false
+  backend_roles:
+    - "cpi-admin"
+
+# Internal writer (control-plane-api service account)
+stoa_gw_writer:
+  reserved: false
+  users:
+    - "stoa-api"
+
+# Oasis Gunters — tenant-admin/devops see own tenant logs (DLS)
+stoa_gw_tenant_oasis_gunters:
+  reserved: false
+  users:
+    - "parzival"
+    - "art3mis"
+    - "aech"
+
+# IOI Sixers — tenant-admin/devops see own tenant logs (DLS)
+stoa_gw_tenant_ioi_sixers:
+  reserved: false
+  users:
+    - "sorrento"
+    - "sixer42"
+
+# Oasis Gunters — viewer (DLS + FLS, no PII)
+stoa_gw_viewer_oasis_gunters:
+  reserved: false
+  users: []
+
+# IOI Sixers — viewer (DLS + FLS, no PII)
+stoa_gw_viewer_ioi_sixers:
+  reserved: false
+  users: []

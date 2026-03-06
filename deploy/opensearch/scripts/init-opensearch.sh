@@ -207,7 +207,9 @@ echo ""
 log_info "=== Step 1: Index Templates ==="
 for template_file in "${TEMPLATES_DIR}"/tools-template.json \
                      "${TEMPLATES_DIR}"/audit-template.json \
-                     "${TEMPLATES_DIR}"/analytics-template.json; do
+                     "${TEMPLATES_DIR}"/analytics-template.json \
+                     "${TEMPLATES_DIR}"/stoa-logs-template.json \
+                     "${TEMPLATES_DIR}"/gateway-logs-template.json; do
   if [[ -f "$template_file" ]]; then
     apply_template "$template_file"
   else
@@ -261,7 +263,19 @@ echo "  - tools          (permanent, catalog)"
 echo "  - audit-*        (1 year retention)"
 echo "  - analytics-*    (90 days retention)"
 echo ""
+echo "Templates applied:"
+echo "  - tools, audit, analytics, stoa-logs, gateway-logs"
+echo ""
+echo "ISM Policies:"
+echo "  - audit-policy          (365d retention)"
+echo "  - stoa-logs-policy      (14d retention)"
+echo "  - analytics-policy      (90d retention)"
+echo "  - gateway-logs-free     (7d, default for stoa-gw-*)"
+echo "  - gateway-logs-pro      (90d, assigned per-tenant by provisioner)"
+echo "  - gateway-logs-enterprise (365d, assigned per-tenant by provisioner)"
+echo ""
 echo "Next steps:"
 echo "  1. Start the sync service to populate tools catalog"
 echo "  2. Configure audit middleware in FastAPI"
 echo "  3. Import Kibana dashboards"
+echo "  4. Run provisioner to create per-tenant DLS/FLS roles"

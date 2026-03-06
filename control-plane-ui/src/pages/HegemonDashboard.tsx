@@ -15,6 +15,10 @@ import {
   GitBranch,
   DollarSign,
   Zap,
+  Download,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { TraceSummary } from '../types';
@@ -23,6 +27,13 @@ import { SparklineChart } from '../components/charts/SparklineChart';
 // =============================================================================
 // TYPES
 // =============================================================================
+
+interface ModelStats {
+  model: string;
+  sessions: number;
+  cost_usd: number;
+  tokens: number;
+}
 
 interface AISessionStats {
   days: number;
@@ -35,7 +46,12 @@ interface AISessionStats {
     total_cost_usd: number;
     total_tokens: number;
     avg_cost_per_session: number;
+    cost_delta_usd: number;
+    cost_delta_pct: number;
+    tokens_delta: number;
+    prev_cost_usd: number;
   };
+  by_model: ModelStats[];
   workers: WorkerStats[];
   daily: { date: string; sessions: number; cost_usd: number; tokens: number }[];
 }
@@ -107,11 +123,13 @@ function StatCard({
   value,
   icon: Icon,
   accent,
+  trend,
 }: {
   label: string;
   value: string | number;
   icon: typeof Bot;
   accent?: string;
+  trend?: { delta: number; label: string };
 }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
@@ -124,6 +142,24 @@ function StatCard({
       >
         {value}
       </div>
+      {trend && (
+        <div
+          className={clsx(
+            'mt-1 flex items-center gap-1 text-xs',
+            trend.delta > 0 ? 'text-red-500' : trend.delta < 0 ? 'text-green-500' : 'text-gray-400'
+          )}
+        >
+          {trend.delta > 0 ? (
+            <TrendingUp className="h-3 w-3" />
+          ) : trend.delta < 0 ? (
+            <TrendingDown className="h-3 w-3" />
+          ) : (
+            <Minus className="h-3 w-3" />
+          )}
+          {trend.delta > 0 ? '+' : ''}
+          {trend.label}
+        </div>
+      )}
     </div>
   );
 }
@@ -296,6 +332,67 @@ function SessionRow({ trace }: { trace: TraceSummary }) {
 }
 
 // =============================================================================
+// MODEL BREAKDOWN (CAB-1692)
+// =============================================================================
+
+const MODEL_COLORS: Record<string, string> = {
+  opus: '#8b5cf6',
+  sonnet: '#3b82f6',
+  haiku: '#10b981',
+  unknown: '#6b7280',
+};
+
+function getModelColor(model: string): string {
+  for (const [key, color] of Object.entries(MODEL_COLORS)) {
+    if (model.toLowerCase().includes(key)) return color;
+  }
+  return MODEL_COLORS.unknown;
+}
+
+function ModelBreakdown({ models }: { models: ModelStats[] }) {
+  const totalCost = models.reduce((sum, m) => sum + m.cost_usd, 0);
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Cost by Model</h2>
+      {/* Bar */}
+      <div className="mt-3 flex h-4 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+        {models.map((m) => {
+          const pct = totalCost > 0 ? (m.cost_usd / totalCost) * 100 : 0;
+          return (
+            <div
+              key={m.model}
+              className="h-full transition-all"
+              style={{ width: `${pct}%`, backgroundColor: getModelColor(m.model) }}
+              title={`${shortModel(m.model)}: ${formatCost(m.cost_usd)} (${pct.toFixed(0)}%)`}
+            />
+          );
+        })}
+      </div>
+      {/* Legend */}
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {models.map((m) => (
+          <div key={m.model} className="flex items-center gap-2 text-sm">
+            <span
+              className="h-3 w-3 rounded-full"
+              style={{ backgroundColor: getModelColor(m.model) }}
+            />
+            <div>
+              <span className="font-medium text-gray-900 dark:text-white">
+                {shortModel(m.model)}
+              </span>
+              <span className="ml-1 text-gray-500 dark:text-gray-400">
+                {formatCost(m.cost_usd)} / {formatTokens(m.tokens)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // DAILY COST CHART
 // =============================================================================
 
@@ -392,6 +489,25 @@ export function HegemonDashboard() {
             <option value={30}>30 days</option>
           </select>
           <button
+            onClick={async () => {
+              try {
+                const blob = await apiService.exportAiSessionsCsv(days);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hegemon-sessions-${days}d.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (err) {
+                console.error('CSV export failed:', err);
+              }
+            }}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <Download className="h-4 w-4" />
+            CSV
+          </button>
+          <button
             onClick={fetchData}
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
@@ -431,6 +547,14 @@ export function HegemonDashboard() {
               value={formatCost(stats.totals.total_cost_usd)}
               icon={DollarSign}
               accent="text-emerald-600"
+              trend={
+                stats.totals.prev_cost_usd > 0
+                  ? {
+                      delta: stats.totals.cost_delta_usd,
+                      label: `${stats.totals.cost_delta_pct > 0 ? '+' : ''}${stats.totals.cost_delta_pct}% vs prev`,
+                    }
+                  : undefined
+              }
             />
             <StatCard
               label="Total Tokens"
@@ -440,8 +564,11 @@ export function HegemonDashboard() {
             <StatCard label="Workers" value={stats.workers.length} icon={Cpu} />
           </div>
 
-          {/* Daily Cost Chart */}
+          {/* Daily Cost Chart + Model Breakdown */}
           {stats.daily.length > 1 && <DailyCostChart daily={stats.daily} />}
+          {stats.by_model && stats.by_model.length > 0 && (
+            <ModelBreakdown models={stats.by_model} />
+          )}
 
           {/* Worker Cards */}
           {stats.workers.length > 0 && (

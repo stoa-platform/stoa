@@ -114,6 +114,7 @@ from .routers.mcp_admin import (
 )
 from .routers.oauth_clients import router as oauth_clients_router
 from .routers.portal import internal_router as portal_internal_router
+from .routers.telemetry import router as telemetry_router
 from .routers.tenant_mcp_servers import router as tenant_mcp_servers_router
 from .services import (
     argocd_service,
@@ -129,6 +130,7 @@ from .workers.chat_metering_consumer import chat_metering_consumer
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.gateway_health_worker import gateway_health_worker
 from .workers.sync_engine import sync_engine
+from .workers.telemetry_worker import telemetry_worker
 
 
 def custom_generate_unique_id(route):
@@ -147,6 +149,7 @@ ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
 ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
 ENABLE_CHAT_METERING_CONSUMER = os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true").lower() == "true"
 ENABLE_BILLING_METERING_CONSUMER = os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
+ENABLE_TELEMETRY_WORKER = os.getenv("ENABLE_TELEMETRY_WORKER", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -266,6 +269,22 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start billing metering consumer", error=str(e))
 
+    # Start telemetry worker (CAB-1682 — gateway observability)
+    telemetry_worker_task = None
+    if ENABLE_TELEMETRY_WORKER:
+        try:
+            from .opensearch.log_writer import log_writer
+            from .opensearch.opensearch_integration import OpenSearchService
+
+            os_service = OpenSearchService.get_instance()
+            if os_service.client:
+                log_writer.set_client(os_service.client)
+            await log_writer.start()
+            telemetry_worker_task = asyncio.create_task(telemetry_worker.start())
+            logger.info("Telemetry worker started")
+        except Exception as e:
+            logger.warning("Failed to start telemetry worker", error=str(e))
+
     yield
 
     # Shutdown
@@ -312,6 +331,16 @@ async def lifespan(app: FastAPI):
         billing_metering_task.cancel()
         with suppress(asyncio.CancelledError):
             await billing_metering_task
+
+    # Stop telemetry worker (CAB-1682)
+    if ENABLE_TELEMETRY_WORKER and telemetry_worker_task:
+        await telemetry_worker.stop()
+        telemetry_worker_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await telemetry_worker_task
+        from .opensearch.log_writer import log_writer
+
+        await log_writer.stop()
 
     await kafka_service.disconnect()
     await git_service.disconnect()
@@ -701,6 +730,9 @@ app.include_router(gateway_deployments.router)
 app.include_router(gateway_policies.router)
 # Internal gateway registration API (ADR-028 auto-registration)
 app.include_router(gateway_internal.router)
+
+# Telemetry ingest (CAB-1682 — gateway observability)
+app.include_router(telemetry_router)
 # Internal billing API for gateway budget enforcement (CAB-1457)
 app.include_router(billing_internal.router)
 # Billing CRUD API for tenant admins (CAB-1458)

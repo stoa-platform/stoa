@@ -10334,6 +10334,44 @@
         "title": "IngestFindingsRequest",
         "type": "object"
       },
+      "IngestRequest": {
+        "description": "Batch ingest request body.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/TelemetryEntry"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "title": "IngestRequest",
+        "type": "object"
+      },
+      "IngestResponse": {
+        "description": "Ingest response.",
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted",
+          "status"
+        ],
+        "title": "IngestResponse",
+        "type": "object"
+      },
       "InstanceCreate": {
         "description": "Start a new workflow instance",
         "properties": {
@@ -19875,6 +19913,118 @@
         "title": "TaxonomyItem",
         "type": "object"
       },
+      "TelemetryEntry": {
+        "description": "A single gateway telemetry log entry.",
+        "properties": {
+          "gateway_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Id"
+          },
+          "gateway_type": {
+            "title": "Gateway Type",
+            "type": "string"
+          },
+          "latency_ms": {
+            "default": 0.0,
+            "title": "Latency Ms",
+            "type": "number"
+          },
+          "method": {
+            "default": "UNKNOWN",
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "default": "/",
+            "title": "Path",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "source_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ip"
+          },
+          "status": {
+            "default": 0,
+            "title": "Status",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "platform",
+            "title": "Tenant Id"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "gateway_type"
+        ],
+        "title": "TelemetryEntry",
+        "type": "object"
+      },
       "TemplateCreate": {
         "description": "Create a workflow template",
         "properties": {
@@ -24127,6 +24277,90 @@
         "summary": "Startup",
         "tags": [
           "Health"
+        ]
+      }
+    },
+    "/internal/telemetry/ingest": {
+      "post": {
+        "description": "Accepts a batch of log entries from push-based gateways.",
+        "operationId": "ingest_telemetry",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest gateway telemetry entries",
+        "tags": [
+          "Telemetry Internal"
+        ]
+      }
+    },
+    "/internal/telemetry/status": {
+      "get": {
+        "description": "Returns circuit breaker state and buffer size.",
+        "operationId": "telemetry_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Telemetry Status",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Telemetry subsystem status",
+        "tags": [
+          "Telemetry Internal"
         ]
       }
     },
@@ -47037,6 +47271,68 @@
         ]
       }
     },
+    "/v1/traces/export/ai-sessions": {
+      "get": {
+        "description": "Export AI session traces as CSV.\n\nReturns a downloadable CSV with session details including cost, tokens, and model.",
+        "operationId": "export_ai_sessions_csv",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by worker (trigger_source)",
+            "in": "query",
+            "name": "worker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by worker (trigger_source)",
+              "title": "Worker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Ai Sessions Csv",
+        "tags": [
+          "Traces"
+        ]
+      }
+    },
     "/v1/traces/ingest": {
       "post": {
         "description": "Ingest a completed AI session trace from a worker.\n\nWorkers push completed session summaries via this endpoint.\nAuth: X-STOA-API-KEY header.",
@@ -47134,7 +47430,7 @@
     },
     "/v1/traces/stats/ai-sessions": {
       "get": {
-        "description": "Get AI session-specific aggregated statistics.\n\nReturns per-worker stats, daily time series, and totals.",
+        "description": "Get AI session-specific aggregated statistics.\n\nReturns per-worker stats, daily time series, totals, model breakdown, and WoW cost delta.",
         "operationId": "get_ai_session_stats",
         "parameters": [
           {

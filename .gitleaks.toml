@@ -36,6 +36,8 @@ paths = [
   '''deploy/vps/bench/.*''',
   # Onboarding wizard with curl template literals (${trialKey} interpolation, not real secrets)
   '''portal/src/components/onboarding/steps/FirstCall\.tsx''',
+  # E2E smoke mock fixtures with fake JWT tokens (not real secrets)
+  '''e2e/smoke-mock/.*''',
 ]
 
 regexes = [

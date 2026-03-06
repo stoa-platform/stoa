@@ -129,8 +129,8 @@ def upgrade() -> None:
                      created_at, updated_at)
                 VALUES
                     (:id, :name, :display_name, :gateway_type, :environment,
-                     :base_url, :auth_config::jsonb, :status, :capabilities::jsonb,
-                     :mode, :tags::jsonb, NOW(), NOW())
+                     :base_url, CAST(:auth_config AS jsonb), :status, CAST(:capabilities AS jsonb),
+                     :mode, CAST(:tags AS jsonb), NOW(), NOW())
                 ON CONFLICT (name) DO NOTHING
             """),
             {

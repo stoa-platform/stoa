@@ -25,7 +25,9 @@ const mcpConnectorsModule = () => import('./pages/MCPConnectors');
 const gatewaysModule = () => import('./pages/Gateways');
 
 const Tenants = lazy(() => import('./pages/Tenants').then((m) => ({ default: m.Tenants })));
-const APIs = lazy(() => import('./pages/APIs').then((m) => ({ default: m.APIs })));
+const APIsUnified = lazy(() =>
+  import('./pages/APIsUnified').then((m) => ({ default: m.APIsUnified }))
+);
 const Applications = lazy(() =>
   import('./pages/Applications').then((m) => ({ default: m.Applications }))
 );
@@ -122,11 +124,7 @@ const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m
 const Workflows = lazy(() => import('./pages/Workflows').then((m) => ({ default: m.Workflows })));
 
 // CAB-1251: SaaS Self-Service pages
-const backendApisModule = () => import('./pages/BackendApis');
 const saasApiKeysModule = () => import('./pages/SaasApiKeys');
-const BackendApisList = lazy(() =>
-  backendApisModule().then((m) => ({ default: m.BackendApisList }))
-);
 const SaasApiKeysList = lazy(() =>
   saasApiKeysModule().then((m) => ({ default: m.SaasApiKeysList }))
 );
@@ -172,6 +170,11 @@ const ProxyOwnerDashboard = lazy(() =>
   import('./pages/ProxyOwner').then((m) => ({ default: m.ProxyOwnerDashboard }))
 );
 
+// CAB-1730: API Traffic Dashboard (proxy backend observability)
+const ApiTrafficDashboard = lazy(() =>
+  import('./pages/ApiTraffic').then((m) => ({ default: m.ApiTrafficDashboard }))
+);
+
 // CAB-1487: LLM Cost Dashboard
 const LLMCostDashboard = lazy(() =>
   import('./pages/LLMCost').then((m) => ({ default: m.LLMCostDashboard }))
@@ -187,11 +190,6 @@ const CredentialMappings = lazy(() =>
 
 // CAB-1649: Contracts / UAC management
 const Contracts = lazy(() => import('./pages/Contracts').then((m) => ({ default: m.Contracts })));
-
-// CAB-1727: Internal APIs (proxy backends) page
-const InternalApisList = lazy(() =>
-  import('./pages/InternalApis').then((m) => ({ default: m.InternalApisList }))
-);
 
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
@@ -455,7 +453,7 @@ function ProtectedRoutes() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/tenants" element={<Tenants />} />
-                <Route path="/apis" element={<APIs />} />
+                <Route path="/apis" element={<APIsUnified />} />
                 <Route path="/ai-tools" element={<ToolCatalog />} />
                 <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
                 <Route path="/ai-tools/usage" element={<UsageDashboard />} />
@@ -506,7 +504,10 @@ function ProtectedRoutes() {
                 <Route path="/audit-log" element={<AuditLog />} />
                 <Route path="/workflows" element={<Workflows />} />
                 {/* CAB-1251: SaaS Self-Service */}
-                <Route path="/backend-apis" element={<BackendApisList />} />
+                <Route
+                  path="/backend-apis"
+                  element={<Navigate to="/apis?tab=backends" replace />}
+                />
                 <Route path="/saas-api-keys" element={<SaasApiKeysList />} />
                 <Route path="/federation/accounts" element={<FederationAccountsList />} />
                 <Route path="/federation/accounts/:id" element={<FederationAccountDetail />} />
@@ -519,11 +520,15 @@ function ProtectedRoutes() {
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/hegemon" element={<HegemonDashboard />} />
                 <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
+                <Route path="/api-traffic" element={<ApiTrafficDashboard />} />
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
                 <Route path="/webhooks" element={<Webhooks />} />
                 <Route path="/credential-mappings" element={<CredentialMappings />} />
                 <Route path="/contracts" element={<Contracts />} />
-                <Route path="/internal-apis" element={<InternalApisList />} />
+                <Route
+                  path="/internal-apis"
+                  element={<Navigate to="/apis?tab=platform" replace />}
+                />
               </Routes>
             </Suspense>
           )}

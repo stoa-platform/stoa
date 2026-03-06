@@ -141,15 +141,9 @@ export function BackendApisList() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Backend APIs</h1>
-          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
-            Register backend APIs to expose them as MCP tools through the gateway
-          </p>
-        </div>
-        {hasPermission('apis:create') && (
+      {/* Actions */}
+      {hasPermission('apis:create') && (
+        <div className="flex justify-end">
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -157,8 +151,8 @@ export function BackendApisList() {
             <Plus className="h-4 w-4" />
             Register API
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Error */}
       {error && (

@@ -24,37 +24,39 @@ import { Button } from '@stoa/shared/components/Button';
 import type { GatewayInstance, GatewayInstanceStatus, GatewayMode } from '../../types';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants — colors from shared constants (green=dev, amber=staging, red=prod)
 // ---------------------------------------------------------------------------
 
-type Environment = 'production' | 'staging' | 'development';
+import {
+  ENV_ORDER as SHARED_ENV_ORDER,
+  ENV_LABELS,
+  ENV_COLORS as SHARED_COLORS,
+  normalizeEnvironment,
+  type CanonicalEnvironment,
+} from '@stoa/shared/constants/environments';
 
-const ENV_ORDER: Environment[] = ['production', 'staging', 'development'];
+type Environment = CanonicalEnvironment;
 
-const ENV_LABELS: Record<Environment, string> = {
-  production: 'Production',
-  staging: 'Staging',
-  development: 'Development',
-};
+const ENV_ORDER = SHARED_ENV_ORDER;
 
 const ENV_COLORS: Record<Environment, { dot: string; bg: string; text: string; border: string }> = {
   production: {
-    dot: 'bg-red-500',
-    bg: 'bg-red-50 dark:bg-red-950/30',
-    text: 'text-red-700 dark:text-red-400',
-    border: 'border-red-200 dark:border-red-800',
+    dot: SHARED_COLORS.production.dot,
+    bg: `${SHARED_COLORS.production.bg} ${SHARED_COLORS.production.bgDark}`,
+    text: `${SHARED_COLORS.production.text} ${SHARED_COLORS.production.textDark}`,
+    border: `${SHARED_COLORS.production.border} ${SHARED_COLORS.production.borderDark}`,
   },
   staging: {
-    dot: 'bg-amber-500',
-    bg: 'bg-amber-50 dark:bg-amber-950/30',
-    text: 'text-amber-700 dark:text-amber-400',
-    border: 'border-amber-200 dark:border-amber-800',
+    dot: SHARED_COLORS.staging.dot,
+    bg: `${SHARED_COLORS.staging.bg} ${SHARED_COLORS.staging.bgDark}`,
+    text: `${SHARED_COLORS.staging.text} ${SHARED_COLORS.staging.textDark}`,
+    border: `${SHARED_COLORS.staging.border} ${SHARED_COLORS.staging.borderDark}`,
   },
   development: {
-    dot: 'bg-blue-500',
-    bg: 'bg-blue-50 dark:bg-blue-950/30',
-    text: 'text-blue-700 dark:text-blue-400',
-    border: 'border-blue-200 dark:border-blue-800',
+    dot: SHARED_COLORS.development.dot,
+    bg: `${SHARED_COLORS.development.bg} ${SHARED_COLORS.development.bgDark}`,
+    text: `${SHARED_COLORS.development.text} ${SHARED_COLORS.development.textDark}`,
+    border: `${SHARED_COLORS.development.border} ${SHARED_COLORS.development.borderDark}`,
   },
 };
 
@@ -108,12 +110,8 @@ const MODE_LABELS: Record<GatewayMode, string> = {
 // ---------------------------------------------------------------------------
 
 /** Normalize the many env string variants to 3 canonical values. */
-function normalizeEnv(env: string): Environment {
-  const lower = env.toLowerCase();
-  if (lower === 'production' || lower === 'prod') return 'production';
-  if (lower === 'staging') return 'staging';
-  return 'development';
-}
+/** Delegate to shared normalizeEnvironment */
+const normalizeEnv = normalizeEnvironment;
 
 function isLive(gw: GatewayInstance): boolean {
   if (!gw.last_health_check) return false;

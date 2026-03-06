@@ -35,7 +35,8 @@ use crate::state::AppState;
 const SUPERVISION_HEADER: &str = "x-hegemon-supervision";
 
 /// Supervision tiers for HEGEMON workers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SupervisionTier {
     /// All requests pass through. Rate limits and token budget still enforced.
     Autopilot,

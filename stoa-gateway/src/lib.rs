@@ -14,6 +14,7 @@ pub mod git;
 pub mod governance;
 pub mod guardrails;
 pub mod handlers;
+pub mod hegemon;
 pub mod k8s;
 pub mod llm;
 pub mod mcp;
@@ -172,6 +173,13 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/diagnostics/:request_id",
             get(handlers::diagnostic::diagnostic_report_handler),
+        )
+        // CAB-1710/1711: HEGEMON agent registry admin
+        .route("/hegemon/agents", get(hegemon::registry::list_agents))
+        .route("/hegemon/agents/:name", get(hegemon::registry::get_agent))
+        .route(
+            "/hegemon/agents/:name/tier",
+            post(hegemon::registry::update_agent_tier),
         )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

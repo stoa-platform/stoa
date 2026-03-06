@@ -264,6 +264,49 @@ pub fn record_supervision_decision(tier: &str, action: &str) {
         .inc();
 }
 
+// === HEGEMON Dispatch Metrics (CAB-1713) ===
+
+/// Counter of HEGEMON dispatches by worker name.
+pub static HEGEMON_DISPATCHES_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_hegemon_dispatches_total",
+        "Total HEGEMON dispatches by worker",
+        &["worker"]
+    )
+    .expect("Failed to create stoa_hegemon_dispatches_total metric")
+});
+
+/// Gauge of active (in-progress) HEGEMON dispatches.
+pub static HEGEMON_DISPATCH_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "stoa_hegemon_dispatch_active",
+        "Number of active HEGEMON dispatches"
+    )
+    .expect("Failed to create stoa_hegemon_dispatch_active metric")
+});
+
+/// Histogram of HEGEMON dispatch durations in seconds, by worker.
+pub static HEGEMON_DISPATCH_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_hegemon_dispatch_duration_seconds",
+        "Duration of HEGEMON dispatches in seconds",
+        &["worker"],
+        vec![60.0, 300.0, 600.0, 900.0, 1800.0, 3600.0, 7200.0]
+    )
+    .expect("Failed to create stoa_hegemon_dispatch_duration_seconds metric")
+});
+
+/// Histogram of HEGEMON dispatch cost in USD, by worker.
+pub static HEGEMON_DISPATCH_COST: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_hegemon_dispatch_cost_usd",
+        "Cost of HEGEMON dispatches in USD",
+        &["worker"],
+        vec![0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
+    )
+    .expect("Failed to create stoa_hegemon_dispatch_cost_usd metric")
+});
+
 // === Tool Discovery Metrics (CAB-1558) ===
 
 /// Histogram of tool discovery (CP sync) durations in seconds, per tenant and outcome.
@@ -703,6 +746,10 @@ pub fn init_all_metrics() {
     Lazy::force(&DPOP_VALIDATIONS_TOTAL);
     Lazy::force(&SENDER_CONSTRAINT_CHECKS_TOTAL);
     Lazy::force(&SUPERVISION_DECISIONS_TOTAL);
+    Lazy::force(&HEGEMON_DISPATCHES_TOTAL);
+    Lazy::force(&HEGEMON_DISPATCH_ACTIVE);
+    Lazy::force(&HEGEMON_DISPATCH_DURATION);
+    Lazy::force(&HEGEMON_DISPATCH_COST);
 }
 
 /// Get the total number of MCP tool calls across all labels.

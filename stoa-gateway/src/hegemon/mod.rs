@@ -5,12 +5,14 @@
 //!
 //! Kill switch: `STOA_HEGEMON_ENABLED=false` (default: false — explicit opt-in).
 
+pub mod dispatch;
 pub mod identity;
 pub mod registry;
 
 use std::sync::Arc;
 
 use crate::config::Config;
+use dispatch::DispatchTracker;
 use registry::AgentRegistry;
 
 /// Shared state for all HEGEMON subsystems.
@@ -20,6 +22,8 @@ use registry::AgentRegistry;
 pub struct HegemonState {
     /// In-memory agent registry tracking all authenticated workers.
     pub registry: Arc<AgentRegistry>,
+    /// In-memory dispatch tracker for job dispatch and results.
+    pub dispatch_tracker: Arc<DispatchTracker>,
     /// Daily budget limit in USD per agent (from config).
     pub budget_daily_usd: f64,
     /// Warning percentage for budget alerts (0.0-1.0).
@@ -30,6 +34,7 @@ impl HegemonState {
     pub fn new(config: &Config) -> Self {
         Self {
             registry: Arc::new(AgentRegistry::new()),
+            dispatch_tracker: Arc::new(DispatchTracker::new()),
             budget_daily_usd: config.hegemon_budget_daily_usd,
             budget_warn_pct: config.hegemon_budget_warn_pct,
         }

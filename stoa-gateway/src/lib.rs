@@ -14,6 +14,7 @@ pub mod git;
 pub mod governance;
 pub mod guardrails;
 pub mod handlers;
+pub mod hegemon;
 pub mod k8s;
 pub mod llm;
 pub mod mcp;
@@ -173,6 +174,21 @@ pub fn build_router(state: AppState) -> Router {
             "/diagnostics/:request_id",
             get(handlers::diagnostic::diagnostic_report_handler),
         )
+        // CAB-1716: HEGEMON agent budget tracker
+        .route(
+            "/hegemon/budget/check",
+            post(hegemon::budget::budget_check_handler),
+        )
+        .route(
+            "/hegemon/budget/record",
+            post(hegemon::budget::budget_record_handler),
+        )
+        // CAB-1721: HEGEMON fleet dashboard
+        .route(
+            "/hegemon/dashboard",
+            get(hegemon::dashboard::dashboard_handler),
+        )
+        .route("/hegemon/events", get(hegemon::dashboard::events_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

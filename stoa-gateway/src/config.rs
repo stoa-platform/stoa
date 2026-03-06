@@ -486,6 +486,27 @@ pub struct Config {
     #[serde(default = "default_supervision_tier")]
     pub supervision_default_tier: String,
 
+    // === HEGEMON Agent Budget (CAB-1716) ===
+    /// Enable agent budget tracking for HEGEMON workers.
+    /// Env: STOA_HEGEMON_BUDGET_ENABLED
+    #[serde(default)]
+    pub hegemon_budget_enabled: bool,
+
+    /// Daily budget limit in USD per agent.
+    /// Env: STOA_HEGEMON_BUDGET_DAILY_USD
+    #[serde(default = "default_hegemon_budget_daily_usd")]
+    pub hegemon_budget_daily_usd: f64,
+
+    /// Warning threshold as percentage of daily budget (0-100).
+    /// Env: STOA_HEGEMON_BUDGET_WARN_PCT
+    #[serde(default = "default_hegemon_budget_warn_pct")]
+    pub hegemon_budget_warn_pct: u8,
+
+    /// Kafka topic for agent lifecycle events (CAB-1720).
+    /// Env: STOA_HEGEMON_AGENT_EVENTS_TOPIC
+    #[serde(default = "default_hegemon_agent_events_topic")]
+    pub hegemon_agent_events_topic: String,
+
     // === LLM Proxy (CAB-1568: STOA Dogfood) ===
     /// Enable the LLM API proxy (passthrough to upstream LLM provider).
     /// Env: STOA_LLM_PROXY_ENABLED
@@ -910,6 +931,18 @@ fn default_supervision_tier() -> String {
     "autopilot".to_string()
 }
 
+fn default_hegemon_budget_daily_usd() -> f64 {
+    50.0
+}
+
+fn default_hegemon_budget_warn_pct() -> u8 {
+    80
+}
+
+fn default_hegemon_agent_events_topic() -> String {
+    "hegemon.agent_events".to_string()
+}
+
 fn default_llm_timeout_ms() -> u64 {
     30_000
 }
@@ -1022,6 +1055,10 @@ impl Default for Config {
             supervision_enabled: false,
             supervision_webhook_url: None,
             supervision_default_tier: default_supervision_tier(),
+            hegemon_budget_enabled: false,
+            hegemon_budget_daily_usd: default_hegemon_budget_daily_usd(),
+            hegemon_budget_warn_pct: default_hegemon_budget_warn_pct(),
+            hegemon_agent_events_topic: default_hegemon_agent_events_topic(),
             llm_proxy_enabled: false,
             llm_proxy_upstream_url: default_llm_proxy_upstream_url(),
             llm_proxy_api_key: None,

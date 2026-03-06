@@ -18,6 +18,9 @@ use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::guardrails::{GuardrailPolicyStore, TokenBudgetTracker};
+use crate::hegemon::budget::AgentBudgetTracker;
+use crate::hegemon::dashboard::{AgentRegistry, FleetEventBuffer};
+use crate::hegemon::metering::{AgentEventBuffer, AgentMeteringEmitter};
 use crate::llm::{LlmRouter, ProviderRegistry};
 use crate::mcp::pending_requests::PendingRequestTracker;
 use crate::mcp::session::SessionManager;
@@ -129,6 +132,18 @@ pub struct AppState {
     /// LLM cost calculator for per-request cost tracking via Prometheus (CAB-1487 wiring).
     /// Shares the same ProviderRegistry as llm_router. None when LLM router is disabled.
     pub cost_calculator: Option<Arc<crate::llm::CostCalculator>>,
+    /// HEGEMON agent budget tracker for centralized atomic budget enforcement (CAB-1716).
+    /// None when agent budget tracking is disabled.
+    pub agent_budget: Option<Arc<AgentBudgetTracker>>,
+    /// HEGEMON fleet event ring buffer for dashboard visibility (CAB-1721).
+    /// None when agent budget tracking is disabled.
+    pub fleet_events: Option<Arc<FleetEventBuffer>>,
+    /// HEGEMON agent registry for heartbeat tracking (CAB-1721).
+    /// None when agent budget tracking is disabled.
+    pub agent_registry: Option<Arc<AgentRegistry>>,
+    /// HEGEMON agent lifecycle metering emitter (CAB-1720).
+    /// None when agent budget tracking is disabled.
+    pub agent_metering: Option<Arc<AgentMeteringEmitter>>,
 }
 
 impl AppState {
@@ -507,6 +522,52 @@ impl AppState {
             Arc::new(calc)
         });
 
+        // Initialize HEGEMON agent budget tracker (CAB-1716)
+        let agent_budget = if config.hegemon_budget_enabled {
+            let tracker = Arc::new(AgentBudgetTracker::new(
+                config.hegemon_budget_daily_usd,
+                config.hegemon_budget_warn_pct,
+            ));
+            tracing::info!(
+                daily_limit_usd = config.hegemon_budget_daily_usd,
+                warn_pct = config.hegemon_budget_warn_pct,
+                "HEGEMON agent budget tracker initialized"
+            );
+            Some(tracker)
+        } else {
+            tracing::info!(
+                "HEGEMON agent budget tracking disabled (STOA_HEGEMON_BUDGET_ENABLED=false)"
+            );
+            None
+        };
+
+        // Initialize HEGEMON fleet dashboard (CAB-1721)
+        let (fleet_events, agent_registry) = if config.hegemon_budget_enabled {
+            let events = Arc::new(FleetEventBuffer::default());
+            let registry = Arc::new(AgentRegistry::new());
+            tracing::info!("HEGEMON fleet dashboard initialized");
+            (Some(events), Some(registry))
+        } else {
+            (None, None)
+        };
+
+        // Initialize HEGEMON agent lifecycle metering (CAB-1720)
+        let agent_metering = if config.hegemon_budget_enabled {
+            let buffer = Arc::new(AgentEventBuffer::default());
+            let emitter = AgentMeteringEmitter::new(
+                config.hegemon_agent_events_topic.clone(),
+                metering_producer.clone(),
+                buffer,
+            );
+            tracing::info!(
+                topic = %config.hegemon_agent_events_topic,
+                "HEGEMON agent lifecycle metering initialized"
+            );
+            Some(Arc::new(emitter))
+        } else {
+            None
+        };
+
         let start_time = Instant::now();
 
         Self {
@@ -552,6 +613,10 @@ impl AppState {
             capabilities_json,
             llm_router,
             cost_calculator,
+            agent_budget,
+            fleet_events,
+            agent_registry,
+            agent_metering,
         }
     }
 

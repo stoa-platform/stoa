@@ -506,6 +506,7 @@ jobs:
         id: hygiene
         env:
           GH_TOKEN: ${{ github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
           RESULT=$(bash scripts/ai-ops/pr-hygiene.sh)
           echo "json=$RESULT" >> "$GITHUB_OUTPUT"
@@ -513,10 +514,14 @@ jobs:
           STALE=$(echo "$RESULT" | jq -r '.stale')
           ABANDONED=$(echo "$RESULT" | jq -r '.abandoned')
           DRAFT=$(echo "$RESULT" | jq -r '.draft')
+          CLOSED=$(echo "$RESULT" | jq -r '.closed // 0')
+          REOPENED=$(echo "$RESULT" | jq -r '.reopened // 0')
           echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
           echo "stale=$STALE" >> "$GITHUB_OUTPUT"
           echo "abandoned=$ABANDONED" >> "$GITHUB_OUTPUT"
           echo "draft=$DRAFT" >> "$GITHUB_OUTPUT"
+          echo "closed=$CLOSED" >> "$GITHUB_OUTPUT"
+          echo "reopened=$REOPENED" >> "$GITHUB_OUTPUT"
 
       - name: Notify Slack + Push Metrics
         if: always()

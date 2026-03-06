@@ -57,19 +57,46 @@ extract_ticket_id() {
 reopen_linear_ticket() {
   local ticket_id="$1" pr_num="$2" reason="$3"
 
-  if [ -z "${LINEAR_API_KEY:-}" ]; then
-    echo "  LINEAR_API_KEY not set — skipping reopen for $ticket_id"
+  # Source proxy library if available
+  local proxy_lib
+  proxy_lib="$(dirname "$0")/../ops/stoa-proxy.sh"
+  # shellcheck source=/dev/null
+  [[ -f "$proxy_lib" ]] && source "$proxy_lib"
+
+  # Helper: call Linear GraphQL (proxy-first, direct fallback)
+  _linear_gql() {
+    local query="$1" resp_file="$2"
+    if type stoa_proxy_linear_graphql &>/dev/null; then
+      stoa_proxy_linear_graphql "$query" "$resp_file" && return 0
+    fi
+    if [[ -n "${LINEAR_API_KEY:-}" ]]; then
+      curl -s -o "$resp_file" --max-time 15 \
+        -X POST "https://api.linear.app/graphql" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: ${LINEAR_API_KEY}" \
+        -d "$query" 2>/dev/null && return 0
+    fi
+    return 1
+  }
+
+  # Check that at least one path is available
+  if ! type stoa_proxy_linear_graphql &>/dev/null && [ -z "${LINEAR_API_KEY:-}" ]; then
+    echo "  No Linear API path available — skipping reopen for $ticket_id"
     return 0
   fi
 
-  # Find the issue
-  ISSUE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
-    -H "Authorization: $LINEAR_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$ticket_id\\\" } }) { nodes { id state { name type } } } }\"}")
+  local tmp_resp
+  tmp_resp=$(mktemp)
+  trap "rm -f '$tmp_resp'" RETURN
 
-  ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].id // empty')
-  CURRENT_TYPE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].state.type // empty')
+  # Find the issue
+  _linear_gql "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$ticket_id\\\" } }) { nodes { id state { name type } } } }\"}" "$tmp_resp" || {
+    echo "  Failed to query Linear for $ticket_id — skipping"
+    return 0
+  }
+
+  ISSUE_ID=$(jq -r '.data.issues.nodes[0].id // empty' < "$tmp_resp")
+  CURRENT_TYPE=$(jq -r '.data.issues.nodes[0].state.type // empty' < "$tmp_resp")
 
   if [ -z "$ISSUE_ID" ]; then
     echo "  $ticket_id not found in Linear — skipping"
@@ -83,12 +110,12 @@ reopen_linear_ticket() {
   fi
 
   # Get the "Todo" state ID
-  TODO_DATA=$(curl -s -X POST https://api.linear.app/graphql \
-    -H "Authorization: $LINEAR_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"{ workflowStates(filter: { name: { eq: \\\"Todo\\\" }, team: { issues: { identifier: { eq: \\\"$ticket_id\\\" } } } }) { nodes { id name } } }\"}")
+  _linear_gql "{\"query\": \"{ workflowStates(filter: { name: { eq: \\\"Todo\\\" }, team: { issues: { identifier: { eq: \\\"$ticket_id\\\" } } } }) { nodes { id name } } }\"}" "$tmp_resp" || {
+    echo "  Failed to query Todo state for $ticket_id — skipping"
+    return 0
+  }
 
-  TODO_STATE_ID=$(echo "$TODO_DATA" | jq -r '.data.workflowStates.nodes[0].id // empty')
+  TODO_STATE_ID=$(jq -r '.data.workflowStates.nodes[0].id // empty' < "$tmp_resp")
 
   if [ -z "$TODO_STATE_ID" ]; then
     echo "  Could not find Todo state for $ticket_id — skipping reopen"
@@ -101,19 +128,13 @@ reopen_linear_ticket() {
   fi
 
   # Move to Todo
-  MUTATION='mutation { issueUpdate(id: "'"$ISSUE_ID"'", input: { stateId: "'"$TODO_STATE_ID"'" }) { success } }'
-  curl -s -X POST https://api.linear.app/graphql \
-    -H "Authorization: $LINEAR_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"$MUTATION\"}" > /dev/null
+  local mutation='mutation { issueUpdate(id: "'"$ISSUE_ID"'", input: { stateId: "'"$TODO_STATE_ID"'" }) { success } }'
+  _linear_gql "{\"query\": \"$mutation\"}" "$tmp_resp" || true
 
   # Add comment explaining why
-  COMMENT="Reopened automatically by PR hygiene.\n\nPR #${pr_num} was ${reason} without merging. Ticket was falsely marked Done.\n\n*Auto-reopened by pr-hygiene.sh*"
-  COMMENT_MUTATION='mutation { commentCreate(input: { issueId: "'"$ISSUE_ID"'", body: "'"$COMMENT"'" }) { success } }'
-  curl -s -X POST https://api.linear.app/graphql \
-    -H "Authorization: $LINEAR_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
+  local comment="Reopened automatically by PR hygiene.\n\nPR #${pr_num} was ${reason} without merging. Ticket was falsely marked Done.\n\n*Auto-reopened by pr-hygiene.sh*"
+  local comment_mutation='mutation { commentCreate(input: { issueId: "'"$ISSUE_ID"'", body: "'"$comment"'" }) { success } }'
+  _linear_gql "{\"query\": \"$comment_mutation\"}" "$tmp_resp" || true
 
   echo "  Reopened $ticket_id on Linear (Done → Todo)"
 }

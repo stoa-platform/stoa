@@ -181,15 +181,26 @@ _send_slack_bot() {
     return 0
   fi
 
-  # Send via Bot API
-  local RESPONSE
-  RESPONSE=$(curl -sf -X POST "https://slack.com/api/chat.postMessage" \
-    -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-    -H 'Content-Type: application/json' \
-    -d "$BOT_PAYLOAD" 2>/dev/null) || {
-    echo "::warning::Slack Bot API call failed (non-blocking)" >&2
-    return 0
-  }
+  # Send via Bot API (proxy-first + direct fallback)
+  local RESPONSE=""
+  if type stoa_proxy_slack_post &>/dev/null && [ -n "${STOA_PROXY_URL:-}" ]; then
+    local PROXY_RESP="/tmp/slack_proxy_$$.json"
+    if stoa_proxy_slack_post "$BOT_PAYLOAD" "$PROXY_RESP" 2>/dev/null; then
+      RESPONSE=$(cat "$PROXY_RESP" 2>/dev/null)
+      rm -f "$PROXY_RESP"
+    else
+      rm -f "$PROXY_RESP"
+    fi
+  fi
+  if [ -z "$RESPONSE" ]; then
+    RESPONSE=$(curl -sf -X POST "https://slack.com/api/chat.postMessage" \
+      -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+      -H 'Content-Type: application/json' \
+      -d "$BOT_PAYLOAD" 2>/dev/null) || {
+      echo "::warning::Slack Bot API call failed (non-blocking)" >&2
+      return 0
+    }
+  fi
 
   # Extract and return message timestamp for threading/updates
   local TS
@@ -706,8 +717,8 @@ linear_comment() {
   local PR_NUM="${3:-}" PR_URL="${4:-}" PIPELINE="${5:-L3 Pipeline}"
   local DURATION_SECS="${6:-}" FILES="${7:-}" LOC="${8:-}" MODE="${9:-Ship}"
 
-  if [ -z "${LINEAR_API_KEY:-}" ]; then
-    echo "::notice::LINEAR_API_KEY not set — skipping Linear comment"
+  if [ -z "${LINEAR_API_KEY:-}" ] && ! type stoa_proxy_linear_graphql &>/dev/null; then
+    echo "::notice::LINEAR_API_KEY not set and proxy unavailable — skipping Linear comment"
     return 0
   fi
 
@@ -731,24 +742,38 @@ linear_comment() {
   local ESCAPED_BODY
   ESCAPED_BODY=$(_escape_json "$BODY")
 
-  # Resolve Linear issue ID
-  local ISSUE_ID
-  ISSUE_ID=$(curl -sf -X POST "https://api.linear.app/graphql" \
-    -H "Authorization: ${LINEAR_API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
-    | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+  # Resolve Linear issue ID (proxy-first + direct fallback)
+  local RESOLVE_QUERY="{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}"
+  local RESOLVE_RESP="/tmp/linear_resolve_$$.json"
+  local ISSUE_ID=""
+
+  if type stoa_proxy_linear_graphql &>/dev/null; then
+    stoa_proxy_linear_graphql "$RESOLVE_QUERY" "$RESOLVE_RESP" 2>/dev/null || true
+  else
+    curl -sf -X POST "https://api.linear.app/graphql" \
+      -H "Authorization: ${LINEAR_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "$RESOLVE_QUERY" -o "$RESOLVE_RESP" 2>/dev/null || true
+  fi
+  ISSUE_ID=$(jq -r '.data.issueSearch.nodes[0].id // empty' "$RESOLVE_RESP" 2>/dev/null || echo "")
+  rm -f "$RESOLVE_RESP"
 
   if [ -z "$ISSUE_ID" ]; then
     echo "::warning::Could not find Linear issue for ${TICKET_ID}"
     return 0
   fi
 
-  curl -sf -X POST "https://api.linear.app/graphql" \
-    -H "Authorization: ${LINEAR_API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${ESCAPED_BODY}\\\" }) { success } }\"}" \
-    > /dev/null 2>&1 || true
+  # Post comment (proxy-first + direct fallback)
+  local COMMENT_QUERY="{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${ESCAPED_BODY}\\\" }) { success } }\"}"
+
+  if type stoa_proxy_linear_graphql &>/dev/null; then
+    stoa_proxy_linear_graphql "$COMMENT_QUERY" /dev/null 2>/dev/null || true
+  else
+    curl -sf -X POST "https://api.linear.app/graphql" \
+      -H "Authorization: ${LINEAR_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "$COMMENT_QUERY" > /dev/null 2>&1 || true
+  fi
 }
 
 # ── GHA Job Summary ───────────────────────────────────────────────────────────

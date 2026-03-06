@@ -108,7 +108,7 @@ def upgrade() -> None:
             ('slack-bot', 'Slack Bot API', 'https://slack.com/api', '/api.test', 'bearer', 'api-proxy:slack-bot', 120),
             ('slack-webhook', 'Slack Incoming Webhook', 'https://hooks.slack.com', NULL, 'bearer', 'api-proxy:slack-webhook', 30),
             ('infisical', 'Infisical Secrets Manager', 'https://vault.gostoa.dev', '/api/status', 'bearer', 'api-proxy:infisical', 60),
-            ('cloudflare', 'Cloudflare API', 'https://api.cloudflare.com/client/v4', '/', 'bearer', 'api-proxy:cloudflare', 120),
+            ('cloudflare', 'Cloudflare API', 'https://api.cloudflare.com/client/v4', NULL, 'bearer', 'api-proxy:cloudflare', 120),
             ('pushgateway', 'Prometheus Pushgateway', 'https://pushgateway.gostoa.dev', NULL, 'basic', 'api-proxy:pushgateway', 60)
         ON CONFLICT (name) DO NOTHING
         """)

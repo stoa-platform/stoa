@@ -199,6 +199,15 @@ jobs:
                - Calculate: total weekly cost, avg daily, cost per PR, model distribution
                - Flag anomalies: COST-ALERT events, sessions with >50K tokens, cost/PR > $20
                - Recommend: session splitting, model routing adjustments
+            6. Model routing efficiency:
+               - Run: bash scripts/ai-ops/analyze-model-efficiency.sh --days 7
+               - Review model distribution (Haiku vs Opus vs Sonnet usage)
+               - Check if model-router.sh thresholds are optimal:
+                 * <=3pts should use Haiku (cheapest)
+                 * 4-8pts should use Opus (best quality/cost)
+                 * COST-ANOMALY events may indicate tier mismatches
+               - If Haiku usage < 10%: recommend routing more small tickets to Haiku
+               - If cost/PR > $20 consistently: recommend tighter turn budgets
 
             Create issue "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
           # Model tier: sonnet (audit, may create upgrade PRs)

@@ -133,11 +133,32 @@ main() {
   # Log TOKEN-SPEND
   echo "${NOW} | TOKEN-SPEND | date=${TODAY} tokens_total=${total_tokens} cost_usd=${cost_display} sessions=${sessions} messages=${messages} models=${model_summary}" >> "$METRICS_LOG"
 
-  # Check cost alert
+  # Check cost alert (absolute threshold)
   local alert
   alert=$(awk -v c="$total_cost" -v t="$COST_ALERT_THRESHOLD" 'BEGIN { print (c > t) ? "yes" : "no" }')
   if [[ "$alert" == "yes" ]]; then
     echo "${NOW} | COST-ALERT | threshold=${COST_ALERT_THRESHOLD} actual=${cost_display} date=${TODAY}" >> "$METRICS_LOG"
+  fi
+
+  # Cost anomaly detection: compare today's cost to 7-day rolling average
+  # If today's cost > 2x the 7-day average, log COST-ANOMALY
+  if [[ -f "$METRICS_LOG" ]]; then
+    local avg_cost
+    avg_cost=$(grep 'TOKEN-SPEND' "$METRICS_LOG" \
+      | grep -v "date=${TODAY}" \
+      | tail -7 \
+      | grep -oP 'cost_usd=\K[0-9.]+' \
+      | awk '{ sum += $1; n++ } END { if (n > 0) printf "%.4f", sum/n; else print "0" }') || avg_cost="0"
+
+    if [[ "$avg_cost" != "0" ]]; then
+      local is_anomaly
+      is_anomaly=$(awk -v today="$total_cost" -v avg="$avg_cost" 'BEGIN { print (today > 2 * avg) ? "yes" : "no" }')
+      if [[ "$is_anomaly" == "yes" ]]; then
+        local avg_display
+        avg_display=$(awk -v a="$avg_cost" 'BEGIN { printf "%.2f", a }')
+        echo "${NOW} | COST-ANOMALY | today=${cost_display} avg_7d=${avg_display} ratio=$(awk -v t="$total_cost" -v a="$avg_cost" 'BEGIN { printf "%.1f", t/a }')x date=${TODAY}" >> "$METRICS_LOG"
+      fi
+    fi
   fi
 
   # Push to Pushgateway (if ai-factory-notify.sh is available and PUSHGATEWAY_URL set)

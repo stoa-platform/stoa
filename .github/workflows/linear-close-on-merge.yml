@@ -134,6 +134,32 @@ jobs:
 
           echo "Comment added to $TICKET_ID"
 
+      - name: Write PR-MERGED step summary
+        if: steps.extract.outputs.skip != 'true'
+        env:
+          TICKET_ID: ${{ steps.extract.outputs.ticket_id }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          MERGED_AT: ${{ github.event.pull_request.merged_at }}
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## PR Merged — ${TICKET_ID}
+
+          | Field | Value |
+          |-------|-------|
+          | PR | [#${PR_NUM}](${PR_URL}) |
+          | Title | ${PR_TITLE} |
+          | Author | @${PR_AUTHOR} |
+          | Merged | ${MERGED_AT} |
+          | Changes | +${ADDITIONS} -${DELETIONS} (${CHANGED_FILES} files) |
+          | Linear | [${TICKET_ID}](https://linear.app/cab-ing/issue/${TICKET_ID}) |
+          EOF
+
       # Close GitHub Council issue (L3/L3.5 create issues labeled with CAB-XXXX)
       - name: Close GitHub Council issue
         if: steps.extract.outputs.skip != 'true'

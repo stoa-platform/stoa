@@ -19,6 +19,10 @@ pub struct SubscriptionInfo {
     pub api_id: String,
     pub oauth_client_id: String,
     pub rate_limit: Option<u32>,
+    /// Security profile for auth chain selection (CAB-1744).
+    /// Values: "api_key", "oauth2_public", "oauth2_confidential",
+    /// "fapi_baseline", "fapi_advanced". Defaults to "oauth2_public".
+    pub security_profile: String,
 }
 
 /// Subscription validator with moka cache (5-min TTL, 10k entries).
@@ -140,6 +144,11 @@ impl SubscriptionValidator {
                     .get("rate_limit")
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32),
+                security_profile: cp_resp
+                    .get("security_profile")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("oauth2_public")
+                    .to_string(),
             })
         } else if status.as_u16() == 403 || status.as_u16() == 404 {
             // No active subscription or expired — cache as invalid
@@ -150,6 +159,7 @@ impl SubscriptionValidator {
                 api_id: api_id.to_string(),
                 oauth_client_id: oauth_client_id.to_string(),
                 rate_limit: None,
+                security_profile: String::new(),
             })
         } else {
             Err(SubscriptionError::ControlPlaneError(format!(
@@ -229,6 +239,7 @@ mod tests {
             api_id: "api-weather".into(),
             oauth_client_id: "kc-client-123".into(),
             rate_limit: Some(100),
+            security_profile: "oauth2_public".into(),
         };
 
         let cache_key = "kc-client-123:api-weather".to_string();
@@ -253,6 +264,7 @@ mod tests {
             api_id: "api-weather".into(),
             oauth_client_id: "kc-client-123".into(),
             rate_limit: None,
+            security_profile: "oauth2_public".into(),
         };
 
         validator
@@ -308,6 +320,7 @@ mod tests {
             api_id: "api-weather".into(),
             oauth_client_id: "kc-client-123".into(),
             rate_limit: Some(100),
+            security_profile: "oauth2_confidential".into(),
         };
         validator
             .cache
@@ -334,6 +347,7 @@ mod tests {
             api_id: "api-weather".into(),
             oauth_client_id: "unknown-client".into(),
             rate_limit: None,
+            security_profile: String::new(),
         };
         validator
             .cache
@@ -346,6 +360,45 @@ mod tests {
             result.unwrap_err(),
             SubscriptionError::NoActiveSubscription
         ));
+    }
+
+    #[tokio::test]
+    async fn test_security_profile_from_cache() {
+        let validator =
+            SubscriptionValidator::new("http://localhost:8000".into(), reqwest::Client::new());
+
+        let info = SubscriptionInfo {
+            valid: true,
+            subscription_id: "sub-fapi".into(),
+            tenant_id: "acme".into(),
+            api_id: "api-banking".into(),
+            oauth_client_id: "kc-fapi-client".into(),
+            rate_limit: None,
+            security_profile: "fapi_advanced".into(),
+        };
+        validator
+            .cache
+            .insert("kc-fapi-client:api-banking".into(), info);
+
+        let result = validator.validate("kc-fapi-client", "api-banking").await;
+        assert!(result.is_ok());
+        let info = result.expect("should be valid");
+        assert_eq!(info.security_profile, "fapi_advanced");
+    }
+
+    #[test]
+    fn test_security_profile_default() {
+        // When security_profile is missing from CP API response, it defaults to "oauth2_public"
+        let info = SubscriptionInfo {
+            valid: true,
+            subscription_id: "sub-1".into(),
+            tenant_id: "acme".into(),
+            api_id: "api-1".into(),
+            oauth_client_id: "kc-1".into(),
+            rate_limit: None,
+            security_profile: "oauth2_public".into(),
+        };
+        assert_eq!(info.security_profile, "oauth2_public");
     }
 
     #[test]

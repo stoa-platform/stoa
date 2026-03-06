@@ -46,6 +46,22 @@ vi.mock('../uac', () => ({
   useUACSpotlight: () => ({ showSpotlight: false, dismissSpotlight: vi.fn() }),
 }));
 
+vi.mock('../../contexts/EnvironmentContext', () => ({
+  usePortalEnvironment: () => ({
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+    environments: [{ name: 'dev', label: 'Development', mode: 'full', color: 'green' }],
+    endpoints: null,
+    switchEnvironment: vi.fn(),
+    loading: false,
+    error: null,
+  }),
+}));
+
+vi.mock('@stoa/shared/components/EnvironmentChrome', () => ({
+  EnvironmentChrome: () => <div data-testid="env-chrome" />,
+}));
+
 describe('Layout', () => {
   it('renders children inside the main content area', () => {
     renderWithProviders(

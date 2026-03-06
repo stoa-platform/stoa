@@ -17,3 +17,4 @@ export * from './TimeRangeSelector';
 export * from './TrendIndicator';
 export * from './ScoreGauge';
 export * from './ErrorBoundary';
+export * from './EnvironmentChrome';

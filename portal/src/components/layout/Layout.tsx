@@ -3,6 +3,8 @@ import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { Footer } from './Footer';
 import { UACSpotlight, useUACSpotlight } from '../uac';
+import { EnvironmentChrome } from '@stoa/shared/components/EnvironmentChrome';
+import { usePortalEnvironment } from '../../contexts/EnvironmentContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -11,9 +13,21 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { showSpotlight, dismissSpotlight } = useUACSpotlight();
+  const { activeConfig } = usePortalEnvironment();
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex flex-col transition-colors">
+      <EnvironmentChrome
+        current={{
+          name: activeConfig.name,
+          label: activeConfig.label,
+          mode: activeConfig.mode as 'full' | 'read-only' | 'promote-only',
+        }}
+        environments={[]}
+        onSwitch={() => {}}
+        variant="consumer"
+        portalLabels
+      />
       <Header onMenuClick={() => setSidebarOpen(true)} />
 
       <div className="flex flex-1">

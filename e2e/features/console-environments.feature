@@ -63,16 +63,9 @@ Feature: Console - Environment Chrome & Switching
     When I switch to the "Production" environment
     Then the chrome bar displays a "READ ONLY" badge
 
-  Scenario: Write buttons are disabled in read-only environment
+  Scenario: Gateways page has no read-only guards (global scope)
     Given I am logged in to Console as "parzival" from team "high-five"
     And the STOA Console is accessible
     When I switch to the "Production" environment
     And I navigate to the gateways page
-    Then the "Register Gateway" button is disabled
-
-  Scenario: Read-only notice is shown on gateway page in production
-    Given I am logged in to Console as "parzival" from team "high-five"
-    And the STOA Console is accessible
-    When I switch to the "Production" environment
-    And I navigate to the gateways page
-    Then I see a read-only notice banner
+    Then the "Register Gateway" button is not disabled

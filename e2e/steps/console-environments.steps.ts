@@ -160,19 +160,12 @@ Then(
 );
 
 Then(
-  'the {string} button is disabled',
+  'the {string} button is not disabled',
   async ({ page }, buttonText: string) => {
     const button = page.locator(`button:has-text("${buttonText}")`);
     await expect(button.first()).toBeVisible({ timeout: 10000 });
-    await expect(button.first()).toBeDisabled();
+    await expect(button.first()).toBeEnabled();
   }
 );
-
-Then('I see a read-only notice banner', async ({ page }) => {
-  const notice = page.locator(
-    'text=/read.?only/i, [class*="amber"], [data-testid="readonly-notice"]'
-  );
-  await expect(notice.first()).toBeVisible({ timeout: 10000 });
-});
 
 // "I navigate to the gateways page" is defined in console-gateways.steps.ts

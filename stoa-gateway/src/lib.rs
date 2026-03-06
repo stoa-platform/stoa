@@ -55,7 +55,7 @@ use mcp::{
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
     ws::handle_ws_upgrade,
 };
-use proxy::{dynamic_proxy, llm_proxy_handler};
+use proxy::{api_proxy_handler, dynamic_proxy, list_api_proxy_backends, llm_proxy_handler};
 use state::AppState;
 
 /// Build the Axum router with all routes.
@@ -281,6 +281,12 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/v1/messages/count_tokens", post(llm_proxy_handler))
                 // OpenAI-compatible LLM proxy (Mistral, OpenAI, vLLM, etc.)
                 .route("/v1/chat/completions", post(llm_proxy_handler))
+                // API Proxy — internal dogfooding (CAB-1722)
+                // Routes /proxy/<backend>/... to upstream with credential injection.
+                // Separate from /mcp/* and /apis/* (dynamic proxy routes).
+                // Uses catch-all since axum doesn't allow {param}/{*rest}.
+                .route("/proxy/*path", axum::routing::any(api_proxy_handler))
+                .route("/admin/api-proxy/backends", get(list_api_proxy_backends))
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)

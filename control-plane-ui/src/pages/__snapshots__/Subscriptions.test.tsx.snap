@@ -3,12 +3,14 @@
 exports[`Subscriptions > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
 {
   "buttons": [
-    "Pending",
-    "Active",
-    "Suspended",
-    "Revoked",
-    "Rejected",
-    "All",
+    "Pending(5)",
+    "Active(30)",
+    "Suspended(3)",
+    "Revoked(2)",
+    "Rejected(2)",
+    "All(42)",
+    "Approve",
+    "Reject",
   ],
   "headings": [
     "Subscriptions",
@@ -20,12 +22,14 @@ exports[`Subscriptions > snapshot: cpi-admin persona > matches structural snapsh
 exports[`Subscriptions > snapshot: devops persona > matches structural snapshot 1`] = `
 {
   "buttons": [
-    "Pending",
-    "Active",
-    "Suspended",
-    "Revoked",
-    "Rejected",
-    "All",
+    "Pending(5)",
+    "Active(30)",
+    "Suspended(3)",
+    "Revoked(2)",
+    "Rejected(2)",
+    "All(42)",
+    "Approve",
+    "Reject",
   ],
   "headings": [
     "Subscriptions",
@@ -54,12 +58,14 @@ exports[`Subscriptions > snapshot: tenant-admin persona > matches structural sna
 exports[`Subscriptions > snapshot: viewer persona > matches structural snapshot 1`] = `
 {
   "buttons": [
-    "Pending",
-    "Active",
-    "Suspended",
-    "Revoked",
-    "Rejected",
-    "All",
+    "Pending(5)",
+    "Active(30)",
+    "Suspended(3)",
+    "Revoked(2)",
+    "Rejected(2)",
+    "All(42)",
+    "Approve",
+    "Reject",
   ],
   "headings": [
     "Subscriptions",

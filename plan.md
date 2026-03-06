@@ -333,8 +333,13 @@
 
 **Theme**: HEGEMON Runtime Integration + Gateway Hardening + Observability
 
+### Todo
+
+- [ ] CAB-1731: fix(ui): honest environment scoping — remove guards from cross-env pages (13 pts) — Council 8.88/10
+
 ### Done
 
+- [x] CAB-1705: [MEGA] Multi-Environment UX Harmonization — Console & Portal (21 pts) — PRs #1507, #1510, #1515
 - [x] CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398 (2 files, 430 LOC). 17 PrometheusRule alerts + AlertManagerConfig. Gap-fill: portal/console, LLM cost, auth anomaly, SLO burn-rate, rollout
 - [x] CAB-1637: API/MCP Discovery — Smart Connector Catalog (13 pts) — PR #1397 (2 files, ~250 LOC). 12 EU APIs + MCP endpoints, auto-detect, search. 21 tests
 - [x] CAB-1634: RBAC Taxonomy v2 (21 pts) — PR #1396 (6 files, ~380 LOC). 32 permissions, 4 domains, RBACContext, 57 tests

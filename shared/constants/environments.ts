@@ -4,6 +4,14 @@
 
 export type CanonicalEnvironment = 'development' | 'staging' | 'production';
 
+/**
+ * Page-level scope declaration for environment-aware behavior.
+ * - 'environment': Data is filtered by active environment — read-only guards apply (APIs, Deployments)
+ * - 'global': Data is platform-wide, cross-environment — no read-only guards (Gateways, Tenants, Settings)
+ * - 'tenant': Data is tenant-scoped, env filtering may or may not be available
+ */
+export type PageScope = 'environment' | 'global' | 'tenant';
+
 export interface EnvironmentColorSet {
   dot: string;
   bg: string;

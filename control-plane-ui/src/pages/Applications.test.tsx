@@ -23,16 +23,6 @@ vi.mock('../contexts/EnvironmentContext', () => ({
   })),
 }));
 
-vi.mock('../hooks/useEnvironmentMode', () => ({
-  useEnvironmentMode: () => ({
-    canCreate: true,
-    canEdit: true,
-    canDelete: true,
-    canDeploy: true,
-    isReadOnly: false,
-  }),
-}));
-
 vi.mock('../services/api', () => ({
   apiService: {
     getTenants: vi.fn().mockResolvedValue([

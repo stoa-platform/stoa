@@ -45,6 +45,7 @@
     "analytics": "Usage Analytics",
     "securityPosture": "Security Posture",
     "proxyOwner": "Proxy Owner",
+    "apiTraffic": "API Traffic",
     "llmCost": "LLM Cost",
     "subscriptions": "Subscriptions",
     "webhooks": "Webhooks",

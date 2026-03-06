@@ -241,6 +241,12 @@ const navigationSections: NavSection[] = [
         icon: Stethoscope,
         permission: 'tenants:read',
       },
+      {
+        name: 'nav.apiTraffic',
+        href: '/api-traffic',
+        icon: Activity,
+        permission: 'tenants:read',
+      },
     ],
   },
   {

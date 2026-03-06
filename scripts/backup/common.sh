@@ -64,10 +64,8 @@ error_handler() {
     local line_number=$1
     log_error "Script failed at line $line_number with exit code $exit_code"
 
-    # Send Slack notification on error
-    if [[ -n "${SLACK_WEBHOOK_URL:-}" ]]; then
-        send_slack_notification "failure" "Backup failed at line $line_number (exit code: $exit_code)"
-    fi
+    # Send Slack notification on error (proxy or direct)
+    send_slack_notification "failure" "Backup failed at line $line_number (exit code: $exit_code)" 2>/dev/null || true
 
     exit $exit_code
 }
@@ -221,10 +219,11 @@ send_slack_notification() {
     local message=$2
     local details=${3:-""}
 
-    if [[ -z "${SLACK_WEBHOOK_URL:-}" ]]; then
-        log_debug "Slack webhook URL not configured, skipping notification"
-        return 0
-    fi
+    # Source proxy library if available
+    local proxy_lib
+    proxy_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")/../ops" && pwd)/stoa-proxy.sh"
+    # shellcheck source=/dev/null
+    [[ -f "$proxy_lib" ]] && source "$proxy_lib"
 
     local color
     local emoji
@@ -275,6 +274,21 @@ EOF
 
     if [[ -n "$details" ]]; then
         payload=$(echo "$payload" | jq --arg details "$details" '.attachments[0].blocks += [{"type": "section", "text": {"type": "mrkdwn", "text": "*Details:*\n```\($details)```"}}]')
+    fi
+
+    # Try proxy-first (via STOA Gateway)
+    if type stoa_proxy_slack_post &>/dev/null; then
+        if stoa_proxy_slack_post "$payload" 2>/dev/null; then
+            log_debug "Slack notification sent via proxy"
+            return 0
+        fi
+        log_debug "Proxy failed, trying direct"
+    fi
+
+    # Fallback: direct webhook
+    if [[ -z "${SLACK_WEBHOOK_URL:-}" ]]; then
+        log_debug "Slack webhook URL not configured, skipping notification"
+        return 0
     fi
 
     if curl -s -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" &>/dev/null; then

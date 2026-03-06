@@ -5,10 +5,6 @@ exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "Environment Overview",
-    "Production1 gateways · 1 online",
-    "Staging1 gateways · 1 degraded",
-    "Development0 gateways",
     "All21",
     "Production11",
     "Staging101",
@@ -32,10 +28,6 @@ exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "Environment Overview",
-    "Production1 gateways · 1 online",
-    "Staging1 gateways · 1 degraded",
-    "Development0 gateways",
     "All21",
     "Production11",
     "Staging101",
@@ -59,10 +51,6 @@ exports[`GatewayList > snapshot: tenant-admin persona > matches structural snaps
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "Environment Overview",
-    "Production1 gateways · 1 online",
-    "Staging1 gateways · 1 degraded",
-    "Development0 gateways",
     "All21",
     "Production11",
     "Staging101",
@@ -86,10 +74,6 @@ exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "Environment Overview",
-    "Production1 gateways · 1 online",
-    "Staging1 gateways · 1 degraded",
-    "Development0 gateways",
     "All21",
     "Production11",
     "Staging101",

@@ -167,9 +167,11 @@ describe('APIs', () => {
     });
   });
 
-  it('renders the page heading', async () => {
+  it('renders the tenant selector', async () => {
     renderAPIs();
-    expect(await screen.findByText('Manage API definitions and deployments')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Oasis Gunters')).toBeInTheDocument();
+    });
   });
 
   it('renders the Create API button', async () => {
@@ -249,9 +251,9 @@ describe('APIs', () => {
       it('renders the page', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderAPIs();
-        expect(
-          await screen.findByText('Manage API definitions and deployments')
-        ).toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.getByDisplayValue('Oasis Gunters')).toBeInTheDocument();
+        });
       });
     }
   );
@@ -263,7 +265,7 @@ describe('APIs', () => {
       it('matches structural snapshot', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         const { container } = renderAPIs();
-        await screen.findByText('Manage API definitions and deployments');
+        await screen.findByText('Payment API');
         const buttons = [...container.querySelectorAll('button')].map(
           (b) => b.textContent?.trim() || ''
         );

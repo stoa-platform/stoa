@@ -118,14 +118,8 @@ export function InternalApisList() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Internal APIs</h1>
-          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
-            Platform-level API backends proxied through the STOA Gateway
-          </p>
-        </div>
+      {/* Actions */}
+      <div className="flex justify-end">
         <button
           onClick={handleRefresh}
           className="flex items-center gap-2 px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 dark:text-neutral-300"

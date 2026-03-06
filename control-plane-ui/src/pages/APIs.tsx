@@ -231,14 +231,8 @@ export function APIs() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">APIs</h1>
-          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
-            Manage API definitions and deployments
-          </p>
-        </div>
-        {canCreate && (
+      {canCreate && (
+        <div className="flex justify-end">
           <Button
             onClick={() => setShowCreateModal(true)}
             disabled={!selectedTenant}
@@ -246,8 +240,8 @@ export function APIs() {
           >
             Create API
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {isReadOnly && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">

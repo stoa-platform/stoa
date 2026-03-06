@@ -4,10 +4,16 @@ exports[`APIs > snapshot: cpi-admin persona > matches structural snapshot 1`] = 
 {
   "buttons": [
     "Create API",
+    "Deploy DEV",
+    "Deploy STG",
+    "Edit",
+    "Delete",
+    "Deploy DEV",
+    "Deploy STG",
+    "Edit",
+    "Delete",
   ],
-  "headings": [
-    "APIs",
-  ],
+  "headings": [],
   "links": [],
 }
 `;
@@ -16,10 +22,16 @@ exports[`APIs > snapshot: devops persona > matches structural snapshot 1`] = `
 {
   "buttons": [
     "Create API",
+    "Deploy DEV",
+    "Deploy STG",
+    "Edit",
+    "Delete",
+    "Deploy DEV",
+    "Deploy STG",
+    "Edit",
+    "Delete",
   ],
-  "headings": [
-    "APIs",
-  ],
+  "headings": [],
   "links": [],
 }
 `;
@@ -28,10 +40,16 @@ exports[`APIs > snapshot: tenant-admin persona > matches structural snapshot 1`]
 {
   "buttons": [
     "Create API",
+    "Deploy DEV",
+    "Deploy STG",
+    "Edit",
+    "Delete",
+    "Deploy DEV",
+    "Deploy STG",
+    "Edit",
+    "Delete",
   ],
-  "headings": [
-    "APIs",
-  ],
+  "headings": [],
   "links": [],
 }
 `;
@@ -40,10 +58,16 @@ exports[`APIs > snapshot: viewer persona > matches structural snapshot 1`] = `
 {
   "buttons": [
     "Create API",
+    "Deploy DEV",
+    "Deploy STG",
+    "Edit",
+    "Delete",
+    "Deploy DEV",
+    "Deploy STG",
+    "Edit",
+    "Delete",
   ],
-  "headings": [
-    "APIs",
-  ],
+  "headings": [],
   "links": [],
 }
 `;

@@ -101,10 +101,10 @@ describe('InternalApisList', () => {
       setupAuth(role);
     });
 
-    it('renders the page title', async () => {
+    it('renders the refresh button', async () => {
       renderWithProviders(<InternalApisList />, { route: '/internal-apis' });
       await waitFor(() => {
-        expect(screen.getByText('Internal APIs')).toBeInTheDocument();
+        expect(screen.getByText('Refresh')).toBeInTheDocument();
       });
     });
 

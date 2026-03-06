@@ -123,12 +123,6 @@ const navigationSections: NavSection[] = [
         shortcut: ['g', 'a'],
       },
       {
-        name: 'nav.backendApis',
-        href: '/backend-apis',
-        icon: Server,
-        permission: 'apis:read',
-      },
-      {
         name: 'nav.subscriptions',
         href: '/subscriptions',
         icon: ClipboardList,
@@ -245,12 +239,6 @@ const navigationSections: NavSection[] = [
         name: 'nav.proxyOwner',
         href: '/proxy-owner',
         icon: Stethoscope,
-        permission: 'tenants:read',
-      },
-      {
-        name: 'nav.internalApis',
-        href: '/internal-apis',
-        icon: Puzzle,
         permission: 'tenants:read',
       },
     ],

@@ -42,10 +42,15 @@ export interface ProxyBackendHealthStatus {
 
 class ProxyBackendService {
   async list(activeOnly = false): Promise<ProxyBackendListResponse> {
-    const { data } = await apiService.get('/v1/proxy-backends', {
+    const resp = await apiService.get('/v1/proxy-backends', {
       params: { active_only: activeOnly },
     });
-    return data;
+    const data = resp.data;
+    // Normalize: API may return the list directly or wrapped in {items, total}
+    if (Array.isArray(data)) {
+      return { items: data, total: data.length };
+    }
+    return { items: data.items || [], total: data.total ?? (data.items?.length || 0) };
   }
 
   async healthCheck(backendId: string): Promise<ProxyBackendHealthStatus> {

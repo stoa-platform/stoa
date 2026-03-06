@@ -119,6 +119,52 @@ spec:
               value: "200"
             - name: STOA_API_PROXY_BACKENDS_CLOUDFLARE_TIMEOUT_SECS
               value: "30"
+            # --- High-risk backends (CAB-1729) ---
+            # Linear (GraphQL API, 1500 req/h)
+            - name: STOA_API_PROXY_BACKENDS_LINEAR_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_LINEAR_BASE_URL
+              value: "https://api.linear.app"
+            - name: STOA_API_PROXY_BACKENDS_LINEAR_AUTH_TYPE
+              value: "bearer"
+            - name: STOA_API_PROXY_BACKENDS_LINEAR_RATE_LIMIT_RPM
+              value: "1500"
+            - name: STOA_API_PROXY_BACKENDS_LINEAR_TIMEOUT_SECS
+              value: "30"
+            - name: STOA_API_PROXY_BACKENDS_LINEAR_CIRCUIT_BREAKER_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_LINEAR_FALLBACK_DIRECT
+              value: "true"
+            # GitHub API (5000 req/h)
+            - name: STOA_API_PROXY_BACKENDS_GITHUB_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_GITHUB_BASE_URL
+              value: "https://api.github.com"
+            - name: STOA_API_PROXY_BACKENDS_GITHUB_AUTH_TYPE
+              value: "bearer"
+            - name: STOA_API_PROXY_BACKENDS_GITHUB_RATE_LIMIT_RPM
+              value: "5000"
+            - name: STOA_API_PROXY_BACKENDS_GITHUB_TIMEOUT_SECS
+              value: "30"
+            - name: STOA_API_PROXY_BACKENDS_GITHUB_CIRCUIT_BREAKER_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_GITHUB_FALLBACK_DIRECT
+              value: "true"
+            # Slack Bot API
+            - name: STOA_API_PROXY_BACKENDS_SLACK_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_SLACK_BASE_URL
+              value: "https://slack.com/api"
+            - name: STOA_API_PROXY_BACKENDS_SLACK_AUTH_TYPE
+              value: "bearer"
+            - name: STOA_API_PROXY_BACKENDS_SLACK_RATE_LIMIT_RPM
+              value: "60"
+            - name: STOA_API_PROXY_BACKENDS_SLACK_TIMEOUT_SECS
+              value: "10"
+            - name: STOA_API_PROXY_BACKENDS_SLACK_CIRCUIT_BREAKER_ENABLED
+              value: "true"
+            - name: STOA_API_PROXY_BACKENDS_SLACK_FALLBACK_DIRECT
+              value: "true"
           # REQUIRED for auto-registration (ADR-028):
           # The Secret `stoa-gateway-secrets` MUST contain:
           #   STOA_CONTROL_PLANE_API_KEY - API key matching one entry in

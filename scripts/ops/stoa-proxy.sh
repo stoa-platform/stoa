@@ -157,3 +157,88 @@ stoa_proxy_ping_healthcheck() {
 
   return 1
 }
+
+# Post a Linear GraphQL mutation through the gateway proxy.
+# Usage: stoa_proxy_linear_graphql QUERY [RESPONSE_FILE]
+# Falls back to direct LINEAR_API_KEY if proxy fails.
+stoa_proxy_linear_graphql() {
+  local query="$1" response_file="${2:-/dev/null}"
+
+  local token http_code
+  token=$(stoa_proxy_get_token 2>/dev/null) || token=""
+
+  if [[ -n "$token" && -n "${STOA_PROXY_URL:-}" ]]; then
+    http_code=$(curl -s -o "$response_file" -w "%{http_code}" --max-time 15 \
+      -X POST "${STOA_PROXY_URL}/apis/linear/graphql" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${token}" \
+      -d "$query" 2>/dev/null)
+    [[ -z "$http_code" ]] && http_code="000"
+    if [[ "$http_code" -lt 300 && "$http_code" != "000" ]]; then
+      return 0
+    fi
+    echo "WARNING: Gateway proxy returned HTTP ${http_code} for Linear" >&2
+  fi
+
+  # Fallback to direct Linear API
+  if [[ -n "${LINEAR_API_KEY:-}" ]]; then
+    http_code=$(curl -s -o "$response_file" -w "%{http_code}" --max-time 15 \
+      -X POST "https://api.linear.app/graphql" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: ${LINEAR_API_KEY}" \
+      -d "$query" 2>/dev/null)
+    [[ -z "$http_code" ]] && http_code="000"
+    if [[ "$http_code" -lt 300 && "$http_code" != "000" ]]; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+# Send a Slack message through the gateway proxy (Bot API).
+# Usage: stoa_proxy_slack_post PAYLOAD [RESPONSE_FILE]
+# Falls back to direct SLACK_BOT_TOKEN or SLACK_WEBHOOK_URL.
+stoa_proxy_slack_post() {
+  local payload="$1" response_file="${2:-/dev/null}"
+
+  local token http_code
+  token=$(stoa_proxy_get_token 2>/dev/null) || token=""
+
+  # Try gateway proxy -> Slack Bot API
+  if [[ -n "$token" && -n "${STOA_PROXY_URL:-}" ]]; then
+    http_code=$(curl -s -o "$response_file" -w "%{http_code}" --max-time 10 \
+      -X POST "${STOA_PROXY_URL}/apis/slack/chat.postMessage" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${token}" \
+      -d "$payload" 2>/dev/null)
+    [[ -z "$http_code" ]] && http_code="000"
+    if [[ "$http_code" -lt 300 && "$http_code" != "000" ]]; then
+      return 0
+    fi
+    echo "WARNING: Gateway proxy returned HTTP ${http_code} for Slack" >&2
+  fi
+
+  # Fallback 1: direct Bot API
+  if [[ -n "${SLACK_BOT_TOKEN:-}" && -n "${SLACK_CHANNEL_ID:-}" ]]; then
+    http_code=$(curl -s -o "$response_file" -w "%{http_code}" --max-time 10 \
+      -X POST "https://slack.com/api/chat.postMessage" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+      -d "$payload" 2>/dev/null)
+    [[ -z "$http_code" ]] && http_code="000"
+    if [[ "$http_code" -lt 300 && "$http_code" != "000" ]]; then
+      return 0
+    fi
+  fi
+
+  # Fallback 2: direct webhook
+  if [[ -n "${SLACK_WEBHOOK_URL:-}" ]]; then
+    curl -s -o "$response_file" --max-time 10 \
+      -X POST -H "Content-Type: application/json" \
+      -d "$payload" "$SLACK_WEBHOOK_URL" 2>/dev/null || true
+    return 0
+  fi
+
+  return 1
+}

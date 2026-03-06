@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# seed-proxy-backends.sh — Register 4 low-risk proxy backends in the gateway.
+# seed-proxy-backends.sh — Register proxy backends in the gateway.
 #
 # Registers backend credentials via the gateway admin API and proxy backend
-# entries in the CP API for Console visibility (CAB-1728).
+# entries in the CP API for Console visibility.
+# Low-risk (CAB-1728): Pushgateway, Healthchecks, n8n, Cloudflare
+# High-risk (CAB-1729): Linear, GitHub, Slack Bot, Slack Webhook
 #
 # Usage:
 #   GATEWAY_ADMIN_URL=http://stoa-gateway:80 \
@@ -79,7 +81,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Pushgateway — no auth (internal K8s service)
 # ---------------------------------------------------------------------------
-echo "[1/4] Pushgateway"
+echo "[1/8] Pushgateway"
 register_credential "api-proxy:pushgateway" "bearer" "Authorization" "Bearer unused"
 register_cp_backend "pushgateway" "Prometheus Pushgateway" \
   "http://pushgateway.monitoring.svc:9091" "api_key" "api-proxy:pushgateway" \
@@ -88,7 +90,7 @@ register_cp_backend "pushgateway" "Prometheus Pushgateway" \
 # ---------------------------------------------------------------------------
 # 2. Healthchecks — no auth (UUID-based URL)
 # ---------------------------------------------------------------------------
-echo "[2/4] Healthchecks"
+echo "[2/8] Healthchecks"
 register_credential "api-proxy:healthchecks" "bearer" "Authorization" "Bearer unused"
 register_cp_backend "healthchecks" "Healthchecks.io" \
   "https://hc.gostoa.dev" "api_key" "api-proxy:healthchecks" \
@@ -97,7 +99,7 @@ register_cp_backend "healthchecks" "Healthchecks.io" \
 # ---------------------------------------------------------------------------
 # 3. n8n — API key in X-N8N-API-KEY header
 # ---------------------------------------------------------------------------
-echo "[3/4] n8n"
+echo "[3/8] n8n"
 N8N_API_KEY="${N8N_API_KEY:-}"
 if [[ -n "$N8N_API_KEY" ]]; then
   register_credential "api-proxy:n8n" "api_key" "X-N8N-API-KEY" "${N8N_API_KEY}"
@@ -111,7 +113,7 @@ register_cp_backend "n8n" "n8n Workflow Automation" \
 # ---------------------------------------------------------------------------
 # 4. Cloudflare — Bearer token
 # ---------------------------------------------------------------------------
-echo "[4/4] Cloudflare"
+echo "[4/8] Cloudflare"
 CF_API_TOKEN="${CF_API_TOKEN:-}"
 if [[ -n "$CF_API_TOKEN" ]]; then
   register_credential "api-proxy:cloudflare" "bearer" "Authorization" "Bearer ${CF_API_TOKEN}"
@@ -121,6 +123,62 @@ fi
 register_cp_backend "cloudflare" "Cloudflare API" \
   "https://api.cloudflare.com/client/v4" "bearer" "api-proxy:cloudflare" \
   200 true false 30
+
+# ---------------------------------------------------------------------------
+# 5. Linear — Bearer token (GraphQL API, 1500 req/h)
+# ---------------------------------------------------------------------------
+echo "[5/8] Linear"
+LINEAR_API_KEY="${LINEAR_API_KEY:-}"
+if [[ -n "$LINEAR_API_KEY" ]]; then
+  register_credential "api-proxy:linear" "bearer" "Authorization" "${LINEAR_API_KEY}"
+else
+  echo "  SKIP credential (LINEAR_API_KEY not set — register manually)"
+fi
+register_cp_backend "linear" "Linear Issue Tracker" \
+  "https://api.linear.app" "bearer" "api-proxy:linear" \
+  1500 true true 30
+
+# ---------------------------------------------------------------------------
+# 6. GitHub — Bearer PAT (5000 req/h)
+# ---------------------------------------------------------------------------
+echo "[6/8] GitHub"
+GITHUB_PAT="${GITHUB_PAT:-}"
+if [[ -n "$GITHUB_PAT" ]]; then
+  register_credential "api-proxy:github" "bearer" "Authorization" "Bearer ${GITHUB_PAT}"
+else
+  echo "  SKIP credential (GITHUB_PAT not set — register manually)"
+fi
+register_cp_backend "github" "GitHub API" \
+  "https://api.github.com" "bearer" "api-proxy:github" \
+  5000 true true 30
+
+# ---------------------------------------------------------------------------
+# 7. Slack Bot — Bearer token
+# ---------------------------------------------------------------------------
+echo "[7/8] Slack Bot"
+SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
+if [[ -n "$SLACK_BOT_TOKEN" ]]; then
+  register_credential "api-proxy:slack" "bearer" "Authorization" "Bearer ${SLACK_BOT_TOKEN}"
+else
+  echo "  SKIP credential (SLACK_BOT_TOKEN not set — register manually)"
+fi
+register_cp_backend "slack" "Slack Bot API" \
+  "https://slack.com/api" "bearer" "api-proxy:slack" \
+  60 true true 10
+
+# ---------------------------------------------------------------------------
+# 8. Slack Webhook — URL-embedded auth
+# ---------------------------------------------------------------------------
+echo "[8/8] Slack Webhook"
+SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
+if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
+  register_credential "api-proxy:slack-webhook" "bearer" "Authorization" "Bearer unused"
+  register_cp_backend "slack-webhook" "Slack Incoming Webhook" \
+    "${SLACK_WEBHOOK_URL}" "api_key" "api-proxy:slack-webhook" \
+    60 true true 5
+else
+  echo "  SKIP (SLACK_WEBHOOK_URL not set — register manually)"
+fi
 
 echo ""
 echo "=== Done. Verify: curl ${GATEWAY_ADMIN_URL}/admin/backend-credentials ==="

@@ -15,7 +15,7 @@ vi.mock('../../services/api', () => ({
 }));
 
 vi.mock('../../config', () => ({
-  config: { services: { grafana: { url: '' } } },
+  config: { services: { grafana: { url: '/grafana/' } } },
 }));
 
 vi.mock('@stoa/shared/components/Skeleton', () => ({
@@ -208,7 +208,7 @@ describe('ProxyOwnerDashboard', () => {
         });
       });
 
-      it('shows Grafana fallback message instead of iframe', async () => {
+      it('shows permission gate message for Grafana section', async () => {
         renderWithProviders(<ProxyOwnerDashboard />);
 
         await waitFor(() => {

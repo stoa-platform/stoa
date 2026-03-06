@@ -307,6 +307,18 @@ pub static HEGEMON_DISPATCH_COST: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Failed to create stoa_hegemon_dispatch_cost_usd metric")
 });
 
+// === HEGEMON Budget Metrics (CAB-1716) ===
+
+/// Gauge of daily spend per agent in USD.
+pub static HEGEMON_BUDGET_DAILY_USD: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "stoa_hegemon_budget_daily_usd",
+        "Daily budget spent per HEGEMON agent in USD",
+        &["worker"]
+    )
+    .expect("Failed to create stoa_hegemon_budget_daily_usd metric")
+});
+
 // === Tool Discovery Metrics (CAB-1558) ===
 
 /// Histogram of tool discovery (CP sync) durations in seconds, per tenant and outcome.
@@ -750,6 +762,7 @@ pub fn init_all_metrics() {
     Lazy::force(&HEGEMON_DISPATCH_ACTIVE);
     Lazy::force(&HEGEMON_DISPATCH_DURATION);
     Lazy::force(&HEGEMON_DISPATCH_COST);
+    Lazy::force(&HEGEMON_BUDGET_DAILY_USD);
 }
 
 /// Get the total number of MCP tool calls across all labels.

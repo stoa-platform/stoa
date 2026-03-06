@@ -322,8 +322,10 @@ impl OidcProvider {
             .await
             .map_err(|e| OidcError::ConfigFetchError(e.to_string()))?;
 
-        // Validate issuer
-        if config.issuer != self.config.issuer_url {
+        // Validate issuer (scheme-agnostic: internal discovery returns http://
+        // while the canonical issuer_url uses https://)
+        let normalize = |u: &str| u.replace("https://", "").replace("http://", "");
+        if normalize(&config.issuer) != normalize(&self.config.issuer_url) {
             warn!(
                 expected = %self.config.issuer_url,
                 actual = %config.issuer,

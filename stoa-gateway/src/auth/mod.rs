@@ -6,6 +6,7 @@
 //! - RBAC enforcement (role + scope + tenant isolation)
 //! - Combined auth middleware
 
+pub mod agent;
 pub mod api_key;
 pub mod claims;
 pub mod dpop;

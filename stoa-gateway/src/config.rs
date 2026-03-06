@@ -546,6 +546,23 @@ pub struct Config {
     /// Each backend (Linear, GitHub, Slack, etc.) is individually toggled.
     #[serde(default)]
     pub api_proxy: ApiProxyConfig,
+
+    // === HEGEMON Agent Gateway (CAB-1709) ===
+    /// Enable HEGEMON agent gateway module (default: false — explicit opt-in).
+    /// Kill switch: set to false to disable all HEGEMON endpoints.
+    /// Env: STOA_HEGEMON_ENABLED
+    #[serde(default)]
+    pub hegemon_enabled: bool,
+
+    /// Daily budget limit in USD per agent (default: 50.0).
+    /// Env: STOA_HEGEMON_BUDGET_DAILY_USD
+    #[serde(default = "default_hegemon_budget_daily_usd")]
+    pub hegemon_budget_daily_usd: f64,
+
+    /// Warning percentage for budget alerts (default: 0.8 = 80%).
+    /// Env: STOA_HEGEMON_BUDGET_WARN_PCT
+    #[serde(default = "default_hegemon_budget_warn_pct")]
+    pub hegemon_budget_warn_pct: f64,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1032,6 +1049,14 @@ fn default_llm_proxy_mistral_upstream_url() -> String {
     "https://api.mistral.ai".to_string()
 }
 
+fn default_hegemon_budget_daily_usd() -> f64 {
+    50.0
+}
+
+fn default_hegemon_budget_warn_pct() -> f64 {
+    0.8
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1139,6 +1164,9 @@ impl Default for Config {
             llm_proxy_mistral_upstream_url: default_llm_proxy_mistral_upstream_url(),
             llm_proxy_skip_validation: false,
             api_proxy: ApiProxyConfig::default(),
+            hegemon_enabled: false,
+            hegemon_budget_daily_usd: default_hegemon_budget_daily_usd(),
+            hegemon_budget_warn_pct: default_hegemon_budget_warn_pct(),
         }
     }
 }

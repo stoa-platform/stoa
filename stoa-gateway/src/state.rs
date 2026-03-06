@@ -132,6 +132,9 @@ pub struct AppState {
     /// API proxy backend registry for internal dogfooding (CAB-1722).
     /// None when api_proxy.enabled is false.
     pub api_proxy_registry: Option<Arc<crate::proxy::ApiProxyRegistry>>,
+    /// HEGEMON agent gateway state (CAB-1709).
+    /// None when STOA_HEGEMON_ENABLED=false (default).
+    pub hegemon: Option<Arc<crate::hegemon::HegemonState>>,
 }
 
 impl AppState {
@@ -523,6 +526,16 @@ impl AppState {
             None
         };
 
+        // Initialize HEGEMON agent gateway (CAB-1709)
+        let hegemon = if config.hegemon_enabled {
+            let heg = crate::hegemon::HegemonState::new(&config);
+            tracing::info!("HEGEMON agent gateway enabled");
+            Some(Arc::new(heg))
+        } else {
+            tracing::info!("HEGEMON agent gateway disabled (STOA_HEGEMON_ENABLED=false)");
+            None
+        };
+
         let start_time = Instant::now();
 
         Self {
@@ -569,6 +582,7 @@ impl AppState {
             llm_router,
             cost_calculator,
             api_proxy_registry,
+            hegemon,
         }
     }
 

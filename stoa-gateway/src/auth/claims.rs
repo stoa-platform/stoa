@@ -99,6 +99,23 @@ pub struct Claims {
     /// Federation: master account ID (set by Token Exchange protocol mapper)
     #[serde(default)]
     pub master_account_id: Option<String>,
+
+    // === HEGEMON Agent Claims (CAB-1710) ===
+    /// HEGEMON worker name (e.g., "hegemon-worker-backend").
+    /// Set by Keycloak protocol mapper on worker service accounts.
+    #[serde(default)]
+    pub worker_name: Option<String>,
+
+    /// HEGEMON worker roles (e.g., ["backend", "hegemon:execute"]).
+    /// Set by Keycloak protocol mapper on worker service accounts.
+    #[serde(default)]
+    pub worker_roles: Option<Vec<String>>,
+
+    /// HEGEMON supervision tier override from JWT claim.
+    /// Values: "autopilot", "copilot", "command".
+    /// Can be overridden per-request via `X-Hegemon-Supervision` header.
+    #[serde(default)]
+    pub supervision_tier: Option<String>,
 }
 
 /// RFC 8705 / RFC 9449 Confirmation claim for sender-constrained tokens.
@@ -374,6 +391,9 @@ mod tests {
             cnf: None,
             sub_account_id: None,
             master_account_id: None,
+            worker_name: None,
+            worker_roles: None,
+            supervision_tier: None,
         }
     }
 

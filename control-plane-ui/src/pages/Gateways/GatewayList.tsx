@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,55 +8,122 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
-import { RefreshCw } from 'lucide-react';
+import {
+  RefreshCw,
+  Activity,
+  Server,
+  ChevronRight,
+  ExternalLink,
+  Trash2,
+  HeartPulse,
+  Shield,
+  Globe,
+  Zap,
+} from 'lucide-react';
 import { Button } from '@stoa/shared/components/Button';
-import type { GatewayInstance, GatewayType, GatewayInstanceStatus, GatewayMode } from '../../types';
+import type { GatewayInstance, GatewayInstanceStatus, GatewayMode } from '../../types';
 
-const statusColors: Record<GatewayInstanceStatus, string> = {
-  online: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  offline: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300',
-  degraded: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-  maintenance: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+type Environment = 'production' | 'staging' | 'development';
+
+const ENV_ORDER: Environment[] = ['production', 'staging', 'development'];
+
+const ENV_LABELS: Record<Environment, string> = {
+  production: 'Production',
+  staging: 'Staging',
+  development: 'Development',
 };
 
-const modeColors: Record<GatewayMode, string> = {
-  'edge-mcp':
-    'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800',
-  sidecar:
-    'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800',
-  proxy:
-    'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800',
-  shadow:
-    'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800',
+const ENV_COLORS: Record<Environment, { dot: string; bg: string; text: string; border: string }> = {
+  production: {
+    dot: 'bg-red-500',
+    bg: 'bg-red-50 dark:bg-red-950/30',
+    text: 'text-red-700 dark:text-red-400',
+    border: 'border-red-200 dark:border-red-800',
+  },
+  staging: {
+    dot: 'bg-amber-500',
+    bg: 'bg-amber-50 dark:bg-amber-950/30',
+    text: 'text-amber-700 dark:text-amber-400',
+    border: 'border-amber-200 dark:border-amber-800',
+  },
+  development: {
+    dot: 'bg-blue-500',
+    bg: 'bg-blue-50 dark:bg-blue-950/30',
+    text: 'text-blue-700 dark:text-blue-400',
+    border: 'border-blue-200 dark:border-blue-800',
+  },
 };
 
-const modeLabels: Record<GatewayMode, string> = {
+const STATUS_CONFIG: Record<GatewayInstanceStatus, { dot: string; label: string; badge: string }> =
+  {
+    online: {
+      dot: 'bg-green-500',
+      label: 'Online',
+      badge: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    },
+    offline: {
+      dot: 'bg-neutral-400',
+      label: 'Offline',
+      badge: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400',
+    },
+    degraded: {
+      dot: 'bg-yellow-500',
+      label: 'Degraded',
+      badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    },
+    maintenance: {
+      dot: 'bg-blue-500',
+      label: 'Maintenance',
+      badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    },
+  };
+
+const TYPE_DISPLAY: Record<string, { label: string; icon: typeof Server }> = {
+  stoa: { label: 'STOA', icon: Zap },
+  stoa_edge_mcp: { label: 'STOA Edge MCP', icon: Zap },
+  stoa_sidecar: { label: 'STOA Sidecar', icon: Shield },
+  stoa_proxy: { label: 'STOA Proxy', icon: Globe },
+  stoa_shadow: { label: 'STOA Shadow', icon: Activity },
+  webmethods: { label: 'webMethods', icon: Server },
+  kong: { label: 'Kong', icon: Server },
+  apigee: { label: 'Apigee', icon: Server },
+  aws_apigateway: { label: 'AWS API GW', icon: Server },
+  azure_apim: { label: 'Azure APIM', icon: Server },
+  gravitee: { label: 'Gravitee', icon: Server },
+};
+
+const MODE_LABELS: Record<GatewayMode, string> = {
   'edge-mcp': 'Edge MCP',
   sidecar: 'Sidecar',
   proxy: 'Proxy',
   shadow: 'Shadow',
 };
 
-const typeLabels: Record<GatewayType, string> = {
-  webmethods: 'webMethods',
-  kong: 'Kong',
-  apigee: 'Apigee',
-  aws_apigateway: 'AWS API Gateway',
-  stoa: 'STOA',
-  stoa_edge_mcp: 'STOA Edge MCP',
-  stoa_sidecar: 'STOA Sidecar',
-  stoa_proxy: 'STOA Proxy',
-  stoa_shadow: 'STOA Shadow',
-};
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-/** Returns true if the gateway heartbeat is recent (< 90s). */
-function isLive(gw: GatewayInstance): boolean {
-  if (!gw.last_health_check) return false;
-  const elapsed = Date.now() - new Date(gw.last_health_check).getTime();
-  return elapsed < 90_000;
+/** Normalize the many env string variants to 3 canonical values. */
+function normalizeEnv(env: string): Environment {
+  const lower = env.toLowerCase();
+  if (lower === 'production' || lower === 'prod') return 'production';
+  if (lower === 'staging') return 'staging';
+  return 'development';
 }
 
-/** Format seconds into a human-readable uptime string. */
+function isLive(gw: GatewayInstance): boolean {
+  if (!gw.last_health_check) return false;
+  return Date.now() - new Date(gw.last_health_check).getTime() < 90_000;
+}
+
+function isStoa(type: string): boolean {
+  return type.startsWith('stoa');
+}
+
 function formatUptime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
@@ -65,26 +132,48 @@ function formatUptime(seconds: number): string {
   return `${h}h ${m}m`;
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
+
 export function GatewayList() {
   const { isReady } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [healthChecking, setHealthChecking] = useState<string | null>(null);
-  const [modeFilter, setModeFilter] = useState<GatewayMode | ''>('');
   const [selectedGateway, setSelectedGateway] = useState<GatewayInstance | null>(null);
 
-  // Read ?mode= query param
-  useEffect(() => {
-    const modeParam = searchParams.get('mode');
-    if (modeParam && Object.keys(modeLabels).includes(modeParam)) {
-      setModeFilter(modeParam as GatewayMode);
-    }
-  }, [searchParams]);
+  // Active environment tab
+  const [activeEnv, setActiveEnv] = useState<Environment | 'all'>(() => {
+    const param = searchParams.get('env');
+    if (param && ENV_ORDER.includes(param as Environment)) return param as Environment;
+    return 'all';
+  });
 
-  // Auto-refresh gateway list every 30s via useQuery
+  // Sync tab to URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    if (activeEnv === 'all') {
+      params.delete('env');
+    } else {
+      params.set('env', activeEnv);
+    }
+    setSearchParams(params, { replace: true });
+  }, [activeEnv, searchParams, setSearchParams]);
+
   const {
     data: gatewaysData,
     isLoading,
@@ -99,24 +188,54 @@ export function GatewayList() {
 
   const gateways: GatewayInstance[] = gatewaysData?.items ?? [];
   const error = queryError
-    ? (queryError as any).response?.data?.detail ||
+    ? (queryError as { response?: { data?: { detail?: string } } }).response?.data?.detail ||
       (queryError as Error).message ||
       'Failed to load gateways'
     : null;
 
-  // Filter gateways by mode
-  const filteredGateways = modeFilter ? gateways.filter((gw) => gw.mode === modeFilter) : gateways;
+  // Group gateways by normalized environment
+  const envGroups = useMemo(() => {
+    const groups: Record<Environment, GatewayInstance[]> = {
+      production: [],
+      staging: [],
+      development: [],
+    };
+    for (const gw of gateways) {
+      groups[normalizeEnv(gw.environment)].push(gw);
+    }
+    // Sort each group: STOA gateways first, then alphabetical
+    for (const env of ENV_ORDER) {
+      groups[env].sort((a, b) => {
+        const aStoa = isStoa(a.gateway_type) ? 0 : 1;
+        const bStoa = isStoa(b.gateway_type) ? 0 : 1;
+        if (aStoa !== bStoa) return aStoa - bStoa;
+        return a.display_name.localeCompare(b.display_name);
+      });
+    }
+    return groups;
+  }, [gateways]);
 
-  // Count STOA gateways by mode for the filter dropdown
-  const modeCounts = gateways.reduce(
-    (acc, gw) => {
-      if (gw.mode) {
-        acc[gw.mode] = (acc[gw.mode] || 0) + 1;
-      }
-      return acc;
-    },
-    {} as Record<string, number>
-  );
+  // Stats per environment
+  const envStats = useMemo(() => {
+    const stats: Record<
+      Environment,
+      { total: number; online: number; offline: number; degraded: number }
+    > = {
+      production: { total: 0, online: 0, offline: 0, degraded: 0 },
+      staging: { total: 0, online: 0, offline: 0, degraded: 0 },
+      development: { total: 0, online: 0, offline: 0, degraded: 0 },
+    };
+    for (const gw of gateways) {
+      const env = normalizeEnv(gw.environment);
+      stats[env].total++;
+      if (gw.status === 'online') stats[env].online++;
+      else if (gw.status === 'degraded') stats[env].degraded++;
+      else stats[env].offline++;
+    }
+    return stats;
+  }, [gateways]);
+
+  const visibleEnvs = activeEnv === 'all' ? ENV_ORDER : [activeEnv];
 
   const refetchGateways = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['gateways'] });
@@ -127,8 +246,11 @@ export function GatewayList() {
     try {
       await apiService.checkGatewayHealth(id);
       refetchGateways();
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Health check failed');
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Health check failed';
+      toast.error(message);
     } finally {
       setHealthChecking(null);
     }
@@ -143,14 +265,16 @@ export function GatewayList() {
         variant: 'danger',
       });
       if (!confirmed) return;
-
       try {
         await apiService.deleteGatewayInstance(id);
-        toast.success(`Gateway "${name}" deleted successfully`);
+        toast.success(`Gateway "${name}" deleted`);
         if (selectedGateway?.id === id) setSelectedGateway(null);
         refetchGateways();
-      } catch (err: any) {
-        toast.error(err.response?.data?.detail || 'Failed to delete gateway');
+      } catch (err: unknown) {
+        const message =
+          (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+          'Failed to delete gateway';
+        toast.error(message);
       }
     },
     [confirm, toast, refetchGateways, selectedGateway]
@@ -161,6 +285,7 @@ export function GatewayList() {
     refetchGateways();
   };
 
+  // Loading state
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -184,27 +309,19 @@ export function GatewayList() {
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Gateway Registry</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1">
-            Manage registered gateway instances across all environments
+            {gateways.length} gateways across{' '}
+            {ENV_ORDER.filter((e) => envStats[e].total > 0).length} environments
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Mode Filter */}
-          {Object.keys(modeCounts).length > 0 && (
-            <select
-              value={modeFilter}
-              onChange={(e) => setModeFilter(e.target.value as GatewayMode | '')}
-              className="text-sm border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">All Modes ({gateways.length})</option>
-              {(['edge-mcp', 'sidecar', 'proxy', 'shadow'] as GatewayMode[]).map((mode) =>
-                modeCounts[mode] ? (
-                  <option key={mode} value={mode}>
-                    {modeLabels[mode]} ({modeCounts[mode]})
-                  </option>
-                ) : null
-              )}
-            </select>
-          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={refetchGateways}
+            icon={<RefreshCw className="w-4 h-4" />}
+          >
+            Refresh
+          </Button>
           <Button
             variant={showForm ? 'secondary' : 'primary'}
             onClick={() => setShowForm(!showForm)}
@@ -218,13 +335,7 @@ export function GatewayList() {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 rounded-lg flex items-center justify-between">
           <span className="text-sm text-red-700 dark:text-red-400">{error}</span>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={refetchGateways}
-            className="ml-4"
-            icon={<RefreshCw className="w-3.5 h-3.5" />}
-          >
+          <Button variant="secondary" size="sm" onClick={refetchGateways} className="ml-4">
             Retry
           </Button>
         </div>
@@ -235,147 +346,62 @@ export function GatewayList() {
         <GatewayRegistrationForm onCreated={handleCreated} onCancel={() => setShowForm(false)} />
       )}
 
-      {/* Gateway Cards */}
-      {filteredGateways.length === 0 ? (
+      {/* Environment Tabs */}
+      <div className="border-b border-neutral-200 dark:border-neutral-700">
+        <nav className="flex gap-1 -mb-px" aria-label="Environment tabs">
+          <EnvTab
+            label="All"
+            count={gateways.length}
+            online={
+              envStats.production.online + envStats.staging.online + envStats.development.online
+            }
+            isActive={activeEnv === 'all'}
+            onClick={() => setActiveEnv('all')}
+          />
+          {ENV_ORDER.map((env) => (
+            <EnvTab
+              key={env}
+              label={ENV_LABELS[env]}
+              count={envStats[env].total}
+              online={envStats[env].online}
+              degraded={envStats[env].degraded}
+              dotColor={ENV_COLORS[env].dot}
+              isActive={activeEnv === env}
+              onClick={() => setActiveEnv(env)}
+            />
+          ))}
+        </nav>
+      </div>
+
+      {/* Gateway List by Environment */}
+      {gateways.length === 0 ? (
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
           <EmptyState
             variant="servers"
-            title={modeFilter ? `No ${modeLabels[modeFilter]} gateways` : 'No gateways registered'}
-            description={
-              modeFilter
-                ? 'Try clearing the filter or register a new gateway.'
-                : 'Register your first gateway instance to start multi-gateway orchestration.'
-            }
+            title="No gateways registered"
+            description="Register your first gateway instance to start multi-gateway orchestration."
             action={{ label: 'Register Gateway', onClick: () => setShowForm(true) }}
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredGateways.map((gw) => (
-            <div
-              key={gw.id}
-              className="bg-white dark:bg-neutral-800 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => setSelectedGateway(gw)}
-            >
-              <div className="p-6">
-                {/* Header row */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    {/* Live indicator */}
-                    <span
-                      className={`inline-block w-2.5 h-2.5 rounded-full ${
-                        isLive(gw)
-                          ? 'bg-green-500 animate-pulse'
-                          : gw.status === 'degraded'
-                            ? 'bg-yellow-500'
-                            : 'bg-neutral-400'
-                      }`}
-                      title={isLive(gw) ? 'Live (heartbeat active)' : 'No recent heartbeat'}
-                    />
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[gw.status]}`}
-                    >
-                      {gw.status}
-                    </span>
-                    {gw.mode && (
-                      <span
-                        className={`px-2 py-1 text-xs font-medium rounded-full border ${modeColors[gw.mode]}`}
-                      >
-                        {modeLabels[gw.mode]}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs text-neutral-400 dark:text-neutral-500 font-mono">
-                    {typeLabels[gw.gateway_type] || gw.gateway_type}
-                  </span>
-                </div>
-
-                {/* Name */}
-                <h3
-                  className="text-lg font-semibold text-neutral-900 dark:text-white truncate"
-                  title={gw.name}
-                >
-                  {gw.display_name}
-                </h3>
-                <p
-                  className="text-sm text-neutral-500 dark:text-neutral-400 font-mono truncate"
-                  title={gw.name}
-                >
-                  {gw.name}
-                </p>
-
-                {/* Details */}
-                <div className="mt-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500 dark:text-neutral-400">Environment</span>
-                    <span className="font-medium text-neutral-900 dark:text-white">
-                      {gw.environment}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500 dark:text-neutral-400">Base URL</span>
-                    <span
-                      className="font-mono text-xs text-neutral-700 dark:text-neutral-300 truncate ml-2 max-w-[180px]"
-                      title={gw.base_url}
-                    >
-                      {gw.base_url}
-                    </span>
-                  </div>
-                  {gw.tenant_id && (
-                    <div className="flex justify-between">
-                      <span className="text-neutral-500 dark:text-neutral-400">Tenant</span>
-                      <span className="font-medium text-neutral-900 dark:text-white">
-                        {gw.tenant_id}
-                      </span>
-                    </div>
-                  )}
-                  {gw.capabilities.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {gw.capabilities.map((cap) => (
-                        <span
-                          key={cap}
-                          className="px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs rounded"
-                        >
-                          {cap}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Last health check */}
-                {gw.last_health_check && (
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-3">
-                    Last check: {new Date(gw.last_health_check).toLocaleString()}
-                  </p>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="border-t dark:border-neutral-700 px-6 py-3 flex gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleHealthCheck(gw.id);
-                  }}
-                  disabled={healthChecking === gw.id}
-                  className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 disabled:opacity-50"
-                >
-                  {healthChecking === gw.id ? 'Checking...' : 'Health Check'}
-                </button>
-                <span className="text-neutral-300 dark:text-neutral-600">|</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(gw.id, gw.name);
-                  }}
-                  className="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="space-y-8">
+          {visibleEnvs.map((env) => {
+            const items = envGroups[env];
+            if (items.length === 0) return null;
+            return (
+              <EnvironmentSection
+                key={env}
+                env={env}
+                gateways={items}
+                stats={envStats[env]}
+                onSelect={setSelectedGateway}
+                onHealthCheck={handleHealthCheck}
+                onDelete={handleDelete}
+                healthChecking={healthChecking}
+                showHeader={activeEnv === 'all'}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -389,7 +415,270 @@ export function GatewayList() {
   );
 }
 
-// --- Gateway Detail Panel (slide-over) ---
+// ---------------------------------------------------------------------------
+// Environment Tab
+// ---------------------------------------------------------------------------
+
+function EnvTab({
+  label,
+  count,
+  online,
+  degraded,
+  dotColor,
+  isActive,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  online: number;
+  degraded?: number;
+  dotColor?: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        relative px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap
+        ${
+          isActive
+            ? 'text-neutral-900 dark:text-white border-b-2 border-neutral-900 dark:border-white'
+            : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 border-b-2 border-transparent'
+        }
+      `}
+    >
+      <span className="flex items-center gap-2">
+        {dotColor && <span className={`w-2 h-2 rounded-full ${dotColor}`} />}
+        {label}
+        <span
+          className={`
+            text-xs px-1.5 py-0.5 rounded-full
+            ${isActive ? 'bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-500'}
+          `}
+        >
+          {count}
+        </span>
+        {count > 0 && (
+          <span className="flex items-center gap-1 text-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="text-green-600 dark:text-green-400">{online}</span>
+            {(degraded ?? 0) > 0 && (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                <span className="text-yellow-600 dark:text-yellow-400">{degraded}</span>
+              </>
+            )}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Environment Section
+// ---------------------------------------------------------------------------
+
+function EnvironmentSection({
+  env,
+  gateways,
+  stats,
+  onSelect,
+  onHealthCheck,
+  onDelete,
+  healthChecking,
+  showHeader,
+}: {
+  env: Environment;
+  gateways: GatewayInstance[];
+  stats: { total: number; online: number; offline: number; degraded: number };
+  onSelect: (gw: GatewayInstance) => void;
+  onHealthCheck: (id: string) => void;
+  onDelete: (id: string, name: string) => void;
+  healthChecking: string | null;
+  showHeader: boolean;
+}) {
+  const colors = ENV_COLORS[env];
+
+  return (
+    <div>
+      {showHeader && (
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <span className={`w-3 h-3 rounded-full ${colors.dot}`} />
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              {ENV_LABELS[env]}
+            </h2>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-neutral-500 dark:text-neutral-400">
+            <span>{stats.total} gateways</span>
+            <span className="text-neutral-300 dark:text-neutral-600">|</span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              {stats.online} online
+            </span>
+            {stats.degraded > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                {stats.degraded} degraded
+              </span>
+            )}
+            {stats.offline > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
+                {stats.offline} offline
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden border border-neutral-200 dark:border-neutral-700">
+        <div className="divide-y divide-neutral-100 dark:divide-neutral-700/50">
+          {gateways.map((gw) => (
+            <GatewayRow
+              key={gw.id}
+              gw={gw}
+              onSelect={() => onSelect(gw)}
+              onHealthCheck={() => onHealthCheck(gw.id)}
+              onDelete={() => onDelete(gw.id, gw.name)}
+              isChecking={healthChecking === gw.id}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Gateway Row
+// ---------------------------------------------------------------------------
+
+function GatewayRow({
+  gw,
+  onSelect,
+  onHealthCheck,
+  onDelete,
+  isChecking,
+}: {
+  gw: GatewayInstance;
+  onSelect: () => void;
+  onHealthCheck: () => void;
+  onDelete: () => void;
+  isChecking: boolean;
+}) {
+  const status = STATUS_CONFIG[gw.status];
+  const typeInfo = TYPE_DISPLAY[gw.gateway_type] ?? { label: gw.gateway_type, icon: Server };
+  const TypeIcon = typeInfo.icon;
+  const live = isLive(gw);
+
+  return (
+    <div
+      className="group flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 dark:hover:bg-neutral-750 cursor-pointer transition-colors"
+      onClick={onSelect}
+    >
+      {/* Status indicator */}
+      <div className="flex-shrink-0 relative">
+        <div
+          className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+            isStoa(gw.gateway_type)
+              ? 'bg-indigo-100 dark:bg-indigo-900/30'
+              : 'bg-neutral-100 dark:bg-neutral-700'
+          }`}
+        >
+          <TypeIcon
+            className={`w-5 h-5 ${
+              isStoa(gw.gateway_type)
+                ? 'text-indigo-600 dark:text-indigo-400'
+                : 'text-neutral-500 dark:text-neutral-400'
+            }`}
+          />
+        </div>
+        {/* Status dot overlaid on icon */}
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-neutral-800 ${status.dot} ${live ? 'animate-pulse' : ''}`}
+          title={live ? `${status.label} (live heartbeat)` : status.label}
+        />
+      </div>
+
+      {/* Name + type */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-neutral-900 dark:text-white truncate">
+            {gw.display_name}
+          </span>
+          {gw.mode && (
+            <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+              {MODE_LABELS[gw.mode] ?? gw.mode}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">{typeInfo.label}</span>
+          <span className="text-neutral-300 dark:text-neutral-600">&middot;</span>
+          <span className="text-xs font-mono text-neutral-400 dark:text-neutral-500 truncate">
+            {gw.base_url.replace(/^https?:\/\//, '')}
+          </span>
+        </div>
+      </div>
+
+      {/* Status badge */}
+      <div className="flex-shrink-0 hidden sm:block">
+        <span
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full ${status.badge}`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+          {status.label}
+        </span>
+      </div>
+
+      {/* Last check */}
+      <div className="flex-shrink-0 hidden md:block text-right w-20">
+        {gw.last_health_check ? (
+          <span className="text-xs text-neutral-400 dark:text-neutral-500">
+            {timeAgo(gw.last_health_check)}
+          </span>
+        ) : (
+          <span className="text-xs text-neutral-300 dark:text-neutral-600">never</span>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onHealthCheck();
+          }}
+          disabled={isChecking}
+          className="p-1.5 rounded-md text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+          title="Health check"
+        >
+          <HeartPulse className={`w-4 h-4 ${isChecking ? 'animate-pulse' : ''}`} />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="p-1.5 rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+          title="Delete"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Chevron */}
+      <ChevronRight className="w-4 h-4 text-neutral-300 dark:text-neutral-600 flex-shrink-0" />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Detail Panel (slide-over)
+// ---------------------------------------------------------------------------
 
 function GatewayDetailPanel({
   gateway: gw,
@@ -400,7 +689,9 @@ function GatewayDetailPanel({
 }) {
   const hd = (gw.health_details ?? {}) as Record<string, unknown>;
   const errorRate = typeof hd.error_rate === 'number' ? hd.error_rate : null;
-  const isDegraded = errorRate !== null && errorRate > 0.05;
+  const status = STATUS_CONFIG[gw.status];
+  const typeInfo = TYPE_DISPLAY[gw.gateway_type] ?? { label: gw.gateway_type, icon: Server };
+  const live = isLive(gw);
 
   return (
     <div
@@ -408,162 +699,114 @@ function GatewayDetailPanel({
       onClick={onClose}
       data-testid="gateway-detail-overlay"
     >
-      {/* Backdrop */}
       <div className="fixed inset-0 bg-black/30" />
 
-      {/* Panel */}
       <div
         className="relative w-full max-w-md bg-white dark:bg-neutral-800 shadow-xl overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         data-testid="gateway-detail-panel"
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-neutral-800 border-b dark:border-neutral-700 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-block w-3 h-3 rounded-full ${
-                isLive(gw) ? 'bg-green-500 animate-pulse' : 'bg-neutral-400'
-              }`}
-            />
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white truncate">
-              {gw.display_name}
-            </h2>
+        <div className="sticky top-0 bg-white dark:bg-neutral-800 border-b dark:border-neutral-700 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <span
+                className={`flex-shrink-0 w-3 h-3 rounded-full ${status.dot} ${live ? 'animate-pulse' : ''}`}
+              />
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white truncate">
+                {gw.display_name}
+              </h2>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 text-xl leading-none ml-2"
+              aria-label="Close"
+            >
+              &times;
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 text-xl leading-none"
-            aria-label="Close detail panel"
-          >
-            &times;
-          </button>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${status.badge}`}>
+              {status.label}
+            </span>
+            {gw.mode && (
+              <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                {MODE_LABELS[gw.mode] ?? gw.mode}
+              </span>
+            )}
+            <span className="text-xs text-neutral-400">{typeInfo.label}</span>
+          </div>
         </div>
 
         <div className="px-6 py-5 space-y-6">
-          {/* Status badges */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[gw.status]}`}
-            >
-              {gw.status}
-            </span>
-            {isDegraded && (
-              <span className="px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
-                degraded (error rate &gt; 5%)
-              </span>
-            )}
-            {gw.mode && (
-              <span
-                className={`px-2 py-1 text-xs font-medium rounded-full border ${modeColors[gw.mode]}`}
-              >
-                {modeLabels[gw.mode]}
-              </span>
-            )}
-          </div>
-
-          {/* Heartbeat metrics */}
+          {/* Heartbeat Metrics */}
           <section>
-            <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
-              Heartbeat Metrics
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
+              Heartbeat
             </h3>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <MetricItem
+            <div className="grid grid-cols-3 gap-2">
+              <MetricCard
                 label="Uptime"
                 value={
                   typeof hd.uptime_seconds === 'number' ? formatUptime(hd.uptime_seconds) : '--'
                 }
               />
-              <MetricItem
+              <MetricCard
                 label="Routes"
                 value={hd.routes_count != null ? String(hd.routes_count) : '--'}
               />
-              <MetricItem
-                label="Policies"
-                value={hd.policies_count != null ? String(hd.policies_count) : '--'}
-              />
-              <MetricItem
-                label="Requests"
-                value={hd.requests_total != null ? String(hd.requests_total) : '--'}
-              />
-              <MetricItem
+              <MetricCard
                 label="Error Rate"
                 value={errorRate !== null ? `${(errorRate * 100).toFixed(1)}%` : '--'}
-                warn={isDegraded}
+                warn={errorRate !== null && errorRate > 0.05}
               />
-              <MetricItem
-                label="Last Heartbeat"
-                value={
-                  typeof hd.last_heartbeat === 'string'
-                    ? new Date(hd.last_heartbeat).toLocaleTimeString()
-                    : gw.last_health_check
-                      ? new Date(gw.last_health_check).toLocaleTimeString()
-                      : '--'
-                }
-              />
-            </dl>
+            </div>
           </section>
 
-          {/* Instance info */}
+          {/* Instance Info */}
           <section>
-            <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
-              Instance Info
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
+              Configuration
             </h3>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-neutral-500 dark:text-neutral-400">Name</dt>
-                <dd className="font-mono text-neutral-900 dark:text-white text-xs truncate max-w-[220px]">
-                  {gw.name}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-neutral-500 dark:text-neutral-400">Type</dt>
-                <dd className="text-neutral-900 dark:text-white">
-                  {typeLabels[gw.gateway_type] || gw.gateway_type}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-neutral-500 dark:text-neutral-400">Environment</dt>
-                <dd className="text-neutral-900 dark:text-white">{gw.environment}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-neutral-500 dark:text-neutral-400">Base URL</dt>
-                <dd className="font-mono text-xs text-neutral-700 dark:text-neutral-300 truncate max-w-[220px]">
-                  {gw.base_url}
-                </dd>
-              </div>
-              {gw.version && (
-                <div className="flex justify-between">
-                  <dt className="text-neutral-500 dark:text-neutral-400">Version</dt>
-                  <dd className="font-mono text-neutral-900 dark:text-white">{gw.version}</dd>
-                </div>
+            <dl className="space-y-3 text-sm">
+              <DetailRow label="Name" value={gw.name} mono />
+              <DetailRow label="Type" value={typeInfo.label} />
+              <DetailRow label="Environment" value={gw.environment} />
+              <DetailRow
+                label="Base URL"
+                value={
+                  <a
+                    href={gw.base_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {gw.base_url.replace(/^https?:\/\//, '')}
+                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                  </a>
+                }
+              />
+              {gw.tenant_id && <DetailRow label="Tenant" value={gw.tenant_id} />}
+              {gw.version && <DetailRow label="Version" value={gw.version} mono />}
+              <DetailRow label="Created" value={new Date(gw.created_at).toLocaleDateString()} />
+              {gw.last_health_check && (
+                <DetailRow label="Last Check" value={timeAgo(gw.last_health_check)} />
               )}
-              {typeof hd.registered_at === 'string' && (
-                <div className="flex justify-between">
-                  <dt className="text-neutral-500 dark:text-neutral-400">Registered</dt>
-                  <dd className="text-neutral-900 dark:text-white">
-                    {new Date(hd.registered_at).toLocaleString()}
-                  </dd>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <dt className="text-neutral-500 dark:text-neutral-400">Created</dt>
-                <dd className="text-neutral-900 dark:text-white">
-                  {new Date(gw.created_at).toLocaleString()}
-                </dd>
-              </div>
             </dl>
           </section>
 
           {/* Capabilities */}
           {gw.capabilities.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
                 Capabilities
               </h3>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {gw.capabilities.map((cap) => (
                   <span
                     key={cap}
-                    className="px-2 py-1 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs rounded"
+                    className="px-2 py-1 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs rounded-md"
                   >
                     {cap}
                   </span>
@@ -575,19 +818,31 @@ function GatewayDetailPanel({
           {/* Tags */}
           {gw.tags.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
                 Tags
               </h3>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {gw.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded"
+                    className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded-md"
                   >
                     {tag}
                   </span>
                 ))}
               </div>
+            </section>
+          )}
+
+          {/* Raw Health Details */}
+          {Object.keys(hd).length > 0 && (
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+                Health Details
+              </h3>
+              <pre className="text-xs bg-neutral-50 dark:bg-neutral-900 rounded-lg p-3 overflow-x-auto text-neutral-700 dark:text-neutral-300">
+                {JSON.stringify(hd, null, 2)}
+              </pre>
             </section>
           )}
         </div>
@@ -596,12 +851,37 @@ function GatewayDetailPanel({
   );
 }
 
-function MetricItem({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+// ---------------------------------------------------------------------------
+// Small UI atoms
+// ---------------------------------------------------------------------------
+
+function MetricCard({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="bg-neutral-50 dark:bg-neutral-700 rounded-lg p-3">
-      <dt className="text-xs text-neutral-500 dark:text-neutral-400">{label}</dt>
+    <div className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-3">
+      <dt className="text-[11px] text-neutral-500 dark:text-neutral-400">{label}</dt>
       <dd
-        className={`text-lg font-semibold ${warn ? 'text-orange-600' : 'text-neutral-900 dark:text-white'}`}
+        className={`text-base font-semibold mt-0.5 ${warn ? 'text-orange-600 dark:text-orange-400' : 'text-neutral-900 dark:text-white'}`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex justify-between items-center">
+      <dt className="text-neutral-500 dark:text-neutral-400">{label}</dt>
+      <dd
+        className={`text-neutral-900 dark:text-white text-right truncate max-w-[60%] ${mono ? 'font-mono text-xs' : ''}`}
       >
         {value}
       </dd>

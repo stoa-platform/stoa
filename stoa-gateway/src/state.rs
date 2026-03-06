@@ -129,6 +129,9 @@ pub struct AppState {
     /// LLM cost calculator for per-request cost tracking via Prometheus (CAB-1487 wiring).
     /// Shares the same ProviderRegistry as llm_router. None when LLM router is disabled.
     pub cost_calculator: Option<Arc<crate::llm::CostCalculator>>,
+    /// API proxy backend registry for internal dogfooding (CAB-1722).
+    /// None when api_proxy.enabled is false.
+    pub api_proxy_registry: Option<Arc<crate::proxy::ApiProxyRegistry>>,
 }
 
 impl AppState {
@@ -507,6 +510,19 @@ impl AppState {
             Arc::new(calc)
         });
 
+        // Initialize API proxy backend registry (CAB-1722)
+        let api_proxy_registry = if config.api_proxy.enabled {
+            let registry = crate::proxy::ApiProxyRegistry::from_config(&config.api_proxy);
+            tracing::info!(
+                backends = registry.count(),
+                "API proxy registry initialized"
+            );
+            Some(Arc::new(registry))
+        } else {
+            tracing::debug!("API proxy disabled");
+            None
+        };
+
         let start_time = Instant::now();
 
         Self {
@@ -552,6 +568,7 @@ impl AppState {
             capabilities_json,
             llm_router,
             cost_calculator,
+            api_proxy_registry,
         }
     }
 

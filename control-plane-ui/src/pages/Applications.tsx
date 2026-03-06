@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useEnvironment } from '../contexts/EnvironmentContext';
-import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
 import { Plus } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { Button } from '@stoa/shared/components/Button';
@@ -18,7 +17,6 @@ const PAGE_SIZE = 12;
 export function Applications() {
   const { isReady } = useAuth();
   const { activeEnvironment } = useEnvironment();
-  const { canCreate, canEdit, canDelete } = useEnvironmentMode();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [applications, setApplications] = useState<Application[]>([]);
@@ -200,8 +198,7 @@ export function Applications() {
         </div>
         <Button
           onClick={() => setShowCreateModal(true)}
-          disabled={!selectedTenant || !canCreate}
-          title={!canCreate ? 'Read-only environment' : undefined}
+          disabled={!selectedTenant}
           icon={<Plus className="w-5 h-5" />}
         >
           Create Application
@@ -402,8 +399,6 @@ export function Applications() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setEditingApp(app)}
-                  disabled={!canEdit}
-                  title={!canEdit ? 'Read-only environment' : undefined}
                   className="flex-1"
                 >
                   Edit
@@ -412,8 +407,6 @@ export function Applications() {
                   variant="danger"
                   size="sm"
                   onClick={() => handleDelete(app.id, app.display_name || app.name)}
-                  disabled={!canDelete}
-                  title={!canDelete ? 'Read-only environment' : undefined}
                   className="flex-1"
                 >
                   Delete

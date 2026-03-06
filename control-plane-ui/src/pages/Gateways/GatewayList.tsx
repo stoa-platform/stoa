@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
-import { useEnvironmentMode } from '../../hooks/useEnvironmentMode';
 import { apiService } from '../../services/api';
 import { GatewayRegistrationForm } from './GatewayRegistrationForm';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -15,7 +14,6 @@ import {
   Activity,
   Server,
   ChevronRight,
-  ChevronDown,
   ExternalLink,
   Trash2,
   HeartPulse,
@@ -156,11 +154,8 @@ export function GatewayList() {
   const [showForm, setShowForm] = useState(false);
   const [healthChecking, setHealthChecking] = useState<string | null>(null);
   const [selectedGateway, setSelectedGateway] = useState<GatewayInstance | null>(null);
-  const [overviewOpen, setOverviewOpen] = useState(true);
-
-  // Environment context + read-only mode
+  // Environment context (gateways are global — no read-only guards)
   const { activeEnvironment: globalEnv } = useEnvironment();
-  const { canCreate, canDelete, isReadOnly } = useEnvironmentMode();
 
   // Active environment tab — sync with global selector
   const [activeEnv, setActiveEnv] = useState<Environment | 'all'>(() => {
@@ -341,8 +336,6 @@ export function GatewayList() {
           <Button
             variant={showForm ? 'secondary' : 'primary'}
             onClick={() => setShowForm(!showForm)}
-            disabled={!canCreate && !showForm}
-            title={!canCreate ? 'Read-only environment' : undefined}
           >
             {showForm ? 'Cancel' : '+ Register Gateway'}
           </Button>
@@ -359,75 +352,9 @@ export function GatewayList() {
         </div>
       )}
 
-      {/* Read-only notice */}
-      {isReadOnly && (
-        <div
-          className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 rounded-lg text-sm text-amber-700 dark:text-amber-400"
-          data-testid="readonly-notice"
-        >
-          This environment is read-only. Gateway registration and deletion are disabled.
-        </div>
-      )}
-
       {/* Registration Form */}
       {showForm && (
         <GatewayRegistrationForm onCreated={handleCreated} onCancel={() => setShowForm(false)} />
-      )}
-
-      {/* Cross-Environment Overview */}
-      {gateways.length > 0 && (
-        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow border border-neutral-200 dark:border-neutral-700">
-          <button
-            onClick={() => setOverviewOpen(!overviewOpen)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-750 transition-colors rounded-lg"
-          >
-            <span>Environment Overview</span>
-            {overviewOpen ? (
-              <ChevronDown className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </button>
-          {overviewOpen && (
-            <div className="grid grid-cols-3 gap-4 px-4 pb-4">
-              {ENV_ORDER.map((env) => {
-                const stats = envStats[env];
-                const colors = ENV_COLORS[env];
-                return (
-                  <button
-                    key={env}
-                    onClick={() => setActiveEnv(env)}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                      activeEnv === env
-                        ? `${colors.bg} ${colors.border}`
-                        : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-750'
-                    }`}
-                  >
-                    <span className={`w-3 h-3 rounded-full flex-shrink-0 ${colors.dot}`} />
-                    <div className="text-left min-w-0">
-                      <div className={`text-sm font-medium ${colors.text}`}>{ENV_LABELS[env]}</div>
-                      <div className="text-xs text-neutral-500 dark:text-neutral-400">
-                        {stats.total} gateways
-                        {stats.online > 0 && (
-                          <span className="text-green-600 dark:text-green-400">
-                            {' '}
-                            &middot; {stats.online} online
-                          </span>
-                        )}
-                        {stats.degraded > 0 && (
-                          <span className="text-yellow-600 dark:text-yellow-400">
-                            {' '}
-                            &middot; {stats.degraded} degraded
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
       )}
 
       {/* Environment Tabs */}
@@ -483,7 +410,6 @@ export function GatewayList() {
                 onDelete={handleDelete}
                 healthChecking={healthChecking}
                 showHeader={activeEnv === 'all'}
-                canDelete={canDelete}
               />
             );
           })}
@@ -574,7 +500,6 @@ function EnvironmentSection({
   onDelete,
   healthChecking,
   showHeader,
-  canDelete,
 }: {
   env: Environment;
   gateways: GatewayInstance[];
@@ -584,7 +509,6 @@ function EnvironmentSection({
   onDelete: (id: string, name: string) => void;
   healthChecking: string | null;
   showHeader: boolean;
-  canDelete: boolean;
 }) {
   const colors = ENV_COLORS[env];
 
@@ -631,7 +555,6 @@ function EnvironmentSection({
               onHealthCheck={() => onHealthCheck(gw.id)}
               onDelete={() => onDelete(gw.id, gw.name)}
               isChecking={healthChecking === gw.id}
-              canDelete={canDelete}
             />
           ))}
         </div>
@@ -650,14 +573,12 @@ function GatewayRow({
   onHealthCheck,
   onDelete,
   isChecking,
-  canDelete,
 }: {
   gw: GatewayInstance;
   onSelect: () => void;
   onHealthCheck: () => void;
   onDelete: () => void;
   isChecking: boolean;
-  canDelete: boolean;
 }) {
   const status = STATUS_CONFIG[gw.status];
   const typeInfo = TYPE_DISPLAY[gw.gateway_type] ?? { label: gw.gateway_type, icon: Server };
@@ -753,9 +674,8 @@ function GatewayRow({
             e.stopPropagation();
             onDelete();
           }}
-          disabled={!canDelete}
-          className="p-1.5 rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          title={canDelete ? 'Delete' : 'Read-only environment'}
+          className="p-1.5 rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+          title="Delete"
         >
           <Trash2 className="w-4 h-4" />
         </button>

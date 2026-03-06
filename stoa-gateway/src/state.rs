@@ -166,6 +166,7 @@ impl AppState {
             .unwrap_or("http://localhost:8000");
 
         // Build OIDC config if Keycloak credentials are provided
+        // Use internal URL for token endpoint (service-to-service), fall back to external URL
         let oidc = match (
             &config.keycloak_url,
             &config.keycloak_client_id,
@@ -173,9 +174,13 @@ impl AppState {
         ) {
             (Some(url), Some(client_id), Some(client_secret)) => {
                 let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
+                let token_base = config
+                    .keycloak_internal_url
+                    .as_deref()
+                    .unwrap_or(url.as_str());
                 let token_url = format!(
                     "{}/realms/{}/protocol/openid-connect/token",
-                    url.trim_end_matches('/'),
+                    token_base.trim_end_matches('/'),
                     realm
                 );
                 Some(OidcConfig {

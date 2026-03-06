@@ -232,6 +232,14 @@ export interface APIResponse {
   content?: Record<string, { schema: object }>;
 }
 
+// Security profile types (CAB-1744)
+export type SecurityProfile =
+  | 'api_key'
+  | 'oauth2_public'
+  | 'oauth2_confidential'
+  | 'fapi_baseline'
+  | 'fapi_advanced';
+
 // Consumer Application types (field names match backend ApplicationResponse — snake_case)
 export interface Application {
   id: string;
@@ -244,6 +252,10 @@ export interface Application {
   redirect_uris: string[];
   status: string;
   api_subscriptions: string[];
+  security_profile?: SecurityProfile;
+  api_key?: string | null; // Only shown once for api_key profile
+  api_key_prefix?: string | null;
+  jwks_uri?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -254,6 +266,8 @@ export interface ApplicationCreateRequest {
   description?: string;
   redirect_uris: string[];
   environment?: string;
+  security_profile?: SecurityProfile;
+  jwks_uri?: string;
 }
 
 // API Subscription types (for consumer apps)

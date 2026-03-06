@@ -109,11 +109,10 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     Some(tracer)
 }
 
-/// Initialize telemetry as no-op (feature disabled).
-#[cfg(not(feature = "otel"))]
+/// Initialize telemetry as no-op (feature disabled or runtime toggle off).
 pub fn init_telemetry_noop() {
     let _ = OTEL_INITIALIZED.set(false);
-    info!("OpenTelemetry disabled (feature not enabled)");
+    info!("OpenTelemetry disabled");
 }
 
 /// Check if OTel is active

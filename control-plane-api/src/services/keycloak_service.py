@@ -230,35 +230,86 @@ class KeycloakService:
 
     @_auto_reconnect
     async def create_client(
-        self, tenant_id: str, name: str, display_name: str, redirect_uris: list[str], description: str = ""
+        self,
+        tenant_id: str,
+        name: str,
+        display_name: str,
+        redirect_uris: list[str],
+        description: str = "",
+        security_profile: str = "oauth2_public",
     ) -> dict:
         """
         Create a new OAuth2 client for an application.
 
-        Returns client_id and client_secret.
+        Client config varies by security_profile:
+        - oauth2_public: public client, PKCE enforced, no client_secret
+        - oauth2_confidential: confidential client, client_secret_basic
+        - fapi_baseline: confidential, private_key_jwt, FAPI 2.0 Security Profile
+        - fapi_advanced: confidential, private_key_jwt, FAPI 2.0 + DPoP
+
+        Returns client_id and client_secret (None for public clients).
         """
         if not self._admin:
             raise RuntimeError("Keycloak not connected")
 
         client_id = f"{tenant_id}-{name}"
 
+        # Base client config
         client_data = {
             "clientId": client_id,
             "name": display_name,
             "description": description,
             "enabled": True,
             "protocol": "openid-connect",
-            "publicClient": False,
-            "serviceAccountsEnabled": True,
-            "authorizationServicesEnabled": False,
             "standardFlowEnabled": True,
-            "directAccessGrantsEnabled": True,
             "redirectUris": redirect_uris,
             "webOrigins": ["+"],
             "attributes": {
                 "tenant_id": tenant_id,
+                "security_profile": security_profile,
             },
         }
+
+        # Profile-specific config
+        if security_profile == "oauth2_public":
+            client_data.update({
+                "publicClient": True,
+                "serviceAccountsEnabled": False,
+                "directAccessGrantsEnabled": True,
+                "clientAuthenticatorType": "client-secret",
+                "attributes": {
+                    **client_data["attributes"],
+                    "pkce.code.challenge.method": "S256",
+                },
+            })
+        elif security_profile == "oauth2_confidential":
+            client_data.update({
+                "publicClient": False,
+                "serviceAccountsEnabled": True,
+                "directAccessGrantsEnabled": True,
+                "clientAuthenticatorType": "client-secret",
+            })
+        elif security_profile in ("fapi_baseline", "fapi_advanced"):
+            client_data.update({
+                "publicClient": False,
+                "serviceAccountsEnabled": True,
+                "directAccessGrantsEnabled": False,
+                "clientAuthenticatorType": "client-jwt",
+                "attributes": {
+                    **client_data["attributes"],
+                    "pkce.code.challenge.method": "S256",
+                    "token.endpoint.auth.signing.alg": "RS256",
+                },
+            })
+            if security_profile == "fapi_advanced":
+                client_data["attributes"]["dpop.bound.access.tokens"] = "true"
+        else:
+            # Fallback: confidential client
+            client_data.update({
+                "publicClient": False,
+                "serviceAccountsEnabled": True,
+                "directAccessGrantsEnabled": True,
+            })
 
         # Create client
         self._admin.create_client(client_data)
@@ -268,15 +319,19 @@ class KeycloakService:
         if not client:
             raise RuntimeError("Failed to create client")
 
-        # Get client secret
         client_uuid = client["id"]
-        secret_data = self._admin.get_client_secrets(client_uuid)
 
-        logger.info(f"Created client {client_id} for tenant {tenant_id}")
+        # Get client secret (only for confidential clients)
+        client_secret = None
+        if security_profile != "oauth2_public":
+            secret_data = self._admin.get_client_secrets(client_uuid)
+            client_secret = secret_data.get("value")
+
+        logger.info(f"Created client {client_id} for tenant {tenant_id} (profile={security_profile})")
 
         return {
             "client_id": client_id,
-            "client_secret": secret_data.get("value"),
+            "client_secret": client_secret,
             "id": client_uuid,
         }
 

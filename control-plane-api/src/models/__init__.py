@@ -55,7 +55,7 @@ from .mcp_subscription import (
 )
 from .oauth_client import OAuthClient, OAuthClientStatus
 from .plan import Plan, PlanStatus
-from .portal_application import PortalApplication, PortalAppStatus
+from .portal_application import PortalApplication, PortalAppStatus, SecurityProfile
 from .prospect_event import EventType, ProspectEvent
 from .prospect_feedback import ProspectFeedback
 from .proxy_backend import ProxyBackend, ProxyBackendAuthType, ProxyBackendStatus

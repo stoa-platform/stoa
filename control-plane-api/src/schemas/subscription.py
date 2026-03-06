@@ -301,3 +301,4 @@ class SubscriptionValidateOAuthResponse(BaseModel):
     tenant_id: str
     plan_id: str | None = None
     plan_name: str | None = None
+    security_profile: str = "oauth2_public"

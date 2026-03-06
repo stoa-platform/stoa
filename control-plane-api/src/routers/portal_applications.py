@@ -18,8 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
 from ..database import get_db
-from ..models.portal_application import PortalApplication, PortalAppStatus
+from ..models.portal_application import PortalApplication, PortalAppStatus, SecurityProfile
 from ..repositories.portal_application import PortalApplicationRepository
+from ..services.api_key import api_key_service
 from ..services.keycloak_service import keycloak_service
 
 logger = logging.getLogger(__name__)
@@ -38,8 +39,12 @@ class ApplicationResponse(BaseModel):
     name: str
     display_name: str
     description: str
+    security_profile: str = "oauth2_public"
     client_id: str | None = None
     client_secret: str | None = None  # Only returned on create
+    api_key: str | None = None  # Only returned on create for api_key profile
+    api_key_prefix: str | None = None
+    jwks_uri: str | None = None
     tenant_id: str | None = None
     status: str = "active"
     redirect_uris: list[str] = []
@@ -67,7 +72,9 @@ class ApplicationCreateRequest(BaseModel):
     name: str
     display_name: str
     description: str = ""
+    security_profile: SecurityProfile = SecurityProfile.OAUTH2_PUBLIC
     redirect_uris: list[str] = []
+    jwks_uri: str | None = None  # Required for fapi_baseline/fapi_advanced
     tenant_id: str | None = None  # If not specified, uses user's default tenant
     environment: str | None = None  # Multi-env registry (CAB-1667)
 
@@ -91,15 +98,23 @@ class RegenerateSecretResponse(BaseModel):
 # ============================================================================
 
 
-def _app_to_response(app: PortalApplication, client_secret: str | None = None) -> ApplicationResponse:
+def _app_to_response(
+    app: PortalApplication,
+    client_secret: str | None = None,
+    api_key: str | None = None,
+) -> ApplicationResponse:
     """Convert a PortalApplication model to API response."""
     return ApplicationResponse(
         id=str(app.id),
         name=app.name,
         display_name=app.display_name,
         description=app.description or "",
+        security_profile=app.security_profile.value if app.security_profile else "oauth2_public",
         client_id=app.keycloak_client_id,
         client_secret=client_secret,
+        api_key=api_key,
+        api_key_prefix=app.api_key_prefix,
+        jwks_uri=app.jwks_uri,
         tenant_id=app.tenant_id,
         status=app.status.value if app.status else "active",
         redirect_uris=app.redirect_uris or [],
@@ -179,10 +194,20 @@ async def create_application(
     """
     Create a new application.
 
-    Returns the application with client_secret (only shown once!).
-    Creates a corresponding Keycloak OAuth client if KC is available.
+    Returns the application with credentials (only shown once!).
+    Behavior varies by security_profile:
+    - api_key: generates API key, no Keycloak client
+    - oauth2_public: public KC client with PKCE
+    - oauth2_confidential: confidential KC client with client_secret
+    - fapi_baseline: confidential KC client + FAPI 2.0 Security Profile
+    - fapi_advanced: confidential KC client + FAPI 2.0 + DPoP
     """
     repo = PortalApplicationRepository(db)
+    profile = data.security_profile
+
+    # Validate profile-specific requirements
+    if profile in (SecurityProfile.FAPI_BASELINE, SecurityProfile.FAPI_ADVANCED) and not data.jwks_uri:
+        raise HTTPException(status_code=422, detail="jwks_uri is required for FAPI profiles")
 
     # Check for duplicate name
     existing = await repo.get_by_owner_and_name(user.id, data.name)
@@ -197,31 +222,42 @@ async def create_application(
         owner_id=user.id,
         tenant_id=data.tenant_id,
         redirect_uris=data.redirect_uris,
+        security_profile=profile,
+        jwks_uri=data.jwks_uri,
         status=PortalAppStatus.ACTIVE,
         environment=data.environment,
     )
 
-    # Try Keycloak client creation (graceful degradation)
     client_secret = None
-    try:
-        kc_result = await keycloak_service.create_client(
-            tenant_id=data.tenant_id or "default",
-            name=data.name,
-            display_name=data.display_name,
-            redirect_uris=data.redirect_uris,
-            description=data.description,
-        )
-        app.keycloak_client_id = kc_result.get("client_id")
-        app.keycloak_client_uuid = kc_result.get("id")
-        client_secret = kc_result.get("client_secret")
-    except Exception as e:
-        logger.warning(f"Keycloak client creation failed (app will be created without KC): {e}")
+    api_key_full = None
+
+    if profile == SecurityProfile.API_KEY:
+        # API Key profile — no Keycloak client, generate API key
+        api_key_full, key_hash, key_prefix = api_key_service.generate_key()
+        app.api_key_hash = key_hash
+        app.api_key_prefix = key_prefix
+    else:
+        # All OAuth2/FAPI profiles — create Keycloak client
+        try:
+            kc_result = await keycloak_service.create_client(
+                tenant_id=data.tenant_id or "default",
+                name=data.name,
+                display_name=data.display_name,
+                redirect_uris=data.redirect_uris,
+                description=data.description,
+                security_profile=profile.value,
+            )
+            app.keycloak_client_id = kc_result.get("client_id")
+            app.keycloak_client_uuid = kc_result.get("id")
+            client_secret = kc_result.get("client_secret")
+        except Exception as e:
+            logger.warning(f"Keycloak client creation failed (app will be created without KC): {e}")
 
     app = await repo.create(app)
     await db.commit()
 
-    logger.info(f"User {user.username} created application {data.name} (ID: {app.id})")
-    return _app_to_response(app, client_secret=client_secret)
+    logger.info(f"User {user.username} created application {data.name} (profile={profile.value}, ID: {app.id})")
+    return _app_to_response(app, client_secret=client_secret, api_key=api_key_full)
 
 
 @router.patch("/{app_id}", response_model=ApplicationResponse)

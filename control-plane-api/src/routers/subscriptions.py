@@ -1106,6 +1106,21 @@ async def validate_subscription_oauth(
     if subscription.expires_at and now > subscription.expires_at:
         raise HTTPException(status_code=403, detail="Subscription expired")
 
+    # Look up security_profile from portal application
+    security_profile = "oauth2_public"
+    if subscription.application_id:
+        from uuid import UUID as _UUID
+
+        from ..repositories.portal_application import PortalApplicationRepository
+
+        app_repo = PortalApplicationRepository(db)
+        try:
+            portal_app = await app_repo.get_by_id(_UUID(subscription.application_id))
+            if portal_app and portal_app.security_profile:
+                security_profile = portal_app.security_profile.value
+        except (ValueError, Exception):
+            pass  # Invalid UUID or DB error — use default
+
     return SubscriptionValidateOAuthResponse(
         valid=True,
         subscription_id=str(subscription.id),
@@ -1117,4 +1132,5 @@ async def validate_subscription_oauth(
         tenant_id=subscription.tenant_id,
         plan_id=subscription.plan_id,
         plan_name=subscription.plan_name,
+        security_profile=security_profile,
     )

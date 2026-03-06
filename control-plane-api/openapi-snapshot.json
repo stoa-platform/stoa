@@ -807,6 +807,17 @@
             ],
             "title": "Environment"
           },
+          "jwks_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jwks Uri"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -818,6 +829,10 @@
             },
             "title": "Redirect Uris",
             "type": "array"
+          },
+          "security_profile": {
+            "$ref": "#/components/schemas/SecurityProfile",
+            "default": "oauth2_public"
           },
           "tenant_id": {
             "anyOf": [
@@ -18035,6 +18050,18 @@
         "title": "SecurityEventsResponse",
         "type": "object"
       },
+      "SecurityProfile": {
+        "description": "Security profile for a portal application (CAB-1744).\n\nCurated auth combinations \u2014 each profile maps to specific\nKeycloak client config and gateway auth chain enforcement.",
+        "enum": [
+          "api_key",
+          "oauth2_public",
+          "oauth2_confidential",
+          "fapi_baseline",
+          "fapi_advanced"
+        ],
+        "title": "SecurityProfile",
+        "type": "string"
+      },
       "SelfServiceSignupRequest": {
         "properties": {
           "company": {
@@ -19715,6 +19742,11 @@
               }
             ],
             "title": "Plan Name"
+          },
+          "security_profile": {
+            "default": "oauth2_public",
+            "title": "Security Profile",
+            "type": "string"
           },
           "subscriber_id": {
             "title": "Subscriber Id",
@@ -24345,6 +24377,28 @@
       "src__routers__portal_applications__ApplicationResponse": {
         "description": "Application response for Portal.",
         "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "api_key_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Prefix"
+          },
           "api_subscriptions": {
             "default": [],
             "items": {
@@ -24391,6 +24445,17 @@
             "title": "Id",
             "type": "string"
           },
+          "jwks_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jwks Uri"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -24402,6 +24467,11 @@
             },
             "title": "Redirect Uris",
             "type": "array"
+          },
+          "security_profile": {
+            "default": "oauth2_public",
+            "title": "Security Profile",
+            "type": "string"
           },
           "status": {
             "default": "active",
@@ -30004,7 +30074,7 @@
         ]
       },
       "post": {
-        "description": "Create a new application.\n\nReturns the application with client_secret (only shown once!).\nCreates a corresponding Keycloak OAuth client if KC is available.",
+        "description": "Create a new application.\n\nReturns the application with credentials (only shown once!).\nBehavior varies by security_profile:\n- api_key: generates API key, no Keycloak client\n- oauth2_public: public KC client with PKCE\n- oauth2_confidential: confidential KC client with client_secret\n- fapi_baseline: confidential KC client + FAPI 2.0 Security Profile\n- fapi_advanced: confidential KC client + FAPI 2.0 + DPoP",
         "operationId": "create_application",
         "requestBody": {
           "content": {

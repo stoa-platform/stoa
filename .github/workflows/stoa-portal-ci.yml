@@ -69,7 +69,10 @@ jobs:
   # === Docker: build + push GHCR (with Vite env vars) ===
   docker:
     needs: ci
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: |
+      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      !cancelled()
     uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: portal

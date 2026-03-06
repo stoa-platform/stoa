@@ -201,6 +201,8 @@ pub fn build_router(state: AppState) -> Router {
             get(hegemon::dashboard::fleet_dashboard),
         )
         .route("/hegemon/events", get(hegemon::metering::list_events))
+        // CAB-1709 P6: HEGEMON messaging admin
+        .route("/hegemon/messages", get(hegemon::messaging::list_inboxes))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -341,6 +343,20 @@ pub fn build_router(state: AppState) -> Router {
                 .route(
                     "/hegemon/claims/:mega_id/heartbeat",
                     post(hegemon::claims::heartbeat_claim),
+                )
+                // CAB-1709 P6: HEGEMON messaging endpoints
+                .route("/hegemon/messages", post(hegemon::messaging::send_message))
+                .route(
+                    "/hegemon/messages/:agent_name",
+                    get(hegemon::messaging::get_inbox),
+                )
+                .route(
+                    "/hegemon/messages/:agent_name/read",
+                    post(hegemon::messaging::mark_message_read),
+                )
+                .route(
+                    "/hegemon/messages/:agent_name/read-all",
+                    post(hegemon::messaging::mark_all_messages_read),
                 )
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)

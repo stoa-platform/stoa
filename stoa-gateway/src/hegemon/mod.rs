@@ -10,6 +10,7 @@ pub mod claims;
 pub mod dashboard;
 pub mod dispatch;
 pub mod identity;
+pub mod messaging;
 pub mod metering;
 pub mod registry;
 
@@ -20,6 +21,7 @@ use crate::metering::MeteringProducer;
 use budget::BudgetTracker;
 use claims::ClaimTracker;
 use dispatch::DispatchTracker;
+use messaging::MessageHub;
 use metering::HegemonMetering;
 use registry::AgentRegistry;
 
@@ -38,6 +40,8 @@ pub struct HegemonState {
     pub claim_tracker: Arc<ClaimTracker>,
     /// Lifecycle event metering (buffer + Kafka).
     pub metering: Arc<HegemonMetering>,
+    /// Inter-agent message hub.
+    pub message_hub: Arc<MessageHub>,
     /// Daily budget limit in USD per agent (from config).
     pub budget_daily_usd: f64,
     /// Warning percentage for budget alerts (0.0-1.0).
@@ -52,6 +56,7 @@ impl HegemonState {
             budget_tracker: Arc::new(BudgetTracker::new()),
             claim_tracker: Arc::new(ClaimTracker::new()),
             metering: Arc::new(HegemonMetering::new(producer)),
+            message_hub: Arc::new(MessageHub::new()),
             budget_daily_usd: config.hegemon_budget_daily_usd,
             budget_warn_pct: config.hegemon_budget_warn_pct,
         }

@@ -11,10 +11,14 @@ Usage:
   python3 run-arena.py <work_dir> <gateways_json>
 """
 
+import base64
 import json
 import math
 import os
 import sys
+import urllib.request
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 # t-distribution critical values for 95% CI (two-tailed, alpha=0.05)
@@ -48,7 +52,7 @@ def t_critical(df: int) -> float:
         return T_TABLE[df]
     # Find closest key
     keys = sorted(T_TABLE.keys())
-    for i, k in enumerate(keys):
+    for _i, k in enumerate(keys):
         if k >= df:
             return T_TABLE[k]
     return 1.96  # fallback to z-score for large df
@@ -139,7 +143,7 @@ def latency_score(p95: float, cap: float) -> float:
 def compute_gateway_score(scenario_medians: dict, total_ok: int, total_req: int,
                           ramp_val: float = 0.0) -> float:
     """Compute composite arena score from median values."""
-    base = latency_score(scenario_medians.get("sequential", {}).get("p95", 0), CAP_BASE)
+    base_val = latency_score(scenario_medians.get("sequential", {}).get("p95", 0), CAP_BASE)
     b50 = latency_score(scenario_medians.get("burst_50", {}).get("p95", 0), CAP_BURST50)
     b100 = latency_score(scenario_medians.get("burst_100", {}).get("p95", 0), CAP_BURST100)
 
@@ -155,10 +159,100 @@ def compute_gateway_score(scenario_medians: dict, total_ok: int, total_req: int,
     else:
         consist = 100.0
 
-    score = (W_BASE * base + W_BURST50 * b50 + W_BURST100 * b100 +
+    score = (W_BASE * base_val + W_BURST50 * b50 + W_BURST100 * b100 +
              W_AVAIL * avail + W_ERROR * error + W_CONSIST * consist +
              W_RAMP * ramp_val)
     return max(0.0, min(100.0, score))
+
+
+def export_to_opensearch(gateway_docs: list[dict]) -> None:
+    """Export L0 arena scores to OpenSearch for long-term retention.
+
+    Each run creates one document per gateway in a monthly index
+    (stoa-bench-{yyyy.MM}). Uses stdlib urllib only.
+
+    Env vars:
+      OPENSEARCH_URL — base URL (default: http://localhost:9200)
+      OPENSEARCH_USER — Basic auth username (default: admin)
+      OPENSEARCH_PASSWORD — Basic auth password (default: empty)
+      OPENSEARCH_ENABLED — set to "false" to skip (default: true)
+    """
+    if os.environ.get("OPENSEARCH_ENABLED", "true").lower() == "false":
+        return
+
+    base_url = os.environ.get("OPENSEARCH_URL", "http://localhost:9200")
+    os_user = os.environ.get("OPENSEARCH_USER", "admin")
+    os_password = os.environ.get("OPENSEARCH_PASSWORD", "")
+    now = datetime.now(timezone.utc)
+    index = f"stoa-bench-{now.strftime('%Y.%m')}"
+    timestamp = now.isoformat()
+    run_id = str(uuid.uuid4())
+
+    bulk_lines: list[str] = []
+    for entry in gateway_docs:
+        doc = {
+            "@timestamp": timestamp,
+            "run_id": run_id,
+            "layer": "baseline",
+            "instance": entry.get("instance", "default"),
+            "gateway": entry["gateway"],
+            "composite_score": entry["score"],
+            "dimension_score": entry["score"],
+            "dimension": "composite",
+            "category": "baseline",
+            "stddev": entry["stddev"],
+            "ci95": {"lower": entry["ci95_lower"], "upper": entry["ci95_upper"]},
+            "availability": {"score": entry["availability"]},
+            "latency": {
+                "p95": entry.get("scenario_medians", {}).get("sequential", {}).get("p95", 0),
+            },
+            "weight": 1.0,
+            "runs": entry["runs"],
+        }
+        bulk_lines.append(json.dumps({"index": {"_index": index}}))
+        bulk_lines.append(json.dumps(doc))
+
+    if not bulk_lines:
+        return
+
+    try:
+        payload = ("\n".join(bulk_lines) + "\n").encode("utf-8")
+        headers: dict[str, str] = {"Content-Type": "application/x-ndjson"}
+        if os_password:
+            credentials = base64.b64encode(
+                f"{os_user}:{os_password}".encode()
+            ).decode()
+            headers["Authorization"] = f"Basic {credentials}"
+        req = urllib.request.Request(
+            f"{base_url}/_bulk",
+            data=payload,
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read())
+            if result.get("errors"):
+                err_items = [
+                    i
+                    for i in result.get("items", [])
+                    if i.get("index", {}).get("error")
+                ]
+                print(
+                    f'{{"opensearch_bulk_errors":{len(err_items)},'
+                    f'"first_error":{json.dumps(err_items[0] if err_items else None)}}}',
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f'{{"opensearch_export":"ok","index":"{index}",'
+                    f'"docs":{len(gateway_docs)},"run_id":"{run_id}"}}',
+                    file=sys.stderr,
+                )
+    except Exception as e:
+        print(
+            f'{{"opensearch_export_error":"{e}"}}',
+            file=sys.stderr,
+        )
 
 
 def main():
@@ -340,7 +434,12 @@ def main():
         families["gateway_arena_runs"].append(f'gateway_arena_runs{{gateway="{name}"}} {n}')
 
         leaderboard.append({"gateway": name, "score": round(score, 2), "stddev": round(stddev, 4),
-                            "ci95": f"[{ci_lower:.2f}, {ci_upper:.2f}]", "ramp_rate": round(median_rate, 2)})
+                            "ci95": f"[{ci_lower:.2f}, {ci_upper:.2f}]", "ci95_lower": round(ci_lower, 2),
+                            "ci95_upper": round(ci_upper, 2), "availability": round(avail, 4),
+                            "ramp_rate": round(median_rate, 2), "runs": n,
+                            "instance": os.environ.get("ARENA_INSTANCE", "default"),
+                            "scenario_medians": {s: {k: round(v, 6) for k, v in m.items()}
+                                                  for s, m in scenario_medians.items()}})
 
         print(f'{{"gateway":"{name}","score":{score:.2f},"stddev":{stddev:.4f},"ci95":[{ci_lower:.2f},{ci_upper:.2f}],"ramp_rate":{median_rate:.2f}}}',
               file=sys.stderr)
@@ -359,6 +458,9 @@ def main():
     # Leaderboard to stderr
     leaderboard.sort(key=lambda x: x["score"], reverse=True)
     print(json.dumps({"event": "leaderboard", "ranking": leaderboard}), file=sys.stderr)
+
+    # Export to OpenSearch (long-term retention)
+    export_to_opensearch(leaderboard)
 
 
 if __name__ == "__main__":

@@ -193,7 +193,10 @@ class TestCreateClient:
         svc._admin.create_client.return_value = None
         svc._admin.get_clients.return_value = [{"clientId": "acme-myapp", "id": "uuid-1"}]
         svc._admin.get_client_secrets.return_value = {"value": "secret-123"}
-        result = await svc.create_client("acme", "myapp", "My App", ["http://localhost"])
+        result = await svc.create_client(
+            "acme", "myapp", "My App", ["http://localhost"],
+            security_profile="oauth2_confidential",
+        )
         assert result["client_id"] == "acme-myapp"
         assert result["client_secret"] == "secret-123"
 

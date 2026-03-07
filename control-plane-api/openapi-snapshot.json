@@ -807,6 +807,17 @@
             ],
             "title": "Environment"
           },
+          "jwks": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jwks"
+          },
           "jwks_uri": {
             "anyOf": [
               {
@@ -24115,12 +24126,22 @@
             "title": "Display Name",
             "type": "string"
           },
+          "environment": {
+            "default": "development",
+            "title": "Environment",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
           },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "security_profile": {
+            "default": "oauth2_confidential",
+            "title": "Security Profile",
             "type": "string"
           },
           "status": {
@@ -24444,6 +24465,18 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "jwks_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jwks Data"
           },
           "jwks_uri": {
             "anyOf": [
@@ -25975,6 +26008,24 @@
                 }
               ],
               "title": "Gateway Instance Id"
+            }
+          },
+          {
+            "description": "Filter by gateway environment (dev/staging/prod)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by gateway environment (dev/staging/prod)",
+              "title": "Environment"
             }
           },
           {

@@ -69,8 +69,11 @@ export interface Application {
   display_name: string;
   description: string;
   client_id: string;
-  status: 'pending' | 'approved' | 'suspended';
+  status: 'pending' | 'approved' | 'suspended' | 'active' | 'disabled';
   api_subscriptions: string[];
+  environment?: string;
+  security_profile?: string;
+  jwks_uri?: string;
   created_at: string;
   updated_at: string;
 }

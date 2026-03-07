@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { useEnvironment } from '../contexts/EnvironmentContext';
 import { Plus } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { Button } from '@stoa/shared/components/Button';
@@ -11,14 +11,47 @@ import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { Application, ApplicationCreate, API } from '../types';
+import {
+  ENV_ORDER,
+  ENV_LABELS,
+  ENV_COLORS,
+  normalizeEnvironment,
+  type CanonicalEnvironment,
+} from '@stoa/shared/constants/environments';
 
 const PAGE_SIZE = 12;
 
+type EnvFilter = CanonicalEnvironment | 'all';
+
+const TAB_COLORS: Record<
+  CanonicalEnvironment,
+  { dot: string; bg: string; text: string; border: string }
+> = {
+  production: {
+    dot: ENV_COLORS.production.dot,
+    bg: `${ENV_COLORS.production.bg} ${ENV_COLORS.production.bgDark}`,
+    text: `${ENV_COLORS.production.text} ${ENV_COLORS.production.textDark}`,
+    border: `${ENV_COLORS.production.border} ${ENV_COLORS.production.borderDark}`,
+  },
+  staging: {
+    dot: ENV_COLORS.staging.dot,
+    bg: `${ENV_COLORS.staging.bg} ${ENV_COLORS.staging.bgDark}`,
+    text: `${ENV_COLORS.staging.text} ${ENV_COLORS.staging.textDark}`,
+    border: `${ENV_COLORS.staging.border} ${ENV_COLORS.staging.borderDark}`,
+  },
+  development: {
+    dot: ENV_COLORS.development.dot,
+    bg: `${ENV_COLORS.development.bg} ${ENV_COLORS.development.bgDark}`,
+    text: `${ENV_COLORS.development.text} ${ENV_COLORS.development.textDark}`,
+    border: `${ENV_COLORS.development.border} ${ENV_COLORS.development.borderDark}`,
+  },
+};
+
 export function Applications() {
   const { isReady } = useAuth();
-  const { activeEnvironment } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [applications, setApplications] = useState<Application[]>([]);
   const [apis, setApis] = useState<API[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
@@ -27,6 +60,15 @@ export function Applications() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingApp, setEditingApp] = useState<Application | null>(null);
 
+  // Environment tab filter (like Gateways page)
+  const [activeEnv, setActiveEnv] = useState<EnvFilter>(() => {
+    const param = searchParams.get('env');
+    if (param && (param === 'all' || ENV_ORDER.includes(param as CanonicalEnvironment))) {
+      return param as EnvFilter;
+    }
+    return 'all';
+  });
+
   // Search and pagination state
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -34,6 +76,17 @@ export function Applications() {
 
   // Debounce search for performance (300ms delay)
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Sync env tab to URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    if (activeEnv === 'all') {
+      params.delete('env');
+    } else {
+      params.set('env', activeEnv);
+    }
+    setSearchParams(params, { replace: true });
+  }, [activeEnv, searchParams, setSearchParams]);
 
   // Fetch tenants via React Query (benefits from prefetch in AuthContext)
   const {
@@ -54,27 +107,26 @@ export function Applications() {
     }
   }, [tenants, selectedTenant]);
 
+  // Load apps when tenant changes — NO environment dependency
   useEffect(() => {
     if (selectedTenant) {
-      // Parallel loading for better performance
       loadTenantData(selectedTenant);
     }
-  }, [selectedTenant, activeEnvironment]);
+  }, [selectedTenant]);
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, statusFilter, selectedTenant]);
+  }, [debouncedSearch, statusFilter, selectedTenant, activeEnv]);
 
-  // Parallel loading of applications and APIs
+  // Load all applications and APIs (no environment filtering)
   async function loadTenantData(tenantId: string) {
     try {
       setLoading(true);
       setError(null);
 
-      // Load applications and APIs in parallel for faster performance
       const [appsData, apisData] = await Promise.all([
-        apiService.getApplications(tenantId, activeEnvironment || undefined).catch((err) => {
+        apiService.getApplications(tenantId).catch((err) => {
           console.error('Failed to load applications:', err);
           return [] as Application[];
         }),
@@ -95,9 +147,40 @@ export function Applications() {
     }
   }
 
+  // Normalize app environment
+  const normalizeAppEnv = useCallback(
+    (app: Application): CanonicalEnvironment =>
+      normalizeEnvironment(app.environment || 'development'),
+    []
+  );
+
+  // Stats per environment
+  const envStats = useMemo(() => {
+    const stats: Record<
+      CanonicalEnvironment,
+      { total: number; approved: number; pending: number }
+    > = {
+      production: { total: 0, approved: 0, pending: 0 },
+      staging: { total: 0, approved: 0, pending: 0 },
+      development: { total: 0, approved: 0, pending: 0 },
+    };
+    for (const app of applications) {
+      const env = normalizeAppEnv(app);
+      stats[env].total++;
+      if (app.status === 'approved') stats[env].approved++;
+      else if (app.status === 'pending') stats[env].pending++;
+    }
+    return stats;
+  }, [applications, normalizeAppEnv]);
+
   // Client-side filtering (memoized for performance)
   const filteredApplications = useMemo(() => {
     let result = applications;
+
+    // Apply environment tab filter
+    if (activeEnv !== 'all') {
+      result = result.filter((app) => normalizeAppEnv(app) === activeEnv);
+    }
 
     // Apply search filter
     if (debouncedSearch) {
@@ -117,7 +200,7 @@ export function Applications() {
     }
 
     return result;
-  }, [applications, debouncedSearch, statusFilter]);
+  }, [applications, activeEnv, debouncedSearch, statusFilter, normalizeAppEnv]);
 
   // Paginated results
   const paginatedApplications = useMemo(() => {
@@ -169,6 +252,8 @@ export function Applications() {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     suspended: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    disabled: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400',
   };
 
   if ((tenantsLoading || loading) && tenants.length === 0) {
@@ -193,7 +278,7 @@ export function Applications() {
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Applications</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1">
-            Manage consumer applications and API subscriptions
+            Manage consumer applications and API subscriptions across all environments
           </p>
         </div>
         <Button
@@ -203,6 +288,40 @@ export function Applications() {
         >
           Create Application
         </Button>
+      </div>
+
+      {/* Environment Tabs (like Gateways page) */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setActiveEnv('all')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeEnv === 'all'
+              ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
+              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+          }`}
+        >
+          All Environments
+          <span className="ml-2 text-xs opacity-75">({applications.length})</span>
+        </button>
+        {ENV_ORDER.map((env) => {
+          const colors = TAB_COLORS[env];
+          const stats = envStats[env];
+          return (
+            <button
+              key={env}
+              onClick={() => setActiveEnv(env)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeEnv === env
+                  ? `${colors.bg} ${colors.text} ${colors.border} border`
+                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
+              {ENV_LABELS[env]}
+              <span className="text-xs opacity-75">({stats.total})</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Filters */}
@@ -283,6 +402,7 @@ export function Applications() {
               <option value="">All Status</option>
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
+              <option value="active">Active</option>
               <option value="suspended">Suspended</option>
             </select>
           </div>
@@ -329,91 +449,106 @@ export function Applications() {
                 onClick: () => {
                   setSearchQuery('');
                   setStatusFilter('');
+                  setActiveEnv('all');
                 },
               }}
             />
           </div>
         ) : (
-          paginatedApplications.map((app) => (
-            <div
-              key={app.id}
-              className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
-                    {app.display_name || app.name}
-                  </h3>
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400">{app.name}</p>
-                </div>
-                <span
-                  className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[app.status]}`}
-                >
-                  {app.status}
-                </span>
-              </div>
-
-              <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4 line-clamp-2">
-                {app.description || 'No description'}
-              </p>
-
-              <div className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium">Client ID:</span>
-                  <code className="bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 rounded text-xs">
-                    {app.client_id}
-                  </code>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Subscriptions:</span>
-                  <span>{app.api_subscriptions?.length || 0} APIs</span>
-                </div>
-              </div>
-
-              {/* Subscribed APIs */}
-              {app.api_subscriptions && app.api_subscriptions.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-2">
-                    Subscribed APIs:
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {app.api_subscriptions.slice(0, 3).map((apiId) => (
-                      <span
-                        key={apiId}
-                        className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded"
-                      >
-                        {apiId}
-                      </span>
-                    ))}
-                    {app.api_subscriptions.length > 3 && (
-                      <span className="px-2 py-0.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs rounded">
-                        +{app.api_subscriptions.length - 3} more
-                      </span>
-                    )}
+          paginatedApplications.map((app) => {
+            const appEnv = normalizeAppEnv(app);
+            const envColor = TAB_COLORS[appEnv];
+            return (
+              <div
+                key={app.id}
+                className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-semibold text-neutral-900 dark:text-white truncate">
+                      {app.display_name || app.name}
+                    </h3>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">{app.name}</p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                    {/* Environment badge */}
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${envColor.bg} ${envColor.text} ${envColor.border} border`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${envColor.dot}`} />
+                      {ENV_LABELS[appEnv]}
+                    </span>
+                    {/* Status badge */}
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[app.status] || statusColors.active}`}
+                    >
+                      {app.status}
+                    </span>
                   </div>
                 </div>
-              )}
 
-              <div className="flex gap-2 pt-4 border-t dark:border-neutral-700">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditingApp(app)}
-                  className="flex-1"
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleDelete(app.id, app.display_name || app.name)}
-                  className="flex-1"
-                >
-                  Delete
-                </Button>
+                <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4 line-clamp-2">
+                  {app.description || 'No description'}
+                </p>
+
+                <div className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium">Client ID:</span>
+                    <code className="bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 rounded text-xs truncate max-w-[180px]">
+                      {app.client_id}
+                    </code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Subscriptions:</span>
+                    <span>{app.api_subscriptions?.length || 0} APIs</span>
+                  </div>
+                </div>
+
+                {/* Subscribed APIs */}
+                {app.api_subscriptions && app.api_subscriptions.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-2">
+                      Subscribed APIs:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {app.api_subscriptions.slice(0, 3).map((apiId) => (
+                        <span
+                          key={apiId}
+                          className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded"
+                        >
+                          {apiId}
+                        </span>
+                      ))}
+                      {app.api_subscriptions.length > 3 && (
+                        <span className="px-2 py-0.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs rounded">
+                          +{app.api_subscriptions.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-4 border-t dark:border-neutral-700">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingApp(app)}
+                    className="flex-1"
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleDelete(app.id, app.display_name || app.name)}
+                    className="flex-1"
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

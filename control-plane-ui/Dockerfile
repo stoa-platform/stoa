@@ -90,6 +90,11 @@ RUN npm run build
 # Production stage - Use nginx-unprivileged for security (non-root)
 FROM nginxinc/nginx-unprivileged:alpine
 
+# Upgrade Alpine packages to fix CVEs (zlib CVE-2026-22184, CVE-2026-27171)
+USER root
+RUN apk upgrade --no-cache
+USER nginx
+
 # Default backend URLs (overridable via K8s env vars)
 ENV API_BACKEND_URL=http://control-plane-api:8000 \
     LOGS_BACKEND_URL=http://opensearch-dashboards:5601 \

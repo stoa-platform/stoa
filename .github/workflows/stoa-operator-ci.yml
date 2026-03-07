@@ -10,6 +10,9 @@ on:
     paths:
       - 'stoa-operator/**'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     uses: ./.github/workflows/reusable-python-ci.yml

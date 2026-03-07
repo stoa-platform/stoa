@@ -5,6 +5,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { PersonaRole } from '../../test/helpers';
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('../../contexts/EnvironmentContext', () => ({
+  useEnvironment: () => ({ activeEnvironment: 'dev', environments: ['dev', 'staging', 'prod'] }),
+}));
 
 const mockGetGatewayDeployments = vi.fn().mockResolvedValue({ items: [], total: 0 });
 const mockGetDeploymentStatusSummary = vi.fn().mockResolvedValue({

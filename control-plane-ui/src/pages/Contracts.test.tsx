@@ -610,4 +610,53 @@ describe('Contracts', () => {
       });
     }
   );
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona — RBAC visibility',
+    (role) => {
+      beforeEach(() => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        mockGetContracts.mockResolvedValue({ items: mockContracts, total: 2 });
+      });
+
+      it('shows or hides Create Contract button based on apis:update permission', async () => {
+        renderWithProviders(<Contracts />);
+        await waitFor(() => {
+          expect(screen.getByText('Weather API')).toBeInTheDocument();
+        });
+        // cpi-admin, tenant-admin, devops all have apis:update — viewer does not
+        if (role === 'viewer') {
+          expect(screen.queryByText('Create Contract')).not.toBeInTheDocument();
+        } else {
+          expect(screen.getByText('Create Contract')).toBeInTheDocument();
+        }
+      });
+
+      it('shows or hides Delete button on contract cards based on apis:update permission', async () => {
+        renderWithProviders(<Contracts />);
+        await waitFor(() => {
+          expect(screen.getByText('Weather API')).toBeInTheDocument();
+        });
+        if (role === 'viewer') {
+          expect(screen.queryByTitle('Delete')).not.toBeInTheDocument();
+        } else {
+          expect(screen.getAllByTitle('Delete').length).toBeGreaterThan(0);
+        }
+      });
+
+      it('shows tenant selector only for cpi-admin', async () => {
+        renderWithProviders(<Contracts />);
+        await waitFor(() => {
+          expect(screen.getByText('Weather API')).toBeInTheDocument();
+        });
+        // isAdmin = hasRole('cpi-admin') — only cpi-admin sees the tenant selector
+        const selects = document.querySelectorAll('select');
+        if (role === 'cpi-admin') {
+          expect(selects.length).toBeGreaterThan(0);
+        } else {
+          expect(selects.length).toBe(0);
+        }
+      });
+    }
+  );
 });

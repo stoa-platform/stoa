@@ -1939,8 +1939,13 @@ export interface paths {
          * Create Application
          * @description Create a new application.
          *
-         *     Returns the application with client_secret (only shown once!).
-         *     Creates a corresponding Keycloak OAuth client if KC is available.
+         *     Returns the application with credentials (only shown once!).
+         *     Behavior varies by security_profile:
+         *     - api_key: generates API key, no Keycloak client
+         *     - oauth2_public: public KC client with PKCE
+         *     - oauth2_confidential: confidential KC client with client_secret
+         *     - fapi_baseline: confidential KC client + FAPI 2.0 Security Profile
+         *     - fapi_advanced: confidential KC client + FAPI 2.0 + DPoP
          */
         post: operations["create_application"];
         delete?: never;
@@ -8223,6 +8228,10 @@ export interface components {
             display_name: string;
             /** Environment */
             environment?: string | null;
+            /** Jwks */
+            jwks?: string | null;
+            /** Jwks Uri */
+            jwks_uri?: string | null;
             /** Name */
             name: string;
             /**
@@ -8230,6 +8239,8 @@ export interface components {
              * @default []
              */
             redirect_uris: string[];
+            /** @default oauth2_public */
+            security_profile: components["schemas"]["SecurityProfile"];
             /** Tenant Id */
             tenant_id?: string | null;
         };
@@ -15783,6 +15794,15 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * SecurityProfile
+         * @description Security profile for a portal application (CAB-1744).
+         *
+         *     Curated auth combinations — each profile maps to specific
+         *     Keycloak client config and gateway auth chain enforcement.
+         * @enum {string}
+         */
+        SecurityProfile: "api_key" | "oauth2_public" | "oauth2_confidential" | "fapi_baseline" | "fapi_advanced";
         /** SelfServiceSignupRequest */
         SelfServiceSignupRequest: {
             /** Company */
@@ -16481,6 +16501,11 @@ export interface components {
             plan_id?: string | null;
             /** Plan Name */
             plan_name?: string | null;
+            /**
+             * Security Profile
+             * @default oauth2_public
+             */
+            security_profile: string;
             /** Subscriber Id */
             subscriber_id: string;
             /** Subscription Id */
@@ -18646,10 +18671,20 @@ export interface components {
             description: string;
             /** Display Name */
             display_name: string;
+            /**
+             * Environment
+             * @default development
+             */
+            environment: string;
             /** Id */
             id: string;
             /** Name */
             name: string;
+            /**
+             * Security Profile
+             * @default oauth2_confidential
+             */
+            security_profile: string;
             /**
              * Status
              * @default active
@@ -18756,6 +18791,10 @@ export interface components {
          * @description Application response for Portal.
          */
         src__routers__portal_applications__ApplicationResponse: {
+            /** Api Key */
+            api_key?: string | null;
+            /** Api Key Prefix */
+            api_key_prefix?: string | null;
             /**
              * Api Subscriptions
              * @default []
@@ -18773,6 +18812,12 @@ export interface components {
             display_name: string;
             /** Id */
             id: string;
+            /** Jwks Data */
+            jwks_data?: {
+                [key: string]: unknown;
+            } | null;
+            /** Jwks Uri */
+            jwks_uri?: string | null;
             /** Name */
             name: string;
             /**
@@ -18780,6 +18825,11 @@ export interface components {
              * @default []
              */
             redirect_uris: string[];
+            /**
+             * Security Profile
+             * @default oauth2_public
+             */
+            security_profile: string;
             /**
              * Status
              * @default active
@@ -19655,6 +19705,8 @@ export interface operations {
                 /** @description Filter by sync status */
                 sync_status?: string | null;
                 gateway_instance_id?: string | null;
+                /** @description Filter by gateway environment (dev/staging/prod) */
+                environment?: string | null;
                 page?: number;
                 page_size?: number;
             };

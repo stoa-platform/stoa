@@ -36,6 +36,8 @@ class ApplicationResponse(BaseModel):
     client_id: str
     status: str = "active"
     api_subscriptions: list[str] = []
+    environment: str = "development"
+    security_profile: str = "oauth2_confidential"
     created_at: str
     updated_at: str
 
@@ -45,13 +47,17 @@ class ApplicationCredentials(BaseModel):
     client_secret: str
 
 
+def _attr_str(attrs: dict, key: str, default: str = "") -> str:
+    """Extract a string value from Keycloak attributes (may be a list)."""
+    val = attrs.get(key, [default])
+    return val[0] if isinstance(val, list) else val
+
+
 def _kc_client_to_response(client: dict, tenant_id: str) -> ApplicationResponse:
     """Convert a Keycloak client dict to ApplicationResponse."""
     attrs = client.get("attributes", {})
     subs_raw = attrs.get("api_subscriptions", ["[]"])
     subs_val = subs_raw[0] if isinstance(subs_raw, list) else subs_raw
-    created = attrs.get("created_at", [""])
-    updated = attrs.get("updated_at", [""])
     return ApplicationResponse(
         id=client["id"],
         tenant_id=tenant_id,
@@ -61,8 +67,10 @@ def _kc_client_to_response(client: dict, tenant_id: str) -> ApplicationResponse:
         client_id=client.get("clientId", ""),
         status="active" if client.get("enabled", True) else "disabled",
         api_subscriptions=json.loads(subs_val),
-        created_at=created[0] if isinstance(created, list) else created,
-        updated_at=updated[0] if isinstance(updated, list) else updated,
+        environment=_attr_str(attrs, "environment", "development"),
+        security_profile=_attr_str(attrs, "security_profile", "oauth2_confidential"),
+        created_at=_attr_str(attrs, "created_at"),
+        updated_at=_attr_str(attrs, "updated_at"),
     )
 
 

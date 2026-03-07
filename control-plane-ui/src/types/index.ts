@@ -69,11 +69,21 @@ export interface Application {
   display_name: string;
   description: string;
   client_id: string;
-  status: 'pending' | 'approved' | 'suspended';
+  status: 'pending' | 'approved' | 'suspended' | 'active' | 'disabled';
   api_subscriptions: string[];
+  environment?: string;
+  security_profile?: string;
+  jwks_uri?: string;
   created_at: string;
   updated_at: string;
 }
+
+export type SecurityProfile =
+  | 'api_key'
+  | 'oauth2_public'
+  | 'oauth2_confidential'
+  | 'fapi_baseline'
+  | 'fapi_advanced';
 
 export interface ApplicationCreate {
   name: string;
@@ -81,6 +91,9 @@ export interface ApplicationCreate {
   description: string;
   redirect_uris: string[];
   api_subscriptions: string[];
+  security_profile?: SecurityProfile;
+  jwks_uri?: string;
+  jwks?: string; // Inline PEM or JWK/JWKS JSON
 }
 
 // Consumer types (CAB-864 — mTLS Self-Service)

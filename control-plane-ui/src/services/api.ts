@@ -268,9 +268,9 @@ class ApiService {
   }
 
   // Applications
-  async getApplications(tenantId: string, environment?: string): Promise<Application[]> {
+  async getApplications(tenantId: string): Promise<Application[]> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/applications`, {
-      params: { page: 1, page_size: 100, environment },
+      params: { page: 1, page_size: 100 },
     });
     return data.items ?? data;
   }

@@ -124,7 +124,7 @@ export const apiCatalogService = {
       const response = await apiClient.get<PortalAPI>(`/v1/portal/apis/${id}`);
       return transformPortalAPI(response.data);
     } catch (error) {
-      console.error(`Failed to fetch API ${id}:`, error);
+      console.error('Failed to fetch API:', error);
       return null;
     }
   },
@@ -137,7 +137,7 @@ export const apiCatalogService = {
       const response = await apiClient.get<object>(`/v1/portal/apis/${id}/openapi`);
       return response.data;
     } catch (error) {
-      console.warn(`OpenAPI spec not available for API ${id}:`, error);
+      console.warn('OpenAPI spec not available for API:', error);
       return null;
     }
   },

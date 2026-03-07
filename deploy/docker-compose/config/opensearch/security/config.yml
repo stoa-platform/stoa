@@ -38,6 +38,6 @@ config:
           config:
             subject_key: "preferred_username"
             roles_key: "roles"
-            openid_connect_url: "http://localhost/auth/realms/stoa/.well-known/openid-configuration"
+            openid_connect_url: "http://keycloak:8080/realms/stoa/.well-known/openid-configuration"
         authentication_backend:
           type: "noop"

@@ -23,6 +23,8 @@ on:
         type: string
         default: 'dev'
 
+permissions: {}
+
 jobs:
   health-check:
     name: Health Smoke (${{ inputs.component }})

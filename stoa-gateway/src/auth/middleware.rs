@@ -62,7 +62,8 @@ impl AuthState {
 /// Authenticated user extracted from JWT.
 ///
 /// This is injected into request extensions by the auth middleware.
-#[derive(Debug, Clone)]
+/// Custom Debug impl redacts raw_token to prevent cleartext credential logging.
+#[derive(Clone)]
 pub struct AuthenticatedUser {
     /// User ID (from sub claim)
     pub user_id: String,
@@ -81,6 +82,18 @@ pub struct AuthenticatedUser {
 
     /// Raw token (for forwarding to downstream services)
     pub raw_token: String,
+}
+
+impl std::fmt::Debug for AuthenticatedUser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthenticatedUser")
+            .field("user_id", &self.user_id)
+            .field("username", &self.username)
+            .field("email", &self.email)
+            .field("tenant_id", &self.tenant_id)
+            .field("raw_token", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl AuthenticatedUser {

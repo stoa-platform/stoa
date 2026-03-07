@@ -11,6 +11,7 @@ import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { useSequenceShortcuts } from '@stoa/shared/hooks';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useTheme } from '@stoa/shared/contexts';
+import { EnvironmentChrome } from '@stoa/shared/components/EnvironmentChrome';
 import { useTranslation } from 'react-i18next';
 import { LanguageToggle } from './LanguageToggle';
 import { apiService } from '../services/api';
@@ -46,7 +47,6 @@ import {
   ClipboardList,
   ListChecks,
   Check,
-  Lock,
   Users,
   KeyRound,
   Share2,
@@ -121,12 +121,6 @@ const navigationSections: NavSection[] = [
         icon: Layers,
         permission: 'apis:read',
         shortcut: ['g', 'a'],
-      },
-      {
-        name: 'nav.backendApis',
-        href: '/backend-apis',
-        icon: Server,
-        permission: 'apis:read',
       },
       {
         name: 'nav.subscriptions',
@@ -245,6 +239,12 @@ const navigationSections: NavSection[] = [
         name: 'nav.proxyOwner',
         href: '/proxy-owner',
         icon: Stethoscope,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'nav.apiTraffic',
+        href: '/api-traffic',
+        icon: Activity,
         permission: 'tenants:read',
       },
     ],
@@ -489,29 +489,15 @@ export function Layout({ children }: LayoutProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [tenantDropdownOpen]);
 
-  // Environment selector state (ADR-040)
+  // Environment context (ADR-040)
   const { activeEnvironment, activeConfig, environments, switchEnvironment } = useEnvironment();
-  const [envDropdownOpen, setEnvDropdownOpen] = useState(false);
-  const envDropdownRef = useRef<HTMLDivElement>(null);
 
   const handleEnvSwitch = useCallback(
     (env: string) => {
       switchEnvironment(env as Environment);
-      setEnvDropdownOpen(false);
     },
     [switchEnvironment]
   );
-
-  useEffect(() => {
-    if (!envDropdownOpen) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (envDropdownRef.current && !envDropdownRef.current.contains(event.target as Node)) {
-        setEnvDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [envDropdownOpen]);
 
   const filteredSections = useMemo(
     () =>
@@ -742,44 +728,6 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Mobile-only: Env & Tenant selectors */}
         <div className="lg:hidden border-t border-neutral-200 dark:border-neutral-800 px-3 py-3 space-y-2">
-          {/* Environment selector */}
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1 px-1">
-              {t('layout.environment')}
-            </p>
-            {environments.map((env) => (
-              <button
-                key={env.name}
-                onClick={() => {
-                  handleEnvSwitch(env.name);
-                  setSidebarOpen(false);
-                }}
-                className={clsx(
-                  'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  activeEnvironment === env.name
-                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800'
-                )}
-              >
-                <span
-                  className={clsx(
-                    'h-2 w-2 rounded-full flex-shrink-0',
-                    env.color === 'green' && 'bg-green-500',
-                    env.color === 'amber' && 'bg-amber-500',
-                    env.color === 'red' && 'bg-red-500'
-                  )}
-                />
-                <span className="flex-1 text-left">{env.label}</span>
-                {env.mode === 'read-only' && (
-                  <Lock className="h-3 w-3 text-neutral-400 flex-shrink-0" />
-                )}
-                {activeEnvironment === env.name && (
-                  <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />
-                )}
-              </button>
-            ))}
-          </div>
-
           {/* Tenant selector */}
           {tenants && tenants.length > 0 && (
             <div>
@@ -853,8 +801,27 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <div className="lg:pl-64">
+        {/* Environment chrome bar (Stripe-inspired, ADR-040) */}
+        <EnvironmentChrome
+          current={{
+            name: activeEnvironment,
+            label: activeConfig.label,
+            mode: activeConfig.mode,
+            color: activeConfig.color,
+          }}
+          environments={environments.map((env) => ({
+            name: env.name,
+            label: env.label,
+            mode: env.mode,
+            color: env.color,
+          }))}
+          onSwitch={(name) => handleEnvSwitch(name)}
+          variant="admin"
+          className="sticky top-0 z-50"
+        />
+
         {/* Header */}
-        <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 sm:px-6 shadow-sm dark:shadow-none">
+        <header className="sticky top-[36px] z-40 flex h-16 items-center gap-4 border-b bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 sm:px-6 shadow-sm dark:shadow-none">
           {/* Mobile menu button */}
           <button
             onClick={() => setSidebarOpen(true)}
@@ -901,70 +868,6 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Theme toggle */}
           <ThemeToggle size="md" />
-
-          {/* Environment selector (ADR-040) */}
-          <div className="hidden sm:block relative" ref={envDropdownRef}>
-            <button
-              onClick={() => setEnvDropdownOpen(!envDropdownOpen)}
-              className="flex items-center gap-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
-            >
-              <span
-                className={clsx(
-                  'h-2 w-2 rounded-full',
-                  activeConfig.color === 'green' && 'bg-green-500',
-                  activeConfig.color === 'amber' && 'bg-amber-500',
-                  activeConfig.color === 'red' && 'bg-red-500'
-                )}
-              />
-              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                {activeConfig.label}
-              </span>
-              {activeConfig.mode === 'read-only' && <Lock className="h-3 w-3 text-neutral-400" />}
-              <ChevronDown
-                className={clsx(
-                  'h-4 w-4 text-neutral-400 transition-transform duration-200',
-                  envDropdownOpen && 'rotate-180'
-                )}
-              />
-            </button>
-            {envDropdownOpen && (
-              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-lg z-50 py-1">
-                {environments.map((env) => (
-                  <button
-                    key={env.name}
-                    onClick={() => handleEnvSwitch(env.name)}
-                    className={clsx(
-                      'w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
-                      activeEnvironment === env.name
-                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
-                    )}
-                  >
-                    <span
-                      className={clsx(
-                        'h-2 w-2 rounded-full flex-shrink-0',
-                        env.color === 'green' && 'bg-green-500',
-                        env.color === 'amber' && 'bg-amber-500',
-                        env.color === 'red' && 'bg-red-500'
-                      )}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate font-medium">{env.label}</p>
-                      <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
-                        {env.mode === 'read-only' ? t('common.readOnly') : t('common.fullAccess')}
-                      </p>
-                    </div>
-                    {env.mode === 'read-only' && (
-                      <Lock className="h-3 w-3 text-neutral-400 flex-shrink-0" />
-                    )}
-                    {activeEnvironment === env.name && (
-                      <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* Tenant selector */}
           {(user?.tenant_id || (tenants && tenants.length > 0)) && (

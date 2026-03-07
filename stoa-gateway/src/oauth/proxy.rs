@@ -1,9 +1,12 @@
-//! OAuth Token + DCR Proxy
+//! OAuth Token + DCR + PAR Proxy
 //!
 //! CAB-1094: Proxy OAuth endpoints to Keycloak for Claude.ai MCP connector.
 //! CAB-1606: RFC 7592 — Dynamic Client Registration Management Protocol.
+//! CAB-1733: RFC 9126 — Pushed Authorization Requests (PAR) for FAPI 2.0.
+//! CAB-1740: RFC 7523 — JWT Bearer client assertion detection + validation.
 //!
 //! - POST /oauth/token — transparent proxy to Keycloak token endpoint
+//! - POST /oauth/par — PAR proxy to Keycloak (RFC 9126, FAPI 2.0)
 //! - POST /oauth/register — DCR proxy + public client patch for PKCE (RFC 7591)
 //! - GET  /oauth/register/:client_id — read client metadata (RFC 7592)
 //! - PUT  /oauth/register/:client_id — update client metadata (RFC 7592)
@@ -19,6 +22,7 @@ use axum::{
 use serde_json::{json, Value};
 use tracing::{debug, error, info, warn};
 
+use super::client_auth;
 use crate::proxy::hardening::{build_via_value, with_keycloak_resilience};
 use crate::state::AppState;
 
@@ -26,12 +30,48 @@ use crate::state::AppState;
 ///
 /// Transparent proxy to Keycloak token endpoint.
 /// Forwards body as-is, returns Keycloak response as-is.
+///
+/// When the request contains `client_assertion` + `client_assertion_type` (RFC 7523),
+/// the gateway validates the assertion format and claims before forwarding to Keycloak.
+/// Keycloak performs the actual signature verification using the client's registered JWKS.
 pub async fn token_proxy(
     State(state): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
     let config = &state.config;
+
+    // RFC 7523: Detect and validate JWT Bearer client assertion (private_key_jwt)
+    // Parse early for format validation + observability; Keycloak handles signature verification.
+    match client_auth::parse_client_assertion(&body) {
+        Ok(Some(assertion)) => {
+            let client_id = if assertion.client_id.is_empty() {
+                "(from JWT iss)"
+            } else {
+                &assertion.client_id
+            };
+            info!(
+                client_id = %client_id,
+                auth_method = "private_key_jwt",
+                "Token request using JWT Bearer client authentication (RFC 7523)"
+            );
+        }
+        Ok(None) => {
+            // Standard auth (client_secret_basic, client_secret_post, or none/public)
+            debug!("Token request using standard client authentication");
+        }
+        Err(e) => {
+            warn!(error = %e, "Invalid client_assertion in token request");
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": "invalid_client",
+                    "error_description": format!("Client assertion validation failed: {}", e)
+                })),
+            )
+                .into_response();
+        }
+    }
 
     let keycloak_url = match config.keycloak_url.as_deref() {
         Some(url) => url.trim_end_matches('/'),
@@ -102,6 +142,94 @@ pub async fn token_proxy(
             Json(json!({"error": "server_error", "error_description": msg})),
         )
             .into_response(),
+    }
+}
+
+/// POST /oauth/par
+///
+/// RFC 9126 — Pushed Authorization Requests.
+/// Proxies PAR requests to Keycloak, enabling FAPI 2.0 clients to push
+/// authorization parameters server-to-server before redirecting the user agent.
+/// Returns a `request_uri` that the client uses in the authorization request.
+pub async fn par_proxy(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    let config = &state.config;
+
+    let keycloak_url = match config.keycloak_url.as_deref() {
+        Some(url) => url.trim_end_matches('/'),
+        None => {
+            warn!("Keycloak URL not configured — cannot proxy PAR request");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "server_error", "error_description": "Identity provider not configured"})),
+            )
+                .into_response();
+        }
+    };
+    let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
+    let par_url = format!(
+        "{}/realms/{}/protocol/openid-connect/ext/par/request",
+        keycloak_url, realm
+    );
+
+    debug!(url = %par_url, "Proxying PAR request to Keycloak");
+
+    let client = state.http_client.clone();
+    let via_value = build_via_value();
+
+    let content_type = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/x-www-form-urlencoded")
+        .to_string();
+
+    let result = with_keycloak_resilience(&state.circuit_breakers, "oauth-par", || {
+        let c = client.clone();
+        let url = par_url.clone();
+        let ct = content_type.clone();
+        let b = body.clone();
+        let via = via_value.clone();
+        async move {
+            c.post(&url)
+                .header("content-type", ct)
+                .header("Via", via)
+                .body(b.to_vec())
+                .send()
+                .await
+                .map_err(|e| e.to_string())
+        }
+    })
+    .await;
+
+    match result {
+        Ok(resp) => {
+            let status = resp.status();
+            let resp_content_type = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/json")
+                .to_string();
+            let body = resp.bytes().await.unwrap_or_default();
+
+            info!(
+                status = %status,
+                "PAR proxy response from Keycloak"
+            );
+
+            let mut response = (status, body).into_response();
+            if let Ok(ct_val) = resp_content_type.parse() {
+                response.headers_mut().insert("content-type", ct_val);
+            }
+            response
+        }
+        Err((status, msg)) => {
+            error!(error = %msg, "PAR proxy failed");
+            (
+                status,
+                Json(json!({"error": "server_error", "error_description": msg})),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -741,6 +869,7 @@ mod tests {
         use axum::routing::get;
         Router::new()
             .route("/oauth/token", post(token_proxy))
+            .route("/oauth/par", post(par_proxy))
             .route("/oauth/register", post(register_proxy))
             .route(
                 "/oauth/register/:client_id",
@@ -1462,5 +1591,192 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // === par_proxy tests (RFC 9126, CAB-1733) ===
+
+    #[tokio::test]
+    async fn test_par_proxy_no_keycloak_url() {
+        let state = test_state_with_keycloak(None);
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/par")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(
+                        "client_id=test&response_type=code&redirect_uri=http://localhost/cb",
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"], "server_error");
+    }
+
+    #[tokio::test]
+    async fn test_par_proxy_success() {
+        let mock_server = MockServer::start().await;
+
+        // Keycloak returns a PAR response with request_uri
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/protocol/openid-connect/ext/par/request"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "request_uri": "urn:ietf:params:oauth:request_uri:abc123",
+                "expires_in": 60
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/par")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(
+                        "client_id=test&response_type=code&redirect_uri=http://localhost/cb&code_challenge=abc&code_challenge_method=S256",
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["request_uri"]
+            .as_str()
+            .unwrap()
+            .starts_with("urn:ietf:params:oauth:request_uri:"));
+        assert_eq!(json["expires_in"], 60);
+    }
+
+    #[tokio::test]
+    async fn test_par_proxy_forwards_content_type() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/protocol/openid-connect/ext/par/request"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+                "error": "invalid_request",
+                "error_description": "Missing required parameter"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/par")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("client_id=test"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        // PAR returns 400 for invalid requests — proxy passes it through
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // === client_assertion (RFC 7523) in token_proxy tests ===
+
+    #[tokio::test]
+    async fn test_token_proxy_rejects_invalid_assertion_type() {
+        let state = test_state_with_keycloak(Some("http://127.0.0.1:1"));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(
+                        "grant_type=authorization_code&client_assertion_type=wrong&client_assertion=eyJ.test.jwt"
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"], "invalid_client");
+    }
+
+    #[tokio::test]
+    async fn test_token_proxy_rejects_assertion_without_type() {
+        let state = test_state_with_keycloak(Some("http://127.0.0.1:1"));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(
+                        "grant_type=authorization_code&client_assertion=eyJ.test.jwt",
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_token_proxy_forwards_valid_assertion_to_keycloak() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/protocol/openid-connect/token"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"access_token": "fapi-token", "token_type": "Bearer"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+
+        // Valid assertion type + assertion — should be forwarded to KC
+        let body = format!(
+            "grant_type=authorization_code&client_id=fapi-client&client_assertion_type={}&client_assertion=eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3QifQ.eyJpc3MiOiJmYXBpLWNsaWVudCIsInN1YiI6ImZhcGktY2xpZW50IiwiYXVkIjoiaHR0cHM6Ly9tY3AuZ29zdG9hLmRldi9vYXV0aC90b2tlbiIsImV4cCI6OTk5OTk5OTk5OSwianRpIjoidW5pcXVlLWlkIn0.fake-signature",
+            super::client_auth::JWT_BEARER_ASSERTION_TYPE
+        );
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Gateway forwards to KC (format is valid, KC does signature check)
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["access_token"], "fapi-token");
     }
 }

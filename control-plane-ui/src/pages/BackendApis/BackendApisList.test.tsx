@@ -84,14 +84,9 @@ describe('BackendApisList', () => {
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
-  it('renders the heading', async () => {
+  it('renders the register button for admin', async () => {
     renderComponent();
-    expect(await screen.findByRole('heading', { name: 'Backend APIs' })).toBeInTheDocument();
-  });
-
-  it('renders the subtitle', async () => {
-    renderComponent();
-    expect(await screen.findByText(/Register backend APIs/)).toBeInTheDocument();
+    expect(await screen.findByText('Register API')).toBeInTheDocument();
   });
 
   it('shows API rows after loading', async () => {
@@ -153,7 +148,9 @@ describe('BackendApisList', () => {
       it('renders the page', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderComponent();
-        expect(await screen.findByRole('heading', { name: 'Backend APIs' })).toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.getByText('Petstore API')).toBeInTheDocument();
+        });
       });
 
       if (role === 'viewer') {

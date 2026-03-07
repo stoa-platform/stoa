@@ -18,7 +18,7 @@ FROM quay.io/keycloak/keycloak:26.5.3
 # Copy built providers and themes
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 
-# KC 26 features: token-exchange, DPoP binding (CAB-438), SCIM (CAB-1463)
-ENV KC_FEATURES=token-exchange,dpop
+# KC 26 features: token-exchange, DPoP binding (CAB-438), PAR (CAB-1733 FAPI 2.0)
+ENV KC_FEATURES=token-exchange,dpop,par
 
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]

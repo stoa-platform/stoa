@@ -204,7 +204,7 @@ fn init_tracing(config: &Config) {
         .with_current_span(true);
 
     #[cfg(feature = "otel")]
-    {
+    if config.otel_enabled {
         use stoa_gateway::telemetry::{init_telemetry_tracer, TelemetryConfig};
 
         let telem_config = TelemetryConfig {
@@ -223,13 +223,12 @@ fn init_tracing(config: &Config) {
         }
     }
 
+    // Suppress unused warning when otel feature is not compiled
     #[cfg(not(feature = "otel"))]
-    {
-        let _ = config; // Used only with otel feature
-        stoa_gateway::telemetry::init_telemetry_noop();
-    }
+    let _ = config;
 
-    // Fallback: no OTel (feature disabled or init failed)
+    // OTel disabled: feature not compiled, runtime toggle off, or init failed
+    stoa_gateway::telemetry::init_telemetry_noop();
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt_layer)

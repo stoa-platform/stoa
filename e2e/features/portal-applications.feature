@@ -19,6 +19,13 @@ Feature: Portal - Applications and Profile
     And I create an application named "E2E Test App"
     Then the application "E2E Test App" appears in the list
 
+  Scenario: User creates app with API Key security profile
+    Given I am logged in as "art3mis" from community "high-five"
+    And the STOA Portal is accessible
+    When I navigate to my applications page
+    And I create an application named "E2E API Key App" with security profile "api_key"
+    Then the application "E2E API Key App" appears in the list
+
   @smoke
   Scenario: User views profile page
     Given I am logged in as "art3mis" from community "high-five"

@@ -44,6 +44,7 @@ from ..schemas.chat import (
     TokenUsageStatsResponse,
 )
 from ..services.audit_service import AuditService
+from ..services.chat_rate_limiter import check_rate_limit, record_event
 from ..services.chat_security import compute_session_fingerprint
 from ..services.chat_service import ChatService
 
@@ -60,6 +61,15 @@ router = APIRouter(
 # ---------------------------------------------------------------------------
 
 
+def _check_kill_switch() -> None:
+    """Raise 503 if the chat kill switch is enabled (CAB-1655)."""
+    if settings.CHAT_KILL_SWITCH:
+        raise HTTPException(
+            status_code=503,
+            detail="Chat is temporarily disabled",
+        )
+
+
 def _service(db: AsyncSession = Depends(get_db)) -> ChatService:
     return ChatService(db)
 
@@ -74,6 +84,7 @@ def _service(db: AsyncSession = Depends(get_db)) -> ChatService:
     response_model=ConversationResponse,
     status_code=201,
     summary="Create a chat conversation",
+    dependencies=[Depends(_check_kill_switch)],
 )
 @require_tenant_access
 async def create_conversation(
@@ -306,6 +317,7 @@ async def purge_conversations(
 @router.post(
     "/conversations/{conversation_id}/messages",
     summary="Send a message and stream the assistant reply (SSE)",
+    dependencies=[Depends(_check_kill_switch)],
 )
 @require_tenant_access
 async def send_message(
@@ -316,6 +328,16 @@ async def send_message(
     user: User = Depends(get_current_user),
     svc: ChatService = Depends(_service),
 ) -> EventSourceResponse:
+    # Rate limit check (CAB-1655)
+    allowed, reason, retry_after = check_rate_limit(user.id, tenant_id, "message")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=reason,
+            headers={"Retry-After": str(retry_after)},
+        )
+    record_event(user.id, tenant_id, "message")
+
     api_key = request.headers.get("X-Provider-Api-Key", "")
     if not api_key:
         api_key = await svc.get_tenant_api_key(tenant_id) or ""

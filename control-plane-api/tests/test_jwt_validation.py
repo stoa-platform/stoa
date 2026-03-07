@@ -138,6 +138,45 @@ class TestJwtValidation:
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
+    async def test_sub_uuid_used_as_user_id(self, mock_settings, mock_kc_key):
+        """CAB-1669: When 'sub' claim is a Keycloak UUID, user.id must use it."""
+        keycloak_uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        payload = _base_payload(sub=keycloak_uuid)
+        with patch("src.auth.dependencies.jwt.decode", return_value=payload):
+            app = _make_app()
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+                resp = await c.get("/me", headers={"Authorization": "Bearer uuid-sub"})
+        assert resp.status_code == 200
+        assert resp.json()["id"] == keycloak_uuid
+
+    @pytest.mark.asyncio
+    async def test_sub_preferred_over_email(self, mock_settings, mock_kc_key):
+        """CAB-1669: 'sub' claim must take precedence over email for user.id."""
+        payload = _base_payload(sub="keycloak-uuid-123", email="user@acme.com")
+        with patch("src.auth.dependencies.jwt.decode", return_value=payload):
+            app = _make_app()
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+                resp = await c.get("/me", headers={"Authorization": "Bearer sub-pref"})
+        assert resp.status_code == 200
+        # user.id must be the sub claim, not the email
+        assert resp.json()["id"] == "keycloak-uuid-123"
+        assert resp.json()["email"] == "user@acme.com"
+
+    @pytest.mark.asyncio
+    async def test_missing_sub_falls_back_to_username(self, mock_settings, mock_kc_key):
+        """CAB-1669: When sub is missing and email is empty, fall back to username."""
+        payload = _base_payload()
+        del payload["sub"]
+        payload["email"] = ""
+        payload["preferred_username"] = "admin-user"
+        with patch("src.auth.dependencies.jwt.decode", return_value=payload):
+            app = _make_app()
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+                resp = await c.get("/me", headers={"Authorization": "Bearer no-sub-no-email"})
+        assert resp.status_code == 200
+        assert resp.json()["id"] == "admin-user"
+
+    @pytest.mark.asyncio
     async def test_keycloak_unreachable_503(self, mock_settings):
         import httpx
         with patch("src.auth.dependencies.get_keycloak_public_key", new_callable=AsyncMock,

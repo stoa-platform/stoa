@@ -45,11 +45,13 @@
     "analytics": "Usage Analytics",
     "securityPosture": "Security Posture",
     "proxyOwner": "Proxy Owner",
+    "apiTraffic": "API Traffic",
     "llmCost": "LLM Cost",
     "subscriptions": "Subscriptions",
     "webhooks": "Webhooks",
     "credentialMappings": "Credential Mappings",
     "contracts": "Contracts",
+    "internalApis": "Internal APIs",
     "aiFactory": "AI Factory"
   },
   "layout": {

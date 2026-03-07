@@ -168,36 +168,52 @@ env_verify_last_run_timestamp $(date +%s)
 EOF
 
 # ---------------------------------------------------------------------------
-# Step 4: Push to Pushgateway
+# Step 4: Push to Pushgateway (via STOA Gateway proxy with direct fallback)
 # ---------------------------------------------------------------------------
-PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/env_verify/instance/${ARENA_INSTANCE}"
-CURL_AUTH=""
-if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
-  CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
-fi
+PROXY_LIB="$(dirname "$0")/../../ops/stoa-proxy.sh"
+# shellcheck source=/dev/null
+[[ -f "$PROXY_LIB" ]] && source "$PROXY_LIB"
+JOB_PATH="env_verify/instance/${ARENA_INSTANCE}"
 
-PUSH_CODE=$(curl -s -o "$WORK_DIR/push_response.txt" -w "%{http_code}" --max-time 10 -X PUT \
-  --data-binary @"$METRICS_FILE" \
-  -H "Content-Type: text/plain" $CURL_AUTH "$PUSH_URL" 2>/dev/null)
-[ -z "$PUSH_CODE" ] && PUSH_CODE="000"
-
-if [ "$PUSH_CODE" -lt 300 ] && [ "$PUSH_CODE" != "000" ]; then
+if type stoa_proxy_push_metrics &>/dev/null && stoa_proxy_push_metrics "$JOB_PATH" "$METRICS_FILE" "$WORK_DIR/push_response.txt"; then
   METRIC_LINES=$(wc -l < "$METRICS_FILE" | tr -d ' ')
-  log_json "\"Pushed ${METRIC_LINES} metric lines to Pushgateway (HTTP ${PUSH_CODE})\""
+  log_json "\"Pushed ${METRIC_LINES} metric lines via proxy (job=${JOB_PATH})\""
 else
-  RESP_BODY=$(head -c 500 "$WORK_DIR/push_response.txt" 2>/dev/null | tr '"' "'" || echo "")
-  log_json "\"WARNING: Pushgateway returned HTTP ${PUSH_CODE}: ${RESP_BODY}\""
+  # Direct fallback
+  PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/${JOB_PATH}"
+  CURL_AUTH=""
+  [ -n "${PUSHGATEWAY_AUTH:-}" ] && CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
+  PUSH_CODE=$(curl -s -o "$WORK_DIR/push_response.txt" -w "%{http_code}" --max-time 10 -X PUT \
+    --data-binary @"$METRICS_FILE" \
+    -H "Content-Type: text/plain" $CURL_AUTH "$PUSH_URL" 2>/dev/null)
+  [ -z "$PUSH_CODE" ] && PUSH_CODE="000"
+  if [ "$PUSH_CODE" -lt 300 ] && [ "$PUSH_CODE" != "000" ]; then
+    METRIC_LINES=$(wc -l < "$METRICS_FILE" | tr -d ' ')
+    log_json "\"Pushed ${METRIC_LINES} metric lines to Pushgateway (HTTP ${PUSH_CODE})\""
+  else
+    RESP_BODY=$(head -c 500 "$WORK_DIR/push_response.txt" 2>/dev/null | tr '"' "'" || echo "")
+    log_json "\"WARNING: Pushgateway returned HTTP ${PUSH_CODE}: ${RESP_BODY}\""
+  fi
 fi
 
 # ---------------------------------------------------------------------------
-# Step 5: Ping Healthchecks (dead man's switch)
+# Step 5: Ping Healthchecks (via STOA Gateway proxy with direct fallback)
 # ---------------------------------------------------------------------------
-if [ -n "${HEALTHCHECKS_URL:-}" ]; then
+if [ -n "${HEALTHCHECKS_URL:-}" ] || [ -n "${STOA_PROXY_URL:-}" ]; then
+  HEALTHCHECK_UUID="${HEALTHCHECKS_UUID:-}"
   if [ "$PASSED" -eq "$TOTAL" ]; then
-    curl -s -o /dev/null --max-time 5 "${HEALTHCHECKS_URL}" 2>/dev/null || true
+    if type stoa_proxy_ping_healthcheck &>/dev/null && [ -n "$HEALTHCHECK_UUID" ]; then
+      stoa_proxy_ping_healthcheck "$HEALTHCHECK_UUID" "" 2>/dev/null || true
+    elif [ -n "${HEALTHCHECKS_URL:-}" ]; then
+      curl -s -o /dev/null --max-time 5 "${HEALTHCHECKS_URL}" 2>/dev/null || true
+    fi
     log_json "\"Healthchecks pinged (all environments healthy)\""
   else
-    curl -s -o /dev/null --max-time 5 "${HEALTHCHECKS_URL}/fail" 2>/dev/null || true
+    if type stoa_proxy_ping_healthcheck &>/dev/null && [ -n "$HEALTHCHECK_UUID" ]; then
+      stoa_proxy_ping_healthcheck "$HEALTHCHECK_UUID" "/fail" 2>/dev/null || true
+    elif [ -n "${HEALTHCHECKS_URL:-}" ]; then
+      curl -s -o /dev/null --max-time 5 "${HEALTHCHECKS_URL}/fail" 2>/dev/null || true
+    fi
     log_json "\"Healthchecks pinged /fail (${PASSED}/${TOTAL} environments healthy)\""
   fi
 fi

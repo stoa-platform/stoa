@@ -18,11 +18,13 @@ import {
   ArrowDownRight,
   ExternalLink,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { config } from '../../config';
 import { PermissionGate } from '../../components/PermissionGate';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { observabilityPath } from '../../utils/navigation';
 
 const AUTO_REFRESH_INTERVAL = 30_000; // 30s — infrastructure metrics refresh faster
 
@@ -176,6 +178,7 @@ function GatewayRow({ gw }: { gw: GatewayHealth }) {
 
 export function ProxyOwnerDashboard() {
   const { hasPermission, user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = hasPermission('tenants:read');
 
   const [gateways, setGateways] = useState<GatewayHealth[]>([]);
@@ -191,7 +194,7 @@ export function ProxyOwnerDashboard() {
       setError(null);
 
       // Fetch gateway instances for health overview
-      const gwResponse = await apiService.get('/v1/gateway-instances');
+      const gwResponse = await apiService.get('/v1/admin/gateways');
       const instances = gwResponse.data?.items || gwResponse.data || [];
 
       // Map real gateway data to our health model
@@ -264,7 +267,7 @@ export function ProxyOwnerDashboard() {
   const offlineCount = gateways.filter((g) => g.status === 'offline').length;
   void offlineCount; // reserved for future offline-count KPI card
 
-  const grafanaBaseUrl = config?.services?.grafana?.url || '';
+  const grafanaUrl = `${config.services.grafana.url}/d/gateway-overview`;
   const tenantFilter = user?.tenant_id ? `&var-tenant=${user.tenant_id}` : '';
 
   return (
@@ -509,37 +512,24 @@ export function ProxyOwnerDashboard() {
           </div>
         }
       >
-        {grafanaBaseUrl ? (
-          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none overflow-hidden">
-            <div className="px-4 py-3 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
-                Infrastructure Metrics
-              </h2>
-              <a
-                href={`${grafanaBaseUrl}/d/gateway-overview?orgId=1${tenantFilter}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
-              >
-                Open in Grafana
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-            <iframe
-              src={`${grafanaBaseUrl}/d-solo/gateway-overview/gateway-health?orgId=1&panelId=1&theme=light${tenantFilter}`}
-              className="w-full h-64 border-0"
-              title="Gateway health metrics"
-              loading="lazy"
-            />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              Infrastructure Metrics
+            </h2>
           </div>
-        ) : (
-          <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-6 text-center">
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              Grafana not configured. Set <code className="text-xs">grafana.url</code> in platform
-              settings.
-            </p>
-          </div>
-        )}
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+            View gateway health dashboards, latency distributions, and error rates in Grafana.
+          </p>
+          <button
+            onClick={() => navigate(observabilityPath(`${grafanaUrl}?orgId=1${tenantFilter}`))}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
+          >
+            <Activity className="h-4 w-4" />
+            Open in Grafana
+            <ExternalLink className="h-3 w-3" />
+          </button>
+        </div>
       </PermissionGate>
 
       {/* Gateway link for non-admins */}

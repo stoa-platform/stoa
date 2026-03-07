@@ -58,6 +58,19 @@ const { mockGateways } = vi.hoisted(() => ({
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
+vi.mock('../../contexts/EnvironmentContext', () => ({
+  useEnvironment: () => ({
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+    environments: [
+      { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+      { name: 'staging', label: 'Staging', mode: 'full', color: 'amber' },
+      { name: 'prod', label: 'Production', mode: 'read-only', color: 'red' },
+    ],
+    switchEnvironment: vi.fn(),
+  }),
+}));
+
 vi.mock('../../services/api', () => ({
   apiService: {
     getGatewayInstances: vi.fn().mockResolvedValue({

@@ -14,6 +14,7 @@ pub mod git;
 pub mod governance;
 pub mod guardrails;
 pub mod handlers;
+pub mod hegemon;
 pub mod k8s;
 pub mod llm;
 pub mod mcp;
@@ -55,7 +56,7 @@ use mcp::{
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
     ws::handle_ws_upgrade,
 };
-use proxy::{dynamic_proxy, llm_proxy_handler};
+use proxy::{api_proxy_handler, dynamic_proxy, list_api_proxy_backends, llm_proxy_handler};
 use state::AppState;
 
 /// Build the Axum router with all routes.
@@ -173,6 +174,35 @@ pub fn build_router(state: AppState) -> Router {
             "/diagnostics/:request_id",
             get(handlers::diagnostic::diagnostic_report_handler),
         )
+        // CAB-1710/1711: HEGEMON agent registry admin
+        .route("/hegemon/agents", get(hegemon::registry::list_agents))
+        .route("/hegemon/agents/:name", get(hegemon::registry::get_agent))
+        .route(
+            "/hegemon/agents/:name/tier",
+            post(hegemon::registry::update_agent_tier),
+        )
+        // CAB-1713/1714: HEGEMON dispatch admin
+        .route(
+            "/hegemon/dispatches",
+            get(hegemon::dispatch::list_dispatches),
+        )
+        .route(
+            "/hegemon/dispatches/:id",
+            get(hegemon::dispatch::get_dispatch),
+        )
+        // CAB-1716: HEGEMON budget admin
+        .route("/hegemon/budget", get(hegemon::budget::list_budgets))
+        // CAB-1718: HEGEMON claims admin
+        .route("/hegemon/claims", get(hegemon::claims::list_claims))
+        .route("/hegemon/claims/:mega_id", get(hegemon::claims::get_claims))
+        // CAB-1720/1721: HEGEMON metering + dashboard admin
+        .route(
+            "/hegemon/dashboard",
+            get(hegemon::dashboard::fleet_dashboard),
+        )
+        .route("/hegemon/events", get(hegemon::metering::list_events))
+        // CAB-1709 P6: HEGEMON messaging admin
+        .route("/hegemon/messages", get(hegemon::messaging::list_inboxes))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -237,6 +267,8 @@ pub fn build_router(state: AppState) -> Router {
                     get(oauth::discovery::openid_configuration),
                 )
                 .route("/oauth/token", post(oauth::proxy::token_proxy))
+                // RFC 9126 — Pushed Authorization Requests (CAB-1733, FAPI 2.0)
+                .route("/oauth/par", post(oauth::proxy::par_proxy))
                 .route("/oauth/register", post(oauth::proxy::register_proxy))
                 // RFC 7592 — Dynamic Client Registration Management (CAB-1606)
                 .route(
@@ -281,6 +313,51 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/v1/messages/count_tokens", post(llm_proxy_handler))
                 // OpenAI-compatible LLM proxy (Mistral, OpenAI, vLLM, etc.)
                 .route("/v1/chat/completions", post(llm_proxy_handler))
+                // API Proxy — internal dogfooding (CAB-1722)
+                // Routes /proxy/<backend>/... to upstream with credential injection.
+                // Separate from /mcp/* and /apis/* (dynamic proxy routes).
+                // Uses catch-all since axum doesn't allow {param}/{*rest}.
+                .route("/proxy/*path", axum::routing::any(api_proxy_handler))
+                .route("/admin/api-proxy/backends", get(list_api_proxy_backends))
+                // CAB-1713/1714: HEGEMON dispatch endpoints
+                .route("/hegemon/dispatch", post(hegemon::dispatch::dispatch_job))
+                .route(
+                    "/hegemon/dispatch/:id/result",
+                    post(hegemon::dispatch::dispatch_result),
+                )
+                // CAB-1716: HEGEMON budget endpoints
+                .route("/hegemon/budget/check", post(hegemon::budget::budget_check))
+                .route(
+                    "/hegemon/budget/record",
+                    post(hegemon::budget::budget_record),
+                )
+                // CAB-1718: HEGEMON claim coordination endpoints
+                .route(
+                    "/hegemon/claims/:mega_id/reserve",
+                    post(hegemon::claims::reserve_claim),
+                )
+                .route(
+                    "/hegemon/claims/:mega_id/release",
+                    post(hegemon::claims::release_claim),
+                )
+                .route(
+                    "/hegemon/claims/:mega_id/heartbeat",
+                    post(hegemon::claims::heartbeat_claim),
+                )
+                // CAB-1709 P6: HEGEMON messaging endpoints
+                .route("/hegemon/messages", post(hegemon::messaging::send_message))
+                .route(
+                    "/hegemon/messages/:agent_name",
+                    get(hegemon::messaging::get_inbox),
+                )
+                .route(
+                    "/hegemon/messages/:agent_name/read",
+                    post(hegemon::messaging::mark_message_read),
+                )
+                .route(
+                    "/hegemon/messages/:agent_name/read-all",
+                    post(hegemon::messaging::mark_all_messages_read),
+                )
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)

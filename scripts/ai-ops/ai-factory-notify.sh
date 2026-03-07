@@ -181,15 +181,26 @@ _send_slack_bot() {
     return 0
   fi
 
-  # Send via Bot API
-  local RESPONSE
-  RESPONSE=$(curl -sf -X POST "https://slack.com/api/chat.postMessage" \
-    -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-    -H 'Content-Type: application/json' \
-    -d "$BOT_PAYLOAD" 2>/dev/null) || {
-    echo "::warning::Slack Bot API call failed (non-blocking)" >&2
-    return 0
-  }
+  # Send via Bot API (proxy-first + direct fallback)
+  local RESPONSE=""
+  if type stoa_proxy_slack_post &>/dev/null && [ -n "${STOA_PROXY_URL:-}" ]; then
+    local PROXY_RESP="/tmp/slack_proxy_$$.json"
+    if stoa_proxy_slack_post "$BOT_PAYLOAD" "$PROXY_RESP" 2>/dev/null; then
+      RESPONSE=$(cat "$PROXY_RESP" 2>/dev/null)
+      rm -f "$PROXY_RESP"
+    else
+      rm -f "$PROXY_RESP"
+    fi
+  fi
+  if [ -z "$RESPONSE" ]; then
+    RESPONSE=$(curl -sf -X POST "https://slack.com/api/chat.postMessage" \
+      -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+      -H 'Content-Type: application/json' \
+      -d "$BOT_PAYLOAD" 2>/dev/null) || {
+      echo "::warning::Slack Bot API call failed (non-blocking)" >&2
+      return 0
+    }
+  fi
 
   # Extract and return message timestamp for threading/updates
   local TS
@@ -276,29 +287,51 @@ _react_slack() {
 
 _push_metrics() {
   # Internal: push Prometheus text format metrics to Pushgateway.
-  # Graceful degradation if PUSHGATEWAY_URL is unset.
+  # Tries STOA Gateway proxy first, falls back to direct Pushgateway.
+  # Graceful degradation if neither is configured.
   # $1 = job path suffix (e.g., "workflow/linear-dispatch/stage/council")
   # $2 = metrics text (Prometheus exposition format)
   local JOB_PATH="${1:?}" METRICS_TEXT="${2:?}"
   # $() strips trailing newlines but Pushgateway requires one
   METRICS_TEXT="${METRICS_TEXT}"$'\n'
+
+  local FULL_JOB="ai_factory/${JOB_PATH}"
+  local HTTP_CODE=""
+  local TMP_METRICS
+  TMP_METRICS=$(mktemp)
+  printf '%s\n' "$METRICS_TEXT" > "$TMP_METRICS"
+
+  # Try STOA Gateway proxy first
+  local PROXY_LIB
+  PROXY_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../ops" 2>/dev/null && pwd)/stoa-proxy.sh"
+  # shellcheck source=/dev/null
+  if [[ -f "$PROXY_LIB" ]] && [[ -n "${STOA_PROXY_URL:-}" ]]; then
+    source "$PROXY_LIB" 2>/dev/null || true
+    if type stoa_proxy_push_metrics &>/dev/null && stoa_proxy_push_metrics "$FULL_JOB" "$TMP_METRICS" /dev/null 2>/dev/null; then
+      rm -f "$TMP_METRICS"
+      return 0
+    fi
+  fi
+
+  # Direct fallback
   if [ -z "${PUSHGATEWAY_URL:-}" ]; then
     echo "::notice::PUSHGATEWAY_URL not configured — skipping metrics push"
+    rm -f "$TMP_METRICS"
     return 0
   fi
-  local PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/ai_factory/${JOB_PATH}"
-  local HTTP_CODE
+  local PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/${FULL_JOB}"
   if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
-    HTTP_CODE=$(printf '%s\n' "$METRICS_TEXT" | curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      --data-binary @- \
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary @"$TMP_METRICS" \
       -H "Content-Type: text/plain" \
       -u "${PUSHGATEWAY_AUTH}" "$PUSH_URL" 2>/dev/null)
   else
-    HTTP_CODE=$(printf '%s\n' "$METRICS_TEXT" | curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      --data-binary @- \
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      --data-binary @"$TMP_METRICS" \
       -H "Content-Type: text/plain" \
       "$PUSH_URL" 2>/dev/null)
   fi
+  rm -f "$TMP_METRICS"
   [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
   if [ "$HTTP_CODE" -ge 300 ] || [ "$HTTP_CODE" = "000" ]; then
     echo "::warning::Pushgateway returned HTTP ${HTTP_CODE} (non-blocking)"
@@ -684,8 +717,8 @@ linear_comment() {
   local PR_NUM="${3:-}" PR_URL="${4:-}" PIPELINE="${5:-L3 Pipeline}"
   local DURATION_SECS="${6:-}" FILES="${7:-}" LOC="${8:-}" MODE="${9:-Ship}"
 
-  if [ -z "${LINEAR_API_KEY:-}" ]; then
-    echo "::notice::LINEAR_API_KEY not set — skipping Linear comment"
+  if [ -z "${LINEAR_API_KEY:-}" ] && ! type stoa_proxy_linear_graphql &>/dev/null; then
+    echo "::notice::LINEAR_API_KEY not set and proxy unavailable — skipping Linear comment"
     return 0
   fi
 
@@ -709,24 +742,38 @@ linear_comment() {
   local ESCAPED_BODY
   ESCAPED_BODY=$(_escape_json "$BODY")
 
-  # Resolve Linear issue ID
-  local ISSUE_ID
-  ISSUE_ID=$(curl -sf -X POST "https://api.linear.app/graphql" \
-    -H "Authorization: ${LINEAR_API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
-    | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+  # Resolve Linear issue ID (proxy-first + direct fallback)
+  local RESOLVE_QUERY="{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}"
+  local RESOLVE_RESP="/tmp/linear_resolve_$$.json"
+  local ISSUE_ID=""
+
+  if type stoa_proxy_linear_graphql &>/dev/null; then
+    stoa_proxy_linear_graphql "$RESOLVE_QUERY" "$RESOLVE_RESP" 2>/dev/null || true
+  else
+    curl -sf -X POST "https://api.linear.app/graphql" \
+      -H "Authorization: ${LINEAR_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "$RESOLVE_QUERY" -o "$RESOLVE_RESP" 2>/dev/null || true
+  fi
+  ISSUE_ID=$(jq -r '.data.issueSearch.nodes[0].id // empty' "$RESOLVE_RESP" 2>/dev/null || echo "")
+  rm -f "$RESOLVE_RESP"
 
   if [ -z "$ISSUE_ID" ]; then
     echo "::warning::Could not find Linear issue for ${TICKET_ID}"
     return 0
   fi
 
-  curl -sf -X POST "https://api.linear.app/graphql" \
-    -H "Authorization: ${LINEAR_API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${ESCAPED_BODY}\\\" }) { success } }\"}" \
-    > /dev/null 2>&1 || true
+  # Post comment (proxy-first + direct fallback)
+  local COMMENT_QUERY="{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${ESCAPED_BODY}\\\" }) { success } }\"}"
+
+  if type stoa_proxy_linear_graphql &>/dev/null; then
+    stoa_proxy_linear_graphql "$COMMENT_QUERY" /dev/null 2>/dev/null || true
+  else
+    curl -sf -X POST "https://api.linear.app/graphql" \
+      -H "Authorization: ${LINEAR_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "$COMMENT_QUERY" > /dev/null 2>&1 || true
+  fi
 }
 
 # ── GHA Job Summary ───────────────────────────────────────────────────────────

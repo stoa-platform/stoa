@@ -264,6 +264,61 @@ pub fn record_supervision_decision(tier: &str, action: &str) {
         .inc();
 }
 
+// === HEGEMON Dispatch Metrics (CAB-1713) ===
+
+/// Counter of HEGEMON dispatches by worker name.
+pub static HEGEMON_DISPATCHES_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_hegemon_dispatches_total",
+        "Total HEGEMON dispatches by worker",
+        &["worker"]
+    )
+    .expect("Failed to create stoa_hegemon_dispatches_total metric")
+});
+
+/// Gauge of active (in-progress) HEGEMON dispatches.
+pub static HEGEMON_DISPATCH_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "stoa_hegemon_dispatch_active",
+        "Number of active HEGEMON dispatches"
+    )
+    .expect("Failed to create stoa_hegemon_dispatch_active metric")
+});
+
+/// Histogram of HEGEMON dispatch durations in seconds, by worker.
+pub static HEGEMON_DISPATCH_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_hegemon_dispatch_duration_seconds",
+        "Duration of HEGEMON dispatches in seconds",
+        &["worker"],
+        vec![60.0, 300.0, 600.0, 900.0, 1800.0, 3600.0, 7200.0]
+    )
+    .expect("Failed to create stoa_hegemon_dispatch_duration_seconds metric")
+});
+
+/// Histogram of HEGEMON dispatch cost in USD, by worker.
+pub static HEGEMON_DISPATCH_COST: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_hegemon_dispatch_cost_usd",
+        "Cost of HEGEMON dispatches in USD",
+        &["worker"],
+        vec![0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
+    )
+    .expect("Failed to create stoa_hegemon_dispatch_cost_usd metric")
+});
+
+// === HEGEMON Budget Metrics (CAB-1716) ===
+
+/// Gauge of daily spend per agent in USD.
+pub static HEGEMON_BUDGET_DAILY_USD: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "stoa_hegemon_budget_daily_usd",
+        "Daily budget spent per HEGEMON agent in USD",
+        &["worker"]
+    )
+    .expect("Failed to create stoa_hegemon_budget_daily_usd metric")
+});
+
 // === Tool Discovery Metrics (CAB-1558) ===
 
 /// Histogram of tool discovery (CP sync) durations in seconds, per tenant and outcome.
@@ -319,6 +374,49 @@ pub static FEDERATION_REQUESTS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
         &["sub_account_id", "master_account_id", "status"]
     )
     .expect("Failed to create stoa_federation_requests_total metric")
+});
+
+// === API Proxy Metrics (CAB-1726) ===
+
+/// Counter of API proxy requests by backend, method, and status code.
+pub static API_PROXY_REQUESTS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_api_proxy_requests_total",
+        "Total API proxy requests by backend",
+        &["backend", "method", "status"]
+    )
+    .expect("Failed to create stoa_api_proxy_requests_total metric")
+});
+
+/// Histogram of API proxy request durations in seconds, by backend.
+pub static API_PROXY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_api_proxy_duration_seconds",
+        "Duration of API proxy requests in seconds",
+        &["backend"],
+        vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+    )
+    .expect("Failed to create stoa_api_proxy_duration_seconds metric")
+});
+
+/// Counter of API proxy rate limit rejections by backend.
+pub static API_PROXY_RATE_LIMITED: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_api_proxy_rate_limited_total",
+        "Total API proxy rate limit rejections",
+        &["backend"]
+    )
+    .expect("Failed to create stoa_api_proxy_rate_limited_total metric")
+});
+
+/// Counter of API proxy circuit breaker rejections by backend.
+pub static API_PROXY_CIRCUIT_OPEN: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_api_proxy_circuit_open_total",
+        "Total API proxy circuit breaker rejections",
+        &["backend"]
+    )
+    .expect("Failed to create stoa_api_proxy_circuit_open_total metric")
 });
 
 // === Upstream Latency Metrics ===
@@ -558,6 +656,29 @@ pub fn record_sender_constraint_check(result: &str, method: &str, tenant: &str) 
         .inc();
 }
 
+// === API proxy metrics helpers (CAB-1726) ===
+
+/// Record an API proxy request with backend, method, status, and duration.
+pub fn record_api_proxy_request(backend: &str, method: &str, status: u16, duration_secs: f64) {
+    let status_str = status.to_string();
+    API_PROXY_REQUESTS_TOTAL
+        .with_label_values(&[backend, method, &status_str])
+        .inc();
+    API_PROXY_DURATION
+        .with_label_values(&[backend])
+        .observe(duration_secs);
+}
+
+/// Record an API proxy rate limit rejection.
+pub fn record_api_proxy_rate_limited(backend: &str) {
+    API_PROXY_RATE_LIMITED.with_label_values(&[backend]).inc();
+}
+
+/// Record an API proxy circuit breaker rejection.
+pub fn record_api_proxy_circuit_open(backend: &str) {
+    API_PROXY_CIRCUIT_OPEN.with_label_values(&[backend]).inc();
+}
+
 // === HTTP metrics helpers ===
 
 /// Record an HTTP request with method, path, status, and duration.
@@ -626,6 +747,10 @@ pub fn init_all_metrics() {
     Lazy::force(&FALLBACK_ATTEMPTS);
     Lazy::force(&FALLBACK_EXHAUSTED);
     Lazy::force(&UPSTREAM_LATENCY);
+    Lazy::force(&API_PROXY_REQUESTS_TOTAL);
+    Lazy::force(&API_PROXY_DURATION);
+    Lazy::force(&API_PROXY_RATE_LIMITED);
+    Lazy::force(&API_PROXY_CIRCUIT_OPEN);
     Lazy::force(&MTLS_VALIDATIONS_TOTAL);
     Lazy::force(&MTLS_BINDING_CHECKS_TOTAL);
     Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
@@ -633,6 +758,11 @@ pub fn init_all_metrics() {
     Lazy::force(&DPOP_VALIDATIONS_TOTAL);
     Lazy::force(&SENDER_CONSTRAINT_CHECKS_TOTAL);
     Lazy::force(&SUPERVISION_DECISIONS_TOTAL);
+    Lazy::force(&HEGEMON_DISPATCHES_TOTAL);
+    Lazy::force(&HEGEMON_DISPATCH_ACTIVE);
+    Lazy::force(&HEGEMON_DISPATCH_DURATION);
+    Lazy::force(&HEGEMON_DISPATCH_COST);
+    Lazy::force(&HEGEMON_BUDGET_DAILY_USD);
 }
 
 /// Get the total number of MCP tool calls across all labels.

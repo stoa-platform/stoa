@@ -268,6 +268,27 @@ PAYLOAD=$(jq -n \
     }
   }')
 
+# --- Log rotation (500-line cap, 90-day retention on .1) ---
+MEMORY_DIR="${HOME}/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory"
+rotate_log() {
+  local logfile="$1"
+  [ ! -f "$logfile" ] && return
+  local lines
+  lines=$(wc -l < "$logfile" 2>/dev/null) || return
+  if [ "$lines" -gt 500 ]; then
+    local keep=$((lines - 500))
+    head -n "$keep" "$logfile" >> "${logfile}.1"
+    local tmp="${logfile}.tmp.$$"
+    tail -n 500 "$logfile" > "$tmp" && mv "$tmp" "$logfile"
+  fi
+  # Purge .1 files older than 90 days
+  if [ -f "${logfile}.1" ]; then
+    find "$(dirname "${logfile}.1")" -name "$(basename "${logfile}.1")" -mtime +90 -delete 2>/dev/null || true
+  fi
+}
+rotate_log "${MEMORY_DIR}/metrics.log"
+rotate_log "${MEMORY_DIR}/operations.log"
+
 # --- POST to ingest endpoint ---
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -X POST "$INGEST_ENDPOINT" \

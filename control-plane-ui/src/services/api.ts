@@ -659,6 +659,7 @@ class ApiService {
   async getGatewayDeployments(params?: {
     sync_status?: string;
     gateway_instance_id?: string;
+    environment?: string;
     page?: number;
     page_size?: number;
   }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
@@ -718,7 +719,7 @@ class ApiService {
   // Gateway Policies
   // =========================================================================
 
-  async getGatewayPolicies(params?: { tenant_id?: string }): Promise<any[]> {
+  async getGatewayPolicies(params?: { tenant_id?: string; environment?: string }): Promise<any[]> {
     const { data } = await this.client.get('/v1/admin/policies', { params });
     return data;
   }

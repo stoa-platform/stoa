@@ -244,6 +244,18 @@ pub static SENDER_CONSTRAINT_CHECKS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_sender_constraint_checks_total metric")
 });
 
+// === Security Profile Enforcement Metrics (CAB-1744) ===
+
+/// Counter of profile enforcement checks by result and profile.
+pub static PROFILE_ENFORCEMENT_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_profile_enforcement_total",
+        "Total security profile enforcement checks by result and profile",
+        &["result", "profile"]
+    )
+    .expect("Failed to create stoa_profile_enforcement_total metric")
+});
+
 // === HEGEMON Supervision Metrics (CAB-1636) ===
 
 /// Counter of HEGEMON supervision decisions by tier and action.
@@ -653,6 +665,15 @@ pub fn record_mtls_binding_check(result: &str) {
 pub fn record_sender_constraint_check(result: &str, method: &str, tenant: &str) {
     SENDER_CONSTRAINT_CHECKS_TOTAL
         .with_label_values(&[result, method, tenant])
+        .inc();
+}
+
+// === Profile Enforcement metrics helpers (CAB-1744) ===
+
+/// Record a security profile enforcement check outcome.
+pub fn record_profile_enforcement(result: &str, profile: &str) {
+    PROFILE_ENFORCEMENT_TOTAL
+        .with_label_values(&[result, profile])
         .inc();
 }
 

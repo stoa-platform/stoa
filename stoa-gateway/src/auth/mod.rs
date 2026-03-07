@@ -14,6 +14,7 @@ pub mod jwt;
 pub mod middleware;
 pub mod mtls;
 pub mod oidc;
+pub mod profile_enforcement;
 pub mod rbac;
 pub mod sender_constraint;
 pub mod subscription;

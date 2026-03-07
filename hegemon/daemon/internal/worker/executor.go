@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/stoa-platform/stoa/hegemon/daemon/internal/config"
 )
@@ -136,10 +137,15 @@ func (e *Executor) dialWithTimeout(w *config.WorkerConfig, timeout time.Duration
 		return nil, fmt.Errorf("parse key: %w", err)
 	}
 
+	hostKeyCallback, err := hostKeyCallbackFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("host key callback: %w", err)
+	}
+
 	cfg := &ssh.ClientConfig{
 		User:            w.User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // internal fleet
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         timeout,
 	}
 
@@ -156,6 +162,20 @@ func (e *Executor) writeRemoteFile(client *ssh.Client, path, content string) err
 	defer session.Close()
 	session.Stdin = bytes.NewReader([]byte(content))
 	return session.Run(fmt.Sprintf("cat > %s", path))
+}
+
+// hostKeyCallbackFromEnv returns a host key callback using known_hosts file.
+// Uses HEGEMON_KNOWN_HOSTS env var if set, otherwise ~/.ssh/known_hosts.
+func hostKeyCallbackFromEnv() (ssh.HostKeyCallback, error) {
+	khPath := os.Getenv("HEGEMON_KNOWN_HOSTS")
+	if khPath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("get home dir: %w", err)
+		}
+		khPath = home + "/.ssh/known_hosts"
+	}
+	return knownhosts.New(khPath)
 }
 
 // modelForEstimate selects claude model based on ticket complexity.

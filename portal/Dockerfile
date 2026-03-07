@@ -86,6 +86,11 @@ RUN npm run build
 # Production stage - Use nginx-unprivileged for Kubernetes compatibility
 FROM nginxinc/nginx-unprivileged:alpine
 
+# Upgrade Alpine packages to fix CVEs (zlib CVE-2026-22184, CVE-2026-27171)
+USER root
+RUN apk upgrade --no-cache
+USER nginx
+
 # Default API backend (overridden by K8s env var)
 ENV API_BACKEND_URL=http://control-plane-api:8000
 

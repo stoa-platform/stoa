@@ -1,5 +1,6 @@
 """Repository for gateway instance CRUD operations."""
-from datetime import UTC
+
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -21,17 +22,21 @@ class GatewayInstanceRepository:
         await self.session.refresh(instance)
         return instance
 
-    async def get_by_id(self, instance_id: UUID) -> GatewayInstance | None:
+    async def get_by_id(self, instance_id: UUID, *, include_deleted: bool = False) -> GatewayInstance | None:
         """Get gateway instance by ID."""
-        result = await self.session.execute(
-            select(GatewayInstance).where(GatewayInstance.id == instance_id)
-        )
+        query = select(GatewayInstance).where(GatewayInstance.id == instance_id)
+        if not include_deleted:
+            query = query.where(GatewayInstance.deleted_at.is_(None))
+        result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def get_by_name(self, name: str) -> GatewayInstance | None:
         """Get gateway instance by unique name."""
         result = await self.session.execute(
-            select(GatewayInstance).where(GatewayInstance.name == name)
+            select(GatewayInstance).where(
+                GatewayInstance.name == name,
+                GatewayInstance.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -40,20 +45,22 @@ class GatewayInstanceRepository:
         gateway_type: GatewayType | None = None,
         environment: str | None = None,
         tenant_id: str | None = None,
+        include_deleted: bool = False,
         page: int = 1,
         page_size: int = 50,
     ) -> tuple[list[GatewayInstance], int]:
         """List gateway instances with optional filters and pagination."""
         query = select(GatewayInstance)
 
+        if not include_deleted:
+            query = query.where(GatewayInstance.deleted_at.is_(None))
+
         if gateway_type:
             query = query.where(GatewayInstance.gateway_type == gateway_type)
         if environment:
             query = query.where(GatewayInstance.environment == environment)
         if tenant_id:
-            query = query.where(
-                (GatewayInstance.tenant_id == tenant_id) | (GatewayInstance.tenant_id.is_(None))
-            )
+            query = query.where((GatewayInstance.tenant_id == tenant_id) | (GatewayInstance.tenant_id.is_(None)))
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
@@ -82,8 +89,6 @@ class GatewayInstanceRepository:
         health_details: dict | None = None,
     ) -> GatewayInstance:
         """Update gateway health status."""
-        from datetime import datetime
-
         instance.status = status
         instance.last_health_check = datetime.now(UTC)
         if health_details is not None:
@@ -92,7 +97,23 @@ class GatewayInstanceRepository:
         await self.session.refresh(instance)
         return instance
 
+    async def soft_delete(self, instance: GatewayInstance, deleted_by: str) -> GatewayInstance:
+        """Soft-delete a gateway instance (set deleted_at + deleted_by)."""
+        instance.deleted_at = datetime.now(UTC)
+        instance.deleted_by = deleted_by
+        await self.session.flush()
+        await self.session.refresh(instance)
+        return instance
+
+    async def restore(self, instance: GatewayInstance) -> GatewayInstance:
+        """Restore a soft-deleted gateway instance."""
+        instance.deleted_at = None
+        instance.deleted_by = None
+        await self.session.flush()
+        await self.session.refresh(instance)
+        return instance
+
     async def delete(self, instance: GatewayInstance) -> None:
-        """Delete a gateway instance."""
+        """Hard-delete a gateway instance (kept for internal use only)."""
         await self.session.delete(instance)
         await self.session.flush()

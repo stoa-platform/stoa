@@ -43,6 +43,9 @@ class TestGatewayInstancesRouter:
             "capabilities": [],
             "version": None,
             "tags": [],
+            "protected": False,
+            "deleted_at": None,
+            "deleted_by": None,
             "created_at": datetime(2026, 2, 1, tzinfo=UTC),
             "updated_at": datetime(2026, 2, 1, tzinfo=UTC),
         }
@@ -454,6 +457,7 @@ class TestGatewayInstancesRouter:
             gateway_type="stoa_edge_mcp",
             environment="dev",
             tenant_id="acme",
+            include_deleted=False,
             page=2,
             page_size=10,
         )

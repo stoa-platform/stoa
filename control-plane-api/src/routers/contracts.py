@@ -65,13 +65,9 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
     return user.tenant_id == tenant_id
 
 
-async def _get_or_create_default_bindings(
-    db: AsyncSession, contract: Contract
-) -> list[ProtocolBinding]:
+async def _get_or_create_default_bindings(db: AsyncSession, contract: Contract) -> list[ProtocolBinding]:
     """Get existing bindings or create default disabled bindings for all protocols."""
-    result = await db.execute(
-        select(ProtocolBinding).where(ProtocolBinding.contract_id == contract.id)
-    )
+    result = await db.execute(select(ProtocolBinding).where(ProtocolBinding.contract_id == contract.id))
     bindings = list(result.scalars().all())
 
     # Check which protocols already have bindings
@@ -115,14 +111,10 @@ def _generate_endpoint_info(contract: Contract, protocol: ProtocolType) -> dict:
     otherwise generates base URLs from config. For GraphQL/gRPC/Kafka: stub endpoints.
     """
     base_url = (
-        f"https://api.{settings.BASE_DOMAIN}"
-        if hasattr(settings, "BASE_DOMAIN")
-        else "https://api.stoa.example.com"
+        f"https://api.{settings.BASE_DOMAIN}" if hasattr(settings, "BASE_DOMAIN") else "https://api.stoa.example.com"
     )
     gateway_url = (
-        f"https://mcp.{settings.BASE_DOMAIN}"
-        if hasattr(settings, "BASE_DOMAIN")
-        else "https://mcp.stoa.example.com"
+        f"https://mcp.{settings.BASE_DOMAIN}" if hasattr(settings, "BASE_DOMAIN") else "https://mcp.stoa.example.com"
     )
     contract_name = contract.name.replace("_", "-").lower()
 
@@ -160,9 +152,7 @@ def _generate_endpoint_info(contract: Contract, protocol: ProtocolType) -> dict:
     }
 
 
-def _contract_to_response(
-    contract: Contract, bindings: list[ProtocolBinding]
-) -> ContractResponse:
+def _contract_to_response(contract: Contract, bindings: list[ProtocolBinding]) -> ContractResponse:
     """Convert Contract model + bindings to response schema."""
     return ContractResponse(
         id=contract.id,
@@ -185,9 +175,7 @@ def _contract_to_response(
     )
 
 
-def _binding_to_response(
-    binding: ProtocolBinding, traffic_24h: int | None = None
-) -> ProtocolBindingResponse:
+def _binding_to_response(binding: ProtocolBinding, traffic_24h: int | None = None) -> ProtocolBindingResponse:
     """Convert ProtocolBinding model to response schema."""
     operations = None
     if binding.operations:
@@ -228,9 +216,7 @@ async def create_contract(
 
     # Check for duplicate name
     existing = await db.execute(
-        select(Contract).where(
-            and_(Contract.tenant_id == tenant_id, Contract.name == request.name)
-        )
+        select(Contract).where(and_(Contract.tenant_id == tenant_id, Contract.name == request.name))
     )
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -317,9 +303,7 @@ async def list_contracts(
         bindings = await _get_or_create_default_bindings(db, contract)
         items.append(_contract_to_response(contract, bindings))
 
-    response = ContractListResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    response = ContractListResponse(items=items, total=total, page=page, page_size=page_size)
     await contract_cache.set(cache_key, response)
     return response
 
@@ -599,9 +583,7 @@ async def list_contract_versions(
 
     # For admin, we need a tenant context — use the first matching contract's tenant
     if not tenant_id:
-        result = await db.execute(
-            select(Contract).where(Contract.name == contract_name).limit(1)
-        )
+        result = await db.execute(select(Contract).where(Contract.name == contract_name).limit(1))
         first = result.scalar_one_or_none()
         if not first:
             raise HTTPException(status_code=404, detail=f"No contract found with name '{contract_name}'")
@@ -752,6 +734,7 @@ async def enable_binding(
             and_(
                 GatewayInstance.gateway_type.in_(_stoa_types),
                 GatewayInstance.status == GatewayInstanceStatus.ONLINE,
+                GatewayInstance.deleted_at.is_(None),
                 or_(
                     GatewayInstance.tenant_id == contract.tenant_id,
                     GatewayInstance.tenant_id.is_(None),
@@ -832,9 +815,7 @@ async def enable_binding(
     )
 
 
-@router.delete(
-    "/{contract_id}/bindings/{protocol}", response_model=DisableBindingResponse
-)
+@router.delete("/{contract_id}/bindings/{protocol}", response_model=DisableBindingResponse)
 async def disable_binding(
     contract_id: uuid.UUID,
     protocol: ProtocolType,
@@ -866,9 +847,7 @@ async def disable_binding(
     binding = binding_result.scalar_one_or_none()
 
     if not binding:
-        raise HTTPException(
-            status_code=404, detail=f"{protocol.value.upper()} binding not found"
-        )
+        raise HTTPException(status_code=404, detail=f"{protocol.value.upper()} binding not found")
 
     if not binding.enabled:
         raise HTTPException(

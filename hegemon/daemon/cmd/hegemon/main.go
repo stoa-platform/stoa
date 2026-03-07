@@ -44,14 +44,16 @@ func main() {
 }
 
 type daemon struct {
-	cfg       *config.Config
-	state     *state.Store
-	linear    *linear.Client
-	scheduler *scheduler.Scheduler
-	executor  *worker.Executor
-	reporter  *reporter.Reporter
-	metrics   *metrics.Pusher
-	wg        sync.WaitGroup
+	cfg              *config.Config
+	state            *state.Store
+	linear           *linear.Client
+	scheduler        *scheduler.Scheduler
+	executor         *worker.Executor
+	gatewayExecutor  *worker.GatewayExecutor
+	gatewayClient    *worker.GatewayClient
+	reporter         *reporter.Reporter
+	metrics          *metrics.Pusher
+	wg               sync.WaitGroup
 }
 
 func newDaemon(cfg *config.Config) (*daemon, error) {
@@ -76,7 +78,7 @@ func newDaemon(cfg *config.Config) (*daemon, error) {
 	exec := worker.New(cfg.Repo.Path, cfg.Repo.Branch)
 	metricsPusher := metrics.New(cfg.Metrics.PushgatewayURL, cfg.Metrics.BasicAuth)
 
-	return &daemon{
+	d := &daemon{
 		cfg:       cfg,
 		state:     store,
 		linear:    lc,
@@ -84,7 +86,17 @@ func newDaemon(cfg *config.Config) (*daemon, error) {
 		executor:  exec,
 		reporter:  rep,
 		metrics:   metricsPusher,
-	}, nil
+	}
+
+	// Initialize gateway executor and client if gateway URL is configured.
+	if cfg.Gateway.URL != "" {
+		gwExec := worker.NewGatewayExecutor(cfg.Gateway)
+		d.gatewayExecutor = gwExec
+		d.gatewayClient = worker.NewGatewayClient(cfg.Gateway.URL, gwExec.TokenCache())
+		log.Printf("Gateway integration enabled: %s (mode: %s)", cfg.Gateway.URL, cfg.Gateway.DispatchMode)
+	}
+
+	return d, nil
 }
 
 func (d *daemon) run(ctx context.Context) error {
@@ -153,13 +165,34 @@ func (d *daemon) pollAndDispatch(ctx context.Context) {
 		return
 	}
 
-	// Budget check: skip dispatching if daily cost exceeds limit.
+	// Budget check: prefer gateway, fallback to local SQLite.
 	if d.cfg.Budget.DailyLimitUSD > 0 {
-		dailyCost, err := d.state.GetDailyCost()
-		if err != nil {
-			log.Printf("WARN budget check: %v", err)
-		} else if dailyCost >= d.cfg.Budget.DailyLimitUSD {
-			log.Printf("BUDGET EXCEEDED: $%.2f / $%.2f — skipping dispatches", dailyCost, d.cfg.Budget.DailyLimitUSD)
+		budgetAllowed := true
+		if d.gatewayClient != nil {
+			budget, err := d.gatewayClient.CheckBudget(ctx, "fleet")
+			if err != nil {
+				log.Printf("WARN gateway budget check failed, falling back to local: %v", err)
+				dailyCost, localErr := d.state.GetDailyCost()
+				if localErr != nil {
+					log.Printf("WARN local budget check: %v", localErr)
+				} else if dailyCost >= d.cfg.Budget.DailyLimitUSD {
+					budgetAllowed = false
+					log.Printf("BUDGET EXCEEDED (local): $%.2f / $%.2f", dailyCost, d.cfg.Budget.DailyLimitUSD)
+				}
+			} else if !budget.Allowed {
+				budgetAllowed = false
+				log.Printf("BUDGET EXCEEDED (gateway): $%.2f / $%.2f — %s", budget.DailyCost, budget.DailyLimit, budget.Reason)
+			}
+		} else {
+			dailyCost, err := d.state.GetDailyCost()
+			if err != nil {
+				log.Printf("WARN budget check: %v", err)
+			} else if dailyCost >= d.cfg.Budget.DailyLimitUSD {
+				budgetAllowed = false
+				log.Printf("BUDGET EXCEEDED: $%.2f / $%.2f — skipping dispatches", dailyCost, d.cfg.Budget.DailyLimitUSD)
+			}
+		}
+		if !budgetAllowed {
 			return
 		}
 	}
@@ -236,6 +269,18 @@ func (d *daemon) dispatch(ctx context.Context, issue linear.Issue, w *config.Wor
 	d.reporter.NotifyDispatched(issue.Identifier, issue.Title, w.Name, estimate)
 	log.Printf("DISPATCH %s → %s (est: %d, timeout: %s)", issue.Identifier, w.Name, estimate, timeout)
 
+	// Reserve claim if issue has a parent (part of a MEGA).
+	if issue.ParentID != "" && d.gatewayClient != nil {
+		if err := d.gatewayClient.ReserveClaim(ctx, issue.ParentID, w.Name); err != nil {
+			if err == worker.ErrClaimConflict {
+				log.Printf("CLAIM CONFLICT %s (mega %s) — skipping, owned by another worker", issue.Identifier, issue.ParentID)
+				d.state.SetWorkerIdle(w.Name)
+				return
+			}
+			log.Printf("WARN claim reserve %s: %v (proceeding without claim)", issue.Identifier, err)
+		}
+	}
+
 	// Execute async — don't block the poll loop.
 	d.wg.Add(1)
 	go func() {
@@ -248,16 +293,64 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// Start claim heartbeat if issue has a parent MEGA.
+	if issue.ParentID != "" && d.gatewayClient != nil {
+		heartbeatCtx, cancelHB := context.WithCancel(ctx)
+		defer cancelHB()
+		go d.runClaimHeartbeat(heartbeatCtx, issue.ParentID, w.Name)
+	}
+
 	startTime := time.Now()
-	result, raw, err := d.executor.Execute(execCtx, w, issue.Identifier, issue.Title, issue.Description, issue.Estimate, timeout)
+
+	// Dispatch via configured mode: ssh (default), gateway, or hybrid.
+	var result *worker.Result
+	var raw string
+	var err error
+
+	switch d.cfg.Gateway.DispatchMode {
+	case "gateway":
+		if d.gatewayExecutor != nil {
+			result, raw, err = d.gatewayExecutor.Execute(execCtx, w, issue.Identifier, issue.Title, issue.Description, issue.Estimate, timeout)
+		} else {
+			result, raw, err = d.executor.Execute(execCtx, w, issue.Identifier, issue.Title, issue.Description, issue.Estimate, timeout)
+		}
+	case "hybrid":
+		if d.gatewayExecutor != nil {
+			result, raw, err = d.gatewayExecutor.Execute(execCtx, w, issue.Identifier, issue.Title, issue.Description, issue.Estimate, timeout)
+			if err != nil {
+				log.Printf("WARN gateway dispatch failed for %s, falling back to SSH: %v", issue.Identifier, err)
+				result, raw, err = d.executor.Execute(execCtx, w, issue.Identifier, issue.Title, issue.Description, issue.Estimate, timeout)
+			}
+		} else {
+			result, raw, err = d.executor.Execute(execCtx, w, issue.Identifier, issue.Title, issue.Description, issue.Estimate, timeout)
+		}
+	default: // "ssh"
+		result, raw, err = d.executor.Execute(execCtx, w, issue.Identifier, issue.Title, issue.Description, issue.Estimate, timeout)
+	}
+
 	duration := time.Since(startTime)
 
 	// Release worker.
 	d.state.SetWorkerIdle(w.Name)
 
+	// Release claim on completion (best-effort).
+	if issue.ParentID != "" && d.gatewayClient != nil {
+		if releaseErr := d.gatewayClient.ReleaseClaim(ctx, issue.ParentID, w.Name); releaseErr != nil {
+			log.Printf("WARN claim release %s: %v", issue.Identifier, releaseErr)
+		}
+	}
+
 	// Record execution cost (best-effort, even on failure).
 	if result != nil && result.CostUSD > 0 {
 		d.state.RecordCost(dispatchID, result.CostUSD)
+		// Record cost via gateway (fire-and-forget).
+		if d.gatewayClient != nil {
+			go func() {
+				if gwErr := d.gatewayClient.RecordCost(context.Background(), w.Name, result.CostUSD); gwErr != nil {
+					log.Printf("WARN gateway cost record: %v", gwErr)
+				}
+			}()
+		}
 		// Check budget thresholds after recording cost.
 		d.checkBudgetThresholds()
 	}
@@ -459,6 +552,21 @@ func (d *daemon) checkBudgetThresholds() {
 		d.reporter.NotifyBudgetWarning(dailyCost, d.cfg.Budget.DailyLimitUSD)
 		budgetWarned = true
 		log.Printf("BUDGET WARNING: $%.2f / $%.2f (%.0f%%)", dailyCost, d.cfg.Budget.DailyLimitUSD, pct)
+	}
+}
+
+func (d *daemon) runClaimHeartbeat(ctx context.Context, megaID, owner string) {
+	ticker := time.NewTicker(15 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := d.gatewayClient.Heartbeat(ctx, megaID, owner); err != nil {
+				log.Printf("WARN claim heartbeat %s: %v", megaID, err)
+			}
+		}
 	}
 }
 

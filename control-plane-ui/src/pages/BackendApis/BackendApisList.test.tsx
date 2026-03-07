@@ -145,17 +145,49 @@ describe('BackendApisList', () => {
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',
     (role) => {
-      it('renders the page', async () => {
+      beforeEach(() => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      });
+
+      it('renders the page', async () => {
         renderComponent();
         await waitFor(() => {
           expect(screen.getByText('Petstore API')).toBeInTheDocument();
         });
       });
 
+      if (role === 'cpi-admin' || role === 'tenant-admin') {
+        it('shows Register API button', async () => {
+          renderComponent();
+          expect(await screen.findByText('Register API')).toBeInTheDocument();
+        });
+
+        it('shows Delete button', async () => {
+          renderComponent();
+          await waitFor(() => {
+            expect(screen.getByText('Petstore API')).toBeInTheDocument();
+          });
+          expect(screen.getAllByText('Delete').length).toBeGreaterThanOrEqual(1);
+        });
+      }
+
+      if (role === 'devops') {
+        it('shows Register API button (has apis:create)', async () => {
+          renderComponent();
+          expect(await screen.findByText('Register API')).toBeInTheDocument();
+        });
+
+        it('hides Delete button (no apis:delete)', async () => {
+          renderComponent();
+          await waitFor(() => {
+            expect(screen.getByText('Petstore API')).toBeInTheDocument();
+          });
+          expect(screen.queryByText('Delete')).not.toBeInTheDocument();
+        });
+      }
+
       if (role === 'viewer') {
         it('hides Register API button', async () => {
-          vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
           renderComponent();
           await waitFor(() => {
             expect(screen.getByText('Petstore API')).toBeInTheDocument();
@@ -164,7 +196,6 @@ describe('BackendApisList', () => {
         });
 
         it('hides Delete button', async () => {
-          vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
           renderComponent();
           await waitFor(() => {
             expect(screen.getByText('Petstore API')).toBeInTheDocument();

@@ -1068,6 +1068,9 @@ export interface GatewayInstance {
   version?: string;
   tags: string[];
   mode?: GatewayMode;
+  protected?: boolean;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
   created_at: string;
   updated_at: string;
 }

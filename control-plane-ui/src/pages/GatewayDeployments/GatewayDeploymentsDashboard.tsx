@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { apiService } from '../../services/api';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { DeployAPIDialog } from './DeployAPIDialog';
@@ -26,6 +27,7 @@ const statusFilterOptions: { value: string; label: string }[] = [
 
 export function GatewayDeploymentsDashboard() {
   const { isReady } = useAuth();
+  const { activeEnvironment } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [deployments, setDeployments] = useState<GatewayDeployment[]>([]);
@@ -42,6 +44,7 @@ export function GatewayDeploymentsDashboard() {
     try {
       const params: Record<string, any> = { page: currentPage, page_size: PAGE_SIZE };
       if (statusFilter) params.sync_status = statusFilter;
+      if (activeEnvironment) params.environment = activeEnvironment;
 
       const [deploymentsResult, summaryResult] = await Promise.all([
         apiService.getGatewayDeployments(params),
@@ -57,7 +60,7 @@ export function GatewayDeploymentsDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, statusFilter]);
+  }, [currentPage, statusFilter, activeEnvironment]);
 
   useEffect(() => {
     if (isReady) loadData();

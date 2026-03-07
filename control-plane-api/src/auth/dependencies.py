@@ -176,19 +176,26 @@ async def get_current_user(
             else raw_tenant_id
         )
 
-        # Get user ID from 'sub' claim, with fallback to email or username
-        # Some Keycloak configurations may not include 'sub' in certain token types
+        # Get user ID from 'sub' claim (Keycloak UUID)
+        # The 'sub' claim is mandatory in OIDC access tokens — if missing, the
+        # Keycloak client scope or token type is misconfigured (CAB-1669).
         user_id = payload.get("sub")
         if not user_id:
-            # Fallback: use email or preferred_username as user identifier
+            # Fallback: use email or preferred_username as user identifier.
+            # This is a degraded state — owner_id will be set to email instead
+            # of UUID, which breaks if the user changes their email.
             user_id = email or username
             if user_id:
                 logger.warning(
-                    "JWT token missing 'sub' claim, using fallback identifier",
+                    "JWT token missing 'sub' claim — using fallback identifier. "
+                    "This causes owner_id to use email instead of UUID. "
+                    "Fix: verify Keycloak client scopes include the 'sub' claim "
+                    "(built-in 'Subject (sub)' mapper in openid-connect scope).",
                     fallback_id=user_id,
                     payload_keys=list(payload.keys()),
                     typ=payload.get("typ"),
                     azp=payload.get("azp"),
+                    iss=payload.get("iss"),
                 )
 
         # Log authentication result

@@ -9277,6 +9277,31 @@
             "title": "Created At",
             "type": "string"
           },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Soft-delete timestamp (null = active)",
+            "title": "Deleted At"
+          },
+          "deleted_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "User ID who deleted this gateway",
+            "title": "Deleted By"
+          },
           "display_name": {
             "title": "Display Name",
             "type": "string"
@@ -9333,6 +9358,12 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "protected": {
+            "default": false,
+            "description": "Whether this gateway is protected from deletion",
+            "title": "Protected",
+            "type": "boolean"
           },
           "status": {
             "title": "Status",
@@ -9458,6 +9489,18 @@
               }
             ],
             "title": "Environment"
+          },
+          "protected": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Toggle deletion protection",
+            "title": "Protected"
           },
           "tags": {
             "anyOf": [
@@ -27060,6 +27103,18 @@
             }
           },
           {
+            "description": "Include soft-deleted gateways (cpi-admin only)",
+            "in": "query",
+            "name": "include_deleted",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include soft-deleted gateways (cpi-admin only)",
+              "title": "Include Deleted",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -27265,7 +27320,7 @@
     },
     "/v1/admin/gateways/{gateway_id}": {
       "delete": {
-        "description": "Deregister a gateway instance.",
+        "description": "Soft-delete a gateway instance. Protected gateways cannot be deleted.",
         "operationId": "delete_gateway",
         "parameters": [
           {
@@ -27651,6 +27706,55 @@
         "summary": "Get Gateway Metrics",
         "tags": [
           "Gateway Observability"
+        ]
+      }
+    },
+    "/v1/admin/gateways/{gateway_id}/restore": {
+      "post": {
+        "description": "Restore a soft-deleted gateway instance.",
+        "operationId": "restore_gateway",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayInstanceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Gateway",
+        "tags": [
+          "Gateways"
         ]
       }
     },

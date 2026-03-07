@@ -117,6 +117,36 @@ describe('Workflows', () => {
       });
     }
   );
+
+  // 4-persona RBAC: Create Template button visibility
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona — RBAC visibility',
+    (role) => {
+      beforeEach(() => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        mockListTemplates.mockResolvedValue({
+          items: [mockWorkflowTemplate()],
+          total: 1,
+          page: 1,
+          page_size: 20,
+        });
+        mockListInstances.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
+      });
+
+      it(`${['cpi-admin', 'tenant-admin'].includes(role) ? 'shows' : 'hides'} Delete template action (workflows:manage)`, async () => {
+        renderComponent();
+        await waitFor(() => {
+          expect(screen.getByText('Default User Onboarding')).toBeInTheDocument();
+        });
+        // canManage = hasPermission('workflows:manage') — only cpi-admin and tenant-admin
+        if (['cpi-admin', 'tenant-admin'].includes(role)) {
+          expect(screen.getByTitle('Delete template')).toBeInTheDocument();
+        } else {
+          expect(screen.queryByTitle('Delete template')).not.toBeInTheDocument();
+        }
+      });
+    }
+  );
 });
 
 describe('TemplatesTab', () => {

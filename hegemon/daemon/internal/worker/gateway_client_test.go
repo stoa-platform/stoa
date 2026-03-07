@@ -23,19 +23,26 @@ func newTestGatewayClient(handler http.Handler) (*GatewayClient, *httptest.Serve
 
 func TestCheckBudgetAllowed(t *testing.T) {
 	gc, server := newTestGatewayClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/hegemon/budget/fleet" {
-			t.Errorf("path = %q, want /hegemon/budget/fleet", r.URL.Path)
+		if r.URL.Path != "/hegemon/budget/check" {
+			t.Errorf("path = %q, want /hegemon/budget/check", r.URL.Path)
 		}
-		if r.Method != http.MethodGet {
-			t.Errorf("method = %s, want GET", r.Method)
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
 		}
 		if auth := r.Header.Get("Authorization"); auth != "Bearer test-token" {
 			t.Errorf("auth = %q, want Bearer test-token", auth)
 		}
+		var req budgetCheckRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.WorkerName != "fleet" {
+			t.Errorf("worker_name = %q, want fleet", req.WorkerName)
+		}
 		json.NewEncoder(w).Encode(BudgetStatus{
-			Allowed:    true,
-			DailyCost:  15.50,
-			DailyLimit: 50.00,
+			Allowed:       true,
+			DailySpentUSD: 15.50,
+			DailyLimitUSD: 50.00,
+			RemainingUSD:  34.50,
+			Warning:       false,
 		})
 	}))
 	defer server.Close()
@@ -47,18 +54,22 @@ func TestCheckBudgetAllowed(t *testing.T) {
 	if !status.Allowed {
 		t.Error("budget should be allowed")
 	}
-	if status.DailyCost != 15.50 {
-		t.Errorf("daily_cost = %f, want 15.50", status.DailyCost)
+	if status.DailySpentUSD != 15.50 {
+		t.Errorf("daily_spent_usd = %f, want 15.50", status.DailySpentUSD)
+	}
+	if status.DailyLimitUSD != 50.00 {
+		t.Errorf("daily_limit_usd = %f, want 50.00", status.DailyLimitUSD)
 	}
 }
 
 func TestCheckBudgetDenied(t *testing.T) {
 	gc, server := newTestGatewayClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(BudgetStatus{
-			Allowed:    false,
-			DailyCost:  52.00,
-			DailyLimit: 50.00,
-			Reason:     "daily limit exceeded",
+			Allowed:       false,
+			DailySpentUSD: 52.00,
+			DailyLimitUSD: 50.00,
+			RemainingUSD:  0.00,
+			Warning:       true,
 		})
 	}))
 	defer server.Close()
@@ -70,8 +81,8 @@ func TestCheckBudgetDenied(t *testing.T) {
 	if status.Allowed {
 		t.Error("budget should be denied")
 	}
-	if status.Reason != "daily limit exceeded" {
-		t.Errorf("reason = %q", status.Reason)
+	if !status.Warning {
+		t.Error("warning should be true when over budget")
 	}
 }
 
@@ -90,22 +101,34 @@ func TestCheckBudgetServerError(t *testing.T) {
 
 func TestRecordCostSuccess(t *testing.T) {
 	gc, server := newTestGatewayClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/hegemon/budget/worker-1/cost" {
-			t.Errorf("path = %q, want /hegemon/budget/worker-1/cost", r.URL.Path)
+		if r.URL.Path != "/hegemon/budget/record" {
+			t.Errorf("path = %q, want /hegemon/budget/record", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %s, want POST", r.Method)
 		}
-		var cr costRecord
+		var cr budgetRecordRequest
 		json.NewDecoder(r.Body).Decode(&cr)
-		if cr.CostUSD != 2.50 {
-			t.Errorf("cost_usd = %f, want 2.50", cr.CostUSD)
+		if cr.WorkerName != "worker-1" {
+			t.Errorf("worker_name = %q, want worker-1", cr.WorkerName)
 		}
-		w.WriteHeader(http.StatusNoContent)
+		if cr.AmountUSD != 2.50 {
+			t.Errorf("amount_usd = %f, want 2.50", cr.AmountUSD)
+		}
+		if cr.DispatchID != "heg-001" {
+			t.Errorf("dispatch_id = %q, want heg-001", cr.DispatchID)
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"recorded":        true,
+			"daily_spent_usd": 2.50,
+			"remaining_usd":   47.50,
+			"warning":         false,
+		})
 	}))
 	defer server.Close()
 
-	err := gc.RecordCost(context.Background(), "worker-1", 2.50)
+	err := gc.RecordCost(context.Background(), "worker-1", 2.50, "heg-001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +141,7 @@ func TestRecordCostServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := gc.RecordCost(context.Background(), "worker-1", 1.00)
+	err := gc.RecordCost(context.Background(), "worker-1", 1.00, "heg-002")
 	if err == nil {
 		t.Error("expected error on 503")
 	}

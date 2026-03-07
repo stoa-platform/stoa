@@ -181,7 +181,7 @@ func (d *daemon) pollAndDispatch(ctx context.Context) {
 				}
 			} else if !budget.Allowed {
 				budgetAllowed = false
-				log.Printf("BUDGET EXCEEDED (gateway): $%.2f / $%.2f — %s", budget.DailyCost, budget.DailyLimit, budget.Reason)
+				log.Printf("BUDGET EXCEEDED (gateway): $%.2f / $%.2f", budget.DailySpentUSD, budget.DailyLimitUSD)
 			}
 		} else {
 			dailyCost, err := d.state.GetDailyCost()
@@ -345,8 +345,9 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 		d.state.RecordCost(dispatchID, result.CostUSD)
 		// Record cost via gateway (fire-and-forget).
 		if d.gatewayClient != nil {
+			costDispatchID := fmt.Sprintf("%d", dispatchID)
 			go func() {
-				if gwErr := d.gatewayClient.RecordCost(context.Background(), w.Name, result.CostUSD); gwErr != nil {
+				if gwErr := d.gatewayClient.RecordCost(context.Background(), w.Name, result.CostUSD, costDispatchID); gwErr != nil {
 					log.Printf("WARN gateway cost record: %v", gwErr)
 				}
 			}()
@@ -533,8 +534,9 @@ func (d *daemon) pushMetrics() {
 	}
 }
 
-// budgetWarned tracks whether the warning has been sent this day to avoid spam.
-var budgetWarned bool
+// budgetWarnDate tracks the date (YYYY-MM-DD) when the warning was last sent,
+// allowing it to reset at midnight UTC so warnings fire once per day.
+var budgetWarnDate string
 
 func (d *daemon) checkBudgetThresholds() {
 	if d.cfg.Budget.DailyLimitUSD <= 0 {
@@ -544,13 +546,14 @@ func (d *daemon) checkBudgetThresholds() {
 	if err != nil {
 		return
 	}
+	today := time.Now().UTC().Format("2006-01-02")
 	pct := (dailyCost / d.cfg.Budget.DailyLimitUSD) * 100
 	if dailyCost >= d.cfg.Budget.DailyLimitUSD {
 		d.reporter.NotifyBudgetExceeded(dailyCost, d.cfg.Budget.DailyLimitUSD)
 		log.Printf("BUDGET EXCEEDED: $%.2f / $%.2f", dailyCost, d.cfg.Budget.DailyLimitUSD)
-	} else if pct >= d.cfg.Budget.WarnPercent && !budgetWarned {
+	} else if pct >= d.cfg.Budget.WarnPercent && budgetWarnDate != today {
 		d.reporter.NotifyBudgetWarning(dailyCost, d.cfg.Budget.DailyLimitUSD)
-		budgetWarned = true
+		budgetWarnDate = today
 		log.Printf("BUDGET WARNING: $%.2f / $%.2f (%.0f%%)", dailyCost, d.cfg.Budget.DailyLimitUSD, pct)
 	}
 }

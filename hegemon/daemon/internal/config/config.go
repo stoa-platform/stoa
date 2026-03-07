@@ -22,6 +22,13 @@ type Config struct {
 	Log           LogConfig               `yaml:"log"`
 	Repo          RepoConfig              `yaml:"repo"`
 	Gateway       GatewayConfig           `yaml:"gateway"`
+	Trace         TraceConfig             `yaml:"trace"`
+}
+
+// TraceConfig configures trace reporting to the STOA Control Plane API.
+type TraceConfig struct {
+	APIURL    string `yaml:"api_url"`    // Control Plane API base URL (e.g. "https://api.gostoa.dev")
+	IngestKey string `yaml:"ingest_key"` // X-STOA-API-KEY for POST /v1/traces/ingest
 }
 
 // GatewayConfig configures the STOA Gateway integration for dispatch, budget, and claims.

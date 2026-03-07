@@ -52,6 +52,7 @@ type daemon struct {
 	gatewayExecutor  *worker.GatewayExecutor
 	gatewayClient    *worker.GatewayClient
 	reporter         *reporter.Reporter
+	traceReporter    *reporter.TraceReporter
 	metrics          *metrics.Pusher
 	wg               sync.WaitGroup
 }
@@ -94,6 +95,12 @@ func newDaemon(cfg *config.Config) (*daemon, error) {
 		d.gatewayExecutor = gwExec
 		d.gatewayClient = worker.NewGatewayClient(cfg.Gateway.URL, gwExec.TokenCache())
 		log.Printf("Gateway integration enabled: %s (mode: %s)", cfg.Gateway.URL, cfg.Gateway.DispatchMode)
+	}
+
+	// Initialize trace reporter if configured (pushes session summaries to CP API).
+	if tr := reporter.NewTraceReporter(cfg.Trace.APIURL, cfg.Trace.IngestKey); tr != nil {
+		d.traceReporter = tr
+		log.Printf("Trace reporting enabled: %s", cfg.Trace.APIURL)
 	}
 
 	return d, nil
@@ -401,6 +408,11 @@ func (d *daemon) executeAndReport(ctx context.Context, issue linear.Issue, w *co
 	}
 
 	d.state.CompleteDispatch(dispatchID, status, raw, result.PRNumber, "")
+
+	// Push session trace to STOA Control Plane API (fire-and-forget).
+	if d.traceReporter != nil {
+		d.traceReporter.ReportTrace(w.Name, issue.Identifier, result, duration)
+	}
 
 	if status == "completed" {
 		d.state.ResetRetryCount(issue.Identifier)

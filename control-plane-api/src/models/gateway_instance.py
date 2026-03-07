@@ -7,7 +7,7 @@ that the Control Plane can pilot via the Adapter Pattern (ADR-035).
 import enum
 import uuid
 
-from sqlalchemy import Column, DateTime, Enum as SQLEnum, Index, String
+from sqlalchemy import Boolean, Column, DateTime, Enum as SQLEnum, Index, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
 
@@ -98,6 +98,11 @@ class GatewayInstance(Base):
     # Metadata
     version = Column(String(50), nullable=True)  # Gateway software version
     tags = Column(JSONB, nullable=False, default=list)
+
+    # Deletion protection + soft-delete (CAB-1749)
+    protected = Column(Boolean, nullable=False, default=False, server_default="false")
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by = Column(String(255), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -1,4 +1,5 @@
 """Pydantic schemas for gateway instance and deployment endpoints."""
+
 from datetime import datetime
 from uuid import UUID
 
@@ -11,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class GatewayInstanceCreate(BaseModel):
     """Schema for creating a new gateway instance."""
+
     name: str = Field(..., max_length=255, description="Unique identifier (e.g. 'webmethods-prod')")
     display_name: str = Field(..., max_length=255)
     gateway_type: str = Field(..., description="webmethods, kong, apigee, aws_apigateway, stoa")
@@ -24,16 +26,19 @@ class GatewayInstanceCreate(BaseModel):
 
 class GatewayInstanceUpdate(BaseModel):
     """Schema for updating a gateway instance."""
+
     display_name: str | None = Field(None, max_length=255)
     base_url: str | None = Field(None, max_length=500)
     auth_config: dict | None = None
     capabilities: list[str] | None = None
     tags: list[str] | None = None
     environment: str | None = Field(None, max_length=50)
+    protected: bool | None = Field(None, description="Toggle deletion protection")
 
 
 class GatewayInstanceResponse(BaseModel):
     """Schema for gateway instance in API responses."""
+
     id: UUID
     name: str
     display_name: str
@@ -49,6 +54,9 @@ class GatewayInstanceResponse(BaseModel):
     version: str | None
     tags: list[str]
     mode: str | None = Field(None, description="STOA Gateway mode: edge-mcp, sidecar, proxy, shadow")
+    protected: bool = Field(False, description="Whether this gateway is protected from deletion")
+    deleted_at: datetime | None = Field(None, description="Soft-delete timestamp (null = active)")
+    deleted_by: str | None = Field(None, description="User ID who deleted this gateway")
     created_at: datetime
     updated_at: datetime
 
@@ -67,6 +75,7 @@ class GatewayInstanceResponse(BaseModel):
 
 class GatewayHealthCheckResponse(BaseModel):
     """Schema for health check result."""
+
     status: str
     details: dict | None = None
     gateway_name: str
@@ -80,6 +89,7 @@ class GatewayHealthCheckResponse(BaseModel):
 
 class ModeStatItem(BaseModel):
     """Statistics for a single gateway mode."""
+
     mode: str
     total: int
     online: int
@@ -89,6 +99,7 @@ class ModeStatItem(BaseModel):
 
 class GatewayModeStats(BaseModel):
     """Gateway statistics grouped by mode."""
+
     modes: list[ModeStatItem]
     total_gateways: int
 
@@ -100,12 +111,14 @@ class GatewayModeStats(BaseModel):
 
 class GatewayDeploymentCreate(BaseModel):
     """Schema for deploying an API to gateway(s)."""
+
     api_catalog_id: UUID
     gateway_instance_ids: list[UUID] = Field(..., min_length=1)
 
 
 class GatewayDeploymentResponse(BaseModel):
     """Schema for deployment in API responses."""
+
     id: UUID
     api_catalog_id: UUID
     gateway_instance_id: UUID
@@ -127,6 +140,7 @@ class GatewayDeploymentResponse(BaseModel):
 
 class DeploymentStatusSummary(BaseModel):
     """Sync status counts for the dashboard."""
+
     pending: int = 0
     syncing: int = 0
     synced: int = 0
@@ -143,6 +157,7 @@ class DeploymentStatusSummary(BaseModel):
 
 class PaginatedGatewayInstances(BaseModel):
     """Paginated list of gateway instances."""
+
     items: list[GatewayInstanceResponse]
     total: int
     page: int
@@ -151,6 +166,7 @@ class PaginatedGatewayInstances(BaseModel):
 
 class PaginatedGatewayDeployments(BaseModel):
     """Paginated list of gateway deployments."""
+
     items: list[GatewayDeploymentResponse]
     total: int
     page: int

@@ -92,7 +92,10 @@ class GatewayMetricsService:
             gateway_id: Gateway instance ID.
             tenant_id: When provided, verifies gateway belongs to this tenant.
         """
-        query = select(GatewayInstance).where(GatewayInstance.id == gateway_id)
+        query = select(GatewayInstance).where(
+            GatewayInstance.id == gateway_id,
+            GatewayInstance.deleted_at.is_(None),
+        )
         if tenant_id:
             query = query.where(GatewayInstance.tenant_id == tenant_id)
         result = await self.db.execute(query)
@@ -229,7 +232,10 @@ class GatewayMetricsService:
             gateway_id: Gateway instance ID.
             tenant_id: When provided, verifies gateway belongs to this tenant.
         """
-        query = select(GatewayInstance).where(GatewayInstance.id == gateway_id)
+        query = select(GatewayInstance).where(
+            GatewayInstance.id == gateway_id,
+            GatewayInstance.deleted_at.is_(None),
+        )
         if tenant_id:
             query = query.where(GatewayInstance.tenant_id == tenant_id)
         result = await self.db.execute(query)

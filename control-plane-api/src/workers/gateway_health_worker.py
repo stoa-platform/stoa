@@ -85,6 +85,7 @@ class GatewayHealthWorker:
             GatewayInstance.gateway_type.in_(list(_HEARTBEAT_TYPES)),
             GatewayInstance.status == GatewayInstanceStatus.ONLINE,
             GatewayInstance.last_health_check < cutoff_time,
+            GatewayInstance.deleted_at.is_(None),
         )
         result = await session.execute(stmt)
         stale_gateways = result.scalars().all()
@@ -123,6 +124,7 @@ class GatewayHealthWorker:
         stmt = select(GatewayInstance).where(
             not_(GatewayInstance.gateway_type.in_(list(_HEARTBEAT_TYPES))),
             GatewayInstance.status != GatewayInstanceStatus.MAINTENANCE,
+            GatewayInstance.deleted_at.is_(None),
         )
         result = await session.execute(stmt)
         external_gateways = result.scalars().all()

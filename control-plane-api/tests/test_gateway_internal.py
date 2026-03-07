@@ -2,11 +2,11 @@
 
 Covers the full lifecycle: register → heartbeat → config → auth rejection.
 """
+
 import pytest
 from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
-
 
 VALID_KEY = "test_key_123"
 REGISTER_URL = "/v1/internal/gateways/register"
@@ -48,6 +48,9 @@ def _make_gateway_instance(**overrides):
         "version": "0.1.0",
         "tags": ["mode:edge-mcp", "auto-registered"],
         "mode": "edge-mcp",
+        "protected": False,
+        "deleted_at": None,
+        "deleted_by": None,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
     }
@@ -65,8 +68,10 @@ class TestGatewayRegistration:
         """New gateway registers successfully and returns 201."""
         gw = _make_gateway_instance()
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -91,8 +96,10 @@ class TestGatewayRegistration:
         existing = _make_gateway_instance()
         updated = _make_gateway_instance(version="0.2.0")
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -147,8 +154,10 @@ class TestGatewayRegistration:
         """Various mode strings are normalized correctly."""
         gw = _make_gateway_instance()
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -174,8 +183,10 @@ class TestGatewayRegistration:
             mode="sidecar",
         )
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -199,8 +210,10 @@ class TestGatewayHeartbeat:
         """Heartbeat updates health metrics and returns 204."""
         gw = _make_gateway_instance()
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -230,8 +243,10 @@ class TestGatewayHeartbeat:
         """Heartbeat for non-existent gateway returns 404."""
         fake_id = uuid4()
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -272,8 +287,10 @@ class TestGatewayHeartbeat:
             },
         )
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -299,10 +316,12 @@ class TestGatewayConfig:
         """Config endpoint returns gateway info with empty deployments/policies."""
         gw = _make_gateway_instance()
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo, \
-             patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo, \
-             patch("src.routers.gateway_internal.GatewayPolicyRepository") as MockPolicyRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.GatewayPolicyRepository") as MockPolicyRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -334,10 +353,12 @@ class TestGatewayConfig:
         deploy.desired_state = {"routes": ["/api/v1"]}
         deploy.sync_attempts = 0
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo, \
-             patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo, \
-             patch("src.routers.gateway_internal.GatewayPolicyRepository") as MockPolicyRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.GatewayPolicyRepository") as MockPolicyRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -368,10 +389,12 @@ class TestGatewayConfig:
         policy.priority = 10
         policy.enabled = True
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo, \
-             patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo, \
-             patch("src.routers.gateway_internal.GatewayPolicyRepository") as MockPolicyRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.GatewayPolicyRepository") as MockPolicyRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
 
@@ -396,8 +419,10 @@ class TestGatewayConfig:
         """Config for non-existent gateway returns 404."""
         fake_id = uuid4()
 
-        with patch("src.routers.gateway_internal.settings") as mock_settings, \
-             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             MockRepo.return_value.get_by_id = AsyncMock(return_value=None)

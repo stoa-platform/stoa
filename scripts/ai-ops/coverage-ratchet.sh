@@ -111,6 +111,51 @@ ratchet_typescript() {
   fi
 }
 
+# --- Rust (stoa-gateway) ---
+ratchet_rust() {
+  local component="stoa-gateway"
+  local ci_file="${REPO_ROOT}/.github/workflows/reusable-rust-ci.yml"
+
+  if [[ ! -f "$ci_file" ]]; then
+    echo "SKIP: ${ci_file} not found"
+    return
+  fi
+
+  # Extract current threshold from CI workflow
+  local current_threshold
+  current_threshold=$(grep -oP 'THRESHOLD=\K[0-9]+' "$ci_file" 2>/dev/null | head -1) || true
+  if [[ -z "$current_threshold" ]]; then
+    echo "SKIP: no THRESHOLD found in ${ci_file}"
+    return
+  fi
+
+  # If called with COV_PCT env var (from CI), use that instead of running locally
+  local actual_coverage
+  if [[ -n "${COV_PCT:-}" ]]; then
+    actual_coverage=$(echo "$COV_PCT" | cut -d. -f1)
+  else
+    echo "SKIP: ${component} requires COV_PCT env var (set by CI)"
+    return
+  fi
+
+  local diff=$((actual_coverage - current_threshold))
+  echo "${component}: threshold=${current_threshold}% actual=${actual_coverage}% diff=+${diff}%"
+
+  if [[ "$diff" -ge "$RATCHET_THRESHOLD" ]]; then
+    local new_threshold=$((actual_coverage))
+    echo "  RATCHET: ${current_threshold}% → ${new_threshold}%"
+    if [[ "$DRY_RUN" == "false" ]]; then
+      sed -i.bak "s/THRESHOLD=${current_threshold}/THRESHOLD=${new_threshold}/g" "$ci_file"
+      rm -f "${ci_file}.bak"
+      echo "  UPDATED: ${ci_file}"
+    else
+      echo "  DRY-RUN: would update ${ci_file}"
+    fi
+  else
+    echo "  OK: improvement < ${RATCHET_THRESHOLD}%, no ratchet needed"
+  fi
+}
+
 # --- Main ---
 echo "=== Coverage Ratchet $(date -u +%Y-%m-%d) ==="
 echo "Mode: $( [[ "$DRY_RUN" == "true" ]] && echo 'DRY-RUN' || echo 'LIVE' )"
@@ -121,6 +166,8 @@ echo ""
 ratchet_typescript "control-plane-ui"
 echo ""
 ratchet_typescript "portal"
+echo ""
+ratchet_rust
 
 echo ""
 echo "Done."

@@ -161,6 +161,33 @@ main() {
     fi
   fi
 
+  # PR-MERGED tracking: scan recent git log for merged PRs not yet logged
+  if command -v gh &>/dev/null && command -v git &>/dev/null; then
+    local project_dir="${PROJECT_DIR:-$(pwd)}"
+    if [ -d "$project_dir/.git" ]; then
+      # Get PRs merged today by checking main branch merge commits
+      local merged_prs
+      merged_prs=$(cd "$project_dir" && git log origin/main --since="$TODAY" --oneline --grep="(#" 2>/dev/null \
+        | grep -oP '\(#\K\d+' | sort -u) || merged_prs=""
+
+      if [ -n "$merged_prs" ]; then
+        while read -r pr_num; do
+          [ -z "$pr_num" ] && continue
+          # Skip if already logged today
+          if grep -q "PR-MERGED.*pr=${pr_num}" "$METRICS_LOG" 2>/dev/null; then
+            continue
+          fi
+          # Extract ticket from PR title via gh
+          local pr_title
+          pr_title=$(cd "$project_dir" && gh pr view "$pr_num" --json title --jq '.title' 2>/dev/null) || pr_title=""
+          local ticket
+          ticket=$(echo "$pr_title" | grep -oP 'CAB-\d+' | head -1) || ticket=""
+          echo "${NOW} | PR-MERGED | pr=${pr_num} task=${ticket:-unknown} date=${TODAY}" >> "$METRICS_LOG"
+        done <<< "$merged_prs"
+      fi
+    fi
+  fi
+
   # Push to Pushgateway (if ai-factory-notify.sh is available and PUSHGATEWAY_URL set)
   local notify_script="${PROJECT_DIR}/scripts/ai-ops/ai-factory-notify.sh"
   if [[ -f "$notify_script" && -n "${PUSHGATEWAY_URL:-}" ]]; then

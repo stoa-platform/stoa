@@ -154,6 +154,12 @@ class Settings(BaseSettings):
     # Chat Token Budget (CAB-288) — 0 = unlimited
     CHAT_TOKEN_BUDGET_DAILY: int = 0
 
+    # Chat Rate Limiting + Kill Switch (CAB-1655)
+    CHAT_KILL_SWITCH: bool = False  # Global kill switch — disables all chat endpoints
+    CHAT_RATE_LIMIT_USER_MESSAGES: int = 20  # Max messages per user per minute
+    CHAT_RATE_LIMIT_USER_TOOL_CALLS: int = 5  # Max tool calls per user per minute
+    CHAT_RATE_LIMIT_TENANT_MESSAGES: int = 100  # Max messages per tenant per minute
+
     # Multi-environment registry (CAB-1659)
     # JSON array of environment configs. If empty, defaults are generated from BASE_DOMAIN.
     STOA_ENVIRONMENTS: str = ""

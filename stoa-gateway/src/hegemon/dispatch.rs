@@ -482,6 +482,40 @@ pub async fn dispatch_result(
 }
 
 // =============================================================================
+// Non-Admin Handlers (authenticated, used by daemon poll loop)
+// =============================================================================
+
+/// `GET /hegemon/dispatch/:id` — get dispatch status (for daemon polling).
+///
+/// Unlike the admin endpoint, this is accessible to authenticated HEGEMON agents.
+pub async fn get_dispatch_status(
+    State(state): State<crate::state::AppState>,
+    Path(dispatch_id): Path<String>,
+) -> impl IntoResponse {
+    match &state.hegemon {
+        Some(heg) => match heg.dispatch_tracker.get(&dispatch_id) {
+            Some(dispatch) => Json(dispatch).into_response(),
+            None => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "dispatch_not_found".to_string(),
+                    message: format!("Dispatch '{}' not found", dispatch_id),
+                }),
+            )
+                .into_response(),
+        },
+        None => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "hegemon_disabled".to_string(),
+                message: "HEGEMON module is disabled (STOA_HEGEMON_ENABLED=false)".to_string(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+// =============================================================================
 // Admin Handlers
 // =============================================================================
 

@@ -322,6 +322,10 @@ pub fn build_router(state: AppState) -> Router {
                 // CAB-1713/1714: HEGEMON dispatch endpoints
                 .route("/hegemon/dispatch", post(hegemon::dispatch::dispatch_job))
                 .route(
+                    "/hegemon/dispatch/:id",
+                    get(hegemon::dispatch::get_dispatch_status),
+                )
+                .route(
                     "/hegemon/dispatch/:id/result",
                     post(hegemon::dispatch::dispatch_result),
                 )

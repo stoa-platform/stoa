@@ -60,6 +60,8 @@ spec:
               value: "1000"
             - name: STOA_GATEWAY_EXTERNAL_URL
               value: "https://mcp.gostoa.dev"
+            - name: STOA_HEGEMON_ENABLED
+              value: "true"
             - name: STOA_KAFKA_ENABLED
               value: "true"
             - name: STOA_KAFKA_BROKERS

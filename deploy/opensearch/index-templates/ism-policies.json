@@ -237,7 +237,7 @@
         }
       ],
       "ism_template": {
-        "index_patterns": ["stoa-gw-*"],
+        "index_patterns": ["stoa-*-free-*"],
         "priority": 50
       }
     },
@@ -299,7 +299,7 @@
         }
       ],
       "ism_template": {
-        "index_patterns": [],
+        "index_patterns": ["stoa-*-pro-*"],
         "priority": 150
       }
     },
@@ -377,7 +377,7 @@
         }
       ],
       "ism_template": {
-        "index_patterns": [],
+        "index_patterns": ["stoa-*-enterprise-*"],
         "priority": 150
       }
     }

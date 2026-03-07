@@ -21,6 +21,16 @@ type Config struct {
 	State         StateConfig             `yaml:"state"`
 	Log           LogConfig               `yaml:"log"`
 	Repo          RepoConfig              `yaml:"repo"`
+	Gateway       GatewayConfig           `yaml:"gateway"`
+}
+
+// GatewayConfig configures the STOA Gateway integration for dispatch, budget, and claims.
+type GatewayConfig struct {
+	URL          string `yaml:"url"`           // Gateway base URL (e.g. "https://mcp.gostoa.dev")
+	ClientID     string `yaml:"client_id"`     // Keycloak client ID (e.g. "hegemon-worker-backend")
+	ClientSecret string `yaml:"client_secret"` // Keycloak client secret (from Infisical or env)
+	KeycloakURL  string `yaml:"keycloak_url"`  // Token endpoint base (e.g. "https://auth.gostoa.dev")
+	DispatchMode string `yaml:"dispatch_mode"` // "ssh" (default) | "gateway" | "hybrid"
 }
 
 type BudgetConfig struct {
@@ -167,6 +177,9 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Repo.Branch == "" {
 		cfg.Repo.Branch = "main"
+	}
+	if cfg.Gateway.DispatchMode == "" {
+		cfg.Gateway.DispatchMode = "ssh"
 	}
 	for i := range cfg.Workers {
 		if cfg.Workers[i].Port == 0 {

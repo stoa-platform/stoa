@@ -69,6 +69,15 @@ health_check:
 state:
   db_path: "./hegemon.db"
 
+# Gateway integration: HTTP dispatch, centralized budget, and claims.
+# Requires CAB-1712 Keycloak service accounts to be set up first.
+gateway:
+  url: ""                                    # Gateway URL (e.g. "https://mcp.gostoa.dev"). Empty = disabled.
+  client_id: "${HEGEMON_KC_CLIENT_ID}"       # Keycloak client ID (e.g. "hegemon-worker-backend")
+  client_secret: "${HEGEMON_KC_CLIENT_SECRET}" # Keycloak client secret (from Infisical)
+  keycloak_url: "https://auth.gostoa.dev"    # Keycloak token endpoint base
+  dispatch_mode: "ssh"                       # "ssh" (default) | "gateway" | "hybrid"
+
 repo:
   path: "~/stoa"
   branch: "main"

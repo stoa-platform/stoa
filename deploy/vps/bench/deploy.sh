@@ -21,12 +21,14 @@ declare -A VPS_IPS=(
   ["stoa-vps"]="51.83.45.13"
   ["kong-vps"]="51.83.45.13"
   ["gravitee-vps"]="54.36.209.237"
+  ["bench-vps"]="94.23.107.106"
 )
 
 declare -A VPS_GATEWAYS=(
   ["stoa-vps"]='[{"name":"stoa-vps","health":"http://localhost:8080/health","proxy":"http://localhost:8080/echo/get"}]'
   ["kong-vps"]='[{"name":"kong-vps","health":"http://localhost:8001/status","proxy":"http://localhost:8000/echo/get"}]'
   ["gravitee-vps"]='[{"name":"gravitee-vps","health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://localhost:8082/echo/get"}]'
+  ["bench-vps"]='[{"name":"stoa-vps","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/echo/get"},{"name":"kong-vps","health":"http://51.83.45.13:8001/status","proxy":"http://51.83.45.13:8000/echo/get"},{"name":"gravitee-vps","health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://54.36.209.237:8082/echo/get"}]'
 )
 
 # Enterprise GATEWAYS JSON (L1 — with mcp_base, admin_base, features)
@@ -34,18 +36,21 @@ declare -A VPS_GATEWAYS_ENTERPRISE=(
   ["stoa-vps"]='[{"name":"stoa-vps","target":"http://localhost:8080","mcp_base":"http://localhost:8080/mcp","mcp_protocol":"stoa","admin_base":"http://localhost:8080","health":"http://localhost:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]}]'
   ["kong-vps"]='[{"name":"kong-vps","target":"http://localhost:8000","mcp_base":null,"admin_base":null,"health":"http://localhost:8001/status","features":[]}]'
   ["gravitee-vps"]='[{"name":"gravitee-vps","target":"http://localhost:8082","mcp_base":"http://localhost:8082/mcp","mcp_protocol":"streamable-http","admin_base":null,"health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","features":[]}]'
+  ["bench-vps"]='[{"name":"stoa-vps","target":"http://51.83.45.13:8080","mcp_base":"http://51.83.45.13:8080/mcp","mcp_protocol":"stoa","admin_base":"http://51.83.45.13:8080","health":"http://51.83.45.13:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]},{"name":"kong-vps","target":"http://51.83.45.13:8000","mcp_base":null,"admin_base":null,"health":"http://51.83.45.13:8001/status","features":[]},{"name":"gravitee-vps","target":"http://54.36.209.237:8082","mcp_base":"http://54.36.209.237:8082/mcp","mcp_protocol":"streamable-http","admin_base":null,"health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","features":[]}]'
 )
 
 # Unique VPS IPs (stoa and kong share the same VPS)
 declare -A UNIQUE_VPS=(
   ["51.83.45.13"]="stoa-vps kong-vps"
   ["54.36.209.237"]="gravitee-vps"
+  ["94.23.107.106"]="bench-vps"
 )
 
 # Instance labels per VPS IP (prevent Pushgateway push overwrites between clusters)
 declare -A VPS_INSTANCE=(
   ["51.83.45.13"]="vps-stoa-kong"
   ["54.36.209.237"]="vps-gravitee"
+  ["94.23.107.106"]="vps-bench"
 )
 
 REMOTE_DIR="/opt/arena"
@@ -122,7 +127,16 @@ DISCARD_FIRST=1
 TIMEOUT=5
 ARENA_INSTANCE=${INSTANCE_LABEL}
 GATEWAYS=${COMBINED_GATEWAYS}
+OPENSEARCH_ENABLED=\${OPENSEARCH_ENABLED:-false}
+OPENSEARCH_URL=\${OPENSEARCH_URL:-}
+OPENSEARCH_USER=\${OPENSEARCH_USER:-}
+OPENSEARCH_PASSWORD=\${OPENSEARCH_PASSWORD:-}
 ENVEOF"
+
+  # bench-vps has local OpenSearch — override defaults
+  if [ "$VPS_IP" = "94.23.107.106" ]; then
+    ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=http://localhost:9200|' ${REMOTE_DIR}/.env"
+  fi
 
   echo "  [4/7] Creating .env.enterprise file (L1, instance=$INSTANCE_LABEL)..."
   ssh -i "$SSH_KEY" "debian@${VPS_IP}" "cat > ${REMOTE_DIR}/.env.enterprise <<ENVEOF
@@ -133,7 +147,16 @@ DISCARD_FIRST=1
 TIMEOUT=10
 ARENA_INSTANCE=${INSTANCE_LABEL}
 GATEWAYS=${COMBINED_GATEWAYS_ENT}
+OPENSEARCH_ENABLED=\${OPENSEARCH_ENABLED:-false}
+OPENSEARCH_URL=\${OPENSEARCH_URL:-}
+OPENSEARCH_USER=\${OPENSEARCH_USER:-}
+OPENSEARCH_PASSWORD=\${OPENSEARCH_PASSWORD:-}
 ENVEOF"
+
+  # bench-vps has local OpenSearch — override defaults
+  if [ "$VPS_IP" = "94.23.107.106" ]; then
+    ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=http://localhost:9200|' ${REMOTE_DIR}/.env.enterprise"
+  fi
 
   echo "  [5/7] Pulling arena-bench image..."
   ssh -i "$SSH_KEY" "debian@${VPS_IP}" "docker pull ghcr.io/stoa-platform/arena-bench:0.2.0 2>/dev/null || echo 'Pull failed — ensure docker login ghcr.io'"

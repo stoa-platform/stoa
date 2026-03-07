@@ -19,6 +19,10 @@ services:
       - SCRIPT_PATH=/scripts/benchmark.js
       - ARENA_INSTANCE=${ARENA_INSTANCE:-vps}
       - GATEWAYS=${GATEWAYS}
+      - OPENSEARCH_ENABLED=${OPENSEARCH_ENABLED:-false}
+      - OPENSEARCH_URL=${OPENSEARCH_URL:-}
+      - OPENSEARCH_USER=${OPENSEARCH_USER:-}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD:-}
     restart: "no"
     security_opt:
       - no-new-privileges:true

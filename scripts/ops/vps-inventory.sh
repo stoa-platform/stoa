@@ -22,6 +22,7 @@ VPS_FLEET=(
   "n8n-vps|51.254.139.205|debian|n8n + PocketBase + Healthchecks"
   "webmethods-vps|51.255.201.17|debian|webMethods API Gateway trial (gateway.gostoa.dev)"
   "dev-vps|213.199.45.108|debian|Dev environment (STOA GW + webMethods)"
+  "bench-vps|94.23.107.106|debian|OpenSearch bench + Arena runner (STOA-bench)"
   # HEGEMON workers are dynamic — use hegemon/workers.txt
 )
 

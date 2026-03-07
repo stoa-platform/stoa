@@ -364,6 +364,10 @@ pub fn build_router(state: AppState) -> Router {
                 )
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
+                // Security profile enforcement: per-subscription DPoP/mTLS (CAB-1744)
+                .layer(axum::middleware::from_fn(
+                    auth::profile_enforcement::profile_enforcement_middleware,
+                ))
                 // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)
                 .layer(axum::middleware::from_fn_with_state(
                     state.clone(),

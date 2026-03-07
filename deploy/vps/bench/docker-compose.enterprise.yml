@@ -14,6 +14,10 @@ services:
       - .env.enterprise
     environment:
       - SCRIPT_PATH=/scripts/benchmark-enterprise.js
+      - OPENSEARCH_ENABLED=${OPENSEARCH_ENABLED:-false}
+      - OPENSEARCH_URL=${OPENSEARCH_URL:-}
+      - OPENSEARCH_USER=${OPENSEARCH_USER:-}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD:-}
     restart: "no"
     security_opt:
       - no-new-privileges:true

@@ -32,6 +32,7 @@ type Issue struct {
 	StateID     string
 	StateName   string
 	StateType   string
+	ParentID    string // Parent issue ID (non-empty if sub-ticket of a MEGA)
 }
 
 // Cycle represents a Linear cycle (sprint).
@@ -136,6 +137,7 @@ func (c *Client) GetCycleIssues(cycleID, stateType string) ([]Issue, error) {
 				estimate priority
 				labels { nodes { name } }
 				state { id name type }
+				parent { id }
 			}
 		}
 	}`
@@ -159,6 +161,9 @@ func (c *Client) GetCycleIssues(cycleID, stateType string) ([]Issue, error) {
 						Name string `json:"name"`
 						Type string `json:"type"`
 					} `json:"state"`
+					Parent *struct {
+						ID string `json:"id"`
+					} `json:"parent"`
 				} `json:"nodes"`
 			} `json:"issues"`
 		} `json:"data"`
@@ -173,6 +178,10 @@ func (c *Client) GetCycleIssues(cycleID, stateType string) ([]Issue, error) {
 		for _, l := range n.Labels.Nodes {
 			labels = append(labels, l.Name)
 		}
+		parentID := ""
+		if n.Parent != nil {
+			parentID = n.Parent.ID
+		}
 		issues = append(issues, Issue{
 			ID:          n.ID,
 			Identifier:  n.Identifier,
@@ -184,6 +193,7 @@ func (c *Client) GetCycleIssues(cycleID, stateType string) ([]Issue, error) {
 			StateID:     n.State.ID,
 			StateName:   n.State.Name,
 			StateType:   n.State.Type,
+			ParentID:    parentID,
 		})
 	}
 	return issues, nil

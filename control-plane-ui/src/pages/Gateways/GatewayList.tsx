@@ -20,6 +20,10 @@ import {
   Shield,
   Globe,
   Zap,
+  RotateCcw,
+  Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Button } from '@stoa/shared/components/Button';
 import type { GatewayInstance, GatewayInstanceStatus, GatewayMode } from '../../types';
@@ -146,12 +150,14 @@ function timeAgo(dateStr: string): string {
 // ---------------------------------------------------------------------------
 
 export function GatewayList() {
-  const { isReady } = useAuth();
+  const { isReady, hasRole } = useAuth();
+  const isCpiAdmin = hasRole('cpi-admin');
   const queryClient = useQueryClient();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [healthChecking, setHealthChecking] = useState<string | null>(null);
   const [selectedGateway, setSelectedGateway] = useState<GatewayInstance | null>(null);
   // Environment context (gateways are global — no read-only guards)
@@ -190,8 +196,9 @@ export function GatewayList() {
     isLoading,
     error: queryError,
   } = useQuery({
-    queryKey: ['gateways'],
-    queryFn: () => apiService.getGatewayInstances(),
+    queryKey: ['gateways', showDeleted],
+    queryFn: () =>
+      apiService.getGatewayInstances(showDeleted ? { include_deleted: true } : undefined),
     enabled: isReady,
     refetchInterval: 30_000,
     staleTime: 10_000,
@@ -268,10 +275,14 @@ export function GatewayList() {
   };
 
   const handleDelete = useCallback(
-    async (id: string, name: string) => {
+    async (id: string, name: string, isProtected?: boolean) => {
+      if (isProtected) {
+        toast.error(`Gateway "${name}" is protected and cannot be deleted`);
+        return;
+      }
       const confirmed = await confirm({
         title: 'Delete Gateway',
-        message: `Are you sure you want to delete "${name}"? This cannot be undone.`,
+        message: `Are you sure you want to delete "${name}"? The gateway can be restored by an admin.`,
         confirmLabel: 'Delete',
         variant: 'danger',
       });
@@ -289,6 +300,22 @@ export function GatewayList() {
       }
     },
     [confirm, toast, refetchGateways, selectedGateway]
+  );
+
+  const handleRestore = useCallback(
+    async (id: string, name: string) => {
+      try {
+        await apiService.restoreGatewayInstance(id);
+        toast.success(`Gateway "${name}" restored`);
+        refetchGateways();
+      } catch (err: unknown) {
+        const message =
+          (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+          'Failed to restore gateway';
+        toast.error(message);
+      }
+    },
+    [toast, refetchGateways]
   );
 
   const handleCreated = () => {
@@ -325,6 +352,20 @@ export function GatewayList() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {isCpiAdmin && (
+            <button
+              onClick={() => setShowDeleted(!showDeleted)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                showDeleted
+                  ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
+                  : 'border-neutral-200 bg-white text-neutral-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+              }`}
+              title={showDeleted ? 'Hide deleted gateways' : 'Show deleted gateways'}
+            >
+              {showDeleted ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {showDeleted ? 'Hide deleted' : 'Show deleted'}
+            </button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -408,6 +449,7 @@ export function GatewayList() {
                 onSelect={setSelectedGateway}
                 onHealthCheck={handleHealthCheck}
                 onDelete={handleDelete}
+                onRestore={handleRestore}
                 healthChecking={healthChecking}
                 showHeader={activeEnv === 'all'}
               />
@@ -498,6 +540,7 @@ function EnvironmentSection({
   onSelect,
   onHealthCheck,
   onDelete,
+  onRestore,
   healthChecking,
   showHeader,
 }: {
@@ -506,7 +549,8 @@ function EnvironmentSection({
   stats: { total: number; online: number; offline: number; degraded: number };
   onSelect: (gw: GatewayInstance) => void;
   onHealthCheck: (id: string) => void;
-  onDelete: (id: string, name: string) => void;
+  onDelete: (id: string, name: string, isProtected?: boolean) => void;
+  onRestore: (id: string, name: string) => void;
   healthChecking: string | null;
   showHeader: boolean;
 }) {
@@ -553,7 +597,8 @@ function EnvironmentSection({
               gw={gw}
               onSelect={() => onSelect(gw)}
               onHealthCheck={() => onHealthCheck(gw.id)}
-              onDelete={() => onDelete(gw.id, gw.name)}
+              onDelete={() => onDelete(gw.id, gw.name, gw.protected)}
+              onRestore={() => onRestore(gw.id, gw.name)}
               isChecking={healthChecking === gw.id}
             />
           ))}
@@ -572,22 +617,27 @@ function GatewayRow({
   onSelect,
   onHealthCheck,
   onDelete,
+  onRestore,
   isChecking,
 }: {
   gw: GatewayInstance;
   onSelect: () => void;
   onHealthCheck: () => void;
   onDelete: () => void;
+  onRestore: () => void;
   isChecking: boolean;
 }) {
   const status = STATUS_CONFIG[gw.status];
   const typeInfo = TYPE_DISPLAY[gw.gateway_type] ?? { label: gw.gateway_type, icon: Server };
   const TypeIcon = typeInfo.icon;
   const live = isLive(gw);
+  const isDeleted = !!gw.deleted_at;
 
   return (
     <div
-      className="group flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 dark:hover:bg-neutral-750 cursor-pointer transition-colors"
+      className={`group flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 dark:hover:bg-neutral-750 cursor-pointer transition-colors ${
+        isDeleted ? 'opacity-50' : ''
+      }`}
       onClick={onSelect}
     >
       {/* Status indicator */}
@@ -617,12 +667,27 @@ function GatewayRow({
       {/* Name + type */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-neutral-900 dark:text-white truncate">
+          <span
+            className={`font-medium text-neutral-900 dark:text-white truncate ${isDeleted ? 'line-through' : ''}`}
+          >
             {gw.display_name}
           </span>
           {gw.mode && (
             <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
               {MODE_LABELS[gw.mode] ?? gw.mode}
+            </span>
+          )}
+          {gw.protected && (
+            <span
+              className="flex-shrink-0 text-amber-500 dark:text-amber-400"
+              title="Protected — cannot be deleted"
+            >
+              <Lock className="w-3.5 h-3.5" />
+            </span>
+          )}
+          {isDeleted && (
+            <span className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+              Deleted
             </span>
           )}
         </div>
@@ -658,27 +723,46 @@ function GatewayRow({
 
       {/* Actions */}
       <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onHealthCheck();
-          }}
-          disabled={isChecking}
-          className="p-1.5 rounded-md text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
-          title="Health check"
-        >
-          <HeartPulse className={`w-4 h-4 ${isChecking ? 'animate-pulse' : ''}`} />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="p-1.5 rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors"
-          title="Delete"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {isDeleted ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRestore();
+            }}
+            className="p-1.5 rounded-md text-neutral-400 hover:text-green-600 hover:bg-green-50 dark:hover:text-green-400 dark:hover:bg-green-900/20 transition-colors"
+            title="Restore gateway"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onHealthCheck();
+              }}
+              disabled={isChecking}
+              className="p-1.5 rounded-md text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+              title="Health check"
+            >
+              <HeartPulse className={`w-4 h-4 ${isChecking ? 'animate-pulse' : ''}`} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className={`p-1.5 rounded-md transition-colors ${
+                gw.protected
+                  ? 'text-neutral-300 dark:text-neutral-600 cursor-not-allowed'
+                  : 'text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20'
+              }`}
+              title={gw.protected ? 'Protected — cannot be deleted' : 'Delete'}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Chevron */}

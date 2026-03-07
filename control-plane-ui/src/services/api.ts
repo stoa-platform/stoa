@@ -605,6 +605,7 @@ class ApiService {
     gateway_type?: string;
     environment?: string;
     tenant_id?: string;
+    include_deleted?: boolean;
     page?: number;
     page_size?: number;
   }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
@@ -629,6 +630,11 @@ class ApiService {
 
   async deleteGatewayInstance(id: string): Promise<void> {
     await this.client.delete(`/v1/admin/gateways/${id}`);
+  }
+
+  async restoreGatewayInstance(id: string): Promise<any> {
+    const { data } = await this.client.post(`/v1/admin/gateways/${id}/restore`);
+    return data;
   }
 
   async checkGatewayHealth(id: string): Promise<any> {

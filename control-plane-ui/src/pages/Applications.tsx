@@ -10,7 +10,7 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
-import type { Application, ApplicationCreate, API } from '../types';
+import type { Application, ApplicationCreate, API, SecurityProfile } from '../types';
 import {
   ENV_ORDER,
   ENV_LABELS,
@@ -619,6 +619,30 @@ interface ApplicationFormModalProps {
   title: string;
 }
 
+const SECURITY_PROFILES: { value: SecurityProfile; label: string; description: string }[] = [
+  {
+    value: 'oauth2_public',
+    label: 'OAuth2 Public',
+    description: 'Public client with PKCE (SPAs, mobile)',
+  },
+  {
+    value: 'oauth2_confidential',
+    label: 'OAuth2 Confidential',
+    description: 'Server-side with client_secret',
+  },
+  { value: 'api_key', label: 'API Key', description: 'Simple key-based authentication' },
+  {
+    value: 'fapi_baseline',
+    label: 'FAPI Baseline',
+    description: 'Financial-grade security with private_key_jwt',
+  },
+  {
+    value: 'fapi_advanced',
+    label: 'FAPI Advanced',
+    description: 'FAPI Baseline + DPoP token binding',
+  },
+];
+
 function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: ApplicationFormModalProps) {
   const [formData, setFormData] = useState<ApplicationCreate>({
     name: app?.name || '',
@@ -626,8 +650,13 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
     description: app?.description || '',
     redirect_uris: [],
     api_subscriptions: app?.api_subscriptions || [],
+    security_profile: (app?.security_profile as SecurityProfile) || 'oauth2_public',
   });
   const [redirectUri, setRedirectUri] = useState('');
+  const [fapiKeyMode, setFapiKeyMode] = useState<'upload' | 'url'>('upload');
+
+  const isFapi =
+    formData.security_profile === 'fapi_baseline' || formData.security_profile === 'fapi_advanced';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -720,15 +749,133 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Description
+            </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full border border-neutral-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={2}
               placeholder="Application description..."
             />
           </div>
+
+          {/* Security Profile */}
+          {!app && (
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                Security Profile
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {SECURITY_PROFILES.map((profile) => (
+                  <label
+                    key={profile.value}
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      formData.security_profile === profile.value
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
+                        : 'border-neutral-200 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="security_profile"
+                      value={profile.value}
+                      checked={formData.security_profile === profile.value}
+                      onChange={() =>
+                        setFormData({
+                          ...formData,
+                          security_profile: profile.value,
+                          jwks_uri: undefined,
+                          jwks: undefined,
+                        })
+                      }
+                      className="mt-1 w-4 h-4 text-blue-600"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-neutral-900 dark:text-white">
+                        {profile.label}
+                      </p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        {profile.description}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* FAPI Key Management */}
+          {isFapi && !app && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-3">
+                FAPI requires a public key for client authentication (private_key_jwt)
+              </p>
+              <div className="flex gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFapiKeyMode('upload');
+                    setFormData({ ...formData, jwks_uri: undefined });
+                  }}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    fapiKeyMode === 'upload'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-800/50 dark:text-amber-300'
+                  }`}
+                >
+                  Upload PEM / JWK
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFapiKeyMode('url');
+                    setFormData({ ...formData, jwks: undefined });
+                  }}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    fapiKeyMode === 'url'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-800/50 dark:text-amber-300'
+                  }`}
+                >
+                  JWKS URL
+                </button>
+              </div>
+              {fapiKeyMode === 'upload' ? (
+                <div>
+                  <label className="block text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
+                    Paste your PEM public key or JWK JSON
+                  </label>
+                  <textarea
+                    value={formData.jwks || ''}
+                    onChange={(e) => setFormData({ ...formData, jwks: e.target.value })}
+                    className="w-full border border-amber-300 dark:border-amber-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white font-mono text-xs focus:ring-2 focus:ring-amber-500"
+                    rows={5}
+                    placeholder={`-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhki...\n-----END PUBLIC KEY-----`}
+                    required
+                  />
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Accepts PEM public key (RSA or EC P-256), single JWK, or JWKS JSON
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
+                    JWKS Endpoint URL
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.jwks_uri || ''}
+                    onChange={(e) => setFormData({ ...formData, jwks_uri: e.target.value })}
+                    className="w-full border border-amber-300 dark:border-amber-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-amber-500"
+                    placeholder="https://your-app.example.com/.well-known/jwks.json"
+                    required
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Redirect URIs */}
           <div>

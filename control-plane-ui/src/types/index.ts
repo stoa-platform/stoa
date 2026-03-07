@@ -78,12 +78,22 @@ export interface Application {
   updated_at: string;
 }
 
+export type SecurityProfile =
+  | 'api_key'
+  | 'oauth2_public'
+  | 'oauth2_confidential'
+  | 'fapi_baseline'
+  | 'fapi_advanced';
+
 export interface ApplicationCreate {
   name: string;
   display_name: string;
   description: string;
   redirect_uris: string[];
   api_subscriptions: string[];
+  security_profile?: SecurityProfile;
+  jwks_uri?: string;
+  jwks?: string; // Inline PEM or JWK/JWKS JSON
 }
 
 // Consumer types (CAB-864 — mTLS Self-Service)

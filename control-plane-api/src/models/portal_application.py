@@ -67,6 +67,7 @@ class PortalApplication(Base):
     api_key_hash = Column(String(64), nullable=True)
     api_key_prefix = Column(String(12), nullable=True)
     jwks_uri = Column(String(2048), nullable=True)
+    jwks_data = Column(JSONB, nullable=True)  # Inline JWKS (from PEM upload or JWK JSON)
     environment = Column(String(50), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

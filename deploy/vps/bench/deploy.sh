@@ -133,9 +133,10 @@ OPENSEARCH_USER=\${OPENSEARCH_USER:-}
 OPENSEARCH_PASSWORD=\${OPENSEARCH_PASSWORD:-}
 ENVEOF"
 
-  # bench-vps has local OpenSearch — override defaults
+  # bench-vps uses centralized OpenSearch (OVH K8s prod)
   if [ "$VPS_IP" = "94.23.107.106" ]; then
-    ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=http://localhost:9200|' ${REMOTE_DIR}/.env"
+    ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=https://opensearch-api.gostoa.dev|' ${REMOTE_DIR}/.env"
+    echo "    (OpenSearch credentials must be set manually from Infisical: prod/opensearch/ADMIN_PASSWORD)"
   fi
 
   echo "  [4/7] Creating .env.enterprise file (L1, instance=$INSTANCE_LABEL)..."
@@ -153,9 +154,9 @@ OPENSEARCH_USER=\${OPENSEARCH_USER:-}
 OPENSEARCH_PASSWORD=\${OPENSEARCH_PASSWORD:-}
 ENVEOF"
 
-  # bench-vps has local OpenSearch — override defaults
+  # bench-vps uses centralized OpenSearch (OVH K8s prod)
   if [ "$VPS_IP" = "94.23.107.106" ]; then
-    ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=http://localhost:9200|' ${REMOTE_DIR}/.env.enterprise"
+    ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=https://opensearch-api.gostoa.dev|' ${REMOTE_DIR}/.env.enterprise"
   fi
 
   echo "  [5/7] Pulling arena-bench image..."

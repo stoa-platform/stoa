@@ -173,15 +173,47 @@ describe('SaasApiKeysList', () => {
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',
     (role) => {
-      it('renders the page', async () => {
+      beforeEach(() => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      });
+
+      it('renders the page', async () => {
         renderComponent();
         expect(await screen.findByRole('heading', { name: 'API Keys' })).toBeInTheDocument();
       });
 
+      if (role === 'cpi-admin' || role === 'tenant-admin') {
+        it('shows Create Key button', async () => {
+          renderComponent();
+          expect(await screen.findByText('Create Key')).toBeInTheDocument();
+        });
+
+        it('shows Revoke button for active key', async () => {
+          renderComponent();
+          await waitFor(() => {
+            expect(screen.getByText('my-agent-key')).toBeInTheDocument();
+          });
+          expect(screen.getByText('Revoke')).toBeInTheDocument();
+        });
+      }
+
+      if (role === 'devops') {
+        it('shows Create Key button (has apis:create)', async () => {
+          renderComponent();
+          expect(await screen.findByText('Create Key')).toBeInTheDocument();
+        });
+
+        it('hides Revoke button (no apis:delete)', async () => {
+          renderComponent();
+          await waitFor(() => {
+            expect(screen.getByText('my-agent-key')).toBeInTheDocument();
+          });
+          expect(screen.queryByText('Revoke')).not.toBeInTheDocument();
+        });
+      }
+
       if (role === 'viewer') {
         it('hides Create Key button', async () => {
-          vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
           renderComponent();
           await waitFor(() => {
             expect(screen.getByText('my-agent-key')).toBeInTheDocument();
@@ -190,7 +222,6 @@ describe('SaasApiKeysList', () => {
         });
 
         it('hides Revoke button', async () => {
-          vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
           renderComponent();
           await waitFor(() => {
             expect(screen.getByText('my-agent-key')).toBeInTheDocument();

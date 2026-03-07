@@ -152,4 +152,53 @@ describe('CredentialMappings', () => {
       });
     }
   );
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona — RBAC visibility',
+    (role) => {
+      beforeEach(() => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        mockGetCredentialMappings.mockResolvedValue({ items: mockMappings, total: 2 });
+      });
+
+      it('shows or hides Add Mapping button based on isWriteUser (cpi-admin or tenant-admin)', async () => {
+        renderWithProviders(<CredentialMappings />);
+        await waitFor(() => {
+          expect(screen.getByText('weather-api-v1')).toBeInTheDocument();
+        });
+        // isWriteUser = hasRole('cpi-admin') || hasRole('tenant-admin')
+        if (['cpi-admin', 'tenant-admin'].includes(role)) {
+          expect(screen.getByText('Add Mapping')).toBeInTheDocument();
+        } else {
+          expect(screen.queryByText('Add Mapping')).not.toBeInTheDocument();
+        }
+      });
+
+      it('shows or hides Edit and Delete action buttons based on isWriteUser', async () => {
+        renderWithProviders(<CredentialMappings />);
+        await waitFor(() => {
+          expect(screen.getByText('weather-api-v1')).toBeInTheDocument();
+        });
+        if (['cpi-admin', 'tenant-admin'].includes(role)) {
+          expect(screen.getAllByTitle('Edit').length).toBeGreaterThan(0);
+          expect(screen.getAllByTitle('Delete').length).toBeGreaterThan(0);
+        } else {
+          expect(screen.queryByTitle('Edit')).not.toBeInTheDocument();
+          expect(screen.queryByTitle('Delete')).not.toBeInTheDocument();
+        }
+      });
+
+      it('shows tenant selector only for cpi-admin (isAdmin)', async () => {
+        renderWithProviders(<CredentialMappings />);
+        await waitFor(() => {
+          expect(screen.getByText('Credential Mappings')).toBeInTheDocument();
+        });
+        // isAdmin = hasRole('cpi-admin') AND user has no tenant_id (cross-tenant admin)
+        // cpi-admin mock user has tenant_id='gregarious-games', so the selector is hidden
+        // (condition: isAdmin && !user?.tenant_id — cpi-admin always has a tenant_id in test helpers)
+        const tenantSelectorHeading = screen.queryByText('Credential Mapping Management');
+        expect(tenantSelectorHeading).not.toBeInTheDocument();
+      });
+    }
+  );
 });

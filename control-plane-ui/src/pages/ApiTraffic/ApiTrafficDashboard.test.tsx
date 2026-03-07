@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { ApiTrafficDashboard } from './ApiTrafficDashboard';
-import { renderWithProviders, createAuthMock } from '../../test/helpers';
+import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 import { useAuth } from '../../contexts/AuthContext';
 import { proxyBackendService } from '../../services/proxyBackendService';
 
@@ -145,4 +145,69 @@ describe('ApiTrafficDashboard', () => {
       expect(screen.getByText('Circuit breaker may be open')).toBeInTheDocument();
     });
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      beforeEach(() => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        vi.mocked(proxyBackendService.list).mockResolvedValue(mockBackends);
+        vi.mocked(proxyBackendService.healthCheck).mockResolvedValue(mockHealth);
+      });
+
+      it('renders the page heading', async () => {
+        renderWithProviders(<ApiTrafficDashboard />, { route: '/api-traffic' });
+        await waitFor(() => {
+          expect(screen.getByText('API Traffic')).toBeInTheDocument();
+        });
+      });
+
+      it('shows the backend table', async () => {
+        renderWithProviders(<ApiTrafficDashboard />, { route: '/api-traffic' });
+        await waitFor(() => {
+          expect(screen.getByText('Linear Issue Tracker')).toBeInTheDocument();
+        });
+      });
+
+      if (role === 'cpi-admin') {
+        it('shows Traffic Metrics section with Grafana button (has tenants:read)', async () => {
+          renderWithProviders(<ApiTrafficDashboard />, { route: '/api-traffic' });
+          await waitFor(() => {
+            expect(screen.getByText('Traffic Metrics')).toBeInTheDocument();
+          });
+          expect(screen.getByText('Open in Grafana')).toBeInTheDocument();
+        });
+
+        it('does not show the access-restricted fallback', async () => {
+          renderWithProviders(<ApiTrafficDashboard />, { route: '/api-traffic' });
+          await waitFor(() => {
+            expect(screen.getByText('Linear Issue Tracker')).toBeInTheDocument();
+          });
+          expect(
+            screen.queryByText(/Detailed traffic metrics require platform admin access/)
+          ).not.toBeInTheDocument();
+        });
+      }
+
+      if (role === 'tenant-admin' || role === 'devops' || role === 'viewer') {
+        it('hides Traffic Metrics section (no tenants:read)', async () => {
+          renderWithProviders(<ApiTrafficDashboard />, { route: '/api-traffic' });
+          await waitFor(() => {
+            expect(screen.getByText('Linear Issue Tracker')).toBeInTheDocument();
+          });
+          expect(screen.queryByText('Traffic Metrics')).not.toBeInTheDocument();
+          expect(screen.queryByText('Open in Grafana')).not.toBeInTheDocument();
+        });
+
+        it('shows access-restricted fallback message', async () => {
+          renderWithProviders(<ApiTrafficDashboard />, { route: '/api-traffic' });
+          await waitFor(() => {
+            expect(
+              screen.getByText(/Detailed traffic metrics require platform admin access/)
+            ).toBeInTheDocument();
+          });
+        });
+      }
+    }
+  );
 });

@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-alloy-config
+  namespace: monitoring
+data:
+  config.alloy: |
+    // =========================================================================
+    // STOA Platform - Grafana Alloy Pipeline (OVH MKS)
+    // =========================================================================
+    // Log collection from stoa-system + monitoring → Loki
+    // =========================================================================
+
+    logging {
+      level  = "info"
+      format = "json"
+    }
+
+    // =========================================================================
+    // LOGS PIPELINE
+    // =========================================================================
+
+    // Kubernetes pod discovery
+    discovery.kubernetes "pods" {
+      role = "pod"
+      namespaces {
+        names = ["stoa-system", "monitoring"]
+      }
+    }
+
+    // Relabel discovered pods to extract useful metadata
+    discovery.relabel "pods" {
+      targets = discovery.kubernetes.pods.targets
+
+      // Keep only running pods
+      rule {
+        source_labels = ["__meta_kubernetes_pod_phase"]
+        regex         = "Pending|Succeeded|Failed|Unknown"
+        action        = "drop"
+      }
+
+      // Extract namespace as label
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+
+      // Extract pod name
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+
+      // Extract container name
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+
+      // Extract app label (standard Kubernetes)
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        target_label  = "app"
+      }
+
+      // Extract component label
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_component"]
+        target_label  = "component"
+      }
+
+      // Fallback: use 'app' pod label if app.kubernetes.io/name is empty
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app"]
+        target_label  = "component"
+      }
+    }
+
+    // Collect logs from discovered pods
+    loki.source.kubernetes "pods" {
+      targets    = discovery.relabel.pods.output
+      forward_to = [loki.process.stoa_json.receiver]
+    }
+
+    // Process STOA structured logs (JSON format from structlog / tracing-subscriber)
+    loki.process "stoa_json" {
+      forward_to = [loki.process.add_platform_labels.receiver]
+
+      // Parse JSON logs (structlog Python, tracing-subscriber Rust)
+      stage.json {
+        expressions = {
+          level      = "level",
+          component  = "component",
+          tenant_id  = "tenant_id",
+          trace_id   = "trace_id",
+          span_id    = "span_id",
+          request_id = "request_id",
+          user_id    = "user_id",
+          message    = "message",
+        }
+      }
+
+      // Promote extracted fields to labels (indexed in Loki)
+      stage.labels {
+        values = {
+          level      = "",
+          component  = "",
+          tenant_id  = "",
+        }
+      }
+
+      // Set trace_id as structured metadata (for Grafana trace-log correlation)
+      stage.structured_metadata {
+        values = {
+          trace_id   = "",
+          span_id    = "",
+          request_id = "",
+          user_id    = "",
+        }
+      }
+
+      // Drop debug logs in production to save storage
+      stage.match {
+        selector = "{level=\"debug\"}"
+        stage.drop {
+          expression  = ".*"
+          drop_counter_reason = "debug_logs_filtered"
+        }
+      }
+    }
+
+    // Add platform labels to all log streams
+    loki.process "add_platform_labels" {
+      forward_to = [loki.write.default.receiver]
+
+      stage.static_labels {
+        values = {
+          platform    = "stoa",
+          environment = "production",
+        }
+      }
+    }
+
+    // Push logs to Loki
+    loki.write "default" {
+      endpoint {
+        url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+      }
+    }

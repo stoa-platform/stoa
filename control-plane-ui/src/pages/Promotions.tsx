@@ -25,6 +25,19 @@ import {
 import { clsx } from 'clsx';
 
 // =============================================================================
+// HELPERS
+// =============================================================================
+
+function extractErrorMessage(err: unknown): string {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const resp = err as { response?: { data?: { detail?: string } } };
+    if (resp.response?.data?.detail) return resp.response.data.detail;
+  }
+  if (err instanceof Error) return err.message;
+  return 'Unknown error';
+}
+
+// =============================================================================
 // STATUS CONFIG
 // =============================================================================
 
@@ -366,10 +379,12 @@ function PromotionRow({
 
   const status = promotionStatusConfig[promotion.status];
   const StatusIcon = status.icon;
+  const isProductionTarget = promotion.target_environment === 'production';
+  const isSelfRequest = promotion.requested_by === currentUser;
   const canApprove =
-    canPromote && promotion.status === 'pending' && promotion.requested_by !== currentUser;
+    canPromote && promotion.status === 'pending' && !(isSelfRequest && isProductionTarget);
   const isSelfApproval =
-    canPromote && promotion.status === 'pending' && promotion.requested_by === currentUser;
+    canPromote && promotion.status === 'pending' && isSelfRequest && isProductionTarget;
   const canRollback = canPromote && promotion.status === 'promoted';
 
   const handleExpand = async () => {
@@ -401,7 +416,7 @@ function PromotionRow({
       toast.success('Promotion approved', 'Deployment pipeline triggered');
       onRefresh();
     } catch (err: unknown) {
-      toast.error('Approval failed', err instanceof Error ? err.message : 'Unknown error');
+      toast.error('Approval failed', extractErrorMessage(err));
     } finally {
       setActionLoading(false);
     }
@@ -423,7 +438,7 @@ function PromotionRow({
       toast.success('Rollback created', 'Reverse promotion created');
       onRefresh();
     } catch (err: unknown) {
-      toast.error('Rollback failed', err instanceof Error ? err.message : 'Unknown error');
+      toast.error('Rollback failed', extractErrorMessage(err));
     } finally {
       setActionLoading(false);
     }

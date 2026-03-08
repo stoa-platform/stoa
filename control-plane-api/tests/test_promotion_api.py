@@ -296,14 +296,14 @@ class TestPromotionSelfApproveGuard:
         return PromotionService(mock_db)
 
     @pytest.mark.asyncio
-    async def test_self_approve_blocked(self, service):
-        """4-eyes principle: requester cannot approve their own promotion."""
+    async def test_self_approve_blocked_for_production(self, service):
+        """4-eyes principle: requester cannot approve their own promotion to production."""
         promo = Promotion()
         promo.id = uuid.uuid4()
         promo.tenant_id = "acme"
         promo.api_id = "api-1"
-        promo.source_environment = "dev"
-        promo.target_environment = "staging"
+        promo.source_environment = "staging"
+        promo.target_environment = "production"
         promo.status = PromotionStatus.PENDING.value
         promo.requested_by = "alice@acme.com"
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
@@ -315,6 +315,32 @@ class TestPromotionSelfApproveGuard:
                 approved_by="alice@acme.com",
                 user_id="uid-alice",
             )
+
+    @pytest.mark.asyncio
+    @patch("src.services.promotion_service.kafka_service")
+    async def test_self_approve_allowed_for_staging(self, mock_kafka, service):
+        """2-eyes principle: requester can self-approve dev→staging promotions."""
+        mock_kafka.publish = AsyncMock()
+        promo = Promotion()
+        promo.id = uuid.uuid4()
+        promo.tenant_id = "acme"
+        promo.api_id = "api-1"
+        promo.source_environment = "dev"
+        promo.target_environment = "staging"
+        promo.status = PromotionStatus.PENDING.value
+        promo.requested_by = "alice@acme.com"
+        service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
+        service.repo.update = AsyncMock(return_value=promo)
+
+        result = await service.approve_promotion(
+            tenant_id="acme",
+            promotion_id=promo.id,
+            approved_by="alice@acme.com",
+            user_id="uid-alice",
+        )
+
+        assert result.approved_by == "alice@acme.com"
+        assert result.status == PromotionStatus.PROMOTING.value
 
     @pytest.mark.asyncio
     @patch("src.services.promotion_service.kafka_service")

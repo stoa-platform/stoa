@@ -119,6 +119,7 @@ function extractUserFromToken(oidcUser: any): User | null {
     id: profile.sub,
     email: profile.email || '',
     name: profile.name || profile.preferred_username || '',
+    username: profile.preferred_username || '',
     roles,
     tenant_id: profile.tenant_id,
     permissions: Array.from(permissions),

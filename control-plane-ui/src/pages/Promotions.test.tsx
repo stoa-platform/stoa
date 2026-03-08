@@ -75,7 +75,7 @@ const mockPromotion: Promotion = {
   status: 'pending',
   spec_diff: null,
   message: 'Ready for staging validation',
-  requested_by: 'Wade Watts',
+  requested_by: 'parzival',
   approved_by: null,
   completed_at: null,
   created_at: '2026-03-08T10:00:00Z',

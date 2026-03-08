@@ -18,22 +18,22 @@ router = APIRouter(prefix="/v1/admin/argocd", tags=["ArgoCD Admin"])
 
 
 # ---------------------------------------------------------------------------
-# Schemas
+# Schemas (prefixed to avoid OpenAPI name collision with platform.py)
 # ---------------------------------------------------------------------------
 
 
-class SyncRequest(BaseModel):
+class ArgoCDSyncRequest(BaseModel):
     revision: str = Field("HEAD", description="Git revision to sync to")
     prune: bool = Field(False, description="Prune resources no longer in Git")
 
 
-class SyncResponse(BaseModel):
+class ArgoCDSyncResponse(BaseModel):
     application: str
     status: str
     message: str
 
 
-class DiffResource(BaseModel):
+class ArgoCDDiffResource(BaseModel):
     name: str | None = None
     namespace: str | None = None
     kind: str | None = None
@@ -43,14 +43,14 @@ class DiffResource(BaseModel):
     diff: dict | None = None
 
 
-class DiffResponse(BaseModel):
+class ArgoCDDiffResponse(BaseModel):
     application: str
     total_resources: int
     diff_count: int
-    resources: list[DiffResource]
+    resources: list[ArgoCDDiffResource]
 
 
-class PlatformStatusResponse(BaseModel):
+class ArgoCDPlatformStatusResponse(BaseModel):
     status: str
     components: list[dict]
     checked_at: str
@@ -71,16 +71,16 @@ def _require_cpi_admin(user: User) -> None:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/sync/{app_name}", response_model=SyncResponse)
+@router.post("/sync/{app_name}", response_model=ArgoCDSyncResponse)
 async def trigger_sync(
     app_name: str,
-    request: SyncRequest | None = None,
+    request: ArgoCDSyncRequest | None = None,
     user: User = Depends(get_current_user),
 ):
     """Trigger an ArgoCD sync for an application. cpi-admin only."""
     _require_cpi_admin(user)
 
-    body = request or SyncRequest()
+    body = request or ArgoCDSyncRequest()
     try:
         await argocd_service.sync_application(
             auth_token="",
@@ -89,7 +89,7 @@ async def trigger_sync(
             prune=body.prune,
         )
         logger.info("ArgoCD sync triggered for %s by %s", app_name, user.username)
-        return SyncResponse(
+        return ArgoCDSyncResponse(
             application=app_name,
             status="syncing",
             message=f"Sync triggered for {app_name} at revision {body.revision}",
@@ -99,7 +99,7 @@ async def trigger_sync(
         raise HTTPException(status_code=502, detail=f"ArgoCD sync failed: {e}")
 
 
-@router.get("/diff/{app_name}", response_model=DiffResponse)
+@router.get("/diff/{app_name}", response_model=ArgoCDDiffResponse)
 async def get_application_diff(
     app_name: str,
     user: User = Depends(get_current_user),
@@ -109,13 +109,13 @@ async def get_application_diff(
 
     try:
         diff = await argocd_service.get_application_diff(auth_token="", name=app_name)
-        return DiffResponse(**diff)
+        return ArgoCDDiffResponse(**diff)
     except Exception as e:
         logger.error("ArgoCD diff failed for %s: %s", app_name, e)
         raise HTTPException(status_code=502, detail=f"ArgoCD diff failed: {e}")
 
 
-@router.get("/status", response_model=PlatformStatusResponse)
+@router.get("/status", response_model=ArgoCDPlatformStatusResponse)
 async def get_platform_status(
     user: User = Depends(get_current_user),
 ):
@@ -124,7 +124,7 @@ async def get_platform_status(
 
     try:
         status = await argocd_service.get_platform_status(auth_token="")
-        return PlatformStatusResponse(**status)
+        return ArgoCDPlatformStatusResponse(**status)
     except Exception as e:
         logger.error("ArgoCD status failed: %s", e)
         raise HTTPException(status_code=502, detail=f"ArgoCD status failed: {e}")

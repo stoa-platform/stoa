@@ -36,6 +36,7 @@ from .routers import (
     admin_prospects,
     apis,
     applications,
+    argocd_admin,
     audit,
     backend_apis,
     billing,
@@ -699,6 +700,9 @@ app.include_router(platform.router)
 
 # System Info (Edition, License, Features - CAB-1311)
 app.include_router(system.router)
+
+# ArgoCD Admin — sync, diff, platform status (CAB-1706 W3)
+app.include_router(argocd_admin.router)
 
 # Catalog Admin (CAB-682 - Catalog Cache Sync)
 app.include_router(catalog_admin.router)

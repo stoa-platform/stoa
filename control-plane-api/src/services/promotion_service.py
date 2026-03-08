@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.promotion import Promotion, PromotionStatus, validate_promotion_chain
+from ..repositories.deployment import DeploymentRepository
 from ..repositories.promotion import PromotionRepository
 from ..services.kafka_service import Topics, kafka_service
 
@@ -17,6 +18,7 @@ class PromotionService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = PromotionRepository(db)
+        self.deployment_repo = DeploymentRepository(db)
 
     async def create_promotion(
         self,
@@ -109,6 +111,8 @@ class PromotionService:
                 f"Cannot approve promotion in status '{promotion.status}' "
                 f"(expected '{PromotionStatus.PENDING.value}')"
             )
+        if promotion.requested_by == approved_by:
+            raise ValueError("Cannot approve own promotion request (4-eyes principle)")
 
         promotion.status = PromotionStatus.PROMOTING.value
         promotion.approved_by = approved_by
@@ -212,16 +216,39 @@ class PromotionService:
         return rollback
 
     async def get_diff(self, tenant_id: str, promotion_id: UUID) -> dict:
-        """Get the spec diff for a promotion."""
+        """Get the spec diff for a promotion.
+
+        Fetches actual deployment specs from source and target environments
+        and returns them alongside the stored diff summary.
+        """
         promotion = await self.repo.get_by_id_and_tenant(promotion_id, tenant_id)
         if not promotion:
             raise ValueError(f"Promotion {promotion_id} not found")
+
+        source_spec = await self._get_deployment_spec(tenant_id, promotion.api_id, promotion.source_environment)
+        target_spec = await self._get_deployment_spec(tenant_id, promotion.api_id, promotion.target_environment)
 
         return {
             "promotion_id": promotion.id,
             "source_environment": promotion.source_environment,
             "target_environment": promotion.target_environment,
-            "source_spec": None,
-            "target_spec": None,
+            "source_spec": source_spec,
+            "target_spec": target_spec,
             "diff_summary": promotion.spec_diff,
+        }
+
+    async def _get_deployment_spec(self, tenant_id: str, api_id: str, environment: str) -> dict | None:
+        """Fetch the latest successful deployment spec for an environment."""
+        deployment = await self.deployment_repo.get_latest_success(
+            tenant_id=tenant_id, api_id=api_id, environment=environment
+        )
+        if not deployment:
+            return None
+        return {
+            "deployment_id": str(deployment.id),
+            "version": deployment.version,
+            "spec_hash": deployment.spec_hash,
+            "commit_sha": deployment.commit_sha,
+            "deployed_by": deployment.deployed_by,
+            "completed_at": deployment.completed_at.isoformat() if deployment.completed_at else None,
         }

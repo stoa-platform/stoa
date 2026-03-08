@@ -31,6 +31,7 @@ TIMEOUT="${TIMEOUT:-10}"
 SCRIPT_PATH="${SCRIPT_PATH:-/scripts/benchmark-enterprise.js}"
 ARENA_INSTANCE="${ARENA_INSTANCE:-default}"
 ARENA_JWT="${ARENA_JWT:-}"
+ADMIN_TOKEN="${ADMIN_TOKEN:-}"
 LLM_MOCK_URL="${LLM_MOCK_URL:-}"
 OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-stoa-healthcheck}"
 OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET:-}"
@@ -109,6 +110,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
       --env ADMIN_BASE="$GW_ADMIN" \
       --env HEADERS="$GW_HEADERS" \
       --env ARENA_JWT="$ARENA_JWT" \
+      --env ADMIN_TOKEN="$ADMIN_TOKEN" \
       --env LLM_MOCK_URL="$LLM_MOCK_URL" \
       --env TIMEOUT="$TIMEOUT" \
       --env SUMMARY_FILE="/dev/null" \
@@ -126,6 +128,7 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
         --env ADMIN_BASE="$GW_ADMIN" \
         --env HEADERS="$GW_HEADERS" \
         --env ARENA_JWT="$ARENA_JWT" \
+        --env ADMIN_TOKEN="$ADMIN_TOKEN" \
         --env LLM_MOCK_URL="$LLM_MOCK_URL" \
         --env TIMEOUT="$TIMEOUT" \
         --env SUMMARY_FILE="$SUMMARY_FILE" \

@@ -80,6 +80,7 @@ from .routers import (
     platform,
     portal,
     portal_applications,
+    promotions,
     proxy_backends,
     quotas,
     reconciliation,
@@ -633,6 +634,7 @@ app.include_router(tenants.router)
 app.include_router(apis.router)
 app.include_router(applications.router)
 app.include_router(deployments.router)
+app.include_router(promotions.router)
 app.include_router(git.router)
 app.include_router(events.router)
 app.include_router(webhooks.router)

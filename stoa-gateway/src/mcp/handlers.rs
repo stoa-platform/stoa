@@ -601,6 +601,8 @@ pub async fn mcp_tools_call(
     let guardrails_cfg = state
         .guardrail_policy_store
         .resolve(&auth.tenant_id, &global_guardrails_cfg);
+    // Track guardrail action for X-Stoa-Guardrail response header
+    let mut guardrail_action: Option<&str> = None;
     let arguments = match crate::guardrails::check_request(
         &guardrails_cfg,
         &request.name,
@@ -610,11 +612,13 @@ pub async fn mcp_tools_call(
         crate::guardrails::GuardrailsOutcome::Redacted(redacted) => {
             metrics::record_guardrails_pii("redacted");
             warn!(tool = %request.name, "PII detected and redacted in arguments");
+            guardrail_action = Some("pii-redacted");
             redacted
         }
         crate::guardrails::GuardrailsOutcome::Sensitive { rule, category } => {
             metrics::record_guardrails_content_filter("sensitive", category);
             warn!(tool = %request.name, rule = %rule, category = %category, "Content filter: sensitive content detected, request allowed");
+            guardrail_action = Some("content-flagged");
             request.arguments.clone()
         }
         crate::guardrails::GuardrailsOutcome::Blocked(reason) => {
@@ -632,7 +636,7 @@ pub async fn mcp_tools_call(
                 metrics::record_guardrails_pii("blocked");
             }
             warn!(tool = %request.name, reason = %reason, "Guardrails blocked request");
-            return (
+            let mut resp = (
                 StatusCode::BAD_REQUEST,
                 Json(ToolsCallResponse {
                     content: vec![ToolContent::Text {
@@ -642,6 +646,11 @@ pub async fn mcp_tools_call(
                 }),
             )
                 .into_response();
+            resp.headers_mut().insert(
+                "x-stoa-guardrail",
+                axum::http::HeaderValue::from_static("blocked"),
+            );
+            return resp;
         }
     };
 
@@ -995,14 +1004,21 @@ pub async fn mcp_tools_call(
                 },
             );
 
-            (
+            let mut resp = (
                 StatusCode::OK,
                 Json(ToolsCallResponse {
                     content,
                     is_error: result.is_error,
                 }),
             )
-                .into_response()
+                .into_response();
+            // CAB-1752: Add guardrail audit header when PII was detected/flagged
+            if let Some(action) = guardrail_action {
+                if let Ok(val) = axum::http::HeaderValue::from_str(action) {
+                    resp.headers_mut().insert("x-stoa-guardrail", val);
+                }
+            }
+            resp
         }
         Err(e) => {
             let t_backend = t_backend_start.elapsed();

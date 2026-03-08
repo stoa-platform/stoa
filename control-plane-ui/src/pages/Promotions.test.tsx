@@ -352,6 +352,24 @@ describe('Promotions', () => {
         expect(apiService.approvePromotion).toHaveBeenCalledWith('tenant-1', 'promo-1');
       });
     });
+
+    it('calls error toast when approve fails', async () => {
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.approvePromotion).mockRejectedValue(new Error('Server error'));
+      renderWithProviders(<Promotions />);
+
+      const user = userEvent.setup();
+
+      await waitFor(() => {
+        expect(screen.getByText('Approve')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('Approve'));
+
+      await waitFor(() => {
+        expect(apiService.approvePromotion).toHaveBeenCalledWith('tenant-1', 'promo-1');
+      });
+    });
   });
 
   describe('Rollback action', () => {

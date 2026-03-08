@@ -76,6 +76,8 @@ mod tests {
             path: "/test".to_string(),
             methods: vec!["GET".to_string()],
             backend_url: "https://backend.test".to_string(),
+            method: None,
+            description: None,
             operation_id: None,
             input_schema: None,
             output_schema: None,

@@ -664,6 +664,15 @@ pub async fn upsert_contract(
     State(state): State<AppState>,
     Json(mut contract): Json<UacContractSpec>,
 ) -> impl IntoResponse {
+    // Normalize endpoint shorthand: merge `method` into `methods` if provided
+    for ep in &mut contract.endpoints {
+        if let Some(method) = ep.method.take() {
+            if ep.methods.is_empty() {
+                ep.methods.push(method);
+            }
+        }
+    }
+
     // Validate the contract
     let errors = contract.validate();
     if !errors.is_empty() {
@@ -692,7 +701,10 @@ pub async fn upsert_contract(
         0
     };
 
-    let key = format!("{}:{}", contract.tenant_id, contract.name);
+    let key = contract
+        .key
+        .clone()
+        .unwrap_or_else(|| format!("{}:{}", contract.tenant_id, contract.name));
     let existed = state.contract_registry.upsert(contract.clone()).is_some();
 
     // Auto-generate REST routes from contract (CAB-1299 PR3)

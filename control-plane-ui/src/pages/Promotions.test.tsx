@@ -263,4 +263,157 @@ describe('Promotions', () => {
       });
     });
   });
+
+  describe('Row expand & diff', () => {
+    it('expands a row and loads diff on click', async () => {
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.getPromotionDiff).mockResolvedValue({
+        source_environment: 'dev',
+        target_environment: 'staging',
+        source_spec: { version: '1.0' },
+        target_spec: null,
+        diff_summary: {},
+      });
+      renderWithProviders(<Promotions />);
+
+      const user = userEvent.setup();
+
+      await waitFor(() => {
+        expect(screen.getByText('Ready for staging validation')).toBeInTheDocument();
+      });
+
+      // Click the row to expand
+      await user.click(screen.getByText('Ready for staging validation'));
+
+      await waitFor(() => {
+        expect(apiService.getPromotionDiff).toHaveBeenCalledWith('tenant-1', 'promo-1');
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Source/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows "no diff" when diff fetch fails', async () => {
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.getPromotionDiff).mockRejectedValue(new Error('Not found'));
+      renderWithProviders(<Promotions />);
+
+      const user = userEvent.setup();
+
+      await waitFor(() => {
+        expect(screen.getByText('Ready for staging validation')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('Ready for staging validation'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/No diff available/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Approve action', () => {
+    it('calls approvePromotion when Approve is clicked', async () => {
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.approvePromotion).mockResolvedValue(undefined as never);
+      renderWithProviders(<Promotions />);
+
+      const user = userEvent.setup();
+
+      await waitFor(() => {
+        expect(screen.getByText('Approve')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('Approve'));
+
+      await waitFor(() => {
+        expect(apiService.approvePromotion).toHaveBeenCalledWith('tenant-1', 'promo-1');
+      });
+    });
+  });
+
+  describe('Rollback action', () => {
+    it('calls rollbackPromotion when Rollback is clicked', async () => {
+      const promotedPromotion: Promotion = {
+        ...mockPromotion,
+        status: 'promoted',
+        approved_by: 'James Halliday',
+        completed_at: '2026-03-08T11:00:00Z',
+      };
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.listPromotions).mockResolvedValue({
+        items: [promotedPromotion],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      });
+      vi.mocked(apiService.rollbackPromotion).mockResolvedValue(undefined as never);
+      renderWithProviders(<Promotions />);
+
+      const user = userEvent.setup();
+
+      await waitFor(() => {
+        expect(screen.getByText('Rollback')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('Rollback'));
+
+      await waitFor(() => {
+        expect(apiService.rollbackPromotion).toHaveBeenCalledWith(
+          'tenant-1',
+          'promo-1',
+          expect.objectContaining({ message: expect.any(String) })
+        );
+      });
+    });
+  });
+
+  describe('Error handling', () => {
+    it('shows error when tenant loading fails', async () => {
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.getTenants).mockRejectedValue(new Error('Network error'));
+      renderWithProviders(<Promotions />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Network error')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error when promotions loading fails', async () => {
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.listPromotions).mockRejectedValue(new Error('Server error'));
+      renderWithProviders(<Promotions />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Server error')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Status badges', () => {
+    it.each([
+      { status: 'promoting' as const, label: 'Promoting' },
+      { status: 'failed' as const, label: 'Failed' },
+      { status: 'rolled_back' as const, label: 'Rolled Back' },
+    ])('renders $label badge for $status status', async ({ status, label }) => {
+      const promotion: Promotion = {
+        ...mockPromotion,
+        status,
+        approved_by: status !== 'promoting' ? 'James Halliday' : null,
+      };
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.listPromotions).mockResolvedValue({
+        items: [promotion],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      });
+      renderWithProviders(<Promotions />);
+
+      await waitFor(() => {
+        expect(screen.getByText(label)).toBeInTheDocument();
+      });
+    });
+  });
 });

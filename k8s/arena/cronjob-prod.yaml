@@ -73,6 +73,7 @@ spec:
                   value: |
                     [
                       {"name":"stoa-k8s","health":"http://stoa-gateway.stoa-system.svc/health","proxy":"http://stoa-gateway.stoa-system.svc/echo/get"},
+                      {"name":"agentgateway-k8s","health":"http://agentgateway-arena.stoa-system.svc:3000/health","proxy":"http://agentgateway-arena.stoa-system.svc:3000/echo/get"},
                       {"name":"kong-k8s","health":"http://kong-arena.stoa-system.svc:8001/status","proxy":"http://kong-arena.stoa-system.svc:8000/echo/get"}
                     ]
               resources:

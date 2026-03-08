@@ -5,9 +5,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TOTAL=10
+TOTAL=11
 
-echo "=== Gateway Arena Deploy (3 K8s gateways, co-located) ==="
+echo "=== Gateway Arena Deploy (4 K8s gateways, co-located) ==="
 
 # 1. Echo backend (nginx returning static JSON — same as VPS echo)
 echo "[1/$TOTAL] Applying echo backend..."
@@ -38,8 +38,17 @@ kubectl exec -n stoa-system deploy/kong-arena -- \
   curl -sf -o /dev/null -w "  Kong proxy echo: HTTP %{http_code}\n" http://localhost:8000/echo/get \
   || echo "  WARNING: Kong echo route not ready yet"
 
-# 4. Gravitee APIM (MongoDB + Mgmt API + Gateway)
-echo "[4/$TOTAL] Applying Gravitee Arena stack..."
+# 4. agentgateway (Linux Foundation / Solo.io — MCP-native, alpha)
+echo "[4/$TOTAL] Applying agentgateway Arena..."
+kubectl apply -f "$SCRIPT_DIR/agentgateway.yaml"
+kubectl rollout status deploy/agentgateway-arena -n stoa-system --timeout=120s
+echo "  Verifying agentgateway health..."
+kubectl exec -n stoa-system deploy/agentgateway-arena -- \
+  curl -sf -o /dev/null -w "  agentgateway health: HTTP %{http_code}\n" http://localhost:3000/health \
+  || echo "  WARNING: agentgateway health not ready yet"
+
+# 5. Gravitee APIM (MongoDB + Mgmt API + Gateway)
+echo "[5/$TOTAL] Applying Gravitee Arena stack..."
 kubectl apply -f "$SCRIPT_DIR/gravitee.yaml"
 echo "  Waiting for MongoDB..."
 kubectl rollout status deploy/gravitee-arena-mongo -n stoa-system --timeout=120s
@@ -48,8 +57,8 @@ kubectl rollout status deploy/gravitee-arena-mgmt -n stoa-system --timeout=180s
 echo "  Waiting for Gateway..."
 kubectl rollout status deploy/gravitee-arena-gw -n stoa-system --timeout=180s
 
-# 5. Gravitee echo route init job
-echo "[5/$TOTAL] Running Gravitee echo route init job..."
+# 6. Gravitee echo route init job
+echo "[6/$TOTAL] Running Gravitee echo route init job..."
 # Delete previous job if it exists (jobs are immutable)
 kubectl delete job gravitee-arena-init -n stoa-system --ignore-not-found
 kubectl apply -f "$SCRIPT_DIR/gravitee.yaml"
@@ -62,13 +71,13 @@ else
   echo "    kubectl logs -n stoa-system job/gravitee-arena-init"
 fi
 
-# 6. Pushgateway (Deployment + Service + Ingress)
-echo "[6/$TOTAL] Applying Pushgateway..."
+# 7. Pushgateway (Deployment + Service + Ingress)
+echo "[7/$TOTAL] Applying Pushgateway..."
 kubectl apply -f "$SCRIPT_DIR/pushgateway.yaml"
 kubectl apply -f "$SCRIPT_DIR/pushgateway-ingress.yaml"
 
-# 7. ConfigMap from k6 arena scripts
-echo "[7/$TOTAL] Creating ConfigMap from k6 arena scripts (baseline + enterprise + verify)..."
+# 8. ConfigMap from k6 arena scripts
+echo "[8/$TOTAL] Creating ConfigMap from k6 arena scripts (baseline + enterprise + verify)..."
 kubectl create configmap gateway-arena-scripts \
   --from-file="$REPO_ROOT/scripts/traffic/arena/benchmark.js" \
   --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena.sh" \
@@ -82,16 +91,16 @@ kubectl create configmap gateway-arena-scripts \
 # Clean up old ConfigMap if it exists
 kubectl delete configmap gateway-arena-script -n stoa-system --ignore-not-found
 
-# 8. ServiceMonitor + CronJobs (baseline + enterprise + verify)
-echo "[8/$TOTAL] Applying ServiceMonitor + CronJobs..."
+# 9. ServiceMonitor + CronJobs (baseline + enterprise + verify)
+echo "[9/$TOTAL] Applying ServiceMonitor + CronJobs..."
 kubectl apply -f "$SCRIPT_DIR/pushgateway-servicemonitor.yaml"
 kubectl apply -f "$SCRIPT_DIR/cronjob-prod.yaml"
 kubectl apply -f "$SCRIPT_DIR/cronjob-enterprise.yaml"
 kubectl apply -f "$SCRIPT_DIR/cronjob-verify.yaml"
 
-# 9. Smoke test — trigger one-off run
+# 10. Smoke test — trigger one-off run
 JOB_NAME="arena-smoke-$(date +%s)"
-echo "[9/$TOTAL] Triggering smoke test job: $JOB_NAME"
+echo "[10/$TOTAL] Triggering smoke test job: $JOB_NAME"
 kubectl create job --from=cronjob/gateway-arena "$JOB_NAME" -n stoa-system
 
 echo ""
@@ -103,7 +112,7 @@ if kubectl wait --for=condition=complete "job/$JOB_NAME" -n stoa-system --timeou
   echo ""
   echo "=== Verification ==="
   echo "Arena pods:"
-  kubectl get pods -n stoa-system -l 'app in (echo-backend,kong-arena,gravitee-arena-mongo,gravitee-arena-mgmt,gravitee-arena-gw)'
+  kubectl get pods -n stoa-system -l 'app in (echo-backend,kong-arena,agentgateway-arena,gravitee-arena-mongo,gravitee-arena-mgmt,gravitee-arena-gw)'
   echo ""
   echo "Pushgateway pod:"
   kubectl get pods -n monitoring -l app=pushgateway
@@ -111,8 +120,8 @@ if kubectl wait --for=condition=complete "job/$JOB_NAME" -n stoa-system --timeou
   echo "CronJob:"
   kubectl get cronjob -n stoa-system gateway-arena
   echo ""
-  # 10. Enterprise smoke test
-  echo "[10/$TOTAL] Triggering enterprise smoke test..."
+  # 11. Enterprise smoke test
+  echo "[11/$TOTAL] Triggering enterprise smoke test..."
   ENT_JOB_NAME="arena-ent-smoke-$(date +%s)"
   kubectl create job --from=cronjob/gateway-arena-enterprise "$ENT_JOB_NAME" -n stoa-system
   echo "  Enterprise job created: $ENT_JOB_NAME (runs in background)"

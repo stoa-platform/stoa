@@ -29,19 +29,30 @@ func NewGatewayClient(baseURL string, tokenCache *TokenCache) *GatewayClient {
 
 // --- Budget Operations (CAB-1717) ---
 
-// BudgetStatus represents the response from the gateway budget check endpoint.
+// BudgetStatus represents the response from POST /hegemon/budget/check.
 type BudgetStatus struct {
-	Allowed    bool    `json:"allowed"`
-	DailyCost  float64 `json:"daily_cost"`
-	DailyLimit float64 `json:"daily_limit"`
-	Reason     string  `json:"reason,omitempty"`
+	Allowed       bool    `json:"allowed"`
+	RemainingUSD  float64 `json:"remaining_usd"`
+	DailySpentUSD float64 `json:"daily_spent_usd"`
+	DailyLimitUSD float64 `json:"daily_limit_usd"`
+	Warning       bool    `json:"warning"`
+}
+
+// budgetCheckRequest is the payload for POST /hegemon/budget/check.
+type budgetCheckRequest struct {
+	WorkerName string `json:"worker_name"`
 }
 
 // CheckBudget queries the gateway to determine if the agent has budget remaining.
 func (c *GatewayClient) CheckBudget(ctx context.Context, agentName string) (*BudgetStatus, error) {
-	url := fmt.Sprintf("%s/hegemon/budget/%s", c.baseURL, agentName)
+	url := fmt.Sprintf("%s/hegemon/budget/check", c.baseURL)
 
-	resp, err := c.doRequest(ctx, http.MethodGet, url, nil)
+	payload, err := json.Marshal(budgetCheckRequest{WorkerName: agentName})
+	if err != nil {
+		return nil, fmt.Errorf("marshal budget check: %w", err)
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodPost, url, payload)
 	if err != nil {
 		return nil, fmt.Errorf("budget check: %w", err)
 	}
@@ -63,17 +74,22 @@ func (c *GatewayClient) CheckBudget(ctx context.Context, agentName string) (*Bud
 	return &status, nil
 }
 
-// costRecord is the payload for POST /hegemon/budget/{agent}/cost.
-type costRecord struct {
-	CostUSD    float64 `json:"cost_usd"`
-	DispatchID string  `json:"dispatch_id,omitempty"`
+// budgetRecordRequest is the payload for POST /hegemon/budget/record.
+type budgetRecordRequest struct {
+	WorkerName string  `json:"worker_name"`
+	AmountUSD  float64 `json:"amount_usd"`
+	DispatchID string  `json:"dispatch_id"`
 }
 
 // RecordCost reports execution cost to the gateway for centralized tracking.
-func (c *GatewayClient) RecordCost(ctx context.Context, agentName string, costUSD float64) error {
-	url := fmt.Sprintf("%s/hegemon/budget/%s/cost", c.baseURL, agentName)
+func (c *GatewayClient) RecordCost(ctx context.Context, agentName string, costUSD float64, dispatchID string) error {
+	url := fmt.Sprintf("%s/hegemon/budget/record", c.baseURL)
 
-	payload, err := json.Marshal(costRecord{CostUSD: costUSD})
+	payload, err := json.Marshal(budgetRecordRequest{
+		WorkerName: agentName,
+		AmountUSD:  costUSD,
+		DispatchID: dispatchID,
+	})
 	if err != nil {
 		return fmt.Errorf("marshal cost record: %w", err)
 	}

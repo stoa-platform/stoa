@@ -1280,6 +1280,68 @@ pub async fn llm_costs(State(state): State<AppState>) -> Json<LlmCostSnapshot> {
 }
 
 // =============================================================================
+// Distributed Tracing Admin (CAB-1752)
+// =============================================================================
+
+/// GET /admin/tracing/status — OpenTelemetry tracing configuration status.
+#[derive(Serialize)]
+pub struct TracingStatusResponse {
+    pub enabled: bool,
+    pub endpoint: Option<String>,
+    pub sample_rate: f64,
+}
+
+pub async fn tracing_status(State(state): State<AppState>) -> Json<TracingStatusResponse> {
+    Json(TracingStatusResponse {
+        enabled: state.config.otel_enabled,
+        endpoint: state.config.otel_endpoint.clone(),
+        sample_rate: state.config.otel_sample_rate,
+    })
+}
+
+// =============================================================================
+// Federation Upstreams Admin (CAB-1752)
+// =============================================================================
+
+/// GET /admin/federation/upstreams — list configured upstream MCP servers.
+#[derive(Serialize)]
+pub struct FederationUpstreamEntry {
+    pub url: String,
+    pub transport: String,
+    pub has_auth: bool,
+    pub timeout_secs: u64,
+}
+
+pub async fn federation_upstreams(
+    State(state): State<AppState>,
+) -> Json<FederationUpstreamsResponse> {
+    let upstreams: Vec<FederationUpstreamEntry> = state
+        .config
+        .federation_upstreams
+        .iter()
+        .map(|u| FederationUpstreamEntry {
+            url: u.url.clone(),
+            transport: u.transport.clone().unwrap_or_else(|| "sse".to_string()),
+            has_auth: u.auth_token.is_some(),
+            timeout_secs: u.timeout_secs.unwrap_or(30),
+        })
+        .collect();
+
+    Json(FederationUpstreamsResponse {
+        enabled: state.config.federation_enabled,
+        upstream_count: upstreams.len(),
+        upstreams,
+    })
+}
+
+#[derive(Serialize)]
+pub struct FederationUpstreamsResponse {
+    pub enabled: bool,
+    pub upstream_count: usize,
+    pub upstreams: Vec<FederationUpstreamEntry>,
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1518,6 +1580,9 @@ mod tests {
                 axum::routing::post(prompt_cache_invalidate),
             )
             .route("/prompt-cache/patterns", get(prompt_cache_patterns))
+            // CAB-1752: Tracing + federation upstreams
+            .route("/tracing/status", get(tracing_status))
+            .route("/federation/upstreams", get(federation_upstreams))
             .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
             .with_state(state)
     }
@@ -2604,5 +2669,42 @@ mod tests {
             .unwrap();
         let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(data["status"], "cleared");
+    }
+
+    // CAB-1752: Tracing status endpoint
+    #[tokio::test]
+    async fn test_tracing_status() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/tracing/status"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["enabled"], false);
+        assert!(data["sample_rate"].is_number());
+    }
+
+    // CAB-1752: Federation upstreams endpoint
+    #[tokio::test]
+    async fn test_federation_upstreams_empty() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/federation/upstreams"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["enabled"], false);
+        assert_eq!(data["upstream_count"], 0);
+        assert!(data["upstreams"].as_array().unwrap().is_empty());
     }
 }

@@ -17,9 +17,7 @@
 //! - OPA policy checks apply before upstream calls
 //! - Metering tracks federated calls
 
-// Infrastructure prepared for K8s CRD watcher integration (Phase 7)
-#![allow(dead_code)]
-#![allow(unused_imports)]
+// Federation module — upstream MCP server connectivity (Phase 7)
 
 pub mod cache;
 pub mod composition;

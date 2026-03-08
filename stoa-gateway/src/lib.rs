@@ -163,6 +163,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/llm/status", get(admin::llm_status))
         .route("/llm/providers", get(admin::llm_providers))
         .route("/llm/costs", get(admin::llm_costs))
+        // CAB-1752: Distributed tracing admin
+        .route("/tracing/status", get(admin::tracing_status))
+        // CAB-1752: Federation upstreams listing
+        .route("/federation/upstreams", get(admin::federation_upstreams))
         // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
         .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
         // CAB-1316: Per-request diagnostic report + aggregated summary

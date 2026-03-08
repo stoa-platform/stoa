@@ -17,8 +17,10 @@ from pathlib import Path
 from .push_metrics import MetricsPusher
 
 # CUJ criticality for demo_ready determination
-DEMO_BLOCKERS = {"CUJ-01"}  # core platform health — always must pass
-DEMO_DEGRADED = {"CUJ-02", "CUJ-03", "CUJ-04", "CUJ-05"}  # depend on infra setup
+# CUJ-01 (API Discovery), CUJ-02 (Subscription), CUJ-05 (MCP Tool Exposure)
+# are demo blockers — without self-service or MCP, no pitch on demo day.
+DEMO_BLOCKERS = {"CUJ-01", "CUJ-02", "CUJ-05"}
+DEMO_DEGRADED = {"CUJ-03", "CUJ-04"}  # observability + auth federation — nice-to-have
 
 
 def aggregate_results(results_dir: Path) -> dict:

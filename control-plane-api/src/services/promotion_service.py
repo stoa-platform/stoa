@@ -6,7 +6,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import settings
 from ..models.promotion import Promotion, PromotionStatus, validate_promotion_chain
+from ..notifications.promotion_notifier import notify_promotion_event
 from ..repositories.deployment import DeploymentRepository
 from ..repositories.promotion import PromotionRepository
 from ..services.kafka_service import Topics, kafka_service
@@ -69,6 +71,19 @@ class PromotionService:
                 "api_id": api_id,
                 "source_environment": source_environment,
                 "target_environment": target_environment,
+            },
+        )
+
+        await notify_promotion_event(
+            "promotion.pending_approval",
+            {
+                "tenant_id": tenant_id,
+                "api_id": api_id,
+                "source_environment": source_environment,
+                "target_environment": target_environment,
+                "requested_by": requested_by,
+                "message": message,
+                "console_url": f"https://console.{settings.BASE_DOMAIN}",
             },
         )
 
@@ -139,6 +154,16 @@ class PromotionService:
                 "approved_by": approved_by,
             },
             user_id=user_id,
+        )
+
+        await notify_promotion_event(
+            "promotion.approved",
+            {
+                "api_id": promotion.api_id,
+                "source_environment": promotion.source_environment,
+                "target_environment": promotion.target_environment,
+                "approved_by": approved_by,
+            },
         )
 
         return promotion
@@ -217,6 +242,16 @@ class PromotionService:
                 "rollback_promotion_id": str(rollback.id),
                 "original_source": original.source_environment,
                 "original_target": original.target_environment,
+            },
+        )
+
+        await notify_promotion_event(
+            "promotion.rolled_back",
+            {
+                "api_id": original.api_id,
+                "source_environment": original.source_environment,
+                "target_environment": original.target_environment,
+                "requested_by": requested_by,
             },
         )
 

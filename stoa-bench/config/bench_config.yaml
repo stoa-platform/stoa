@@ -1,0 +1,43 @@
+# STOA Bench — Configuration
+# All URLs use env vars for portability across K8s / VPS / local.
+# Env var override: STOA_BENCH_<SECTION>_<KEY> (uppercase, underscores)
+
+endpoints:
+  api: "${STOA_API_URL:-http://stoa-control-plane-api.stoa-system.svc}"
+  gateway: "${STOA_GATEWAY_URL:-http://stoa-gateway.stoa-system.svc}"
+  auth: "${STOA_AUTH_URL:-http://keycloak.stoa-system.svc}"
+  portal: "${STOA_PORTAL_URL:-http://stoa-portal.stoa-system.svc}"
+  pushgateway: "${PUSHGATEWAY_URL:-http://pushgateway.monitoring.svc:9091}"
+
+auth:
+  realm: "stoa"
+  # Admin credentials (tenant-admin role) for CUJ tests
+  admin_client_id: "${BENCH_ADMIN_CLIENT_ID:-stoa-healthcheck}"
+  admin_client_secret: "${BENCH_ADMIN_CLIENT_SECRET}"
+  # Consumer credentials (viewer/devops role) for portal CUJ tests
+  consumer_client_id: "${BENCH_CONSUMER_CLIENT_ID:-stoa-bench-consumer}"
+  consumer_client_secret: "${BENCH_CONSUMER_CLIENT_SECRET}"
+
+pushgateway:
+  auth: "${PUSHGATEWAY_AUTH:-}"  # user:pass
+  instance: "${ARENA_INSTANCE:-k8s}"
+
+# Test data prefixes (idempotent cleanup)
+test_data:
+  prefix: "bench-"
+  tenant_id: "tenant-bench"
+  cleanup_on_exit: true
+
+# L2 CUJ thresholds
+thresholds:
+  cuj01_e2e_ms: 2000
+  cuj02_e2e_ms: 30000
+  cuj03_metrics_lag_s: 30
+  cuj03_logs_lag_s: 60
+  cuj04_exchange_ms: 500
+  cuj05_e2e_ms: 3000
+
+# Alerting
+alerts:
+  consecutive_fail_threshold: 3
+  healthchecks_url: "${HEALTHCHECKS_URL:-}"

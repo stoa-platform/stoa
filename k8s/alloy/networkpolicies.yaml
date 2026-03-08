@@ -1,0 +1,110 @@
+# NetworkPolicies for Alloy + Loki on OVH MKS
+# IMPORTANT: Port 6443 is required because OVH MKS evaluates NetworkPolicy
+# AFTER kube-proxy DNAT (service port 443 → targetPort 6443).
+# Port 443 alone does NOT work for K8s API access on this cluster.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alloy-k8s-api
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 443
+      protocol: TCP
+    - port: 6443
+      protocol: TCP
+    - port: 10250
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alloy-egress
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 3100
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-loki-ingress
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - port: 3100
+      protocol: TCP
+    from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: alloy
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: grafana
+  - ports:
+    - port: 3100
+      protocol: TCP
+    from:
+    - namespaceSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-loki-k8s-api
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 443
+      protocol: TCP
+    - port: 6443
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-grafana-k8s-api
+  namespace: monitoring
+  labels:
+    security.stoa.dev/policy: seo-observatory
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 443
+      protocol: TCP
+    - port: 6443
+      protocol: TCP

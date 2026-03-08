@@ -1,0 +1,354 @@
+{
+  "name": "SEO GSC Monitor — Daily Pull + Slack Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-daily",
+      "name": "Daily 07:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build JWT from service account credentials for Google API auth\nconst crypto = require('crypto');\n\nconst sa = JSON.parse($env.GSC_SERVICE_ACCOUNT_JSON || '{}');\nconst clientId = $env.GSC_CLIENT_ID || '';\nconst clientSecret = $env.GSC_CLIENT_SECRET || '';\nconst refreshToken = $env.GSC_REFRESH_TOKEN || '';\nconst siteUrl = $env.GSC_SITE_URL || 'https://docs.gostoa.dev';\n\n// Dates: yesterday and 8 days ago (for 7-day window + comparison)\nconst now = new Date();\nconst yesterday = new Date(now);\nyesterday.setDate(now.getDate() - 1);\nconst weekAgo = new Date(now);\nweekAgo.setDate(now.getDate() - 8);\nconst twoWeeksAgo = new Date(now);\ntwoWeeksAgo.setDate(now.getDate() - 15);\n\nconst fmt = d => d.toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    siteUrl,\n    clientId,\n    clientSecret,\n    refreshToken,\n    // Current period: last 7 days\n    startDate: fmt(weekAgo),\n    endDate: fmt(yesterday),\n    // Previous period: 7 days before that\n    prevStartDate: fmt(twoWeeksAgo),\n    prevEndDate: fmt(weekAgo),\n    yesterday: fmt(yesterday)\n  }\n}];"
+      },
+      "id": "setup-dates",
+      "name": "Setup Dates & Credentials",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://oauth2.googleapis.com/token",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ client_id: $json.clientId, client_secret: $json.clientSecret, refresh_token: $json.refreshToken, grant_type: 'refresh_token' }) }}",
+        "options": {}
+      },
+      "id": "refresh-token",
+      "name": "Refresh OAuth Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Setup Dates & Credentials').item.json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Setup Dates & Credentials').item.json.startDate, endDate: $('Setup Dates & Credentials').item.json.endDate, dimensions: ['page'], rowLimit: 50 }) }}",
+        "options": {}
+      },
+      "id": "gsc-pages-current",
+      "name": "GSC Pages (Current Week)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Setup Dates & Credentials').item.json.siteUrl) }}/searchAnalytics/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Refresh OAuth Token').item.json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Setup Dates & Credentials').item.json.prevStartDate, endDate: $('Setup Dates & Credentials').item.json.prevEndDate, dimensions: ['page'], rowLimit: 50 }) }}",
+        "options": {}
+      },
+      "id": "gsc-pages-previous",
+      "name": "GSC Pages (Previous Week)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Setup Dates & Credentials').item.json.siteUrl) }}/searchAnalytics/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Refresh OAuth Token').item.json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Setup Dates & Credentials').item.json.startDate, endDate: $('Setup Dates & Credentials').item.json.endDate, dimensions: ['query'], rowLimit: 25 }) }}",
+        "options": {}
+      },
+      "id": "gsc-queries",
+      "name": "GSC Top Queries",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate GSC data, compute deltas, build Slack message + Pushgateway metrics\nconst currentPages = $('GSC Pages (Current Week)').first().json.rows || [];\nconst previousPages = $('GSC Pages (Previous Week)').first().json.rows || [];\nconst queries = $('GSC Top Queries').first().json.rows || [];\nconst dates = $('Setup Dates & Credentials').first().json;\n\n// Build previous period lookup\nconst prevMap = {};\nfor (const row of previousPages) {\n  prevMap[row.keys[0]] = row;\n}\n\n// Totals\nlet totalImp = 0, totalClicks = 0, prevTotalImp = 0, prevTotalClicks = 0;\nfor (const row of currentPages) { totalImp += row.impressions; totalClicks += row.clicks; }\nfor (const row of previousPages) { prevTotalImp += row.impressions; prevTotalClicks += row.clicks; }\n\nconst totalCtr = totalImp > 0 ? (totalClicks / totalImp * 100) : 0;\nconst prevTotalCtr = prevTotalImp > 0 ? (prevTotalClicks / prevTotalImp * 100) : 0;\nconst impDelta = prevTotalImp > 0 ? ((totalImp - prevTotalImp) / prevTotalImp * 100) : 0;\nconst clickDelta = prevTotalClicks > 0 ? ((totalClicks - prevTotalClicks) / prevTotalClicks * 100) : 100;\n\n// Top movers (biggest impression gain)\nconst movers = currentPages.map(row => {\n  const page = row.keys[0].replace('https://docs.gostoa.dev', '');\n  const prev = prevMap[row.keys[0]] || { impressions: 0, clicks: 0, position: 99 };\n  return {\n    page,\n    impressions: row.impressions,\n    clicks: row.clicks,\n    ctr: row.impressions > 0 ? (row.clicks / row.impressions * 100) : 0,\n    position: row.position,\n    impDelta: row.impressions - prev.impressions,\n    posDelta: prev.position - row.position, // positive = improved\n    prevClicks: prev.clicks\n  };\n}).sort((a, b) => b.impDelta - a.impDelta);\n\n// Celebrations: first clicks\nconst firstClicks = movers.filter(m => m.clicks > 0 && m.prevClicks === 0);\n\n// Needs attention: position dropped > 2\nconst losers = movers.filter(m => m.posDelta < -2).sort((a, b) => a.posDelta - b.posDelta);\n\n// Low CTR with high impressions (optimization opportunities)\nconst lowCtr = movers.filter(m => m.impressions > 20 && m.ctr < 1).sort((a, b) => b.impressions - a.impressions);\n\n// Top queries\nconst topQueries = queries.slice(0, 10).map(q => ({\n  query: q.keys[0],\n  impressions: q.impressions,\n  clicks: q.clicks,\n  position: q.position.toFixed(1)\n}));\n\n// Format delta\nconst fmtDelta = (v) => v >= 0 ? `+${v.toFixed(0)}%` : `${v.toFixed(0)}%`;\nconst fmtPos = (v) => v >= 0 ? `\\u2191${v.toFixed(1)}` : `\\u2193${Math.abs(v).toFixed(1)}`;\n\n// === Slack Daily Message ===\nlet slackText = `:chart_with_upwards_trend: *SEO Daily — ${dates.yesterday}*\\n`;\nslackText += `Impressions: *${totalImp}* (${fmtDelta(impDelta)} vs prev week)\\n`;\nslackText += `Clicks: *${totalClicks}* (${fmtDelta(clickDelta)})\\n`;\nslackText += `CTR: *${totalCtr.toFixed(2)}%* (was ${prevTotalCtr.toFixed(2)}%)\\n`;\n\nif (firstClicks.length > 0) {\n  slackText += `\\n:tada: *First clicks!*\\n`;\n  for (const fc of firstClicks.slice(0, 3)) {\n    slackText += `  • ${fc.page} — ${fc.clicks} click(s)\\n`;\n  }\n}\n\nif (movers.length > 0) {\n  slackText += `\\n:trophy: *Top Movers*\\n`;\n  for (const m of movers.slice(0, 5)) {\n    slackText += `  • ${m.page} — pos ${m.position.toFixed(1)} (${fmtPos(m.posDelta)}), ${m.impressions} imp\\n`;\n  }\n}\n\nif (losers.length > 0) {\n  slackText += `\\n:chart_with_downwards_trend: *Needs Attention*\\n`;\n  for (const l of losers.slice(0, 3)) {\n    slackText += `  • ${l.page} — pos ${l.position.toFixed(1)} (${fmtPos(l.posDelta)})\\n`;\n  }\n}\n\nif (lowCtr.length > 0) {\n  slackText += `\\n:bulb: *Title Rewrite Candidates* (high imp, low CTR)\\n`;\n  for (const lc of lowCtr.slice(0, 3)) {\n    slackText += `  • ${lc.page} — ${lc.impressions} imp, CTR ${lc.ctr.toFixed(1)}%\\n`;\n  }\n}\n\nif (topQueries.length > 0) {\n  slackText += `\\n:mag: *Top Queries*\\n`;\n  for (const q of topQueries.slice(0, 5)) {\n    slackText += `  • \\\"${q.query}\\\" — ${q.impressions} imp, ${q.clicks} clicks, pos ${q.position}\\n`;\n  }\n}\n\n// === Pushgateway Metrics ===\nlet metrics = '';\nmetrics += `# HELP seo_total_impressions Total daily impressions\\n`;\nmetrics += `# TYPE seo_total_impressions gauge\\n`;\nmetrics += `seo_total_impressions{site=\"docs.gostoa.dev\",date=\"${dates.yesterday}\"} ${totalImp}\\n`;\nmetrics += `# HELP seo_total_clicks Total daily clicks\\n`;\nmetrics += `# TYPE seo_total_clicks gauge\\n`;\nmetrics += `seo_total_clicks{site=\"docs.gostoa.dev\",date=\"${dates.yesterday}\"} ${totalClicks}\\n`;\nmetrics += `# HELP seo_total_ctr Global CTR\\n`;\nmetrics += `# TYPE seo_total_ctr gauge\\n`;\nmetrics += `seo_total_ctr{site=\"docs.gostoa.dev\",date=\"${dates.yesterday}\"} ${(totalCtr / 100).toFixed(6)}\\n`;\n\n// Per-page metrics (top 20)\nmetrics += `# HELP seo_page_impressions Page impressions\\n`;\nmetrics += `# TYPE seo_page_impressions gauge\\n`;\nmetrics += `# HELP seo_page_clicks Page clicks\\n`;\nmetrics += `# TYPE seo_page_clicks gauge\\n`;\nmetrics += `# HELP seo_page_position Page avg position\\n`;\nmetrics += `# TYPE seo_page_position gauge\\n`;\nmetrics += `# HELP seo_page_ctr Page CTR\\n`;\nmetrics += `# TYPE seo_page_ctr gauge\\n`;\nfor (const m of movers.slice(0, 20)) {\n  const p = m.page.replace(/\"/g, '');\n  metrics += `seo_page_impressions{page=\"${p}\",date=\"${dates.yesterday}\"} ${m.impressions}\\n`;\n  metrics += `seo_page_clicks{page=\"${p}\",date=\"${dates.yesterday}\"} ${m.clicks}\\n`;\n  metrics += `seo_page_position{page=\"${p}\",date=\"${dates.yesterday}\"} ${m.position.toFixed(2)}\\n`;\n  metrics += `seo_page_ctr{page=\"${p}\",date=\"${dates.yesterday}\"} ${(m.ctr / 100).toFixed(6)}\\n`;\n}\n\n\n\n// === OpenSearch Document ===\nconst opensearchDoc = {\n  '@timestamp': new Date().toISOString(),\n  date: dates.yesterday,\n  site: 'docs.gostoa.dev',\n  period: { start: dates.startDate, end: dates.endDate },\n  previous_period: { start: dates.prevStartDate, end: dates.prevEndDate },\n  totals: {\n    impressions: totalImp,\n    clicks: totalClicks,\n    ctr: totalCtr / 100,\n    avg_position: currentPages.length > 0 ? currentPages.reduce((s, r) => s + r.position, 0) / currentPages.length : 0\n  },\n  deltas: {\n    impressions_pct: impDelta,\n    clicks_pct: parseFloat(clickDelta.toFixed(1)),\n    ctr_prev: prevTotalCtr / 100\n  },\n  pages: movers.slice(0, 50).map(m => ({\n    path: m.page,\n    impressions: m.impressions,\n    clicks: m.clicks,\n    ctr: m.ctr / 100,\n    position: m.position,\n    imp_delta: m.impDelta,\n    pos_delta: m.posDelta,\n    first_click: m.clicks > 0 && m.prevClicks === 0\n  })),\n  queries: topQueries.map(q => ({\n    query: q.query,\n    impressions: q.impressions,\n    clicks: q.clicks,\n    position: parseFloat(q.position)\n  })),\n  alerts: {\n    first_clicks: firstClicks.map(fc => fc.page),\n    ranking_drops: losers.map(l => ({ page: l.page, delta: l.posDelta })),\n    low_ctr_candidates: lowCtr.map(lc => ({ page: lc.page, impressions: lc.impressions, ctr: lc.ctr / 100 }))\n  }\n};\n\nreturn [{\n  json: {\n    slackText,\n    metrics,\n    totalImp,\n    totalClicks,\n    totalCtr: totalCtr.toFixed(2),\n    impDelta: impDelta.toFixed(0),\n    topMovers: movers.slice(0, 5),\n    losers: losers.slice(0, 3),\n    lowCtr: lowCtr.slice(0, 3),\n    firstClicks,\n    topQueries,\n    opensearchDoc\n  }\n}];"
+      },
+      "id": "process-data",
+      "name": "Process & Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_CONTENT_WEBHOOK || $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ blocks: [{ type: 'section', text: { type: 'mrkdwn', text: $json.slackText } }] }) }}",
+        "options": {}
+      },
+      "id": "slack-notify",
+      "name": "Slack Daily Digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.PUSHGATEWAY_URL || 'https://pushgateway.gostoa.dev' }}/metrics/job/ai_factory/pipeline/seo_monitor",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "text/plain"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "string",
+        "body": "={{ $json.metrics }}",
+        "options": {
+          "basicAuth": {
+            "user": "={{ ($env.PUSHGATEWAY_AUTH || ':').split(':')[0] }}",
+            "password": "={{ ($env.PUSHGATEWAY_AUTH || ':').split(':')[1] }}"
+          }
+        }
+      },
+      "id": "pushgateway",
+      "name": "Push Metrics to Prometheus",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Archive raw data as JSON on the n8n host\nconst data = $('Process & Build Report').first().json;\nconst dates = $('Setup Dates & Credentials').first().json;\nconst fs = require('fs');\nconst dir = '/data/seo-metrics';\ntry { fs.mkdirSync(dir, { recursive: true }); } catch(e) {}\nconst path = `${dir}/${dates.yesterday}.json`;\nfs.writeFileSync(path, JSON.stringify(data, null, 2));\nreturn [{ json: { archived: path } }];"
+      },
+      "id": "archive-json",
+      "name": "Archive JSON (90d)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.OPENSEARCH_URL || 'https://opensearch-api.gostoa.dev' }}/seo-metrics-{{ $('Setup Dates & Credentials').first().json.yesterday.substring(0,7) }}/_doc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.opensearchDoc) }}",
+        "options": {
+          "basicAuth": {
+            "user": "={{ ($env.OPENSEARCH_AUTH || 'admin:admin').split(':')[0] }}",
+            "password": "={{ ($env.OPENSEARCH_AUTH || 'admin:admin').split(':')[1] }}"
+          }
+        }
+      },
+      "id": "opensearch-index",
+      "name": "Index to OpenSearch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        800
+      ]
+    }
+  ],
+  "connections": {
+    "Daily 07:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Setup Dates & Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Dates & Credentials": {
+      "main": [
+        [
+          {
+            "node": "Refresh OAuth Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh OAuth Token": {
+      "main": [
+        [
+          {
+            "node": "GSC Pages (Current Week)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GSC Pages (Previous Week)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GSC Top Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Pages (Current Week)": {
+      "main": [
+        [
+          {
+            "node": "Process & Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Pages (Previous Week)": {
+      "main": [
+        [
+          {
+            "node": "Process & Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Top Queries": {
+      "main": [
+        [
+          {
+            "node": "Process & Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process & Build Report": {
+      "main": [
+        [
+          {
+            "node": "Slack Daily Digest",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Push Metrics to Prometheus",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Archive JSON (90d)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Index to OpenSearch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "notes": "SEO GSC Monitor — daily Google Search Console metrics pull.\n\nRequired n8n env vars:\n  GSC_CLIENT_ID         — Google OAuth2 Client ID\n  GSC_CLIENT_SECRET     — Google OAuth2 Client Secret\n  GSC_REFRESH_TOKEN     — OAuth2 refresh token (obtained via one-time auth flow)\n  GSC_SITE_URL          — Site property URL (default: https://docs.gostoa.dev)\n  SLACK_CONTENT_WEBHOOK — Slack webhook for SEO notifications (or SLACK_WEBHOOK_URL)\n  PUSHGATEWAY_URL       — Prometheus Pushgateway URL\n  PUSHGATEWAY_AUTH      — Pushgateway basic auth (user:pass)\n\nSetup:\n  1. Store GSC_CLIENT_ID + GSC_CLIENT_SECRET in Infisical /n8n/\n  2. Run the one-time OAuth2 consent flow (see scripts/ai-ops/gsc-get-refresh-token.sh)\n  3. Store the refresh token in Infisical /n8n/GSC_REFRESH_TOKEN\n  4. Import this workflow in n8n, activate it\n  5. Verify: trigger manually, check Slack + Pushgateway\n\nNode settings required:\n  NODE_FUNCTION_ALLOW_BUILTIN=crypto,https,url,buffer,fs\n  N8N_BLOCK_ENV_ACCESS_IN_NODE=false\n\nOpenSearch env vars:\n  OPENSEARCH_URL  — OpenSearch endpoint (default: https://opensearch.gostoa.dev)\n  OPENSEARCH_AUTH — Basic auth user:pass (default: admin:admin)\n\nIndex pattern: seo-metrics-YYYY-MM (monthly rollover)\nILM: configure 365-day retention on seo-metrics-* indices"
+}

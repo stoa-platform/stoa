@@ -1,0 +1,406 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "bolt",
+      "includeVars": true,
+      "keepTime": true,
+      "title": "L2 Platform CUJs",
+      "type": "link",
+      "url": "/d/stoa-bench-l2-cuj/stoa-bench-l2-platform-cujs"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "title": "L1 Enterprise",
+      "type": "link",
+      "url": "/d/gateway-arena-enterprise/gateway-arena-enterprise"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Demo Summary",
+      "type": "link",
+      "url": "/d/stoa-bench-demo/stoa-bench-demo-readiness"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "DEMO CONFIDENCE",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_demo_confidence",
+          "legendFormat": "Confidence"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": {
+              "3": { "text": "HIGH — GO", "color": "green" },
+              "2": { "text": "MEDIUM — Monitor", "color": "yellow" },
+              "1": { "text": "LOW — Investigate", "color": "orange" },
+              "0": { "text": "BLOCKED — No-Go", "color": "red" }
+            }}
+          ],
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "yellow", "value": 2 },
+              { "color": "green", "value": 3 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Consecutive L2 PASS",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 4, "x": 5, "y": 0 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_consecutive_pass",
+          "legendFormat": "Consecutive"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 5 },
+              { "color": "yellow", "value": 10 },
+              { "color": "green", "value": 50 }
+            ]
+          },
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Regressions",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 3, "x": 9, "y": 0 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_regressions",
+          "legendFormat": "Regressions"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 3 }
+            ]
+          },
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Flaky CUJs",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 3, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_flaky_cujs",
+          "legendFormat": "Flaky"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 2 }
+            ]
+          },
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Error Trend",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 5, "x": 15, "y": 0 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_error_trend",
+          "legendFormat": "Trend"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": {
+              "-1": { "text": "IMPROVING", "color": "green" },
+              "0": { "text": "STABLE", "color": "blue" },
+              "1": { "text": "DEGRADING", "color": "red" }
+            }}
+          ],
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "blue", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Last L3 Run",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 0 },
+      "targets": [
+        {
+          "expr": "time() - stoa_bench_l3_last_run",
+          "legendFormat": "Seconds ago"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1200 },
+              { "color": "red", "value": 3600 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Consecutive PASS Trend (7d)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_consecutive_pass",
+          "legendFormat": "Consecutive PASS"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 20 },
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 10 }
+            ]
+          },
+          "custom.thresholdsStyle": { "mode": "line" }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "single" }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Demo Confidence Trend (7d)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_demo_confidence",
+          "legendFormat": "Confidence Level"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 20, "stacking": { "mode": "none" } },
+          "min": 0,
+          "max": 3,
+          "mappings": [
+            { "type": "value", "options": { "3": { "text": "HIGH" }, "2": { "text": "MEDIUM" }, "1": { "text": "LOW" }, "0": { "text": "BLOCKED" } } }
+          ],
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "yellow", "value": 2 },
+              { "color": "green", "value": 3 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Per-CUJ Error Rate (last 20 runs)",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_error_rate",
+          "legendFormat": "{{cuj}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "id": 16,
+      "title": "Error Rate Trend (7d)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_error_rate",
+          "legendFormat": "{{cuj}} error %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          },
+          "custom.thresholdsStyle": { "mode": "dashed" }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 20,
+      "title": "CUJ Pass Rate (7d rolling)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "targets": [
+        {
+          "expr": "avg_over_time(stoa_bench_cuj_status{layer=\"L2\"}[6h]) * 100",
+          "legendFormat": "{{cuj}} pass %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 5 },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 90 },
+              { "color": "green", "value": 95 }
+            ]
+          },
+          "custom.thresholdsStyle": { "mode": "dashed" }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 30,
+      "title": "CUJ Latency Trend (7d)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 29 },
+      "targets": [
+        {
+          "expr": "stoa_bench_cuj_duration_seconds{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 40,
+      "title": "Service Availability (24h)",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 37 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_availability_24h",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 95,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 99 },
+              { "color": "green", "value": 99.5 }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["stoa-bench", "l3", "stability", "demo-confidence"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "STOA Bench — L3 Stability & Demo Confidence",
+  "uid": "stoa-bench-l3-stability",
+  "version": 2
+}

@@ -1,0 +1,403 @@
+{
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-seo"
+      },
+      "description": "Total daily impressions from Google Search Console for docs.gostoa.dev",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 20
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "1d"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "field": "totals.impressions",
+              "id": "1",
+              "type": "max"
+            }
+          ],
+          "query": "NOT test:true",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Daily Impressions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-seo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 20
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "1d"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "field": "totals.clicks",
+              "id": "1",
+              "type": "max"
+            }
+          ],
+          "query": "NOT test:true",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Daily Clicks",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-seo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 15
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "1d"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "field": "totals.ctr",
+              "id": "1",
+              "type": "max"
+            }
+          ],
+          "query": "NOT test:true",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "CTR (%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-seo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 15,
+            "transform": "negative-Y"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "1d"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "field": "totals.avg_position",
+              "id": "1",
+              "type": "max"
+            }
+          ],
+          "query": "NOT test:true",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Average Position",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-seo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": -0.1
+              },
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "1d"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "field": "deltas.impressions_pct",
+              "id": "1",
+              "type": "max"
+            }
+          ],
+          "query": "NOT test:true",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Impressions Delta (%)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-seo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": -0.1
+              },
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "1d"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "field": "deltas.clicks_pct",
+              "id": "1",
+              "type": "max"
+            }
+          ],
+          "query": "NOT test:true",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Clicks Delta (%)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-seo"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 7,
+      "targets": [
+        {
+          "metrics": [
+            {
+              "id": "1",
+              "settings": {
+                "size": "7"
+              },
+              "type": "raw_data"
+            }
+          ],
+          "query": "NOT test:true",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Latest Report",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_id": true,
+              "_index": true,
+              "_type": true,
+              "alerts": true,
+              "pages": true,
+              "period": true,
+              "previous_period": true,
+              "queries": true
+            },
+            "renameByName": {
+              "date": "Date",
+              "deltas.clicks_pct": "Clicks \u0394%",
+              "deltas.impressions_pct": "Imp \u0394%",
+              "site": "Site",
+              "totals.avg_position": "Avg Position",
+              "totals.clicks": "Clicks",
+              "totals.ctr": "CTR",
+              "totals.impressions": "Impressions"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "1d",
+  "tags": [
+    "seo",
+    "observatory"
+  ],
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "utc",
+  "title": "SEO Observatory \u2014 docs.gostoa.dev",
+  "uid": "seo-observatory"
+}

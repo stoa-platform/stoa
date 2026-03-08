@@ -1,0 +1,123 @@
+---
+# Arena Layer 2 — Platform Critical User Journeys
+# Runs every 15 min, validates 5 CUJs that map to the demo flow.
+# Results pushed to Pushgateway as stoa_bench_* metrics.
+# L3 stability analysis runs after each L2 cycle.
+#
+# Docker image: ghcr.io/stoa-platform/stoa-bench:0.1.8
+# Contains: pytest, httpx, scoring modules, runner.py
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: stoa-bench-l2
+  namespace: stoa-system
+  labels:
+    app: stoa-bench
+    layer: l2
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600  # 10 min max
+      backoffLimit: 0  # No retry — flaky results are tracked by L3
+      template:
+        metadata:
+          labels:
+            app: stoa-bench
+            layer: l2
+        spec:
+          imagePullSecrets:
+            - name: ghcr-pull-secret
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 12345
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: bench-l2
+              image: ghcr.io/stoa-platform/stoa-bench:0.1.8
+              command: ["python", "/bench/runner.py", "--cron"]
+              env:
+                # Service endpoints (in-cluster DNS — all on port 80)
+                - name: STOA_API_URL
+                  value: "http://stoa-control-plane-api.stoa-system.svc"
+                - name: STOA_GATEWAY_URL
+                  value: "http://stoa-gateway.stoa-system.svc"
+                - name: STOA_AUTH_URL
+                  value: "http://keycloak.stoa-system.svc"
+                - name: STOA_PORTAL_URL
+                  value: "http://stoa-portal.stoa-system.svc"
+                # Auth credentials (from K8s Secret)
+                - name: BENCH_ADMIN_CLIENT_ID
+                  value: "stoa-healthcheck"
+                - name: BENCH_ADMIN_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: arena-verify-config
+                      key: oidc-client-secret
+                - name: BENCH_CONSUMER_CLIENT_ID
+                  value: "stoa-bench-consumer"
+                - name: BENCH_CONSUMER_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: arena-verify-config
+                      key: bench-consumer-secret
+                      optional: true
+                # Pushgateway
+                - name: PUSHGATEWAY_URL
+                  value: "http://pushgateway.monitoring.svc:9091"
+                - name: ARENA_INSTANCE
+                  value: "k8s"
+                # Healthchecks dead man's switch
+                - name: HEALTHCHECKS_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: arena-verify-config
+                      key: healthchecks-url
+                      optional: true
+                # Token Exchange (CUJ-04)
+                - name: TOKEN_EXCHANGE_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: arena-verify-config
+                      key: token-exchange-secret
+                      optional: true
+                # Monitoring stack (CUJ-03)
+                - name: PROMETHEUS_URL
+                  value: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
+                - name: GRAFANA_URL
+                  value: "http://prometheus-grafana.monitoring.svc:80"
+                - name: LOKI_URL
+                  value: "http://loki.monitoring.svc:3100"
+                # Timeouts
+                - name: BENCH_TIMEOUT
+                  value: "10"
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: history
+                  mountPath: /tmp/stoa-bench-history
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi
+            - name: history
+              emptyDir:
+                sizeLimit: 16Mi

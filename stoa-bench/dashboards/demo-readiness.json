@@ -1,0 +1,486 @@
+{
+  "annotations": { "list": [] },
+  "description": "STOA Bench — Single-pane demo readiness view for March 17 ESN+ECB presentation. Aggregates all 4 layers (L0-L3).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Layer Details",
+      "type": "dashboards",
+      "tags": ["stoa-bench"]
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "DEMO READINESS — STOA Platform",
+      "type": "row"
+    },
+    {
+      "id": 1,
+      "title": "DEMO VERDICT",
+      "description": "L2 CUJ blockers (CUJ-01, 02, 05) determine GO/BLOCKED",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "stoa_bench_demo_ready",
+          "legendFormat": "Demo Ready"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": {
+              "1": { "text": "GO", "color": "green" },
+              "0": { "text": "BLOCKED", "color": "red" }
+            }}
+          ],
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "L3 Confidence",
+      "description": "Stability confidence from L3 consecutive pass analysis",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 6, "y": 1 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_demo_confidence",
+          "legendFormat": "Confidence"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": {
+              "3": { "text": "HIGH", "color": "green" },
+              "2": { "text": "MEDIUM", "color": "yellow" },
+              "1": { "text": "LOW", "color": "orange" },
+              "0": { "text": "BLOCKED", "color": "red" }
+            }}
+          ],
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "yellow", "value": 2 },
+              { "color": "green", "value": 3 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Consecutive PASS",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 3, "x": 10, "y": 1 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_consecutive_pass",
+          "legendFormat": "Streak"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 5 },
+              { "color": "yellow", "value": 10 },
+              { "color": "green", "value": 50 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "L2 CUJs",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 3, "x": 13, "y": 1 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l2_passed",
+          "legendFormat": "Passed"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "green", "value": 5 }
+            ]
+          },
+          "max": 5
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "L1-A Core",
+      "description": "Gateway Core (8 comparable dimensions)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 16, "y": 1 },
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_l1a_score{gateway=\"stoa-k8s\"}",
+          "legendFormat": "STOA L1-A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "green", "value": 80 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "L1-B AI",
+      "description": "AI-Native (12 STOA differentiator dimensions)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 20, "y": 1 },
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_l1b_score{gateway=\"stoa-k8s\"}",
+          "legendFormat": "STOA L1-B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "green", "value": 80 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "id": 101,
+      "title": "L2 — Platform CUJs (Current)",
+      "type": "row"
+    },
+    {
+      "id": 10,
+      "title": "CUJ Status Matrix",
+      "type": "table",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "stoa_bench_cuj_status{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "expr": "stoa_bench_cuj_duration_seconds{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": { "byField": "cuj", "mode": "outer" }
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value #A" },
+            "properties": [
+              { "id": "displayName", "value": "Status" },
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "1": { "text": "PASS", "color": "green" }, "0": { "text": "FAIL", "color": "red" } } }
+              ]}
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value #B" },
+            "properties": [
+              { "id": "displayName", "value": "Duration" },
+              { "id": "unit", "value": "s" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 11,
+      "title": "Error Rate by CUJ",
+      "type": "bargauge",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_error_rate",
+          "legendFormat": "{{cuj}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 102,
+      "title": "L1 — Enterprise AI Readiness (Gateway Comparison)",
+      "type": "row"
+    },
+    {
+      "id": 20,
+      "title": "L1-A Gateway Core — Per Gateway",
+      "description": "8 comparable dimensions: auth, policy, guardrails, quota, resilience, governance, TLS, transforms",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_l1a_score",
+          "legendFormat": "{{gateway}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "green", "value": 80 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "id": 21,
+      "title": "L1-B AI-Native — Per Gateway",
+      "description": "12 AI-native dimensions: MCP, LLM routing, tools CRUD, UAC, PII, tracing, federation",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_l1b_score",
+          "legendFormat": "{{gateway}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "green", "value": 70 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "id": 103,
+      "title": "L0 — Proxy Baseline Performance",
+      "type": "row"
+    },
+    {
+      "id": 30,
+      "title": "L0 Proxy Score — Per Gateway",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "targets": [
+        {
+          "expr": "gateway_arena_score",
+          "legendFormat": "{{gateway}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "green", "value": 80 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "id": 31,
+      "title": "L0 P95 Latency — Per Gateway",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "targets": [
+        {
+          "expr": "gateway_arena_p95_seconds * 1000",
+          "legendFormat": "{{gateway}} p95",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 },
+      "id": 104,
+      "title": "Trends (7 days)",
+      "type": "row"
+    },
+    {
+      "id": 40,
+      "title": "Consecutive PASS + Demo Confidence",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l3_consecutive_pass",
+          "legendFormat": "Consecutive PASS"
+        },
+        {
+          "expr": "stoa_bench_l3_demo_confidence * 20",
+          "legendFormat": "Confidence (x20 scale)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 41,
+      "title": "CUJ Status History (24h)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+      "targets": [
+        {
+          "expr": "stoa_bench_cuj_status{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "points", "pointSize": 8, "showPoints": "always" },
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "PASS" }, "0": { "text": "FAIL" } } }
+          ],
+          "min": -0.1,
+          "max": 1.1
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" }
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["stoa-bench", "demo", "summary"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "STOA Bench — Demo Readiness",
+  "uid": "stoa-bench-demo",
+  "version": 1
+}

@@ -1,0 +1,23 @@
+[project]
+name = "stoa-bench"
+version = "0.1.0"
+description = "STOA Platform — 4-Layer Continuous Benchmark"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27,<1",
+    "pyyaml>=6.0",
+    "prometheus-client>=0.21",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+asyncio_default_test_loop_scope = "module"
+testpaths = ["tests"]
+markers = [
+    "l2: Layer 2 — Platform Critical User Journeys",
+    "l3: Layer 3 — Stability & Regression",
+]

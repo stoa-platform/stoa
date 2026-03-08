@@ -196,6 +196,14 @@ def main() -> None:
     discard_first = int(os.environ.get("DISCARD_FIRST", "1"))
     total_runs = int(os.environ.get("RUNS", "3"))
 
+    # L1-A (Gateway Core) vs L1-B (AI-Native) dimension classification
+    L1A_DIMS = {"auth_chain", "policy_eval", "guardrails", "quota_burst",
+                "resilience", "governance"}  # core gateway capabilities
+    L1B_DIMS = {"mcp_discovery", "mcp_toolcall", "llm_routing", "llm_cost",
+                "llm_circuit_breaker", "native_tools_crud", "api_bridge",
+                "uac_binding", "pii_detection", "distributed_tracing",
+                "prompt_cache", "skills_lifecycle", "federation", "diagnostic"}
+
     # Prometheus metric families
     families: dict[str, list[str]] = {
         "gateway_arena_enterprise_score": [],
@@ -205,6 +213,8 @@ def main() -> None:
         "gateway_arena_enterprise_score_stddev": [],
         "gateway_arena_enterprise_runs": [],
         "gateway_arena_enterprise_latency_p95": [],
+        "gateway_arena_enterprise_l1a_score": [],
+        "gateway_arena_enterprise_l1b_score": [],
     }
     family_meta = {
         "gateway_arena_enterprise_score": ("gauge", "Enterprise AI Readiness Index 0-100"),
@@ -214,6 +224,8 @@ def main() -> None:
         "gateway_arena_enterprise_score_stddev": ("gauge", "Enterprise score run-to-run stddev"),
         "gateway_arena_enterprise_runs": ("gauge", "Number of valid enterprise runs"),
         "gateway_arena_enterprise_latency_p95": ("gauge", "P95 latency per enterprise dimension"),
+        "gateway_arena_enterprise_l1a_score": ("gauge", "L1-A Gateway Core sub-score 0-100"),
+        "gateway_arena_enterprise_l1b_score": ("gauge", "L1-B AI-Native sub-score 0-100"),
     }
 
     leaderboard = []
@@ -359,9 +371,38 @@ def main() -> None:
                 "stddev": round(stddev, 4),
             })
 
+        # Compute L1-A (Gateway Core) and L1-B (AI-Native) sub-scores
+        l1a_weighted_sum = 0.0
+        l1a_weight_total = 0.0
+        l1b_weighted_sum = 0.0
+        l1b_weight_total = 0.0
+        for dim in DIMENSIONS:
+            dk = dim["key"]
+            dscore = median(dim_run_scores[dk])
+            dweight = dim["weight"]
+            if dk in L1A_DIMS:
+                l1a_weighted_sum += dweight * dscore
+                l1a_weight_total += dweight
+            elif dk in L1B_DIMS:
+                l1b_weighted_sum += dweight * dscore
+                l1b_weight_total += dweight
+        # Normalize to 0-100 (divide by total weight of each group)
+        l1a_score = (l1a_weighted_sum / l1a_weight_total * 100 / 100) if l1a_weight_total > 0 else 0.0
+        l1b_score = (l1b_weighted_sum / l1b_weight_total * 100 / 100) if l1b_weight_total > 0 else 0.0
+        # Rescale: weighted sum / weight_total gives the score already normalized
+        l1a_score = l1a_weighted_sum / l1a_weight_total if l1a_weight_total > 0 else 0.0
+        l1b_score = l1b_weighted_sum / l1b_weight_total if l1b_weight_total > 0 else 0.0
+
+        families["gateway_arena_enterprise_l1a_score"].append(
+            f'gateway_arena_enterprise_l1a_score{{gateway="{name}"}} {l1a_score:.2f}')
+        families["gateway_arena_enterprise_l1b_score"].append(
+            f'gateway_arena_enterprise_l1b_score{{gateway="{name}"}} {l1b_score:.2f}')
+
         leaderboard.append({
             "gateway": name,
             "enterprise_score": round(enterprise_score, 2),
+            "l1a_core_score": round(l1a_score, 2),
+            "l1b_ai_score": round(l1b_score, 2),
             "stddev": round(stddev, 4),
             "ci95": f"[{ci_lower:.2f}, {ci_upper:.2f}]",
             "dimensions": dim_details,

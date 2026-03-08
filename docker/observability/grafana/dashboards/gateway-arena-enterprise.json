@@ -62,7 +62,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 1},
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 1},
       "id": 1,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
@@ -73,6 +73,68 @@
         }
       ],
       "title": "Enterprise Readiness Index",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "L1-A: Gateway Core capabilities (auth, policy, guardrails, quota, resilience, governance). Comparable across all gateways.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 20},
+              {"color": "yellow", "value": 50},
+              {"color": "green", "value": 80}
+            ]
+          },
+          "min": 0, "max": 100, "unit": "none", "decimals": 1
+        }
+      },
+      "gridPos": {"h": 6, "w": 5, "x": 6, "y": 1},
+      "id": 50,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_l1a_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "L1-A Gateway Core",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "L1-B: AI-Native capabilities (MCP, LLM routing, tools CRUD, PII, tracing, federation). STOA differentiator.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 10},
+              {"color": "yellow", "value": 40},
+              {"color": "green", "value": 80}
+            ]
+          },
+          "min": 0, "max": 100, "unit": "none", "decimals": 1
+        }
+      },
+      "gridPos": {"h": 6, "w": 5, "x": 11, "y": 1},
+      "id": 51,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_enterprise_l1b_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "L1-B AI-Native",
       "type": "stat"
     },
     {

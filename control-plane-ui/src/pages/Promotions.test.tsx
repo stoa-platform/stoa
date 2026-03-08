@@ -254,6 +254,35 @@ describe('Promotions', () => {
       });
     });
 
+    it('calls completePromotion when Mark Deployed is clicked', async () => {
+      const promotingPromotion: Promotion = {
+        ...mockPromotion,
+        status: 'promoting',
+        approved_by: 'James Halliday',
+      };
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.listPromotions).mockResolvedValue({
+        items: [promotingPromotion],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      });
+      vi.mocked(apiService.completePromotion).mockResolvedValue(undefined as never);
+      renderWithProviders(<Promotions />);
+
+      const user = userEvent.setup();
+
+      await waitFor(() => {
+        expect(screen.getByText('Mark Deployed')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('Mark Deployed'));
+
+      await waitFor(() => {
+        expect(apiService.completePromotion).toHaveBeenCalledWith('tenant-1', 'promo-1');
+      });
+    });
+
     it('hides Mark Deployed for viewers', async () => {
       const promotingPromotion: Promotion = {
         ...mockPromotion,

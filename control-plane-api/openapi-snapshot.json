@@ -1023,6 +1023,189 @@
         "title": "ApprovalStepDef",
         "type": "object"
       },
+      "ArgoCDDiffResource": {
+        "properties": {
+          "diff": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "namespace": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Namespace"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "ArgoCDDiffResource",
+        "type": "object"
+      },
+      "ArgoCDDiffResponse": {
+        "properties": {
+          "application": {
+            "title": "Application",
+            "type": "string"
+          },
+          "diff_count": {
+            "title": "Diff Count",
+            "type": "integer"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ArgoCDDiffResource"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "total_resources": {
+            "title": "Total Resources",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "application",
+          "total_resources",
+          "diff_count",
+          "resources"
+        ],
+        "title": "ArgoCDDiffResponse",
+        "type": "object"
+      },
+      "ArgoCDPlatformStatusResponse": {
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "components",
+          "checked_at"
+        ],
+        "title": "ArgoCDPlatformStatusResponse",
+        "type": "object"
+      },
+      "ArgoCDSyncRequest": {
+        "properties": {
+          "prune": {
+            "default": false,
+            "description": "Prune resources no longer in Git",
+            "title": "Prune",
+            "type": "boolean"
+          },
+          "revision": {
+            "default": "HEAD",
+            "description": "Git revision to sync to",
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "title": "ArgoCDSyncRequest",
+        "type": "object"
+      },
+      "ArgoCDSyncResponse": {
+        "properties": {
+          "application": {
+            "title": "Application",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application",
+          "status",
+          "message"
+        ],
+        "title": "ArgoCDSyncResponse",
+        "type": "object"
+      },
       "AudienceUpdateRequest": {
         "description": "Request to update an API's audience visibility level.",
         "properties": {
@@ -15408,6 +15591,261 @@
         "title": "PortalMCPServersResponse",
         "type": "object"
       },
+      "PromotionCreate": {
+        "properties": {
+          "message": {
+            "description": "Mandatory audit trail message explaining the promotion reason",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "source_environment": {
+            "description": "Source environment (dev, staging)",
+            "title": "Source Environment",
+            "type": "string"
+          },
+          "target_environment": {
+            "description": "Target environment (staging, production)",
+            "title": "Target Environment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_environment",
+          "target_environment",
+          "message"
+        ],
+        "title": "PromotionCreate",
+        "type": "object"
+      },
+      "PromotionDiffResponse": {
+        "properties": {
+          "diff_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Summary"
+          },
+          "promotion_id": {
+            "format": "uuid",
+            "title": "Promotion Id",
+            "type": "string"
+          },
+          "source_environment": {
+            "title": "Source Environment",
+            "type": "string"
+          },
+          "source_spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Spec"
+          },
+          "target_environment": {
+            "title": "Target Environment",
+            "type": "string"
+          },
+          "target_spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Spec"
+          }
+        },
+        "required": [
+          "promotion_id",
+          "source_environment",
+          "target_environment"
+        ],
+        "title": "PromotionDiffResponse",
+        "type": "object"
+      },
+      "PromotionListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PromotionResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 50,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PromotionListResponse",
+        "type": "object"
+      },
+      "PromotionResponse": {
+        "properties": {
+          "api_id": {
+            "title": "Api Id",
+            "type": "string"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "requested_by": {
+            "title": "Requested By",
+            "type": "string"
+          },
+          "source_deployment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Deployment Id"
+          },
+          "source_environment": {
+            "title": "Source Environment",
+            "type": "string"
+          },
+          "spec_diff": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Diff"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_deployment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Deployment Id"
+          },
+          "target_environment": {
+            "title": "Target Environment",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "api_id",
+          "source_environment",
+          "target_environment",
+          "status",
+          "message",
+          "requested_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PromotionResponse",
+        "type": "object"
+      },
+      "PromotionRollbackRequest": {
+        "properties": {
+          "message": {
+            "description": "Mandatory audit trail message explaining the rollback reason",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "PromotionRollbackRequest",
+        "type": "object"
+      },
       "ProspectDetail": {
         "description": "Detailed prospect information with timeline.",
         "properties": {
@@ -25636,6 +26074,146 @@
         "summary": "List Access Requests",
         "tags": [
           "Admin Access Requests"
+        ]
+      }
+    },
+    "/v1/admin/argocd/diff/{app_name}": {
+      "get": {
+        "description": "Get diff between desired and live state. cpi-admin only.",
+        "operationId": "get_application_diff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_name",
+            "required": true,
+            "schema": {
+              "title": "App Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArgoCDDiffResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Application Diff",
+        "tags": [
+          "ArgoCD Admin"
+        ]
+      }
+    },
+    "/v1/admin/argocd/status": {
+      "get": {
+        "description": "Get aggregated platform status for all ArgoCD applications. cpi-admin only.",
+        "operationId": "get_platform_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArgoCDPlatformStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Platform Status",
+        "tags": [
+          "ArgoCD Admin"
+        ]
+      }
+    },
+    "/v1/admin/argocd/sync/{app_name}": {
+      "post": {
+        "description": "Trigger an ArgoCD sync for an application. cpi-admin only.",
+        "operationId": "trigger_sync",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_name",
+            "required": true,
+            "schema": {
+              "title": "App Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ArgoCDSyncRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArgoCDSyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Sync",
+        "tags": [
+          "ArgoCD Admin"
         ]
       }
     },
@@ -46563,6 +47141,434 @@
         "summary": "Toggle Tenant Mcp Server Tool",
         "tags": [
           "Tenant MCP Servers"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/promotions": {
+      "get": {
+        "description": "List promotions for a tenant with optional filtering.",
+        "operationId": "list_promotions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "api_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target_environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Environment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Promotions",
+        "tags": [
+          "Promotions"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/promotions/{api_id}": {
+      "post": {
+        "description": "Create a promotion request for an API (dev\u2192staging or staging\u2192production).",
+        "operationId": "create_promotion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Promotion",
+        "tags": [
+          "Promotions"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}": {
+      "get": {
+        "description": "Get promotion details.",
+        "operationId": "get_promotion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Promotion",
+        "tags": [
+          "Promotions"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}/approve": {
+      "post": {
+        "description": "Approve a pending promotion \u2014 triggers the promoting pipeline.",
+        "operationId": "approve_promotion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Promotion",
+        "tags": [
+          "Promotions"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}/diff": {
+      "get": {
+        "description": "Get the spec diff between source and target environments.",
+        "operationId": "get_promotion_diff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionDiffResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Promotion Diff",
+        "tags": [
+          "Promotions"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}/rollback": {
+      "post": {
+        "description": "Rollback a completed promotion \u2014 creates a reverse promotion.",
+        "operationId": "rollback_promotion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback Promotion",
+        "tags": [
+          "Promotions"
         ]
       }
     },

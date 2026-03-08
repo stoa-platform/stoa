@@ -1,10 +1,12 @@
-"""Tests for Promotion service + router (CAB-1706 W2)"""
+"""Tests for Promotion service + router (CAB-1706 W2 + W3)"""
 
 import uuid
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.models.deployment import Deployment
 from src.models.promotion import Promotion, PromotionStatus
 from src.services.promotion_service import PromotionService
 
@@ -257,15 +259,19 @@ class TestPromotionServiceDiff:
     async def test_get_diff(self, service):
         promo = Promotion()
         promo.id = uuid.uuid4()
+        promo.api_id = "api-1"
         promo.source_environment = "dev"
         promo.target_environment = "staging"
         promo.spec_diff = {"changed_fields": ["version"]}
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
+        service.deployment_repo.get_latest_success = AsyncMock(return_value=None)
 
         result = await service.get_diff("acme", promo.id)
 
         assert result["source_environment"] == "dev"
         assert result["diff_summary"] == {"changed_fields": ["version"]}
+        assert result["source_spec"] is None
+        assert result["target_spec"] is None
 
     @pytest.mark.asyncio
     async def test_get_diff_not_found(self, service):
@@ -273,3 +279,142 @@ class TestPromotionServiceDiff:
 
         with pytest.raises(ValueError, match="not found"):
             await service.get_diff("acme", uuid.uuid4())
+
+
+# ============================================================================
+# W3 — Self-Approve Guard + Computed Diff
+# ============================================================================
+
+
+class TestPromotionSelfApproveGuard:
+    @pytest.fixture
+    def mock_db(self):
+        return AsyncMock()
+
+    @pytest.fixture
+    def service(self, mock_db):
+        return PromotionService(mock_db)
+
+    @pytest.mark.asyncio
+    async def test_self_approve_blocked(self, service):
+        """4-eyes principle: requester cannot approve their own promotion."""
+        promo = Promotion()
+        promo.id = uuid.uuid4()
+        promo.tenant_id = "acme"
+        promo.api_id = "api-1"
+        promo.source_environment = "dev"
+        promo.target_environment = "staging"
+        promo.status = PromotionStatus.PENDING.value
+        promo.requested_by = "alice@acme.com"
+        service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
+
+        with pytest.raises(ValueError, match="4-eyes principle"):
+            await service.approve_promotion(
+                tenant_id="acme",
+                promotion_id=promo.id,
+                approved_by="alice@acme.com",
+                user_id="uid-alice",
+            )
+
+    @pytest.mark.asyncio
+    @patch("src.services.promotion_service.kafka_service")
+    async def test_different_user_can_approve(self, mock_kafka, service):
+        """A different user can approve the promotion."""
+        mock_kafka.publish = AsyncMock()
+        promo = Promotion()
+        promo.id = uuid.uuid4()
+        promo.tenant_id = "acme"
+        promo.api_id = "api-1"
+        promo.source_environment = "dev"
+        promo.target_environment = "staging"
+        promo.status = PromotionStatus.PENDING.value
+        promo.requested_by = "alice@acme.com"
+        service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
+        service.repo.update = AsyncMock(return_value=promo)
+
+        result = await service.approve_promotion(
+            tenant_id="acme",
+            promotion_id=promo.id,
+            approved_by="bob@acme.com",
+            user_id="uid-bob",
+        )
+
+        assert result.approved_by == "bob@acme.com"
+        assert result.status == PromotionStatus.PROMOTING.value
+
+
+class TestPromotionComputedDiff:
+    @pytest.fixture
+    def mock_db(self):
+        return AsyncMock()
+
+    @pytest.fixture
+    def service(self, mock_db):
+        return PromotionService(mock_db)
+
+    @pytest.mark.asyncio
+    async def test_diff_with_deployment_specs(self, service):
+        """get_diff returns actual deployment specs from source and target."""
+        promo = Promotion()
+        promo.id = uuid.uuid4()
+        promo.api_id = "payment-api"
+        promo.source_environment = "dev"
+        promo.target_environment = "staging"
+        promo.spec_diff = {"changed_fields": ["version"]}
+        service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
+
+        source_deploy = Deployment()
+        source_deploy.id = uuid.uuid4()
+        source_deploy.version = "2.0.0"
+        source_deploy.spec_hash = "abc123"
+        source_deploy.commit_sha = "def456"
+        source_deploy.deployed_by = "alice"
+        source_deploy.completed_at = datetime(2026, 3, 8, 10, 0, 0, tzinfo=UTC)
+
+        target_deploy = Deployment()
+        target_deploy.id = uuid.uuid4()
+        target_deploy.version = "1.0.0"
+        target_deploy.spec_hash = "xyz789"
+        target_deploy.commit_sha = "uvw012"
+        target_deploy.deployed_by = "bob"
+        target_deploy.completed_at = datetime(2026, 3, 7, 10, 0, 0, tzinfo=UTC)
+
+        env_map = {"dev": source_deploy, "staging": target_deploy}
+        service.deployment_repo.get_latest_success = AsyncMock(
+            side_effect=lambda **kwargs: env_map.get(kwargs.get("environment"))
+        )
+
+        result = await service.get_diff("acme", promo.id)
+
+        assert result["source_spec"]["version"] == "2.0.0"
+        assert result["target_spec"]["version"] == "1.0.0"
+        assert result["diff_summary"] == {"changed_fields": ["version"]}
+
+    @pytest.mark.asyncio
+    async def test_diff_no_target_deployment(self, service):
+        """get_diff returns None for target_spec when no deployment exists yet."""
+        promo = Promotion()
+        promo.id = uuid.uuid4()
+        promo.api_id = "new-api"
+        promo.source_environment = "dev"
+        promo.target_environment = "staging"
+        promo.spec_diff = None
+        service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
+
+        source_deploy = Deployment()
+        source_deploy.id = uuid.uuid4()
+        source_deploy.version = "1.0.0"
+        source_deploy.spec_hash = "abc123"
+        source_deploy.commit_sha = "def456"
+        source_deploy.deployed_by = "alice"
+        source_deploy.completed_at = datetime(2026, 3, 8, 10, 0, 0, tzinfo=UTC)
+
+        env_map = {"dev": source_deploy}
+        service.deployment_repo.get_latest_success = AsyncMock(
+            side_effect=lambda **kwargs: env_map.get(kwargs.get("environment"))
+        )
+
+        result = await service.get_diff("acme", promo.id)
+
+        assert result["source_spec"] is not None
+        assert result["target_spec"] is None

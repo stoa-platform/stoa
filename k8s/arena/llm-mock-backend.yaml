@@ -17,6 +17,7 @@ data:
         location /v1/messages {
             default_type application/json;
             add_header X-Mock-Server "llm-mock-k8s";
+            add_header X-Stoa-Llm-Provider "anthropic";
             return 200 '{"id":"msg_arena_mock_001","type":"message","role":"assistant","content":[{"type":"text","text":"Arena benchmark mock response."}],"model":"claude-mock","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":12,"output_tokens":8}}';
         }
 
@@ -24,6 +25,7 @@ data:
         location /v1/chat/completions {
             default_type application/json;
             add_header X-Mock-Server "llm-mock-k8s";
+            add_header X-Stoa-Llm-Provider "openai-compat";
             return 200 '{"id":"chatcmpl-arena_mock_001","object":"chat.completion","created":1709000000,"model":"mistral-mock","choices":[{"index":0,"message":{"role":"assistant","content":"Arena benchmark mock response."},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20}}';
         }
 

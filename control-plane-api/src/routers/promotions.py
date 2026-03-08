@@ -136,6 +136,24 @@ async def approve_promotion(
     return PromotionResponse.model_validate(promotion)
 
 
+@router.post("/{promotion_id}/complete", response_model=PromotionResponse)
+@require_permission(Permission.APIS_PROMOTE)
+@require_tenant_access
+async def complete_promotion(
+    tenant_id: str,
+    promotion_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually mark a promoting promotion as completed (deployed)."""
+    service = PromotionService(db)
+    try:
+        promotion = await service.complete_promotion(promotion_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return PromotionResponse.model_validate(promotion)
+
+
 @router.post("/{promotion_id}/rollback", response_model=PromotionResponse, status_code=201)
 @require_permission(Permission.APIS_PROMOTE)
 @require_tenant_access

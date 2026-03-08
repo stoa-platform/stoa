@@ -416,6 +416,11 @@ pub struct Config {
     #[serde(default = "default_federation_cache_max_entries")]
     pub federation_cache_max_entries: u64,
 
+    /// Configured upstream MCP servers for federation (CAB-1752)
+    /// Env: STOA_FEDERATION_UPSTREAMS (JSON array)
+    #[serde(default)]
+    pub federation_upstreams: Vec<FederationUpstreamConfig>,
+
     /// Max entries in prompt cache (default: 1000)
     /// Env: STOA_PROMPT_CACHE_MAX_ENTRIES
     #[serde(default = "default_prompt_cache_max_entries")]
@@ -567,6 +572,19 @@ pub struct Config {
 
 /// LLM provider router configuration (CAB-1487)
 ///
+/// Configuration for a single upstream MCP server in federation (CAB-1752).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationUpstreamConfig {
+    /// Upstream MCP server URL
+    pub url: String,
+    /// Transport type (default: "sse")
+    pub transport: Option<String>,
+    /// Optional auth token (never exposed in admin API)
+    pub auth_token: Option<String>,
+    /// Connection timeout in seconds (default: 30)
+    pub timeout_secs: Option<u64>,
+}
+
 /// Configures multi-provider LLM routing with cost tracking and budget enforcement.
 /// Providers are defined as a list; disabled providers are filtered at startup.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1140,6 +1158,7 @@ impl Default for Config {
             federation_enabled: false,
             federation_cache_ttl_secs: default_federation_cache_ttl(),
             federation_cache_max_entries: default_federation_cache_max_entries(),
+            federation_upstreams: vec![],
             prompt_cache_max_entries: default_prompt_cache_max_entries(),
             prompt_cache_ttl_secs: default_prompt_cache_ttl_secs(),
             prompt_cache_watch_dir: None,

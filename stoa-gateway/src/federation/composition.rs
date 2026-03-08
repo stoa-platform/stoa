@@ -3,8 +3,7 @@
 //! Enables composing multiple tools into a single compound tool.
 //! Sequential execution with data passing between steps.
 
-// Infrastructure prepared for K8s CRD watcher integration (Phase 7)
-#![allow(dead_code)]
+// Tool composition for federation (Phase 7)
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

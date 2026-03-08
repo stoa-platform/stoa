@@ -2,9 +2,7 @@
 //!
 //! Connects to upstream MCP servers and proxies tool calls.
 
-// Infrastructure prepared for K8s CRD watcher integration (Phase 7)
-#![allow(dead_code)]
-#![allow(clippy::redundant_closure)]
+// Upstream MCP client for federation (Phase 7)
 
 use async_trait::async_trait;
 use reqwest::Client;
@@ -159,10 +157,8 @@ impl UpstreamMcpClient {
 
         if let Some(result) = response.get("result") {
             if let Some(tools) = result.get("tools").and_then(|v| v.as_array()) {
-                let definitions: Vec<ToolDefinition> = tools
-                    .iter()
-                    .filter_map(|t| parse_tool_definition(t))
-                    .collect();
+                let definitions: Vec<ToolDefinition> =
+                    tools.iter().filter_map(parse_tool_definition).collect();
 
                 info!(
                     count = definitions.len(),

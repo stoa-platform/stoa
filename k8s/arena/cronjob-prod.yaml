@@ -56,6 +56,16 @@ spec:
                   value: "/scripts/benchmark.js"
                 - name: ARENA_INSTANCE
                   value: "k8s"
+                - name: OPENSEARCH_URL
+                  value: "http://opensearch.opensearch.svc:9200"
+                - name: OPENSEARCH_USER
+                  value: "admin"
+                - name: OPENSEARCH_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: opensearch-credentials
+                      key: admin-password
+                      optional: true
                   # VPS gateways benchmarked locally via deploy/vps/bench/ (co-located)
                   # Gravitee-k8s disabled: APIM 4.6 health probe incompatible, Java startup too slow
                   # Re-enable when Gravitee probe path is fixed for v4.6

@@ -68,7 +68,7 @@ kubectl apply -f "$SCRIPT_DIR/pushgateway.yaml"
 kubectl apply -f "$SCRIPT_DIR/pushgateway-ingress.yaml"
 
 # 7. ConfigMap from k6 arena scripts
-echo "[7/$TOTAL] Creating ConfigMap from k6 arena scripts (baseline + enterprise)..."
+echo "[7/$TOTAL] Creating ConfigMap from k6 arena scripts (baseline + enterprise + verify)..."
 kubectl create configmap gateway-arena-scripts \
   --from-file="$REPO_ROOT/scripts/traffic/arena/benchmark.js" \
   --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena.sh" \
@@ -76,16 +76,18 @@ kubectl create configmap gateway-arena-scripts \
   --from-file="$REPO_ROOT/scripts/traffic/arena/benchmark-enterprise.js" \
   --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena-enterprise.sh" \
   --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena-enterprise.py" \
+  --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena-verify.sh" \
   -n stoa-system \
   --dry-run=client -o yaml | kubectl apply -f -
 # Clean up old ConfigMap if it exists
 kubectl delete configmap gateway-arena-script -n stoa-system --ignore-not-found
 
-# 8. ServiceMonitor + CronJobs (baseline + enterprise)
+# 8. ServiceMonitor + CronJobs (baseline + enterprise + verify)
 echo "[8/$TOTAL] Applying ServiceMonitor + CronJobs..."
 kubectl apply -f "$SCRIPT_DIR/pushgateway-servicemonitor.yaml"
 kubectl apply -f "$SCRIPT_DIR/cronjob-prod.yaml"
 kubectl apply -f "$SCRIPT_DIR/cronjob-enterprise.yaml"
+kubectl apply -f "$SCRIPT_DIR/cronjob-verify.yaml"
 
 # 9. Smoke test — trigger one-off run
 JOB_NAME="arena-smoke-$(date +%s)"

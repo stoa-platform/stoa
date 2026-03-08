@@ -180,7 +180,7 @@ describe('Promotions', () => {
   describe('RBAC — 4-eyes principle', () => {
     it('shows Approve button when different user can approve', async () => {
       setupMocks('cpi-admin');
-      // cpi-admin is "James Halliday", promotion requested by "Wade Watts" => can approve
+      // cpi-admin is "halliday", promotion requested by "parzival" => can approve
       renderWithProviders(<Promotions />);
 
       await waitFor(() => {
@@ -188,9 +188,30 @@ describe('Promotions', () => {
       });
     });
 
-    it('blocks self-approval (4-eyes principle)', async () => {
+    it('allows self-approval for dev→staging (2-eyes)', async () => {
       setupMocks('tenant-admin');
-      // tenant-admin is "Wade Watts", same as requested_by => self-approve blocked
+      // tenant-admin is "parzival", same as requested_by, but target is staging => allowed
+      renderWithProviders(<Promotions />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Approve')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Self-approve blocked')).not.toBeInTheDocument();
+    });
+
+    it('blocks self-approval for staging→production (4-eyes)', async () => {
+      const prodPromotion: Promotion = {
+        ...mockPromotion,
+        source_environment: 'staging',
+        target_environment: 'production',
+      };
+      setupMocks('tenant-admin');
+      vi.mocked(apiService.listPromotions).mockResolvedValue({
+        items: [prodPromotion],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      });
       renderWithProviders(<Promotions />);
 
       await waitFor(() => {

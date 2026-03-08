@@ -111,8 +111,15 @@ class PromotionService:
                 f"Cannot approve promotion in status '{promotion.status}' "
                 f"(expected '{PromotionStatus.PENDING.value}')"
             )
-        if promotion.requested_by == approved_by:
-            raise ValueError("Cannot approve own promotion request (4-eyes principle)")
+        # 4-eyes principle: self-approval blocked for production promotions
+        if (
+            promotion.requested_by == approved_by
+            and promotion.target_environment == "production"
+        ):
+            raise ValueError(
+                "Cannot approve your own promotion to production (4-eyes principle). "
+                "A different team member must approve production deployments."
+            )
 
         promotion.status = PromotionStatus.PROMOTING.value
         promotion.approved_by = approved_by

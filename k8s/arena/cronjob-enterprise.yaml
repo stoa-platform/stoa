@@ -96,6 +96,11 @@ spec:
                   # Feature keys: llm_routing, llm_cost, llm_circuit_breaker,
                   #   native_tools_crud, api_bridge, uac_binding, pii_detection,
                   #   distributed_tracing, prompt_cache, skills_lifecycle, federation, diagnostic
+                  #
+                  # Kong Enterprise 3.12+ has AI MCP Proxy plugin (~14/20 dims)
+                  # but requires a paid license. Not benchmarkable without it.
+                  # Kong OSS stays with features=[] (honest baseline).
+                  # See stoa-bench/METHODOLOGY.md for full transparency.
                 - name: GATEWAYS
                   value: |
                     [
@@ -114,6 +119,19 @@ spec:
                         ]
                       },
                       {
+                        "name": "agentgateway-k8s",
+                        "target": "http://agentgateway-arena.stoa-system.svc:3000",
+                        "mcp_base": "http://agentgateway-arena.stoa-system.svc:3000/mcp",
+                        "mcp_protocol": "streamable-http",
+                        "admin_base": "http://agentgateway-arena.stoa-system.svc:15000",
+                        "health": "http://agentgateway-arena.stoa-system.svc:3000/health",
+                        "features": [
+                          "llm_routing", "llm_cost",
+                          "api_bridge", "pii_detection",
+                          "distributed_tracing", "federation"
+                        ]
+                      },
+                      {
                         "name": "kong-k8s",
                         "target": "http://kong-arena.stoa-system.svc:8000",
                         "mcp_base": null,
@@ -128,7 +146,10 @@ spec:
                         "mcp_protocol": "streamable-http",
                         "admin_base": null,
                         "health": "http://gravitee-arena-gw.stoa-system.svc:18082/_node/health",
-                        "features": []
+                        "features": [
+                          "api_bridge", "llm_routing", "llm_cost",
+                          "guardrails", "distributed_tracing"
+                        ]
                       }
                     ]
               resources:

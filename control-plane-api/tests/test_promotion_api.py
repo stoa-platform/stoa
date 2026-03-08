@@ -8,6 +8,7 @@ import pytest
 
 from src.models.deployment import Deployment
 from src.models.promotion import Promotion, PromotionStatus
+from src.notifications.templates import format_message
 from src.services.promotion_service import PromotionService
 
 # ============================================================================
@@ -444,3 +445,158 @@ class TestPromotionComputedDiff:
 
         assert result["source_spec"] is not None
         assert result["target_spec"] is None
+
+
+# ============================================================================
+# Promotion Notification Templates (CAB-1706)
+# ============================================================================
+
+
+class TestPromotionNotificationTemplates:
+    def test_pending_approval_staging(self):
+        msg = format_message(
+            "promotion.pending_approval",
+            {
+                "api_id": "orders-api",
+                "tenant_id": "acme",
+                "source_environment": "dev",
+                "target_environment": "staging",
+                "requested_by": "torpedo",
+                "message": "Ready for QA",
+                "console_url": "https://console.gostoa.dev",
+            },
+        )
+        assert msg is not None
+        assert "orders-api" in msg
+        assert "DEV" in msg
+        assert "STAGING" in msg
+        assert "torpedo" in msg
+        assert "self-approval allowed" in msg
+        assert "Ready for QA" in msg
+        assert "console.gostoa.dev" in msg
+
+    def test_pending_approval_production_4eyes(self):
+        msg = format_message(
+            "promotion.pending_approval",
+            {
+                "api_id": "billing-api",
+                "tenant_id": "acme",
+                "source_environment": "staging",
+                "target_environment": "production",
+                "requested_by": "torpedo",
+            },
+        )
+        assert msg is not None
+        assert "4-eyes required" in msg
+        assert "PRODUCTION" in msg
+
+    def test_approved(self):
+        msg = format_message(
+            "promotion.approved",
+            {
+                "api_id": "orders-api",
+                "source_environment": "dev",
+                "target_environment": "staging",
+                "approved_by": "admin",
+            },
+        )
+        assert msg is not None
+        assert "approved" in msg.lower()
+        assert "admin" in msg
+
+    def test_rolled_back(self):
+        msg = format_message(
+            "promotion.rolled_back",
+            {
+                "api_id": "orders-api",
+                "source_environment": "dev",
+                "target_environment": "staging",
+                "requested_by": "torpedo",
+            },
+        )
+        assert msg is not None
+        assert "rolled back" in msg.lower()
+        assert "torpedo" in msg
+
+    def test_unknown_event_returns_none(self):
+        assert format_message("promotion.unknown", {}) is None
+
+
+class TestPromotionServiceNotifications:
+    @pytest.fixture
+    def mock_db(self):
+        return AsyncMock()
+
+    @pytest.fixture
+    def service(self, mock_db):
+        return PromotionService(mock_db)
+
+    @pytest.mark.asyncio
+    @patch("src.services.promotion_service.notify_promotion_event")
+    @patch("src.services.promotion_service.kafka_service")
+    async def test_create_sends_slack_notification(self, mock_kafka, mock_notify, service):
+        mock_kafka.emit_audit_event = AsyncMock()
+        mock_notify.return_value = None
+        service.repo.get_active_for_target = AsyncMock(return_value=None)
+        created = Promotion()
+        created.id = uuid.uuid4()
+        created.tenant_id = "acme"
+        created.api_id = "api-1"
+        created.source_environment = "dev"
+        created.target_environment = "staging"
+        created.status = PromotionStatus.PENDING.value
+        created.message = "QA release"
+        created.requested_by = "torpedo"
+        service.repo.create = AsyncMock(return_value=created)
+
+        await service.create_promotion(
+            tenant_id="acme",
+            api_id="api-1",
+            source_environment="dev",
+            target_environment="staging",
+            message="QA release",
+            requested_by="torpedo",
+            user_id="uid-1",
+        )
+
+        mock_notify.assert_awaited_once()
+        call_args = mock_notify.call_args
+        assert call_args[0][0] == "promotion.pending_approval"
+        payload = call_args[0][1]
+        assert payload["api_id"] == "api-1"
+        assert payload["requested_by"] == "torpedo"
+        assert "console_url" in payload
+
+    @pytest.mark.asyncio
+    @patch("src.services.promotion_service.notify_promotion_event")
+    @patch("src.services.promotion_service.kafka_service")
+    async def test_approve_sends_slack_notification(self, mock_kafka, mock_notify, service):
+        mock_kafka.publish = AsyncMock()
+        mock_notify.return_value = None
+        promo = Promotion()
+        promo.id = uuid.uuid4()
+        promo.tenant_id = "acme"
+        promo.api_id = "api-1"
+        promo.source_environment = "dev"
+        promo.target_environment = "staging"
+        promo.status = PromotionStatus.PENDING.value
+        promo.requested_by = "torpedo"
+        service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
+        service.repo.update = AsyncMock(return_value=promo)
+
+        await service.approve_promotion(
+            tenant_id="acme",
+            promotion_id=promo.id,
+            approved_by="admin",
+            user_id="uid-2",
+        )
+
+        mock_notify.assert_awaited_once_with(
+            "promotion.approved",
+            {
+                "api_id": "api-1",
+                "source_environment": "dev",
+                "target_environment": "staging",
+                "approved_by": "admin",
+            },
+        )

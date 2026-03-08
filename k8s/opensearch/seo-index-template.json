@@ -1,0 +1,89 @@
+{
+  "index_patterns": ["seo-metrics-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "seo-metrics-ilm",
+      "index.lifecycle.rollover_alias": "seo-metrics"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "date": { "type": "date", "format": "yyyy-MM-dd" },
+        "site": { "type": "keyword" },
+        "period": {
+          "properties": {
+            "start": { "type": "date", "format": "yyyy-MM-dd" },
+            "end": { "type": "date", "format": "yyyy-MM-dd" }
+          }
+        },
+        "previous_period": {
+          "properties": {
+            "start": { "type": "date", "format": "yyyy-MM-dd" },
+            "end": { "type": "date", "format": "yyyy-MM-dd" }
+          }
+        },
+        "totals": {
+          "properties": {
+            "impressions": { "type": "integer" },
+            "clicks": { "type": "integer" },
+            "ctr": { "type": "float" },
+            "avg_position": { "type": "float" }
+          }
+        },
+        "deltas": {
+          "properties": {
+            "impressions_pct": { "type": "float" },
+            "clicks_pct": { "type": "float" },
+            "ctr_prev": { "type": "float" }
+          }
+        },
+        "pages": {
+          "type": "nested",
+          "properties": {
+            "path": { "type": "keyword" },
+            "impressions": { "type": "integer" },
+            "clicks": { "type": "integer" },
+            "ctr": { "type": "float" },
+            "position": { "type": "float" },
+            "imp_delta": { "type": "integer" },
+            "pos_delta": { "type": "float" },
+            "first_click": { "type": "boolean" }
+          }
+        },
+        "queries": {
+          "type": "nested",
+          "properties": {
+            "query": { "type": "keyword" },
+            "impressions": { "type": "integer" },
+            "clicks": { "type": "integer" },
+            "position": { "type": "float" }
+          }
+        },
+        "alerts": {
+          "properties": {
+            "first_clicks": { "type": "keyword" },
+            "ranking_drops": {
+              "type": "nested",
+              "properties": {
+                "page": { "type": "keyword" },
+                "delta": { "type": "float" }
+              }
+            },
+            "low_ctr_candidates": {
+              "type": "nested",
+              "properties": {
+                "page": { "type": "keyword" },
+                "impressions": { "type": "integer" },
+                "ctr": { "type": "float" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "priority": 100,
+  "composed_of": []
+}

@@ -769,7 +769,7 @@ export function Promotions() {
                 promotion={promotion}
                 tenantId={selectedTenant}
                 canPromote={canPromote}
-                currentUser={user?.name || ''}
+                currentUser={user?.username || ''}
                 onRefresh={loadPromotions}
               />
             ))}

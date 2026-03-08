@@ -7,7 +7,7 @@
 
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Tag, Clock } from 'lucide-react';
+import { ArrowRight, Tag, Clock, CheckCircle2, Circle } from 'lucide-react';
 import type { API } from '../../types';
 
 interface APICardProps {
@@ -78,6 +78,28 @@ export const APICard = memo(function APICard({ api, onMouseEnter }: APICardProps
           </span>
         )}
       </div>
+
+      {/* Environment availability badges */}
+      {api.deployments && Object.keys(api.deployments).length > 0 && (
+        <div className="flex items-center gap-2 mb-3">
+          {(['dev', 'staging', 'production'] as const).map((env) => {
+            const deployed = api.deployments?.[env];
+            return (
+              <span
+                key={env}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
+                  deployed
+                    ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                    : 'bg-neutral-50 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500'
+                }`}
+              >
+                {deployed ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+                {env === 'production' ? 'Prod' : env.charAt(0).toUpperCase() + env.slice(1)}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-3 border-t border-neutral-100 dark:border-neutral-700">
         <div className="flex items-center text-xs text-neutral-500">

@@ -12,6 +12,10 @@ use serde_json::Value;
 use super::classifications::Classification;
 use super::llm::LlmConfig;
 
+fn default_tenant_id() -> String {
+    "default".to_string()
+}
+
 // =============================================================================
 // Contract Status
 // =============================================================================
@@ -49,9 +53,17 @@ pub struct UacEndpoint {
     /// URL path pattern (e.g. "/payments/{id}")
     pub path: String,
     /// Allowed HTTP methods (e.g. ["GET", "POST"])
+    #[serde(default)]
     pub methods: Vec<String>,
     /// Backend URL to proxy requests to
+    #[serde(default)]
     pub backend_url: String,
+    /// Single method shorthand — merged into `methods` during deserialization
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
+    /// Human-readable description of this endpoint
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// OpenAPI operationId — used for MCP tool naming
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_id: Option<String>,
@@ -76,9 +88,13 @@ pub struct UacEndpoint {
 pub struct UacContractSpec {
     /// Unique contract name within tenant (kebab-case)
     pub name: String,
+    /// Optional explicit key override (default: `tenant_id:name`)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
     /// Semantic version (e.g. "1.0.0")
     pub version: String,
     /// Owning tenant identifier
+    #[serde(default = "default_tenant_id")]
     pub tenant_id: String,
     /// Human-readable display name
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -87,13 +103,16 @@ pub struct UacContractSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// ICT risk classification (H/VH/VVH, DORA-aligned)
+    #[serde(default)]
     pub classification: Classification,
     /// API endpoints exposed by this contract
+    #[serde(default)]
     pub endpoints: Vec<UacEndpoint>,
     /// Required policies derived from classification (auto-populated)
     #[serde(default)]
     pub required_policies: Vec<String>,
     /// Lifecycle status
+    #[serde(default)]
     pub status: ContractStatus,
     /// URL of the source OpenAPI spec
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -119,6 +138,7 @@ impl UacContractSpec {
 
         Self {
             name: name.into(),
+            key: None,
             version: "1.0.0".to_string(),
             tenant_id: tenant_id.into(),
             display_name: None,
@@ -178,7 +198,8 @@ impl UacContractSpec {
             if ep.methods.is_empty() {
                 errors.push(format!("endpoints[{}].methods must not be empty", i));
             }
-            if ep.backend_url.is_empty() {
+            // backend_url only required for Published contracts — Draft/Deprecated can omit it
+            if ep.backend_url.is_empty() && self.status == ContractStatus::Published {
                 errors.push(format!("endpoints[{}].backend_url must not be empty", i));
             }
         }
@@ -200,6 +221,8 @@ mod tests {
             path: "/payments/{id}".to_string(),
             methods: vec!["GET".to_string(), "POST".to_string()],
             backend_url: "https://backend.acme.com/v1/payments".to_string(),
+            method: None,
+            description: None,
             operation_id: Some("get_payment".to_string()),
             input_schema: None,
             output_schema: None,
@@ -316,6 +339,8 @@ mod tests {
             path: "/users".to_string(),
             methods: vec!["POST".to_string()],
             backend_url: "https://api.example.com/users".to_string(),
+            method: None,
+            description: None,
             operation_id: Some("create_user".to_string()),
             input_schema: Some(serde_json::json!({
                 "type": "object",
@@ -345,6 +370,8 @@ mod tests {
             path: "/health".to_string(),
             methods: vec!["GET".to_string()],
             backend_url: "https://api.example.com/health".to_string(),
+            method: None,
+            description: None,
             operation_id: None,
             input_schema: None,
             output_schema: None,

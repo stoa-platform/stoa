@@ -152,6 +152,8 @@ impl LlmConfig {
                     path: cap.capability.path_suffix().to_string(),
                     methods: vec![cap.capability.http_method().to_string()],
                     backend_url: primary.backend_url.clone(),
+                    method: None,
+                    description: None,
                     operation_id: Some(cap.capability.operation_id().to_string()),
                     input_schema: None,
                     output_schema: None,

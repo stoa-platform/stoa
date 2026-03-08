@@ -68,6 +68,7 @@ function transformPortalAPI(portalApi: PortalAPI): API {
     category: portalApi.category,
     tags: portalApi.tags,
     audience: (portalApi.audience as API['audience']) || 'public',
+    deployments: portalApi.deployments,
     createdAt: portalApi.created_at || new Date().toISOString(),
     updatedAt: portalApi.updated_at || new Date().toISOString(),
   };

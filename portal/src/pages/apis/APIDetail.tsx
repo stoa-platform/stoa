@@ -23,6 +23,8 @@ import {
   Copy,
   Check,
   CreditCard,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
 import { useAPI, useOpenAPISpec } from '../../hooks/useAPIs';
 import { useSubscribe, type SubscribeToAPIResponse } from '../../hooks/useSubscriptions';
@@ -279,6 +281,31 @@ export function APIDetail() {
             <div>
               <span className="text-neutral-700 dark:text-neutral-200">{api.endpoints.length}</span>{' '}
               endpoint{api.endpoints.length !== 1 ? 's' : ''}
+            </div>
+          )}
+          {api.deployments && Object.keys(api.deployments).length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-neutral-500 dark:text-neutral-400">Available in:</span>
+              {(['dev', 'staging', 'production'] as const).map((env) => {
+                const deployed = api.deployments?.[env];
+                return (
+                  <span
+                    key={env}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded ${
+                      deployed
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                        : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500'
+                    }`}
+                  >
+                    {deployed ? (
+                      <CheckCircle2 className="h-3 w-3" />
+                    ) : (
+                      <Circle className="h-3 w-3" />
+                    )}
+                    {env === 'production' ? 'Prod' : env.charAt(0).toUpperCase() + env.slice(1)}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>

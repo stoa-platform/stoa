@@ -385,6 +385,7 @@ function PromotionRow({
     canPromote && promotion.status === 'pending' && !(isSelfRequest && isProductionTarget);
   const isSelfApproval =
     canPromote && promotion.status === 'pending' && isSelfRequest && isProductionTarget;
+  const canComplete = canPromote && promotion.status === 'promoting';
   const canRollback = canPromote && promotion.status === 'promoted';
 
   const handleExpand = async () => {
@@ -417,6 +418,26 @@ function PromotionRow({
       onRefresh();
     } catch (err: unknown) {
       toast.error('Approval failed', extractErrorMessage(err));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    const ok = await confirm({
+      title: 'Mark as Deployed',
+      message: `Confirm that ${promotion.source_environment} → ${promotion.target_environment} deployment is complete?`,
+      confirmLabel: 'Mark Deployed',
+      variant: 'default',
+    });
+    if (!ok) return;
+    try {
+      setActionLoading(true);
+      await apiService.completePromotion(tenantId, promotion.id);
+      toast.success('Promotion completed', 'Marked as deployed');
+      onRefresh();
+    } catch (err: unknown) {
+      toast.error('Complete failed', extractErrorMessage(err));
     } finally {
       setActionLoading(false);
     }
@@ -539,6 +560,16 @@ function PromotionRow({
             >
               Self-approve blocked
             </span>
+          )}
+          {canComplete && (
+            <button
+              onClick={handleComplete}
+              disabled={actionLoading}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Mark Deployed
+            </button>
           )}
           {canRollback && (
             <button

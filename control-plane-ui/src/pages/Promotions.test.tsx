@@ -31,6 +31,7 @@ vi.mock('../services/api', () => ({
     listPromotions: vi.fn(),
     createPromotion: vi.fn(),
     approvePromotion: vi.fn(),
+    completePromotion: vi.fn(),
     rollbackPromotion: vi.fn(),
     getPromotionDiff: vi.fn(),
   },
@@ -229,6 +230,49 @@ describe('Promotions', () => {
       });
       expect(screen.queryByText('Approve')).not.toBeInTheDocument();
       expect(screen.queryByText('Rollback')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Mark Deployed', () => {
+    it('shows Mark Deployed button for promoting promotions', async () => {
+      const promotingPromotion: Promotion = {
+        ...mockPromotion,
+        status: 'promoting',
+        approved_by: 'James Halliday',
+      };
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.listPromotions).mockResolvedValue({
+        items: [promotingPromotion],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      });
+      renderWithProviders(<Promotions />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Mark Deployed')).toBeInTheDocument();
+      });
+    });
+
+    it('hides Mark Deployed for viewers', async () => {
+      const promotingPromotion: Promotion = {
+        ...mockPromotion,
+        status: 'promoting',
+        approved_by: 'James Halliday',
+      };
+      setupMocks('viewer');
+      vi.mocked(apiService.listPromotions).mockResolvedValue({
+        items: [promotingPromotion],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      });
+      renderWithProviders(<Promotions />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Promoting')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Mark Deployed')).not.toBeInTheDocument();
     });
   });
 

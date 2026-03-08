@@ -474,6 +474,13 @@ class ApiService {
     return data;
   }
 
+  async completePromotion(tenantId: string, promotionId: string): Promise<Promotion> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/promotions/${promotionId}/complete`
+    );
+    return data;
+  }
+
   async rollbackPromotion(
     tenantId: string,
     promotionId: string,

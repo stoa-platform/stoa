@@ -1,0 +1,817 @@
+import { useState, useEffect, useCallback } from 'react';
+import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { TableSkeleton } from '@stoa/shared/components/Skeleton';
+import { Button } from '@stoa/shared/components/Button';
+import type { Promotion, PromotionStatus, PromotionDiffResponse, Tenant, API } from '../types';
+import {
+  ArrowRight,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Loader2,
+  RefreshCw,
+  Undo2,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  X,
+  ArrowUpRight,
+  AlertCircle,
+} from 'lucide-react';
+import { clsx } from 'clsx';
+
+// =============================================================================
+// STATUS CONFIG
+// =============================================================================
+
+const promotionStatusConfig: Record<
+  PromotionStatus,
+  { icon: typeof CheckCircle2; color: string; bg: string; label: string }
+> = {
+  pending: {
+    icon: Clock,
+    color: 'text-amber-600 dark:text-amber-400',
+    bg: 'bg-amber-100 dark:bg-amber-900/30',
+    label: 'Pending Approval',
+  },
+  promoting: {
+    icon: Loader2,
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-100 dark:bg-blue-900/30',
+    label: 'Promoting',
+  },
+  promoted: {
+    icon: CheckCircle2,
+    color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-100 dark:bg-green-900/30',
+    label: 'Promoted',
+  },
+  failed: {
+    icon: XCircle,
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+    label: 'Failed',
+  },
+  rolled_back: {
+    icon: Undo2,
+    color: 'text-orange-600 dark:text-orange-400',
+    bg: 'bg-orange-100 dark:bg-orange-900/30',
+    label: 'Rolled Back',
+  },
+};
+
+const envColors: Record<string, string> = {
+  dev: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+  staging: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  production: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+};
+
+const VALID_CHAINS: [string, string][] = [
+  ['dev', 'staging'],
+  ['staging', 'production'],
+];
+
+// =============================================================================
+// PROMOTION PIPELINE INDICATOR
+// =============================================================================
+
+function PromotionPipeline({ promotions }: { promotions: Promotion[] }) {
+  const envs = ['dev', 'staging', 'production'] as const;
+
+  const getEnvStatus = (env: string) => {
+    const latest = promotions.find(
+      (p) => p.target_environment === env && (p.status === 'promoted' || p.status === 'promoting')
+    );
+    if (!latest) return 'none';
+    return latest.status;
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {envs.map((env, i) => {
+        const status = i === 0 ? 'source' : getEnvStatus(env);
+        return (
+          <div key={env} className="flex items-center gap-2">
+            {i > 0 && (
+              <ArrowRight className="h-4 w-4 text-neutral-300 dark:text-neutral-600 shrink-0" />
+            )}
+            <div
+              className={clsx(
+                'px-3 py-1.5 rounded-lg text-xs font-medium border',
+                status === 'source' || status === 'promoted'
+                  ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                  : status === 'promoting'
+                    ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 animate-pulse'
+                    : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400'
+              )}
+            >
+              {env.toUpperCase()}
+              {status === 'promoted' && <CheckCircle2 className="inline h-3 w-3 ml-1" />}
+              {status === 'promoting' && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// =============================================================================
+// DIFF VIEWER
+// =============================================================================
+
+function DiffViewer({ diff }: { diff: PromotionDiffResponse }) {
+  return (
+    <div className="space-y-4 p-4 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <h4 className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase mb-2">
+            Source ({diff.source_environment})
+          </h4>
+          {diff.source_spec ? (
+            <pre className="text-xs bg-white dark:bg-neutral-800 p-3 rounded border border-neutral-200 dark:border-neutral-700 overflow-auto max-h-48">
+              {JSON.stringify(diff.source_spec, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-sm text-neutral-400">No deployment found</p>
+          )}
+        </div>
+        <div>
+          <h4 className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase mb-2">
+            Target ({diff.target_environment})
+          </h4>
+          {diff.target_spec ? (
+            <pre className="text-xs bg-white dark:bg-neutral-800 p-3 rounded border border-neutral-200 dark:border-neutral-700 overflow-auto max-h-48">
+              {JSON.stringify(diff.target_spec, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-sm text-neutral-400">No prior deployment (first deploy to target)</p>
+          )}
+        </div>
+      </div>
+      {diff.diff_summary && Object.keys(diff.diff_summary).length > 0 && (
+        <div>
+          <h4 className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase mb-2">
+            Changes
+          </h4>
+          <pre className="text-xs bg-white dark:bg-neutral-800 p-3 rounded border border-neutral-200 dark:border-neutral-700 overflow-auto max-h-32">
+            {JSON.stringify(diff.diff_summary, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// CREATE PROMOTION DIALOG
+// =============================================================================
+
+interface CreatePromotionDialogProps {
+  tenantId: string;
+  apis: API[];
+  onClose: () => void;
+  onCreated: () => void;
+}
+
+function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePromotionDialogProps) {
+  const [selectedApi, setSelectedApi] = useState('');
+  const [source, setSource] = useState('dev');
+  const [target, setTarget] = useState('staging');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isValidChain = VALID_CHAINS.some(([s, t]) => s === source && t === target);
+
+  useEffect(() => {
+    if (source === 'dev') setTarget('staging');
+    else if (source === 'staging') setTarget('production');
+  }, [source]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedApi || !message.trim()) return;
+    try {
+      setSubmitting(true);
+      setError(null);
+      await apiService.createPromotion(tenantId, selectedApi, {
+        source_environment: source,
+        target_environment: target,
+        message: message.trim(),
+      });
+      onCreated();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'response' in err
+            ? ((err as { response?: { data?: { detail?: string } } }).response?.data?.detail ??
+              'Failed to create promotion')
+            : 'Failed to create promotion';
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg mx-4">
+        <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-700 px-6 py-4">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            Create Promotion
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {error && (
+            <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* API selector */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              API
+            </label>
+            <select
+              value={selectedApi}
+              onChange={(e) => setSelectedApi(e.target.value)}
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+              required
+            >
+              <option value="">Select an API...</option>
+              {apis.map((api) => (
+                <option key={api.id} value={api.id}>
+                  {api.display_name} ({api.name})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Environment chain */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Promotion Path
+            </label>
+            <div className="flex items-center gap-3">
+              <select
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                className="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+              >
+                <option value="dev">Dev</option>
+                <option value="staging">Staging</option>
+              </select>
+              <ArrowRight className="h-5 w-5 text-neutral-400 shrink-0" />
+              <select
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                className="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+              >
+                <option value="staging">Staging</option>
+                <option value="production">Production</option>
+              </select>
+            </div>
+            {!isValidChain && (
+              <p className="text-xs text-red-500 mt-1">
+                Invalid chain. Only dev &rarr; staging and staging &rarr; production are allowed.
+              </p>
+            )}
+          </div>
+
+          {/* Message */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Message <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Why are you promoting this API? (audit trail)"
+              rows={3}
+              maxLength={1000}
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm resize-none"
+              required
+            />
+            <p className="text-xs text-neutral-400 mt-1">{message.length}/1000</p>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-2 border-t border-neutral-200 dark:border-neutral-700">
+            <Button variant="secondary" onClick={onClose} type="button">
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={submitting || !selectedApi || !message.trim() || !isValidChain}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <ArrowUpRight className="h-4 w-4" />
+                  Create Promotion
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// PROMOTION ROW
+// =============================================================================
+
+interface PromotionRowProps {
+  promotion: Promotion;
+  tenantId: string;
+  canPromote: boolean;
+  currentUser: string;
+  onRefresh: () => void;
+}
+
+function PromotionRow({
+  promotion,
+  tenantId,
+  canPromote,
+  currentUser,
+  onRefresh,
+}: PromotionRowProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [diff, setDiff] = useState<PromotionDiffResponse | null>(null);
+  const [loadingDiff, setLoadingDiff] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const toast = useToastActions();
+  const [confirm, confirmDialog] = useConfirm();
+
+  const status = promotionStatusConfig[promotion.status];
+  const StatusIcon = status.icon;
+  const canApprove =
+    canPromote && promotion.status === 'pending' && promotion.requested_by !== currentUser;
+  const isSelfApproval =
+    canPromote && promotion.status === 'pending' && promotion.requested_by === currentUser;
+  const canRollback = canPromote && promotion.status === 'promoted';
+
+  const handleExpand = async () => {
+    if (!expanded && !diff) {
+      setLoadingDiff(true);
+      try {
+        const result = await apiService.getPromotionDiff(tenantId, promotion.id);
+        setDiff(result);
+      } catch {
+        // Diff may not be available for all promotions
+      } finally {
+        setLoadingDiff(false);
+      }
+    }
+    setExpanded(!expanded);
+  };
+
+  const handleApprove = async () => {
+    const ok = await confirm({
+      title: 'Approve Promotion',
+      message: `Approve promotion of API from ${promotion.source_environment} to ${promotion.target_environment}? This will trigger the deployment pipeline.`,
+      confirmLabel: 'Approve',
+      variant: 'default',
+    });
+    if (!ok) return;
+    try {
+      setActionLoading(true);
+      await apiService.approvePromotion(tenantId, promotion.id);
+      toast.success('Promotion approved', 'Deployment pipeline triggered');
+      onRefresh();
+    } catch (err: unknown) {
+      toast.error('Approval failed', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    const ok = await confirm({
+      title: 'Rollback Promotion',
+      message: `Rollback this promotion? This will create a reverse promotion from ${promotion.target_environment} to ${promotion.source_environment}.`,
+      confirmLabel: 'Rollback',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      setActionLoading(true);
+      await apiService.rollbackPromotion(tenantId, promotion.id, {
+        message: `Rollback of promotion ${promotion.id.slice(0, 8)}`,
+      });
+      toast.success('Rollback created', 'Reverse promotion created');
+      onRefresh();
+    } catch (err: unknown) {
+      toast.error('Rollback failed', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div
+        className={clsx(
+          'grid grid-cols-[2fr_1.5fr_1fr_1.5fr_1fr_1fr] gap-2 px-6 py-4 items-center cursor-pointer transition-colors',
+          expanded
+            ? 'bg-blue-50 dark:bg-blue-900/10'
+            : 'hover:bg-neutral-50 dark:hover:bg-neutral-700'
+        )}
+        onClick={handleExpand}
+      >
+        {/* API + Message */}
+        <div className="flex items-center gap-2 min-w-0">
+          <button className="text-neutral-400 dark:text-neutral-500 shrink-0">
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-neutral-900 dark:text-white truncate">
+              {promotion.api_id.slice(0, 8)}...
+            </div>
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+              {promotion.message}
+            </div>
+          </div>
+        </div>
+
+        {/* Environment chain */}
+        <div className="flex items-center gap-1.5">
+          <span
+            className={clsx(
+              'px-2 py-0.5 text-xs font-medium rounded',
+              envColors[promotion.source_environment] || 'bg-neutral-100 text-neutral-700'
+            )}
+          >
+            {promotion.source_environment.toUpperCase()}
+          </span>
+          <ArrowRight className="h-3.5 w-3.5 text-neutral-400" />
+          <span
+            className={clsx(
+              'px-2 py-0.5 text-xs font-medium rounded',
+              envColors[promotion.target_environment] || 'bg-neutral-100 text-neutral-700'
+            )}
+          >
+            {promotion.target_environment.toUpperCase()}
+          </span>
+        </div>
+
+        {/* Status */}
+        <div>
+          <span
+            className={clsx(
+              'inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium',
+              status.bg,
+              status.color
+            )}
+          >
+            <StatusIcon
+              className={clsx('h-3.5 w-3.5', promotion.status === 'promoting' && 'animate-spin')}
+            />
+            {status.label}
+          </span>
+        </div>
+
+        {/* Requested by + date */}
+        <div>
+          <div className="text-sm text-neutral-900 dark:text-white">{promotion.requested_by}</div>
+          <div className="text-xs text-neutral-500 dark:text-neutral-400">
+            {new Date(promotion.created_at).toLocaleString()}
+          </div>
+        </div>
+
+        {/* Approved by */}
+        <div className="text-sm text-neutral-500 dark:text-neutral-400">
+          {promotion.approved_by || '—'}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {canApprove && (
+            <button
+              onClick={handleApprove}
+              disabled={actionLoading}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Approve
+            </button>
+          )}
+          {isSelfApproval && (
+            <span
+              className="text-xs text-amber-600 dark:text-amber-400"
+              title="4-eyes principle: you cannot approve your own promotion"
+            >
+              Self-approve blocked
+            </span>
+          )}
+          {canRollback && (
+            <button
+              onClick={handleRollback}
+              disabled={actionLoading}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              Rollback
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded: Diff viewer */}
+      {expanded && (
+        <div className="px-6 pb-4 bg-blue-50/50 dark:bg-blue-900/5 border-t border-neutral-100 dark:border-neutral-700">
+          <div className="pt-4">
+            {loadingDiff ? (
+              <div className="flex items-center gap-2 text-sm text-neutral-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading diff...
+              </div>
+            ) : diff ? (
+              <DiffViewer diff={diff} />
+            ) : (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                No diff available for this promotion.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {confirmDialog}
+    </div>
+  );
+}
+
+// =============================================================================
+// MAIN PROMOTIONS PAGE
+// =============================================================================
+
+export function Promotions() {
+  const { isReady, hasPermission, user } = useAuth();
+  const toast = useToastActions();
+
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [apis, setApis] = useState<API[]>([]);
+  const [selectedTenant, setSelectedTenant] = useState('');
+  const [selectedApi, setSelectedApi] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  const canPromote = hasPermission('apis:deploy');
+  const pageSize = 20;
+
+  const loadPromotions = useCallback(async () => {
+    if (!selectedTenant) return;
+    try {
+      setLoading(true);
+      const result = await apiService.listPromotions(selectedTenant, {
+        api_id: selectedApi || undefined,
+        status: selectedStatus || undefined,
+        page,
+        page_size: pageSize,
+      });
+      setPromotions(result.items);
+      setTotalCount(result.total);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load promotions');
+      setPromotions([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedTenant, selectedApi, selectedStatus, page]);
+
+  useEffect(() => {
+    if (isReady) loadTenants();
+  }, [isReady]);
+
+  useEffect(() => {
+    if (selectedTenant) {
+      loadApis(selectedTenant);
+      setPage(1);
+    }
+  }, [selectedTenant]);
+
+  useEffect(() => {
+    if (selectedTenant) loadPromotions();
+  }, [loadPromotions, selectedTenant]);
+
+  async function loadTenants() {
+    try {
+      const data = await apiService.getTenants();
+      setTenants(data);
+      if (data.length > 0) setSelectedTenant(data[0].id);
+      setLoading(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load tenants');
+      setLoading(false);
+    }
+  }
+
+  async function loadApis(tenantId: string) {
+    try {
+      const data = await apiService.getApis(tenantId);
+      setApis(data);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  const handleCreated = () => {
+    setShowCreateDialog(false);
+    toast.success('Promotion created', 'Promotion request submitted for approval');
+    loadPromotions();
+  };
+
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Promotions</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
+            Promote APIs across environments — dev &rarr; staging &rarr; production
+          </p>
+        </div>
+        {canPromote && (
+          <Button onClick={() => setShowCreateDialog(true)} disabled={!selectedTenant}>
+            <Plus className="h-4 w-4" />
+            New Promotion
+          </Button>
+        )}
+      </div>
+
+      {/* Pipeline Indicator */}
+      {promotions.length > 0 && (
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-4">
+          <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
+            Promotion Pipeline
+          </h3>
+          <PromotionPipeline promotions={promotions} />
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4">
+        <select
+          value={selectedTenant}
+          onChange={(e) => setSelectedTenant(e.target.value)}
+          className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+        >
+          <option value="">Select tenant...</option>
+          {tenants.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.display_name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={selectedApi}
+          onChange={(e) => {
+            setSelectedApi(e.target.value);
+            setPage(1);
+          }}
+          className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+        >
+          <option value="">All APIs</option>
+          {apis.map((api) => (
+            <option key={api.id} value={api.id}>
+              {api.display_name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={selectedStatus}
+          onChange={(e) => {
+            setSelectedStatus(e.target.value);
+            setPage(1);
+          }}
+          className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+        >
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="promoting">Promoting</option>
+          <option value="promoted">Promoted</option>
+          <option value="failed">Failed</option>
+          <option value="rolled_back">Rolled Back</option>
+        </select>
+        <button
+          onClick={loadPromotions}
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 text-sm"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg">
+          {error}
+          <button onClick={() => setError(null)} className="float-right font-bold">
+            &times;
+          </button>
+        </div>
+      )}
+
+      {/* Promotions List */}
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 overflow-hidden">
+        {loading ? (
+          <TableSkeleton rows={5} columns={6} />
+        ) : promotions.length === 0 ? (
+          <EmptyState
+            variant="deployments"
+            description="No promotions yet. Create one to promote an API across environments."
+          />
+        ) : (
+          <div className="divide-y divide-neutral-200 dark:divide-neutral-700">
+            {/* Table header */}
+            <div className="grid grid-cols-[2fr_1.5fr_1fr_1.5fr_1fr_1fr] gap-2 px-6 py-3 bg-neutral-50 dark:bg-neutral-700 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+              <span>API / Message</span>
+              <span>Path</span>
+              <span>Status</span>
+              <span>Requested By</span>
+              <span>Approved By</span>
+              <span>Actions</span>
+            </div>
+            {promotions.map((promotion) => (
+              <PromotionRow
+                key={promotion.id}
+                promotion={promotion}
+                tenantId={selectedTenant}
+                canPromote={canPromote}
+                currentUser={user?.name || ''}
+                onRefresh={loadPromotions}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalCount)} of{' '}
+            {totalCount}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg disabled:opacity-50 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg disabled:opacity-50 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Promotion Dialog */}
+      {showCreateDialog && selectedTenant && (
+        <CreatePromotionDialog
+          tenantId={selectedTenant}
+          apis={apis}
+          onClose={() => setShowCreateDialog(false)}
+          onCreated={handleCreated}
+        />
+      )}
+    </div>
+  );
+}

@@ -36,6 +36,7 @@ from .routers import (
     admin_prospects,
     apis,
     applications,
+    argocd_admin,
     audit,
     backend_apis,
     billing,
@@ -80,6 +81,7 @@ from .routers import (
     platform,
     portal,
     portal_applications,
+    promotions,
     proxy_backends,
     quotas,
     reconciliation,
@@ -633,6 +635,7 @@ app.include_router(tenants.router)
 app.include_router(apis.router)
 app.include_router(applications.router)
 app.include_router(deployments.router)
+app.include_router(promotions.router)
 app.include_router(git.router)
 app.include_router(events.router)
 app.include_router(webhooks.router)
@@ -697,6 +700,9 @@ app.include_router(platform.router)
 
 # System Info (Edition, License, Features - CAB-1311)
 app.include_router(system.router)
+
+# ArgoCD Admin — sync, diff, platform status (CAB-1706 W3)
+app.include_router(argocd_admin.router)
 
 # Catalog Admin (CAB-682 - Catalog Cache Sync)
 app.include_router(catalog_admin.router)

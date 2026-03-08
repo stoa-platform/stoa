@@ -52,6 +52,10 @@
         "response_size_bytes": {
           "type": "long"
         },
+        "request_body": {
+          "type": "text",
+          "_meta": { "pii": true }
+        },
         "error_message": {
           "type": "text"
         },
@@ -67,14 +71,19 @@
         "tags": {
           "type": "keyword"
         }
+      },
+      "_meta": {
+        "pii_fields": ["request_body"],
+        "description": "API call logs with PII tagging for GDPR compliance"
       }
     }
   },
   "priority": 100,
-  "version": 1,
+  "version": 2,
   "_meta": {
     "description": "STOA Platform - API Call Logs Index (14 days retention, per-tenant)",
     "managed_by": "stoa-logs-service",
-    "retention_days": 14
+    "retention_days": 14,
+    "cab_ticket": "CAB-1684"
   }
 }

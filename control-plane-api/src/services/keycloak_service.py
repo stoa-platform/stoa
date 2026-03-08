@@ -1,6 +1,7 @@
 """Keycloak service for authentication and client management"""
 
 import functools
+import json
 import logging
 
 import httpx
@@ -237,6 +238,7 @@ class KeycloakService:
         redirect_uris: list[str],
         description: str = "",
         security_profile: str = "oauth2_public",
+        jwks_data: dict | None = None,
     ) -> dict:
         """
         Create a new OAuth2 client for an application.
@@ -303,6 +305,9 @@ class KeycloakService:
             })
             if security_profile == "fapi_advanced":
                 client_data["attributes"]["dpop.bound.access.tokens"] = "true"
+            # Inject inline JWKS for private_key_jwt auth (CAB-1748)
+            if jwks_data and "keys" in jwks_data and jwks_data["keys"]:
+                client_data["attributes"]["jwt.credential.public.key"] = json.dumps(jwks_data)
         else:
             # Fallback: confidential client
             client_data.update({

@@ -3,6 +3,7 @@
 exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot 1`] = `
 {
   "buttons": [
+    "Show deleted",
     "Refresh",
     "+ Register Gateway",
     "All21",

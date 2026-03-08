@@ -224,7 +224,8 @@ if [[ -f "${TEMPLATES_DIR}/ism-policies.json" ]]; then
   policies=$(cat "${TEMPLATES_DIR}/ism-policies.json" | jq -c '.policies[]')
   while IFS= read -r policy; do
     policy_id=$(echo "$policy" | jq -r '.policy_id')
-    policy_body=$(echo "$policy" | jq -c '{policy: del(.policy_id, .ism_template) | . + {ism_template: .ism_template}}' | jq -c '{policy: .policy}')
+    ism_template=$(echo "$policy" | jq -c '.ism_template')
+    policy_body=$(echo "$policy" | jq -c '{policy: {description: .description, default_state: .default_state, states: .states, ism_template: .ism_template}}')
     apply_ism_policy "$policy_id" "$policy_body"
   done <<< "$policies"
 else
@@ -235,6 +236,8 @@ fi
 log_info "=== Step 3: Initial Indices ==="
 create_initial_index "audit"
 create_initial_index "analytics"
+create_initial_index "stoa-gw"
+create_initial_index "stoa-logs"
 
 # 4. Create tools index (not rolled over, single index)
 log_info "Creating tools index..."
@@ -262,6 +265,8 @@ echo "Indices created:"
 echo "  - tools          (permanent, catalog)"
 echo "  - audit-*        (1 year retention)"
 echo "  - analytics-*    (90 days retention)"
+echo "  - stoa-gw-*      (tiered: 7d free, 90d pro, 365d enterprise)"
+echo "  - stoa-logs-*    (14 days retention)"
 echo ""
 echo "Templates applied:"
 echo "  - tools, audit, analytics, stoa-logs, gateway-logs"

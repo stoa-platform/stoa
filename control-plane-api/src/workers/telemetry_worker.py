@@ -72,6 +72,7 @@ class TelemetryWorker:
     async def _get_online_gateways(self, session: AsyncSession) -> list[GatewayInstance]:
         stmt = select(GatewayInstance).where(
             GatewayInstance.status == GatewayInstanceStatus.ONLINE,
+            GatewayInstance.deleted_at.is_(None),
         )
         result = await session.execute(stmt)
         return list(result.scalars().all())

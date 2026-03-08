@@ -21,7 +21,8 @@ VPS_FLEET=(
   "gravitee-vps|54.36.209.237|debian|Gravitee APIM v4 (Arena benchmark)"
   "n8n-vps|51.254.139.205|debian|n8n + PocketBase + Healthchecks"
   "webmethods-vps|51.255.201.17|debian|webMethods API Gateway trial (gateway.gostoa.dev)"
-  "dev-vps|213.199.45.108|debian|Dev environment (STOA GW + webMethods)"
+  "infisical-vps|213.199.45.108|debian|Infisical vault (vault.gostoa.dev) + Caddy TLS"
+  "bench-vps|94.23.107.106|debian|OpenSearch bench + Arena runner (STOA-bench)"
   # HEGEMON workers are dynamic — use hegemon/workers.txt
 )
 

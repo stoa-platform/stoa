@@ -1,7 +1,10 @@
-"""Slack message templates for deployment lifecycle events (CAB-1413).
+"""Slack message templates for deployment + promotion lifecycle events.
 
-Event types: deployment.started, deployment.completed, deployment.failed,
-deployment.rolledback.
+Deployment events (CAB-1413): deployment.started, deployment.completed,
+deployment.failed, deployment.rolledback.
+
+Promotion events (CAB-1706): promotion.pending_approval, promotion.approved,
+promotion.completed, promotion.rolled_back.
 """
 
 from typing import Any
@@ -59,6 +62,48 @@ def deploy_rolledback(payload: dict[str, Any]) -> str:
     return f":white_check_mark: *{api}* rolled back to v{rollback_version}\n" f"  {_tenant_env(payload)}"
 
 
+def promotion_pending_approval(payload: dict[str, Any]) -> str:
+    api = payload.get("api_name", payload.get("api_id", "unknown"))
+    source = payload.get("source_environment", "?").upper()
+    target = payload.get("target_environment", "?").upper()
+    requester = payload.get("requested_by", "unknown")
+    message = payload.get("message", "")
+    tenant = payload.get("tenant_id", "unknown")
+    is_prod = payload.get("target_environment", "") == "production"
+    eyes = "4-eyes required — a different user must approve" if is_prod else "self-approval allowed"
+    console_url = payload.get("console_url", "")
+    link = f"\n  → <{console_url}/promotions|Review in Console>" if console_url else ""
+    return (
+        f":eyes: *Promotion awaiting approval*\n"
+        f"  *{api}* {source} → {target} | Tenant: {tenant}\n"
+        f"  Requested by: {requester} | _{eyes}_"
+        + (f"\n  Message: _{message}_" if message else "")
+        + link
+    )
+
+
+def promotion_approved(payload: dict[str, Any]) -> str:
+    api = payload.get("api_name", payload.get("api_id", "unknown"))
+    source = payload.get("source_environment", "?").upper()
+    target = payload.get("target_environment", "?").upper()
+    approved_by = payload.get("approved_by", "unknown")
+    return (
+        f":white_check_mark: *Promotion approved*\n"
+        f"  *{api}* {source} → {target} | Approved by: {approved_by}"
+    )
+
+
+def promotion_rolled_back(payload: dict[str, Any]) -> str:
+    api = payload.get("api_name", payload.get("api_id", "unknown"))
+    source = payload.get("source_environment", "?").upper()
+    target = payload.get("target_environment", "?").upper()
+    requester = payload.get("requested_by", "unknown")
+    return (
+        f":arrows_counterclockwise: *Promotion rolled back*\n"
+        f"  *{api}* {source} → {target} | By: {requester}"
+    )
+
+
 def format_message(event_type: str, payload: dict[str, Any]) -> str | None:
     """Return a formatted Slack message string for the given event type.
 
@@ -75,5 +120,11 @@ def format_message(event_type: str, payload: dict[str, Any]) -> str | None:
             return deploy_failed(payload)
         case "deployment.rolledback":
             return deploy_rolledback(payload)
+        case "promotion.pending_approval":
+            return promotion_pending_approval(payload)
+        case "promotion.approved":
+            return promotion_approved(payload)
+        case "promotion.rolled_back":
+            return promotion_rolled_back(payload)
         case _:
             return None

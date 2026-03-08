@@ -6,6 +6,7 @@ from . import (
     execution_logs,
     gateway,
     git,
+    promotions,
     subscriptions,
     tenants,
     traces,

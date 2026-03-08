@@ -27,16 +27,31 @@ pub struct RequestTraceContext {
     pub traceparent: String,
 }
 
-/// Middleware that extracts W3C `traceparent` from incoming requests.
+/// Middleware that extracts W3C `traceparent` from incoming requests and
+/// echoes it back in responses.
 ///
 /// Inserts a [`RequestTraceContext`] into request extensions when a valid
 /// traceparent header is present. If absent or malformed, the request
 /// continues without trace context (downstream uses fallback trace IDs).
+///
+/// When a valid traceparent was received, the response includes:
+/// - `traceparent`: the original traceparent header (W3C propagation)
+/// - `X-Stoa-Trace-Id`: the extracted trace ID (for observability)
 pub async fn trace_context_middleware(mut request: Request, next: Next) -> Response {
-    if let Some(ctx) = extract_traceparent_from_headers(request.headers()) {
-        request.extensions_mut().insert(ctx);
+    let trace_ctx = extract_traceparent_from_headers(request.headers());
+    if let Some(ref ctx) = trace_ctx {
+        request.extensions_mut().insert(ctx.clone());
     }
-    next.run(request).await
+    let mut response = next.run(request).await;
+    if let Some(ctx) = trace_ctx {
+        if let Ok(val) = axum::http::HeaderValue::from_str(&ctx.traceparent) {
+            response.headers_mut().insert("traceparent", val);
+        }
+        if let Ok(val) = axum::http::HeaderValue::from_str(&ctx.trace_id) {
+            response.headers_mut().insert("x-stoa-trace-id", val);
+        }
+    }
+    response
 }
 
 /// Parse a W3C traceparent header value.
@@ -245,6 +260,56 @@ mod tests {
             .await
             .expect("body");
         assert_eq!(&body[..], b"found");
+    }
+
+    #[tokio::test]
+    async fn test_middleware_echoes_traceparent_in_response() {
+        let app = Router::new()
+            .route("/health", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn(trace_context_middleware));
+
+        let tp = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        let req = Request::builder()
+            .uri("/health")
+            .header("traceparent", tp)
+            .body(Body::empty())
+            .expect("request");
+        let resp = app.oneshot(req).await.expect("response");
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Verify traceparent is echoed in response
+        let resp_tp = resp
+            .headers()
+            .get("traceparent")
+            .expect("traceparent header");
+        assert_eq!(resp_tp.to_str().unwrap(), tp);
+
+        // Verify X-Stoa-Trace-Id is set
+        let trace_id = resp
+            .headers()
+            .get("x-stoa-trace-id")
+            .expect("trace id header");
+        assert_eq!(
+            trace_id.to_str().unwrap(),
+            "4bf92f3577b34da6a3ce929d0e0e4736"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_middleware_no_trace_headers_without_traceparent() {
+        let app = Router::new()
+            .route("/health", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn(trace_context_middleware));
+
+        let req = Request::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .expect("request");
+        let resp = app.oneshot(req).await.expect("response");
+
+        // No traceparent in request → no trace headers in response
+        assert!(resp.headers().get("traceparent").is_none());
+        assert!(resp.headers().get("x-stoa-trace-id").is_none());
     }
 
     #[tokio::test]

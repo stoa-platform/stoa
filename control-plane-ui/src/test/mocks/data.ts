@@ -20,6 +20,7 @@ export const mockAdminUser: User = {
   id: 'user-admin',
   email: 'parzival@oasis.gg',
   name: 'Parzival',
+  username: 'parzival',
   roles: ['cpi-admin'],
   tenant_id: 'oasis-gunters',
   permissions: [
@@ -49,6 +50,7 @@ export const mockViewerUser: User = {
   id: 'user-viewer',
   email: 'viewer@oasis.gg',
   name: 'Viewer',
+  username: 'viewer',
   roles: ['viewer'],
   tenant_id: 'oasis-gunters',
   permissions: ['apis:read', 'apps:read', 'audit:read'],

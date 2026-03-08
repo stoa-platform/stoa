@@ -1,154 +1,55 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-06 (CAB-1733 FAPI 2.0 Spike + Decomposition)
+> Derniere MAJ: 2026-03-07 (CAB-1697 Rules Diet Phase 2)
 
 ## ✅ DONE
 
-> Full history: 1305+ pts across 88 issues (C8 alone). See Linear for complete audit trail.
-> Key milestones: Docs v1.0 (107 pts), Rust Gateway (50 pts), ArgoCD+AWX (34 pts), UAC (34 pts)
+> Full history: 2500+ pts across 160+ issues. See Linear for complete audit trail.
 
 ### Cycle 12 (Mar 3+)
 - 🔴 CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10
-  - Spike DONE: `docs/spikes/SPIKE-FAPI-2-COMPATIBILITY.md`
-  - ADR-056 DONE: FAPI 2.0 Architecture (stoa-docs)
-  - KC 26.5.3 sufficient, no upgrade needed. Decomposed: 5 subs (CAB-1739-1743)
+  - Spike DONE, ADR-056 DONE, KC 26.5.3 sufficient. Decomposed: 5 subs (CAB-1739-1743)
+- ✅ CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398
+- ✅ CAB-1637: API/MCP Discovery — Smart Connector Catalog (13 pts) — PR #1397
+- ✅ CAB-1634: RBAC Taxonomy v2 (21 pts) — PR #1396
+- ✅ CAB-1635: OTel Distributed Tracing (21 pts) — PR #1391
+- ✅ CAB-1636: [MEGA] HEGEMON Runtime × STOA Gateway Integration (28 pts) — PR #1393
+- ✅ CAB-1633: Wire AI Factory through LLM Gateway Proxy (5 pts) — PRs #1336, #1339
+- ✅ CAB-1632: Switch repo Private → Public (5 pts) — PRs #1331-#1337
+- ✅ CAB-1601: Anthropic Cache Token Tracking (21 pts) — PRs #1292, #1303-#1305
+- ✅ CAB-1614: Arena 20 Dimensions — Blue Ocean (21 pts) — PRs #1270, #1276
+- ✅ CAB-1552: Lazy MCP Discovery + ADR-051 (5 pts) — PR #1209
+- ✅ Queue-Driven AI Factory (8 pts) — PR #1321
+- ✅ CAB-1708: Portal eslint/vite upgrade (3 pts) — PR #1561
+- ✅ CAB-1707: TokenUsage i18n + persona tests (3 pts) — already on main
+- ✅ CAB-1698: Log rotation + model routing (5 pts) — PR #1559
 
-### Cycle 12 (Feb 27+) — older items
-- ✅ CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398 (2 files, 430 LOC). 17 new PrometheusRule alerts + AlertManagerConfig CRD. Gap-fill: portal/console health, LLM cost anomaly, auth/RBAC anomaly, SLO multi-window burn-rate, deployment rollout. 4 Slack channels + inhibition rules
-- ✅ CAB-1637: API/MCP Discovery — Smart Connector Catalog (13 pts) — PR #1397 (2 files, ~250 LOC). Curated catalog of 12 EU APIs + MCP endpoints, auto-detect from URL, search by keyword. 3 endpoints: /catalog, /detect, /search. 21 unit tests
-- ✅ CAB-1634: RBAC Taxonomy v2 (21 pts) — PR #1396 (6 files, ~380 LOC). 32 granular permissions, 4 resource domains (api, subscription, analytics, admin), RBACContext + permission inheritance, 57 unit tests
-- ✅ CAB-1635: OTel Distributed Tracing (21 pts) — PR #1391. Per-tenant spans, trace propagation
-- ✅ CAB-1636: [MEGA] HEGEMON Runtime × STOA Gateway Integration (28 pts) — PR #1393 (18 files, 2687 LOC). 3 phases: P1 gateway deploy configs + Keycloak runbook, P2 supervision middleware (3 tiers: AUTOPILOT/CO-PILOT/COMMAND, 15 tests) + Grafana dashboard (6 panels) + integration tests (7 scenarios), P3 HEGEMON MCP Server v0 (3 read-only tools: workers_status, cycle_status, metrics, 13 tests). Full CI/CD: prod + staging deployed, smoke tests green
-- ✅ CAB-1633: Wire AI Factory through LLM Gateway Proxy (5 pts) — PRs #1336 (K8s deployment, stoa-parallel, HEGEMON workers), #1339 (skip_validation flag for local dogfood). Prod deployed: envFrom secretRef on gateway pods, `stoa-dogfood.sh --verify` operational
-- ✅ CAB-1632: Switch repo Private → Public (5 pts) — PRs #1331 (sanitize rules, CI fork safety, gitleaks), #1333 (move 25 strategic/demo docs to stoa-strategy), #1337 (restore memory.md/plan.md after git-filter-repo). Post-switch: 7 repos public, 41 bot issues closed, 14 closed PR bodies sanitized (3 business/personal + 11 VPS IPs), git history clean (17 files removed from 1547 commits). Savings: ~$654/mo GHA billing
-- ✅ Prod hotfix: 401 Unauthorized on all api.gostoa.dev endpoints — PR #1328 (auth dependency fix)
-- ✅ Prod fix: duplicate personal tenants + Prometheus NetworkPolicy — PR #1332 (DB-level idempotency, test mock fixes). DB cleanup: removed 3 duplicate tenants + 2 duplicate gateways
-- ✅ chore: update OpenAPI snapshot with 4 LLM usage endpoints — PR #1338 (unblocked CP-API CI/CD on main, 317→321 paths)
-- ✅ CAB-1601: Anthropic Cache Token Tracking (21 pts) — 4 PRs across 4 components:
-  - PR #1292: Rust gateway — cache field extraction, cache-aware cost calc, 4 Prometheus counters
-  - PR #1303: Python CP API — schema, migration 049, model, repository, service, router
-  - PR #1304: Grafana dashboard — cache hit ratio, savings ($/hr), per-tenant cost, model mix
-  - PR #1305: Dogfood script — `--verify` (4 checks), `--hegemon` (VPS env), enhanced `--setup`
-- ✅ CAB-1614: Arena 20 Dimensions — Blue Ocean (21 pts) — PRs #1270, #1276 (12 new k6 scenarios, features gate, 4-category Grafana, VPS sidecar deploy)
-- ✅ CAB-1552: Lazy MCP Discovery + ADR-051 (5 pts) — PR #1209 (LazyMcpDiscovery struct, moka cache, 10 tests)
-- ✅ Arena LLM routing fix — PRs #1313, #1317 (Mistral/OpenAI-compat corpus + LLM_BASE_URL fix). Score: llm_routing 39.9→91.5, llm_cost ~40→84.8, composite 83.90
-- ✅ Queue-Driven AI Factory (8 pts) — PR #1321 (+380/-1279 LOC, 8 files). Unified pipeline: Linear → Council → PocketBase queue → dispatch-daemon → Contabo workers. Removed 3 GHA jobs (plan-validate, implement, implement-fast). Added `push_queue_job()` + `notify_queued()` to notify.sh, enriched dispatch-daemon prompts, `/stoa queue` Slack commands, inline S2 worker validation
-- ✅ CAB-1608: stoa-parallel reliability (3 pts) — PR #1243 (3 root causes fixed)
-
-### Cycle 11 (Feb 27) — 152/152 pts, 8 tickets, 9 PRs, 3h wall clock
-- ✅ CAB-1539: Portal Unit Tests (21 pts) — PR #1181 (15 untested components)
-- ✅ CAB-1523: E2E @wip DPoP & MCP Scenarios (13 pts) — PR #1182 (7 DPoP + 1 MCP resource)
-- ✅ CAB-1526: API Router Test Coverage (13 pts) — PR #1183 (64 tests, 3 routers)
-- ✅ CAB-1545: PermissionGate + ProxyOwner Dashboard (21 pts) — PR #1184
-- ✅ CAB-1538: API Service Layer Tests (21 pts) — PR #1187 (34 tests, 4 service modules)
-- ✅ CAB-1542: Gateway Skills + Proxy Hardening + Auto-RCA (21 pts) — PRs #1188, #1189
-- ✅ CAB-1541: Self-Service Signup Service (21 pts) — PR #1190
-- ✅ CAB-1540: OSS Launch Readiness (21 pts) — PR #1191 (SUPPORT.md, CONTRIBUTORS.md)
-
-### Cycle 10 (Mar 2-8) — CLOSED (193/193 pts, 13 tickets, 100%)
-- Full details in completed-tickets.md
-
-### Cycle 9 (Feb 22+)
-- ✅ CAB-1304 [MEGA] Demo Tenant Automation (13 pts) — PRs #1052, #1056 (seed script, demo router, K8s cronjob, 19 tests)
-- ✅ CAB-1448 [MEGA] API Router Test Coverage Blitz (21 pts) — 14 PRs (#996–#1074), 91% coverage, DONE
-- ✅ CAB-1451 [MEGA] E2E Test Expansion (21 pts) — PRs #997, #1006, #974 (49 features, 0 @wip, DONE)
-- ✅ CAB-1452 [MEGA] DX: Chat Agent Hardening (21 pts) — PRs #984, #1008, #1060, #1069 (389+ tests, DONE)
-- ✅ CAB-1457 [api] Billing models + migration + service (5 pts) — PR #1000
-- ✅ CAB-402 Policy Drift Monitoring (5 pts) — PR #1059
-- ✅ CAB-1460 Scheduled Blog Publishing Pipeline (5 pts) — PR #1053
-- ✅ CAB-1326 [MEGA] Community Launch Prep (13 pts) — PRs #1048-#1052
-- ✅ Backlog trim: 106 tickets canceled on Linear
-- ✅ CAB-1347 [MEGA] Event-Driven V2 Phase 3 (Policy Propagation) — PRs #1032, #1034
-- ✅ CAB-1348 [MEGA] v2 Linux Native — CANCELLED (tokio-uring incompatible)
-- ✅ Veille concurrentielle 3 niveaux — PRs #1019, #1020, #1025
-- ✅ CAB-1446 [MEGA] Gateway Test Coverage Expansion (21 pts) — PR #995
-- ✅ CAB-1456 [gateway] Metering enrichment + budget enforcement (5 pts) — PR #998
-- ✅ CAB-1450 [MEGA] DX: CI & Local Dev Completeness (13 pts) — PRs #975, #983, #987, #989
-- ✅ CAB-1342 [MEGA] Helm Auto-Sync Secrets + Multi-Staging (21 pts) — PR #990
-- ✅ CAB-1334 [MEGA] Usage Metering Pipeline P1 (21 pts) — PR #991
-- ✅ CAB-1438 [MEGA] K8s HPA + PDB for All Components (21 pts) — PR #970
-- ✅ CAB-1439 [MEGA] Portal Component Test Coverage (21 pts) — PR #968
-- ✅ CAB-1316 [MEGA] Self-Diagnostic Engine + Hop Detection (21 pts) — PR #981
-- ✅ CAB-1392 [MEGA] Security & MCP Deep-Dive Content (21 pts) — stoa-docs
-- ✅ CAB-1440 [MEGA] E2E: Unblock @wip Features (13 pts) — PR #969
-- ✅ CAB-1322 [MEGA] Full UX Audit (21 pts) — PR #892
-- ✅ CAB-1437 [MEGA] API Service Layer Hardening (21 pts) — PRs #912, #935, #963, #966
-- ✅ CAB-1432 [MEGA] Credential Mapping (21 pts) — PRs #899, #903
-- ✅ CAB-1345 [MEGA] WebSocket & Streaming (21 pts) — PR #890
-- ✅ CAB-1319 [MEGA] MCP Developer Self-Service (21 pts) — PR #898
-- ✅ CAB-374 [MEGA] Vercel-Style DX (34 pts) — ALL 3 PHASES DONE
-- ✅ CAB-1331 [MEGA] UAC-Driven Observability (21 pts) — ALL 3 PHASES DONE
-- ✅ CAB-1336 [MEGA] Multi-Cloud Adapters (21 pts) — ALL 3 DONE
-- ✅ CAB-1123 [MEGA] Prompt Cache HEGEMON (21 pts) — PR #878
-- ✅ CAB-1333 [MEGA] MCP Protocol Full Compliance (34 pts) — PR #831
-- ✅ CAB-1390 [MEGA] Portal Test Coverage (21 pts) — ALL 3 PHASES DONE
-- ✅ CAB-1389 [MEGA] Cross-Component Quality (13 pts) — ALL 3 PHASES DONE
-- ✅ CAB-1388 [MEGA] API Test Hardening R2 (21 pts) — PR #818
-- ✅ CAB-1337 [MEGA] AI Guardrails V2 (34 pts) — PRs #809, #816, #825
-- ✅ CAB-1301 [MEGA] Gateway API + NetworkPolicy (21 pts) — ALL 3 PHASES DONE
-- ✅ CAB-1398 [MEGA] AI Factory Slack Upgrade (26 pts) — ALL 4 PHASES DONE
-- ✅ CAB-1482 PocketBase remote tier + sync (5 pts) — PRs #1098, #1099, #1110 (hegemon state store, SSL fix, CI deep integration)
-- ✅ CAB-1481 Progressive Permission Allowlist (3 pts) — PR #1102 (instance-capture hook + analyze script)
-- ✅ CAB-438 Sender-Constrained Tokens W4 (Token Binding UI) — PR #1101 (security posture dashboard)
-- ✅ CAB-438 Sender-Constrained Tokens W5 (DPoP E2E) — PR #1103 (4 Playwright BDD features)
-- ✅ CAB-1472 MCP Protocol 2025-11-25 (5 pts) — PR #1104 (protocol bump + 9 handler tests, 1330 gw tests)
-- ✅ CAB-1479 P4 API Router Test Audit — PR #1105 (50 tests: monitoring, operations, traces)
-- ✅ CAB-1482 P3 Hegemon Agent State Store — PR #1098
-- ✅ CAB-1475 PG Audit Trail — PR #1094
-- ✅ CAB-1479 P5 E2E Scenarios — PR #1096
-- ✅ CAB-1479 P3 Portal Hook Tests — PR #1095
-- ✅ CAB-1514 [MEGA] HEGEMON Runtime VPS (13 pts) — PRs #1118, #1119 (8 scripts, 2 runbooks, 18-pt verify, OVH VPS-1 €4.49/mo)
-- ✅ CAB-1519 HEGEMON Phase 2 Go Daemon (21 pts) — PR #1135 (10MB binary, Linear→SSH→claude -p, 11 tests, Council 8.0/10)
-- ✅ CAB-1513 stoa-parallel v2 (13 pts) — PR #1114 (7 windows, approve-once, PocketBase claims, Linear auto-status, ORCHESTRE enrichi)
-- ✅ CAB-1483 SCIM→Roles + DCR Onboarding (5 pts) — PR #1113
-- ✅ CAB-1490 Perf Regression Gate (3 pts) — PR #1121
-- ✅ CAB-1492 Security Scanner CronJob (5 pts) — PR #1122
-- ✅ CAB-1493 Public Benchmark Methodology (3 pts) — PR #1123
-- ✅ CAB-1489 Security Scanner Tests (3 pts) — PR #1124
-- ✅ CAB-1487 LLM Provider Router + Cost (5 pts) — PR #1125
-- ✅ CAB-1491 LLM Budget Service + API (5 pts) — PR #1126
-- ✅ CAB-1488 Proxy Mode Tests (3 pts) — PR #1128
-- ✅ CAB-1494 Shadow Mode Tests (3 pts) — PR #1129
-- ✅ CAB-1497 Security Posture Dashboard (5 pts) — PR #1130
-- ✅ CAB-1484 SCIM↔Gateway Reconciliation (5 pts) — PR #1131
-- ✅ CAB-1485 Access Review Dashboard (5 pts) — PR #1132 (42 tests)
-- ✅ CAB-1495 LLM Cost Dashboard (5 pts) — PR #1133 (48 tests)
-- ✅ CAB-1486/1498/1499/1500 Wave 3 E2E Features — PR #1134 (22 scenarios, 8 files)
-- ✅ CAB-1528 Security Scanner Tests (3 pts) — PR #1158 (HEGEMON autonomous dispatch, 35 tests + CI fixes: rule_name→title, OpenAPI snapshot)
-- ✅ +30 smaller tickets (chat agent, i18n, deps, CI fixes, docs)
-
-### Cycle 8 (Feb 16-22) — CLOSED (1305 pts, 88 issues, 186 pts/day)
-
-Top MEGAs: UAC (34), Federation (34), GW Tests (34), Test Blitz (34), Portal RBAC (34),
-SaaS MVP (34), Onboarding (34), API Tests (34), Deploy Lifecycle (34), Kafka (26), +40 more.
+### Historical Cycles (Collapsed)
+- **C11** (Feb 27): 152/152 pts, 8 tickets, 9 PRs, 3h wall clock — PRs #1181-#1191
+- **C10** (Mar 2-8): 193/193 pts, 13 tickets, 100%
+- **C9** (Feb 22+): 830/830 pts, 68 issues, 100%
+- **C8** (Feb 16-22): 1305 pts, 88 issues, 186 pts/day
+- **C7**: 505 pts, 44 issues, 72 pts/day
 
 ## 🔴 IN PROGRESS
 
 CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
-- ✅ demo-dry-run.sh: 23/23 PASS, GO in 5s
+- ✅ demo-dry-run.sh: 23/23 PASS
 - [ ] Repetitions + video backup (human-only)
 
-### Cycle 11 — COMPLETE (152/152 pts, 8 tickets, 9 PRs, 3h wall clock)
-- Session 2026-02-27: 4 parallel instances (BACKEND, FRONTEND, MCP, QA)
-- BACKEND: 76/76 pts (4 PRs #1183, #1187, #1190, #1191) — 3h08m single session
-- FRONTEND: 42/42 pts (2 PRs #1181, #1184) — ~55min
-- MCP: 21/21 pts (2 PRs #1188, #1189) — ~2h (1 relaunch due to context exhaustion)
-- QA: 13/13 pts (1 PR #1182) — ~30min
+CAB-1696: [MEGA] AI Factory Audit Remediation (34 pts) — Phase 1 in progress
+- [~] CAB-1697: Rules diet Phase 2 (5 pts)
+- [ ] CAB-1699: Rust coverage gate (5 pts) — blocked by P1
+- [ ] CAB-1700: E2E smoke mock server (5 pts) — blocked by P1
+- [ ] CAB-1701: OpenAPI→TS contract testing (3 pts) — blocked by P1
+
+CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Decomposed, subs pending
+- [ ] CAB-1739-1743: 5 sub-tickets (implementation pending)
 
 ## 📋 NEXT
 
-**Human-only (post-demo)**:
-CAB-1132: Business Model Validation — Post Demo (8 pts, P1)
-CAB-1126: Demo Video (8 pts, P2)
-CAB-1125: Video Punchline AI Factory (8 pts, P2)
-CAB-1127: Dual-Track Content (5 pts, P2)
-CAB-1124: Modele ESN Partner (5 pts, P2)
-CAB-1128: Design Partner Communication (3 pts, P2)
-
-**Deferred (Council Redo)**:
-CAB-1473: WASM Plugin System (21 pts) — Council 5.00 → post-v1.0
-CAB-1462: Error Snapshot v2 (21 pts) — Council 5.75 → descope
-CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
+**Human-only**: CAB-1132 Business Model (8), CAB-1126 Video (8), CAB-1125 Punchline (8)
+**Deferred**: CAB-1473 WASM (21, 5.00), CAB-1462 ErrorSnap (21, 5.75), CAB-1512 Federation (21, 5.50)
 
 ## 🚫 BLOCKED
 
@@ -156,30 +57,8 @@ CAB-1512: MCP Federation v2 (21 pts) — Council 5.50 → needs spec
 
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
-- C9 final: 830/830 pts (100%), 68 issues. Only demo rehearsal (human-only) remains
-- C10 CLOSED: 193/193 pts, 13 tickets, 100%
-- C11 CLOSED: 152/152 pts, 8 tickets, 9 PRs, 3h wall clock, 4 parallel instances
-- **Cache token tracking** (CAB-1601): end-to-end Anthropic prompt cache monitoring. Gateway extracts cache_creation/read tokens → Prometheus counters → CP API stores in usage_summaries (migration 049) → Grafana dashboard (cache ratio, savings, per-tenant cost, model mix). Verify: `stoa-dogfood.sh --verify`
-- **Queue-Driven AI Factory** (PR #1321): Unified pipeline replaces GHA implement jobs. Flow: Linear → n8n → GHA Council S1 → PocketBase queue → dispatch-daemon → Contabo workers. Council Go → auto-queue (no `/go` needed). Council < 8.0 → rejected. Schema: 5 new columns on queue_jobs (council_score, estimate, mode, source, description). Dispatch enriched prompts with score/mode/estimate. `/stoa queue [stats|pause|resume]` Slack commands. Inline S2 for >5pt tickets (worker self-validates plan before implementing)
-- **Arena Enterprise scores** (2026-03-01): STOA 83.90 (CI95 [83.74, 84.00]) | Gravitee 46.72 | Kong 5.46. LLM routing fix: `LLM_BASE_URL = LLM_MOCK_URL || TARGET_URL` routes LLM calls to mock backend in arena mode (PRs #1313, #1317)
-- Test suite: 5700+ tests, 91% coverage (control-plane-api), 1330+ gateway tests
-- Session 2026-02-27: 9 PRs merged (#1181-#1191), parallel 4-pane dispatch, 152 pts in 3h
-- Session 2026-02-26: 25 PRs merged (#1111-#1135), parallel agents + inline implementation, 5 MEGAs completed + Go daemon
-- HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB/200GB, Nuremberg), Go daemon PR #1135, Infisical dynamic secrets
-- **HEGEMON v3 autonomous startup** (2026-03-01): `hegemon-start.sh` auto-launches Claude Code with zero interactive prompts
-  - 3+1 layer permission fix: `~/.claude.json` (onboarding/trust) + `~/.claude/settings.json` (`Bash(*)` + file tools + `skipDangerousModePermissionPrompt`) + `--permission-mode acceptEdits` (safety warnings)
-  - **Critical**: `acceptEdits` only auto-approves file tools WITHIN workspace. `Read/Write/Edit/Glob/Grep/WebFetch/WebSearch` in global `permissions.allow` covers out-of-workspace access (`~/.claude/projects/.../operations.log`)
-  - Auto-config: `ensure_claude_config()` patches onboarding, API key approval, project trust, tool permissions, global settings — all idempotent
-  - MCP auto-approver: background watcher sends Enter on "Enter to confirm" prompt (30 polls × 2s)
-  - Deployed on ALL 5 workers, validated with `systemctl restart hegemon-agent`
-  - SSH key: `~/.ssh/id_ed25519_stoa` (not default ed25519)
-  - **CI/CD deploy workflow**: WORKING. PRs #1171 (fresh SSH key), #1173 (printenv), #1174 (pkill self-match fix). Full pipeline: Build 25s → Deploy 22s → Verify active
-- Backlog trim: 106 tickets canceled 2026-02-24
-- Velocity C11: 152 pts / 8 tickets / 3h wall clock (50.7 pts/h parallel throughput)
-- Velocity C10: 193 pts / 13 tickets
-- Velocity C9: 830 pts / 68 issues
-- Velocity C8: 1305 pts / 88 issues / 186 pts/day
-- Velocity C7: 505 pts / 44 issues / 72 pts/day
-- ADR numbering: stoa-docs owns 001-051. Next: **ADR-052**
-- docs.gostoa.dev = 41+ articles, all 8 migration spokes published
-- Veille system: L1 weekly, L2 monthly, L3 quarterly
+- Test suite: 5700+ tests, 91% CP-API coverage, 1330+ gateway tests
+- Arena scores: STOA 83.90 | Gravitee 46.72 | Kong 5.46
+- HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB), Go daemon, Infisical secrets
+- ADR numbering: stoa-docs 001-056. Next: **ADR-057**
+- docs.gostoa.dev = 41+ articles, 8 migration spokes

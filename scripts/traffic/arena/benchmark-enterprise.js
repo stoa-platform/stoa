@@ -16,6 +16,7 @@
  *                    If empty, admin scenarios score 0.
  *   SCENARIO      — One of the 20 enterprise scenarios (see scenarios object below)
  *   ARENA_JWT     — Bearer token for authenticated scenarios (optional)
+ *   ADMIN_TOKEN   — Static admin API token for admin endpoints (optional, falls back to ARENA_JWT)
  *   HEADERS       — JSON object of extra headers (optional)
  *   TIMEOUT       — Request timeout in seconds (default: 10)
  *   SUMMARY_FILE  — Output path for JSON summary
@@ -31,6 +32,7 @@ const MCP_PROTOCOL = __ENV.MCP_PROTOCOL || 'stoa'; // "stoa" (REST) or "streamab
 const ADMIN_BASE = __ENV.ADMIN_BASE || '';
 const SCENARIO = __ENV.SCENARIO || 'ent_mcp_discovery';
 const ARENA_JWT = __ENV.ARENA_JWT || '';
+const ADMIN_TOKEN = __ENV.ADMIN_TOKEN || '';
 const HEADERS = __ENV.HEADERS ? JSON.parse(__ENV.HEADERS) : {};
 const TIMEOUT = (__ENV.TIMEOUT || '10') + 's';
 const LLM_MOCK_URL = __ENV.LLM_MOCK_URL || '';
@@ -45,6 +47,17 @@ function authHeaders() {
   if (ARENA_JWT) {
     h['Authorization'] = `Bearer ${ARENA_JWT}`;
   }
+  return h;
+}
+
+// Admin endpoint auth: uses ADMIN_TOKEN (static gateway token) if set, falls back to ARENA_JWT
+function adminAuthHeaders() {
+  const h = Object.assign({}, HEADERS);
+  const token = ADMIN_TOKEN || ARENA_JWT;
+  if (token) {
+    h['Authorization'] = `Bearer ${token}`;
+  }
+  h['Content-Type'] = 'application/json';
   return h;
 }
 
@@ -92,11 +105,11 @@ function mcpRequest(method, params, tags) {
   });
 }
 
-// Admin endpoint request helper
+// Admin endpoint request helper — uses adminAuthHeaders (ADMIN_TOKEN or ARENA_JWT fallback)
 function adminRequest(path, tags, method, body) {
   if (!ADMIN_BASE) return null;
   const url = `${ADMIN_BASE}${path}`;
-  const hdrs = Object.assign({ 'Content-Type': 'application/json' }, authHeaders());
+  const hdrs = adminAuthHeaders();
   if (method === 'POST') {
     return http.post(url, body ? JSON.stringify(body) : null, {
       headers: hdrs,
@@ -113,7 +126,7 @@ function adminRequest(path, tags, method, body) {
   }
   // Default: GET
   return http.get(url, {
-    headers: authHeaders(),
+    headers: hdrs,
     timeout: TIMEOUT,
     tags: tags,
   });

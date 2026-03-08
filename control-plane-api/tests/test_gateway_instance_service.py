@@ -1,4 +1,5 @@
 """Tests for GatewayInstanceService — gateway CRUD + health check."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -34,8 +35,10 @@ class TestGatewayInstanceService:
         """Successful gateway registration."""
         db = AsyncMock()
 
-        with patch("src.services.gateway_instance_service.AdapterRegistry") as mock_registry, \
-             patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.services.gateway_instance_service.AdapterRegistry") as mock_registry,
+            patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_registry.has_type.return_value = True
             mock_repo = MockRepo.return_value
@@ -85,8 +88,10 @@ class TestGatewayInstanceService:
         """Creating a gateway with duplicate name raises ValueError."""
         db = AsyncMock()
 
-        with patch("src.services.gateway_instance_service.AdapterRegistry") as mock_registry, \
-             patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo:
+        with (
+            patch("src.services.gateway_instance_service.AdapterRegistry") as mock_registry,
+            patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo,
+        ):
 
             mock_registry.has_type.return_value = True
             mock_repo = MockRepo.return_value
@@ -137,7 +142,7 @@ class TestGatewayInstanceService:
             svc.repo = mock_repo
 
             with pytest.raises(ValueError, match="not found"):
-                await svc.delete(uuid4())
+                await svc.delete(uuid4(), deleted_by="test-user")
 
     @pytest.mark.asyncio
     async def test_update_applies_fields(self):
@@ -178,12 +183,12 @@ class TestGatewayInstanceService:
         mock_adapter = MagicMock()
         mock_adapter.connect = AsyncMock()
         mock_adapter.disconnect = AsyncMock()
-        mock_adapter.health_check = AsyncMock(
-            return_value=AdapterResult(success=True, data={"version": "10.15"})
-        )
+        mock_adapter.health_check = AsyncMock(return_value=AdapterResult(success=True, data={"version": "10.15"}))
 
-        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo, \
-             patch("src.services.gateway_instance_service.AdapterRegistry") as MockRegistry:
+        with (
+            patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo,
+            patch("src.services.gateway_instance_service.AdapterRegistry") as MockRegistry,
+        ):
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_id = AsyncMock(return_value=gw)
@@ -210,8 +215,10 @@ class TestGatewayInstanceService:
         mock_adapter.connect = AsyncMock(side_effect=ConnectionError("refused"))
         mock_adapter.disconnect = AsyncMock()
 
-        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo, \
-             patch("src.services.gateway_instance_service.AdapterRegistry") as MockRegistry:
+        with (
+            patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo,
+            patch("src.services.gateway_instance_service.AdapterRegistry") as MockRegistry,
+        ):
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_id = AsyncMock(return_value=gw)
@@ -258,8 +265,10 @@ class TestGatewayInstanceServiceAdditional:
         db = AsyncMock()
         gw = self._make_gateway()
 
-        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo, \
-             patch("src.services.gateway_instance_service.GatewayType") as MockGwType:
+        with (
+            patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo,
+            patch("src.services.gateway_instance_service.GatewayType") as MockGwType,
+        ):
 
             MockGwType.return_value = "kong_enum"
             mock_repo = MockRepo.return_value
@@ -274,7 +283,12 @@ class TestGatewayInstanceServiceAdditional:
 
             MockGwType.assert_called_once_with("kong")
             mock_repo.list_all.assert_awaited_once_with(
-                gateway_type="kong_enum", environment="prod", tenant_id=None, page=1, page_size=50
+                gateway_type="kong_enum",
+                environment="prod",
+                tenant_id=None,
+                include_deleted=False,
+                page=1,
+                page_size=50,
             )
             assert total == 1
 
@@ -282,8 +296,10 @@ class TestGatewayInstanceServiceAdditional:
     async def test_list_without_gateway_type_passes_none(self):
         db = AsyncMock()
 
-        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo, \
-             patch("src.services.gateway_instance_service.GatewayType") as MockGwType:
+        with (
+            patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo,
+            patch("src.services.gateway_instance_service.GatewayType") as MockGwType,
+        ):
 
             mock_repo = MockRepo.return_value
             mock_repo.list_all = AsyncMock(return_value=([], 0))
@@ -297,7 +313,12 @@ class TestGatewayInstanceServiceAdditional:
 
             MockGwType.assert_not_called()
             mock_repo.list_all.assert_awaited_once_with(
-                gateway_type=None, environment=None, tenant_id=None, page=1, page_size=50
+                gateway_type=None,
+                environment=None,
+                tenant_id=None,
+                include_deleted=False,
+                page=1,
+                page_size=50,
             )
 
     @pytest.mark.asyncio

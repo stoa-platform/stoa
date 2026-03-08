@@ -199,6 +199,7 @@ export interface API {
   endpoints?: APIEndpoint[];
   status: 'draft' | 'published' | 'deprecated';
   audience?: APIAudience;
+  deployments?: Record<string, boolean>;
   createdAt: string;
   updatedAt: string;
 }

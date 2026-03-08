@@ -948,7 +948,7 @@ def seed_subscriptions(
                 api_key = data.get("api_key", "")
                 print(f"  [+] Subscription oasis-mobile -> petstore (sub: {sub_id})")
                 if api_key:
-                    print(f"      API Key: {api_key[:20]}...")
+                    print(f"      API Key: {api_key[:8]}...{api_key[-4:]}")
                 results["oasis-mobile:petstore"] = "created"
 
                 # Auto-approve

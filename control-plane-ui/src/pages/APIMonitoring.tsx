@@ -508,6 +508,11 @@ function generateDemoStats(): APITransactionStats {
   };
 }
 
+/** Cryptographically secure random integer in [0, max). */
+function secureRandomInt(max: number): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0] % max;
+}
+
 function generateDemoTransactions(): APITransactionSummary[] {
   const apis = ['weather-api', 'payment-api', 'user-api', 'inventory-api'];
   const methods = ['GET', 'POST', 'PUT', 'DELETE'];
@@ -522,25 +527,25 @@ function generateDemoTransactions(): APITransactionSummary[] {
   ];
 
   return Array.from({ length: 20 }, (_, i) => {
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
+    const status = statuses[secureRandomInt(statuses.length)];
     const statusCode =
       status === 'success'
-        ? [200, 201][Math.floor(Math.random() * 2)]
+        ? [200, 201][secureRandomInt(2)]
         : status === 'error'
-          ? [400, 404, 500][Math.floor(Math.random() * 3)]
+          ? [400, 404, 500][secureRandomInt(3)]
           : 504;
 
     return {
       id: `txn-${i + 1}`,
-      trace_id: `trace-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      api_name: apis[Math.floor(Math.random() * apis.length)],
-      method: methods[Math.floor(Math.random() * methods.length)],
-      path: paths[Math.floor(Math.random() * paths.length)],
+      trace_id: `trace-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
+      api_name: apis[secureRandomInt(apis.length)],
+      method: methods[secureRandomInt(methods.length)],
+      path: paths[secureRandomInt(paths.length)],
       status_code: statusCode,
       status,
-      started_at: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-      total_duration_ms: Math.floor(Math.random() * 500) + 50,
-      spans_count: Math.floor(Math.random() * 4) + 2,
+      started_at: new Date(Date.now() - secureRandomInt(3600000)).toISOString(),
+      total_duration_ms: secureRandomInt(500) + 50,
+      spans_count: secureRandomInt(4) + 2,
     };
   }).sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
 }
@@ -551,9 +556,8 @@ function generateDemoTransaction(id: string): APITransaction {
     ...summary,
     id,
     tenant_id: 'tenant-acme',
-    client_ip: '192.168.1.' + Math.floor(Math.random() * 255),
-    user_id:
-      ['alice@example.com', 'bob@example.com', null][Math.floor(Math.random() * 3)] || undefined,
+    client_ip: '192.168.1.' + secureRandomInt(255),
+    user_id: ['alice@example.com', 'bob@example.com', null][secureRandomInt(3)] || undefined,
     spans: [
       {
         name: 'Gateway Ingress',

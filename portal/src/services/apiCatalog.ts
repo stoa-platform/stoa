@@ -68,6 +68,7 @@ function transformPortalAPI(portalApi: PortalAPI): API {
     category: portalApi.category,
     tags: portalApi.tags,
     audience: (portalApi.audience as API['audience']) || 'public',
+    deployments: portalApi.deployments,
     createdAt: portalApi.created_at || new Date().toISOString(),
     updatedAt: portalApi.updated_at || new Date().toISOString(),
   };
@@ -124,7 +125,7 @@ export const apiCatalogService = {
       const response = await apiClient.get<PortalAPI>(`/v1/portal/apis/${id}`);
       return transformPortalAPI(response.data);
     } catch (error) {
-      console.error(`Failed to fetch API ${id}:`, error);
+      console.error('Failed to fetch API:', error);
       return null;
     }
   },
@@ -137,7 +138,7 @@ export const apiCatalogService = {
       const response = await apiClient.get<object>(`/v1/portal/apis/${id}/openapi`);
       return response.data;
     } catch (error) {
-      console.warn(`OpenAPI spec not available for API ${id}:`, error);
+      console.warn('OpenAPI spec not available for API:', error);
       return null;
     }
   },

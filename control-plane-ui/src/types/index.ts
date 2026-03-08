@@ -3,6 +3,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  username: string;
   roles: string[];
   tenant_id?: string;
   permissions: string[];
@@ -69,11 +70,21 @@ export interface Application {
   display_name: string;
   description: string;
   client_id: string;
-  status: 'pending' | 'approved' | 'suspended';
+  status: 'pending' | 'approved' | 'suspended' | 'active' | 'disabled';
   api_subscriptions: string[];
+  environment?: string;
+  security_profile?: string;
+  jwks_uri?: string;
   created_at: string;
   updated_at: string;
 }
+
+export type SecurityProfile =
+  | 'api_key'
+  | 'oauth2_public'
+  | 'oauth2_confidential'
+  | 'fapi_baseline'
+  | 'fapi_advanced';
 
 export interface ApplicationCreate {
   name: string;
@@ -81,6 +92,9 @@ export interface ApplicationCreate {
   description: string;
   redirect_uris: string[];
   api_subscriptions: string[];
+  security_profile?: SecurityProfile;
+  jwks_uri?: string;
+  jwks?: string; // Inline PEM or JWK/JWKS JSON
 }
 
 // Consumer types (CAB-864 — mTLS Self-Service)
@@ -1055,6 +1069,9 @@ export interface GatewayInstance {
   version?: string;
   tags: string[];
   mode?: GatewayMode;
+  protected?: boolean;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1720,4 +1737,54 @@ export interface PublishContractResponse {
 export interface ContractListResponse {
   items: Contract[];
   total: number;
+}
+
+// =============================================================================
+// Promotion Types (CAB-1706)
+// =============================================================================
+
+export type PromotionStatus = 'pending' | 'promoting' | 'promoted' | 'failed' | 'rolled_back';
+
+export interface Promotion {
+  id: string;
+  tenant_id: string;
+  api_id: string;
+  source_environment: string;
+  target_environment: string;
+  source_deployment_id: string | null;
+  target_deployment_id: string | null;
+  status: PromotionStatus;
+  spec_diff: Record<string, unknown> | null;
+  message: string;
+  requested_by: string;
+  approved_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromotionCreate {
+  source_environment: string;
+  target_environment: string;
+  message: string;
+}
+
+export interface PromotionRollbackRequest {
+  message: string;
+}
+
+export interface PromotionListResponse {
+  items: Promotion[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PromotionDiffResponse {
+  promotion_id: string;
+  source_environment: string;
+  target_environment: string;
+  source_spec: Record<string, unknown> | null;
+  target_spec: Record<string, unknown> | null;
+  diff_summary: Record<string, unknown> | null;
 }

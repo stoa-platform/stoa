@@ -51,6 +51,7 @@
     "webhooks": "Webhooks",
     "credentialMappings": "Credential Mappings",
     "contracts": "Contracts",
+    "promotions": "Promotions",
     "internalApis": "Internal APIs",
     "aiFactory": "AI Factory"
   },

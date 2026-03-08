@@ -39,6 +39,10 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: promote-to-prod
   cancel-in-progress: false

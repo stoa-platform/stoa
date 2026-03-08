@@ -14,15 +14,6 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 
-vi.mock('../contexts/EnvironmentContext', () => ({
-  useEnvironment: vi.fn(() => ({
-    activeEnvironment: null,
-    activeConfig: null,
-    environments: [],
-    switchEnvironment: vi.fn(),
-  })),
-}));
-
 vi.mock('../services/api', () => ({
   apiService: {
     getTenants: vi.fn().mockResolvedValue([
@@ -138,7 +129,9 @@ describe('Applications', () => {
   it('renders the page heading', async () => {
     renderApplications();
     expect(
-      await screen.findByText('Manage consumer applications and API subscriptions')
+      await screen.findByText(
+        'Manage consumer applications and API subscriptions across all environments'
+      )
     ).toBeInTheDocument();
   });
 
@@ -186,7 +179,9 @@ describe('Applications', () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderApplications();
         expect(
-          await screen.findByText('Manage consumer applications and API subscriptions')
+          await screen.findByText(
+            'Manage consumer applications and API subscriptions across all environments'
+          )
         ).toBeInTheDocument();
       });
     }

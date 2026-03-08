@@ -317,6 +317,12 @@ const navigationSections: NavSection[] = [
     items: [
       { name: 'nav.policies', href: '/policies', icon: FileCheck, permission: 'apis:read' },
       {
+        name: 'nav.promotions',
+        href: '/promotions',
+        icon: ArrowUpDown,
+        permission: 'apis:deploy',
+      },
+      {
         name: 'nav.contracts',
         href: '/contracts',
         icon: FileText,

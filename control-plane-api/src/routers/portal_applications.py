@@ -21,6 +21,7 @@ from ..database import get_db
 from ..models.portal_application import PortalApplication, PortalAppStatus, SecurityProfile
 from ..repositories.portal_application import PortalApplicationRepository
 from ..services.api_key import api_key_service
+from ..services.jwks_utils import parse_jwks_input
 from ..services.keycloak_service import keycloak_service
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ class ApplicationResponse(BaseModel):
     api_key: str | None = None  # Only returned on create for api_key profile
     api_key_prefix: str | None = None
     jwks_uri: str | None = None
+    jwks_data: dict | None = None
     tenant_id: str | None = None
     status: str = "active"
     redirect_uris: list[str] = []
@@ -74,7 +76,8 @@ class ApplicationCreateRequest(BaseModel):
     description: str = ""
     security_profile: SecurityProfile = SecurityProfile.OAUTH2_PUBLIC
     redirect_uris: list[str] = []
-    jwks_uri: str | None = None  # Required for fapi_baseline/fapi_advanced
+    jwks_uri: str | None = None  # FAPI: URL to JWKS endpoint
+    jwks: str | None = None  # FAPI: inline PEM public key or JWK/JWKS JSON
     tenant_id: str | None = None  # If not specified, uses user's default tenant
     environment: str | None = None  # Multi-env registry (CAB-1667)
 
@@ -115,6 +118,7 @@ def _app_to_response(
         api_key=api_key,
         api_key_prefix=app.api_key_prefix,
         jwks_uri=app.jwks_uri,
+        jwks_data=app.jwks_data,
         tenant_id=app.tenant_id,
         status=app.status.value if app.status else "active",
         redirect_uris=app.redirect_uris or [],
@@ -206,8 +210,25 @@ async def create_application(
     profile = data.security_profile
 
     # Validate profile-specific requirements
-    if profile in (SecurityProfile.FAPI_BASELINE, SecurityProfile.FAPI_ADVANCED) and not data.jwks_uri:
-        raise HTTPException(status_code=422, detail="jwks_uri is required for FAPI profiles")
+    if profile in (SecurityProfile.FAPI_BASELINE, SecurityProfile.FAPI_ADVANCED):
+        if not data.jwks_uri and not data.jwks:
+            raise HTTPException(
+                status_code=422,
+                detail="FAPI profiles require either jwks_uri (URL) or jwks (inline PEM/JWK)",
+            )
+        if data.jwks_uri and data.jwks:
+            raise HTTPException(
+                status_code=422,
+                detail="Provide either jwks_uri or jwks, not both",
+            )
+
+    # Parse inline JWKS if provided (PEM, JWK JSON, or JWKS JSON)
+    jwks_data = None
+    if data.jwks:
+        try:
+            jwks_data = parse_jwks_input(data.jwks)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid JWKS input: {e}")
 
     # Check for duplicate name
     existing = await repo.get_by_owner_and_name(user.id, data.name)
@@ -224,6 +245,7 @@ async def create_application(
         redirect_uris=data.redirect_uris,
         security_profile=profile,
         jwks_uri=data.jwks_uri,
+        jwks_data=jwks_data,
         status=PortalAppStatus.ACTIVE,
         environment=data.environment,
     )
@@ -246,6 +268,7 @@ async def create_application(
                 redirect_uris=data.redirect_uris,
                 description=data.description,
                 security_profile=profile.value,
+                jwks_data=jwks_data,
             )
             app.keycloak_client_id = kc_result.get("client_id")
             app.keycloak_client_uuid = kc_result.get("id")

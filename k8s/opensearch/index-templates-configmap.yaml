@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-index-templates
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/component: index-templates
+    app.kubernetes.io/managed-by: stoa
+data:
+  gateway-logs-template.json: |
+    {
+      "index_patterns": ["stoa-gw-*"],
+      "template": {
+        "settings": {
+          "number_of_shards": 1,
+          "number_of_replicas": 1
+        },
+        "mappings": {
+          "properties": {
+            "@timestamp": { "type": "date" },
+            "gateway_type": { "type": "keyword" },
+            "gateway_id": { "type": "keyword" },
+            "tenant_id": { "type": "keyword" },
+            "method": { "type": "keyword" },
+            "path": { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+            "status": { "type": "integer" },
+            "latency_ms": { "type": "float" },
+            "trace_id": { "type": "keyword" },
+            "request_id": { "type": "keyword" },
+            "user_agent": { "type": "text" },
+            "source_ip": { "type": "ip" },
+            "request_body": { "type": "text", "_meta": { "pii": true } },
+            "response_body": { "type": "text", "_meta": { "pii": true } },
+            "auth_token": { "type": "keyword", "_meta": { "pii": true } },
+            "consumer_id": { "type": "keyword" },
+            "api_name": { "type": "keyword" },
+            "environment": { "type": "keyword" },
+            "tags": { "type": "keyword" }
+          },
+          "_meta": {
+            "pii_fields": ["request_body", "response_body", "auth_token"],
+            "description": "Gateway telemetry logs with PII tagging for GDPR compliance"
+          }
+        }
+      },
+      "priority": 200,
+      "version": 1
+    }
+  stoa-logs-template.json: |
+    {
+      "index_patterns": ["stoa-logs-*"],
+      "template": {
+        "settings": {
+          "number_of_shards": 1,
+          "number_of_replicas": 1,
+          "index": {
+            "lifecycle": {
+              "name": "stoa-logs-policy",
+              "rollover_alias": "stoa-logs"
+            }
+          }
+        },
+        "mappings": {
+          "properties": {
+            "@timestamp": { "type": "date" },
+            "tenant_id": { "type": "keyword" },
+            "correlation_id": { "type": "keyword" },
+            "method": { "type": "keyword" },
+            "path": { "type": "keyword" },
+            "status": { "type": "integer" },
+            "consumer_id": { "type": "keyword" },
+            "consumer_name": { "type": "keyword" },
+            "api_name": { "type": "keyword" },
+            "api_version": { "type": "keyword" },
+            "latency_ms": { "type": "float" },
+            "request_size_bytes": { "type": "long" },
+            "response_size_bytes": { "type": "long" },
+            "request_body": { "type": "text", "_meta": { "pii": true } },
+            "error_message": { "type": "text" },
+            "error_code": { "type": "keyword" },
+            "gateway_instance": { "type": "keyword" },
+            "environment": { "type": "keyword" },
+            "tags": { "type": "keyword" }
+          },
+          "_meta": {
+            "pii_fields": ["request_body"],
+            "description": "API call logs with PII tagging for GDPR compliance"
+          }
+        }
+      },
+      "priority": 100,
+      "version": 2
+    }
+  audit-template.json: |
+    {
+      "index_patterns": ["audit-*"],
+      "template": {
+        "settings": {
+          "number_of_shards": 1,
+          "number_of_replicas": 1,
+          "index": {
+            "lifecycle": {
+              "name": "audit-policy",
+              "rollover_alias": "audit"
+            }
+          }
+        },
+        "mappings": {
+          "properties": {
+            "@timestamp": { "type": "date" },
+            "event_id": { "type": "keyword" },
+            "event_type": { "type": "keyword" },
+            "event_category": { "type": "keyword" },
+            "severity": { "type": "keyword" },
+            "actor": {
+              "properties": {
+                "id": { "type": "keyword" },
+                "email": { "type": "keyword" },
+                "name": { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+                "type": { "type": "keyword" },
+                "ip_address": { "type": "ip" },
+                "user_agent": { "type": "text" }
+              }
+            },
+            "tenant_id": { "type": "keyword" },
+            "resource": {
+              "properties": {
+                "type": { "type": "keyword" },
+                "id": { "type": "keyword" },
+                "name": { "type": "text", "fields": { "keyword": { "type": "keyword" } } }
+              }
+            },
+            "action": { "type": "keyword" },
+            "outcome": { "type": "keyword" },
+            "details": { "type": "object", "enabled": true },
+            "changes": {
+              "properties": {
+                "before": { "type": "object", "enabled": false },
+                "after": { "type": "object", "enabled": false },
+                "fields_changed": { "type": "keyword" }
+              }
+            },
+            "correlation_id": { "type": "keyword" },
+            "tags": { "type": "keyword" }
+          }
+        }
+      },
+      "priority": 100,
+      "version": 1
+    }

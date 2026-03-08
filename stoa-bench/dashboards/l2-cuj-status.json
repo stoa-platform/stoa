@@ -1,0 +1,250 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "bolt",
+      "includeVars": true,
+      "keepTime": true,
+      "title": "L3 Stability",
+      "type": "link",
+      "url": "/d/stoa-bench-l3-stability/stoa-bench-l3-stability-demo-confidence"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "title": "L1 Enterprise",
+      "type": "link",
+      "url": "/d/gateway-arena-enterprise/gateway-arena-enterprise"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "title": "Demo Summary",
+      "type": "link",
+      "url": "/d/stoa-bench-demo/stoa-bench-demo-readiness"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "DEMO READINESS",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "stoa_bench_demo_ready",
+          "legendFormat": "Demo Ready"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "GO", "color": "green" }, "0": { "text": "BLOCKED", "color": "red" } } }
+          ],
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "CUJs Passed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "stoa_bench_l2_passed",
+          "legendFormat": "Passed"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "green", "value": 5 }
+            ]
+          },
+          "unit": "none",
+          "max": 5
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Last Run",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 10, "y": 0 },
+      "targets": [
+        {
+          "expr": "time() - stoa_bench_l2_last_run",
+          "legendFormat": "Seconds ago"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1200 },
+              { "color": "red", "value": 3600 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "CUJ Status — Current",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "expr": "stoa_bench_cuj_status{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "expr": "stoa_bench_cuj_duration_seconds{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": { "byField": "cuj", "mode": "outer" }
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value #A" },
+            "properties": [
+              { "id": "displayName", "value": "Status" },
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "1": { "text": "✅ PASS", "color": "green" }, "0": { "text": "❌ FAIL", "color": "red" } } }
+              ]}
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value #B" },
+            "properties": [
+              { "id": "displayName", "value": "Duration" },
+              { "id": "unit", "value": "s" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "title": "CUJ Status — History (24h)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "expr": "stoa_bench_cuj_status{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 8,
+            "showPoints": "always"
+          },
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "PASS" }, "0": { "text": "FAIL" } } }
+          ],
+          "min": -0.1,
+          "max": 1.1
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 30,
+      "title": "CUJ E2E Latency (24h)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "expr": "stoa_bench_cuj_duration_seconds{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 40,
+      "title": "Sub-Test Detail",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 28 },
+      "targets": [
+        {
+          "expr": "stoa_bench_subtest_status{layer=\"L2\"}",
+          "legendFormat": "{{cuj}}/{{subtest}}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "displayName", "value": "Status" },
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "1": { "text": "✅", "color": "green" }, "0": { "text": "❌", "color": "red" } } }
+              ]}
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["stoa-bench", "l2", "cuj", "demo-readiness"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "STOA Bench — L2 Platform CUJs",
+  "uid": "stoa-bench-l2-cuj",
+  "version": 1
+}

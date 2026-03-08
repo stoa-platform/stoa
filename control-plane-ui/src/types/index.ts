@@ -1737,3 +1737,53 @@ export interface ContractListResponse {
   items: Contract[];
   total: number;
 }
+
+// =============================================================================
+// Promotion Types (CAB-1706)
+// =============================================================================
+
+export type PromotionStatus = 'pending' | 'promoting' | 'promoted' | 'failed' | 'rolled_back';
+
+export interface Promotion {
+  id: string;
+  tenant_id: string;
+  api_id: string;
+  source_environment: string;
+  target_environment: string;
+  source_deployment_id: string | null;
+  target_deployment_id: string | null;
+  status: PromotionStatus;
+  spec_diff: Record<string, unknown> | null;
+  message: string;
+  requested_by: string;
+  approved_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromotionCreate {
+  source_environment: string;
+  target_environment: string;
+  message: string;
+}
+
+export interface PromotionRollbackRequest {
+  message: string;
+}
+
+export interface PromotionListResponse {
+  items: Promotion[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PromotionDiffResponse {
+  promotion_id: string;
+  source_environment: string;
+  target_environment: string;
+  source_spec: Record<string, unknown> | null;
+  target_spec: Record<string, unknown> | null;
+  diff_summary: Record<string, unknown> | null;
+}

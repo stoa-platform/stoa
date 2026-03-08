@@ -59,6 +59,11 @@ import type {
   ContractListResponse,
   PublishContractResponse,
   ProtocolBinding,
+  Promotion,
+  PromotionCreate,
+  PromotionRollbackRequest,
+  PromotionListResponse,
+  PromotionDiffResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -431,6 +436,64 @@ class ApiService {
     );
     return data;
   }
+
+  // ── Promotions (CAB-1706) ──────────────────────────────────────────────────
+
+  async listPromotions(
+    tenantId: string,
+    params?: {
+      api_id?: string;
+      status?: string;
+      target_environment?: string;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<PromotionListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/promotions`, { params });
+    return data;
+  }
+
+  async getPromotion(tenantId: string, promotionId: string): Promise<Promotion> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/promotions/${promotionId}`);
+    return data;
+  }
+
+  async createPromotion(
+    tenantId: string,
+    apiId: string,
+    request: PromotionCreate
+  ): Promise<Promotion> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/promotions/${apiId}`, request);
+    return data;
+  }
+
+  async approvePromotion(tenantId: string, promotionId: string): Promise<Promotion> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/promotions/${promotionId}/approve`
+    );
+    return data;
+  }
+
+  async rollbackPromotion(
+    tenantId: string,
+    promotionId: string,
+    request: PromotionRollbackRequest
+  ): Promise<Promotion> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/promotions/${promotionId}/rollback`,
+      request
+    );
+    return data;
+  }
+
+  async getPromotionDiff(tenantId: string, promotionId: string): Promise<PromotionDiffResponse> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/promotions/${promotionId}/diff`
+    );
+    return data;
+  }
+
+  // ── Environment Status ────────────────────────────────────────────────────
 
   async getEnvironmentStatus(
     tenantId: string,

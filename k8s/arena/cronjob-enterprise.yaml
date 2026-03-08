@@ -69,6 +69,13 @@ spec:
                       optional: true
                 - name: LLM_MOCK_URL
                   value: "http://llm-mock-backend.stoa-system.svc:8889"
+                  # Admin API token for gateway admin endpoints (circuit-breakers, skills, etc.)
+                - name: ADMIN_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: stoa-gateway-secrets
+                      key: STOA_ADMIN_API_TOKEN
+                      optional: true
                   # OIDC credentials for JWT auto-fetch (reuses L2 verify config)
                   # If ARENA_JWT is empty, the orchestrator fetches a fresh token
                   # via client_credentials grant before running benchmarks.

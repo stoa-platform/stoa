@@ -2,6 +2,7 @@
 //!
 //! Public modules and router builder for integration testing and the binary entry point.
 
+pub mod a2a;
 pub mod access_log;
 pub mod auth;
 pub mod cache;
@@ -366,6 +367,10 @@ pub fn build_router(state: AppState) -> Router {
                     "/hegemon/messages/:agent_name/read-all",
                     post(hegemon::messaging::mark_all_messages_read),
                 )
+                // A2A (Agent-to-Agent) Protocol — Google A2A spec (CAB-1754)
+                .route("/.well-known/agent.json", get(a2a::discovery::agent_card))
+                .route("/a2a", post(a2a::handlers::a2a_handler))
+                .route("/a2a/agents", get(a2a::discovery::list_agents))
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Security profile enforcement: per-subscription DPoP/mTLS (CAB-1744)

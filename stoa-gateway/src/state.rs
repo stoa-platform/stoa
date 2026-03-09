@@ -135,6 +135,9 @@ pub struct AppState {
     /// HEGEMON agent gateway state (CAB-1709).
     /// None when STOA_HEGEMON_ENABLED=false (default).
     pub hegemon: Option<Arc<crate::hegemon::HegemonState>>,
+    /// A2A agent registry for inter-agent communication (CAB-1754).
+    /// None when STOA_A2A_ENABLED=false (default).
+    pub a2a_registry: Option<Arc<crate::a2a::registry::AgentRegistry>>,
 }
 
 impl AppState {
@@ -536,6 +539,19 @@ impl AppState {
             None
         };
 
+        // Initialize A2A agent registry (CAB-1754)
+        let a2a_registry = if config.a2a_enabled {
+            let registry = crate::a2a::registry::AgentRegistry::new(
+                config.a2a_max_agents,
+                config.a2a_max_tasks,
+            );
+            tracing::info!("A2A agent registry enabled");
+            Some(Arc::new(registry))
+        } else {
+            tracing::info!("A2A protocol disabled (STOA_A2A_ENABLED=false)");
+            None
+        };
+
         let start_time = Instant::now();
 
         Self {
@@ -583,6 +599,7 @@ impl AppState {
             cost_calculator,
             api_proxy_registry,
             hegemon,
+            a2a_registry,
         }
     }
 

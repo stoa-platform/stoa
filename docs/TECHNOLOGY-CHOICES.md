@@ -17,8 +17,7 @@ This document explains the technology choices for the STOA stack and why each co
 | **GitOps K8s** | ArgoCD | Flux, Jenkins, Spinnaker | UI, multi-cluster, adoption |
 | **Non-K8s Automation** | AWX (Ansible) | Terraform, scripts | Idempotent, auditable, UI |
 | **Gateway v1** | webMethods | Kong, APISIX, Gravitee | Existing expertise, legacy |
-| **MCP Gateway** | Python + FastAPI + OPA | — | Current production gateway |
-| **Gateway v2 (Future)** | Rust + eBPF | Go, C++ | Target Q4 2026, performance |
+| **STOA Gateway** | Rust + Tokio + axum | Go, C++ | Production since Feb 2026 |
 | **Search** | OpenSearch | Elasticsearch, Meilisearch | Free fork, AWS-free |
 
 ---
@@ -195,9 +194,9 @@ This document explains the technology choices for the STOA stack and why each co
 
 ---
 
-## Gateway v2 (Future Vision — Target Q4 2026): Rust + eBPF vs Go vs C++
+## Gateway: Rust + Tokio + axum vs Go vs C++
 
-> **Note**: The current MCP Gateway in production uses **Python 3.11 + FastAPI + OPA**. The Rust + eBPF implementation below is the **target architecture** for the `stoa-gateway/` component, planned for Q4 2026.
+> **Note**: The STOA Gateway is built with **Rust + Tokio + axum** and has been in production since February 2026. It replaced the earlier Python-based MCP Gateway (now archived).
 
 | Criteria | Rust | Go | C++ |
 |----------|------|-----|-----|
@@ -272,11 +271,10 @@ This document explains the technology choices for the STOA stack and why each co
 | **Control Plane UI** | React + TypeScript | 18.x | ✅ Prod |
 | **Developer Portal** | React + Vite + TailwindCSS | - | ✅ Prod |
 | **Control Plane API** | FastAPI + Python | 3.11 | ✅ Prod |
-| **MCP Gateway** | FastAPI + Python | 3.11 | ✅ Prod |
+| **STOA Gateway** | Rust + Tokio + axum | stable | ✅ Prod |
 | **Database** | PostgreSQL | 16.x | ✅ Prod |
 | **Auth** | Keycloak | 24.x | ✅ Prod |
 | **Messaging** | Redpanda (Kafka-compatible) | - | ✅ Prod |
-| **API Gateway** | webMethods | Trial | ✅ Prod |
 | **Orchestration** | Kubernetes (EKS) | 1.29 | ✅ Prod |
 | **Secrets** | HashiCorp Vault | - | ✅ Prod |
 | **Observability** | Prometheus + Grafana + Loki | - | ✅ Prod |

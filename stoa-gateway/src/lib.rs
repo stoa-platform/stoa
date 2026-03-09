@@ -578,13 +578,22 @@ pub fn build_router(state: AppState) -> Router {
 
 /// Middleware that records Prometheus metrics for every HTTP request.
 /// On 5xx responses, triggers the diagnostic engine for automatic root-cause analysis (CAB-1542).
+///
+/// Health, readiness, and metrics endpoints are excluded to avoid unnecessary
+/// overhead on high-frequency probes (K8s liveness/readiness, arena benchmarks).
 async fn http_metrics_middleware(
     axum::extract::State(state): axum::extract::State<AppState>,
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    // Skip metrics recording for infrastructure endpoints
+    let raw_path = request.uri().path();
+    if raw_path.starts_with("/health") || raw_path.starts_with("/ready") || raw_path == "/metrics" {
+        return next.run(request).await;
+    }
+
     let method = request.method().to_string();
-    let path = metrics::normalize_path(request.uri().path());
+    let path = metrics::normalize_path(raw_path);
     let request_id = request
         .headers()
         .get("x-request-id")

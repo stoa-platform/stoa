@@ -22,7 +22,7 @@ Three-layer continuous verification: L0 (proxy baseline, k6, 30min), L1 (enterpr
 
 ## L0 Scoring
 
-Formula: `0.15*Base + 0.25*Burst50 + 0.25*Burst100 + 0.15*Avail + 0.10*Error + 0.10*Consistency`. Scores: >95 excellent, 80-95 good, 60-80 acceptable, <60 investigate. 7 scenarios: warmup, health, sequential(20), burst_10/50/100, sustained(100). Caps: 400ms sequential, 2.5s burst_50, 4s burst_100. Consistency: IQR-based CV.
+Formula: `0.15*Base + 0.20*Burst50 + 0.10*Burst100 + 0.15*Avail + 0.10*Error + 0.15*Consistency + 0.15*Ramp`. burst_100 downweighted (measures cluster capacity, not gateway overhead on shared nodes). Scores: >95 excellent, 80-95 good, 60-80 acceptable, <60 investigate. 7 scenarios: warmup, health, sequential(20), burst_10/50/100, sustained(100). Caps: 400ms sequential, 2.5s burst_50, 4s burst_100. Consistency: IQR-based CV.
 
 ## Echo Backend (Fair Comparison)
 

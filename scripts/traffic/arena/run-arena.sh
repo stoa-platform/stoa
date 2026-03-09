@@ -50,6 +50,27 @@ rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 
 # ---------------------------------------------------------------------------
+# Pre-check: verify all gateways are reachable before benchmarking
+# ---------------------------------------------------------------------------
+COOLDOWN="${COOLDOWN:-15}"
+
+for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
+  GW_NAME=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].name")
+  GW_HEALTH=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].health")
+  max_retries=30
+  for attempt in $(seq 1 $max_retries); do
+    if curl -sf --max-time 5 "$GW_HEALTH" >/dev/null 2>&1; then
+      log_json "\"Gateway $GW_NAME is ready (attempt $attempt)\""
+      break
+    fi
+    if [ "$attempt" -eq "$max_retries" ]; then
+      log_json "\"WARNING: Gateway $GW_NAME not ready after $max_retries attempts, benchmarking anyway\""
+    fi
+    sleep 1
+  done
+done
+
+# ---------------------------------------------------------------------------
 # Run benchmarks
 # ---------------------------------------------------------------------------
 for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
@@ -57,6 +78,12 @@ for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
   GW_HEALTH=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].health")
   GW_PROXY=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].proxy")
   GW_HEADERS=$(echo "$GATEWAYS" | jq -c ".[$gw_idx].proxy_headers // {}")
+
+  # Cooldown between gateway runs to let TCP TIME_WAIT sockets close
+  if [ "$gw_idx" -gt 0 ]; then
+    log_json "\"Cooldown ${COOLDOWN}s before $GW_NAME (TCP socket cleanup)\""
+    sleep "$COOLDOWN"
+  fi
 
   log_json "\"Benchmarking gateway: ${GW_NAME}\""
   mkdir -p "$WORK_DIR/$GW_NAME"

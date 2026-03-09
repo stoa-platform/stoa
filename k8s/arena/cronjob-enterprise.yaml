@@ -145,7 +145,7 @@ spec:
                         "mcp_base": "http://gravitee-arena-gw.stoa-system.svc:8082/mcp",
                         "mcp_protocol": "streamable-http",
                         "admin_base": null,
-                        "health": "http://gravitee-arena-gw.stoa-system.svc:18082/_node/health",
+                        "health": "http://gravitee-arena-gw.stoa-system.svc:8082/echo/get",
                         "features": [
                           "api_bridge", "llm_routing", "llm_cost",
                           "guardrails", "distributed_tracing"

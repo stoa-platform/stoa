@@ -5,14 +5,8 @@ import {
   X,
   BarChart3,
   ExternalLink,
-  Activity,
   Briefcase,
   Store,
-  Star,
-  Bell,
-  FileText,
-  Gauge,
-  GitCompareArrows,
   LucideIcon,
 } from 'lucide-react';
 import { config } from '../../config';
@@ -36,97 +30,33 @@ interface NavItem {
   external?: boolean;
 }
 
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
-
-const sections: NavSection[] = [
+const navItems: NavItem[] = [
   {
-    title: 'Discover',
-    items: [
-      {
-        name: 'Marketplace',
-        href: '/marketplace',
-        icon: Store,
-        enabled: config.features.enableMarketplace,
-        scope: 'stoa:catalog:read',
-      },
-      {
-        name: 'Compare APIs',
-        href: '/api-compare',
-        icon: GitCompareArrows,
-        enabled: config.features.enableAPIComparison,
-        scope: 'stoa:catalog:read',
-      },
-    ],
+    name: 'Marketplace',
+    href: '/marketplace',
+    icon: Store,
+    enabled: config.features.enableMarketplace,
+    scope: 'stoa:catalog:read',
   },
   {
-    title: 'My Workspace',
-    items: [
-      {
-        name: 'My Apps & Credentials',
-        href: '/workspace',
-        icon: Briefcase,
-        permission: 'apps:read',
-      },
-      {
-        name: 'Usage',
-        href: '/usage',
-        icon: BarChart3,
-        enabled: config.features.enableSubscriptions,
-        scope: 'stoa:metrics:read',
-      },
-      {
-        name: 'Executions',
-        href: '/executions',
-        icon: Activity,
-        scope: 'stoa:metrics:read',
-      },
-      {
-        name: 'Favorites',
-        href: '/favorites',
-        icon: Star,
-        enabled: config.features.enableFavorites,
-      },
-      {
-        name: 'Notifications',
-        href: '/notifications',
-        icon: Bell,
-        enabled: config.features.enableNotifications,
-      },
-    ],
+    name: 'My Workspace',
+    href: '/workspace',
+    icon: Briefcase,
+    permission: 'apps:read',
   },
   {
-    title: 'Operations',
-    items: [
-      {
-        name: 'Audit Log',
-        href: '/audit-log',
-        icon: FileText,
-        enabled: config.features.enableAuditLog,
-        permission: 'audit:read',
-      },
-      {
-        name: 'Rate Limits',
-        href: '/rate-limits',
-        icon: Gauge,
-        enabled: config.features.enableRateLimits,
-        scope: 'stoa:metrics:read',
-      },
-    ],
+    name: 'Analytics',
+    href: '/usage',
+    icon: BarChart3,
+    enabled: config.features.enableSubscriptions,
+    scope: 'stoa:metrics:read',
   },
+  { name: 'Profile', href: '/profile', icon: User },
   {
-    title: 'Account',
-    items: [
-      { name: 'Profile', href: '/profile', icon: User },
-      {
-        name: 'Console',
-        href: config.services.console.url,
-        icon: ExternalLink,
-        external: true,
-      },
-    ],
+    name: 'Console',
+    href: config.services.console.url,
+    icon: ExternalLink,
+    external: true,
   },
 ];
 
@@ -146,12 +76,9 @@ function isItemVisible(
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { hasPermission, hasScope, hasRole, user } = useAuth();
 
-  const filteredSections = sections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => isItemVisible(item, hasPermission, hasScope, hasRole)),
-    }))
-    .filter((section) => section.items.length > 0);
+  const visibleItems = navItems.filter((item) =>
+    isItemVisible(item, hasPermission, hasScope, hasRole)
+  );
 
   return (
     <>
@@ -186,52 +113,40 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Navigation - sectioned */}
-        <nav className="flex-1 p-4 pb-20 space-y-6 overflow-y-auto">
-          {filteredSections.map((section) => (
-            <div key={section.title}>
-              <h3 className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-                {section.title}
-              </h3>
-              <div className="space-y-1">
-                {section.items.map((item) =>
-                  item.external ? (
-                    <a
-                      key={item.name}
-                      href={item.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={onClose}
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                    >
-                      <item.icon className="h-5 w-5" aria-hidden="true" />
-                      {item.name}
-                      <ExternalLink
-                        className="h-3 w-3 ml-auto text-neutral-400"
-                        aria-hidden="true"
-                      />
-                    </a>
-                  ) : (
-                    <NavLink
-                      key={item.name}
-                      to={item.href}
-                      onClick={onClose}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                            : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                        }`
-                      }
-                    >
-                      <item.icon className="h-5 w-5" aria-hidden="true" />
-                      {item.name}
-                    </NavLink>
-                  )
-                )}
-              </div>
-            </div>
-          ))}
+        {/* Navigation - flat list */}
+        <nav className="flex-1 p-4 pb-20 space-y-1 overflow-y-auto">
+          {visibleItems.map((item) =>
+            item.external ? (
+              <a
+                key={item.name}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onClose}
+                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                <item.icon className="h-5 w-5" aria-hidden="true" />
+                {item.name}
+                <ExternalLink className="h-3 w-3 ml-auto text-neutral-400" aria-hidden="true" />
+              </a>
+            ) : (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                    isActive
+                      ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }`
+                }
+              >
+                <item.icon className="h-5 w-5" aria-hidden="true" />
+                {item.name}
+              </NavLink>
+            )
+          )}
         </nav>
 
         {/* Footer info */}

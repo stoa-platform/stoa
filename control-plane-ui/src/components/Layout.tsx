@@ -27,10 +27,8 @@ import {
   AlertTriangle,
   Activity,
   Server,
-  Network,
   ArrowUpDown,
   BarChart3,
-  PieChart,
   TrendingUp,
   Menu,
   X,
@@ -38,26 +36,13 @@ import {
   Plus,
   Sun,
   Moon,
-  Shield,
   Gauge,
   ScrollText,
-  Eye,
-  Coins,
-  FileCheck,
   ClipboardList,
-  ListChecks,
   Check,
   Users,
-  KeyRound,
-  Share2,
   Sparkles,
-  Stethoscope,
-  Settings,
-  DollarSign,
   Puzzle,
-  Webhook,
-  Key,
-  FileText,
   Bot,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -83,6 +68,8 @@ interface NavSection {
 }
 
 // Navigation config — name/title values are i18n keys, resolved via t() in render
+// Rationalized from 8 sections (48 items) to 5 sections (~20 items) for demo clarity.
+// All routes still work via URL or command palette — only sidebar nav is simplified.
 const navigationSections: NavSection[] = [
   {
     title: 'nav.overview',
@@ -95,7 +82,6 @@ const navigationSections: NavSection[] = [
         permission: 'tenants:read',
         shortcut: ['g', 'o'],
       },
-      { name: 'nav.myUsage', href: '/my-usage', icon: PieChart, shortcut: ['g', 'u'] },
       {
         name: 'nav.business',
         href: '/business',
@@ -123,15 +109,23 @@ const navigationSections: NavSection[] = [
         shortcut: ['g', 'a'],
       },
       {
-        name: 'nav.subscriptions',
-        href: '/subscriptions',
-        icon: ClipboardList,
+        name: 'nav.consumers',
+        href: '/consumers',
+        icon: Users,
+        permission: 'consumers:read',
+        shortcut: ['g', 'c'],
+      },
+      {
+        name: 'nav.applications',
+        href: '/applications',
+        icon: AppWindow,
         permission: 'apps:read',
       },
     ],
   },
   {
     title: 'nav.aiMcp',
+    accent: true,
     items: [
       {
         name: 'nav.aiTools',
@@ -157,52 +151,9 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: 'nav.access',
-    items: [
-      {
-        name: 'nav.consumers',
-        href: '/consumers',
-        icon: Users,
-        permission: 'consumers:read',
-        shortcut: ['g', 'c'],
-      },
-      {
-        name: 'nav.applications',
-        href: '/applications',
-        icon: AppWindow,
-        permission: 'apps:read',
-      },
-      {
-        name: 'nav.apiKeys',
-        href: '/saas-api-keys',
-        icon: KeyRound,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.credentialMappings',
-        href: '/credential-mappings',
-        icon: Key,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.audience',
-        href: '/audience-governance',
-        icon: Users,
-        permission: 'apis:update',
-      },
-    ],
-  },
-  {
     title: 'nav.gateway',
-    accent: true,
     items: [
       { name: 'nav.status', href: '/gateway', icon: Server, permission: 'apis:read' },
-      {
-        name: 'nav.registry',
-        href: '/gateways',
-        icon: Network,
-        permission: 'tenants:read',
-      },
       {
         name: 'nav.modes',
         href: '/gateways/modes',
@@ -218,33 +169,9 @@ const navigationSections: NavSection[] = [
         permission: 'tenants:read',
       },
       {
-        name: 'nav.drift',
-        href: '/drift',
-        icon: AlertTriangle,
-        permission: 'tenants:read',
-      },
-      {
         name: 'nav.metrics',
         href: '/gateway-observability',
         icon: BarChart3,
-        permission: 'tenants:read',
-      },
-      {
-        name: 'nav.federation',
-        href: '/federation/accounts',
-        icon: Share2,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.proxyOwner',
-        href: '/proxy-owner',
-        icon: Stethoscope,
-        permission: 'tenants:read',
-      },
-      {
-        name: 'nav.apiTraffic',
-        href: '/api-traffic',
-        icon: Activity,
         permission: 'tenants:read',
       },
     ],
@@ -253,51 +180,7 @@ const navigationSections: NavSection[] = [
     title: 'nav.insights',
     items: [
       { name: 'nav.observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
-      { name: 'nav.identity', href: '/identity', icon: Shield, shortcut: ['g', 'i'] },
       { name: 'nav.logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
-      {
-        name: 'nav.apiMonitoring',
-        href: '/monitoring',
-        icon: Activity,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.errorSnapshots',
-        href: '/errors',
-        icon: AlertTriangle,
-        permission: 'apis:read',
-        badge: 'STOA',
-      },
-      {
-        name: 'nav.executions',
-        href: '/executions',
-        icon: ClipboardList,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.shadowDiscovery',
-        href: '/shadow-discovery',
-        icon: Eye,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.llmCost',
-        href: '/llm-cost',
-        icon: DollarSign,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.tokenOptimizer',
-        href: '/token-optimizer',
-        icon: Coins,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.diagnostics',
-        href: '/diagnostics',
-        icon: Stethoscope,
-        permission: 'apis:read',
-      },
       {
         name: 'nav.analytics',
         href: '/analytics',
@@ -310,82 +193,11 @@ const navigationSections: NavSection[] = [
         icon: Bot,
         permission: 'tenants:read',
       },
-    ],
-  },
-  {
-    title: 'nav.governance',
-    items: [
-      { name: 'nav.policies', href: '/policies', icon: FileCheck, permission: 'apis:read' },
-      {
-        name: 'nav.promotions',
-        href: '/promotions',
-        icon: ArrowUpDown,
-        permission: 'apis:deploy',
-      },
-      {
-        name: 'nav.contracts',
-        href: '/contracts',
-        icon: FileText,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.workflows',
-        href: '/workflows',
-        icon: ListChecks,
-        permission: 'workflows:read',
-      },
-      {
-        name: 'nav.webhooks',
-        href: '/webhooks',
-        icon: Webhook,
-        permission: 'apis:read',
-      },
       {
         name: 'nav.auditLog',
         href: '/audit-log',
         icon: ClipboardList,
         permission: 'audit:read',
-      },
-      {
-        name: 'nav.securityPosture',
-        href: '/security-posture',
-        icon: Shield,
-        permission: 'audit:read',
-      },
-    ],
-  },
-  {
-    title: 'nav.admin',
-    items: [
-      {
-        name: 'nav.prospects',
-        href: '/admin/prospects',
-        icon: Sparkles,
-        permission: 'admin:platform',
-      },
-      {
-        name: 'nav.accessRequests',
-        href: '/admin/access-requests',
-        icon: KeyRound,
-        permission: 'admin:platform',
-      },
-      {
-        name: 'nav.users',
-        href: '/admin/users',
-        icon: Users,
-        permission: 'admin:platform',
-      },
-      {
-        name: 'nav.platformSettings',
-        href: '/admin/settings',
-        icon: Settings,
-        permission: 'admin:platform',
-      },
-      {
-        name: 'nav.roles',
-        href: '/admin/roles',
-        icon: Shield,
-        permission: 'admin:platform',
       },
     ],
   },
@@ -423,16 +235,8 @@ export function Layout({ children }: LayoutProps) {
     } catch {
       /* ignore corrupt data */
     }
-    // Default: Gateway open, others closed (keys are i18n keys, stable across languages)
-    return {
-      'nav.overview': true,
-      'nav.apiCatalog': true,
-      'nav.aiMcp': true,
-      'nav.access': true,
-      'nav.gateway': false,
-      'nav.insights': true,
-      'nav.governance': true,
-    };
+    // Default: all sections open (only 5 sections now, all fit on screen)
+    return {};
   });
 
   const toggleSection = useCallback((title: string) => {

@@ -134,7 +134,6 @@ describe('Layout', () => {
 
   it('renders sidebar with navigation items', () => {
     renderLayout();
-    // Nav items render name in <span> + optional shortcut — check by text within the nav
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('APIs')).toBeInTheDocument();
     expect(screen.getByText('AI Tools')).toBeInTheDocument();
@@ -159,21 +158,15 @@ describe('Layout', () => {
 
   it('renders Observability navigation item (CAB-1108)', () => {
     renderLayout();
-    // Section header + nav item both render "Observability"
-    expect(screen.getAllByText('Observability').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Observability')).toBeInTheDocument();
   });
 
-  it('renders Identity navigation item', () => {
+  it('renders gateway section with items (CAB-1764)', () => {
     renderLayout();
-    expect(screen.getByText('Identity')).toBeInTheDocument();
-  });
-
-  it('renders gateway section with items', () => {
-    renderLayout();
-    expect(screen.getByText((_, el) => el?.textContent === '\u26A1 Gateway')).toBeInTheDocument();
-    expect(screen.getByText('Registry')).toBeInTheDocument();
+    expect(screen.getByText('Gateway')).toBeInTheDocument();
     expect(screen.getByText('Modes')).toBeInTheDocument();
     expect(screen.getByText('Metrics')).toBeInTheDocument();
+    expect(screen.getByText('Deployments')).toBeInTheDocument();
   });
 
   it('renders breadcrumb component', () => {
@@ -187,51 +180,48 @@ describe('Layout', () => {
     expect(screen.getByText('Control Plane')).toBeInTheDocument();
   });
 
-  it('renders section headers', () => {
+  it('renders rationalized section headers (CAB-1764)', () => {
     renderLayout();
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('API Catalog')).toBeInTheDocument();
-    expect(screen.getByText('AI & MCP')).toBeInTheDocument();
-    expect(screen.getByText('Access')).toBeInTheDocument();
-    expect(screen.getAllByText('Observability').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Governance')).toBeInTheDocument();
+    // AI & MCP has accent (⚡ prefix)
+    expect(screen.getByText((_, el) => el?.textContent === '\u26A1 AI & MCP')).toBeInTheDocument();
+    expect(screen.getByText('Gateway')).toBeInTheDocument();
+    expect(screen.getByText('Insights')).toBeInTheDocument();
+    // Removed sections should not appear
+    expect(screen.queryByText('Access')).not.toBeInTheDocument();
+    expect(screen.queryByText('Governance')).not.toBeInTheDocument();
   });
 
   it('renders STOA badges on unique features', () => {
     renderLayout();
     const badges = screen.getAllByText('STOA');
-    expect(badges.length).toBeGreaterThanOrEqual(3);
+    expect(badges.length).toBeGreaterThanOrEqual(2);
   });
 
   it('collapses section when header is clicked', () => {
     renderLayout();
-    // Gateway section is open by default
-    const gatewayHeader = screen.getByText((_, el) => el?.textContent === '\u26A1 Gateway');
-    expect(gatewayHeader).toBeInTheDocument();
-    // Click to collapse
-    fireEvent.click(gatewayHeader);
-    // Verify localStorage was updated (keys are i18n keys, stable across languages)
-    const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
-    expect(stored['nav.gateway']).toBe(true);
-  });
-
-  it('expands collapsed section when header is clicked', () => {
-    renderLayout();
-    // Overview is collapsed by default — click to expand
     const overviewHeader = screen.getByText('Overview');
     fireEvent.click(overviewHeader);
+    const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
+    expect(stored['nav.overview']).toBe(true);
+  });
+
+  it('expands collapsed section when header is clicked twice', () => {
+    renderLayout();
+    const overviewHeader = screen.getByText('Overview');
+    fireEvent.click(overviewHeader); // collapse
+    fireEvent.click(overviewHeader); // expand
     const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
     expect(stored['nav.overview']).toBe(false);
   });
 
   it('persists section state to localStorage', () => {
-    // Pre-set localStorage (keys are i18n keys)
     localStorage.setItem(
       'stoa-sidebar-sections',
       JSON.stringify({ 'nav.overview': false, 'nav.apiCatalog': true })
     );
     renderLayout();
-    // Toggle API Catalog to expand
     const catalogHeader = screen.getByText('API Catalog');
     fireEvent.click(catalogHeader);
     const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
@@ -240,7 +230,6 @@ describe('Layout', () => {
 
   it('renders tenant selector button', () => {
     renderLayout();
-    // The tenant selector shows the user's tenant_id (may appear in both header and mobile sidebar)
     const tenantButtons = screen.getAllByText('oasis-gunters');
     expect(tenantButtons.length).toBeGreaterThanOrEqual(1);
   });
@@ -249,33 +238,36 @@ describe('Layout', () => {
     renderLayout();
     const tenantButtons = screen.getAllByText('oasis-gunters');
     fireEvent.click(tenantButtons[0]);
-    // Dropdown should be open — the button should still be visible
     expect(tenantButtons[0]).toBeInTheDocument();
   });
 
-  it('renders new skeleton page nav items (CAB-1118)', () => {
+  it('renders key nav items after rationalization (CAB-1764)', () => {
     renderLayout();
-    expect(screen.getByText('Shadow Discovery')).toBeInTheDocument();
-    expect(screen.getByText('Token Optimizer')).toBeInTheDocument();
-    expect(screen.getByText('Policies')).toBeInTheDocument();
     expect(screen.getByText('Audit Log')).toBeInTheDocument();
+    expect(screen.getByText('Usage Analytics')).toBeInTheDocument();
+    expect(screen.getByText('AI Factory')).toBeInTheDocument();
+    expect(screen.getByText('Consumers')).toBeInTheDocument();
+  });
+
+  it('does not render removed nav items (CAB-1764)', () => {
+    renderLayout();
+    expect(screen.queryByText('Shadow Discovery')).not.toBeInTheDocument();
+    expect(screen.queryByText('Token Optimizer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Policies')).not.toBeInTheDocument();
+    expect(screen.queryByText('Identity')).not.toBeInTheDocument();
+    expect(screen.queryByText('My Usage')).not.toBeInTheDocument();
   });
 
   it('shows tenant list in dropdown and switches tenant', async () => {
     renderLayout();
-    // Wait for tenant query to resolve — tenants appear in both header and mobile sidebar
     await waitFor(() => {
       expect(screen.getAllByText('Oasis Gunters').length).toBeGreaterThanOrEqual(1);
     });
-    // Open header dropdown (first matching button)
     const oasisButtons = screen.getAllByText('Oasis Gunters');
     fireEvent.click(oasisButtons[0]);
-    // Sixers Corp should appear (in dropdown and/or mobile sidebar)
     const sixersElements = screen.getAllByText('Sixers Corp');
     expect(sixersElements.length).toBeGreaterThanOrEqual(1);
-    // Switch to Sixers Corp via the first match
     fireEvent.click(sixersElements[0]);
-    // Active tenant should be stored
     expect(localStorage.getItem('stoa-active-tenant')).toBe('t2');
   });
 
@@ -284,20 +276,14 @@ describe('Layout', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Oasis Gunters').length).toBeGreaterThanOrEqual(1);
     });
-    // Open header dropdown
     const oasisButtons = screen.getAllByText('Oasis Gunters');
     fireEvent.click(oasisButtons[0]);
     await waitFor(() => {
       expect(screen.getAllByText('Sixers Corp').length).toBeGreaterThanOrEqual(1);
     });
-    // Click outside
     fireEvent.mouseDown(document.body);
-    // Header dropdown should close — but mobile sidebar still renders tenants
-    // We verify the dropdown closed by checking the count decreased
     await waitFor(() => {
       const sixersBefore = screen.getAllByText('Sixers Corp');
-      // Mobile sidebar always renders tenants, so at least 1 remains
-      // The header dropdown close means we no longer have the dropdown-specific instance
       expect(sixersBefore.length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -324,10 +310,8 @@ describe('Layout', () => {
     });
 
     renderLayout();
-    // Viewer should see basic items
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('APIs')).toBeInTheDocument();
-    // Viewer should NOT see admin-only items
     expect(screen.queryByText('Business')).not.toBeInTheDocument();
   });
 });

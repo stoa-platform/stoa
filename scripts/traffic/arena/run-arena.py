@@ -34,13 +34,15 @@ CAP_BASE = 0.4
 CAP_BURST50 = 2.5
 CAP_BURST100 = 4.0
 
-# Weights (updated for ramp_up scenario)
-W_BASE = 0.10
+# Weights — tuned for stability on shared clusters (3x B2-15 nodes).
+# burst_100 downweighted: 100 VUs on 12 vCPU measures cluster capacity, not gateway overhead.
+# base + consist upweighted: low-noise scenarios that reflect actual proxy performance.
+W_BASE = 0.15
 W_BURST50 = 0.20
-W_BURST100 = 0.20
+W_BURST100 = 0.10
 W_AVAIL = 0.15
 W_ERROR = 0.10
-W_CONSIST = 0.10
+W_CONSIST = 0.15
 W_RAMP = 0.15
 
 SCENARIOS = ["health", "sequential", "burst_10", "burst_50", "burst_100", "sustained", "ramp_up"]

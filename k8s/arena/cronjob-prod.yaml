@@ -69,10 +69,15 @@ spec:
                   # VPS gateways benchmarked locally via deploy/vps/bench/ (co-located)
                   # Gravitee-k8s re-enabled: use proxy port 8082 (not technical 18082) for health
                   # Java startup is slow but proxy port responds once K8s readiness passes
+                - name: STOA_ADMIN_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: stoa-gateway-secrets
+                      key: STOA_ADMIN_API_TOKEN
                 - name: GATEWAYS
                   value: |
                     [
-                      {"name":"stoa-k8s","health":"http://stoa-gateway.stoa-system.svc/health","proxy":"http://stoa-gateway.stoa-system.svc/echo/get"},
+                      {"name":"stoa-k8s","health":"http://stoa-gateway.stoa-system.svc/health","proxy":"http://stoa-gateway.stoa-system.svc/echo/get","admin_base":"http://stoa-gateway.stoa-system.svc"},
                       {"name":"agentgateway-k8s","health":"http://agentgateway-arena.stoa-system.svc:3000/health","proxy":"http://agentgateway-arena.stoa-system.svc:3000/echo/get"},
                       {"name":"kong-k8s","health":"http://kong-arena.stoa-system.svc:8001/status","proxy":"http://kong-arena.stoa-system.svc:8000/echo/get"},
                       {"name":"gravitee-k8s","health":"http://gravitee-arena-gw.stoa-system.svc:8082/echo/get","proxy":"http://gravitee-arena-gw.stoa-system.svc:8082/echo/get"}

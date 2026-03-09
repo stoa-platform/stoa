@@ -568,6 +568,22 @@ pub struct Config {
     /// Env: STOA_HEGEMON_BUDGET_WARN_PCT
     #[serde(default = "default_hegemon_budget_warn_pct")]
     pub hegemon_budget_warn_pct: f64,
+
+    // === A2A Protocol (CAB-1754) ===
+    /// Enable A2A (Agent-to-Agent) protocol support (default: false).
+    /// Env: STOA_A2A_ENABLED
+    #[serde(default)]
+    pub a2a_enabled: bool,
+
+    /// Max agents in the A2A registry (default: 1000).
+    /// Env: STOA_A2A_MAX_AGENTS
+    #[serde(default = "default_a2a_max_agents")]
+    pub a2a_max_agents: usize,
+
+    /// Max in-flight tasks in the A2A registry (default: 10000).
+    /// Env: STOA_A2A_MAX_TASKS
+    #[serde(default = "default_a2a_max_tasks")]
+    pub a2a_max_tasks: usize,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1075,6 +1091,14 @@ fn default_hegemon_budget_warn_pct() -> f64 {
     0.8
 }
 
+fn default_a2a_max_agents() -> usize {
+    1000
+}
+
+fn default_a2a_max_tasks() -> usize {
+    10000
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1186,6 +1210,9 @@ impl Default for Config {
             hegemon_enabled: false,
             hegemon_budget_daily_usd: default_hegemon_budget_daily_usd(),
             hegemon_budget_warn_pct: default_hegemon_budget_warn_pct(),
+            a2a_enabled: false,
+            a2a_max_agents: default_a2a_max_agents(),
+            a2a_max_tasks: default_a2a_max_tasks(),
         }
     }
 }

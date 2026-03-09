@@ -50,6 +50,40 @@ rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 
 # ---------------------------------------------------------------------------
+# Pre-provision: register echo route on gateways that have an admin API
+# (STOA gateway stores routes in-memory; other gateways use static config)
+# ---------------------------------------------------------------------------
+STOA_ADMIN_TOKEN="${STOA_ADMIN_TOKEN:-}"
+
+for gw_idx in $(seq 0 $((GATEWAY_COUNT - 1))); do
+  GW_NAME=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].name")
+  GW_ADMIN=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].admin_base // empty")
+  GW_PROXY=$(echo "$GATEWAYS" | jq -r ".[$gw_idx].proxy")
+
+  if [ -n "$GW_ADMIN" ] && [ -n "$STOA_ADMIN_TOKEN" ]; then
+    ECHO_BACKEND="${ECHO_BACKEND:-http://echo-backend.stoa-system.svc:8888}"
+    ROUTE_PAYLOAD="{\"id\":\"arena-echo-route\",\"name\":\"Arena Echo Backend\",\"tenant_id\":\"arena-bench\",\"path_prefix\":\"/echo\",\"backend_url\":\"${ECHO_BACKEND}\",\"methods\":[],\"spec_hash\":\"v1\",\"activated\":true}"
+    # Call admin API multiple times to reach all replicas (Service round-robin)
+    ok_count=0
+    for attempt in $(seq 1 10); do
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${GW_ADMIN}/admin/apis" \
+        -H "Authorization: Bearer ${STOA_ADMIN_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$ROUTE_PAYLOAD" --max-time 5 2>/dev/null)
+      [ "${HTTP_CODE:-0}" -lt 300 ] 2>/dev/null && ok_count=$((ok_count + 1))
+    done
+    # Verify the proxy endpoint returns 200
+    sleep 1
+    VERIFY_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$GW_PROXY" --max-time 5 2>/dev/null)
+    if [ "${VERIFY_CODE:-0}" = "200" ]; then
+      log_json "\"Registered echo route on $GW_NAME ($ok_count/10 registrations, proxy verified)\""
+    else
+      log_json "\"WARNING: Echo route on $GW_NAME not verified (proxy HTTP ${VERIFY_CODE:-000}, $ok_count/10 registrations)\""
+    fi
+  fi
+done
+
+# ---------------------------------------------------------------------------
 # Pre-check: verify all gateways are reachable before benchmarking
 # ---------------------------------------------------------------------------
 COOLDOWN="${COOLDOWN:-15}"

@@ -7,14 +7,14 @@ metadata:
     app: gateway-arena
     environment: production
 spec:
-  schedule: "*/30 * * * *"
+  schedule: "*/45 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 1800
+      activeDeadlineSeconds: 2700
       template:
         metadata:
           labels:

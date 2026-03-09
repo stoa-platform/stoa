@@ -1,5 +1,5 @@
 /**
- * Tests for Sidebar (CAB-1390)
+ * Tests for Sidebar (CAB-1390, CAB-1764)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -16,6 +16,7 @@ vi.mock('../../config', () => ({
     },
     services: { console: { url: 'https://console.example.com' } },
     app: { version: '1.0.0' },
+    baseDomain: 'example.com',
   },
 }));
 
@@ -50,44 +51,48 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       mockUseAuth.mockReturnValue(createAuthMock(role));
     });
 
-    it('renders navigation sections', () => {
-      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      // "Discover" section should be visible
-      expect(screen.getByText('Discover')).toBeInTheDocument();
-    });
-
-    it('renders Marketplace nav item when feature is enabled', () => {
+    it('renders flat navigation items', () => {
       renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
       expect(screen.getByText('Marketplace')).toBeInTheDocument();
-    });
-
-    it('does not render separate API Catalog or AI Tools nav items', () => {
-      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.queryByText('API Catalog')).not.toBeInTheDocument();
-      expect(screen.queryByText('AI Tools')).not.toBeInTheDocument();
-    });
-
-    it('renders Profile nav item (always visible)', () => {
-      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
       expect(screen.getByText('Profile')).toBeInTheDocument();
+    });
+
+    it('renders My Workspace nav item', () => {
+      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
+      expect(screen.getByText('My Workspace')).toBeInTheDocument();
+    });
+
+    it('renders Analytics nav item when subscriptions enabled', () => {
+      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
+      expect(screen.getByText('Analytics')).toBeInTheDocument();
+    });
+
+    it('does not render removed nav items', () => {
+      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
+      expect(screen.queryByText('Compare APIs')).not.toBeInTheDocument();
+      expect(screen.queryByText('Favorites')).not.toBeInTheDocument();
+      expect(screen.queryByText('Notifications')).not.toBeInTheDocument();
+      expect(screen.queryByText('Audit Log')).not.toBeInTheDocument();
+      expect(screen.queryByText('Rate Limits')).not.toBeInTheDocument();
+    });
+
+    it('renders Console as external link', () => {
+      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
+      expect(screen.getByText('Console')).toBeInTheDocument();
     });
 
     it('shows mobile overlay when isOpen is true', () => {
       const { container } = renderWithProviders(<Sidebar isOpen={true} onClose={onClose} />);
-      // The overlay div appears when isOpen is true
       expect(container.querySelector('[class*="fixed inset-0"]')).toBeInTheDocument();
     });
 
     it('does not show mobile overlay when isOpen is false', () => {
       const { container } = renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      // Overlay uses conditional render (isOpen && <div>), not aria-hidden
-      // aria-hidden="true" is used on SVG icons, so check by overlay's class instead
       expect(container.querySelector('[class*="fixed inset-0"]')).not.toBeInTheDocument();
     });
 
     it('calls onClose when overlay is clicked', () => {
       renderWithProviders(<Sidebar isOpen={true} onClose={onClose} />);
-      // The overlay button/div is clickable
       const overlay = document.querySelector('[class*="fixed inset-0"]');
       if (overlay) {
         fireEvent.click(overlay);
@@ -95,26 +100,11 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       }
     });
 
-    it('hides Gateways item when enableGateways is false', () => {
+    it('does not render section headers (flat navigation)', () => {
       renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.queryByText('Gateways')).not.toBeInTheDocument();
-    });
-
-    it('filters items based on user scope — viewer without write scope', () => {
-      if (role !== 'viewer') return;
-      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      // Register Consumer requires stoa:subscriptions:write — should be hidden for viewer
-      expect(screen.queryByText('Register Consumer')).not.toBeInTheDocument();
-    });
-
-    it('shows My Workspace section for tenant-admin', () => {
-      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.getByText('My Workspace')).toBeInTheDocument();
-    });
-
-    it('renders "Account" section', () => {
-      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.getByText('Account')).toBeInTheDocument();
+      expect(screen.queryByText('Discover')).not.toBeInTheDocument();
+      expect(screen.queryByText('Account')).not.toBeInTheDocument();
+      expect(screen.queryByText('Operations')).not.toBeInTheDocument();
     });
   }
 );

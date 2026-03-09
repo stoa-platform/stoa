@@ -287,6 +287,7 @@ def main():
         "gateway_arena_p99_ci_upper_seconds": [],
         "gateway_arena_ramp_rate": [],
         "gateway_arena_requests_total": [],
+        "gateway_arena_overhead_ms": [],
     }
     family_meta = {
         "gateway_arena_score": ("gauge", "Composite arena score 0-100"),
@@ -306,6 +307,7 @@ def main():
         "gateway_arena_p99_ci_upper_seconds": ("gauge", "P99 latency CI95 upper bound"),
         "gateway_arena_ramp_rate": ("gauge", "Ramp-up max sustained req/s"),
         "gateway_arena_requests_total": ("gauge", "Total requests by status"),
+        "gateway_arena_overhead_ms": ("gauge", "Gateway overhead vs echo-baseline in milliseconds"),
     }
 
     leaderboard = []
@@ -460,6 +462,25 @@ def main():
     # Leaderboard to stderr
     leaderboard.sort(key=lambda x: x["score"], reverse=True)
     print(json.dumps({"event": "leaderboard", "ranking": leaderboard}), file=sys.stderr)
+
+    # Compute gateway overhead vs echo-baseline (if baseline present)
+    baseline = next((g for g in leaderboard if g["gateway"] == "echo-baseline"), None)
+    if baseline:
+        overhead_scenarios = ["sequential", "burst_10", "burst_50", "burst_100", "sustained"]
+        for gw in leaderboard:
+            if gw["gateway"] == "echo-baseline":
+                continue
+            for scenario in overhead_scenarios:
+                gw_p50 = gw.get("scenario_medians", {}).get(scenario, {}).get("p50", 0)
+                bl_p50 = baseline.get("scenario_medians", {}).get(scenario, {}).get("p50", 0)
+                overhead = max(0, (gw_p50 - bl_p50) * 1000)  # convert to ms
+                families["gateway_arena_overhead_ms"].append(
+                    f'gateway_arena_overhead_ms{{gateway="{gw["gateway"]}",scenario="{scenario}"}} {overhead:.2f}')
+            # Log overhead summary
+            seq_oh = max(0, (gw.get("scenario_medians", {}).get("sequential", {}).get("p50", 0)
+                            - baseline.get("scenario_medians", {}).get("sequential", {}).get("p50", 0)) * 1000)
+            print(f'{{"event":"overhead","gateway":"{gw["gateway"]}","sequential_overhead_ms":{seq_oh:.2f}}}',
+                  file=sys.stderr)
 
     # Export to OpenSearch (long-term retention)
     export_to_opensearch(leaderboard)

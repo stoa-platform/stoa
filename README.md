@@ -1,6 +1,7 @@
 <p align="center">
   <strong>STOA Platform</strong><br>
-  The European Agent Gateway
+  The European Agent Gateway<br>
+  <a href="https://gostoa.dev">🌐 Website</a> · <a href="https://docs.gostoa.dev">📚 Docs</a> · <a href="https://discord.gg/j8tHSSes">💬 Discord</a>
 </p>
 
 <p align="center">

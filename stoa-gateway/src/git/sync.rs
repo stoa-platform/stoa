@@ -15,7 +15,7 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::RwLock;
+use parking_lot::RwLock;
 use thiserror::Error;
 use tracing::{error, info, warn};
 
@@ -99,7 +99,7 @@ impl CircuitBreaker {
         }
 
         // Check if recovery timeout has passed
-        let opened_at = self.opened_at.read().unwrap();
+        let opened_at = self.opened_at.read();
         if let Some(opened) = *opened_at {
             let recovery_at =
                 opened + Duration::seconds(self.config.recovery_timeout_seconds as i64);
@@ -114,7 +114,7 @@ impl CircuitBreaker {
 
     /// Get the time when recovery will be attempted.
     pub fn recovery_at(&self) -> Option<DateTime<Utc>> {
-        let opened_at = self.opened_at.read().unwrap();
+        let opened_at = self.opened_at.read();
         opened_at.map(|t| t + Duration::seconds(self.config.recovery_timeout_seconds as i64))
     }
 
@@ -122,7 +122,7 @@ impl CircuitBreaker {
     pub fn record_success(&self) {
         self.failure_count.store(0, Ordering::Relaxed);
         self.is_open.store(false, Ordering::Relaxed);
-        *self.opened_at.write().unwrap() = None;
+        *self.opened_at.write() = None;
 
         info!("Circuit breaker: success recorded, circuit closed");
     }
@@ -133,7 +133,7 @@ impl CircuitBreaker {
 
         if failures >= self.config.failure_threshold {
             self.is_open.store(true, Ordering::Relaxed);
-            *self.opened_at.write().unwrap() = Some(Utc::now());
+            *self.opened_at.write() = Some(Utc::now());
 
             error!(
                 failures,

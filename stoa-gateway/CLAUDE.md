@@ -9,7 +9,7 @@ Currently implements: MCP discovery, tool proxy, JWT/OAuth2 auth, SSE transport,
 ## Tech Stack
 - Rust 2021 edition, Tokio 1 (async runtime), Axum 0.7 (web framework)
 - serde/serde_json (serialization), Figment (layered config: YAML + env)
-- jsonwebtoken 9 (JWT), reqwest 0.11 (HTTP client)
+- jsonwebtoken 10 (JWT), reqwest 0.12 (HTTP client)
 - moka 0.12 (in-memory cache for API keys + JWKS)
 - prometheus 0.13, tracing/tracing-subscriber (structured JSON logging)
 - tokio-stream, futures (SSE streams)

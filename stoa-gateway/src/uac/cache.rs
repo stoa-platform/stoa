@@ -10,7 +10,7 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 use super::classifications::Classification;
 
@@ -103,13 +103,13 @@ impl VersionedPolicyCache {
 
     /// Update the current Git version (called when Git sync completes).
     pub fn set_version(&self, version: String) {
-        let mut current = self.current_version.write().unwrap();
+        let mut current = self.current_version.write();
         *current = version;
     }
 
     /// Get the current Git version.
     pub fn get_version(&self) -> String {
-        self.current_version.read().unwrap().clone()
+        self.current_version.read().clone()
     }
 
     /// Get a policy from cache if valid.
@@ -119,8 +119,8 @@ impl VersionedPolicyCache {
     /// - Policy is expired (TTL)
     /// - Policy is stale (Git version mismatch)
     pub fn get(&self, name: &str) -> Option<PolicyDefinition> {
-        let cache = self.cache.read().unwrap();
-        let current_version = self.current_version.read().unwrap();
+        let cache = self.cache.read();
+        let current_version = self.current_version.read();
 
         if let Some(entry) = cache.get(name) {
             if entry.is_expired() {
@@ -140,8 +140,8 @@ impl VersionedPolicyCache {
     /// This is used for audit logging - we need to know which version
     /// of the policy was used for each decision.
     pub fn get_with_version(&self, name: &str) -> Option<(PolicyDefinition, String)> {
-        let cache = self.cache.read().unwrap();
-        let current_version = self.current_version.read().unwrap();
+        let cache = self.cache.read();
+        let current_version = self.current_version.read();
 
         if let Some(entry) = cache.get(name) {
             if entry.is_expired() {
@@ -158,14 +158,14 @@ impl VersionedPolicyCache {
 
     /// Put a policy in the cache.
     pub fn put(&self, policy: PolicyDefinition, git_version: String) {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write();
         let name = policy.name.clone();
         cache.insert(name, CacheEntry::new(policy, git_version, self.ttl));
     }
 
     /// Put multiple policies in the cache.
     pub fn put_all(&self, policies: Vec<PolicyDefinition>, git_version: String) {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write();
         for policy in policies {
             let name = policy.name.clone();
             cache.insert(name, CacheEntry::new(policy, git_version.clone(), self.ttl));
@@ -174,20 +174,20 @@ impl VersionedPolicyCache {
 
     /// Invalidate all cached entries.
     pub fn invalidate_all(&self) {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write();
         cache.clear();
     }
 
     /// Invalidate a specific policy.
     pub fn invalidate(&self, name: &str) {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write();
         cache.remove(name);
     }
 
     /// Get cache statistics.
     pub fn stats(&self) -> CacheStats {
-        let cache = self.cache.read().unwrap();
-        let current_version = self.current_version.read().unwrap();
+        let cache = self.cache.read();
+        let current_version = self.current_version.read();
 
         let total = cache.len();
         let expired = cache.values().filter(|e| e.is_expired()).count();

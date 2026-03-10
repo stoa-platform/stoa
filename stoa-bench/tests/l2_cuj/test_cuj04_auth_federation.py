@@ -1,6 +1,6 @@
 """CUJ-04: Auth Federation OAM→Keycloak — Token Exchange (RFC 8693).
 
-Validates the banque centrale demo flow: a token from an external IDP
+Validates the bank demo flow: a token from an external IDP
 (Oracle OAM, simulated) is exchanged via Keycloak for a STOA token.
 
 Sub-tests:

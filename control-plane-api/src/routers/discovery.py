@@ -175,7 +175,7 @@ CURATED_CATALOG: list[dict] = [
         "id": "eu-ecb-sdw",
         "name": "ecb-sdw",
         "display_name": "ECB Statistical Data Warehouse",
-        "description": "European Central Bank — exchange rates, monetary statistics, banking data",
+        "description": "ECB — exchange rates, monetary statistics, banking data",
         "category": "finance",
         "region": "EU",
         "spec_url": "https://data-api.ecb.europa.eu/service",

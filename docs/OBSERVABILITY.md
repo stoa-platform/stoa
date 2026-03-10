@@ -21,7 +21,7 @@ This document describes the observability setup for the STOA Platform, including
     +---------v---------+        +-----------+-----------+
     |  ServiceMonitors  |        |       Promtail        |
     | - control-plane   |        |     (DaemonSet)       |
-    | - mcp-gateway     |        +-----------------------+
+    | - stoa-gateway     |        +-----------------------+
     +-------------------+                    |
               |                              |
     +---------v---------+        +-----------v-----------+
@@ -227,12 +227,12 @@ Dashboards are automatically loaded by Grafana via sidecar ConfigMaps:
 
 | Dashboard | ConfigMap | Description |
 |-----------|-----------|-------------|
-| MCP Gateway Traceability | `grafana-dashboard-mcp-gateway` | Real-time MCP logs, tenant metrics, tool invocations |
+| STOA Gateway Traceability | `grafana-dashboard-stoa-gateway` | Real-time MCP logs, tenant metrics, tool invocations |
 | SLO Dashboard | `grafana-dashboard-slo` | SLO compliance, error budget, latency percentiles |
 
-### MCP Gateway Traceability Dashboard (CAB-282)
+### STOA Gateway Traceability Dashboard (CAB-282)
 
-**File**: `deploy/grafana/dashboards/mcp-gateway-traceability.json`
+**File**: `deploy/grafana/dashboards/stoa-gateway-traceability.json`
 
 Panels:
 - Real-time MCP logs (Loki)
@@ -266,8 +266,8 @@ Panels:
 ### Deploying Dashboards
 
 ```bash
-# Deploy MCP Gateway dashboard
-kubectl apply -f deploy/grafana/dashboards/mcp-gateway-configmap.yaml
+# Deploy STOA Gateway dashboard
+kubectl apply -f deploy/grafana/dashboards/stoa-gateway-configmap.yaml
 
 # Deploy SLO dashboard (via ConfigMap)
 kubectl create configmap grafana-dashboard-slo \
@@ -350,7 +350,7 @@ The STOA platform uses PrometheusRule CRDs for alerting. All rules are deployed 
 
 ### Alert Categories
 
-#### MCP Gateway Alerts (`stoa.mcp-gateway.rules`)
+#### STOA Gateway Alerts (`stoa.stoa-gateway.rules`)
 
 | Alert | Condition | Severity |
 |-------|-----------|----------|
@@ -648,7 +648,7 @@ observability:
 | File | Description |
 |------|-------------|
 | `deploy/prometheus/alerting-rules.yaml` | PrometheusRule CRD (CAB-310) |
-| `deploy/grafana/dashboards/mcp-gateway-traceability.json` | MCP Gateway dashboard (CAB-282) |
-| `deploy/grafana/dashboards/mcp-gateway-configmap.yaml` | Dashboard ConfigMap |
+| `deploy/grafana/dashboards/stoa-gateway-traceability.json` | STOA Gateway dashboard (CAB-282) |
+| `deploy/grafana/dashboards/stoa-gateway-configmap.yaml` | Dashboard ConfigMap |
 | `docker/observability/grafana/dashboards/slo-dashboard.json` | SLO Dashboard |
 | `charts/stoa-platform/values.yaml` | Helm chart observability config |

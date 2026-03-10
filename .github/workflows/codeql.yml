@@ -46,7 +46,6 @@ jobs:
           config: |
             paths:
               - control-plane-api/src
-              - mcp-gateway/src
               - control-plane-ui/src
               - portal/src
             paths-ignore:

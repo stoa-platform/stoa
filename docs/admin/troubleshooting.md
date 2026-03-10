@@ -11,7 +11,6 @@ kubectl get events -n stoa-system --sort-by='.lastTimestamp' | tail -20
 
 # Component logs
 kubectl logs -f deploy/control-plane-api -n stoa-system
-kubectl logs -f deploy/mcp-gateway -n stoa-system
 kubectl logs -f deploy/stoa-gateway -n stoa-system
 
 # Previous container logs (after crash)
@@ -108,27 +107,27 @@ location /api/ {
 }
 ```
 
-### MCP Gateway — Circuit Breaker Tripped
+### STOA Gateway — Circuit Breaker Tripped
 
 **Symptoms**: Tool calls return `503 Service Unavailable` with circuit breaker message.
 
 **Diagnosis**:
 ```bash
-kubectl logs deploy/mcp-gateway -n stoa-system | grep "circuit"
+kubectl logs deploy/stoa-gateway -n stoa-system | grep "circuit"
 ```
 
 **Fixes**:
 - Check upstream service health
 - Wait for half-open timeout (default: 30s)
-- Restart gateway if upstream is now healthy: `kubectl rollout restart deploy/mcp-gateway -n stoa-system`
+- Restart gateway if upstream is now healthy: `kubectl rollout restart deploy/stoa-gateway -n stoa-system`
 
-### MCP Gateway — Token Validation Failed
+### STOA Gateway — Token Validation Failed
 
 **Symptoms**: `401 Unauthorized` or `403 Forbidden` from gateway.
 
 **Diagnosis**:
 ```bash
-kubectl logs deploy/mcp-gateway -n stoa-system | grep -i "token\|auth\|jwt"
+kubectl logs deploy/stoa-gateway -n stoa-system | grep -i "token\|auth\|jwt"
 ```
 
 **Common causes**:

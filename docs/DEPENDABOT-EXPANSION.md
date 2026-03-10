@@ -7,7 +7,7 @@ This document tracks the expansion of Dependabot coverage to additional STOA rep
 ## Current Status (Monorepo)
 
 The main `stoa` monorepo has comprehensive Dependabot coverage:
-- Python (control-plane-api, mcp-gateway, cli)
+- Python (control-plane-api, cli)
 - NPM (portal, control-plane-ui, e2e)
 - Cargo (stoa-gateway)
 - GitHub Actions (root level)

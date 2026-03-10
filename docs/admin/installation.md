@@ -116,7 +116,6 @@ Expected services:
 | control-plane-api | ClusterIP | 8000 |
 | control-plane-ui | ClusterIP | 80 |
 | portal | ClusterIP | 80 |
-| mcp-gateway | ClusterIP | 8080 |
 | stoa-gateway | ClusterIP | 8443 |
 
 ### Verify ingress

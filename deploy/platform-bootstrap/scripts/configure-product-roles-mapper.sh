@@ -108,7 +108,7 @@ log "Step 2/3: Assigning stoa-identity scope to platform clients..."
 CLIENTS_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
   "${KEYCLOAK_URL}/admin/realms/${REALM}/clients")
 
-PLATFORM_CLIENTS=("control-plane-api" "control-plane-ui" "stoa-portal" "stoa-mcp-gateway" "stoa-identity-governance")
+PLATFORM_CLIENTS=("control-plane-api" "control-plane-ui" "stoa-portal" "stoa-gateway" "stoa-identity-governance")
 
 for CLIENT_NAME in "${PLATFORM_CLIENTS[@]}"; do
   CLIENT_UUID=$(echo "$CLIENTS_JSON" | jq -r ".[] | select(.clientId == \"${CLIENT_NAME}\") | .id")

@@ -41,7 +41,7 @@ RESOURCE_SERVER_ID="${RESOURCE_SERVER_ID:-control-plane-api}"
 DRY_RUN="${DRY_RUN:-false}"
 
 # Clients to configure (space-separated)
-CLIENTS_TO_CONFIGURE="${CLIENTS_TO_CONFIGURE:-control-plane-ui stoa-portal mcp-gateway-client}"
+CLIENTS_TO_CONFIGURE="${CLIENTS_TO_CONFIGURE:-control-plane-ui stoa-portal}"
 
 # Mapper configuration
 MAPPER_NAME="api-audience-mapper"

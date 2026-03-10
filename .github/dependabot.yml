@@ -10,16 +10,6 @@ updates:
     commit-message:
       prefix: "chore(deps)"
 
-  # Python - MCP Gateway
-  - package-ecosystem: "pip"
-    directory: "/mcp-gateway"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "chore(deps)"
-
   # NPM - Portal
   - package-ecosystem: "npm"
     directory: "/portal"

@@ -129,7 +129,7 @@ class LokiClient:
         start = from_date or (end - timedelta(days=7))
 
         # Build LogQL query with stream selector and filters
-        stream_selector = f'{{job="mcp-gateway",user_id="{user_id}",tenant_id="{tenant_id}"}}'
+        stream_selector = f'{{job="stoa-gateway",user_id="{user_id}",tenant_id="{tenant_id}"}}'
         line_filters = '| json'
 
         if tool_id:
@@ -168,7 +168,7 @@ class LokiClient:
 
         # Query for all activity types from multiple sources
         query = (
-            f'{{job=~"mcp-gateway|control-plane-api",tenant_id="{tenant_id}",user_id="{user_id}"}} '
+            f'{{job=~"stoa-gateway|control-plane-api",tenant_id="{tenant_id}",user_id="{user_id}"}} '
             f'| json '
             f'| event_type=~"subscription.*|api.call|key.rotated"'
         )

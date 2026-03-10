@@ -217,7 +217,7 @@ curl -X POST https://mcp.gostoa.dev/mcp/sse \
 
 ```bash
 # Follow MCP Gateway logs
-kubectl logs -f deployment/mcp-gateway -n stoa-system
+kubectl logs -f deployment/stoa-gateway -n stoa-system
 
 # Check recent events
 kubectl get events -n stoa-system --sort-by='.lastTimestamp'
@@ -229,7 +229,7 @@ kubectl get events -n stoa-system --sort-by='.lastTimestamp'
 
 | Setting | Value |
 |---------|-------|
-| Client ID | `mcp-gateway` |
+| Client ID | `stoa-gateway` |
 | Protocol | OpenID Connect |
 | Access Type | Public |
 | Standard Flow Enabled | Yes |
@@ -251,10 +251,10 @@ kubectl get events -n stoa-system --sort-by='.lastTimestamp'
 
 | File | Description |
 |------|-------------|
-| `mcp-gateway/src/handlers/mcp_sse.py` | MCP SSE handler with session auth |
-| `mcp-gateway/src/middleware/auth.py` | Authentication middleware |
-| `mcp-gateway/src/main.py` | Main app with REST endpoints |
-| `mcp-gateway/src/routes/oauth_discovery.py` | OAuth discovery endpoints |
+| `stoa-gateway/src/mcp/` | MCP protocol handlers |
+| `stoa-gateway/src/auth/` | Authentication middleware |
+| `stoa-gateway/src/main.rs` | Main entry point |
+| `stoa-gateway/src/oauth/` | OAuth discovery and proxy endpoints |
 
 ## Changelog
 

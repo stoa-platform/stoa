@@ -54,7 +54,7 @@ kubectl exec deploy/control-plane-api -n stoa-system -- \
 ```bash
 # Watch rollout
 kubectl rollout status deployment/control-plane-api -n stoa-system
-kubectl rollout status deployment/mcp-gateway -n stoa-system
+kubectl rollout status deployment/stoa-gateway -n stoa-system
 kubectl rollout status deployment/control-plane-ui -n stoa-system
 kubectl rollout status deployment/portal -n stoa-system
 
@@ -111,7 +111,7 @@ kubectl exec deploy/control-plane-api -n stoa-system -- \
 | Component | Upgrade Path | Notes |
 |-----------|-------------|-------|
 | Control Plane API | Any → latest | Always run Alembic after upgrade |
-| MCP Gateway | Any → latest | OPA policies may need updating |
+| STOA Gateway | Any → latest | Check release notes for config changes |
 | Console UI | Any → latest | Static assets, no state |
 | Portal | Any → latest | Static assets, no state |
 | STOA Gateway | Any → latest | Zero-downtime with rolling update |

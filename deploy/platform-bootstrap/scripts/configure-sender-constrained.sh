@@ -175,7 +175,7 @@ log "Step 6/7: Adding stoa-identity scope to platform clients..."
 SCOPE_ID=$(kc_get "/client-scopes" | jq -r '.[] | select(.name == "stoa-identity") | .id')
 
 if [[ -n "$SCOPE_ID" ]]; then
-  for CLIENT_ID_NAME in "control-plane-api" "stoa-mcp-gateway" "stoa-identity-governance"; do
+  for CLIENT_ID_NAME in "control-plane-api" "stoa-gateway" "stoa-identity-governance"; do
     CLIENT_UUID=$(kc_get "/clients" | jq -r ".[] | select(.clientId == \"${CLIENT_ID_NAME}\") | .id")
     if [[ -n "$CLIENT_UUID" ]]; then
       kc_put "/clients/${CLIENT_UUID}/default-client-scopes/${SCOPE_ID}" "{}"

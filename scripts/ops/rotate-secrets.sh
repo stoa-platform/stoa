@@ -54,7 +54,7 @@ NC='\033[0m'
 PERSONAS=(parzival art3mis aech sorrento i-r0k anorak alex)
 
 # OIDC confidential clients
-OIDC_CLIENTS=(control-plane-api stoa-mcp-gateway opensearch-dashboards stoa-observability)
+OIDC_CLIENTS=(control-plane-api stoa-gateway opensearch-dashboards stoa-observability)
 
 # --- Parse args ---
 COMMAND="${1:-}"

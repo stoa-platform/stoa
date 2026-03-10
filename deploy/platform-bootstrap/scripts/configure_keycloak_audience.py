@@ -57,7 +57,7 @@ class Config:
             raise ValueError("KEYCLOAK_ADMIN_PASS environment variable is required")
 
         clients = os.getenv(
-            "CLIENTS_TO_CONFIGURE", "control-plane-ui stoa-portal mcp-gateway-client"
+            "CLIENTS_TO_CONFIGURE", "control-plane-ui stoa-portal"
         )
 
         return cls(

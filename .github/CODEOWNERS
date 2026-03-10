@@ -7,7 +7,6 @@
 # Security-critical paths
 /control-plane-api/src/auth/          @stoa-platform/maintainers
 /control-plane-api/src/core/security/ @stoa-platform/maintainers
-/mcp-gateway/src/auth/                @stoa-platform/maintainers
 
 # CI/CD — prevent workflow tampering
 /.github/workflows/ @stoa-platform/maintainers

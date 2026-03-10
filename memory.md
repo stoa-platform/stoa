@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-10 (OpSec cleanup + Arena L1 trim)
+> Derniere MAJ: 2026-03-10 (fix(gateway) audit remediations PR #1633)
 
 ## ✅ DONE
 
@@ -9,6 +9,9 @@
 ### Cycle 12 (Mar 3+)
 - 🔴 CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10
   - Spike DONE, ADR-056 DONE, KC 26.5.3 sufficient. Decomposed: 5 subs (CAB-1739-1743)
+- ✅ fix(gateway): audit remediations — Council 8.75/10, PR #1633
+  - SSE panic fix (HIGH), parking_lot migration (MEDIUM), mode Option accessors (MEDIUM), dep docs (SECURITY), README sync (DX)
+- ✅ CAB-1766: Operations Grafana embed + RBAC (13 pts) — Council 8.50/10, PR #1632
 - ✅ Arena L1: Remove Kong & Gravitee (score near-zero) — PR #1620
 - ✅ docs: Simplify banking terminology across repos — PRs #1622, stoa-docs #111, stoa-web #22
 - ✅ fix(audit): Word boundary matching for blocklist false positive — stoa-docs #111
@@ -47,8 +50,12 @@ CAB-1696: [MEGA] AI Factory Audit Remediation (34 pts) — Phase 1 in progress
 - [ ] CAB-1700: E2E smoke mock server (5 pts) — blocked by P1
 - [ ] CAB-1701: OpenAPI→TS contract testing (3 pts) — blocked by P1
 
-CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Decomposed, subs pending
-- [ ] CAB-1739-1743: 5 sub-tickets (implementation pending)
+CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
+- ✅ CAB-1739 PAR proxy (5 pts) — PR #1526
+- ✅ CAB-1741 KC 26.5.3 unify (3 pts) — PR #1526
+- ✅ CAB-1742 OTel toggle (3 pts) — PR #1526
+- ✅ CAB-1740 private_key_jwt RFC 7523 (8 pts) — PR #1531
+- [ ] CAB-1743 FAPI 2.0 docs (5 pts) — ADR-056 drafted, needs stoa-docs PR
 
 ## 📋 NEXT
 

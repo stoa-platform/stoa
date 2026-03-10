@@ -66,15 +66,11 @@ jobs:
       checks: write
 
   # === Docker: build + push GHCR (with Vite env vars) ===
-  # On push to main, always build+deploy even if CI re-validation fails.
-  # Branch protection already validated CI on the PR — blocking deploy here
-  # causes main/prod divergence with no way to "un-merge" the code.
   docker:
     needs: ci
     if: |
-      always() &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      !cancelled()
+      needs.ci.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: control-plane-ui

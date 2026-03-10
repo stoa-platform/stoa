@@ -9,7 +9,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["STOA Platform <contact@gostoa.dev>"]
 description = "STOA MCP Gateway - Legacy-to-AI Bridge"
-license = "AGPL-3.0"
+license = "Apache-2.0"
 
 [dependencies]
 # === Existing (keep these) ===

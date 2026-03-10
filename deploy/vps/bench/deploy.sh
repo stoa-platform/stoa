@@ -17,9 +17,11 @@ SSH_KEY=~/.ssh/id_ed25519_stoa
 
 # VPS configs: name, IP, GATEWAYS JSON
 # stoa-vps and kong-vps share the same VPS (51.83.45.13)
+# TODO: agentgateway-vps needs a dedicated VPS — currently co-located with stoa/kong for benchmarking
 declare -A VPS_IPS=(
   ["stoa-vps"]="51.83.45.13"
   ["kong-vps"]="51.83.45.13"
+  ["agentgateway-vps"]="51.83.45.13"
   ["gravitee-vps"]="54.36.209.237"
   ["bench-vps"]="94.23.107.106"
 )
@@ -27,28 +29,31 @@ declare -A VPS_IPS=(
 declare -A VPS_GATEWAYS=(
   ["stoa-vps"]='[{"name":"stoa-vps","health":"http://localhost:8080/health","proxy":"http://localhost:8080/echo/get"}]'
   ["kong-vps"]='[{"name":"kong-vps","health":"http://localhost:8001/status","proxy":"http://localhost:8000/echo/get"}]'
+  ["agentgateway-vps"]='[{"name":"agentgateway-vps","health":"http://localhost:3000/health","proxy":"http://localhost:3000/echo/get"}]'
   ["gravitee-vps"]='[{"name":"gravitee-vps","health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://localhost:8082/echo/get"}]'
-  ["bench-vps"]='[{"name":"stoa-vps","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/echo/get"},{"name":"kong-vps","health":"http://51.83.45.13:8001/status","proxy":"http://51.83.45.13:8000/echo/get"},{"name":"gravitee-vps","health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://54.36.209.237:8082/echo/get"}]'
+  ["bench-vps"]='[{"name":"stoa-vps","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/echo/get"},{"name":"kong-vps","health":"http://51.83.45.13:8001/status","proxy":"http://51.83.45.13:8000/echo/get"},{"name":"agentgateway-vps","health":"http://51.83.45.13:3000/health","proxy":"http://51.83.45.13:3000/echo/get"},{"name":"gravitee-vps","health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://54.36.209.237:8082/echo/get"}]'
 )
 
 # Enterprise GATEWAYS JSON (L1 — with mcp_base, admin_base, features)
+# Feature declarations match K8s cronjob-enterprise.yaml (PR #1638)
 declare -A VPS_GATEWAYS_ENTERPRISE=(
   ["stoa-vps"]='[{"name":"stoa-vps","target":"http://localhost:8080","mcp_base":"http://localhost:8080/mcp","mcp_protocol":"stoa","admin_base":"http://localhost:8080","health":"http://localhost:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]}]'
-  ["kong-vps"]='[{"name":"kong-vps","target":"http://localhost:8000","mcp_base":null,"admin_base":null,"health":"http://localhost:8001/status","features":[]}]'
-  ["gravitee-vps"]='[{"name":"gravitee-vps","target":"http://localhost:8082","mcp_base":"http://localhost:8082/mcp","mcp_protocol":"streamable-http","admin_base":null,"health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","features":[]}]'
-  ["bench-vps"]='[{"name":"stoa-vps","target":"http://51.83.45.13:8080","mcp_base":"http://51.83.45.13:8080/mcp","mcp_protocol":"stoa","admin_base":"http://51.83.45.13:8080","health":"http://51.83.45.13:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]},{"name":"kong-vps","target":"http://51.83.45.13:8000","mcp_base":null,"admin_base":null,"health":"http://51.83.45.13:8001/status","features":[]},{"name":"gravitee-vps","target":"http://54.36.209.237:8082","mcp_base":"http://54.36.209.237:8082/mcp","mcp_protocol":"streamable-http","admin_base":null,"health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","features":[]}]'
+  ["kong-vps"]='[{"name":"kong-vps","target":"http://localhost:8000","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://localhost:8001/status","features":[]}]'
+  ["agentgateway-vps"]='[{"name":"agentgateway-vps","target":"http://localhost:3000","mcp_base":"http://localhost:3000/mcp","mcp_protocol":"streamable-http","admin_base":"http://localhost:15000","health":"http://localhost:3000/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","pii_detection","distributed_tracing","federation"]}]'
+  ["gravitee-vps"]='[{"name":"gravitee-vps","target":"http://localhost:8082","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","features":["distributed_tracing","quota_burst","resilience"]}]'
+  ["bench-vps"]='[{"name":"stoa-vps","target":"http://51.83.45.13:8080","mcp_base":"http://51.83.45.13:8080/mcp","mcp_protocol":"stoa","admin_base":"http://51.83.45.13:8080","health":"http://51.83.45.13:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]},{"name":"kong-vps","target":"http://51.83.45.13:8000","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://51.83.45.13:8001/status","features":[]},{"name":"agentgateway-vps","target":"http://51.83.45.13:3000","mcp_base":"http://51.83.45.13:3000/mcp","mcp_protocol":"streamable-http","admin_base":"http://51.83.45.13:15000","health":"http://51.83.45.13:3000/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","pii_detection","distributed_tracing","federation"]},{"name":"gravitee-vps","target":"http://54.36.209.237:8082","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","features":["distributed_tracing","quota_burst","resilience"]}]'
 )
 
-# Unique VPS IPs (stoa and kong share the same VPS)
+# Unique VPS IPs (stoa, kong, and agentgateway share the same VPS)
 declare -A UNIQUE_VPS=(
-  ["51.83.45.13"]="stoa-vps kong-vps"
+  ["51.83.45.13"]="stoa-vps kong-vps agentgateway-vps"
   ["54.36.209.237"]="gravitee-vps"
   ["94.23.107.106"]="bench-vps"
 )
 
 # Instance labels per VPS IP (prevent Pushgateway push overwrites between clusters)
 declare -A VPS_INSTANCE=(
-  ["51.83.45.13"]="vps-stoa-kong"
+  ["51.83.45.13"]="vps-stoa-kong-agentgw"
   ["54.36.209.237"]="vps-gravitee"
   ["94.23.107.106"]="vps-bench"
 )
@@ -235,5 +240,6 @@ echo ""
 echo "Verify (manual run):"
 echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose run --rm arena'"
 echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose -f docker-compose.enterprise.yml run --rm arena-enterprise'"
+echo "  ssh -i $SSH_KEY debian@54.36.209.237 'cd /opt/arena && docker compose run --rm arena'"
 echo "  ssh -i $SSH_KEY debian@54.36.209.237 'cd /opt/arena && docker compose -f docker-compose.enterprise.yml run --rm arena-enterprise'"
 echo "  curl -sf -u arena:arena-push-2026 https://pushgateway.gostoa.dev/metrics | grep enterprise_dimension"

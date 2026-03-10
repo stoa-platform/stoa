@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TOTAL=11
 
-echo "=== Gateway Arena Deploy (4 K8s gateways, co-located) ==="
+echo "=== Gateway Arena Deploy (5 K8s gateways, co-located) ==="
 
 # 1. Echo backend (nginx returning static JSON — same as VPS echo)
 echo "[1/$TOTAL] Applying echo backend..."

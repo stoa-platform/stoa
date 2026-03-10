@@ -89,15 +89,16 @@ spec:
                       optional: true
                 - name: OIDC_TOKEN_URL
                   value: "http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/token"
-                  # GATEWAYS: 20-dimension enterprise benchmark config
-                  # Only AI-native gateways with meaningful MCP support.
-                  # Kong OSS and Gravitee removed — they score near-zero on
-                  # enterprise dimensions (no MCP, no AI features) and add
-                  # noise without insight. See L0 for proxy baseline comparison.
+                  # GATEWAYS: 20-dimension enterprise AI readiness benchmark.
+                  # 4 gateways: 2 AI-native + 2 traditional (baseline contrast).
+                  #
+                  # Kong Enterprise excluded: AI License (separate from Enterprise)
+                  # not available for automated CI. MCP plugins in Tech Preview (3.12+).
+                  # See METHODOLOGY.md for full evaluation notes.
                   #
                   # mcp_base: null = no MCP support (scores 0 on MCP dims)
-                  # admin_base: admin API for introspection endpoints
-                  # features: list of supported feature keys (missing = score 0)
+                  # mcp_protocol: "stoa" (REST) or "streamable-http" (JSON-RPC 2.0)
+                  # features: self-declared capability keys (missing = score 0)
                   # Feature keys: llm_routing, llm_cost, llm_circuit_breaker,
                   #   native_tools_crud, api_bridge, uac_binding, pii_detection,
                   #   distributed_tracing, prompt_cache, skills_lifecycle, federation, diagnostic
@@ -126,10 +127,30 @@ spec:
                         "admin_base": "http://agentgateway-arena.stoa-system.svc:15000",
                         "health": "http://agentgateway-arena.stoa-system.svc:3000/health",
                         "features": [
-                          "llm_routing", "llm_cost",
-                          "api_bridge", "pii_detection",
-                          "distributed_tracing", "federation"
+                          "llm_routing", "llm_cost", "llm_circuit_breaker",
+                          "native_tools_crud", "api_bridge",
+                          "pii_detection", "distributed_tracing", "federation"
                         ]
+                      },
+                      {
+                        "name": "gravitee-k8s",
+                        "target": "http://gravitee-arena-gw.stoa-system.svc:8082",
+                        "mcp_base": null,
+                        "mcp_protocol": null,
+                        "admin_base": null,
+                        "health": "http://gravitee-arena-gw.stoa-system.svc:8082/",
+                        "features": [
+                          "distributed_tracing", "quota_burst", "resilience"
+                        ]
+                      },
+                      {
+                        "name": "kong-k8s",
+                        "target": "http://kong-arena.stoa-system.svc:8000",
+                        "mcp_base": null,
+                        "mcp_protocol": null,
+                        "admin_base": null,
+                        "health": "http://kong-arena.stoa-system.svc:8001/status",
+                        "features": []
                       }
                     ]
               resources:

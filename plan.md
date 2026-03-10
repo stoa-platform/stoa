@@ -348,6 +348,10 @@
 
 ### Done
 
+- [x] chore(arena): Remove Kong & Gravitee from L1 Enterprise benchmark — PR #1620
+- [x] docs: Update gateway-arena.md rule for L1 changes — PR #1621
+- [x] docs: Simplify banking terminology across repos — PRs #1622, stoa-docs #111, stoa-web #22
+- [x] fix(audit): Word boundary matching for blocklist false positive — stoa-docs #111
 - [x] CAB-1725: fix(api): correct proxy backend health endpoints (5 pts) — PR #1530
 - [x] CAB-1731: fix(ui): honest environment scoping — remove guards from cross-env pages (13 pts) — PR #1518
 

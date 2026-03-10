@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     ARGOCD_EXTERNAL_URL: str = f"https://argocd.{_BASE_DOMAIN}"
     ARGOCD_TOKEN: str = ""
     ARGOCD_VERIFY_SSL: bool = True
-    ARGOCD_PLATFORM_APPS: str = "stoa-gateway"
+    ARGOCD_PLATFORM_APPS: str = "stoa-gateway,control-plane-api,control-plane-ui,stoa-portal"
 
     # External Observability URLs (CAB-654)
     GRAFANA_URL: str = f"https://grafana.{_BASE_DOMAIN}"

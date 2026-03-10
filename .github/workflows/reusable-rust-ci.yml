@@ -101,7 +101,7 @@ jobs:
       - name: Set result output
         id: set-result
         if: always()
-        run: echo "result=success" >> $GITHUB_OUTPUT
+        run: echo "result=${{ job.status }}" >> $GITHUB_OUTPUT
 
   coverage:
     name: Code Coverage

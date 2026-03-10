@@ -2,34 +2,30 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw,
   Activity,
-  AlertTriangle,
-  Clock,
   CheckCircle,
   XCircle,
-  TrendingUp,
+  Clock,
   ExternalLink,
-  Zap,
   Shield,
+  BarChart3,
+  Siren,
+  Gauge,
+  Layers,
+  Award,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
-import { StatCard } from '@stoa/shared/components/StatCard';
-import type { AggregatedMetrics, PlatformStatusResponse } from '../../types';
+import type { PlatformStatusResponse } from '../../types';
 import { config } from '../../config';
 import { observabilityPath } from '../../utils/navigation';
+import { GrafanaPanel } from '../../components/GrafanaPanel';
 
-const AUTO_REFRESH_INTERVAL = 15_000; // 15 seconds for operations
+const AUTO_REFRESH_INTERVAL = 30_000; // 30 seconds
 
-// Simulated metrics - in production, these would come from Prometheus
-interface OperationsMetrics {
-  errorRate: number; // percentage
-  p95Latency: number; // ms
-  requestsPerMinute: number;
-  activeAlerts: number;
-  uptime: number; // percentage
-}
+const panels = config.services.grafana.panels;
+const dashboards = config.services.grafana.dashboards;
 
 interface RecentDeployment {
   id: string;
@@ -39,44 +35,38 @@ interface RecentDeployment {
   timestamp: string;
 }
 
-// Metric thresholds
-const thresholds = {
-  errorRate: { good: 0.1, warning: 1 },
-  p95Latency: { good: 300, warning: 500 },
-  uptime: { good: 99.9, warning: 99 },
-};
-
-function getStatusColor(
-  value: number,
-  threshold: { good: number; warning: number },
-  inverse = false
-) {
-  if (inverse) {
-    if (value >= threshold.good) return 'text-green-600';
-    if (value >= threshold.warning) return 'text-yellow-600';
-    return 'text-red-600';
-  }
-  if (value <= threshold.good) return 'text-green-600';
-  if (value <= threshold.warning) return 'text-yellow-600';
-  return 'text-red-600';
-}
-
 function DeploymentItem({ deployment }: { deployment: RecentDeployment }) {
-  const statusConfig = {
-    synced: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/30' },
-    syncing: { icon: RefreshCw, color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-    failed: { icon: XCircle, color: 'text-red-600', bg: 'bg-red-100 dark:bg-red-900/30' },
-    pending: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
+  const statusCfg = {
+    synced: {
+      icon: CheckCircle,
+      color: 'text-green-600',
+      bg: 'bg-green-100 dark:bg-green-900/30',
+    },
+    syncing: {
+      icon: RefreshCw,
+      color: 'text-blue-600',
+      bg: 'bg-blue-100 dark:bg-blue-900/30',
+    },
+    failed: {
+      icon: XCircle,
+      color: 'text-red-600',
+      bg: 'bg-red-100 dark:bg-red-900/30',
+    },
+    pending: {
+      icon: Clock,
+      color: 'text-yellow-600',
+      bg: 'bg-yellow-100 dark:bg-yellow-900/30',
+    },
   };
 
-  const config = statusConfig[deployment.status];
-  const Icon = config.icon;
+  const cfg = statusCfg[deployment.status];
+  const Icon = cfg.icon;
 
   return (
     <div className="flex items-center gap-3 py-2">
-      <div className={`p-1.5 rounded ${config.bg}`}>
+      <div className={`p-1.5 rounded ${cfg.bg}`}>
         <Icon
-          className={`h-4 w-4 ${config.color} ${deployment.status === 'syncing' ? 'animate-spin' : ''}`}
+          className={`h-4 w-4 ${cfg.color} ${deployment.status === 'syncing' ? 'animate-spin' : ''}`}
         />
       </div>
       <div className="flex-1 min-w-0">
@@ -90,52 +80,56 @@ function DeploymentItem({ deployment }: { deployment: RecentDeployment }) {
   );
 }
 
+function QuickLinkButton({
+  label,
+  icon: Icon,
+  href,
+  onClick,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href?: string;
+  onClick?: () => void;
+}) {
+  const cls =
+    'inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-sm font-medium text-neutral-700 dark:text-neutral-300';
+
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+        <Icon className="h-4 w-4" />
+        {label}
+        <ExternalLink className="h-3 w-3 text-neutral-400" />
+      </a>
+    );
+  }
+
+  return (
+    <button onClick={onClick} className={cls}>
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
+
 export function OperationsDashboard() {
   const navigate = useNavigate();
-  const { isReady } = useAuth();
-  const [gatewayMetrics, setGatewayMetrics] = useState<AggregatedMetrics | null>(null);
+  const { isReady, hasRole } = useAuth();
   const [platformStatus, setPlatformStatus] = useState<PlatformStatusResponse | null>(null);
-  const [operationsMetrics, setOperationsMetrics] = useState<OperationsMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
+  const canViewTrafficSecurity = hasRole('cpi-admin') || hasRole('devops');
+
   const loadData = useCallback(async () => {
     try {
-      // Load gateway metrics and platform status in parallel
-      const [metrics, status] = await Promise.all([
-        apiService.getGatewayAggregatedMetrics().catch(() => null),
-        apiService
-          .get<PlatformStatusResponse>('/v1/platform/status')
-          .then((r) => r.data)
-          .catch(() => null),
-      ]);
+      const status = await apiService
+        .get<PlatformStatusResponse>('/v1/platform/status')
+        .then((r) => r.data)
+        .catch(() => null);
 
-      setGatewayMetrics(metrics);
       setPlatformStatus(status);
-
-      // Fetch real operations metrics from API (CAB-Observability)
-      try {
-        const opsMetrics = await apiService.getOperationsMetrics();
-        setOperationsMetrics({
-          errorRate: opsMetrics.error_rate,
-          p95Latency: opsMetrics.p95_latency_ms,
-          requestsPerMinute: opsMetrics.requests_per_minute,
-          activeAlerts: opsMetrics.active_alerts,
-          uptime: opsMetrics.uptime,
-        });
-      } catch (_err) {
-        console.warn('Operations metrics unavailable, using defaults');
-        // Fallback to defaults if API unavailable
-        setOperationsMetrics({
-          errorRate: 0,
-          p95Latency: 0,
-          requestsPerMinute: 0,
-          activeAlerts: 0,
-          uptime: 100,
-        });
-      }
-
       setError(null);
       setLastRefresh(new Date());
     } catch (err: any) {
@@ -149,14 +143,13 @@ export function OperationsDashboard() {
     if (isReady) loadData();
   }, [isReady, loadData]);
 
-  // Auto-refresh
   useEffect(() => {
     if (!isReady) return;
     const interval = setInterval(loadData, AUTO_REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, [isReady, loadData]);
 
-  // Generate recent deployments from platform events
+  // Recent deployments from ArgoCD events
   const recentDeployments: RecentDeployment[] =
     platformStatus?.events?.slice(0, 5).map((event, idx) => ({
       id: String(event.id || idx),
@@ -178,18 +171,11 @@ export function OperationsDashboard() {
       }),
     })) || [];
 
-  // Calculate platform health
+  // ArgoCD component health
   const healthyComponents =
     platformStatus?.gitops?.components?.filter((c) => c.health_status === 'Healthy').length || 0;
   const totalComponents = platformStatus?.gitops?.components?.length || 1;
   const platformHealth = Math.round((healthyComponents / totalComponents) * 100);
-
-  // External links
-  const grafanaUrl =
-    platformStatus?.external_links?.grafana ||
-    `${config.services.grafana.url}/d/stoa-incident-response`;
-  const prometheusUrl =
-    platformStatus?.external_links?.prometheus || config.services.prometheus.url;
 
   return (
     <div className="space-y-6">
@@ -200,7 +186,7 @@ export function OperationsDashboard() {
             Operations Dashboard
           </h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Platform health, performance metrics, and incident overview
+            Platform health, SLO metrics, and deployment overview
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -242,9 +228,9 @@ export function OperationsDashboard() {
 
       {loading ? (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <CardSkeleton key={i} className="h-24" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <CardSkeleton key={i} className="h-52" />
             ))}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -254,232 +240,221 @@ export function OperationsDashboard() {
         </div>
       ) : (
         <>
-          {/* Key Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <StatCard
-              label="Platform Health"
-              value={`${platformHealth}%`}
-              icon={Shield}
-              colorClass={
-                platformHealth >= 100
-                  ? 'text-green-600'
-                  : platformHealth >= 80
-                    ? 'text-yellow-600'
-                    : 'text-red-600'
-              }
-              subtitle={`${healthyComponents}/${totalComponents} components`}
-            />
-            <StatCard
-              label="Error Rate (5m)"
-              value={operationsMetrics?.errorRate.toFixed(2) || '0.00'}
-              unit="%"
-              icon={AlertTriangle}
-              colorClass={getStatusColor(operationsMetrics?.errorRate || 0, thresholds.errorRate)}
-              trend={
-                operationsMetrics?.errorRate && operationsMetrics.errorRate > 0.5 ? 'up' : 'stable'
-              }
-            />
-            <StatCard
-              label="P95 Latency"
-              value={Math.round(operationsMetrics?.p95Latency || 0)}
-              unit="ms"
-              icon={Clock}
-              colorClass={getStatusColor(operationsMetrics?.p95Latency || 0, thresholds.p95Latency)}
-            />
-            <StatCard
-              label="Active Alerts"
-              value={operationsMetrics?.activeAlerts || 0}
-              icon={Zap}
-              colorClass={operationsMetrics?.activeAlerts === 0 ? 'text-green-600' : 'text-red-600'}
-            />
-            <StatCard
-              label="Requests/min"
-              value={operationsMetrics?.requestsPerMinute || 0}
-              icon={Activity}
-              colorClass="text-blue-600"
-            />
-          </div>
-
-          {/* Gateway Health Summary */}
-          {gatewayMetrics && (
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                  Gateway Health
-                </h2>
-                <a
-                  href="/gateway-observability"
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                >
-                  View Details
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-neutral-900 dark:text-white">
-                    {gatewayMetrics.health.total_gateways}
-                  </p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Total</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-green-600">
-                    {gatewayMetrics.health.online}
-                  </p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Online</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {gatewayMetrics.health.degraded}
-                  </p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Degraded</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-red-600">{gatewayMetrics.health.offline}</p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Offline</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-neutral-600 dark:text-neutral-400">
-                    {gatewayMetrics.health.maintenance}
-                  </p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Maintenance</p>
-                </div>
-              </div>
+          {/* SLO Overview — Grafana Panel Embeds (visible to all authenticated users) */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                SLO Overview
+              </h2>
+              <button
+                onClick={() => navigate(observabilityPath(dashboards.slo))}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              >
+                View full SLO dashboard
+                <ExternalLink className="h-3 w-3" />
+              </button>
             </div>
-          )}
-
-          {/* Two Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Recent Deployments */}
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                  Recent Deployments
-                </h2>
-                <a
-                  href="/gateway-deployments"
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                >
-                  View All
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-              {recentDeployments.length > 0 ? (
-                <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
-                  {recentDeployments.map((deployment) => (
-                    <DeploymentItem key={deployment.id} deployment={deployment} />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-8">
-                  No recent deployments
-                </p>
-              )}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <GrafanaPanel
+                dashboardUid={panels.sloAvailability.uid}
+                panelId={panels.sloAvailability.panelId}
+                title="Availability"
+                height={180}
+              />
+              <GrafanaPanel
+                dashboardUid={panels.sloErrorRate.uid}
+                panelId={panels.sloErrorRate.panelId}
+                title="Error Rate"
+                height={180}
+              />
+              <GrafanaPanel
+                dashboardUid={panels.sloLatencyP95.uid}
+                panelId={panels.sloLatencyP95.panelId}
+                title="P95 Latency"
+                height={180}
+              />
+              <GrafanaPanel
+                dashboardUid={panels.sloErrorBudget.uid}
+                panelId={panels.sloErrorBudget.panelId}
+                title="Error Budget"
+                height={180}
+              />
             </div>
+          </section>
 
-            {/* Active Incidents / Alerts */}
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <div className="flex items-center justify-between mb-4">
+          {/* Platform Health — ArgoCD status (real data) + CUJ Health (Grafana) */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                Platform Health
+              </h2>
+              <button
+                onClick={() => navigate(observabilityPath(dashboards.platformHealth))}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              >
+                View Platform Health dashboard
+                <ExternalLink className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* ArgoCD Component Status */}
+              <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Shield className="h-4 w-4 text-neutral-500" />
+                  <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    ArgoCD Components — {platformHealth}% Healthy
+                  </h3>
+                </div>
+                {platformStatus?.gitops?.components ? (
+                  <div className="space-y-2">
+                    {platformStatus.gitops.components.map((comp) => (
+                      <div key={comp.name} className="flex items-center justify-between py-1.5">
+                        <span className="text-sm text-neutral-900 dark:text-white">
+                          {comp.name}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              comp.sync_status === 'Synced'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            }`}
+                          >
+                            {comp.sync_status}
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              comp.health_status === 'Healthy'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : comp.health_status === 'Degraded'
+                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            }`}
+                          >
+                            {comp.health_status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
+                    ArgoCD status unavailable
+                  </p>
+                )}
+              </div>
+              {/* CUJ Health — Grafana embed */}
+              <GrafanaPanel
+                dashboardUid={panels.platformCujPassing.uid}
+                panelId={panels.platformCujPassing.panelId}
+                title="CUJ Health"
+                height={240}
+              />
+            </div>
+          </section>
+
+          {/* Traffic & Security — restricted to cpi-admin and devops */}
+          {canViewTrafficSecurity && (
+            <section>
+              <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                  Active Incidents
+                  Traffic & Security
                 </h2>
                 <button
-                  onClick={() => navigate(observabilityPath(grafanaUrl))}
+                  onClick={() => navigate(observabilityPath(dashboards.incidentResponse))}
                   className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                 >
-                  Open Grafana
+                  View Incident Response dashboard
                   <ExternalLink className="h-3 w-3" />
                 </button>
               </div>
-              {operationsMetrics?.activeAlerts === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-3">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                  </div>
-                  <p className="text-sm font-medium text-green-600">All Systems Operational</p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    No active incidents at this time
-                  </p>
+              <div className="space-y-4">
+                <GrafanaPanel
+                  dashboardUid={panels.errorRateTimeseries.uid}
+                  panelId={panels.errorRateTimeseries.panelId}
+                  title="Error Rate over Time"
+                  height={250}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <GrafanaPanel
+                    dashboardUid={panels.activeConnections.uid}
+                    panelId={panels.activeConnections.panelId}
+                    title="Active Connections"
+                    height={180}
+                  />
+                  <GrafanaPanel
+                    dashboardUid={panels.securityEvents.uid}
+                    panelId={panels.securityEvents.panelId}
+                    title="Security Events"
+                    height={180}
+                  />
+                  <GrafanaPanel
+                    dashboardUid={panels.fleetRps.uid}
+                    panelId={panels.fleetRps.panelId}
+                    title="Fleet RPS"
+                    height={180}
+                  />
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {/* Simulated alert items */}
-                  <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-red-800 dark:text-red-300">
-                        High Error Rate on MCP Gateway
-                      </p>
-                      <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-                        Error rate exceeded 1% threshold
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              </div>
+            </section>
+          )}
+
+          {/* Recent Deployments — ArgoCD events (real data) */}
+          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                Recent Deployments
+              </h2>
             </div>
+            {recentDeployments.length > 0 ? (
+              <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
+                {recentDeployments.map((deployment) => (
+                  <DeploymentItem key={deployment.id} deployment={deployment} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-8">
+                No recent deployments
+              </p>
+            )}
           </div>
 
-          {/* Quick Links to Observability Tools */}
+          {/* Quick Links to Grafana Dashboards */}
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
             <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
-              Observability Tools
+              Observability Dashboards
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <button
-                onClick={() => navigate(observabilityPath(grafanaUrl))}
-                className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-left"
-              >
-                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                  <Activity className="h-5 w-5 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-neutral-900 dark:text-white">Grafana</p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Dashboards</p>
-                </div>
-                <ExternalLink className="h-4 w-4 text-neutral-400 ml-auto" />
-              </button>
-              <button
-                onClick={() => navigate(observabilityPath(prometheusUrl))}
-                className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-left"
-              >
-                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-neutral-900 dark:text-white">Prometheus</p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Metrics</p>
-                </div>
-                <ExternalLink className="h-4 w-4 text-neutral-400 ml-auto" />
-              </button>
-              <a
-                href="/monitoring"
-                className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
-              >
-                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                  <Zap className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-neutral-900 dark:text-white">
-                    API Monitoring
-                  </p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Tracing</p>
-                </div>
-              </a>
-              <a
-                href="/errors"
-                className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
-              >
-                <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-neutral-900 dark:text-white">
-                    Error Snapshots
-                  </p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Debugging</p>
-                </div>
-              </a>
+            <div className="flex flex-wrap gap-3">
+              <QuickLinkButton
+                label="SLO Dashboard"
+                icon={Gauge}
+                onClick={() => navigate(observabilityPath(dashboards.slo))}
+              />
+              <QuickLinkButton
+                label="Incident Response"
+                icon={Siren}
+                onClick={() => navigate(observabilityPath(dashboards.incidentResponse))}
+              />
+              <QuickLinkButton
+                label="Gateway Fleet"
+                icon={Layers}
+                onClick={() => navigate(observabilityPath(dashboards.gatewayFleet))}
+              />
+              <QuickLinkButton
+                label="Arena Benchmark"
+                icon={Award}
+                onClick={() => navigate(observabilityPath(dashboards.gatewayArena))}
+              />
+              <QuickLinkButton
+                label="Service Health"
+                icon={Activity}
+                onClick={() => navigate(observabilityPath(dashboards.serviceHealth))}
+              />
+              <QuickLinkButton
+                label="Logs Explorer"
+                icon={BarChart3}
+                href={config.services.logs.url}
+              />
             </div>
           </div>
         </>

@@ -78,19 +78,18 @@ async def get_operations_metrics(
         )
 
     try:
-        # Use recording rules for efficient queries (deployed with stoa-slo.yaml)
-        # These recording rules are pre-computed by Prometheus
+        # Use recording rules aligned with stoa-slo.yaml definitions
         error_rate_result = await prometheus_client.query(
-            "slo:error_rate:5m or vector(0)"
+            "(1 - slo:api_availability:ratio) or vector(0)"
         )
         p95_result = await prometheus_client.query(
-            "slo:latency_p95:5m or vector(0)"
+            "slo:api_latency_p95:seconds or vector(0)"
         )
         rps_result = await prometheus_client.query(
-            "slo:requests_per_minute or vector(0)"
+            "business:api_calls:hourly_rate / 60 or vector(0)"
         )
         uptime_result = await prometheus_client.query(
-            "slo:availability:5m or vector(1)"
+            "slo:api_availability:ratio or vector(1)"
         )
 
         # Query Alertmanager for active alerts count

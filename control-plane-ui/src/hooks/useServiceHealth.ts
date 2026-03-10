@@ -26,10 +26,11 @@ export function useServiceHealth(url: string): UseServiceHealthResult {
         method: 'HEAD',
         signal: controller.signal,
         mode: isSameOrigin ? 'same-origin' : 'no-cors',
+        redirect: 'manual',
       });
 
-      // no-cors returns opaque response (status 0) — treat as available
-      if (response.type === 'opaque' || response.ok) {
+      // opaque (no-cors) or opaqueredirect (manual redirect) — service is reachable
+      if (response.type === 'opaque' || response.type === 'opaqueredirect' || response.ok) {
         setStatus('available');
       } else if (response.status >= 500) {
         setStatus('unavailable');

@@ -6,7 +6,7 @@ Rust implementation of the unified STOA gateway. Implements the 4-mode architect
 
 - Rust 2021 edition, Tokio 1 (async runtime), Axum 0.7 (web framework)
 - serde/serde_json, Figment (layered config: YAML + env)
-- jsonwebtoken 9, reqwest 0.11 (HTTP client)
+- jsonwebtoken 10, reqwest 0.12 (HTTP client)
 - moka 0.12 (in-memory cache), prometheus 0.13
 
 ## Prerequisites

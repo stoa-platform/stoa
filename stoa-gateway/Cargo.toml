@@ -9,7 +9,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["STOA Platform <contact@gostoa.dev>"]
 description = "STOA MCP Gateway - Legacy-to-AI Bridge"
-license = "AGPL-3.0"
+license = "Apache-2.0"
 
 [dependencies]
 # === Existing (keep these) ===
@@ -22,7 +22,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "1"
 chrono = { version = "0.4", features = ["serde"] }
 prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
-jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }  # RUSTSEC-2023-0071: rsa timing vuln — no upstream fix, low risk (JWT verify only, no RSA decrypt)
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 async-trait = "0.1"
 
@@ -59,7 +59,7 @@ regex = "1"
 notify = "8"
 
 # === Phase 2 OPA: Embedded Policy Engine (CAB-1094) ===
-regorus = "0.9"                              # Pure Rust OPA evaluator (no sidecar)
+regorus = "0.9"                              # Pure Rust OPA evaluator (no sidecar) — RUSTSEC-2025-0141: bincode unmaintained (transitive, no API exposed)
 
 # === Phase 8: Shadow Mode UAC Generation ===
 serde_yaml = "0.9"                           # YAML serialization for UAC contracts

@@ -150,8 +150,11 @@ export function Consumers() {
         await apiService.suspendConsumer(activeTenant, consumer.id);
         toast.success('Consumer suspended', `${consumer.name} has been suspended`);
         invalidateConsumers();
-      } catch (err: any) {
-        toast.error('Suspend failed', err.message || 'Failed to suspend consumer');
+      } catch (err: unknown) {
+        toast.error(
+          'Suspend failed',
+          err instanceof Error ? err.message : 'Failed to suspend consumer'
+        );
       }
     },
     [activeTenant, confirm, toast, invalidateConsumers]
@@ -163,8 +166,11 @@ export function Consumers() {
         await apiService.activateConsumer(activeTenant, consumer.id);
         toast.success('Consumer activated', `${consumer.name} has been activated`);
         invalidateConsumers();
-      } catch (err: any) {
-        toast.error('Activation failed', err.message || 'Failed to activate consumer');
+      } catch (err: unknown) {
+        toast.error(
+          'Activation failed',
+          err instanceof Error ? err.message : 'Failed to activate consumer'
+        );
       }
     },
     [activeTenant, toast, invalidateConsumers]
@@ -185,8 +191,11 @@ export function Consumers() {
         await apiService.deleteConsumer(activeTenant, consumer.id);
         toast.success('Consumer deleted', `${consumer.name} has been removed`);
         invalidateConsumers();
-      } catch (err: any) {
-        toast.error('Delete failed', err.message || 'Failed to delete consumer');
+      } catch (err: unknown) {
+        toast.error(
+          'Delete failed',
+          err instanceof Error ? err.message : 'Failed to delete consumer'
+        );
       }
     },
     [activeTenant, confirm, toast, invalidateConsumers]

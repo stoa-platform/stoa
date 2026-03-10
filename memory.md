@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-07 (CAB-1697 Rules Diet Phase 2)
+> Derniere MAJ: 2026-03-10 (OpSec cleanup + Arena L1 trim)
 
 ## ✅ DONE
 
@@ -9,6 +9,10 @@
 ### Cycle 12 (Mar 3+)
 - 🔴 CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10
   - Spike DONE, ADR-056 DONE, KC 26.5.3 sufficient. Decomposed: 5 subs (CAB-1739-1743)
+- ✅ Arena L1: Remove Kong & Gravitee (score near-zero) — PR #1620
+- ✅ docs: Simplify banking terminology across repos — PRs #1622, stoa-docs #111, stoa-web #22
+- ✅ fix(audit): Word boundary matching for blocklist false positive — stoa-docs #111
+- ✅ docs: Update gateway-arena.md rule for L1 changes — PR #1621
 - ✅ CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398
 - ✅ CAB-1637: API/MCP Discovery — Smart Connector Catalog (13 pts) — PR #1397
 - ✅ CAB-1634: RBAC Taxonomy v2 (21 pts) — PR #1396
@@ -58,7 +62,8 @@ CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Decomposed, subs pending
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
 - Test suite: 5700+ tests, 91% CP-API coverage, 1330+ gateway tests
-- Arena scores: STOA 83.90 | Gravitee 46.72 | Kong 5.46
+- Arena L0 scores: STOA 83.90 | Gravitee 46.72 | Kong 5.46
+- Arena L1 (Enterprise): STOA + agentgateway only (Kong/Gravitee removed PR #1620)
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB), Go daemon, Infisical secrets
 - ADR numbering: stoa-docs 001-056. Next: **ADR-057**
 - docs.gostoa.dev = 41+ articles, 8 migration spokes

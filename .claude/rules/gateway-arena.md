@@ -28,7 +28,8 @@ Formula: `0.15*Base + 0.20*Burst50 + 0.10*Burst100 + 0.15*Avail + 0.10*Error + 0
 
 Local nginx echo (static JSON, <1ms) ensures benchmarks measure gateway overhead only.
 
-**K8s**: stoa-k8s (`stoa-gateway.stoa-system.svc`), kong-k8s (`:8000`), gravitee-k8s (`:8082`) — all → echo-backend:8888
+**K8s (L0)**: stoa-k8s (`stoa-gateway.stoa-system.svc`), kong-k8s (`:8000`), gravitee-k8s (`:8082`) — all → echo-backend:8888
+**K8s (L1)**: stoa-k8s, agentgateway-k8s (`:3000`) — AI-native gateways only (Kong/Gravitee removed, score near-zero)
 **VPS**: stoa-vps, kong-vps, gravitee-vps — all → echo-local:8888 (Docker, same network required)
 
 VPS gotcha: echo container MUST be on gateway's Docker network. STOA SSRF blocklist blocks `localhost` — use container name.
@@ -71,9 +72,9 @@ Supporting: `kong.yaml`, `gravitee.yaml`, `echo-backend.yaml`, `pushgateway*.yam
 
 Features gate: gateways declare `features` array in GATEWAYS JSON. Missing = score 0. Blue Ocean: 49% on STOA-unique features.
 
-**MCP Protocol**: STOA = custom REST (`/mcp/capabilities`, `/mcp/tools/list|call`), Gravitee 4.8 = Streamable HTTP (JSON-RPC 2.0), Kong OSS = none (Enterprise-only plugin).
+**MCP Protocol**: STOA = custom REST (`/mcp/capabilities`, `/mcp/tools/list|call`), agentgateway = Streamable HTTP (JSON-RPC 2.0).
 
-Scores: STOA ~85-95, Kong ~5-8, Gravitee ~47-50.
+**L1 Gateways** (PR #1620): STOA (12 features) and agentgateway (6 features). Kong/Gravitee removed — they score near-zero on enterprise dimensions (no MCP, no AI features). They remain in L0 for proxy baseline.
 
 ## L2: Platform Continuous Verification
 

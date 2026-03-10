@@ -59,7 +59,7 @@ cd alembic && alembic upgrade head
 cd control-plane-ui
 npm install
 cp .env.example .env.local    # Edit VITE_API_URL, VITE_KEYCLOAK_URL
-npm start                     # Vite dev server on :5173
+npm run dev                   # Vite dev server on :5173
 ```
 
 ### Developer Portal (React/TypeScript)
@@ -154,7 +154,7 @@ Each component has a `.env.example` with all available settings. Required vars f
 | `cargo test --all-features` fails | Install cmake: `brew install cmake` |
 | Keycloak unreachable | Start Keycloak: `docker compose up keycloak -d` |
 | Database connection refused | Start PostgreSQL: `brew services start postgresql@15` |
-| `npm start` port conflict | Kill process on port: `lsof -ti:5173 \| xargs kill` |
+| `npm run dev` port conflict | Kill process on port: `lsof -ti:5173 \| xargs kill` |
 | ESLint max-warnings exceeded | Fix warnings or check threshold in `.eslintrc` |
 
 ## Further Reading

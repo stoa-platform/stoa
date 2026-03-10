@@ -108,6 +108,27 @@ export const config = {
       arenaDashboardUrl:
         import.meta.env.VITE_ARENA_DASHBOARD_URL ||
         '/grafana/d/gateway-arena/gateway-arena-leaderboard',
+      // Embedded panels for the Operations Dashboard (CAB-1766)
+      panels: {
+        sloAvailability: { uid: 'stoa-slo-dashboard', panelId: 1 },
+        sloLatencyP95: { uid: 'stoa-slo-dashboard', panelId: 2 },
+        sloErrorRate: { uid: 'stoa-slo-dashboard', panelId: 3 },
+        sloErrorBudget: { uid: 'stoa-slo-dashboard', panelId: 4 },
+        errorRateTimeseries: { uid: 'stoa-incident-response', panelId: 0 },
+        latencyP99: { uid: 'stoa-incident-response', panelId: 1 },
+        activeConnections: { uid: 'stoa-incident-response', panelId: 5 },
+        securityEvents: { uid: 'stoa-incident-response', panelId: 6 },
+        fleetRps: { uid: 'stoa-gw-unified', panelId: 2 },
+        platformCujPassing: { uid: 'platform-health-l2', panelId: 1 },
+      },
+      dashboards: {
+        slo: '/grafana/d/stoa-slo-dashboard/slo-dashboard',
+        incidentResponse: '/grafana/d/stoa-incident-response/incident-response',
+        gatewayFleet: '/grafana/d/stoa-gw-unified/gateway-fleet-unified',
+        platformHealth: '/grafana/d/platform-health-l2/platform-health',
+        serviceHealth: '/grafana/d/stoa-service-health/service-health',
+        gatewayArena: '/grafana/d/gateway-arena/gateway-arena-leaderboard',
+      },
     },
     prometheus: {
       url: import.meta.env.VITE_PROMETHEUS_URL || `https://prometheus.${BASE_DOMAIN}`,

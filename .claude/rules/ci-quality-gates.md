@@ -115,7 +115,7 @@ cd mcp-gateway && pytest tests/ --cov=src --cov-fail-under=40 -q
 
 | Component | ESLint max-warnings | Prettier | Build | Notes |
 |-----------|-------------------|----------|-------|-------|
-| control-plane-ui | **105** | blocking | `tsc -p tsconfig.app.json` | `tsconfig.app.json` excludes `**/*.test.ts(x)` |
+| control-plane-ui | **100** | blocking | `tsc -p tsconfig.app.json` | `tsconfig.app.json` excludes `**/*.test.ts(x)` |
 | portal | **0** | blocking | `tsc -p tsconfig.app.json` | jsx-a11y plugin active |
 
 Pre-push commands:

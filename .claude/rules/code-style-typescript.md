@@ -14,7 +14,7 @@ globs: "control-plane-ui/**,portal/**"
 - End of line: LF
 
 ## ESLint
-- Max warnings: 105 (control-plane-ui), 0 (portal)
+- Max warnings: 100 (control-plane-ui), 0 (portal)
 - Path alias: `@/*` maps to `src/*`
 - Unused args: prefix with `_` (e.g., `_unused`)
 

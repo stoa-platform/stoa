@@ -138,8 +138,9 @@ export function OperationsDashboard() {
 
       setError(null);
       setLastRefresh(new Date());
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load operations data');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      setError(axiosErr.response?.data?.detail || 'Failed to load operations data');
     } finally {
       setLoading(false);
     }

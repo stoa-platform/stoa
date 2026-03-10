@@ -66,8 +66,9 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
 
       await apiService.createGatewayInstance(payload);
       onCreated();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Failed to register gateway');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      setError(axiosErr.response?.data?.detail || axiosErr.message || 'Failed to register gateway');
     } finally {
       setSubmitting(false);
     }

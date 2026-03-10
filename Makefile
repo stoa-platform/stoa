@@ -48,7 +48,7 @@ test-all: ## Run all tests (parallel)
 	$(MAKE) -j test-api test-ui test-portal test-gateway test-cli
 
 test-api: ## Run control-plane-api tests
-	cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=58 --ignore=tests/test_opensearch.py -q
+	cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=65 --ignore=tests/test_opensearch.py -q
 
 test-ui: ## Run console UI tests
 	cd control-plane-ui && npm run test -- --run

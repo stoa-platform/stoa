@@ -47446,6 +47446,64 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}/complete": {
+      "post": {
+        "description": "Manually mark a promoting promotion as completed (deployed).",
+        "operationId": "complete_promotion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Promotion",
+        "tags": [
+          "Promotions"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/promotions/{promotion_id}/diff": {
       "get": {
         "description": "Get the spec diff between source and target environments.",

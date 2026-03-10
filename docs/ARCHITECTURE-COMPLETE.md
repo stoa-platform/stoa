@@ -217,11 +217,11 @@ portal/
 
 ### 2.4 MCP Gateway (AI-Native Gateway)
 
-**Emplacement:** `mcp-gateway/`
-**Technology:** Python 3.11, FastAPI, OPA, Kubernetes-asyncio
+**Emplacement:** `stoa-gateway/`
+**Technology:** Rust, Tokio, axum
 
 ```
-mcp-gateway/
+stoa-gateway/
 ├── src/
 │   ├── main.py                 # Entry point
 │   ├── handlers/
@@ -621,7 +621,7 @@ charts/stoa-platform/
 │   │   ├── service.yaml
 │   │   ├── configmap.yaml
 │   │   └── ingress.yaml
-│   ├── mcp-gateway/
+│   ├── stoa-gateway/
 │   │   ├── deployment.yaml
 │   │   ├── service.yaml
 │   │   └── ingress.yaml
@@ -660,7 +660,7 @@ charts/stoa-platform/
 │  │ control-plane-ui     │ Public       │ PKCE + Authorization Code│    │
 │  │ stoa-portal          │ Public       │ PKCE + Authorization Code│    │
 │  │ api-gateway          │ Confidential │ Token Validation         │    │
-│  │ mcp-gateway          │ Confidential │ JWT Validation           │    │
+│  │ stoa-gateway          │ Confidential │ JWT Validation           │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │
 │  Realm Roles:                                                            │
@@ -1644,10 +1644,10 @@ K8S_WATCHER_ENABLED=true
 cd control-plane-ui && npm start          # Console UI
 cd portal && npm run dev                   # Developer Portal
 cd control-plane-api && uvicorn src.main:app --reload  # API
-cd mcp-gateway && python -m src.main      # MCP Gateway
+cd stoa-gateway && cargo run               # STOA Gateway
 
 # Testing
-cd mcp-gateway && pytest --cov=src        # MCP tests (196 tests)
+cd stoa-gateway && cargo test              # Gateway tests
 cd portal && npm run test                  # Portal tests
 
 # Deployment
@@ -1662,7 +1662,7 @@ kubectl describe tool payment-search -n tenant-acme
 
 # Debugging
 kubectl logs -f deployment/control-plane-api -n stoa-system
-kubectl logs -f deployment/mcp-gateway -n stoa-system
+kubectl logs -f deployment/stoa-gateway -n stoa-system
 kubectl exec -it deployment/control-plane-api -n stoa-system -- /bin/sh
 ```
 

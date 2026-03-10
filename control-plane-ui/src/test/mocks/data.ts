@@ -223,8 +223,8 @@ export const mockPlatformStatus: PlatformStatusResponse = {
         message: null,
       },
       {
-        name: 'mcp-gateway',
-        display_name: 'MCP Gateway',
+        name: 'stoa-gateway',
+        display_name: 'STOA Gateway',
         sync_status: 'Synced',
         health_status: 'Healthy',
         revision: 'def456',

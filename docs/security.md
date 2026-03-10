@@ -16,7 +16,7 @@ The STOA Platform runs 9 automated security checks on every push to `main`/`deve
 |---|-----|------|-------|---------------|
 | 1 | `verify-signatures` | git verify-commit | All commits | Warning only |
 | 2 | `sast-rust` | Clippy (strict) | stoa-gateway | Any warning or denied lint |
-| 3 | `sast-python` | Bandit | control-plane-api, mcp-gateway | Medium+ severity |
+| 3 | `sast-python` | Bandit | control-plane-api | Medium+ severity |
 | 4 | `sast-javascript` | ESLint Security | control-plane-ui, portal | Error-level findings |
 | 5 | `dependency-scan` | cargo-audit, pip-audit, npm audit | All dependencies | HIGH+ vulnerabilities |
 | 6 | `secret-scan` | Gitleaks | Full git history | Any secret detected |

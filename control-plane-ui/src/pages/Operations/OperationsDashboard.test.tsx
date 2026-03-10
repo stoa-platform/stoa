@@ -27,7 +27,7 @@ vi.mock('../../services/api', () => ({
               message: null,
             },
             {
-              name: 'mcp-gateway',
+              name: 'stoa-gateway',
               health_status: 'Healthy',
               sync_status: 'Synced',
               revision: 'def456',

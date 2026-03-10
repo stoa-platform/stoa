@@ -47,12 +47,11 @@ npm run dev
 
 Access the Developer Portal at `http://localhost:5173`
 
-### 5. Start MCP Gateway
+### 5. Start STOA Gateway
 
 ```bash
-cd mcp-gateway
-pip install -e ".[dev,k8s]"
-python -m src.main
+cd stoa-gateway
+cargo run
 ```
 
 ## Kubernetes Deployment

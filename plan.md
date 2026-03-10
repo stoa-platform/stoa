@@ -341,8 +341,8 @@
     - [x] CAB-1741 [infra] Unify KC to 26.5.3 + FAPI profiles (3 pts) — PR #1526
     - [x] CAB-1742 [gateway] OTel runtime toggle (3 pts) — PR #1526
     - [ ] CAB-1743 [docs] FAPI 2.0 architecture guide (5 pts) — ADR-056 drafted, needs stoa-docs PR
-  - **Phase 2** (after Phase 1) [owner: —]
-    - [ ] CAB-1740 [gateway] private_key_jwt client auth RFC 7523 (8 pts)
+  - **Phase 2** (after Phase 1) [owner: —] — PR #1531
+    - [x] CAB-1740 [gateway] private_key_jwt client auth RFC 7523 (8 pts) — PR #1531
 
 ### Todo
 

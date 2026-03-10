@@ -50,8 +50,12 @@ CAB-1696: [MEGA] AI Factory Audit Remediation (34 pts) — Phase 1 in progress
 - [ ] CAB-1700: E2E smoke mock server (5 pts) — blocked by P1
 - [ ] CAB-1701: OpenAPI→TS contract testing (3 pts) — blocked by P1
 
-CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Decomposed, subs pending
-- [ ] CAB-1739-1743: 5 sub-tickets (implementation pending)
+CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
+- ✅ CAB-1739 PAR proxy (5 pts) — PR #1526
+- ✅ CAB-1741 KC 26.5.3 unify (3 pts) — PR #1526
+- ✅ CAB-1742 OTel toggle (3 pts) — PR #1526
+- ✅ CAB-1740 private_key_jwt RFC 7523 (8 pts) — PR #1531
+- [ ] CAB-1743 FAPI 2.0 docs (5 pts) — ADR-056 drafted, needs stoa-docs PR
 
 ## 📋 NEXT
 

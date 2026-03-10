@@ -429,8 +429,8 @@ def _get_mock_status(error: str | None = None) -> PlatformStatusResponse:
             message=None,
         ),
         ComponentStatus(
-            name="stoa-mcp-gateway",
-            display_name="MCP Gateway",
+            name="stoa-gateway",
+            display_name="STOA Gateway",
             sync_status="Unknown" if error else "Synced",
             health_status="Unknown" if error else "Healthy",
             revision="HEAD",

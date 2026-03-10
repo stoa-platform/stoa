@@ -35,7 +35,6 @@ configMapGenerator:
     files:
       - applications/stoa-portal.yaml
       - applications/control-plane-ui.yaml
-      - applications/mcp-gateway.yaml
       - applications/identity-governance.yaml
       - applications/dcr-service-account-template.yaml
 

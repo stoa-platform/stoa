@@ -118,22 +118,14 @@ controlPlaneApi:
     secretName: db-credentials
 ```
 
-### MCP Gateway
+### STOA Gateway
 
 ```yaml
-mcpGateway:
+stoaGateway:
   replicas: 2
   image:
-    repository: ghcr.io/potomitan/stoa-mcp-gateway
+    repository: ghcr.io/stoa-platform/stoa-gateway
     tag: latest
-  opa:
-    enabled: true
-    embedded: true
-  metering:
-    enabled: true
-    kafka:
-      bootstrapServers: redpanda:9092
-      topic: mcp-events
 ```
 
 ### Observability

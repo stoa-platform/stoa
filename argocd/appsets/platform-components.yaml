@@ -29,7 +29,7 @@ spec:
                   wave: "1"
                 - component: control-plane-api
                   wave: "2"
-                - component: mcp-gateway
+                - component: stoa-gateway
                   wave: "3"
                 - component: control-plane-ui
                   wave: "4"

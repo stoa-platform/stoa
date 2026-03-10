@@ -226,7 +226,7 @@ services:
       STOA_CONTROL_PLANE_URL: http://control-plane-api:8000
       STOA_KEYCLOAK_URL: http://keycloak:8080
       STOA_KEYCLOAK_REALM: stoa
-      STOA_KEYCLOAK_CLIENT_ID: stoa-mcp-gateway
+      STOA_KEYCLOAK_CLIENT_ID: stoa-gateway
       STOA_LOG_LEVEL: ${LOG_LEVEL:-info}
       STOA_LOG_FORMAT: json
       STOA_GATEWAY_MODE: edge-mcp

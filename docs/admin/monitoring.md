@@ -64,7 +64,7 @@ Access Grafana at `https://grafana.<BASE_DOMAIN>`.
 | Alert | Condition | Action |
 |-------|-----------|--------|
 | API Down | `up{job="control-plane-api"} == 0` for 2m | Check pods, restart deployment |
-| Gateway Down | `up{job="mcp-gateway"} == 0` for 2m | Check pods, check OPA config |
+| Gateway Down | `up{job="stoa-gateway"} == 0` for 2m | Check pods, check gateway config |
 | Error Rate Spike | `rate(http_requests_total{status=~"5.."}[5m]) > 0.1` | Check logs, identify failing endpoint |
 | Database Unreachable | `db_query_duration_seconds > 30` | Check PostgreSQL, network policies |
 

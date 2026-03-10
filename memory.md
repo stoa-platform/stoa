@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-10 (OpSec cleanup + Arena L1 trim)
+> Derniere MAJ: 2026-03-10 (fix(gateway) audit remediations PR #1633)
 
 ## ✅ DONE
 
@@ -9,6 +9,9 @@
 ### Cycle 12 (Mar 3+)
 - 🔴 CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10
   - Spike DONE, ADR-056 DONE, KC 26.5.3 sufficient. Decomposed: 5 subs (CAB-1739-1743)
+- ✅ fix(gateway): audit remediations — Council 8.75/10, PR #1633
+  - SSE panic fix (HIGH), parking_lot migration (MEDIUM), mode Option accessors (MEDIUM), dep docs (SECURITY), README sync (DX)
+- ✅ CAB-1766: Operations Grafana embed + RBAC (13 pts) — Council 8.50/10, PR #1632
 - ✅ Arena L1: Remove Kong & Gravitee (score near-zero) — PR #1620
 - ✅ docs: Simplify banking terminology across repos — PRs #1622, stoa-docs #111, stoa-web #22
 - ✅ fix(audit): Word boundary matching for blocklist false positive — stoa-docs #111

@@ -161,7 +161,7 @@ describe('OperationsDashboard', () => {
       expect(screen.getByText('Platform Health')).toBeInTheDocument();
     });
     expect(screen.getByText('control-plane-api')).toBeInTheDocument();
-    expect(screen.getByText('stoa-gateway')).toBeInTheDocument();
+    expect(screen.getAllByText('stoa-gateway').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows Recent Deployments section', async () => {

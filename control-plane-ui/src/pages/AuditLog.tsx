@@ -137,9 +137,10 @@ export function AuditLog() {
       setEntries(data.entries || []);
       setTotal(data.total || 0);
       setError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!mountedRef.current) return;
-      setError(err.response?.data?.detail || 'Failed to load audit log');
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      setError(axiosErr.response?.data?.detail || 'Failed to load audit log');
       setEntries([]);
       setTotal(0);
     } finally {

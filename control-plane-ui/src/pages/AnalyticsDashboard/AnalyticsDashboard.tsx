@@ -174,9 +174,10 @@ export function AnalyticsDashboard() {
       setTopApis(apis);
       setErrorCategories(taxonomy.items || []);
       setError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!mountedRef.current) return;
-      setError(err.response?.data?.detail || 'Failed to load analytics');
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      setError(axiosErr.response?.data?.detail || 'Failed to load analytics');
     } finally {
       if (mountedRef.current) setLoading(false);
     }

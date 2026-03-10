@@ -73,8 +73,11 @@ export function GatewayModesDashboard() {
       const data = await apiService.getGatewayModeStats();
       setStats(data);
       setError(null);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Failed to load gateway mode stats');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      setError(
+        axiosErr.response?.data?.detail || axiosErr.message || 'Failed to load gateway mode stats'
+      );
     } finally {
       setLoading(false);
     }

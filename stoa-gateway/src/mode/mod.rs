@@ -312,35 +312,35 @@ impl ModeConfig {
         self.mode
     }
 
-    /// Get Edge MCP settings (panics if wrong mode)
-    pub fn edge_mcp(&self) -> &EdgeMcpSettings {
+    /// Get Edge MCP settings, or `None` if not in edge-mcp mode.
+    pub fn edge_mcp(&self) -> Option<&EdgeMcpSettings> {
         match &self.settings {
-            ModeSettings::EdgeMcp(s) => s,
-            _ => panic!("Not in edge-mcp mode"),
+            ModeSettings::EdgeMcp(s) => Some(s),
+            _ => None,
         }
     }
 
-    /// Get Sidecar settings (panics if wrong mode)
-    pub fn sidecar(&self) -> &SidecarSettings {
+    /// Get Sidecar settings, or `None` if not in sidecar mode.
+    pub fn sidecar(&self) -> Option<&SidecarSettings> {
         match &self.settings {
-            ModeSettings::Sidecar(s) => s,
-            _ => panic!("Not in sidecar mode"),
+            ModeSettings::Sidecar(s) => Some(s),
+            _ => None,
         }
     }
 
-    /// Get Proxy settings (panics if wrong mode)
-    pub fn proxy(&self) -> &ProxySettings {
+    /// Get Proxy settings, or `None` if not in proxy mode.
+    pub fn proxy(&self) -> Option<&ProxySettings> {
         match &self.settings {
-            ModeSettings::Proxy(s) => s,
-            _ => panic!("Not in proxy mode"),
+            ModeSettings::Proxy(s) => Some(s),
+            _ => None,
         }
     }
 
-    /// Get Shadow settings (panics if wrong mode)
-    pub fn shadow(&self) -> &ShadowSettings {
+    /// Get Shadow settings, or `None` if not in shadow mode.
+    pub fn shadow(&self) -> Option<&ShadowSettings> {
         match &self.settings {
-            ModeSettings::Shadow(s) => s,
-            _ => panic!("Not in shadow mode"),
+            ModeSettings::Shadow(s) => Some(s),
+            _ => None,
         }
     }
 }
@@ -567,30 +567,27 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Not in sidecar mode")]
     fn test_mode_config_wrong_accessor_sidecar() {
         let config = ModeConfig::from_env(); // defaults to EdgeMcp
-        let _ = config.sidecar();
+        assert!(config.sidecar().is_none());
     }
 
     #[test]
-    #[should_panic(expected = "Not in proxy mode")]
     fn test_mode_config_wrong_accessor_proxy() {
         let config = ModeConfig::from_env();
-        let _ = config.proxy();
+        assert!(config.proxy().is_none());
     }
 
     #[test]
-    #[should_panic(expected = "Not in shadow mode")]
     fn test_mode_config_wrong_accessor_shadow() {
         let config = ModeConfig::from_env();
-        let _ = config.shadow();
+        assert!(config.shadow().is_none());
     }
 
     #[test]
     fn test_mode_config_edge_mcp_accessor() {
         let config = ModeConfig::from_env(); // defaults to EdgeMcp
-        let settings = config.edge_mcp();
+        let settings = config.edge_mcp().expect("should be in edge-mcp mode");
         assert!(settings.sse_keepalive); // default is true
     }
 }

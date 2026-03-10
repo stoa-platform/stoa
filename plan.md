@@ -348,6 +348,9 @@
 
 ### Done
 
+- [x] fix(gateway): audit remediations — Council 8.75/10, PR #1633
+  - SSE panic (HIGH), parking_lot RwLock (MEDIUM), mode Option accessors (MEDIUM), dep vuln docs (SECURITY), README sync (DX)
+- [x] CAB-1766: Operations Grafana embed + RBAC (13 pts) — Council 8.50/10, PR #1632
 - [x] chore(arena): Remove Kong & Gravitee from L1 Enterprise benchmark — PR #1620
 - [x] docs: Update gateway-arena.md rule for L1 changes — PR #1621
 - [x] docs: Simplify banking terminology across repos — PRs #1622, stoa-docs #111, stoa-web #22

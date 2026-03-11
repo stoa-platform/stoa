@@ -69,7 +69,7 @@ export function LLMCostDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState<Period>('month');
 
-  const tenantId = sessionStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || '';
+  const tenantId = localStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || '';
   const canManageProviders = hasPermission('admin:servers');
 
   const fetchData = useCallback(async () => {

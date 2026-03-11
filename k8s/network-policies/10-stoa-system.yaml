@@ -166,3 +166,30 @@ spec:
           port: 9091
         - protocol: TCP
           port: 2112
+---
+# Control Plane API → Prometheus (operations dashboard metrics queries)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-prometheus
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector:
+    matchLabels:
+      app: stoa-control-plane-api
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090

@@ -45,11 +45,13 @@ describe('GrafanaEmbed', () => {
     expect(screen.getByRole('heading', { name: 'STOA Observability' })).toBeInTheDocument();
   });
 
-  it('renders iframe with correct src', () => {
+  it('renders iframe with auth_token in src', () => {
     render(<GrafanaEmbed />);
     const iframe = screen.getByTitle('STOA Observability - Grafana');
     expect(iframe).toBeInTheDocument();
-    expect(iframe).toHaveAttribute('src', '/grafana/');
+    const src = iframe.getAttribute('src')!;
+    expect(src).toContain('/grafana/');
+    expect(src).toContain('auth_token=mock-jwt-token-for-grafana');
   });
 
   it('shows loading state initially', () => {
@@ -83,11 +85,15 @@ describe('GrafanaEmbed', () => {
     expect(rootDiv.className).not.toContain('fixed');
   });
 
-  it('open in new tab calls window.open', () => {
+  it('open in new tab calls window.open with auth_token', () => {
     render(<GrafanaEmbed />);
     const openButton = screen.getByTitle('Open in new tab');
     fireEvent.click(openButton);
-    expect(window.open).toHaveBeenCalledWith('/grafana/', '_blank', 'noopener,noreferrer');
+    expect(window.open).toHaveBeenCalledWith(
+      expect.stringContaining('/grafana/'),
+      '_blank',
+      'noopener,noreferrer'
+    );
   });
 
   it('handles iframe load event and hides loading', () => {
@@ -108,11 +114,13 @@ describe('GrafanaEmbed', () => {
     expect(iframe).toHaveAttribute('referrerPolicy', 'no-referrer-when-downgrade');
   });
 
-  it('uses deep-link URL from search params when provided', () => {
+  it('uses deep-link URL from search params with auth_token appended', () => {
     mockSearchParams.set('url', 'https://grafana.gostoa.dev/d/custom-dashboard');
     render(<GrafanaEmbed />);
     const iframe = screen.getByTitle('STOA Observability - Grafana');
-    expect(iframe).toHaveAttribute('src', 'https://grafana.gostoa.dev/d/custom-dashboard');
+    const src = iframe.getAttribute('src')!;
+    expect(src).toContain('https://grafana.gostoa.dev/d/custom-dashboard');
+    expect(src).toContain('auth_token=mock-jwt-token-for-grafana');
   });
 
   // 4-persona coverage

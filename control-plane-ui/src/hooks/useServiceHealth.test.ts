@@ -22,7 +22,13 @@ describe('useServiceHealth', () => {
   });
 
   it('returns available for successful response', async () => {
-    mockFetch.mockResolvedValue({ ok: true, type: 'basic', status: 200 });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      type: 'basic',
+      status: 200,
+      redirected: false,
+      url: 'https://example.com/health',
+    });
     const { result } = renderHook(() => useServiceHealth('https://example.com/health'));
 
     await waitFor(() => expect(result.current.status).toBe('available'));
@@ -36,14 +42,26 @@ describe('useServiceHealth', () => {
   });
 
   it('returns available for 4xx responses (service is up)', async () => {
-    mockFetch.mockResolvedValue({ ok: false, type: 'basic', status: 401 });
+    mockFetch.mockResolvedValue({
+      ok: false,
+      type: 'basic',
+      status: 401,
+      redirected: false,
+      url: 'https://example.com/health',
+    });
     const { result } = renderHook(() => useServiceHealth('https://example.com/health'));
 
     await waitFor(() => expect(result.current.status).toBe('available'));
   });
 
   it('returns unavailable for 5xx responses', async () => {
-    mockFetch.mockResolvedValue({ ok: false, type: 'basic', status: 500 });
+    mockFetch.mockResolvedValue({
+      ok: false,
+      type: 'basic',
+      status: 500,
+      redirected: false,
+      url: 'https://example.com/health',
+    });
     const { result } = renderHook(() => useServiceHealth('https://example.com/health'));
 
     await waitFor(() => expect(result.current.status).toBe('unavailable'));
@@ -57,13 +75,19 @@ describe('useServiceHealth', () => {
   });
 
   it('uses same-origin mode for relative URLs', async () => {
-    mockFetch.mockResolvedValue({ ok: true, type: 'basic', status: 200 });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      type: 'basic',
+      status: 200,
+      redirected: false,
+      url: 'http://localhost:3000/api/health',
+    });
     renderHook(() => useServiceHealth('/api/health'));
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/health',
-      expect.objectContaining({ mode: 'same-origin' })
+      expect.objectContaining({ mode: 'same-origin', redirect: 'follow' })
     );
   });
 
@@ -79,7 +103,13 @@ describe('useServiceHealth', () => {
   });
 
   it('uses HEAD method', async () => {
-    mockFetch.mockResolvedValue({ ok: true, type: 'basic', status: 200 });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      type: 'basic',
+      status: 200,
+      redirected: false,
+      url: 'https://example.com/health',
+    });
     renderHook(() => useServiceHealth('https://example.com/health'));
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
@@ -90,7 +120,13 @@ describe('useServiceHealth', () => {
   });
 
   it('passes abort signal for timeout', async () => {
-    mockFetch.mockResolvedValue({ ok: true, type: 'basic', status: 200 });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      type: 'basic',
+      status: 200,
+      redirected: false,
+      url: 'https://example.com/health',
+    });
     renderHook(() => useServiceHealth('https://example.com/health'));
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
@@ -107,9 +143,59 @@ describe('useServiceHealth', () => {
     await waitFor(() => expect(result.current.status).toBe('unavailable'));
 
     // Retry with success
-    mockFetch.mockResolvedValueOnce({ ok: true, type: 'basic', status: 200 });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      type: 'basic',
+      status: 200,
+      redirected: false,
+      url: 'https://example.com/health',
+    });
     result.current.retry();
 
     await waitFor(() => expect(result.current.status).toBe('available'));
+  });
+
+  // CAB-1773: Detect auth redirect for same-origin Grafana URLs
+  it('returns unavailable when same-origin URL is redirected to login', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      type: 'basic',
+      status: 200,
+      redirected: true,
+      url: 'http://localhost:3000/grafana/login?redirectTo=%2Fgrafana%2F',
+    });
+    const { result } = renderHook(() => useServiceHealth('/grafana/'));
+
+    await waitFor(() => expect(result.current.status).toBe('unavailable'));
+  });
+
+  it('returns available when same-origin URL redirects within same path', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      type: 'basic',
+      status: 200,
+      redirected: true,
+      url: 'http://localhost:3000/grafana/d/dashboard-uid',
+    });
+    const { result } = renderHook(() => useServiceHealth('/grafana/'));
+
+    await waitFor(() => expect(result.current.status).toBe('available'));
+  });
+
+  it('follows redirects for same-origin (redirect: follow)', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      type: 'basic',
+      status: 200,
+      redirected: false,
+      url: 'http://localhost:3000/api/health',
+    });
+    renderHook(() => useServiceHealth('/api/health'));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/health',
+      expect.objectContaining({ redirect: 'follow' })
+    );
   });
 });

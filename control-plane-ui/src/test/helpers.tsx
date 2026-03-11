@@ -140,6 +140,7 @@ export function createAuthMock(role: PersonaRole) {
     isAuthenticated: true,
     isLoading: false,
     isReady: true,
+    accessToken: 'mock-jwt-token-for-grafana',
     login: vi.fn(),
     logout: vi.fn(),
     hasPermission: (permission: string) => user.permissions.includes(permission),

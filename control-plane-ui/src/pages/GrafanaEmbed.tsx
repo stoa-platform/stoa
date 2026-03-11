@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { config } from '../config';
 import { isAllowedEmbedUrl } from '../utils/navigation';
 import { ExternalLink, RefreshCw, Maximize2, Minimize2, Gauge } from 'lucide-react';
 import { useServiceHealth } from '../hooks/useServiceHealth';
 import { ServiceUnavailable } from '../components/ServiceUnavailable';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * GrafanaEmbed - Embedded Grafana / Prometheus dashboard view
@@ -18,15 +19,23 @@ export function GrafanaEmbed() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [key, setKey] = useState(0);
+  const { accessToken } = useAuth();
 
   const targetUrl = searchParams.get('url');
-  const iframeUrl =
+  const baseIframeUrl =
     targetUrl && isAllowedEmbedUrl(targetUrl) ? targetUrl : config.services.grafana.url;
 
-  const isPrometheus = iframeUrl.includes('prometheus');
+  const isPrometheus = baseIframeUrl.includes('prometheus');
   const serviceLabel = isPrometheus ? 'Prometheus' : 'Grafana';
 
-  const { status: serviceStatus, retry: retryHealth } = useServiceHealth(iframeUrl);
+  // Append Keycloak JWT for Grafana [auth.jwt] url_login (not for Prometheus)
+  const iframeUrl = useMemo(() => {
+    if (!accessToken || isPrometheus) return baseIframeUrl;
+    const separator = baseIframeUrl.includes('?') ? '&' : '?';
+    return `${baseIframeUrl}${separator}auth_token=${encodeURIComponent(accessToken)}`;
+  }, [baseIframeUrl, accessToken, isPrometheus]);
+
+  const { status: serviceStatus, retry: retryHealth } = useServiceHealth(baseIframeUrl);
 
   const handleIframeLoad = () => {
     setIsLoading(false);

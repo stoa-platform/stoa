@@ -1,6 +1,7 @@
 import { Activity } from 'lucide-react';
 import { useServiceHealth } from '../hooks/useServiceHealth';
 import { ServiceUnavailable } from './ServiceUnavailable';
+import { useAuth } from '../contexts/AuthContext';
 import { config } from '../config';
 
 interface GrafanaPanelProps {
@@ -18,9 +19,12 @@ interface GrafanaPanelProps {
 /**
  * Embeds a single Grafana panel via `/d-solo/` iframe.
  *
- * Uses anonymous Viewer access (GF_AUTH_ANONYMOUS_ENABLED=true on Grafana).
- * RBAC gating in the Console UI is display-level only (UX control, not security).
- * Anyone with access to the /grafana/ proxy can view panels directly.
+ * Authentication: passes the Keycloak JWT as `auth_token` URL parameter.
+ * Grafana validates the JWT via JWKS and issues a session cookie
+ * (`enable_login_token = true`), so subsequent loads don't need the token.
+ *
+ * RBAC: Grafana maps Keycloak roles to Grafana roles via `role_attribute_path`.
+ * The Console UI RBAC gating (e.g., Traffic & Security section) is UX-level only.
  */
 export function GrafanaPanel({
   dashboardUid,
@@ -35,6 +39,7 @@ export function GrafanaPanel({
 }: GrafanaPanelProps) {
   const baseUrl = config.services.grafana.url;
   const { status, retry } = useServiceHealth(baseUrl);
+  const { accessToken } = useAuth();
 
   const params = new URLSearchParams({
     orgId: '1',
@@ -48,6 +53,11 @@ export function GrafanaPanel({
     for (const [key, value] of Object.entries(variables)) {
       params.set(`var-${key}`, value);
     }
+  }
+
+  // Pass Keycloak JWT for Grafana [auth.jwt] url_login validation
+  if (accessToken) {
+    params.set('auth_token', accessToken);
   }
 
   const iframeSrc = `${baseUrl}d-solo/${dashboardUid}/?${params.toString()}`;

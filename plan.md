@@ -346,6 +346,8 @@
 
 ### Todo
 
+- [ ] CAB-1773: fix(ui) Grafana iframe embedding with JWT auth_token (8 pts) — Council 8.50/10
+
 ### Done
 
 - [x] fix(gateway): audit remediations — Council 8.75/10, PR #1633

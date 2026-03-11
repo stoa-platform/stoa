@@ -1,10 +1,13 @@
-# Grafana OIDC Configuration for kube-prometheus-stack
-# Apply with: helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack -n stoa-monitoring -f values-grafana-oidc.yaml
+# Grafana OIDC + JWT Configuration for kube-prometheus-stack
+# Apply with: helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack -n monitoring -f values-grafana-oidc.yaml
+#
+# Two auth modes:
+# 1. OIDC (browser): Keycloak auto_login for direct Grafana access
+# 2. JWT (iframe): Console passes Keycloak JWT as ?auth_token= URL param
 #
 # Prerequisites:
-# 1. Create Keycloak client 'observability' in realm 'stoa'
-# 2. Set client as confidential with redirect URIs: https://grafana.gostoa.dev/*
-# 3. Replace KEYCLOAK_CLIENT_SECRET below with actual secret
+# 1. Keycloak client 'stoa-observability' in realm 'stoa' (already exists)
+# 2. Secret 'grafana-oidc-secret' with GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET
 
 grafana:
   # Admin credentials (keeping existing)
@@ -13,47 +16,55 @@ grafana:
   # Grafana configuration
   grafana.ini:
     server:
-      root_url: https://grafana.gostoa.dev
+      root_url: https://console.gostoa.dev/grafana
+      serve_from_sub_path: true
 
-    # Security — allow iframe embedding for Console Operations page
+    # Security — allow iframe embedding for Console Operations page (CAB-1773)
     security:
       allow_embedding: true
+      cookie_samesite: lax
 
     # Auth configuration
     auth:
       disable_login_form: false
-      oauth_auto_login: false
+      oauth_auto_login: true
 
-    # Anonymous access — required for embedded Grafana panels in Console
-    # Console RBAC controls which users see which sections (UX gate, not security gate)
-    auth.anonymous:
+    # JWT authentication — for Console iframe embedding (CAB-1773)
+    # Console passes Keycloak access_token as ?auth_token= URL parameter.
+    # Grafana validates the JWT against Keycloak JWKS endpoint.
+    # enable_login_token=true: Grafana issues a session cookie after first JWT
+    # validation, so subsequent iframe loads don't need the token.
+    auth.jwt:
       enabled: true
-      org_role: Viewer
+      url_login: true
+      enable_login_token: true
+      jwk_set_url: http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/certs
+      username_claim: preferred_username
+      email_claim: email
+      auto_sign_up: true
+      expected_claims: '{"iss": "https://auth.gostoa.dev/realms/stoa"}'
+      role_attribute_path: contains(realm_access.roles[*], 'cpi-admin') && 'Admin' || contains(realm_access.roles[*], 'admin') && 'Admin' || 'Viewer'
+      cache_ttl: 60m
 
-    # Keycloak OIDC configuration
+    # Keycloak OIDC — for direct Grafana access (browser, not iframe)
     auth.generic_oauth:
       enabled: true
       name: Keycloak
       allow_sign_up: true
-      auto_login: false
-      client_id: observability
+      auto_login: true
+      client_id: stoa-observability
       client_secret: ${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
       scopes: openid profile email roles
       auth_url: https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth
-      token_url: https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token
-      api_url: https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/userinfo
-      # Role mapping
-      role_attribute_path: contains(realm_access.roles[*], 'admin') && 'Admin' || contains(realm_access.roles[*], 'cpi-admin') && 'Admin' || contains(realm_access.roles[*], 'editor') && 'Editor' || 'Viewer'
-      # TLS verification (set to false if using self-signed certs)
+      token_url: http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/token
+      api_url: http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/userinfo
+      role_attribute_path: contains(realm_access.roles[*], 'cpi-admin') && 'Admin' || contains(realm_access.roles[*], 'admin') && 'Admin' || 'Viewer'
       tls_skip_verify_insecure: false
-      # Use PKCE
       use_pkce: true
 
     # Users configuration
     users:
-      # Allow users to be created via OAuth
       allow_sign_up: true
-      # Auto-assign org role for new users
       auto_assign_org_role: Viewer
 
   # Environment variables for secrets

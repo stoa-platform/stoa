@@ -1,0 +1,30 @@
+# Grafana JWT + iframe embedding patch for kube-prometheus-stack (CAB-1773)
+# Apply with: helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+#   -n monitoring --reuse-values -f deploy/observability/values-grafana-jwt-patch.yaml
+#
+# Uses --reuse-values to preserve all existing config (OIDC, scrape targets, resources).
+# Only adds: [security] allow_embedding, [auth.jwt] for Console iframe embedding.
+
+grafana:
+  grafana.ini:
+    # Security — allow iframe embedding for Console Operations page (CAB-1773)
+    security:
+      allow_embedding: true
+      cookie_samesite: lax
+
+    # JWT authentication — for Console iframe embedding (CAB-1773)
+    # Console passes Keycloak access_token as ?auth_token= URL parameter.
+    # Grafana validates the JWT against Keycloak JWKS endpoint.
+    # enable_login_token=true: Grafana issues a session cookie after first JWT
+    # validation, so subsequent iframe loads don't need the token.
+    auth.jwt:
+      enabled: true
+      url_login: true
+      enable_login_token: true
+      jwk_set_url: https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/certs
+      username_claim: preferred_username
+      email_claim: email
+      auto_sign_up: true
+      expected_claims: '{"iss": "https://auth.gostoa.dev/realms/stoa"}'
+      role_attribute_path: contains(realm_access.roles[*], 'cpi-admin') && 'Admin' || contains(realm_access.roles[*], 'admin') && 'Admin' || 'Viewer'
+      cache_ttl: 60m

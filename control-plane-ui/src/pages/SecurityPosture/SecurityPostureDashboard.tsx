@@ -80,13 +80,6 @@ interface SecurityScan {
   duration_seconds: number | null;
 }
 
-interface CronJobStatus {
-  status: 'active' | 'paused' | 'degraded';
-  last_run: string | null;
-  next_run: string | null;
-  last_duration_seconds: number | null;
-}
-
 const SEVERITY_CONFIG: Record<SeverityLevel, { bg: string; text: string; label: string }> = {
   critical: {
     bg: 'bg-red-100 dark:bg-red-900/30',
@@ -156,7 +149,6 @@ export function SecurityPostureDashboard() {
   const [driftItems, setDriftItems] = useState<DriftItem[]>([]);
   const [tokenBinding, setTokenBinding] = useState<TokenBindingStatus | null>(null);
   const [scans, setScans] = useState<SecurityScan[]>([]);
-  const [cronJobStatus, setCronJobStatus] = useState<CronJobStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterSeverity, setFilterSeverity] = useState<SeverityLevel | 'all'>('all');
@@ -203,7 +195,22 @@ export function SecurityPostureDashboard() {
 
   const loadData = useCallback(async () => {
     try {
-      const [securityRes, driftRes, tokenBindingRes, scansRes, cronJobRes] = await Promise.all([
+      const [findingsRes, securityRes, driftRes, tokenBindingRes, scansRes] = await Promise.all([
+        apiService
+          .get<{
+            findings: Array<{
+              id: string;
+              severity: SeverityLevel;
+              rule_name: string;
+              description: string | null;
+              resource_name: string | null;
+              created_at: string;
+              status: string;
+              scanner: string;
+            }>;
+            total: number;
+          }>(`/v1/security/${tenantId}/findings`)
+          .catch(() => ({ data: { findings: [], total: 0 } })),
         apiService
           .get<{
             events: SecurityEvent[];
@@ -222,30 +229,26 @@ export function SecurityPostureDashboard() {
         apiService
           .get<{ scans: SecurityScan[] }>(`/v1/security/${tenantId}/scans`)
           .catch(() => ({ data: { scans: [] } })),
-        apiService
-          .get<CronJobStatus>(`/v1/security/${tenantId}/cronjob-status`)
-          .catch(() => ({ data: null as CronJobStatus | null })),
       ]);
 
-      // Map security events to findings for display
-      const mappedFindings: SecurityFinding[] = securityRes.data.events.map((evt, i) => ({
-        id: `sec-${i}`,
-        category: evt.event_type,
-        severity: evt.severity || 'medium',
-        title: formatEventType(evt.event_type),
-        description: `${evt.count} occurrence(s) detected`,
-        resource: tenantId,
-        detected_at: evt.last_occurred,
-        status: 'open' as const,
+      // Use real findings from /v1/security/{tenant}/findings endpoint
+      const realFindings: SecurityFinding[] = (findingsRes.data.findings || []).map((f) => ({
+        id: f.id,
+        category: f.scanner,
+        severity: f.severity,
+        title: f.rule_name,
+        description: f.description || 'No description',
+        resource: f.resource_name || tenantId,
+        detected_at: f.created_at,
+        status: f.status === 'resolved' ? ('resolved' as const) : ('open' as const),
       }));
 
       if (!mountedRef.current) return;
-      setFindings(mappedFindings);
+      setFindings(realFindings);
       setEvents(securityRes.data.events);
       setDriftItems(driftRes.data.items || []);
       setTokenBinding(tokenBindingRes.data);
       setScans(scansRes.data.scans || []);
-      setCronJobStatus(cronJobRes.data);
       setError(null);
     } catch (err: any) {
       if (!mountedRef.current) return;
@@ -722,64 +725,6 @@ export function SecurityPostureDashboard() {
             </div>
           )}
 
-          {/* CronJob Status Indicator */}
-          {cronJobStatus && (
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Timer className="h-5 w-5 text-purple-500" />
-                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                    Scan Schedule
-                  </h2>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    data-testid="cronjob-status-dot"
-                    className={`h-2.5 w-2.5 rounded-full ${
-                      cronJobStatus.status === 'active'
-                        ? 'bg-green-500'
-                        : cronJobStatus.status === 'degraded'
-                          ? 'bg-yellow-500'
-                          : 'bg-neutral-400'
-                    }`}
-                  />
-                  <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 capitalize">
-                    {cronJobStatus.status}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-neutral-500 dark:text-neutral-400">Last Run</span>
-                  <div className="font-medium text-neutral-900 dark:text-white mt-0.5">
-                    {cronJobStatus.last_run
-                      ? new Date(cronJobStatus.last_run).toLocaleString()
-                      : 'Never'}
-                    {cronJobStatus.last_duration_seconds != null && (
-                      <span className="text-xs text-neutral-400 ml-1">
-                        ({cronJobStatus.last_duration_seconds}s)
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-neutral-500 dark:text-neutral-400">Next Scheduled</span>
-                  <div className="font-medium text-neutral-900 dark:text-white mt-0.5">
-                    {cronJobStatus.next_run
-                      ? new Date(cronJobStatus.next_run).toLocaleString()
-                      : 'Not scheduled'}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-neutral-500 dark:text-neutral-400">Status</span>
-                  <div className="font-medium text-neutral-900 dark:text-white mt-0.5 capitalize">
-                    {cronJobStatus.status}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Quick Actions (RBAC-gated) */}
           {canManageFindings && openFindings.length > 0 && (
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
@@ -853,10 +798,6 @@ export function SecurityPostureDashboard() {
       )}
     </div>
   );
-}
-
-function formatEventType(type: string): string {
-  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export default SecurityPostureDashboard;

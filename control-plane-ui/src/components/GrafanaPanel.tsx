@@ -2,6 +2,7 @@ import { Activity } from 'lucide-react';
 import { useServiceHealth } from '../hooks/useServiceHealth';
 import { ServiceUnavailable } from './ServiceUnavailable';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '@stoa/shared/contexts';
 import { config } from '../config';
 
 interface GrafanaPanelProps {
@@ -33,20 +34,22 @@ export function GrafanaPanel({
   height = 200,
   from = 'now-1h',
   to = 'now',
-  theme = 'light',
+  theme,
   variables,
   className,
 }: GrafanaPanelProps) {
   const baseUrl = config.services.grafana.url;
   const { status, retry } = useServiceHealth(baseUrl);
   const { accessToken } = useAuth();
+  const { resolvedTheme } = useTheme();
+  const effectiveTheme = theme ?? (resolvedTheme === 'dark' ? 'dark' : 'light');
 
   const params = new URLSearchParams({
     orgId: '1',
     panelId: String(panelId),
     from,
     to,
-    theme,
+    theme: effectiveTheme,
   });
 
   if (variables) {

@@ -23,9 +23,11 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 
+const mockApiGet = vi.fn();
+
 vi.mock('../services/api', () => ({
   apiService: {
-    get: vi.fn().mockRejectedValue(new Error('Use demo data')),
+    get: (...args: unknown[]) => mockApiGet(...args),
   },
 }));
 
@@ -75,6 +77,7 @@ describe('APIMonitoring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+    mockApiGet.mockRejectedValue(new Error('API unavailable'));
   });
 
   it('renders the page heading', async () => {
@@ -104,7 +107,32 @@ describe('APIMonitoring', () => {
     expect(await screen.findByText('Refresh')).toBeInTheDocument();
   });
 
-  it('renders stats cards when demo data loads', async () => {
+  it('renders error banner when API calls fail', async () => {
+    renderAPIMonitoring();
+    expect(await screen.findByText('Transaction monitoring is unavailable')).toBeInTheDocument();
+  });
+
+  it('renders stats cards when API data loads successfully', async () => {
+    mockApiGet.mockImplementation((url: string) => {
+      if (url.includes('/stats')) {
+        return Promise.resolve({
+          data: {
+            total_requests: 1234,
+            success_count: 1220,
+            error_count: 3,
+            timeout_count: 0,
+            avg_latency_ms: 42,
+            p95_latency_ms: 120,
+            p99_latency_ms: 200,
+            requests_per_minute: 10,
+            by_api: {},
+            by_status_code: {},
+          },
+        });
+      }
+      // transactions endpoint
+      return Promise.resolve({ data: { transactions: [], demo_mode: false } });
+    });
     renderAPIMonitoring();
     expect(await screen.findByText('Total Requests')).toBeInTheDocument();
     expect(screen.getByText('Success Rate')).toBeInTheDocument();

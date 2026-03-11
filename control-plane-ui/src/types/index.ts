@@ -1069,6 +1069,7 @@ export interface GatewayInstance {
   version?: string;
   tags: string[];
   mode?: GatewayMode;
+  source?: 'argocd' | 'self_register' | 'manual';
   protected?: boolean;
   deleted_at?: string | null;
   deleted_by?: string | null;

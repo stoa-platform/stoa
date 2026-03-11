@@ -886,7 +886,7 @@ function GatewayDetailPanel({
               <MetricCard
                 label="Error Rate"
                 value={errorRate !== null ? `${(errorRate * 100).toFixed(1)}%` : '--'}
-                warn={errorRate !== null && errorRate > 0.05}
+                warn={errorRate !== null ? errorRate > 0.05 : false}
               />
             </div>
           </section>

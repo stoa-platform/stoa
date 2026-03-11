@@ -53,13 +53,18 @@ export function usePrometheusQuery(query: string, refreshInterval = 15_000) {
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchQuery();
-    const interval = setInterval(fetchQuery, refreshInterval);
+    if (query) fetchQuery();
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchQuery, refreshInterval);
+      return () => {
+        mountedRef.current = false;
+        clearInterval(interval);
+      };
+    }
     return () => {
       mountedRef.current = false;
-      clearInterval(interval);
     };
-  }, [fetchQuery, refreshInterval]);
+  }, [fetchQuery, refreshInterval, query]);
 
   return { data, loading, error, refetch: fetchQuery };
 }
@@ -107,13 +112,18 @@ export function usePrometheusRange(
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchRange();
-    const interval = setInterval(fetchRange, refreshInterval);
+    if (query) fetchRange();
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchRange, refreshInterval);
+      return () => {
+        mountedRef.current = false;
+        clearInterval(interval);
+      };
+    }
     return () => {
       mountedRef.current = false;
-      clearInterval(interval);
     };
-  }, [fetchRange, refreshInterval]);
+  }, [fetchRange, refreshInterval, query]);
 
   return { data, loading, error, refetch: fetchRange };
 }

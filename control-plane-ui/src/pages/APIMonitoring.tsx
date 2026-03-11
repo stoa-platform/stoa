@@ -321,8 +321,7 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
         setTransaction(response.data);
       } catch (err) {
         console.error('Failed to fetch transaction detail:', err);
-        // Use demo data for now
-        setTransaction(generateDemoTransaction(transactionId));
+        setTransaction(null);
       } finally {
         setLoading(false);
       }
@@ -478,135 +477,6 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
 }
 
 // =============================================================================
-// DEMO DATA GENERATOR
-// =============================================================================
-
-function generateDemoStats(): APITransactionStats {
-  return {
-    total_requests: 12847,
-    success_count: 11923,
-    error_count: 724,
-    timeout_count: 200,
-    avg_latency_ms: 145,
-    p95_latency_ms: 320,
-    p99_latency_ms: 890,
-    requests_per_minute: 42.5,
-    by_api: {
-      'weather-api': { total: 4521, success: 4398, errors: 123, avg_latency_ms: 89 },
-      'payment-api': { total: 3298, success: 3102, errors: 196, avg_latency_ms: 234 },
-      'user-api': { total: 2876, success: 2654, errors: 222, avg_latency_ms: 156 },
-      'inventory-api': { total: 2152, success: 1769, errors: 183, avg_latency_ms: 178 },
-    },
-    by_status_code: {
-      200: 10234,
-      201: 1689,
-      400: 312,
-      401: 89,
-      404: 156,
-      500: 167,
-    },
-  };
-}
-
-/** Cryptographically secure random integer in [0, max). */
-function secureRandomInt(max: number): number {
-  return crypto.getRandomValues(new Uint32Array(1))[0] % max;
-}
-
-function generateDemoTransactions(): APITransactionSummary[] {
-  const apis = ['weather-api', 'payment-api', 'user-api', 'inventory-api'];
-  const methods = ['GET', 'POST', 'PUT', 'DELETE'];
-  const paths = ['/v1/data', '/v1/users/123', '/v1/orders', '/v1/products', '/v1/health'];
-  const statuses: TransactionStatus[] = [
-    'success',
-    'success',
-    'success',
-    'success',
-    'error',
-    'timeout',
-  ];
-
-  return Array.from({ length: 20 }, (_, i) => {
-    const status = statuses[secureRandomInt(statuses.length)];
-    const statusCode =
-      status === 'success'
-        ? [200, 201][secureRandomInt(2)]
-        : status === 'error'
-          ? [400, 404, 500][secureRandomInt(3)]
-          : 504;
-
-    return {
-      id: `txn-${i + 1}`,
-      trace_id: `trace-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
-      api_name: apis[secureRandomInt(apis.length)],
-      method: methods[secureRandomInt(methods.length)],
-      path: paths[secureRandomInt(paths.length)],
-      status_code: statusCode,
-      status,
-      started_at: new Date(Date.now() - secureRandomInt(3600000)).toISOString(),
-      total_duration_ms: secureRandomInt(500) + 50,
-      spans_count: secureRandomInt(4) + 2,
-    };
-  }).sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
-}
-
-function generateDemoTransaction(id: string): APITransaction {
-  const summary = generateDemoTransactions()[0];
-  return {
-    ...summary,
-    id,
-    tenant_id: 'tenant-acme',
-    client_ip: '192.168.1.' + secureRandomInt(255),
-    user_id: ['alice@example.com', 'bob@example.com', null][secureRandomInt(3)] || undefined,
-    spans: [
-      {
-        name: 'Gateway Ingress',
-        service: 'Gateway',
-        status: 'success',
-        started_at: summary.started_at,
-        duration_ms: 15,
-      },
-      {
-        name: 'Authentication',
-        service: 'Gateway',
-        status: 'success',
-        started_at: summary.started_at,
-        duration_ms: 8,
-      },
-      {
-        name: 'Rate Limiting',
-        service: 'Gateway',
-        status: 'success',
-        started_at: summary.started_at,
-        duration_ms: 2,
-      },
-      {
-        name: 'Backend Request',
-        service: 'Backend',
-        status: summary.status,
-        started_at: summary.started_at,
-        duration_ms: summary.total_duration_ms - 30,
-        error:
-          summary.status === 'error' ? 'Backend returned 500: Internal Server Error' : undefined,
-      },
-      {
-        name: 'Response Transform',
-        service: 'Gateway',
-        status: summary.status === 'timeout' ? 'timeout' : 'success',
-        started_at: summary.started_at,
-        duration_ms: 5,
-      },
-    ],
-    error_message:
-      summary.status === 'error'
-        ? 'Backend service returned an error response'
-        : summary.status === 'timeout'
-          ? 'Request timed out waiting for backend response'
-          : undefined,
-  };
-}
-
-// =============================================================================
 // MAIN COMPONENT
 // =============================================================================
 
@@ -615,6 +485,8 @@ export function APIMonitoring() {
   const [transactions, setTransactions] = useState<APITransactionSummary[]>([]);
   const [stats, setStats] = useState<APITransactionStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -624,20 +496,22 @@ export function APIMonitoring() {
 
   const fetchData = useCallback(async () => {
     try {
-      // Try to fetch from API
       const [txnResponse, statsResponse] = await Promise.all([
-        apiService.get<{ transactions: APITransactionSummary[] }>('/v1/monitoring/transactions'),
+        apiService.get<{ transactions: APITransactionSummary[]; demo_mode?: boolean }>(
+          '/v1/monitoring/transactions'
+        ),
         apiService.get<APITransactionStats>('/v1/monitoring/transactions/stats'),
       ]);
       if (!mountedRef.current) return;
       setTransactions(txnResponse.data.transactions);
       setStats(statsResponse.data);
+      setDemoMode(txnResponse.data.demo_mode === true);
+      setError(null);
     } catch (_err) {
       if (!mountedRef.current) return;
-      console.log('Using demo data for transactions');
-      // Use demo data
-      setTransactions(generateDemoTransactions());
-      setStats(generateDemoStats());
+      setError('Transaction monitoring is unavailable');
+      setTransactions([]);
+      setStats(null);
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -685,6 +559,28 @@ export function APIMonitoring() {
 
   return (
     <div className="space-y-6">
+      {/* Error banner */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3 flex items-center justify-between">
+          <span className="text-sm text-red-700 dark:text-red-400">{error}</span>
+          <button
+            onClick={fetchData}
+            className="text-xs font-medium text-red-700 dark:text-red-300 bg-white dark:bg-neutral-800 border border-red-300 dark:border-red-700 rounded-lg px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Demo mode warning */}
+      {demoMode && !error && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            Showing demo data — real transaction monitoring (OpenSearch) is not connected.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

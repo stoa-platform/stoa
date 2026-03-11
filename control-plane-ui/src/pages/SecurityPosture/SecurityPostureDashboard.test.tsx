@@ -49,12 +49,50 @@ const mockScanHistory = [
   },
 ];
 
-const mockCronJobStatus = {
-  status: 'active' as const,
-  last_run: '2026-02-26T06:00:00Z',
-  next_run: '2026-02-27T06:00:00Z',
-  last_duration_seconds: 45,
-};
+// mockCronJobStatus removed — CronJob section was removed from SecurityPostureDashboard
+
+const mockFindings = [
+  {
+    id: 'f-1',
+    severity: 'critical',
+    rule_name: 'Auth Failure Detected',
+    description: 'Multiple auth failures',
+    resource_name: 'api-gateway',
+    created_at: '2026-02-26T10:00:00Z',
+    status: 'open',
+    scanner: 'auth_scanner',
+  },
+  {
+    id: 'f-2',
+    severity: 'high',
+    rule_name: 'Rate Limit Exceeded',
+    description: 'Rate limit violations',
+    resource_name: 'api-gateway',
+    created_at: '2026-02-26T09:00:00Z',
+    status: 'open',
+    scanner: 'rate_scanner',
+  },
+  {
+    id: 'f-3',
+    severity: 'medium',
+    rule_name: 'Suspicious Request Pattern',
+    description: 'Suspicious patterns detected',
+    resource_name: 'api-gateway',
+    created_at: '2026-02-26T08:00:00Z',
+    status: 'open',
+    scanner: 'anomaly_scanner',
+  },
+  {
+    id: 'f-4',
+    severity: 'low',
+    rule_name: 'Policy Violation',
+    description: 'Minor policy violation',
+    resource_name: 'api-gateway',
+    created_at: '2026-02-26T07:00:00Z',
+    status: 'open',
+    scanner: 'policy_scanner',
+  },
+];
 
 const mockSecurityEvents = [
   {
@@ -94,12 +132,12 @@ vi.mock('../../services/api', () => ({
 interface SetupOptions {
   tokenBinding?: Partial<typeof mockTokenBinding> | null;
   events?: typeof mockSecurityEvents;
+  findings?: typeof mockFindings;
   scans?: typeof mockScanHistory;
-  cronJob?: typeof mockCronJobStatus | null;
 }
 
 function setupApiMock(options: SetupOptions = {}) {
-  const { tokenBinding: tokenBindingOverride, events = [], scans = [], cronJob = null } = options;
+  const { tokenBinding: tokenBindingOverride, events = [], findings = [], scans = [] } = options;
 
   mockGet.mockImplementation((url: string) => {
     if (url.includes('/token-binding')) {
@@ -119,8 +157,8 @@ function setupApiMock(options: SetupOptions = {}) {
     if (url.includes('/scans')) {
       return Promise.resolve({ data: { scans } });
     }
-    if (url.includes('/cronjob-status')) {
-      return Promise.resolve({ data: cronJob });
+    if (url.includes('/findings')) {
+      return Promise.resolve({ data: { findings } });
     }
     // Default: security events
     return Promise.resolve({ data: { events, summary: {} } });
@@ -270,7 +308,7 @@ describe('SecurityPostureDashboard', () => {
     });
 
     it('shows correct count for each severity level', async () => {
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
         const criticalCard = screen.getByTestId('severity-card-critical');
@@ -295,10 +333,10 @@ describe('SecurityPostureDashboard', () => {
 
   describe('Sortable Findings Table', () => {
     it('renders sortable severity header', async () => {
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
-        expect(screen.getByText('Auth Failure')).toBeInTheDocument();
+        expect(screen.getByText('Auth Failure Detected')).toBeInTheDocument();
       });
       // The Severity column header should be clickable
       const severityHeader = screen.getByText('Severity');
@@ -306,10 +344,10 @@ describe('SecurityPostureDashboard', () => {
     });
 
     it('renders sortable category header', async () => {
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
-        expect(screen.getByText('Auth Failure')).toBeInTheDocument();
+        expect(screen.getByText('Auth Failure Detected')).toBeInTheDocument();
       });
       const categoryHeader = screen.getByText('Category');
       expect(categoryHeader.closest('th')).toBeInTheDocument();
@@ -317,10 +355,10 @@ describe('SecurityPostureDashboard', () => {
 
     it('toggles sort direction on severity click', async () => {
       const user = userEvent.setup();
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
-        expect(screen.getByText('Auth Failure')).toBeInTheDocument();
+        expect(screen.getByText('Auth Failure Detected')).toBeInTheDocument();
       });
       const severityHeader = screen.getByText('Severity');
       // Default sort is severity ascending (critical first)
@@ -333,10 +371,10 @@ describe('SecurityPostureDashboard', () => {
 
     it('switches to category sort on category click', async () => {
       const user = userEvent.setup();
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
-        expect(screen.getByText('Auth Failure')).toBeInTheDocument();
+        expect(screen.getByText('Auth Failure Detected')).toBeInTheDocument();
       });
       const categoryHeader = screen.getByText('Category');
       await user.click(categoryHeader);
@@ -393,81 +431,10 @@ describe('SecurityPostureDashboard', () => {
     });
   });
 
-  describe('CronJob Status Indicator', () => {
-    it('renders cronjob status section when data exists', async () => {
-      setupApiMock({ cronJob: mockCronJobStatus });
-      render(<SecurityPostureDashboard />);
-      await waitFor(() => {
-        expect(screen.getByText('Scan Schedule')).toBeInTheDocument();
-      });
-    });
-
-    it('shows active status with green dot', async () => {
-      setupApiMock({ cronJob: mockCronJobStatus });
-      render(<SecurityPostureDashboard />);
-      await waitFor(() => {
-        const dot = screen.getByTestId('cronjob-status-dot');
-        expect(dot).toHaveClass('bg-green-500');
-      });
-    });
-
-    it('shows degraded status with yellow dot', async () => {
-      setupApiMock({ cronJob: { ...mockCronJobStatus, status: 'degraded' as const } });
-      render(<SecurityPostureDashboard />);
-      await waitFor(() => {
-        const dot = screen.getByTestId('cronjob-status-dot');
-        expect(dot).toHaveClass('bg-yellow-500');
-      });
-    });
-
-    it('shows paused status with neutral dot', async () => {
-      setupApiMock({ cronJob: { ...mockCronJobStatus, status: 'paused' as const } });
-      render(<SecurityPostureDashboard />);
-      await waitFor(() => {
-        const dot = screen.getByTestId('cronjob-status-dot');
-        expect(dot).toHaveClass('bg-neutral-400');
-      });
-    });
-
-    it('shows last run duration', async () => {
-      setupApiMock({ cronJob: mockCronJobStatus });
-      render(<SecurityPostureDashboard />);
-      await waitFor(() => {
-        expect(screen.getByText('(45s)')).toBeInTheDocument();
-      });
-    });
-
-    it('shows "Never" when last_run is null', async () => {
-      setupApiMock({
-        cronJob: { ...mockCronJobStatus, last_run: null, last_duration_seconds: null },
-      });
-      render(<SecurityPostureDashboard />);
-      await waitFor(() => {
-        expect(screen.getByText('Never')).toBeInTheDocument();
-      });
-    });
-
-    it('shows "Not scheduled" when next_run is null', async () => {
-      setupApiMock({ cronJob: { ...mockCronJobStatus, next_run: null } });
-      render(<SecurityPostureDashboard />);
-      await waitFor(() => {
-        expect(screen.getByText('Not scheduled')).toBeInTheDocument();
-      });
-    });
-
-    it('does not render when cronjob data is null', async () => {
-      render(<SecurityPostureDashboard />);
-      await waitFor(() => {
-        expect(screen.getByText('Security Posture')).toBeInTheDocument();
-      });
-      expect(screen.queryByText('Scan Schedule')).not.toBeInTheDocument();
-    });
-  });
-
   describe('Quick Actions (RBAC-gated)', () => {
     it('shows quick actions for cpi-admin with findings', async () => {
       vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
         expect(screen.getByText('Quick Actions')).toBeInTheDocument();
@@ -479,7 +446,7 @@ describe('SecurityPostureDashboard', () => {
 
     it('shows quick actions for tenant-admin with findings', async () => {
       vi.mocked(useAuth).mockReturnValue(createAuthMock('tenant-admin'));
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
         expect(screen.getByText('Quick Actions')).toBeInTheDocument();
@@ -488,27 +455,27 @@ describe('SecurityPostureDashboard', () => {
 
     it('hides quick actions for devops', async () => {
       vi.mocked(useAuth).mockReturnValue(createAuthMock('devops'));
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
         expect(screen.getByText('Security Posture')).toBeInTheDocument();
       });
       // Wait for data to load
       await waitFor(() => {
-        expect(screen.getByText('Auth Failure')).toBeInTheDocument();
+        expect(screen.getByText('Auth Failure Detected')).toBeInTheDocument();
       });
       expect(screen.queryByText('Quick Actions')).not.toBeInTheDocument();
     });
 
     it('hides quick actions for viewer', async () => {
       vi.mocked(useAuth).mockReturnValue(createAuthMock('viewer'));
-      setupApiMock({ events: mockSecurityEvents });
+      setupApiMock({ findings: mockFindings });
       render(<SecurityPostureDashboard />);
       await waitFor(() => {
         expect(screen.getByText('Security Posture')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(screen.getByText('Auth Failure')).toBeInTheDocument();
+        expect(screen.getByText('Auth Failure Detected')).toBeInTheDocument();
       });
       expect(screen.queryByText('Quick Actions')).not.toBeInTheDocument();
     });

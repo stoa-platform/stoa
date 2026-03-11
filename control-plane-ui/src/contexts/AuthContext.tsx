@@ -19,6 +19,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isReady: boolean; // Token is set and ready for API calls
+  accessToken: string | null; // Raw Keycloak JWT for Grafana iframe auth
   login: () => void;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
@@ -212,18 +213,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(() => oidc.signinRedirect(), [oidc]);
   const logout = useCallback(() => oidc.signoutRedirect(), [oidc]);
 
+  const accessToken = oidc.user?.access_token ?? null;
+
   const value: AuthContextType = useMemo(
     () => ({
       user,
       isAuthenticated: oidc.isAuthenticated,
       isLoading: oidc.isLoading,
       isReady,
+      accessToken,
       login,
       logout,
       hasPermission,
       hasRole,
     }),
-    [user, oidc.isAuthenticated, oidc.isLoading, isReady, login, logout, hasPermission, hasRole]
+    [
+      user,
+      oidc.isAuthenticated,
+      oidc.isLoading,
+      isReady,
+      accessToken,
+      login,
+      logout,
+      hasPermission,
+      hasRole,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

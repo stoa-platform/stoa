@@ -16,8 +16,8 @@ server {
     # NEVER use static proxy_pass hostnames — nginx crashes if DNS fails at startup
     set $api_backend "${API_BACKEND_URL}";
     set $logs_backend "${LOGS_BACKEND_URL}";
-    set $grafana_backend "${GRAFANA_BACKEND_URL}";
     set $prometheus_backend "${PROMETHEUS_BACKEND_URL}";
+    # Note: GRAFANA_BACKEND_URL no longer used — Grafana served via monitoring/grafana ingress
 
     # =========================================================================
     # OpenSearch Dashboards proxy (STOA Logs — CAB-1114)
@@ -40,36 +40,10 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # =========================================================================
-    # Grafana proxy (Observability — CAB-1108)
-    # Grafana configured with GF_SERVER_SERVE_FROM_SUB_PATH=true
-    # =========================================================================
-    location /grafana/ {
-        proxy_pass $grafana_backend;
-        proxy_hide_header X-Frame-Options;
-        add_header Content-Security-Policy "frame-ancestors 'self' https://console.gostoa.dev" always;
-        proxy_set_header Host $http_host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-
-    # Grafana WebSocket for Live features
-    location /grafana/api/live/ {
-        proxy_pass $grafana_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $http_host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
+    # Grafana is served directly by the monitoring/grafana ingress (path: /grafana).
+    # No proxy block needed here — the ingress routes /grafana/* to Grafana.
+    # Authentication: Grafana [auth.jwt] validates Keycloak JWT via ?auth_token= URL param.
+    # Embedding: Grafana [security] allow_embedding=true removes X-Frame-Options: deny.
 
     # =========================================================================
     # Prometheus proxy (Observability — native dashboards)

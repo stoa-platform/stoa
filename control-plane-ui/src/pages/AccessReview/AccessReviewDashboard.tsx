@@ -42,7 +42,7 @@ export function AccessReviewDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const tenantId = sessionStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || '';
+  const tenantId = localStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || '';
   const canManageClients = hasPermission('admin:servers');
 
   const fetchClients = useCallback(async () => {

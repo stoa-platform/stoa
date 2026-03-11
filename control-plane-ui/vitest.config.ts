@@ -33,7 +33,7 @@ export default defineConfig({
       thresholds: {
         lines: 65,
         functions: 53, // lowered from 54: consumer tracking removed (not yet in gateway)
-        branches: 59,
+        branches: 57, // lowered from 59: CronJob section + demo branches removed (CAB-1774)
         statements: 65,
       },
     },

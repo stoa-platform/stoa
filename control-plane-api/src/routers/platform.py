@@ -104,6 +104,7 @@ class PlatformStatusResponse(BaseModel):
     events: list[PlatformEvent]
     external_links: ExternalLinks
     timestamp: str
+    demo_mode: bool = False
 
 
 # ============================================================================
@@ -453,4 +454,5 @@ def _get_mock_status(error: str | None = None) -> PlatformStatusResponse:
             logs=settings.LOGS_URL,
         ),
         timestamp=now,
+        demo_mode=True,
     )

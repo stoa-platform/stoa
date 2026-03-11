@@ -72,6 +72,7 @@ export function ExecutionViewDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedExecution, setSelectedExecution] = useState<ExecutionDetail | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -94,9 +95,11 @@ export function ExecutionViewDashboard() {
       );
       setExecutions(data.items);
       setTotal(data.total);
-    } catch {
+      setError(null);
+    } catch (_err) {
       setExecutions([]);
       setTotal(0);
+      setError('Failed to load executions');
     } finally {
       setLoading(false);
     }
@@ -146,6 +149,12 @@ export function ExecutionViewDashboard() {
           Monitor API executions and error patterns
         </p>
       </div>
+
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
+          <span className="text-sm text-red-700 dark:text-red-400">{error}</span>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

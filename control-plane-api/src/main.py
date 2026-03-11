@@ -132,6 +132,7 @@ from .workers.billing_metering_consumer import billing_metering_consumer
 from .workers.chat_metering_consumer import chat_metering_consumer
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.gateway_health_worker import gateway_health_worker
+from .workers.gateway_reconciler import gateway_reconciler
 from .workers.sync_engine import sync_engine
 from .workers.telemetry_worker import telemetry_worker
 
@@ -153,6 +154,7 @@ ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true")
 ENABLE_CHAT_METERING_CONSUMER = os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true").lower() == "true"
 ENABLE_BILLING_METERING_CONSUMER = os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
 ENABLE_TELEMETRY_WORKER = os.getenv("ENABLE_TELEMETRY_WORKER", "true").lower() == "true"
+ENABLE_GATEWAY_RECONCILER = os.getenv("ENABLE_GATEWAY_RECONCILER", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -254,6 +256,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start gateway health worker", error=str(e))
 
+    # Start gateway reconciler (ArgoCD → gateway_instances sync)
+    gateway_reconciler_task = None
+    if ENABLE_GATEWAY_RECONCILER:
+        try:
+            gateway_reconciler_task = asyncio.create_task(gateway_reconciler.start())
+            logger.info("Gateway reconciler started")
+        except Exception as e:
+            logger.warning("Failed to start gateway reconciler", error=str(e))
+
     # Start chat metering consumer (CAB-288)
     chat_metering_task = None
     if ENABLE_CHAT_METERING_CONSUMER:
@@ -320,6 +331,13 @@ async def lifespan(app: FastAPI):
         gateway_health_task.cancel()
         with suppress(asyncio.CancelledError):
             await gateway_health_task
+
+    # Stop gateway reconciler
+    if ENABLE_GATEWAY_RECONCILER and gateway_reconciler_task:
+        await gateway_reconciler.stop()
+        gateway_reconciler_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await gateway_reconciler_task
 
     # Stop chat metering consumer (CAB-288)
     if ENABLE_CHAT_METERING_CONSUMER and chat_metering_task:

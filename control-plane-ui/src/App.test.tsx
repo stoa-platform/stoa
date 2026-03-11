@@ -47,7 +47,34 @@ vi.mock('./services/api', () => ({
     }),
     getPlatformComponents: vi.fn().mockResolvedValue([]),
     getPlatformEvents: vi.fn().mockResolvedValue([]),
+    getGatewayHealthSummary: vi.fn().mockResolvedValue({
+      online: 2,
+      offline: 0,
+      degraded: 0,
+      maintenance: 0,
+      total: 2,
+    }),
+    getGatewayModeStats: vi.fn().mockResolvedValue({ modes: [], total_gateways: 2 }),
+    getGatewayInstances: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   },
+}));
+
+// Mock Prometheus hooks — return no data (demo mode)
+vi.mock('./hooks/usePrometheus', () => ({
+  usePrometheusQuery: () => ({
+    data: null,
+    loading: false,
+    error: 'not connected',
+    refetch: vi.fn(),
+  }),
+  usePrometheusRange: () => ({
+    data: null,
+    loading: false,
+    error: 'not connected',
+    refetch: vi.fn(),
+  }),
+  scalarValue: () => null,
+  groupByLabel: () => ({}),
 }));
 
 vi.mock('./services/mcpGatewayApi', () => ({
@@ -91,6 +118,42 @@ vi.mock('react-oidc-context', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+// Shared component mocks for PlatformDashboard
+vi.mock('@stoa/shared/components/StatCard', () => ({
+  StatCard: ({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) => (
+    <div data-testid={`stat-card-${label}`}>
+      <span>{label}</span>
+      <span>{value}</span>
+      {subtitle && <span>{subtitle}</span>}
+    </div>
+  ),
+}));
+
+vi.mock('@stoa/shared/components/TimeRangeSelector', () => ({
+  TimeRangeSelector: () => <div data-testid="time-range-selector" />,
+  RANGE_CONFIG: {
+    '1h': { seconds: 3600, step: '1m', label: '1 hour' },
+    '6h': { seconds: 21600, step: '5m', label: '6 hours' },
+    '24h': { seconds: 86400, step: '15m', label: '24 hours' },
+    '7d': { seconds: 604800, step: '1h', label: '7 days' },
+    '30d': { seconds: 2592000, step: '6h', label: '30 days' },
+  },
+}));
+
+vi.mock('@stoa/shared/components/TrendIndicator', () => ({
+  TrendIndicator: () => <span data-testid="trend-indicator" />,
+}));
+
+vi.mock('@stoa/shared/components/Skeleton', () => ({
+  CardSkeleton: ({ className }: { className?: string }) => (
+    <div data-testid="card-skeleton" className={className} />
+  ),
+}));
+
+vi.mock('./components/charts/SparklineChart', () => ({
+  SparklineChart: () => <svg data-testid="sparkline-chart" />,
+}));
+
 // Lazy pages mock
 vi.mock('./pages/Tenants', () => ({ Tenants: () => <div>Tenants Page</div> }));
 vi.mock('./pages/APIs', () => ({ APIs: () => <div>APIs Page</div> }));
@@ -113,7 +176,6 @@ describe('App', () => {
   it('renders Dashboard heading at root route', async () => {
     renderApp('/');
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
-    expect(screen.getByText('Welcome to STOA Control Plane')).toBeInTheDocument();
   });
 
   it('renders welcome message with user name', async () => {
@@ -121,17 +183,9 @@ describe('App', () => {
     expect(await screen.findByText('Hello, Parzival!')).toBeInTheDocument();
   });
 
-  it('renders quick action card descriptions on dashboard', async () => {
+  it('renders gateway KPI card on dashboard', async () => {
     renderApp('/');
-    expect(await screen.findByText('Manage API definitions and deployments')).toBeInTheDocument();
-    expect(screen.getByText('Browse MCP tools catalog')).toBeInTheDocument();
-    expect(screen.getByText('Manage consumer applications')).toBeInTheDocument();
-    expect(screen.getByText('View deployment history')).toBeInTheDocument();
-  });
-
-  it('renders Getting Started section', async () => {
-    renderApp('/');
-    expect(await screen.findByText('Getting Started')).toBeInTheDocument();
+    expect(await screen.findByText('Gateways')).toBeInTheDocument();
   });
 
   it('blocks protected route when not authenticated', () => {

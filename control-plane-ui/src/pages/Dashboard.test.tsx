@@ -24,6 +24,15 @@ vi.mock('../services/api', () => ({
     }),
     getPlatformComponents: vi.fn().mockResolvedValue([]),
     getPlatformEvents: vi.fn().mockResolvedValue([]),
+    getGatewayHealthSummary: vi.fn().mockResolvedValue({
+      online: 2,
+      offline: 0,
+      degraded: 0,
+      maintenance: 0,
+      total: 2,
+    }),
+    getGatewayModeStats: vi.fn().mockResolvedValue({ modes: [], total_gateways: 2 }),
+    getGatewayInstances: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   },
 }));
 
@@ -69,6 +78,60 @@ vi.mock('../services/mcpGatewayApi', () => ({
   mcpGatewayService: { setAuthToken: vi.fn(), clearAuthToken: vi.fn() },
 }));
 
+// Shared component mocks for PlatformDashboard
+vi.mock('@stoa/shared/components/StatCard', () => ({
+  StatCard: ({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) => (
+    <div data-testid={`stat-card-${label}`}>
+      <span>{label}</span>
+      <span>{value}</span>
+      {subtitle && <span>{subtitle}</span>}
+    </div>
+  ),
+}));
+
+vi.mock('@stoa/shared/components/TimeRangeSelector', () => ({
+  TimeRangeSelector: () => <div data-testid="time-range-selector" />,
+  RANGE_CONFIG: {
+    '1h': { seconds: 3600, step: '1m', label: '1 hour' },
+    '6h': { seconds: 21600, step: '5m', label: '6 hours' },
+    '24h': { seconds: 86400, step: '15m', label: '24 hours' },
+    '7d': { seconds: 604800, step: '1h', label: '7 days' },
+    '30d': { seconds: 2592000, step: '6h', label: '30 days' },
+  },
+}));
+
+vi.mock('@stoa/shared/components/TrendIndicator', () => ({
+  TrendIndicator: () => <span data-testid="trend-indicator" />,
+}));
+
+vi.mock('@stoa/shared/components/Skeleton', () => ({
+  CardSkeleton: ({ className }: { className?: string }) => (
+    <div data-testid="card-skeleton" className={className} />
+  ),
+}));
+
+vi.mock('../components/charts/SparklineChart', () => ({
+  SparklineChart: () => <svg data-testid="sparkline-chart" />,
+}));
+
+// Mock Prometheus hooks — return no data (demo mode)
+vi.mock('../hooks/usePrometheus', () => ({
+  usePrometheusQuery: () => ({
+    data: null,
+    loading: false,
+    error: 'not connected',
+    refetch: vi.fn(),
+  }),
+  usePrometheusRange: () => ({
+    data: null,
+    loading: false,
+    error: 'not connected',
+    refetch: vi.fn(),
+  }),
+  scalarValue: () => null,
+  groupByLabel: () => ({}),
+}));
+
 import App from '../App';
 
 function renderApp(route = '/') {
@@ -93,40 +156,29 @@ describe('Dashboard', () => {
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
   });
 
-  it('renders the welcome subtitle', async () => {
-    renderApp('/');
-    expect(await screen.findByText('Welcome to STOA Control Plane')).toBeInTheDocument();
-  });
-
   it('greets the authenticated user by name', async () => {
     renderApp('/');
     expect(await screen.findByText('Hello, James Halliday!')).toBeInTheDocument();
   });
 
-  it('shows the user email', async () => {
+  it('shows gateway KPI card', async () => {
     renderApp('/');
-    expect(await screen.findByText('halliday@gregarious-games.com')).toBeInTheDocument();
+    expect(await screen.findByText('Gateways')).toBeInTheDocument();
   });
 
-  it('renders the four quick action card descriptions', async () => {
+  it('shows Refresh button', async () => {
     renderApp('/');
-    expect(await screen.findByText('Manage API definitions and deployments')).toBeInTheDocument();
-    expect(screen.getByText('Browse MCP tools catalog')).toBeInTheDocument();
-    expect(screen.getByText('Manage consumer applications')).toBeInTheDocument();
-    expect(screen.getByText('View deployment history')).toBeInTheDocument();
+    expect(await screen.findByText('Refresh')).toBeInTheDocument();
   });
 
-  it('renders the Getting Started section', async () => {
+  it('shows demo mode banner when Prometheus is unreachable', async () => {
     renderApp('/');
-    expect(await screen.findByText('Getting Started')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Sample Data — Connect Prometheus to see live metrics')
+    ).toBeInTheDocument();
   });
 
-  it('renders the Quick Links section', async () => {
-    renderApp('/');
-    expect(await screen.findByText('Quick Links')).toBeInTheDocument();
-  });
-
-  // CAB-1553: 4-persona widget permission coverage
+  // CAB-1775: 4-persona widget permission coverage
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',
     (role) => {
@@ -134,25 +186,19 @@ describe('Dashboard', () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
       });
 
-      it('renders the page with welcome card', async () => {
+      it('renders the dashboard heading', async () => {
         renderApp('/');
         expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
       });
 
-      it('renders all four quick action cards', async () => {
+      it('renders KPI stat cards', async () => {
         renderApp('/');
-        expect(
-          await screen.findByText('Manage API definitions and deployments')
-        ).toBeInTheDocument();
-        expect(screen.getByText('Browse MCP tools catalog')).toBeInTheDocument();
-        expect(screen.getByText('Manage consumer applications')).toBeInTheDocument();
-        expect(screen.getByText('View deployment history')).toBeInTheDocument();
+        expect(await screen.findByText('Gateways')).toBeInTheDocument();
       });
 
-      it('renders Getting Started and Quick Links sections', async () => {
+      it('renders Gateway Instances section', async () => {
         renderApp('/');
-        expect(await screen.findByText('Getting Started')).toBeInTheDocument();
-        expect(screen.getByText('Quick Links')).toBeInTheDocument();
+        expect(await screen.findByText('Gateway Instances')).toBeInTheDocument();
       });
     }
   );

@@ -793,6 +793,8 @@ function GatewayDetailPanel({
   onClose: () => void;
 }) {
   const hd = (gw.health_details ?? {}) as Record<string, unknown>;
+  const uptimeSeconds = typeof hd.uptime_seconds === 'number' ? hd.uptime_seconds : null;
+  const routesCount = typeof hd.routes_count === 'number' ? hd.routes_count : null;
   const errorRate = typeof hd.error_rate === 'number' ? hd.error_rate : null;
   const status = STATUS_CONFIG[gw.status];
   const typeInfo = TYPE_DISPLAY[gw.gateway_type] ?? { label: gw.gateway_type, icon: Server };
@@ -851,7 +853,7 @@ function GatewayDetailPanel({
 
         <div className="px-6 py-5 space-y-6">
           {/* ArgoCD Sync Status */}
-          {gw.source === 'argocd' && hd.argocd_sync && (
+          {gw.source === 'argocd' && !!hd.argocd_sync && (
             <section>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
                 ArgoCD Sync
@@ -861,7 +863,7 @@ function GatewayDetailPanel({
                 <MetricCard label="Sync" value={String(hd.argocd_sync ?? '--')} />
                 <MetricCard
                   label="Revision"
-                  value={hd.argocd_revision ? String(hd.argocd_revision) : '--'}
+                  value={typeof hd.argocd_revision === 'string' ? hd.argocd_revision : '--'}
                 />
               </div>
             </section>
@@ -875,13 +877,11 @@ function GatewayDetailPanel({
             <div className="grid grid-cols-3 gap-2">
               <MetricCard
                 label="Uptime"
-                value={
-                  typeof hd.uptime_seconds === 'number' ? formatUptime(hd.uptime_seconds) : '--'
-                }
+                value={uptimeSeconds !== null ? formatUptime(uptimeSeconds) : '--'}
               />
               <MetricCard
                 label="Routes"
-                value={hd.routes_count != null ? String(hd.routes_count) : '--'}
+                value={routesCount !== null ? String(routesCount) : '--'}
               />
               <MetricCard
                 label="Error Rate"

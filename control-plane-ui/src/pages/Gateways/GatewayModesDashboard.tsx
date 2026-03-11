@@ -26,8 +26,8 @@ const modeConfigs: ModeConfig[] = [
   },
   {
     id: 'sidecar',
-    name: 'Sidecar',
-    description: 'Policy enforcement behind existing gateway (Kong, Envoy, Apigee)',
+    name: 'STOA Link',
+    description: 'Policy enforcement sidecar behind existing gateways (Kong, Gravitee, webMethods)',
     icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-50 dark:bg-emerald-950/30',
@@ -229,8 +229,8 @@ export function GatewayModesDashboard() {
               protocol with SSE transport for AI agents (Claude, GPT, etc.)
             </li>
             <li>
-              <strong className="text-neutral-900 dark:text-white">Sidecar:</strong> Policy
-              enforcement deployed alongside existing gateways
+              <strong className="text-neutral-900 dark:text-white">STOA Link:</strong> Policy
+              enforcement sidecar deployed alongside existing gateways
             </li>
             <li>
               <strong className="text-neutral-900 dark:text-white">Proxy:</strong> Full inline proxy

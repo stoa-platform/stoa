@@ -1,0 +1,165 @@
+# Platform SLO Recording Rules + Alerts
+# Aligned with actual metric names exported by components:
+#   - control-plane-api: stoa_control_plane_http_requests_total (label: status_code)
+#   - stoa-gateway: stoa_http_requests_total (label: status)
+# Job names: stoa-control-plane-api, stoa-gateway
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-platform-slo-rules
+  namespace: monitoring
+  labels:
+    prometheus: k8s
+    release: prometheus
+    role: alert-rules
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  groups:
+  - interval: 30s
+    name: slo-recording
+    rules:
+    # Availability: combined across CP API + Gateway
+    - expr: |
+        (
+          (sum(rate(stoa_control_plane_http_requests_total{job="stoa-control-plane-api",status_code!~"5.."}[5m])) or vector(0))
+          +
+          (sum(rate(stoa_http_requests_total{job="stoa-gateway",status!~"5.."}[5m])) or vector(0))
+        )
+        /
+        clamp_min(
+          (sum(rate(stoa_control_plane_http_requests_total{job="stoa-control-plane-api"}[5m])) or vector(0))
+          +
+          (sum(rate(stoa_http_requests_total{job="stoa-gateway"}[5m])) or vector(0)),
+          1e-10
+        )
+      record: slo:api_availability:ratio
+
+    - expr: |
+        (sum(rate(stoa_control_plane_http_requests_total{job="stoa-control-plane-api",status_code!~"5.."}[5m])) or vector(0))
+        /
+        clamp_min(sum(rate(stoa_control_plane_http_requests_total{job="stoa-control-plane-api"}[5m])) or vector(0), 1e-10)
+      labels:
+        job: stoa-control-plane-api
+      record: slo:api_availability:ratio_by_service
+
+    - expr: |
+        (sum(rate(stoa_http_requests_total{job="stoa-gateway",status!~"5.."}[5m])) or vector(0))
+        /
+        clamp_min(sum(rate(stoa_http_requests_total{job="stoa-gateway"}[5m])) or vector(0), 1e-10)
+      labels:
+        job: stoa-gateway
+      record: slo:api_availability:ratio_by_service
+
+    # Latency P95/P99
+    - expr: |
+        histogram_quantile(0.95,
+          sum by (le) (
+            rate(stoa_control_plane_http_request_duration_seconds_bucket{job="stoa-control-plane-api"}[5m])
+            or
+            rate(stoa_http_request_duration_seconds_bucket{job="stoa-gateway"}[5m])
+          )
+        )
+      record: slo:api_latency_p95:seconds
+
+    - expr: |
+        histogram_quantile(0.99,
+          sum by (le) (
+            rate(stoa_control_plane_http_request_duration_seconds_bucket{job="stoa-control-plane-api"}[5m])
+            or
+            rate(stoa_http_request_duration_seconds_bucket{job="stoa-gateway"}[5m])
+          )
+        )
+      record: slo:api_latency_p99:seconds
+
+    # Error rate
+    - expr: |
+        (
+          (sum(rate(stoa_control_plane_http_requests_total{job="stoa-control-plane-api",status_code=~"5.."}[5m])) or vector(0))
+          +
+          (sum(rate(stoa_http_requests_total{job="stoa-gateway",status=~"5.."}[5m])) or vector(0))
+        )
+        /
+        clamp_min(
+          (sum(rate(stoa_control_plane_http_requests_total{job="stoa-control-plane-api"}[5m])) or vector(0))
+          +
+          (sum(rate(stoa_http_requests_total{job="stoa-gateway"}[5m])) or vector(0)),
+          1e-10
+        )
+      record: slo:api_error_rate:ratio
+
+    # Request rate (per second)
+    - expr: |
+        (sum(rate(stoa_control_plane_http_requests_total{job="stoa-control-plane-api"}[5m])) or vector(0))
+        +
+        (sum(rate(stoa_http_requests_total{job="stoa-gateway"}[5m])) or vector(0))
+      record: slo:api_request_rate:per_second
+
+    # Error budget (SLO target: 99.9%)
+    - expr: |
+        1 - (
+          (1 - (slo:api_availability:ratio or vector(1)))
+          /
+          (1 - 0.999)
+        )
+      record: slo:error_budget:remaining_ratio
+
+    # Business: API calls hourly rate (used by operations dashboard)
+    - expr: |
+        (
+          (sum(rate(stoa_control_plane_http_requests_total{job="stoa-control-plane-api"}[5m])) or vector(0))
+          +
+          (sum(rate(stoa_http_requests_total{job="stoa-gateway"}[5m])) or vector(0))
+        ) * 3600
+      record: business:api_calls:hourly_rate
+
+  - name: slo-alerts
+    rules:
+    - alert: SLOAvailabilityBreach
+      annotations:
+        summary: API availability below 99.9% SLO
+      expr: slo:api_availability:ratio < 0.999
+      for: 5m
+      labels:
+        severity: critical
+        slo: availability
+    - alert: SLOLatencyP95Breach
+      annotations:
+        summary: API p95 latency exceeds 500ms SLO
+      expr: slo:api_latency_p95:seconds > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        slo: latency
+    - alert: SLOErrorRateBreach
+      annotations:
+        summary: API error rate exceeds 0.1% SLO
+      expr: slo:api_error_rate:ratio > 0.001
+      for: 5m
+      labels:
+        severity: critical
+        slo: error_rate
+    - alert: ErrorBudgetExhausted
+      annotations:
+        summary: Error budget nearly exhausted
+      expr: slo:error_budget:remaining_ratio < 0.05
+      for: 5m
+      labels:
+        severity: critical
+        slo: error_budget
+    - alert: ControlPlaneAPIDown
+      annotations:
+        summary: Control-Plane API is down
+      expr: up{job="stoa-control-plane-api"} == 0
+      for: 1m
+      labels:
+        component: control-plane-api
+        severity: critical
+    - alert: StoaGatewayDown
+      annotations:
+        summary: STOA Gateway is down
+      expr: up{job="stoa-gateway"} == 0
+      for: 1m
+      labels:
+        component: stoa-gateway
+        severity: critical

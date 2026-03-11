@@ -41,14 +41,6 @@ interface ErrorCategory {
   avg_duration_ms: number;
 }
 
-interface ConsumerUsage {
-  consumer_id: string;
-  name: string;
-  calls: number;
-  error_rate: number;
-  avg_latency_ms: number;
-}
-
 const ERROR_CATEGORY_COLORS: Record<string, string> = {
   auth: 'bg-red-500',
   rate_limit: 'bg-orange-500',
@@ -62,7 +54,6 @@ export function AnalyticsDashboard() {
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
   const [topApis, setTopApis] = useState<TopAPI[]>([]);
   const [errorCategories, setErrorCategories] = useState<ErrorCategory[]>([]);
-  const [consumerUsage, setConsumerUsage] = useState<ConsumerUsage[]>([]);
   const [loading, setLoading] = useState(true);
   const [_error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('calls');
@@ -85,10 +76,9 @@ export function AnalyticsDashboard() {
     `sum(rate(stoa_mcp_tools_calls_total{tenant="${tenantId}",status="error"}[5m])) / sum(rate(stoa_mcp_tools_calls_total{tenant="${tenantId}"}[5m]))`,
     AUTO_REFRESH_INTERVAL
   );
-  const activeConsumers = usePrometheusQuery(
-    `count(count by (consumer_id) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}"}[${timeRange}]) > 0))`,
-    AUTO_REFRESH_INTERVAL
-  );
+  // consumer_id label not yet exposed by the gateway (metrics.rs labels: tool, tenant, status)
+  // Query disabled — would always return 0. Show "--" in the KPI card instead.
+  const activeConsumers = usePrometheusQuery('', 0);
 
   // Sparklines
   const callsTrend = usePrometheusRange(
@@ -142,19 +132,9 @@ export function AnalyticsDashboard() {
     expandedTool ? AUTO_REFRESH_INTERVAL : 0
   );
 
-  // Consumer usage (top 10 by calls)
-  const consumerCallsQuery = usePrometheusQuery(
-    `topk(10, sum by (consumer_id) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}"}[${timeRange}])))`,
-    AUTO_REFRESH_INTERVAL
-  );
-  const consumerErrorsQuery = usePrometheusQuery(
-    `sum by (consumer_id) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}",status="error"}[${timeRange}]))`,
-    AUTO_REFRESH_INTERVAL
-  );
-  const consumerLatencyQuery = usePrometheusQuery(
-    `sum by (consumer_id) (rate(stoa_mcp_tool_duration_seconds_sum{tenant="${tenantId}"}[5m])) / sum by (consumer_id) (rate(stoa_mcp_tool_duration_seconds_count{tenant="${tenantId}"}[5m]))`,
-    AUTO_REFRESH_INTERVAL
-  );
+  // Consumer usage queries disabled — consumer_id label not exposed by gateway metrics.
+  // These queries would always return empty results. Will be re-enabled when
+  // consumer tracking is added to the gateway (separate ticket).
 
   // API data
   const loadApiData = useCallback(async () => {
@@ -207,9 +187,6 @@ export function AnalyticsDashboard() {
     topToolsQuery.refetch();
     topToolsErrors.refetch();
     topToolsLatency.refetch();
-    consumerCallsQuery.refetch();
-    consumerErrorsQuery.refetch();
-    consumerLatencyQuery.refetch();
     if (expandedTool) {
       expandedToolP50.refetch();
       expandedToolP95.refetch();
@@ -241,29 +218,6 @@ export function AnalyticsDashboard() {
     })
     .slice(0, 10);
   const maxToolCalls = enrichedTools[0]?.calls || 1;
-
-  // Build consumer usage from Prometheus results
-  const consumerCallsMap = groupByLabel(consumerCallsQuery.data, 'consumer_id');
-  const consumerErrorsMap = groupByLabel(consumerErrorsQuery.data, 'consumer_id');
-  const consumerLatencyMap = groupByLabel(consumerLatencyQuery.data, 'consumer_id');
-
-  useEffect(() => {
-    const ids = Object.keys(consumerCallsMap);
-    if (ids.length === 0) return;
-    const usage: ConsumerUsage[] = ids.map((id) => {
-      const calls = consumerCallsMap[id] || 0;
-      const errors = consumerErrorsMap[id] || 0;
-      return {
-        consumer_id: id,
-        name: id,
-        calls,
-        error_rate: calls > 0 ? errors / calls : 0,
-        avg_latency_ms: (consumerLatencyMap[id] || 0) * 1000,
-      };
-    });
-    usage.sort((a, b) => b.calls - a.calls);
-    setConsumerUsage(usage);
-  }, [consumerCallsQuery.data, consumerErrorsQuery.data, consumerLatencyQuery.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prometheusAvailable = !totalCalls.error;
   const isInitialLoading = loading && !prometheusAvailable;
@@ -665,7 +619,7 @@ export function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* Consumer Activity Table */}
+          {/* Consumer Activity — disabled until consumer_id label is added to gateway metrics */}
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -673,74 +627,21 @@ export function AnalyticsDashboard() {
                   Consumer Activity
                 </h2>
                 <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                  Top consumers by usage ({timeRange})
+                  Per-consumer analytics
                 </p>
               </div>
               <Users className="h-5 w-5 text-neutral-400" />
             </div>
-            {consumerUsage.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                      <th className="text-left py-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
-                        Consumer
-                      </th>
-                      <th className="text-right py-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
-                        Calls
-                      </th>
-                      <th className="text-right py-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
-                        Error Rate
-                      </th>
-                      <th className="text-right py-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
-                        Avg Latency
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {consumerUsage.map((c) => (
-                      <tr
-                        key={c.consumer_id}
-                        className="border-b border-neutral-100 dark:border-neutral-700/50 hover:bg-neutral-50 dark:hover:bg-neutral-700/30"
-                      >
-                        <td className="py-2 px-2">
-                          <span className="font-medium text-neutral-900 dark:text-white">
-                            {c.name}
-                          </span>
-                        </td>
-                        <td className="py-2 px-2 text-right text-neutral-700 dark:text-neutral-300">
-                          {c.calls >= 1000
-                            ? `${(c.calls / 1000).toFixed(1)}K`
-                            : Math.round(c.calls)}
-                        </td>
-                        <td className="py-2 px-2 text-right">
-                          <span
-                            className={
-                              c.error_rate > 0.05
-                                ? 'text-red-600 dark:text-red-400 font-medium'
-                                : c.error_rate > 0.01
-                                  ? 'text-yellow-600 dark:text-yellow-400'
-                                  : 'text-green-600 dark:text-green-400'
-                            }
-                          >
-                            {(c.error_rate * 100).toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="py-2 px-2 text-right text-neutral-700 dark:text-neutral-300">
-                          {Math.round(c.avg_latency_ms)}ms
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <EmptyState
-                title="No consumer data"
-                description="Consumer activity will appear here once consumers start making API calls."
-                illustration={<Users className="h-12 w-12" />}
-              />
-            )}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                Consumer-level tracking is not yet available. The gateway does not currently expose
+                a{' '}
+                <code className="text-xs bg-amber-100 dark:bg-amber-900/40 px-1 rounded">
+                  consumer_id
+                </code>{' '}
+                label in its metrics.
+              </p>
+            </div>
           </div>
         </>
       )}

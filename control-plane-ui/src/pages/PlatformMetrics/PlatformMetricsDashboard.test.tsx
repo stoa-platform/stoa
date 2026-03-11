@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { PlatformMetricsDashboard } from './PlatformMetricsDashboard';
-import { createAuthMock } from '../../test/helpers';
+import { createAuthMock, renderWithProviders } from '../../test/helpers';
 import { useAuth } from '../../contexts/AuthContext';
 import type { PersonaRole } from '../../test/helpers';
 
@@ -43,6 +43,16 @@ vi.mock('../../components/charts/SparklineChart', () => ({
   SparklineChart: () => <div data-testid="sparkline-chart">Sparkline</div>,
 }));
 
+vi.mock('../../components/metrics/MetricCard', () => ({
+  MetricCard: ({ label }: { label: string }) => <div data-testid="metric-card">{label}</div>,
+}));
+
+vi.mock('../../components/metrics/MetricTimeseries', () => ({
+  MetricTimeseries: ({ label }: { label: string }) => (
+    <div data-testid="metric-timeseries">{label}</div>
+  ),
+}));
+
 describe('PlatformMetricsDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,24 +60,26 @@ describe('PlatformMetricsDashboard', () => {
   });
 
   it('renders the page title', () => {
-    render(<PlatformMetricsDashboard />);
-    expect(screen.getByText('Platform Metrics')).toBeInTheDocument();
+    renderWithProviders(<PlatformMetricsDashboard />);
+    expect(screen.getByText('Platform Observability')).toBeInTheDocument();
   });
 
   it('renders the page subtitle', () => {
-    render(<PlatformMetricsDashboard />);
-    expect(screen.getByText('Real-time platform performance and health')).toBeInTheDocument();
+    renderWithProviders(<PlatformMetricsDashboard />);
+    expect(
+      screen.getByText('Real-time platform metrics, MCP activity, arena benchmarks')
+    ).toBeInTheDocument();
   });
 
   it('renders time range selector with default 1h selected', () => {
-    render(<PlatformMetricsDashboard />);
+    renderWithProviders(<PlatformMetricsDashboard />);
     const buttons = screen.getAllByRole('button');
     const oneHourButton = buttons.find((btn) => btn.textContent === '1h');
     expect(oneHourButton).toHaveClass('bg-white');
   });
 
   it('changes time range when button clicked', () => {
-    render(<PlatformMetricsDashboard />);
+    renderWithProviders(<PlatformMetricsDashboard />);
     const buttons = screen.getAllByRole('button');
     const sixHourButton = buttons.find((btn) => btn.textContent === '6h');
 
@@ -78,74 +90,113 @@ describe('PlatformMetricsDashboard', () => {
   });
 
   it('renders refresh button', () => {
-    render(<PlatformMetricsDashboard />);
+    renderWithProviders(<PlatformMetricsDashboard />);
     const refreshButton = screen.getByText('Refresh');
     expect(refreshButton).toBeInTheDocument();
   });
 
-  it('shows KPI stat cards', () => {
-    render(<PlatformMetricsDashboard />);
-    expect(screen.getByText(/Total Requests/i)).toBeInTheDocument();
-    // Error Rate appears in multiple places - section title and stat card
+  it('shows KPI metric cards', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText(/Total Requests/i)).toBeInTheDocument();
+    });
     const errorRateElements = screen.getAllByText(/Error Rate/i);
     expect(errorRateElements.length).toBeGreaterThan(0);
-    expect(screen.getByText(/P95 Latency/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/P95 Latency/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Services Up/i)).toBeInTheDocument();
   });
 
-  it('shows "--" for null values', () => {
-    render(<PlatformMetricsDashboard />);
-    const dashes = screen.getAllByText('--');
-    expect(dashes.length).toBeGreaterThan(0);
+  it('renders SLO section', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('SLO Status')).toBeInTheDocument();
+    });
+    expect(screen.getAllByText(/Availability/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Error Budget/i).length).toBeGreaterThan(0);
   });
 
-  it('renders sparkline section titles', () => {
-    render(<PlatformMetricsDashboard />);
-    expect(screen.getByText('Request Rate')).toBeInTheDocument();
-    expect(screen.getByText('Error Rate')).toBeInTheDocument();
+  it('renders sparkline section titles', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('Request Rate')).toBeInTheDocument();
+    });
   });
 
-  it('renders top endpoints section', () => {
-    render(<PlatformMetricsDashboard />);
-    expect(screen.getByText('Top Endpoints')).toBeInTheDocument();
+  it('renders MCP & AI Activity section', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('MCP & AI Activity')).toBeInTheDocument();
+    });
+    expect(screen.getByText('MCP Sessions Active')).toBeInTheDocument();
+    expect(screen.getByText('Tool Calls / h')).toBeInTheDocument();
   });
 
-  it('renders component health section', () => {
-    render(<PlatformMetricsDashboard />);
-    expect(screen.getByText('Component Health')).toBeInTheDocument();
+  it('renders Gateway Adapters section', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('Gateway Adapters')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Adapter Ops / h')).toBeInTheDocument();
+    expect(screen.getByText('Circuit Breakers Open')).toBeInTheDocument();
   });
 
-  it('shows "No API data available" when no top APIs', () => {
-    render(<PlatformMetricsDashboard />);
-    expect(screen.getByText('No API data available')).toBeInTheDocument();
+  it('renders Arena Benchmark section', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('Arena Benchmark')).toBeInTheDocument();
+    });
+    expect(screen.getByText('STOA Score')).toBeInTheDocument();
+    expect(screen.getByText('Enterprise Score')).toBeInTheDocument();
   });
 
-  it('shows "Component status unavailable" when no component health', () => {
-    render(<PlatformMetricsDashboard />);
-    expect(screen.getByText('Component status unavailable')).toBeInTheDocument();
+  it('renders Platform Health CUJs section', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('Platform Health (CUJs)')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Health Chain')).toBeInTheDocument();
+    expect(screen.getByText('Auth Flow')).toBeInTheDocument();
+    expect(screen.getByText('MCP Discovery')).toBeInTheDocument();
+  });
+
+  it('renders top endpoints section', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('Top Endpoints')).toBeInTheDocument();
+    });
+  });
+
+  it('shows "No API data available" when no top APIs', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('No API data available')).toBeInTheDocument();
+    });
   });
 
   it('calls refetch when refresh button clicked', () => {
-    render(<PlatformMetricsDashboard />);
+    renderWithProviders(<PlatformMetricsDashboard />);
     const refreshButton = screen.getByText('Refresh');
     fireEvent.click(refreshButton);
     expect(refreshButton).toBeInTheDocument();
   });
 
-  it('renders link to business page', () => {
-    render(<PlatformMetricsDashboard />);
+  it('renders link to business page', async () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    await waitFor(() => {
+      expect(screen.getByText('View All')).toBeInTheDocument();
+    });
     const viewAllLink = screen.getByText('View All');
     expect(viewAllLink.closest('a')).toHaveAttribute('href', '/business');
   });
 
-  it('renders link to operations page', () => {
-    render(<PlatformMetricsDashboard />);
-    const operationsLink = screen.getByText('Operations');
-    expect(operationsLink.closest('a')).toHaveAttribute('href', '/operations');
+  it('renders cross-links to Transaction Tracing and Operations', () => {
+    renderWithProviders(<PlatformMetricsDashboard />);
+    expect(screen.getByText(/Transaction Tracing/i)).toBeInTheDocument();
+    expect(screen.getByText(/SLO & Deployments/i)).toBeInTheDocument();
   });
 
   it('displays last refresh time', () => {
-    render(<PlatformMetricsDashboard />);
+    renderWithProviders(<PlatformMetricsDashboard />);
     const timeElements = screen.getAllByText(/:/);
     expect(timeElements.length).toBeGreaterThan(0);
   });
@@ -155,8 +206,8 @@ describe('PlatformMetricsDashboard', () => {
     (role) => {
       it('renders the page', () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
-        render(<PlatformMetricsDashboard />);
-        expect(screen.getByText('Platform Metrics')).toBeInTheDocument();
+        renderWithProviders(<PlatformMetricsDashboard />);
+        expect(screen.getByText('Platform Observability')).toBeInTheDocument();
       });
     }
   );

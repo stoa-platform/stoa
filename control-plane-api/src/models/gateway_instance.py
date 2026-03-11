@@ -99,6 +99,9 @@ class GatewayInstance(Base):
     version = Column(String(50), nullable=True)  # Gateway software version
     tags = Column(JSONB, nullable=False, default=list)
 
+    # Source of truth tracking (argocd, self_register, manual)
+    source = Column(String(50), nullable=False, default="self_register", server_default="self_register")
+
     # Deletion protection + soft-delete (CAB-1749)
     protected = Column(Boolean, nullable=False, default=False, server_default="false")
     deleted_at = Column(DateTime(timezone=True), nullable=True)

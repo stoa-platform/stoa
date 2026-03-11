@@ -38,6 +38,7 @@ def _check_gateway_connected() -> bool:
     # In OIDC proxy mode, no persistent client is created
     # Gateway is "connected" if using proxy mode or has a client
     from ..config import settings
+
     if settings.GATEWAY_USE_OIDC_PROXY:
         return True  # Proxy mode is always available
     return gateway_service._client is not None
@@ -45,6 +46,7 @@ def _check_gateway_connected() -> bool:
 
 class HealthCheck(BaseModel):
     """Health check response model."""
+
     status: str
     version: str
     timestamp: str
@@ -53,6 +55,7 @@ class HealthCheck(BaseModel):
 
 class DependencyStatus(BaseModel):
     """Status of a dependency."""
+
     status: str
     latency_ms: float | None = None
     error: str | None = None
@@ -148,3 +151,17 @@ async def startup():
         version=settings.VERSION,
         timestamp=datetime.now(UTC).isoformat(),
     )
+
+
+@router.get("/workers")
+async def workers_status():
+    """Background workers health status."""
+    from ..workers.gateway_health_worker import gateway_health_worker
+    from ..workers.gateway_reconciler import gateway_reconciler
+
+    return {
+        "gateway_health_worker": {
+            "active": gateway_health_worker._running,
+        },
+        "gateway_reconciler": gateway_reconciler.status,
+    }

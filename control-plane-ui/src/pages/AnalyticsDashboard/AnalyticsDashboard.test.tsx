@@ -187,9 +187,9 @@ describe('AnalyticsDashboard', () => {
     expect(screen.getByText('Consumer Activity')).toBeInTheDocument();
   });
 
-  it('shows empty consumer state when no data', () => {
+  it('shows consumer tracking unavailable notice', () => {
     render(<AnalyticsDashboard />);
-    expect(screen.getByText('No consumer data')).toBeInTheDocument();
+    expect(screen.getByText(/Consumer-level tracking is not yet available/)).toBeInTheDocument();
   });
 
   // --- Sort controls ---
@@ -261,39 +261,13 @@ describe('AnalyticsDashboard', () => {
     expect(latencyBadges.length).toBeGreaterThan(0);
   });
 
-  // --- Consumer table ---
+  // --- Consumer section (disabled — consumer_id label not in gateway metrics) ---
 
-  it('renders consumer table with data', () => {
+  it('shows consumer tracking unavailable notice instead of table', () => {
     mockWithToolData({ 'test-tool': 50 });
     render(<AnalyticsDashboard />);
-    expect(screen.getByText('agent-alpha')).toBeInTheDocument();
-    expect(screen.getByText('agent-beta')).toBeInTheDocument();
-  });
-
-  it('shows consumer table headers', () => {
-    mockWithToolData({ 'test-tool': 50 });
-    render(<AnalyticsDashboard />);
-    expect(screen.getByText('Consumer')).toBeInTheDocument();
-    expect(screen.getByText('Calls')).toBeInTheDocument();
-    expect(screen.getByText('Avg Latency')).toBeInTheDocument();
-  });
-
-  it('color-codes high error rate consumers red', () => {
-    mockWithToolData({ 'test-tool': 50 });
-    render(<AnalyticsDashboard />);
-    // agent-alpha: 30/500 = 6% (> 5% -> red)
-    const alphaRow = screen.getByText('agent-alpha').closest('tr')!;
-    const errorCell = within(alphaRow).getByText('6.0%');
-    expect(errorCell.className).toContain('text-red-600');
-  });
-
-  it('color-codes low error rate consumers green-or-yellow', () => {
-    mockWithToolData({ 'test-tool': 50 });
-    render(<AnalyticsDashboard />);
-    // agent-beta: 2/120 = 1.67% (between 1% and 5% -> yellow)
-    const betaRow = screen.getByText('agent-beta').closest('tr')!;
-    const errorCell = within(betaRow).getByText('1.7%');
-    expect(errorCell.className).toContain('text-yellow-600');
+    expect(screen.getByText(/Consumer-level tracking is not yet available/)).toBeInTheDocument();
+    expect(screen.queryByText('agent-alpha')).not.toBeInTheDocument();
   });
 
   // --- Refresh ---

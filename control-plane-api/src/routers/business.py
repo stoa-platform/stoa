@@ -186,11 +186,12 @@ async def get_top_apis(
 
     try:
         # Query top tools by invocation count
+        # Uses stoa_mcp_tools_calls_total with label "tool" (gateway metrics.rs)
         result = await prometheus_client.query(
             f"""
             topk({limit},
-              sum by (tool_name) (
-                increase(stoa_mcp_gateway_mcp_tool_invocations_total[30d])
+              sum by (tool) (
+                increase(stoa_mcp_tools_calls_total[30d])
               )
             )
             """.strip().replace("\n", " ").replace("  ", " ")
@@ -202,7 +203,7 @@ async def get_top_apis(
         apis = []
         for item in result.get("result", []):
             metric = item.get("metric", {})
-            tool_name = metric.get("tool_name", "unknown")
+            tool_name = metric.get("tool", "unknown")
             raw_value = float(item.get("value", [0, 0])[1])
 
             # Skip NaN values

@@ -3,6 +3,7 @@
 These endpoints are called by STOA gateways for auto-registration and heartbeat.
 Not exposed on public ingress — internal traffic only.
 """
+
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
@@ -144,51 +145,74 @@ async def register_gateway(
         payload.capabilities,
     )
 
-    # Check if already registered (upsert pattern)
-    existing = await repo.get_by_name(instance_name)
     now = datetime.now(UTC)
+    heartbeat_details = {
+        "registered_at": now.isoformat(),
+        "mode": normalized_mode,
+        "hostname": payload.hostname,
+    }
 
+    # 1. Check if already registered by name (re-registration after restart)
+    existing = await repo.get_by_name(instance_name)
     if existing:
-        # Update existing registration
         existing.version = payload.version
         existing.capabilities = payload.capabilities
         existing.base_url = payload.admin_url
         existing.status = GatewayInstanceStatus.ONLINE
         existing.last_health_check = now
-        existing.mode = normalized_mode  # ADR-024
-        existing.health_details = {
-            "registered_at": now.isoformat(),
-            "mode": normalized_mode,
-            "hostname": payload.hostname,
-        }
+        existing.mode = normalized_mode
+        existing.health_details = {**(existing.health_details or {}), **heartbeat_details}
         instance = await repo.update(existing)
         await db.commit()
         logger.info("Gateway re-registered: id=%s, name=%s", instance.id, instance.name)
-    else:
-        # Create new registration
-        instance = GatewayInstance(
-            name=instance_name,
-            display_name=f"STOA Gateway ({normalized_mode})",
-            gateway_type=gateway_type,
-            environment=payload.environment,
-            tenant_id=payload.tenant_id,
-            base_url=payload.admin_url,
-            auth_config={"type": "gateway_key"},  # Internal auth via heartbeat
-            status=GatewayInstanceStatus.ONLINE,
-            last_health_check=now,
-            mode=normalized_mode,  # ADR-024
-            health_details={
-                "registered_at": now.isoformat(),
-                "mode": normalized_mode,
-                "hostname": payload.hostname,
-            },
-            capabilities=payload.capabilities,
-            version=payload.version,
-            tags=[f"mode:{normalized_mode}", "auto-registered"],
-        )
-        instance = await repo.create(instance)
+        return instance
+
+    # 2. Check if ArgoCD reconciler already created an entry for this type+env.
+    #    Adopt it instead of creating a duplicate (Phase 4: ArgoCD as source of truth).
+    argocd_entry = await repo.get_by_source_and_type(
+        source="argocd",
+        gateway_type=gateway_type,
+        environment=payload.environment,
+    )
+    if argocd_entry:
+        argocd_entry.version = payload.version
+        argocd_entry.capabilities = payload.capabilities
+        argocd_entry.base_url = payload.admin_url
+        argocd_entry.status = GatewayInstanceStatus.ONLINE
+        argocd_entry.last_health_check = now
+        argocd_entry.mode = normalized_mode
+        argocd_entry.health_details = {**(argocd_entry.health_details or {}), **heartbeat_details}
+        instance = await repo.update(argocd_entry)
         await db.commit()
-        logger.info("Gateway registered: id=%s, name=%s", instance.id, instance.name)
+        logger.info(
+            "Gateway adopted ArgoCD entry: id=%s, argocd_name=%s, hostname=%s",
+            instance.id,
+            instance.name,
+            payload.hostname,
+        )
+        return instance
+
+    # 3. No existing entry — create with source=self_register (non-ArgoCD deployments)
+    instance = GatewayInstance(
+        name=instance_name,
+        display_name=f"STOA Gateway ({normalized_mode})",
+        gateway_type=gateway_type,
+        environment=payload.environment,
+        tenant_id=payload.tenant_id,
+        base_url=payload.admin_url,
+        auth_config={"type": "gateway_key"},
+        status=GatewayInstanceStatus.ONLINE,
+        last_health_check=now,
+        mode=normalized_mode,
+        health_details=heartbeat_details,
+        capabilities=payload.capabilities,
+        version=payload.version,
+        source="self_register",
+        tags=[f"mode:{normalized_mode}", "auto-registered"],
+    )
+    instance = await repo.create(instance)
+    await db.commit()
+    logger.info("Gateway registered: id=%s, name=%s", instance.id, instance.name)
 
     return instance
 

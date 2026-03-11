@@ -592,7 +592,7 @@ export function APIMonitoring() {
         <div className="flex items-center gap-3">
           <button
             onClick={() =>
-              navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-incident-response`))
+              navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-gateway-red`))
             }
             className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
           >

@@ -92,7 +92,7 @@ const STATUS_CONFIG: Record<GatewayInstanceStatus, { dot: string; label: string;
 const TYPE_DISPLAY: Record<string, { label: string; icon: typeof Server }> = {
   stoa: { label: 'STOA', icon: Zap },
   stoa_edge_mcp: { label: 'STOA Edge MCP', icon: Zap },
-  stoa_sidecar: { label: 'STOA Sidecar', icon: Shield },
+  stoa_sidecar: { label: 'STOA Link', icon: Shield },
   stoa_proxy: { label: 'STOA Proxy', icon: Globe },
   stoa_shadow: { label: 'STOA Shadow', icon: Activity },
   webmethods: { label: 'webMethods', icon: Server },
@@ -105,7 +105,7 @@ const TYPE_DISPLAY: Record<string, { label: string; icon: typeof Server }> = {
 
 const MODE_LABELS: Record<GatewayMode, string> = {
   'edge-mcp': 'Edge MCP',
-  sidecar: 'Sidecar',
+  sidecar: 'STOA Link',
   proxy: 'Proxy',
   shadow: 'Shadow',
 };

@@ -12,10 +12,7 @@ import {
   Gauge,
   Layers,
   Award,
-  Zap,
   AlertTriangle,
-  Lock,
-  Wifi,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -25,43 +22,21 @@ import type { PlatformStatusResponse } from '../../types';
 import { config } from '../../config';
 import { observabilityPath } from '../../utils/navigation';
 import { MetricCard } from '../../components/metrics/MetricCard';
-import { MetricTimeseries } from '../../components/metrics/MetricTimeseries';
 
 const AUTO_REFRESH_INTERVAL = 30_000; // 30 seconds
 
 const dashboards = config.services.grafana.dashboards;
 
-// PromQL queries — combines Gateway (stoa_http_requests_total, label: status)
-// and Control Plane API (stoa_control_plane_http_requests_total, label: status_code)
+// SLO PromQL queries
 const QUERIES = {
-  // SLO: availability = 1 - error_rate across both Gateway + API (1h window)
   availability:
     '(1 - (sum(increase(stoa_http_requests_total{status=~"5.."}[1h])) + sum(increase(stoa_control_plane_http_requests_total{status_code=~"5.."}[1h])) or vector(0)) / (sum(increase(stoa_http_requests_total[1h])) + sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(1))) * 100',
-  // SLO: error rate percentage (Gateway + API combined)
   errorRate:
     '((sum(increase(stoa_http_requests_total{status=~"5.."}[1h])) or vector(0)) + (sum(increase(stoa_control_plane_http_requests_total{status_code=~"5.."}[1h])) or vector(0))) / ((sum(increase(stoa_http_requests_total[1h])) or vector(1)) + (sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(1))) * 100',
-  // SLO: p95 latency in ms (Gateway — primary user-facing)
   latencyP95:
     'histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket[1h])) by (le)) * 1000 or vector(0)',
-  // SLO: error budget remaining (target 99.9%, 24h rolling — 30d needs longer retention)
   errorBudget:
     '(1 - ((sum(increase(stoa_http_requests_total{status=~"5.."}[24h])) or vector(0)) / (sum(increase(stoa_http_requests_total[24h])) or vector(1))) / 0.001) * 100',
-  // Platform health: total requests/h (shows activity, not CUJ)
-  platformRequests: 'sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(0)',
-  // Traffic: error rate time-series (5m buckets over 1h)
-  errorRateTimeseries:
-    '(sum(increase(stoa_http_requests_total{status=~"5.."}[5m])) or vector(0)) / (sum(increase(stoa_http_requests_total[5m])) or vector(1)) * 100',
-  // Traffic: active SSE/MCP connections
-  activeConnections: 'sum(stoa_mcp_sse_connections_active) or vector(0)',
-  // Security: rejected mTLS validations
-  securityEvents: 'sum(increase(stoa_mtls_validations_total{result="rejected"}[1h])) or vector(0)',
-  // Traffic: total platform RPS (Gateway + API combined)
-  fleetRps:
-    '(sum(rate(stoa_http_requests_total[5m])) or vector(0)) + (sum(rate(stoa_control_plane_http_requests_total[5m])) or vector(0))',
-  // API backend: requests in progress
-  apiInProgress: 'sum(stoa_control_plane_http_requests_in_progress) or vector(0)',
-  // MCP: active tool calls
-  mcpToolCalls: 'sum(increase(stoa_mcp_tools_calls_total[1h])) or vector(0)',
 };
 
 interface RecentDeployment {
@@ -150,22 +125,18 @@ function QuickLinkButton({
 }
 
 // Format helpers
-const fmtPercent = (v: number | null) => (v === null ? '—' : `${v.toFixed(2)}%`);
-const fmtMs = (v: number | null) => (v === null ? '—' : v < 1 ? '<1 ms' : `${v.toFixed(0)} ms`);
+const fmtPercent = (v: number | null) => (v === null ? '--' : `${v.toFixed(2)}%`);
+const fmtMs = (v: number | null) => (v === null ? '--' : v < 1 ? '<1 ms' : `${v.toFixed(0)} ms`);
 const fmtBudget = (v: number | null) =>
-  v === null ? '—' : v > 100 ? '100%' : v < 0 ? '0%' : `${v.toFixed(1)}%`;
-const fmtCount = (v: number | null) => (v === null ? '—' : v.toFixed(0));
-const fmtRps = (v: number | null) => (v === null ? '—' : `${v.toFixed(1)} req/s`);
+  v === null ? '--' : v > 100 ? '100%' : v < 0 ? '0%' : `${v.toFixed(1)}%`;
 
 export function OperationsDashboard() {
   const navigate = useNavigate();
-  const { isReady, hasRole } = useAuth();
+  const { isReady } = useAuth();
   const [platformStatus, setPlatformStatus] = useState<PlatformStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-
-  const canViewTrafficSecurity = hasRole('cpi-admin') || hasRole('devops');
 
   const loadData = useCallback(async () => {
     try {
@@ -232,10 +203,16 @@ export function OperationsDashboard() {
             Operations Dashboard
           </h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Platform health, SLO metrics, and deployment overview
+            SLO metrics, ArgoCD status, and deployment overview
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/observability')}
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+          >
+            Full metrics <ExternalLink className="h-3 w-3" />
+          </button>
           <span className="text-xs text-neutral-400 dark:text-neutral-500">
             Last refresh: {lastRefresh.toLocaleTimeString('fr-FR')}
           </span>
@@ -286,7 +263,7 @@ export function OperationsDashboard() {
         </div>
       ) : (
         <>
-          {/* SLO Overview — Native Prometheus metrics (visible to all authenticated users) */}
+          {/* SLO Overview */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
@@ -332,11 +309,11 @@ export function OperationsDashboard() {
             </div>
           </section>
 
-          {/* Platform Health — ArgoCD status (real data) + CUJ Health (Prometheus) */}
+          {/* Platform Health — ArgoCD status */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                Platform Health
+                ArgoCD Components
               </h2>
               <button
                 onClick={() => navigate(observabilityPath(dashboards.platformHealth))}
@@ -346,139 +323,52 @@ export function OperationsDashboard() {
                 <ExternalLink className="h-3 w-3" />
               </button>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* ArgoCD Component Status */}
-              <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <Shield className="h-4 w-4 text-neutral-500" />
-                  <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    ArgoCD Components — {platformHealth}% Healthy
-                  </h3>
-                </div>
-                {platformStatus?.gitops?.components ? (
-                  <div className="space-y-2">
-                    {platformStatus.gitops.components.map((comp) => (
-                      <div key={comp.name} className="flex items-center justify-between py-1.5">
-                        <span className="text-sm text-neutral-900 dark:text-white">
-                          {comp.name}
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Shield className="h-4 w-4 text-neutral-500" />
+                <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  ArgoCD Components — {platformHealth}% Healthy
+                </h3>
+              </div>
+              {platformStatus?.gitops?.components ? (
+                <div className="space-y-2">
+                  {platformStatus.gitops.components.map((comp) => (
+                    <div key={comp.name} className="flex items-center justify-between py-1.5">
+                      <span className="text-sm text-neutral-900 dark:text-white">{comp.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            comp.sync_status === 'Synced'
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          }`}
+                        >
+                          {comp.sync_status}
                         </span>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${
-                              comp.sync_status === 'Synced'
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                            }`}
-                          >
-                            {comp.sync_status}
-                          </span>
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${
-                              comp.health_status === 'Healthy'
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : comp.health_status === 'Degraded'
-                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                            }`}
-                          >
-                            {comp.health_status}
-                          </span>
-                        </div>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            comp.health_status === 'Healthy'
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                              : comp.health_status === 'Degraded'
+                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                          }`}
+                        >
+                          {comp.health_status}
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
-                    ArgoCD status unavailable
-                  </p>
-                )}
-              </div>
-              {/* Platform Activity — real Prometheus metrics */}
-              <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <Activity className="h-4 w-4 text-neutral-500" />
-                  <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Platform Activity
-                  </h3>
+                    </div>
+                  ))}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <MetricCard
-                    label="API Requests/h"
-                    query={QUERIES.platformRequests}
-                    format={fmtCount}
-                    color="#3b82f6"
-                    icon={BarChart3}
-                  />
-                  <MetricCard
-                    label="API In Progress"
-                    query={QUERIES.apiInProgress}
-                    format={fmtCount}
-                    color="#10b981"
-                    icon={Activity}
-                  />
-                  <MetricCard
-                    label="MCP Tool Calls/h"
-                    query={QUERIES.mcpToolCalls}
-                    format={fmtCount}
-                    color="#8b5cf6"
-                    icon={Zap}
-                  />
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
+                  ArgoCD status unavailable
+                </p>
+              )}
             </div>
           </section>
 
-          {/* Traffic & Security — restricted to cpi-admin and devops */}
-          {canViewTrafficSecurity && (
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                  Traffic & Security
-                </h2>
-                <button
-                  onClick={() => navigate(observabilityPath(dashboards.incidentResponse))}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                >
-                  View Incident Response dashboard
-                  <ExternalLink className="h-3 w-3" />
-                </button>
-              </div>
-              <div className="space-y-4">
-                <MetricTimeseries
-                  label="Error Rate over Time"
-                  query={QUERIES.errorRateTimeseries}
-                  duration={3600}
-                  step="1m"
-                  color="#ef4444"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <MetricCard
-                    label="Active Connections"
-                    query={QUERIES.activeConnections}
-                    format={fmtCount}
-                    color="#3b82f6"
-                    icon={Wifi}
-                  />
-                  <MetricCard
-                    label="Security Events"
-                    query={QUERIES.securityEvents}
-                    format={fmtCount}
-                    color="#f59e0b"
-                    icon={Lock}
-                  />
-                  <MetricCard
-                    label="Fleet RPS"
-                    query={QUERIES.fleetRps}
-                    format={fmtRps}
-                    color="#8b5cf6"
-                    icon={Zap}
-                  />
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Recent Deployments — ArgoCD events (real data) */}
+          {/* Recent Deployments */}
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
@@ -510,14 +400,19 @@ export function OperationsDashboard() {
                 onClick={() => navigate(observabilityPath(dashboards.slo))}
               />
               <QuickLinkButton
-                label="Incident Response"
+                label="Gateway RED Method"
                 icon={Siren}
-                onClick={() => navigate(observabilityPath(dashboards.incidentResponse))}
+                onClick={() => navigate(observabilityPath(dashboards.gatewayRed))}
               />
               <QuickLinkButton
-                label="Gateway Fleet"
+                label="Control Plane API"
                 icon={Layers}
-                onClick={() => navigate(observabilityPath(dashboards.gatewayFleet))}
+                onClick={() => navigate(observabilityPath(dashboards.controlPlaneApi))}
+              />
+              <QuickLinkButton
+                label="Platform Overview"
+                icon={Activity}
+                onClick={() => navigate(observabilityPath(dashboards.platformOverview))}
               />
               <QuickLinkButton
                 label="Arena Benchmark"

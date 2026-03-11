@@ -40,6 +40,29 @@ class GatewayInstanceRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_source_and_type(
+        self,
+        source: str,
+        gateway_type: GatewayType,
+        environment: str | None = None,
+    ) -> GatewayInstance | None:
+        """Find a gateway instance by source + type + optional environment.
+
+        Used to find ArgoCD-created entries that a self-registering gateway should adopt
+        instead of creating a duplicate.
+        """
+        query = select(GatewayInstance).where(
+            GatewayInstance.source == source,
+            GatewayInstance.gateway_type == gateway_type,
+            GatewayInstance.deleted_at.is_(None),
+        )
+        if environment:
+            query = query.where(GatewayInstance.environment == environment)
+        # Prefer the most recently updated entry
+        query = query.order_by(GatewayInstance.updated_at.desc()).limit(1)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def list_all(
         self,
         gateway_type: GatewayType | None = None,

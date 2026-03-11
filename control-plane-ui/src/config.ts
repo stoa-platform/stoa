@@ -110,8 +110,9 @@ export const config = {
         '/grafana/d/gateway-arena/gateway-arena-leaderboard',
       dashboards: {
         slo: '/grafana/d/stoa-slo-dashboard/slo-dashboard',
-        incidentResponse: '/grafana/d/stoa-incident-response/incident-response',
-        gatewayFleet: '/grafana/d/stoa-gw-unified/gateway-fleet-unified',
+        gatewayRed: '/grafana/d/stoa-gateway-red/gateway-red-method',
+        controlPlaneApi: '/grafana/d/stoa-control-plane-api/control-plane-api',
+        platformOverview: '/grafana/d/stoa-platform-overview/platform-overview',
         platformHealth: '/grafana/d/platform-health-l2/platform-health',
         serviceHealth: '/grafana/d/stoa-service-health/service-health',
         gatewayArena: '/grafana/d/gateway-arena/gateway-arena-leaderboard',

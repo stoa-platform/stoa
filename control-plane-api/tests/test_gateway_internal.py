@@ -3,8 +3,7 @@
 Covers the full lifecycle: register → heartbeat → config → auth rejection.
 """
 
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -29,7 +28,7 @@ def _registration_payload(**overrides):
 
 def _make_gateway_instance(**overrides):
     """Create a mock GatewayInstance with real enum values for Pydantic serialization."""
-    from src.models.gateway_instance import GatewayType, GatewayInstanceStatus
+    from src.models.gateway_instance import GatewayInstanceStatus, GatewayType
 
     gw_id = overrides.pop("id", uuid4())
     defaults = {
@@ -77,6 +76,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
             resp = client.post(
@@ -163,6 +163,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
             # Test with underscore mode (should be normalized)
@@ -192,6 +193,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
             resp = client.post(
@@ -201,6 +203,64 @@ class TestGatewayRegistration:
             )
 
             assert resp.status_code == 201
+
+    def test_register_adopts_argocd_entry(self, client):
+        """Gateway registration adopts existing ArgoCD entry instead of creating duplicate."""
+        argocd_gw = _make_gateway_instance(
+            name="argocd-stoa-gateway",
+            source="argocd",
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)  # No exact name match
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=argocd_gw)
+            mock_repo.update = AsyncMock(return_value=argocd_gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json=_registration_payload(),
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 201
+            mock_repo.update.assert_awaited_once()
+            mock_repo.create.assert_not_called()
+            # Verify it returned the ArgoCD entry
+            assert resp.json()["name"] == "argocd-stoa-gateway"
+
+    def test_register_prefers_name_match_over_argocd(self, client):
+        """Re-registration by name takes priority over ArgoCD adoption."""
+        existing = _make_gateway_instance()
+        updated = _make_gateway_instance(version="0.3.0")
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=existing)  # Name match found
+            mock_repo.update = AsyncMock(return_value=updated)
+            # get_by_source_and_type should NOT be called when name matches
+            mock_repo.get_by_source_and_type = AsyncMock()
+
+            resp = client.post(
+                REGISTER_URL,
+                json=_registration_payload(version="0.3.0"),
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 201
+            mock_repo.get_by_source_and_type.assert_not_awaited()
 
 
 class TestGatewayHeartbeat:
@@ -447,8 +507,8 @@ class TestHelperFunctions:
 
     def test_mode_to_gateway_type(self):
         """Mode strings map to correct GatewayType enum values."""
-        from src.routers.gateway_internal import _mode_to_gateway_type
         from src.models.gateway_instance import GatewayType
+        from src.routers.gateway_internal import _mode_to_gateway_type
 
         assert _mode_to_gateway_type("edge-mcp") == GatewayType.STOA_EDGE_MCP
         assert _mode_to_gateway_type("edge_mcp") == GatewayType.STOA_EDGE_MCP

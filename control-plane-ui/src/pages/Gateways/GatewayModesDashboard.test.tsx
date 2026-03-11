@@ -67,7 +67,7 @@ describe('GatewayModesDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('Edge MCP')).toBeInTheDocument();
     });
-    expect(screen.getByText('Sidecar')).toBeInTheDocument();
+    expect(screen.getByText('STOA Link')).toBeInTheDocument();
     expect(screen.getByText('Proxy')).toBeInTheDocument();
     expect(screen.getByText('Shadow')).toBeInTheDocument();
   });

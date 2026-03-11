@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     GATEWAY_HEARTBEAT_TIMEOUT_SECONDS: int = 90
     # Health check interval in seconds (how often to check for stale gateways)
     GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS: int = 30
+    # ArgoCD reconciler interval (how often to sync ArgoCD apps → gateway_instances)
+    GATEWAY_RECONCILER_INTERVAL_SECONDS: int = 60
 
     # Docs Search — Algolia integration (CAB-1327)
     ALGOLIA_APP_ID: str = "GIWP67WK7V"

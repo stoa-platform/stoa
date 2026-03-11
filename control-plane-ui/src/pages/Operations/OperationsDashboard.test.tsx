@@ -7,7 +7,7 @@ import type { PersonaRole } from '../../test/helpers';
 // Mock AuthContext
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
-// Mock api service — only platform status (no more gateway metrics or operations metrics)
+// Mock api service — only platform status
 vi.mock('../../services/api', () => ({
   apiService: {
     setAuthToken: vi.fn(),
@@ -52,24 +52,12 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
-// Mock config with panels + dashboards
+// Mock config with dashboards (panels config no longer needed — native components)
 vi.mock('../../config', () => ({
   config: {
     services: {
       grafana: {
         url: '/grafana/',
-        panels: {
-          sloAvailability: { uid: 'stoa-slo-dashboard', panelId: 1 },
-          sloLatencyP95: { uid: 'stoa-slo-dashboard', panelId: 2 },
-          sloErrorRate: { uid: 'stoa-slo-dashboard', panelId: 3 },
-          sloErrorBudget: { uid: 'stoa-slo-dashboard', panelId: 4 },
-          errorRateTimeseries: { uid: 'stoa-incident-response', panelId: 0 },
-          latencyP99: { uid: 'stoa-incident-response', panelId: 1 },
-          activeConnections: { uid: 'stoa-incident-response', panelId: 5 },
-          securityEvents: { uid: 'stoa-incident-response', panelId: 6 },
-          fleetRps: { uid: 'stoa-gw-unified', panelId: 2 },
-          platformCujPassing: { uid: 'platform-health-l2', panelId: 1 },
-        },
         dashboards: {
           slo: '/grafana/d/stoa-slo-dashboard/slo-dashboard',
           incidentResponse: '/grafana/d/stoa-incident-response/incident-response',
@@ -96,19 +84,19 @@ vi.mock('@stoa/shared/components/Skeleton', () => ({
   ),
 }));
 
-// Mock GrafanaPanel — render as a simple div with title
-vi.mock('../../components/GrafanaPanel', () => ({
-  GrafanaPanel: ({
-    title,
-    dashboardUid,
-    panelId,
-  }: {
-    title?: string;
-    dashboardUid: string;
-    panelId: number;
-  }) => (
-    <div data-testid="grafana-panel" data-uid={dashboardUid} data-panel-id={panelId}>
-      {title}
+// Mock MetricCard and MetricTimeseries — render as simple divs
+vi.mock('../../components/metrics/MetricCard', () => ({
+  MetricCard: ({ label, query }: { label: string; query: string }) => (
+    <div data-testid="metric-card" data-query={query}>
+      {label}
+    </div>
+  ),
+}));
+
+vi.mock('../../components/metrics/MetricTimeseries', () => ({
+  MetricTimeseries: ({ label, query }: { label: string; query: string }) => (
+    <div data-testid="metric-timeseries" data-query={query}>
+      {label}
     </div>
   ),
 }));
@@ -144,7 +132,7 @@ describe('OperationsDashboard', () => {
     expect(screen.getByText('Refresh')).toBeInTheDocument();
   });
 
-  it('renders SLO Overview section with 4 Grafana panels', async () => {
+  it('renders SLO Overview section with 4 native metric cards', async () => {
     renderComponent();
     await waitFor(() => {
       expect(screen.getByText('SLO Overview')).toBeInTheDocument();
@@ -155,6 +143,17 @@ describe('OperationsDashboard', () => {
     expect(screen.getByText('Error Budget')).toBeInTheDocument();
   });
 
+  it('renders native metric cards instead of Grafana iframes', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('SLO Overview')).toBeInTheDocument();
+    });
+    const metricCards = screen.getAllByTestId('metric-card');
+    expect(metricCards.length).toBeGreaterThanOrEqual(4);
+    // No Grafana iframes
+    expect(screen.queryByTestId('grafana-panel')).not.toBeInTheDocument();
+  });
+
   it('renders Platform Health section with ArgoCD components', async () => {
     renderComponent();
     await waitFor(() => {
@@ -162,6 +161,13 @@ describe('OperationsDashboard', () => {
     });
     expect(screen.getByText('control-plane-api')).toBeInTheDocument();
     expect(screen.getAllByText('stoa-gateway').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders CUJ Health as native metric card', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('CUJ Health Score')).toBeInTheDocument();
+    });
   });
 
   it('shows Recent Deployments section', async () => {
@@ -190,16 +196,6 @@ describe('OperationsDashboard', () => {
       expect(screen.getByText('Observability Dashboards')).toBeInTheDocument();
     });
     expect(screen.queryByText('Prometheus')).not.toBeInTheDocument();
-  });
-
-  it('renders Grafana panel embeds with correct UIDs', async () => {
-    renderComponent();
-    await waitFor(() => {
-      expect(screen.getByText('SLO Overview')).toBeInTheDocument();
-    });
-    const panels = screen.getAllByTestId('grafana-panel');
-    const sloPanel = panels.find((p) => p.getAttribute('data-uid') === 'stoa-slo-dashboard');
-    expect(sloPanel).toBeTruthy();
   });
 
   // RBAC — Persona-based visibility tests

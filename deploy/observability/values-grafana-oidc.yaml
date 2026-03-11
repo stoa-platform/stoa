@@ -38,7 +38,7 @@ grafana:
       enabled: true
       url_login: true
       enable_login_token: true
-      jwk_set_url: http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/certs
+      jwk_set_url: https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/certs
       username_claim: preferred_username
       email_claim: email
       auto_sign_up: true

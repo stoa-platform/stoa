@@ -34,35 +34,9 @@ interface GatewayHealth {
   id: string;
   name: string;
   status: 'online' | 'degraded' | 'offline';
-  uptime: number; // percentage
-  errorRate: number; // percentage
-  latencyP50: number; // ms
-  latencyP99: number; // ms
-  requestsPerMin: number;
-}
-
-interface PolicySummary {
-  activePolicies: number;
-  enforcedToday: number;
-  violations24h: number;
-  topViolationType: string;
-}
-
-interface TrafficOverview {
-  totalRequests24h: number;
-  uniqueTenants: number;
-  crossTenantCalls: number;
-  errorRate: number; // percentage
-  peakRps: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-function formatNumber(num: number): string {
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-  return num.toString();
-}
 
 const STATUS_CONFIG = {
   online: {
@@ -158,18 +132,6 @@ function GatewayRow({ gw }: { gw: GatewayHealth }) {
           {cfg.label}
         </span>
       </td>
-      <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
-        {gw.uptime.toFixed(2)}%
-      </td>
-      <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
-        {gw.errorRate.toFixed(2)}%
-      </td>
-      <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
-        {gw.latencyP50}ms / {gw.latencyP99}ms
-      </td>
-      <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
-        {formatNumber(gw.requestsPerMin)}/min
-      </td>
     </tr>
   );
 }
@@ -182,8 +144,6 @@ export function ProxyOwnerDashboard() {
   const isAdmin = hasPermission('tenants:read');
 
   const [gateways, setGateways] = useState<GatewayHealth[]>([]);
-  const [policies, setPolicies] = useState<PolicySummary | null>(null);
-  const [traffic, setTraffic] = useState<TrafficOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -197,7 +157,7 @@ export function ProxyOwnerDashboard() {
       const gwResponse = await apiService.get('/v1/admin/gateways');
       const instances = gwResponse.data?.items || gwResponse.data || [];
 
-      // Map real gateway data to our health model
+      // Map real gateway data — only use fields actually returned by the API
       const gwHealth: GatewayHealth[] = instances.map(
         (inst: {
           id: string;
@@ -210,37 +170,9 @@ export function ProxyOwnerDashboard() {
           name: inst.display_name || inst.name,
           status:
             inst.status === 'online' ? 'online' : inst.status === 'error' ? 'offline' : 'degraded',
-          uptime: inst.status === 'online' ? 99.9 + Math.random() * 0.09 : 95 + Math.random() * 4,
-          errorRate: inst.status === 'online' ? Math.random() * 0.5 : 2 + Math.random() * 5,
-          latencyP50: Math.floor(5 + Math.random() * 15),
-          latencyP99: Math.floor(50 + Math.random() * 150),
-          requestsPerMin: Math.floor(100 + Math.random() * 900),
         })
       );
       setGateways(gwHealth);
-
-      // Policy summary — derive from real API counts or use computed
-      const policySummary: PolicySummary = {
-        activePolicies: gwHealth.length * 3 + Math.floor(Math.random() * 5),
-        enforcedToday: Math.floor(500 + Math.random() * 1500),
-        violations24h: Math.floor(Math.random() * 50),
-        topViolationType: 'rate_limit',
-      };
-      setPolicies(policySummary);
-
-      // Traffic overview — derived from gateway data
-      const totalRpm = gwHealth.reduce((sum, g) => sum + g.requestsPerMin, 0);
-      const trafficData: TrafficOverview = {
-        totalRequests24h: totalRpm * 60 * 24,
-        uniqueTenants: Math.floor(3 + Math.random() * 10),
-        crossTenantCalls: Math.floor(totalRpm * 0.05),
-        errorRate:
-          gwHealth.length > 0
-            ? gwHealth.reduce((sum, g) => sum + g.errorRate, 0) / gwHealth.length
-            : 0,
-        peakRps: Math.floor(totalRpm / 60) * 2,
-      };
-      setTraffic(trafficData);
 
       if (!mountedRef.current) return;
       setLastRefresh(new Date());
@@ -322,36 +254,27 @@ export function ProxyOwnerDashboard() {
           />
           <KPICard
             label="Active Policies"
-            value={policies?.activePolicies ?? 0}
-            subtitle={`${policies?.enforcedToday ?? 0} enforced today`}
+            value="--"
+            subtitle="Metrics not yet available"
             icon={Shield}
-            iconBg="bg-blue-100 dark:bg-blue-900/30"
-            iconColor="text-blue-600 dark:text-blue-400"
+            iconBg="bg-neutral-100 dark:bg-neutral-700"
+            iconColor="text-neutral-400"
           />
           <KPICard
             label="Requests (24h)"
-            value={formatNumber(traffic?.totalRequests24h ?? 0)}
-            subtitle={`Peak: ${traffic?.peakRps ?? 0} req/s`}
+            value="--"
+            subtitle="Metrics not yet available"
             icon={Activity}
-            iconBg="bg-purple-100 dark:bg-purple-900/30"
-            iconColor="text-purple-600 dark:text-purple-400"
+            iconBg="bg-neutral-100 dark:bg-neutral-700"
+            iconColor="text-neutral-400"
           />
           <KPICard
             label="Violations (24h)"
-            value={policies?.violations24h ?? 0}
-            subtitle={
-              policies?.topViolationType
-                ? `Top: ${policies.topViolationType.replace('_', ' ')}`
-                : undefined
-            }
+            value="--"
+            subtitle="Metrics not yet available"
             icon={AlertTriangle}
-            iconBg="bg-amber-100 dark:bg-amber-900/30"
-            iconColor="text-amber-600 dark:text-amber-400"
-            trend={
-              policies && policies.violations24h > 0
-                ? { value: -12, label: 'vs yesterday' }
-                : undefined
-            }
+            iconBg="bg-neutral-100 dark:bg-neutral-700"
+            iconColor="text-neutral-400"
           />
         </div>
       )}
@@ -379,18 +302,6 @@ export function ProxyOwnerDashboard() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-                  Uptime
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-                  Error Rate
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-                  Latency (P50/P99)
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-                  Throughput
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
@@ -402,102 +313,32 @@ export function ProxyOwnerDashboard() {
         )}
       </div>
 
-      {/* Two-column layout for admin sections */}
+      {/* Two-column layout — traffic & policy metrics not yet available */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cross-Tenant Traffic — admin only */}
         <PermissionGate permission="tenants:read">
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
             <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
               Cross-Tenant Traffic
             </h2>
-            {traffic ? (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                    Unique Tenants
-                  </span>
-                  <span className="text-sm font-medium text-neutral-900 dark:text-white">
-                    {traffic.uniqueTenants}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                    Cross-Tenant Calls
-                  </span>
-                  <span className="text-sm font-medium text-neutral-900 dark:text-white">
-                    {formatNumber(traffic.crossTenantCalls)}/min
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                    Avg Error Rate
-                  </span>
-                  <span
-                    className={`text-sm font-medium ${traffic.errorRate < 1 ? 'text-green-600' : traffic.errorRate < 5 ? 'text-amber-600' : 'text-red-600'}`}
-                  >
-                    {traffic.errorRate.toFixed(2)}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500 dark:text-neutral-400">Peak RPS</span>
-                  <span className="text-sm font-medium text-neutral-900 dark:text-white">
-                    {traffic.peakRps}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-neutral-400 dark:text-neutral-500">Loading...</p>
-            )}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                Traffic metrics are not yet available. Per-gateway Prometheus instrumentation is
+                required.
+              </p>
+            </div>
           </div>
         </PermissionGate>
 
-        {/* Policy Enforcement Summary */}
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
             Policy Enforcement
           </h2>
-          {policies ? (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                  Active Policies
-                </span>
-                <span className="text-sm font-medium text-neutral-900 dark:text-white">
-                  {policies.activePolicies}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                  Enforced Today
-                </span>
-                <span className="text-sm font-medium text-neutral-900 dark:text-white">
-                  {formatNumber(policies.enforcedToday)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                  Violations (24h)
-                </span>
-                <span
-                  className={`text-sm font-medium ${policies.violations24h === 0 ? 'text-green-600' : 'text-amber-600'}`}
-                >
-                  {policies.violations24h}
-                </span>
-              </div>
-              {policies.topViolationType && policies.violations24h > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                    Top Violation
-                  </span>
-                  <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded">
-                    {policies.topViolationType.replace('_', ' ')}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-neutral-400 dark:text-neutral-500">Loading...</p>
-          )}
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              Policy metrics are not yet available. Enforcement counters will appear once policy
+              evaluation is instrumented.
+            </p>
+          </div>
         </div>
       </div>
 

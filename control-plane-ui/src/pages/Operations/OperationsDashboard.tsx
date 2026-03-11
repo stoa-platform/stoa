@@ -12,6 +12,10 @@ import {
   Gauge,
   Layers,
   Award,
+  Zap,
+  AlertTriangle,
+  Lock,
+  Wifi,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,12 +24,39 @@ import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { PlatformStatusResponse } from '../../types';
 import { config } from '../../config';
 import { observabilityPath } from '../../utils/navigation';
-import { GrafanaPanel } from '../../components/GrafanaPanel';
+import { MetricCard } from '../../components/metrics/MetricCard';
+import { MetricTimeseries } from '../../components/metrics/MetricTimeseries';
 
 const AUTO_REFRESH_INTERVAL = 30_000; // 30 seconds
 
-const panels = config.services.grafana.panels;
 const dashboards = config.services.grafana.dashboards;
+
+// PromQL queries for SLO metrics
+const QUERIES = {
+  // SLO: availability = 1 - error_rate (over 1h window)
+  availability:
+    '(1 - (sum(rate(stoa_http_requests_total{code=~"5.."}[1h])) or vector(0)) / (sum(rate(stoa_http_requests_total[1h])) or vector(1))) * 100',
+  // SLO: error rate percentage
+  errorRate:
+    '(sum(rate(stoa_http_requests_total{code=~"5.."}[1h])) / sum(rate(stoa_http_requests_total[1h]))) * 100 or vector(0)',
+  // SLO: p95 latency in ms
+  latencyP95:
+    'histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket[1h])) by (le)) * 1000 or vector(0)',
+  // SLO: error budget remaining (target 99.9%, 30d window)
+  errorBudget:
+    '(1 - ((sum(increase(stoa_http_requests_total{code=~"5.."}[30d])) or vector(0)) / (sum(increase(stoa_http_requests_total[30d])) or vector(1))) / 0.001) * 100',
+  // Platform CUJ health ratio (from arena L2 recording rule)
+  cujHealth: 'platform:verify_health:ratio or vector(0)',
+  // Traffic: error rate time-series (5m buckets over 1h)
+  errorRateTimeseries:
+    '(sum(rate(stoa_http_requests_total{code=~"5.."}[5m])) / sum(rate(stoa_http_requests_total[5m]))) * 100 or vector(0)',
+  // Traffic: active SSE/MCP connections
+  activeConnections: 'sum(stoa_mcp_sse_connections_active) or vector(0)',
+  // Security: rejected mTLS validations
+  securityEvents: 'sum(increase(stoa_mtls_validations_total{result="rejected"}[1h])) or vector(0)',
+  // Traffic: total gateway RPS
+  fleetRps: 'sum(rate(stoa_http_requests_total[5m])) or vector(0)',
+};
 
 interface RecentDeployment {
   id: string;
@@ -111,6 +142,14 @@ function QuickLinkButton({
     </button>
   );
 }
+
+// Format helpers
+const fmtPercent = (v: number | null) => (v === null ? '—' : `${v.toFixed(2)}%`);
+const fmtMs = (v: number | null) => (v === null ? '—' : v < 1 ? '<1 ms' : `${v.toFixed(0)} ms`);
+const fmtBudget = (v: number | null) =>
+  v === null ? '—' : v > 100 ? '100%' : v < 0 ? '0%' : `${v.toFixed(1)}%`;
+const fmtCount = (v: number | null) => (v === null ? '—' : v.toFixed(0));
+const fmtRps = (v: number | null) => (v === null ? '—' : `${v.toFixed(1)} req/s`);
 
 export function OperationsDashboard() {
   const navigate = useNavigate();
@@ -231,7 +270,7 @@ export function OperationsDashboard() {
         <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
-              <CardSkeleton key={i} className="h-52" />
+              <CardSkeleton key={i} className="h-32" />
             ))}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -241,7 +280,7 @@ export function OperationsDashboard() {
         </div>
       ) : (
         <>
-          {/* SLO Overview — Grafana Panel Embeds (visible to all authenticated users) */}
+          {/* SLO Overview — Native Prometheus metrics (visible to all authenticated users) */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
@@ -256,34 +295,38 @@ export function OperationsDashboard() {
               </button>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <GrafanaPanel
-                dashboardUid={panels.sloAvailability.uid}
-                panelId={panels.sloAvailability.panelId}
-                title="Availability"
-                height={180}
+              <MetricCard
+                label="Availability"
+                query={QUERIES.availability}
+                format={fmtPercent}
+                color="#10b981"
+                icon={CheckCircle}
               />
-              <GrafanaPanel
-                dashboardUid={panels.sloErrorRate.uid}
-                panelId={panels.sloErrorRate.panelId}
-                title="Error Rate"
-                height={180}
+              <MetricCard
+                label="Error Rate"
+                query={QUERIES.errorRate}
+                format={fmtPercent}
+                color="#ef4444"
+                icon={AlertTriangle}
               />
-              <GrafanaPanel
-                dashboardUid={panels.sloLatencyP95.uid}
-                panelId={panels.sloLatencyP95.panelId}
-                title="P95 Latency"
-                height={180}
+              <MetricCard
+                label="P95 Latency"
+                query={QUERIES.latencyP95}
+                format={fmtMs}
+                color="#f59e0b"
+                icon={Clock}
               />
-              <GrafanaPanel
-                dashboardUid={panels.sloErrorBudget.uid}
-                panelId={panels.sloErrorBudget.panelId}
-                title="Error Budget"
-                height={180}
+              <MetricCard
+                label="Error Budget"
+                query={QUERIES.errorBudget}
+                format={fmtBudget}
+                color="#8b5cf6"
+                icon={Gauge}
               />
             </div>
           </section>
 
-          {/* Platform Health — ArgoCD status (real data) + CUJ Health (Grafana) */}
+          {/* Platform Health — ArgoCD status (real data) + CUJ Health (Prometheus) */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
@@ -344,12 +387,16 @@ export function OperationsDashboard() {
                   </p>
                 )}
               </div>
-              {/* CUJ Health — Grafana embed */}
-              <GrafanaPanel
-                dashboardUid={panels.platformCujPassing.uid}
-                panelId={panels.platformCujPassing.panelId}
-                title="CUJ Health"
-                height={240}
+              {/* CUJ Health — Native Prometheus metric */}
+              <MetricCard
+                label="CUJ Health Score"
+                query={QUERIES.cujHealth}
+                rangeQuery={QUERIES.cujHealth}
+                rangeDuration={7200}
+                rangeStep="5m"
+                format={(v) => (v === null ? '—' : `${(v * 100).toFixed(0)}%`)}
+                color="#10b981"
+                icon={Activity}
               />
             </div>
           </section>
@@ -370,30 +417,34 @@ export function OperationsDashboard() {
                 </button>
               </div>
               <div className="space-y-4">
-                <GrafanaPanel
-                  dashboardUid={panels.errorRateTimeseries.uid}
-                  panelId={panels.errorRateTimeseries.panelId}
-                  title="Error Rate over Time"
-                  height={250}
+                <MetricTimeseries
+                  label="Error Rate over Time"
+                  query={QUERIES.errorRateTimeseries}
+                  duration={3600}
+                  step="1m"
+                  color="#ef4444"
                 />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <GrafanaPanel
-                    dashboardUid={panels.activeConnections.uid}
-                    panelId={panels.activeConnections.panelId}
-                    title="Active Connections"
-                    height={180}
+                  <MetricCard
+                    label="Active Connections"
+                    query={QUERIES.activeConnections}
+                    format={fmtCount}
+                    color="#3b82f6"
+                    icon={Wifi}
                   />
-                  <GrafanaPanel
-                    dashboardUid={panels.securityEvents.uid}
-                    panelId={panels.securityEvents.panelId}
-                    title="Security Events"
-                    height={180}
+                  <MetricCard
+                    label="Security Events"
+                    query={QUERIES.securityEvents}
+                    format={fmtCount}
+                    color="#f59e0b"
+                    icon={Lock}
                   />
-                  <GrafanaPanel
-                    dashboardUid={panels.fleetRps.uid}
-                    panelId={panels.fleetRps.panelId}
-                    title="Fleet RPS"
-                    height={180}
+                  <MetricCard
+                    label="Fleet RPS"
+                    query={QUERIES.fleetRps}
+                    format={fmtRps}
+                    color="#8b5cf6"
+                    icon={Zap}
                   />
                 </div>
               </div>

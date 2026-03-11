@@ -163,11 +163,14 @@ describe('OperationsDashboard', () => {
     expect(screen.getAllByText('stoa-gateway').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders CUJ Health as native metric card', async () => {
+  it('renders Platform Activity with API and MCP metrics', async () => {
     renderComponent();
     await waitFor(() => {
-      expect(screen.getByText('CUJ Health Score')).toBeInTheDocument();
+      expect(screen.getByText('Platform Activity')).toBeInTheDocument();
     });
+    expect(screen.getByText('API Requests/h')).toBeInTheDocument();
+    expect(screen.getByText('API In Progress')).toBeInTheDocument();
+    expect(screen.getByText('MCP Tool Calls/h')).toBeInTheDocument();
   });
 
   it('shows Recent Deployments section', async () => {

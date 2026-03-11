@@ -31,31 +31,37 @@ const AUTO_REFRESH_INTERVAL = 30_000; // 30 seconds
 
 const dashboards = config.services.grafana.dashboards;
 
-// PromQL queries for SLO metrics
+// PromQL queries — combines Gateway (stoa_http_requests_total, label: status)
+// and Control Plane API (stoa_control_plane_http_requests_total, label: status_code)
 const QUERIES = {
-  // SLO: availability = 1 - error_rate (over 1h window)
+  // SLO: availability = 1 - error_rate across both Gateway + API (1h window)
   availability:
-    '(1 - (sum(rate(stoa_http_requests_total{code=~"5.."}[1h])) or vector(0)) / (sum(rate(stoa_http_requests_total[1h])) or vector(1))) * 100',
-  // SLO: error rate percentage
+    '(1 - (sum(increase(stoa_http_requests_total{status=~"5.."}[1h])) + sum(increase(stoa_control_plane_http_requests_total{status_code=~"5.."}[1h])) or vector(0)) / (sum(increase(stoa_http_requests_total[1h])) + sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(1))) * 100',
+  // SLO: error rate percentage (Gateway + API combined)
   errorRate:
-    '(sum(rate(stoa_http_requests_total{code=~"5.."}[1h])) / sum(rate(stoa_http_requests_total[1h]))) * 100 or vector(0)',
-  // SLO: p95 latency in ms
+    '((sum(increase(stoa_http_requests_total{status=~"5.."}[1h])) or vector(0)) + (sum(increase(stoa_control_plane_http_requests_total{status_code=~"5.."}[1h])) or vector(0))) / ((sum(increase(stoa_http_requests_total[1h])) or vector(1)) + (sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(1))) * 100',
+  // SLO: p95 latency in ms (Gateway — primary user-facing)
   latencyP95:
     'histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket[1h])) by (le)) * 1000 or vector(0)',
-  // SLO: error budget remaining (target 99.9%, 30d window)
+  // SLO: error budget remaining (target 99.9%, 24h rolling — 30d needs longer retention)
   errorBudget:
-    '(1 - ((sum(increase(stoa_http_requests_total{code=~"5.."}[30d])) or vector(0)) / (sum(increase(stoa_http_requests_total[30d])) or vector(1))) / 0.001) * 100',
-  // Platform CUJ health ratio (from arena L2 recording rule)
-  cujHealth: 'platform:verify_health:ratio or vector(0)',
+    '(1 - ((sum(increase(stoa_http_requests_total{status=~"5.."}[24h])) or vector(0)) / (sum(increase(stoa_http_requests_total[24h])) or vector(1))) / 0.001) * 100',
+  // Platform health: total requests/h (shows activity, not CUJ)
+  platformRequests: 'sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(0)',
   // Traffic: error rate time-series (5m buckets over 1h)
   errorRateTimeseries:
-    '(sum(rate(stoa_http_requests_total{code=~"5.."}[5m])) / sum(rate(stoa_http_requests_total[5m]))) * 100 or vector(0)',
+    '(sum(increase(stoa_http_requests_total{status=~"5.."}[5m])) or vector(0)) / (sum(increase(stoa_http_requests_total[5m])) or vector(1)) * 100',
   // Traffic: active SSE/MCP connections
   activeConnections: 'sum(stoa_mcp_sse_connections_active) or vector(0)',
   // Security: rejected mTLS validations
   securityEvents: 'sum(increase(stoa_mtls_validations_total{result="rejected"}[1h])) or vector(0)',
-  // Traffic: total gateway RPS
-  fleetRps: 'sum(rate(stoa_http_requests_total[5m])) or vector(0)',
+  // Traffic: total platform RPS (Gateway + API combined)
+  fleetRps:
+    '(sum(rate(stoa_http_requests_total[5m])) or vector(0)) + (sum(rate(stoa_control_plane_http_requests_total[5m])) or vector(0))',
+  // API backend: requests in progress
+  apiInProgress: 'sum(stoa_control_plane_http_requests_in_progress) or vector(0)',
+  // MCP: active tool calls
+  mcpToolCalls: 'sum(increase(stoa_mcp_tools_calls_total[1h])) or vector(0)',
 };
 
 interface RecentDeployment {
@@ -387,17 +393,38 @@ export function OperationsDashboard() {
                   </p>
                 )}
               </div>
-              {/* CUJ Health — Native Prometheus metric */}
-              <MetricCard
-                label="CUJ Health Score"
-                query={QUERIES.cujHealth}
-                rangeQuery={QUERIES.cujHealth}
-                rangeDuration={7200}
-                rangeStep="5m"
-                format={(v) => (v === null ? '—' : `${(v * 100).toFixed(0)}%`)}
-                color="#10b981"
-                icon={Activity}
-              />
+              {/* Platform Activity — real Prometheus metrics */}
+              <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Activity className="h-4 w-4 text-neutral-500" />
+                  <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Platform Activity
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <MetricCard
+                    label="API Requests/h"
+                    query={QUERIES.platformRequests}
+                    format={fmtCount}
+                    color="#3b82f6"
+                    icon={BarChart3}
+                  />
+                  <MetricCard
+                    label="API In Progress"
+                    query={QUERIES.apiInProgress}
+                    format={fmtCount}
+                    color="#10b981"
+                    icon={Activity}
+                  />
+                  <MetricCard
+                    label="MCP Tool Calls/h"
+                    query={QUERIES.mcpToolCalls}
+                    format={fmtCount}
+                    color="#8b5cf6"
+                    icon={Zap}
+                  />
+                </div>
+              </div>
             </div>
           </section>
 

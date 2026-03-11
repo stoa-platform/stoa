@@ -53,6 +53,27 @@ const { mockGateways } = vi.hoisted(() => ({
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-10T00:00:00Z',
     },
+    {
+      id: 'gw-3',
+      name: 'argocd-kong-dataplane',
+      display_name: 'Kong Dataplane',
+      gateway_type: 'kong',
+      environment: 'production',
+      base_url: 'http://kong-dataplane.stoa-dataplane.svc.cluster.local',
+      auth_config: {},
+      status: 'online',
+      last_health_check: new Date().toISOString(),
+      health_details: {
+        argocd_health: 'Healthy',
+        argocd_sync: 'Synced',
+        argocd_revision: 'abc12345',
+      },
+      capabilities: ['rest'],
+      tags: ['argocd-managed'],
+      source: 'argocd',
+      created_at: '2024-03-01T00:00:00Z',
+      updated_at: '2024-03-11T00:00:00Z',
+    },
   ],
 }));
 
@@ -75,7 +96,7 @@ vi.mock('../../services/api', () => ({
   apiService: {
     getGatewayInstances: vi.fn().mockResolvedValue({
       items: mockGateways,
-      total: 2,
+      total: 3,
     }),
     checkGatewayHealth: vi.fn().mockResolvedValue({ status: 'online' }),
     deleteGatewayInstance: vi.fn().mockResolvedValue(undefined),
@@ -238,6 +259,30 @@ describe('GatewayList', () => {
     fireEvent.click(gatewayName);
     // gw-2 has error_rate: 0.08 (> 0.05) -> error rate card has warn styling
     expect(screen.getByText('8.0%')).toBeInTheDocument();
+  });
+
+  it('renders GitOps badge for argocd-sourced gateways', async () => {
+    renderGatewayList();
+    await screen.findByText('Kong Dataplane');
+    // ArgoCD-sourced gateways show "GitOps" badge
+    expect(screen.getAllByText('GitOps').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows ArgoCD sync info in detail panel', async () => {
+    renderGatewayList();
+    const gatewayName = await screen.findByText('Kong Dataplane');
+    fireEvent.click(gatewayName);
+    expect(screen.getByText('ArgoCD Sync')).toBeInTheDocument();
+    expect(screen.getByText('Healthy')).toBeInTheDocument();
+    expect(screen.getByText('Synced')).toBeInTheDocument();
+    expect(screen.getByText('abc12345')).toBeInTheDocument();
+  });
+
+  it('shows source label in detail panel for argocd gateway', async () => {
+    renderGatewayList();
+    const gatewayName = await screen.findByText('Kong Dataplane');
+    fireEvent.click(gatewayName);
+    expect(screen.getByText('ArgoCD (GitOps)')).toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

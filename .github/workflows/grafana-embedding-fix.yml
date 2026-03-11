@@ -23,17 +23,23 @@ jobs:
       - name: Find Grafana deployment
         id: find
         run: |
-          # Find the Grafana deployment (kube-prometheus-stack names it with a prefix)
-          GRAFANA_DEPLOY=$(kubectl get deployments -n stoa-monitoring -o name 2>/dev/null | grep grafana || true)
-          if [ -z "$GRAFANA_DEPLOY" ]; then
-            echo "Trying stoa-system namespace..."
-            GRAFANA_DEPLOY=$(kubectl get deployments -n stoa-system -o name 2>/dev/null | grep grafana || true)
-            echo "namespace=stoa-system" >> "$GITHUB_OUTPUT"
-          else
-            echo "namespace=stoa-monitoring" >> "$GITHUB_OUTPUT"
-          fi
-          echo "deployment=$GRAFANA_DEPLOY" >> "$GITHUB_OUTPUT"
-          echo "Found: $GRAFANA_DEPLOY"
+          # Search all likely namespaces for the Grafana deployment
+          for NS in stoa-monitoring monitoring stoa-system default; do
+            echo "Checking namespace: $NS"
+            GRAFANA_DEPLOY=$(kubectl get deployments -n "$NS" -o name 2>/dev/null | grep grafana || true)
+            if [ -n "$GRAFANA_DEPLOY" ]; then
+              echo "namespace=$NS" >> "$GITHUB_OUTPUT"
+              echo "deployment=$GRAFANA_DEPLOY" >> "$GITHUB_OUTPUT"
+              echo "Found: $GRAFANA_DEPLOY in $NS"
+              exit 0
+            fi
+          done
+          # Last resort: search all namespaces
+          echo "Searching all namespaces..."
+          kubectl get deployments --all-namespaces -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name' 2>/dev/null | grep -i grafana || true
+          echo "deployment=" >> "$GITHUB_OUTPUT"
+          echo "namespace=" >> "$GITHUB_OUTPUT"
+          echo "::warning::No Grafana deployment found in any namespace"
 
       - name: Patch Grafana env vars
         run: |

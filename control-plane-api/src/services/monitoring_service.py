@@ -1,4 +1,4 @@
-"""Monitoring service — queries audit-* index in OpenSearch for real transaction data."""
+"""Monitoring service — queries audit index in OpenSearch for real transaction data."""
 
 import logging
 
@@ -44,7 +44,7 @@ class MonitoringService:
 
     async def list_transactions(
         self,
-        tenant_id: str,
+        tenant_id: str | None,
         limit: int = 50,
         api_name: str | None = None,
         status: str | None = None,
@@ -53,9 +53,10 @@ class MonitoringService:
         """List recent transactions from audit index."""
         try:
             filters: list[dict] = [
-                {"term": {"tenant_id": tenant_id}},
                 {"range": {"@timestamp": {"gte": f"now-{time_range_minutes}m"}}},
             ]
+            if tenant_id:
+                filters.append({"term": {"tenant_id": tenant_id}})
             if api_name:
                 filters.append({"wildcard": {"request.path": f"*/{api_name}/*"}})
             if status:
@@ -72,7 +73,7 @@ class MonitoringService:
                 "size": limit,
             }
 
-            resp = await self.client.search(index="audit-*", body=body)
+            resp = await self.client.search(index="audit*", body=body)
             hits = resp.get("hits", {}).get("hits", [])
 
             transactions = []
@@ -105,19 +106,21 @@ class MonitoringService:
 
     async def get_transaction_stats(
         self,
-        tenant_id: str,
+        tenant_id: str | None,
         time_range_minutes: int = 60,
     ) -> APITransactionStats | None:
         """Get aggregated transaction statistics from audit index."""
         try:
+            stat_filters: list[dict] = [
+                {"range": {"@timestamp": {"gte": f"now-{time_range_minutes}m"}}},
+            ]
+            if tenant_id:
+                stat_filters.append({"term": {"tenant_id": tenant_id}})
             body = {
                 "size": 0,
                 "query": {
                     "bool": {
-                        "filter": [
-                            {"term": {"tenant_id": tenant_id}},
-                            {"range": {"@timestamp": {"gte": f"now-{time_range_minutes}m"}}},
-                        ]
+                        "filter": stat_filters
                     }
                 },
                 "aggs": {
@@ -151,7 +154,7 @@ class MonitoringService:
                 },
             }
 
-            resp = await self.client.search(index="audit-*", body=body)
+            resp = await self.client.search(index="audit*", body=body)
             total = resp["hits"]["total"]["value"]
             aggs = resp["aggregations"]
 
@@ -193,23 +196,23 @@ class MonitoringService:
     async def get_transaction(
         self,
         event_id: str,
-        tenant_id: str,
+        tenant_id: str | None,
     ) -> APITransaction | None:
         """Get detailed transaction by event_id."""
         try:
+            detail_filters: list[dict] = [{"term": {"event_id": event_id}}]
+            if tenant_id:
+                detail_filters.append({"term": {"tenant_id": tenant_id}})
             body = {
                 "query": {
                     "bool": {
-                        "filter": [
-                            {"term": {"event_id": event_id}},
-                            {"term": {"tenant_id": tenant_id}},
-                        ]
+                        "filter": detail_filters
                     }
                 },
                 "size": 1,
             }
 
-            resp = await self.client.search(index="audit-*", body=body)
+            resp = await self.client.search(index="audit*", body=body)
             hits = resp.get("hits", {}).get("hits", [])
             if not hits:
                 return None

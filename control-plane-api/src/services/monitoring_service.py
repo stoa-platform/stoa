@@ -285,22 +285,37 @@ class MonitoringService:
         event_id: str,
         tenant_id: str | None,
     ) -> APITransaction | None:
-        """Get detailed transaction by event_id."""
+        """Get detailed transaction by event_id or OpenSearch _id."""
         try:
-            detail_filters: list[dict] = [{"term": {"event_id": event_id}}]
-            if tenant_id:
-                detail_filters.append({"term": {"tenant_id": tenant_id}})
+            tenant_filter: list[dict] = (
+                [{"term": {"tenant_id": tenant_id}}] if tenant_id else []
+            )
+
+            # Try event_id field first
             body = {
                 "query": {
                     "bool": {
-                        "filter": detail_filters
+                        "filter": [{"term": {"event_id": event_id}}, *tenant_filter]
                     }
                 },
                 "size": 1,
             }
-
             resp = await self.client.search(index="audit*", body=body)
             hits = resp.get("hits", {}).get("hits", [])
+
+            # Fallback: try OpenSearch _id (used when event_id field is absent)
+            if not hits:
+                body = {
+                    "query": {
+                        "bool": {
+                            "filter": [{"ids": {"values": [event_id]}}, *tenant_filter]
+                        }
+                    },
+                    "size": 1,
+                }
+                resp = await self.client.search(index="audit*", body=body)
+                hits = resp.get("hits", {}).get("hits", [])
+
             if not hits:
                 return None
 

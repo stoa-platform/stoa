@@ -2,6 +2,7 @@
 # GitHub Actions: Control Plane API CI/CD
 # =============================================================================
 # Thin orchestrator — delegates to reusable workflows (ADR-031)
+# Deployment via GitOps: CI pushes image → dispatches to stoa-infra → ArgoCD syncs
 # =============================================================================
 
 name: Control Plane API CI/CD
@@ -15,7 +16,7 @@ on:
       - '.github/workflows/control-plane-api-ci.yml'
       - '.github/workflows/reusable-python-ci.yml'
       - '.github/workflows/reusable-docker-ghcr.yml'
-      - '.github/workflows/reusable-k8s-deploy.yml'
+      - '.github/workflows/reusable-gitops-deploy.yml'
       - '.github/actions/**'
 
   pull_request:
@@ -122,21 +123,17 @@ jobs:
       attestations: write
     secrets: inherit
 
-  # === Deploy: K3s rollout with auto-rollback ===
+  # === GitOps Deploy: dispatch to stoa-infra → ArgoCD syncs ===
   deploy:
     needs: docker
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/reusable-k8s-deploy.yml
+    uses: ./.github/workflows/reusable-gitops-deploy.yml
     with:
-      component: stoa-control-plane-api
-      container-name: control-plane-api
+      component: control-plane-api
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
       environment-url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-api') || 'api' }}.gostoa.dev
       verify-endpoint: https://${{ (github.event.inputs.environment == 'staging' && 'staging-api') || 'api' }}.gostoa.dev/health
-      expected-status: '200'
-    permissions:
-      contents: read
     secrets: inherit
 
   # === Smoke Test: health checks after deploy (Tier 1) ===
@@ -151,21 +148,17 @@ jobs:
     permissions:
       contents: read
 
-  # === Staging: deploy same dev image to staging cluster ===
+  # === Staging: deploy same dev image to staging via GitOps ===
   deploy-staging:
     needs: [smoke-test, docker]
     if: github.event_name == 'push' && needs.smoke-test.result == 'success'
-    uses: ./.github/workflows/reusable-k8s-deploy.yml
+    uses: ./.github/workflows/reusable-gitops-deploy.yml
     with:
-      component: stoa-control-plane-api
-      container-name: control-plane-api
+      component: control-plane-api
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: staging
       environment-url: https://staging-api.gostoa.dev
       verify-endpoint: https://staging-api.gostoa.dev/health
-      expected-status: '200'
-    permissions:
-      contents: read
     secrets: inherit
 
   smoke-test-staging:

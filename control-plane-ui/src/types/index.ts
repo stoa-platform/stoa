@@ -151,6 +151,27 @@ export interface BulkRevokeResponse {
   errors: string[];
 }
 
+// Tenant CA types (CAB-1787/1788 — per-tenant CA management)
+export interface TenantCAInfo {
+  tenant_id: string;
+  subject_dn: string;
+  serial_number: string;
+  not_before: string;
+  not_after: string;
+  key_algorithm: string;
+  fingerprint_sha256: string;
+  ca_certificate_pem: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface CSRSignResponse {
+  signed_certificate_pem: string;
+  subject_dn: string;
+  issuer_dn: string;
+  validity_days: number;
+}
+
 // Environment types (ADR-040 — Born GitOps)
 export type Environment = 'dev' | 'staging' | 'prod';
 export type EnvironmentMode = 'full' | 'read-only' | 'promote-only';

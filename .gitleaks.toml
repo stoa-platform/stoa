@@ -41,6 +41,8 @@ paths = [
   # Gateway Rust inline test fixtures (#[cfg(test)] blocks) — test RSA keys and fake JWTs
   '''stoa-gateway/src/oauth/client_auth\.rs''',
   '''stoa-gateway/src/oauth/proxy\.rs''',
+  # UI crypto test fixtures — forge-generated test keys (not real secrets)
+  '''control-plane-ui/src/lib/__tests__/crypto\.test\.ts''',
 ]
 
 regexes = [

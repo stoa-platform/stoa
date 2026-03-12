@@ -273,21 +273,46 @@ function TransactionRow({
         </div>
       </td>
       <td className="px-4 py-3">
-        <span
-          className={clsx(
-            'px-2 py-1 rounded text-xs font-bold',
-            getStatusCodeColor(transaction.status_code)
+        <div className="flex items-center gap-2">
+          <span
+            className={clsx(
+              'px-2 py-1 rounded text-xs font-bold',
+              getStatusCodeColor(transaction.status_code)
+            )}
+          >
+            {transaction.status_code}
+          </span>
+          {transaction.status_text && transaction.status_code >= 400 && (
+            <span className="text-xs text-neutral-500 dark:text-neutral-400">
+              {transaction.status_text}
+            </span>
           )}
-        >
-          {transaction.status_code}
-        </span>
+        </div>
       </td>
       <td className="px-4 py-3">
-        <div className={clsx('flex items-center gap-1.5', config.color)}>
-          <StatusIcon
-            className={clsx('h-4 w-4', transaction.status === 'pending' && 'animate-spin')}
-          />
-          <span className="text-sm font-medium">{config.label}</span>
+        <div className="flex items-center gap-2">
+          <div className={clsx('flex items-center gap-1.5', config.color)}>
+            <StatusIcon
+              className={clsx('h-4 w-4', transaction.status === 'pending' && 'animate-spin')}
+            />
+            <span className="text-sm font-medium">{config.label}</span>
+          </div>
+          {transaction.error_source && (
+            <span
+              className={clsx(
+                'px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide',
+                transaction.error_source === 'auth' || transaction.error_source === 'rbac'
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                  : transaction.error_source === 'rate-limiter'
+                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                    : transaction.error_source === 'gateway'
+                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400'
+              )}
+            >
+              {transaction.error_source}
+            </span>
+          )}
         </div>
       </td>
       <td className="px-4 py-3">
@@ -427,21 +452,43 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
           </div>
 
           {/* Error Message */}
-          {transaction.error_message && (
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-red-800 dark:text-red-400">
-                    Error Details
-                  </h4>
-                  <p className="text-sm text-red-700 dark:text-red-400 mt-1">
-                    {transaction.error_message}
-                  </p>
+          {(transaction.error_message || transaction.error_source) &&
+            transaction.status_code >= 400 && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-sm font-semibold text-red-800 dark:text-red-400">
+                        {transaction.status_code} {transaction.status_text || 'Error'}
+                      </h4>
+                      {transaction.error_source && (
+                        <span
+                          className={clsx(
+                            'px-2 py-0.5 rounded text-xs font-semibold uppercase',
+                            transaction.error_source === 'auth' ||
+                              transaction.error_source === 'rbac'
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                              : transaction.error_source === 'rate-limiter'
+                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+                                : transaction.error_source === 'gateway'
+                                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                                  : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                          )}
+                        >
+                          Source: {transaction.error_source}
+                        </span>
+                      )}
+                    </div>
+                    {transaction.error_message && (
+                      <p className="text-sm text-red-700 dark:text-red-400">
+                        {transaction.error_message}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Metadata */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">

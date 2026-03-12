@@ -563,6 +563,8 @@ export interface APITransaction {
   path: string;
   status_code: number;
   status: TransactionStatus;
+  status_text?: string;
+  error_source?: string;
   client_ip?: string;
   user_id?: string;
   started_at: string;
@@ -581,6 +583,8 @@ export interface APITransactionSummary {
   path: string;
   status_code: number;
   status: TransactionStatus;
+  status_text?: string;
+  error_source?: string;
   started_at: string;
   total_duration_ms: number;
   spans_count: number;

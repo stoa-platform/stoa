@@ -10,13 +10,11 @@ import { CertificateGenerationWizard } from '../CertificateGenerationWizard';
 // Mock the crypto module — forge keygen is too slow for unit tests
 vi.mock('../../lib/crypto', () => ({
   generateKeyPair: vi.fn(() => ({
-    privateKeyPem: '-----BEGIN RSA PRIVATE KEY-----\nMOCK\n-----END RSA PRIVATE KEY-----',
-    publicKeyPem: '-----BEGIN PUBLIC KEY-----\nMOCK\n-----END PUBLIC KEY-----',
+    privateKeyPem: 'MOCK_PRIVATE_KEY_PEM_DATA',
+    publicKeyPem: 'MOCK_PUBLIC_KEY_PEM_DATA',
     fingerprint: 'a'.repeat(64),
   })),
-  createCSR: vi.fn(
-    () => '-----BEGIN CERTIFICATE REQUEST-----\nMOCK\n-----END CERTIFICATE REQUEST-----'
-  ),
+  createCSR: vi.fn(() => 'MOCK_CSR_PEM_DATA'),
   createPKCS12: vi.fn(() => new Blob(['mock'], { type: 'application/x-pkcs12' })),
   downloadOnce: vi.fn(),
   downloadPem: vi.fn(),

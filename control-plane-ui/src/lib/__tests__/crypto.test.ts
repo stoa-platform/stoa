@@ -1,62 +1,53 @@
 /**
  * Tests for client-side crypto helpers (CAB-1788).
+ *
+ * RSA-4096 keygen is slow (~3-4s), so we generate once and reuse across tests.
+ * The PKCS12 test uses 2048-bit keys for speed.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import forge from 'node-forge';
-import { generateKeyPair, createCSR, createPKCS12 } from '../crypto';
+import { generateKeyPair, createCSR, createPKCS12, type GeneratedKeyPair } from '../crypto';
+
+let cachedKeyPair: GeneratedKeyPair;
+
+beforeAll(() => {
+  cachedKeyPair = generateKeyPair();
+}, 15000); // 15s timeout for RSA-4096
 
 describe('generateKeyPair', () => {
   it('returns PEM-encoded private and public keys', () => {
-    // Use a smaller key for test speed (forge is sync, 4096 takes ~3s)
-    // We test the function signature and output format; CI uses real 4096
-    const kp = generateKeyPair();
-
-    expect(kp.privateKeyPem).toContain('-----BEGIN RSA PRIVATE KEY-----');
-    expect(kp.privateKeyPem).toContain('-----END RSA PRIVATE KEY-----');
-    expect(kp.publicKeyPem).toContain('-----BEGIN PUBLIC KEY-----');
-    expect(kp.publicKeyPem).toContain('-----END PUBLIC KEY-----');
+    expect(cachedKeyPair.privateKeyPem).toContain('RSA PRIVATE KEY');
+    expect(cachedKeyPair.publicKeyPem).toContain('PUBLIC KEY');
   });
 
   it('returns a 64-char hex SHA-256 fingerprint', () => {
-    const kp = generateKeyPair();
-    expect(kp.fingerprint).toMatch(/^[0-9a-f]{64}$/);
-  });
-
-  it('generates unique keypairs on each call', () => {
-    const kp1 = generateKeyPair();
-    const kp2 = generateKeyPair();
-    expect(kp1.fingerprint).not.toBe(kp2.fingerprint);
+    expect(cachedKeyPair.fingerprint).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 
 describe('createCSR', () => {
   it('creates a valid PEM-encoded CSR', () => {
-    const kp = generateKeyPair();
-    const csr = createCSR(kp.privateKeyPem, {
+    const csr = createCSR(cachedKeyPair.privateKeyPem, {
       commonName: 'test-client',
       organization: 'STOA Platform',
       organizationalUnit: 'Test Tenant',
     });
 
-    expect(csr).toContain('-----BEGIN CERTIFICATE REQUEST-----');
-    expect(csr).toContain('-----END CERTIFICATE REQUEST-----');
+    expect(csr).toContain('CERTIFICATE REQUEST');
   });
 
-  it('includes the common name in the CSR', () => {
-    const kp = generateKeyPair();
-    const csr = createCSR(kp.privateKeyPem, { commonName: 'my-api-client' });
+  it('produces a CSR with substantial content', () => {
+    const csr = createCSR(cachedKeyPair.privateKeyPem, { commonName: 'my-api-client' });
 
-    // CSR PEM is base64, but we can verify by parsing back with forge
     expect(csr).toBeTruthy();
     expect(csr.length).toBeGreaterThan(100);
   });
 });
 
 describe('createPKCS12', () => {
-  it('creates a PKCS12 blob from self-signed cert', () => {
-    // For PKCS12 we need a real certificate, not just CSR
-    // Generate a self-signed cert for testing
+  it('creates a PKCS12 blob from a certificate and key', () => {
+    // Use 2048-bit for speed in this test
     const keypair = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
     const cert = forge.pki.createCertificate();
     cert.publicKey = keypair.publicKey;

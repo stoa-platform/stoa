@@ -19,7 +19,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
     "@types/js-yaml": "^4.0.9",
-    "axios": "^1.6.5",
+    "axios": "^1.13.6",
     "clsx": "^2.1.0",
     "i18next": "^25.8.13",
     "js-yaml": "^4.1.1",

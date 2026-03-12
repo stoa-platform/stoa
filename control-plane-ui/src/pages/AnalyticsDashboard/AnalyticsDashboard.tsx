@@ -76,9 +76,11 @@ export function AnalyticsDashboard() {
     `sum(rate(stoa_mcp_tools_calls_total{tenant="${tenantId}",status="error"}[5m])) / sum(rate(stoa_mcp_tools_calls_total{tenant="${tenantId}"}[5m]))`,
     AUTO_REFRESH_INTERVAL
   );
-  // consumer_id label not yet exposed by the gateway (metrics.rs labels: tool, tenant, status)
-  // Query disabled — would always return 0. Show "--" in the KPI card instead.
-  const activeConsumers = usePrometheusQuery('', 0);
+  // CAB-1782: consumer_id label now exposed by gateway on stoa_mcp_tools_calls_total
+  const activeConsumers = usePrometheusQuery(
+    `count(count by (consumer_id) (stoa_mcp_tools_calls_total{tenant="${tenantId}",consumer_id!="unknown"}))`,
+    AUTO_REFRESH_INTERVAL
+  );
 
   // Sparklines
   const callsTrend = usePrometheusRange(
@@ -132,9 +134,19 @@ export function AnalyticsDashboard() {
     expandedTool ? AUTO_REFRESH_INTERVAL : 0
   );
 
-  // Consumer usage queries disabled — consumer_id label not exposed by gateway metrics.
-  // These queries would always return empty results. Will be re-enabled when
-  // consumer tracking is added to the gateway (separate ticket).
+  // CAB-1782: Consumer usage queries — consumer_id label now on CounterVec
+  const topConsumers = usePrometheusQuery(
+    `topk(10, sum by (consumer_id) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}",consumer_id!="unknown"}[${timeRange}])))`,
+    AUTO_REFRESH_INTERVAL
+  );
+  const topConsumersErrors = usePrometheusQuery(
+    `sum by (consumer_id) (increase(stoa_mcp_tools_calls_total{tenant="${tenantId}",consumer_id!="unknown",status="error"}[${timeRange}]))`,
+    AUTO_REFRESH_INTERVAL
+  );
+  const topConsumersLatency = usePrometheusQuery(
+    `sum by (consumer_id) (rate(stoa_mcp_tool_duration_seconds_sum{tenant="${tenantId}"}[5m])) / sum by (consumer_id) (rate(stoa_mcp_tool_duration_seconds_count{tenant="${tenantId}"}[5m]))`,
+    AUTO_REFRESH_INTERVAL
+  );
 
   // API data
   const loadApiData = useCallback(async () => {
@@ -619,7 +631,7 @@ export function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* Consumer Activity — disabled until consumer_id label is added to gateway metrics */}
+          {/* Consumer Activity (CAB-1782) */}
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -632,16 +644,85 @@ export function AnalyticsDashboard() {
               </div>
               <Users className="h-5 w-5 text-neutral-400" />
             </div>
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
-              <p className="text-sm text-amber-700 dark:text-amber-400">
-                Consumer-level tracking is not yet available. The gateway does not currently expose
-                a{' '}
-                <code className="text-xs bg-amber-100 dark:bg-amber-900/40 px-1 rounded">
-                  consumer_id
-                </code>{' '}
-                label in its metrics.
-              </p>
-            </div>
+            {topConsumers.data &&
+            (
+              topConsumers.data as Array<{
+                metric: { consumer_id: string };
+                value: [number, string];
+              }>
+            ).length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-neutral-500 dark:text-neutral-400 border-b dark:border-neutral-700">
+                      <th className="pb-2 font-medium">Consumer</th>
+                      <th className="pb-2 font-medium text-right">Calls</th>
+                      <th className="pb-2 font-medium text-right">Errors</th>
+                      <th className="pb-2 font-medium text-right">Error %</th>
+                      <th className="pb-2 font-medium text-right">Avg Latency</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(
+                      topConsumers.data as Array<{
+                        metric: { consumer_id: string };
+                        value: [number, string];
+                      }>
+                    ).map((row) => {
+                      const consumerId = row.metric.consumer_id;
+                      const calls = parseFloat(row.value[1]) || 0;
+                      const errors = (
+                        topConsumersErrors.data as Array<{
+                          metric: { consumer_id: string };
+                          value: [number, string];
+                        }> | null
+                      )?.find((e) => e.metric.consumer_id === consumerId);
+                      const errorCount = errors ? parseFloat(errors.value[1]) || 0 : 0;
+                      const errorPct = calls > 0 ? (errorCount / calls) * 100 : 0;
+                      const latency = (
+                        topConsumersLatency.data as Array<{
+                          metric: { consumer_id: string };
+                          value: [number, string];
+                        }> | null
+                      )?.find((l) => l.metric.consumer_id === consumerId);
+                      const avgLatency = latency ? parseFloat(latency.value[1]) || 0 : 0;
+                      return (
+                        <tr
+                          key={consumerId}
+                          className="border-b dark:border-neutral-700 last:border-0"
+                        >
+                          <td className="py-2 font-mono text-xs">{consumerId}</td>
+                          <td className="py-2 text-right">{Math.round(calls).toLocaleString()}</td>
+                          <td className="py-2 text-right">
+                            {Math.round(errorCount).toLocaleString()}
+                          </td>
+                          <td className="py-2 text-right">
+                            <span
+                              className={
+                                errorPct > 5
+                                  ? 'text-red-600 dark:text-red-400 font-semibold'
+                                  : errorPct > 1
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-green-600 dark:text-green-400'
+                              }
+                            >
+                              {errorPct.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="py-2 text-right">{(avgLatency * 1000).toFixed(0)}ms</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState
+                title="No consumer data"
+                description="Consumer activity will appear here when authenticated requests are made."
+                illustration={<Users className="h-12 w-12" />}
+              />
+            )}
           </div>
         </>
       )}

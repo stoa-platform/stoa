@@ -289,7 +289,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 event_category=category,
                 severity=severity,
                 actor=actor,
-                tenant_id=actor.get("tenant_id"),
+                tenant_id=actor.get("tenant_id") or "platform",
                 resource=self._extract_resource(request),
                 action=f"{request.method} {request.url.path}",
                 outcome=outcome,

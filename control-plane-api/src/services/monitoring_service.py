@@ -121,6 +121,68 @@ def _extract_api_name(path: str) -> str:
     return parts[0] if parts else "unknown"
 
 
+def _build_spans_from_timings(
+    gateway_timings: dict[str, float],
+    total_latency_ms: int,
+    status_code: int,
+    path: str,
+) -> list[TransactionSpan]:
+    """Build ordered TransactionSpan list from gateway Server-Timing data.
+
+    Maps gateway timing stages to spans with computed start offsets.
+    Stages are ordered by the gateway middleware chain execution order:
+    identity → auth → quota → supervision → policy_eval → routing → backend_call → transport
+    """
+    # Ordered stages matching the gateway middleware chain
+    stage_order = [
+        ("identity", "gateway-identity"),
+        ("auth", "gateway-auth"),
+        ("quota", "gateway-quota"),
+        ("supervision", "gateway-supervision"),
+        ("policy_eval", "gateway-policy"),
+        ("routing", "gateway-routing"),
+        ("backend_call", "gateway-backend"),
+        ("serialization", "gateway-serialization"),
+    ]
+
+    spans: list[TransactionSpan] = []
+    offset_ms = 0
+    status = _status_from_code(status_code)
+
+    for stage_name, service_name in stage_order:
+        dur = gateway_timings.get(stage_name)
+        if dur is None:
+            continue
+        dur_int = max(round(dur), 0)
+        spans.append(
+            TransactionSpan(
+                name=stage_name,
+                service=service_name,
+                start_offset_ms=offset_ms,
+                duration_ms=dur_int,
+                status="success" if status_code < 400 else status,
+                metadata={},
+            )
+        )
+        offset_ms += dur_int
+
+    # If no gateway spans but we have total, add a single span as fallback
+    if not spans:
+        source = _error_source(path, status_code) or "control-plane-api"
+        spans.append(
+            TransactionSpan(
+                name="api_request",
+                service=source if status_code >= 400 else "control-plane-api",
+                start_offset_ms=0,
+                duration_ms=total_latency_ms,
+                status=status,
+                metadata={},
+            )
+        )
+
+    return spans
+
+
 class MonitoringService:
     """Queries OpenSearch audit-* index for transaction analytics."""
 
@@ -169,6 +231,10 @@ class MonitoringService:
                 code = res.get("status_code", 0)
                 path = req.get("path", "")
 
+                # Count gateway spans from Server-Timing data (CAB-1790)
+                gateway_timings = res.get("gateway_timings", {})
+                spans_count = len(gateway_timings) if gateway_timings else 1
+
                 transactions.append(
                     APITransactionSummary(
                         id=src.get("event_id", hit["_id"]),
@@ -182,7 +248,7 @@ class MonitoringService:
                         error_source=_error_source(path, code),
                         started_at=src.get("@timestamp", ""),
                         total_duration_ms=int(res.get("latency_ms", 0)),
-                        spans_count=1,
+                        spans_count=spans_count,
                     )
                 )
             return transactions
@@ -205,11 +271,7 @@ class MonitoringService:
                 stat_filters.append({"term": {"tenant_id.keyword": tenant_id}})
             body = {
                 "size": 0,
-                "query": {
-                    "bool": {
-                        "filter": stat_filters
-                    }
-                },
+                "query": {"bool": {"filter": stat_filters}},
                 "aggs": {
                     "success_count": {"filter": {"range": {"response.status_code": {"lt": 400}}}},
                     "error_count": {
@@ -287,17 +349,11 @@ class MonitoringService:
     ) -> APITransaction | None:
         """Get detailed transaction by event_id or OpenSearch _id."""
         try:
-            tenant_filter: list[dict] = (
-                [{"term": {"tenant_id.keyword": tenant_id}}] if tenant_id else []
-            )
+            tenant_filter: list[dict] = [{"term": {"tenant_id.keyword": tenant_id}}] if tenant_id else []
 
             # Try event_id.keyword first (event_id is mapped as text, term needs keyword subfield)
             body = {
-                "query": {
-                    "bool": {
-                        "filter": [{"term": {"event_id.keyword": event_id}}, *tenant_filter]
-                    }
-                },
+                "query": {"bool": {"filter": [{"term": {"event_id.keyword": event_id}}, *tenant_filter]}},
                 "size": 1,
             }
             resp = await self.client.search(index="audit*", body=body)
@@ -306,11 +362,7 @@ class MonitoringService:
             # Fallback: try OpenSearch _id (used when event_id field is absent)
             if not hits:
                 body = {
-                    "query": {
-                        "bool": {
-                            "filter": [{"ids": {"values": [event_id]}}, *tenant_filter]
-                        }
-                    },
+                    "query": {"bool": {"filter": [{"ids": {"values": [event_id]}}, *tenant_filter]}},
                     "size": 1,
                 }
                 resp = await self.client.search(index="audit*", body=body)
@@ -327,15 +379,9 @@ class MonitoringService:
             latency = int(res.get("latency_ms", 0))
             path = req.get("path", "")
 
-            source = _error_source(path, code) or "control-plane-api"
-            span = TransactionSpan(
-                name="api_request",
-                service=source if code >= 400 else "control-plane-api",
-                start_offset_ms=0,
-                duration_ms=latency,
-                status=_status_from_code(code),
-                metadata={"correlation_id": src.get("correlation_id", "")},
-            )
+            # Build spans from gateway Server-Timing data (CAB-1790)
+            gateway_timings = res.get("gateway_timings", {})
+            spans = _build_spans_from_timings(gateway_timings, latency, code, path)
 
             error_msg = None
             if code >= 400:
@@ -357,7 +403,7 @@ class MonitoringService:
                 user_id=actor.get("id"),
                 started_at=src.get("@timestamp", ""),
                 total_duration_ms=latency,
-                spans=[span],
+                spans=spans,
                 error_message=error_msg,
             )
 

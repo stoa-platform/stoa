@@ -20,6 +20,12 @@ services:
       STOA_HOST: "0.0.0.0"
       STOA_GATEWAY_MODE: "edge-mcp"
       STOA_ADMIN_API_TOKEN: "${STOA_ADMIN_API_TOKEN:?Set STOA_ADMIN_API_TOKEN from Infisical prod/gateway/arena/ADMIN_API_TOKEN}"
+      # Control Plane registration (CAB-1781)
+      STOA_CONTROL_PLANE_URL: "${STOA_CONTROL_PLANE_URL:-https://api.gostoa.dev}"
+      STOA_CONTROL_PLANE_API_KEY: "${STOA_CONTROL_PLANE_API_KEY:-}"
+      STOA_INSTANCE_NAME: "stoa-arena-vps"
+      STOA_ENVIRONMENT: "prod"
+      STOA_AUTO_REGISTER: "true"
       # Disable all optional features — pure proxy benchmark
       STOA_POLICY_ENABLED: "false"
       STOA_ZOMBIE_DETECTION_ENABLED: "false"

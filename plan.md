@@ -346,6 +346,7 @@
 
 ### Todo
 
+- [ ] CAB-1781: feat(infra) Universal Gateway Self-Registration (13 pts) — Council 8.50/10
 - [ ] CAB-1773: fix(ui) Grafana iframe embedding with JWT auth_token (8 pts) — Council 8.50/10
 
 ### Done

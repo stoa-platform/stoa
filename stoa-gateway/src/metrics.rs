@@ -851,7 +851,13 @@ mod tests {
     #[test]
     fn test_get_requests_total() {
         // Record some calls and verify total is non-negative
-        record_tool_call("metric_test_tool", "metric-tenant", "success", 0.01, "consumer-1");
+        record_tool_call(
+            "metric_test_tool",
+            "metric-tenant",
+            "success",
+            0.01,
+            "consumer-1",
+        );
         let total = get_requests_total();
         assert!(total >= 1, "Expected at least 1 request, got {}", total);
     }
@@ -859,7 +865,13 @@ mod tests {
     #[test]
     fn test_get_error_rate_with_no_errors() {
         // Record only success calls
-        record_tool_call("rate_test_tool", "rate-tenant", "success", 0.01, "consumer-1");
+        record_tool_call(
+            "rate_test_tool",
+            "rate-tenant",
+            "success",
+            0.01,
+            "consumer-1",
+        );
         let rate = get_error_rate();
         // Rate should be between 0.0 and 1.0
         assert!(

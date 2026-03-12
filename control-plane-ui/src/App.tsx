@@ -188,6 +188,11 @@ const CredentialMappings = lazy(() =>
 // CAB-1649: Contracts / UAC management
 const Contracts = lazy(() => import('./pages/Contracts').then((m) => ({ default: m.Contracts })));
 
+// CAB-1786: Certificate Management Page
+const CertificatesPage = lazy(() =>
+  import('./pages/Certificates').then((m) => ({ default: m.Certificates }))
+);
+
 // CAB-1706: GitOps Promotion Flow
 const PromotionsPage = lazy(() =>
   import('./pages/Promotions').then((m) => ({ default: m.Promotions }))
@@ -235,6 +240,7 @@ function ProtectedRoutes() {
                 <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
                 <Route path="/applications" element={<Applications />} />
                 <Route path="/consumers" element={<Consumers />} />
+                <Route path="/certificates" element={<CertificatesPage />} />
                 <Route path="/subscriptions" element={<Subscriptions />} />
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/monitoring" element={<APIMonitoring />} />

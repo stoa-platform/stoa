@@ -52,6 +52,7 @@ class ExternalMCPServerRepository:
         self,
         tenant_id: str,
         enabled_only: bool = False,
+        environment: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ExternalMCPServer], int]:
@@ -64,6 +65,9 @@ class ExternalMCPServerRepository:
 
         if enabled_only:
             query = query.where(ExternalMCPServer.enabled.is_(True))
+
+        if environment:
+            query = query.where(ExternalMCPServer.environment == environment)
 
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.session.execute(count_query)
@@ -98,6 +102,7 @@ class ExternalMCPServerRepository:
         self,
         tenant_id: str | None = None,
         enabled_only: bool = False,
+        environment: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ExternalMCPServer], int]:
@@ -115,6 +120,9 @@ class ExternalMCPServerRepository:
 
         if enabled_only:
             query = query.where(ExternalMCPServer.enabled.is_(True))
+
+        if environment:
+            query = query.where(ExternalMCPServer.environment == environment)
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())

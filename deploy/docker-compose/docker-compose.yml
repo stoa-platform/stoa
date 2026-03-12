@@ -230,7 +230,9 @@ services:
       STOA_LOG_LEVEL: ${LOG_LEVEL:-info}
       STOA_LOG_FORMAT: json
       STOA_GATEWAY_MODE: edge-mcp
-      STOA_AUTO_REGISTER: "false"
+      STOA_AUTO_REGISTER: "${STOA_AUTO_REGISTER:-true}"
+      STOA_INSTANCE_NAME: "stoa-quickstart"
+      STOA_ENVIRONMENT: "dev"
     depends_on:
       control-plane-api:
         condition: service_healthy

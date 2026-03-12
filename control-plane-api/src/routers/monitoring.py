@@ -14,7 +14,7 @@ from ..schemas.monitoring import (
     APITransactionSummary,
     TransactionSpan,
 )
-from ..services.monitoring_service import MonitoringService
+from ..services.monitoring_service import MonitoringService, _error_source, _status_text
 
 logger = logging.getLogger(__name__)
 
@@ -95,15 +95,19 @@ def generate_demo_transactions(count: int = 50, tenant_id: str | None = None) ->
         tx_id = f"tx-{i:06d}-{random.randint(1000, 9999)}"
         trace_id = f"trace-{random.randint(100000, 999999)}"
 
+        path = random.choice(api["paths"])
+        full_path = f"/v1/{api['name']}{path}"
         transactions.append(
             APITransactionSummary(
                 id=tx_id,
                 trace_id=trace_id,
                 api_name=api["name"],
                 method=method,
-                path=random.choice(api["paths"]),
+                path=full_path,
                 status_code=status_code,
                 status=status,
+                status_text=_status_text(status_code),
+                error_source=_error_source(full_path, status_code),
                 started_at=started_at.isoformat() + "Z",
                 total_duration_ms=latency,
                 spans_count=random.randint(3, 8),
@@ -156,15 +160,18 @@ def generate_transaction_detail(tx_id: str, tenant_id: str = "demo") -> APITrans
     status_code = 500 if is_error else 200
     status = "error" if is_error else "success"
 
+    path = f"/v1/{api_name}/{api_name.replace('-api', '')}s/12345"
     return APITransaction(
         id=tx_id,
         trace_id=f"trace-{random.randint(100000, 999999)}",
         api_name=api_name,
         tenant_id=tenant_id,
         method=random.choice(["GET", "POST", "PUT"]),
-        path=f"/{api_name.replace('-api', '')}s/12345",
+        path=path,
         status_code=status_code,
         status=status,
+        status_text=_status_text(status_code),
+        error_source=_error_source(path, status_code),
         client_ip=f"10.0.{random.randint(1, 255)}.{random.randint(1, 255)}",
         user_id=f"user-{random.randint(1000, 9999)}",
         started_at=base_time.isoformat() + "Z",
@@ -172,7 +179,7 @@ def generate_transaction_detail(tx_id: str, tenant_id: str = "demo") -> APITrans
         spans=spans,
         request_headers={"Content-Type": "application/json", "Authorization": "Bearer ***"},
         response_headers={"Content-Type": "application/json"},
-        error_message="Internal server error" if is_error else None,
+        error_message=_status_text(status_code) if is_error else None,
     )
 
 

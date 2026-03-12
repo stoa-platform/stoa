@@ -20,6 +20,8 @@ class APITransactionSummary(BaseModel):
     path: str
     status_code: int
     status: str  # success, error, timeout, pending
+    status_text: str = ""  # HTTP status text (e.g. "Not Implemented")
+    error_source: str | None = None  # Origin of error: "backend", "gateway", "auth", etc.
     started_at: str
     total_duration_ms: int
     spans_count: int
@@ -34,6 +36,8 @@ class APITransaction(BaseModel):
     path: str
     status_code: int
     status: str
+    status_text: str = ""
+    error_source: str | None = None
     client_ip: str | None = None
     user_id: str | None = None
     started_at: str

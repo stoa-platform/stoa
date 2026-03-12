@@ -274,4 +274,4 @@ class TestGetTransaction:
 
         assert result is not None
         assert result.status == "error"
-        assert result.error_message == "Internal failure"
+        assert result.error_message == "Internal Server Error: Internal failure"

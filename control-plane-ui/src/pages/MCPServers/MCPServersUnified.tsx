@@ -353,15 +353,7 @@ function CustomServersTab() {
   const [syncingServerId, setSyncingServerId] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    if (isReady) loadServers();
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [isReady, activeEnvironment]);
-
-  async function loadServers() {
+  const loadServers = useCallback(async () => {
     try {
       setLoading(true);
       const response = await externalMcpServersService.listServers({
@@ -377,7 +369,15 @@ function CustomServersTab() {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }
+  }, [activeEnvironment]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    if (isReady) loadServers();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [isReady, loadServers]);
 
   const handleCreate = useCallback(
     async (data: ExternalMCPServerCreate | ExternalMCPServerUpdate) => {
@@ -394,7 +394,7 @@ function CustomServersTab() {
         throw new Error(message);
       }
     },
-    [activeEnvironment]
+    [activeEnvironment, loadServers]
   );
 
   const handleTestConnection = useCallback(
@@ -419,7 +419,7 @@ function CustomServersTab() {
         setTestingServerId(null);
       }
     },
-    [toast]
+    [toast, loadServers]
   );
 
   const handleSyncTools = useCallback(
@@ -439,7 +439,7 @@ function CustomServersTab() {
         setSyncingServerId(null);
       }
     },
-    [toast]
+    [toast, loadServers]
   );
 
   const handleDelete = useCallback(
@@ -461,7 +461,7 @@ function CustomServersTab() {
         toast.error('Delete failed', message);
       }
     },
-    [toast, confirm]
+    [toast, confirm, loadServers]
   );
 
   if (loading) {

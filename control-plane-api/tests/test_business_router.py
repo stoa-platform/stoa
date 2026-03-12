@@ -104,8 +104,8 @@ class TestBusinessRouter:
             mock_prom.query = AsyncMock(return_value={
                 "resultType": "vector",
                 "result": [
-                    {"metric": {"tool_name": "payment_api"}, "value": [0, "1000"]},
-                    {"metric": {"tool_name": "order_api"}, "value": [0, "500"]},
+                    {"metric": {"tool": "payment_api"}, "value": [0, "1000"]},
+                    {"metric": {"tool": "order_api"}, "value": [0, "500"]},
                 ],
             })
 

@@ -15083,6 +15083,11 @@
       "PlatformStatusResponse": {
         "description": "Complete platform status response.",
         "properties": {
+          "demo_mode": {
+            "default": false,
+            "title": "Demo Mode",
+            "type": "boolean"
+          },
           "events": {
             "items": {
               "$ref": "#/components/schemas/PlatformEvent"
@@ -25319,6 +25324,26 @@
           }
         },
         "summary": "Startup",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/workers": {
+      "get": {
+        "description": "Background workers health status.",
+        "operationId": "workers_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Workers Status",
         "tags": [
           "Health"
         ]

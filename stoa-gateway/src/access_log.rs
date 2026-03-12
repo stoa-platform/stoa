@@ -10,6 +10,7 @@
 use axum::{extract::Request, middleware::Next, response::Response};
 use std::time::Instant;
 
+use crate::diagnostics::latency::{new_shared_tracker, to_server_timing, Stage};
 use crate::telemetry::extract_trace_id;
 use crate::trace_context::RequestTraceContext;
 
@@ -26,7 +27,7 @@ const SKIP_PATHS: &[&str] = &[
 ///
 /// Extracts tenant_id and consumer_id from request extensions (set by auth
 /// middleware) when available.
-pub async fn access_log_middleware(request: Request, next: Next) -> Response {
+pub async fn access_log_middleware(mut request: Request, next: Next) -> Response {
     let path = request.uri().path().to_string();
 
     // Skip noisy endpoints
@@ -62,10 +63,27 @@ pub async fn access_log_middleware(request: Request, next: Next) -> Response {
         .get::<RequestTraceContext>()
         .map(|ctx| ctx.trace_id.clone());
 
+    // Inject a shared LatencyTracker for downstream middlewares to record per-layer timings.
+    // Each middleware calls begin_stage()/end_stage() on this tracker via request extensions.
+    let tracker = new_shared_tracker();
+    request.extensions_mut().insert(tracker.clone());
+
     let start = Instant::now();
-    let response = next.run(request).await;
+    let mut response = next.run(request).await;
     let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
     let status = response.status().as_u16();
+
+    // Finalize the tracker and emit Server-Timing header (CAB-1790)
+    let server_timing = {
+        let mut t = tracker.lock().unwrap_or_else(|e| e.into_inner());
+        // Record the total transport overhead (access_log layer itself)
+        t.record_stage(Stage::Transport, duration_ms);
+        let breakdown = t.finalize();
+        to_server_timing(&breakdown)
+    };
+    if let Ok(value) = axum::http::HeaderValue::from_str(&server_timing) {
+        response.headers_mut().insert("server-timing", value);
+    }
 
     // Use incoming trace_id if present, else fall back to OTel span context
     let trace_id = trace_id_from_header.unwrap_or_else(extract_trace_id);
@@ -81,6 +99,7 @@ pub async fn access_log_middleware(request: Request, next: Next) -> Response {
         user_agent = %user_agent,
         trace_id = %trace_id,
         log_type = "access_log",
+        server_timing = %server_timing,
         "request completed"
     );
 

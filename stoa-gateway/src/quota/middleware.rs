@@ -20,6 +20,7 @@ use serde::Serialize;
 use tracing::{debug, warn};
 
 use crate::auth::middleware::AuthenticatedUser;
+use crate::diagnostics::latency::{SharedTracker, Stage};
 use crate::metrics;
 use crate::state::AppState;
 
@@ -50,12 +51,26 @@ pub async fn quota_middleware(
         return next.run(request).await;
     }
 
+    // Begin latency tracking for quota stage (CAB-1790)
+    let tracker = request.extensions().get::<SharedTracker>().cloned();
+    if let Some(ref t) = tracker {
+        if let Ok(mut guard) = t.lock() {
+            guard.begin_stage(Stage::Quota);
+        }
+    }
+
     // Extract consumer_id from auth context
     let consumer_id = extract_consumer_id(&request);
 
     let consumer_id = match consumer_id {
         Some(id) => id,
         None => {
+            // End quota stage before early return
+            if let Some(ref t) = tracker {
+                if let Ok(mut guard) = t.lock() {
+                    guard.end_stage();
+                }
+            }
             // No consumer identified — skip quota enforcement
             // (anonymous requests are handled by the existing tenant rate limiter)
             debug!("No consumer_id found, skipping quota enforcement");
@@ -67,6 +82,11 @@ pub async fn quota_middleware(
     let rate_limit_info = match state.consumer_rate_limiter.check_rate_limit(&consumer_id) {
         Ok(info) => info,
         Err(quota_error) => {
+            if let Some(ref t) = tracker {
+                if let Ok(mut guard) = t.lock() {
+                    guard.end_stage();
+                }
+            }
             warn!(
                 consumer_id = %consumer_id,
                 error = %quota_error,
@@ -78,12 +98,24 @@ pub async fn quota_middleware(
 
     // 2. Check daily/monthly quota
     if let Err(quota_error) = state.quota_manager.check_quota(&consumer_id) {
+        if let Some(ref t) = tracker {
+            if let Ok(mut guard) = t.lock() {
+                guard.end_stage();
+            }
+        }
         warn!(
             consumer_id = %consumer_id,
             error = %quota_error,
             "Quota exceeded"
         );
         return quota_error_response(&quota_error);
+    }
+
+    // End quota stage — checks passed, handler execution is tracked separately
+    if let Some(ref t) = tracker {
+        if let Ok(mut guard) = t.lock() {
+            guard.end_stage();
+        }
     }
 
     // 3. Execute the handler

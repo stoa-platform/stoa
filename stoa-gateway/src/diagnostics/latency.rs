@@ -3,6 +3,7 @@
 //! Captures checkpoint timestamps at each processing stage and attributes
 //! latency to: auth, policy evaluation, backend call, and serialization.
 
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,12 @@ pub enum Stage {
     BackendCall,
     Serialization,
     Total,
+    /// Per-layer stages for multi-span tracing (CAB-1790)
+    Transport,
+    Identity,
+    Routing,
+    Quota,
+    Supervision,
 }
 
 impl std::fmt::Display for Stage {
@@ -26,6 +33,11 @@ impl std::fmt::Display for Stage {
             Self::BackendCall => write!(f, "backend_call"),
             Self::Serialization => write!(f, "serialization"),
             Self::Total => write!(f, "total"),
+            Self::Transport => write!(f, "transport"),
+            Self::Identity => write!(f, "identity"),
+            Self::Routing => write!(f, "routing"),
+            Self::Quota => write!(f, "quota"),
+            Self::Supervision => write!(f, "supervision"),
         }
     }
 }
@@ -38,7 +50,7 @@ pub struct Checkpoint {
 }
 
 /// Timing breakdown with per-stage durations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TimingBreakdown {
     pub auth_ms: Option<f64>,
     pub policy_eval_ms: Option<f64>,
@@ -46,6 +58,17 @@ pub struct TimingBreakdown {
     pub serialization_ms: Option<f64>,
     pub total_ms: f64,
     pub checkpoints: Vec<Checkpoint>,
+    /// Per-layer timings for multi-span tracing (CAB-1790)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routing_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quota_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supervision_ms: Option<f64>,
 }
 
 /// Identifies a stage that consumed a disproportionate amount of total latency.
@@ -113,17 +136,32 @@ impl LatencyTracker {
         let mut policy_ms = None;
         let mut backend_ms = None;
         let mut serialization_ms = None;
+        let mut transport_ms = None;
+        let mut identity_ms = None;
+        let mut routing_ms = None;
+        let mut quota_ms = None;
+        let mut supervision_ms = None;
         let mut checkpoints = Vec::new();
+
+        // Helper macro to accumulate optional durations
+        macro_rules! accum {
+            ($field:ident, $dur:expr) => {
+                $field = Some($field.unwrap_or(0.0) + $dur)
+            };
+        }
 
         for (stage, start, end) in &self.checkpoints {
             let dur = end.duration_since(*start).as_secs_f64() * 1000.0;
             match stage {
-                Stage::Auth => auth_ms = Some(auth_ms.unwrap_or(0.0) + dur),
-                Stage::PolicyEval => policy_ms = Some(policy_ms.unwrap_or(0.0) + dur),
-                Stage::BackendCall => backend_ms = Some(backend_ms.unwrap_or(0.0) + dur),
-                Stage::Serialization => {
-                    serialization_ms = Some(serialization_ms.unwrap_or(0.0) + dur)
-                }
+                Stage::Auth => accum!(auth_ms, dur),
+                Stage::PolicyEval => accum!(policy_ms, dur),
+                Stage::BackendCall => accum!(backend_ms, dur),
+                Stage::Serialization => accum!(serialization_ms, dur),
+                Stage::Transport => accum!(transport_ms, dur),
+                Stage::Identity => accum!(identity_ms, dur),
+                Stage::Routing => accum!(routing_ms, dur),
+                Stage::Quota => accum!(quota_ms, dur),
+                Stage::Supervision => accum!(supervision_ms, dur),
                 Stage::Total => {}
             }
             checkpoints.push(Checkpoint {
@@ -135,12 +173,15 @@ impl LatencyTracker {
         // Merge externally measured durations from record_stage()
         for (stage, dur) in &self.overrides {
             match stage {
-                Stage::Auth => auth_ms = Some(auth_ms.unwrap_or(0.0) + dur),
-                Stage::PolicyEval => policy_ms = Some(policy_ms.unwrap_or(0.0) + dur),
-                Stage::BackendCall => backend_ms = Some(backend_ms.unwrap_or(0.0) + dur),
-                Stage::Serialization => {
-                    serialization_ms = Some(serialization_ms.unwrap_or(0.0) + dur)
-                }
+                Stage::Auth => accum!(auth_ms, *dur),
+                Stage::PolicyEval => accum!(policy_ms, *dur),
+                Stage::BackendCall => accum!(backend_ms, *dur),
+                Stage::Serialization => accum!(serialization_ms, *dur),
+                Stage::Transport => accum!(transport_ms, *dur),
+                Stage::Identity => accum!(identity_ms, *dur),
+                Stage::Routing => accum!(routing_ms, *dur),
+                Stage::Quota => accum!(quota_ms, *dur),
+                Stage::Supervision => accum!(supervision_ms, *dur),
                 Stage::Total => {}
             }
             checkpoints.push(Checkpoint {
@@ -156,6 +197,11 @@ impl LatencyTracker {
             serialization_ms,
             total_ms,
             checkpoints,
+            transport_ms,
+            identity_ms,
+            routing_ms,
+            quota_ms,
+            supervision_ms,
         }
     }
 
@@ -171,6 +217,11 @@ impl LatencyTracker {
             (Stage::PolicyEval, breakdown.policy_eval_ms),
             (Stage::BackendCall, breakdown.backend_ms),
             (Stage::Serialization, breakdown.serialization_ms),
+            (Stage::Transport, breakdown.transport_ms),
+            (Stage::Identity, breakdown.identity_ms),
+            (Stage::Routing, breakdown.routing_ms),
+            (Stage::Quota, breakdown.quota_ms),
+            (Stage::Supervision, breakdown.supervision_ms),
         ];
 
         for (stage, duration_opt) in stages {
@@ -194,6 +245,50 @@ impl Default for LatencyTracker {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Thread-safe wrapper for passing `LatencyTracker` through request extensions.
+///
+/// Inserted by `access_log_middleware` before `next.run()`, each downstream
+/// middleware calls `begin_stage()`/`end_stage()` through the mutex.
+/// On the response path, `access_log_middleware` finalizes the tracker and
+/// serializes to a `Server-Timing` response header.
+pub type SharedTracker = Arc<Mutex<LatencyTracker>>;
+
+/// Create a new shared tracker for use as a request extension.
+pub fn new_shared_tracker() -> SharedTracker {
+    Arc::new(Mutex::new(LatencyTracker::new()))
+}
+
+/// Serialize a `TimingBreakdown` into a `Server-Timing` header value.
+///
+/// Format per RFC 7231 / W3C Server-Timing spec:
+///   `stage;dur=12.34, stage2;dur=5.67`
+///
+/// Only includes stages with measured durations (skips None values).
+pub fn to_server_timing(breakdown: &TimingBreakdown) -> String {
+    let mut parts = Vec::new();
+
+    let stages: &[(&str, Option<f64>)] = &[
+        ("identity", breakdown.identity_ms),
+        ("auth", breakdown.auth_ms),
+        ("quota", breakdown.quota_ms),
+        ("supervision", breakdown.supervision_ms),
+        ("policy_eval", breakdown.policy_eval_ms),
+        ("routing", breakdown.routing_ms),
+        ("backend_call", breakdown.backend_ms),
+        ("serialization", breakdown.serialization_ms),
+        ("transport", breakdown.transport_ms),
+        ("total", Some(breakdown.total_ms)),
+    ];
+
+    for (name, duration) in stages {
+        if let Some(dur) = duration {
+            parts.push(format!("{};dur={:.2}", name, dur));
+        }
+    }
+
+    parts.join(", ")
 }
 
 #[cfg(test)]
@@ -265,7 +360,7 @@ mod tests {
             backend_ms: Some(90.0),
             serialization_ms: Some(3.0),
             total_ms: 100.0,
-            checkpoints: Vec::new(),
+            ..TimingBreakdown::default()
         };
 
         let outliers = LatencyTracker::detect_outliers(&breakdown, 80.0);
@@ -282,7 +377,7 @@ mod tests {
             backend_ms: Some(25.0),
             serialization_ms: Some(25.0),
             total_ms: 100.0,
-            checkpoints: Vec::new(),
+            ..TimingBreakdown::default()
         };
 
         let outliers = LatencyTracker::detect_outliers(&breakdown, 80.0);
@@ -291,16 +386,7 @@ mod tests {
 
     #[test]
     fn detect_outliers_zero_total_returns_empty() {
-        let breakdown = TimingBreakdown {
-            auth_ms: None,
-            policy_eval_ms: None,
-            backend_ms: None,
-            serialization_ms: None,
-            total_ms: 0.0,
-            checkpoints: Vec::new(),
-        };
-
-        let outliers = LatencyTracker::detect_outliers(&breakdown, 80.0);
+        let outliers = LatencyTracker::detect_outliers(&TimingBreakdown::default(), 80.0);
         assert!(outliers.is_empty());
     }
 
@@ -327,6 +413,11 @@ mod tests {
         assert_eq!(Stage::BackendCall.to_string(), "backend_call");
         assert_eq!(Stage::Serialization.to_string(), "serialization");
         assert_eq!(Stage::Total.to_string(), "total");
+        assert_eq!(Stage::Transport.to_string(), "transport");
+        assert_eq!(Stage::Identity.to_string(), "identity");
+        assert_eq!(Stage::Routing.to_string(), "routing");
+        assert_eq!(Stage::Quota.to_string(), "quota");
+        assert_eq!(Stage::Supervision.to_string(), "supervision");
     }
 
     #[test]
@@ -344,21 +435,87 @@ mod tests {
     fn timing_breakdown_serializes() {
         let tb = TimingBreakdown {
             auth_ms: Some(5.0),
-            policy_eval_ms: None,
             backend_ms: Some(50.0),
-            serialization_ms: None,
             total_ms: 60.0,
-            checkpoints: vec![],
+            ..TimingBreakdown::default()
         };
         let json = serde_json::to_string(&tb).expect("serialize");
         assert!(json.contains("auth_ms"));
         assert!(json.contains("backend_ms"));
         assert!(json.contains("total_ms"));
+        // New fields with None are skipped (skip_serializing_if)
+        assert!(!json.contains("transport_ms"));
     }
 
     #[test]
     fn default_tracker_works() {
         let tracker = LatencyTracker::default();
         assert!(tracker.checkpoints.is_empty());
+    }
+
+    #[test]
+    fn server_timing_header_format() {
+        let breakdown = TimingBreakdown {
+            auth_ms: Some(5.50),
+            quota_ms: Some(0.12),
+            backend_ms: Some(42.00),
+            total_ms: 50.00,
+            ..TimingBreakdown::default()
+        };
+        let header = to_server_timing(&breakdown);
+        assert!(header.contains("auth;dur=5.50"));
+        assert!(header.contains("quota;dur=0.12"));
+        assert!(header.contains("backend_call;dur=42.00"));
+        assert!(header.contains("total;dur=50.00"));
+        // Stages with None are not included
+        assert!(!header.contains("identity"));
+        assert!(!header.contains("transport"));
+    }
+
+    #[test]
+    fn server_timing_empty_breakdown() {
+        let breakdown = TimingBreakdown::default();
+        let header = to_server_timing(&breakdown);
+        // Only total (0.00) should be present
+        assert_eq!(header, "total;dur=0.00");
+    }
+
+    #[test]
+    fn shared_tracker_can_be_cloned_and_used() {
+        let tracker = new_shared_tracker();
+        let clone = tracker.clone();
+
+        {
+            let mut t = tracker.lock().expect("lock");
+            t.begin_stage(Stage::Identity);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        {
+            let mut t = clone.lock().expect("lock");
+            t.end_stage();
+            let breakdown = t.finalize();
+            assert!(breakdown.identity_ms.is_some());
+        }
+    }
+
+    #[test]
+    fn new_stages_tracked_in_finalize() {
+        let mut tracker = LatencyTracker::new();
+        tracker.begin_stage(Stage::Identity);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        tracker.end_stage();
+        tracker.begin_stage(Stage::Quota);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        tracker.end_stage();
+        tracker.begin_stage(Stage::Supervision);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        tracker.end_stage();
+
+        let breakdown = tracker.finalize();
+        assert!(breakdown.identity_ms.is_some());
+        assert!(breakdown.quota_ms.is_some());
+        assert!(breakdown.supervision_ms.is_some());
+        assert!(breakdown.transport_ms.is_none());
+        assert!(breakdown.routing_ms.is_none());
     }
 }

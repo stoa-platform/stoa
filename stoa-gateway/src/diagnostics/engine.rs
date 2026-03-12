@@ -295,7 +295,7 @@ mod tests {
                 backend_ms: Some(50.0),
                 serialization_ms: Some(1.0),
                 total_ms: 54.0,
-                checkpoints: vec![],
+                ..TimingBreakdown::default()
             },
             timestamp: "2026-02-24T12:00:00Z".into(),
         }
@@ -474,7 +474,7 @@ mod tests {
             backend_ms: Some(900.0),
             serialization_ms: Some(1.0),
             total_ms: 903.0,
-            checkpoints: vec![],
+            ..TimingBreakdown::default()
         };
         let report = engine.diagnose(input);
         assert!(!report.outliers.is_empty());

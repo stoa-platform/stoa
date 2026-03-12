@@ -623,12 +623,8 @@ async fn http_metrics_middleware(
             error_message: None,
             hop_headers: diagnostics::hops::HopHeaders::default(),
             timing: diagnostics::latency::TimingBreakdown {
-                auth_ms: None,
-                policy_eval_ms: None,
-                backend_ms: None,
-                serialization_ms: None,
                 total_ms: duration * 1000.0,
-                checkpoints: Vec::new(),
+                ..diagnostics::latency::TimingBreakdown::default()
             },
             timestamp: chrono::Utc::now().to_rfc3339(),
         };

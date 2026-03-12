@@ -202,6 +202,9 @@ pub struct ToolContext {
     /// When present, the tool can send incremental progress notifications over WebSocket.
     /// SSE connections always have this as `None` since SSE can't push mid-request.
     pub progress_token: Option<Value>,
+    /// OAuth client ID (azp claim) used as consumer identifier for metrics (CAB-1782).
+    /// Defaults to "unknown" for unauthenticated requests.
+    pub consumer_id: String,
 }
 
 /// The Tool trait - implement this for each MCP tool

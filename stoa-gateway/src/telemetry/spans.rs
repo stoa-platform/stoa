@@ -18,6 +18,7 @@ use tracing::{debug, span, Level, Span};
 pub struct ToolSpan {
     tool_name: String,
     tenant_id: String,
+    consumer_id: String,
     start: Instant,
     _tracing_span: Span,
     finished: bool,
@@ -25,7 +26,7 @@ pub struct ToolSpan {
 
 impl ToolSpan {
     /// Create a new tool span
-    pub fn new(tool_name: &str, tenant_id: &str) -> Self {
+    pub fn new(tool_name: &str, tenant_id: &str, consumer_id: &str) -> Self {
         let tracing_span = span!(
             Level::INFO,
             "tool_call",
@@ -47,6 +48,7 @@ impl ToolSpan {
         Self {
             tool_name: tool_name.to_string(),
             tenant_id: tenant_id.to_string(),
+            consumer_id: consumer_id.to_string(),
             start: Instant::now(),
             _tracing_span: tracing_span,
             finished: false,
@@ -97,7 +99,7 @@ impl ToolSpan {
         );
 
         // Record metrics
-        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "success", duration);
+        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "success", duration, &self.consumer_id);
     }
 
     /// Mark span as failed with error
@@ -114,7 +116,7 @@ impl ToolSpan {
         );
 
         // Record metrics
-        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "error", duration);
+        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "error", duration, &self.consumer_id);
     }
 
     /// Mark span as cache hit (no execution)
@@ -130,7 +132,7 @@ impl ToolSpan {
         );
 
         // Record metrics with cache_hit status
-        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "cache_hit", duration);
+        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "cache_hit", duration, &self.consumer_id);
     }
 
     /// Mark span as circuit breaker open (fast fail)
@@ -150,6 +152,7 @@ impl ToolSpan {
             &self.tenant_id,
             "circuit_open",
             duration,
+            &self.consumer_id,
         );
     }
 }
@@ -159,7 +162,7 @@ impl Drop for ToolSpan {
         // If not explicitly finished, record as error (likely panic)
         if !self.finished {
             let duration = self.elapsed_secs();
-            crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "dropped", duration);
+            crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "dropped", duration, &self.consumer_id);
         }
     }
 }
@@ -220,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_tool_span_creation() {
-        let span = ToolSpan::new("test_tool", "test-tenant");
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer");
         assert_eq!(span.tool_name, "test_tool");
         assert_eq!(span.tenant_id, "test-tenant");
         span.finish_success();
@@ -228,39 +231,39 @@ mod tests {
 
     #[test]
     fn test_tool_span_error() {
-        let span = ToolSpan::new("test_tool", "test-tenant");
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer");
         span.finish_error("something went wrong");
     }
 
     #[test]
     fn test_tool_span_cache_hit() {
-        let span = ToolSpan::new("test_tool", "test-tenant");
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer");
         span.finish_cache_hit();
     }
 
     #[test]
     fn test_tool_span_circuit_open() {
-        let span = ToolSpan::new("test_tool", "test-tenant");
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer");
         span.finish_circuit_open();
     }
 
     #[test]
     fn test_tool_span_guard_success() {
-        let span = ToolSpan::new("test_tool", "test-tenant");
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer");
         let guard = ToolSpanGuard::new(span);
         guard.success();
     }
 
     #[test]
     fn test_tool_span_guard_auto_success() {
-        let span = ToolSpan::new("test_tool", "test-tenant");
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer");
         let _guard = ToolSpanGuard::new(span);
         // Auto-finishes on drop with success
     }
 
     #[test]
     fn test_tool_span_guard_with_error() {
-        let span = ToolSpan::new("test_tool", "test-tenant");
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer");
         let mut guard = ToolSpanGuard::new(span);
         guard.set_error("oops");
         // Will finish with error on drop
@@ -268,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_elapsed_secs() {
-        let span = ToolSpan::new("test_tool", "test-tenant");
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer");
         std::thread::sleep(std::time::Duration::from_millis(10));
         let elapsed = span.elapsed_secs();
         assert!(elapsed >= 0.01);
@@ -277,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_tool_span_with_uac_attributes() {
-        let span = ToolSpan::new("test_tool", "test-tenant").with_uac(
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer").with_uac(
             Some("contract-123"),
             Some("jwt"),
             Some("POST"),
@@ -290,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_tool_span_with_partial_uac() {
-        let span = ToolSpan::new("test_tool", "test-tenant").with_uac(
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer").with_uac(
             Some("contract-456"),
             None,
             None,
@@ -302,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_tool_span_with_no_uac() {
-        let span = ToolSpan::new("test_tool", "test-tenant").with_uac(None, None, None, None);
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer").with_uac(None, None, None, None);
         span.finish_success();
     }
 }

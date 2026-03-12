@@ -187,9 +187,9 @@ describe('AnalyticsDashboard', () => {
     expect(screen.getByText('Consumer Activity')).toBeInTheDocument();
   });
 
-  it('shows consumer tracking unavailable notice', () => {
+  it('shows empty state when no consumer data', () => {
     render(<AnalyticsDashboard />);
-    expect(screen.getByText(/Consumer-level tracking is not yet available/)).toBeInTheDocument();
+    expect(screen.getByText('No consumer data')).toBeInTheDocument();
   });
 
   // --- Sort controls ---
@@ -261,13 +261,24 @@ describe('AnalyticsDashboard', () => {
     expect(latencyBadges.length).toBeGreaterThan(0);
   });
 
-  // --- Consumer section (disabled — consumer_id label not in gateway metrics) ---
+  // --- Consumer section (CAB-1782: consumer_id label now in gateway metrics) ---
 
-  it('shows consumer tracking unavailable notice instead of table', () => {
+  it('shows consumer activity table with data', () => {
     mockWithToolData({ 'test-tool': 50 });
     render(<AnalyticsDashboard />);
-    expect(screen.getByText(/Consumer-level tracking is not yet available/)).toBeInTheDocument();
-    expect(screen.queryByText('agent-alpha')).not.toBeInTheDocument();
+    expect(screen.getByText('agent-alpha')).toBeInTheDocument();
+    expect(screen.getByText('agent-beta')).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Consumer-level tracking is not yet available/)
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows consumer error percentage with correct color coding', () => {
+    mockWithToolData({ 'test-tool': 50 });
+    render(<AnalyticsDashboard />);
+    // agent-alpha: 30/500 = 6% (> 5% → red)
+    const errorCells = screen.getAllByText(/6\.0%/);
+    expect(errorCells.length).toBeGreaterThan(0);
   });
 
   // --- Refresh ---

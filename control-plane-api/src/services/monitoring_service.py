@@ -141,7 +141,7 @@ class MonitoringService:
                 {"range": {"@timestamp": {"gte": f"now-{time_range_minutes}m"}}},
             ]
             if tenant_id:
-                filters.append({"term": {"tenant_id": tenant_id}})
+                filters.append({"term": {"tenant_id.keyword": tenant_id}})
             if api_name:
                 filters.append({"wildcard": {"request.path": f"*/{api_name}/*"}})
             if status:
@@ -202,7 +202,7 @@ class MonitoringService:
                 {"range": {"@timestamp": {"gte": f"now-{time_range_minutes}m"}}},
             ]
             if tenant_id:
-                stat_filters.append({"term": {"tenant_id": tenant_id}})
+                stat_filters.append({"term": {"tenant_id.keyword": tenant_id}})
             body = {
                 "size": 0,
                 "query": {
@@ -288,7 +288,7 @@ class MonitoringService:
         """Get detailed transaction by event_id or OpenSearch _id."""
         try:
             tenant_filter: list[dict] = (
-                [{"term": {"tenant_id": tenant_id}}] if tenant_id else []
+                [{"term": {"tenant_id.keyword": tenant_id}}] if tenant_id else []
             )
 
             # Try event_id.keyword first (event_id is mapped as text, term needs keyword subfield)

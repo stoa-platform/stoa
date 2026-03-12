@@ -63,7 +63,20 @@ class TestProvisionTenant:
         index_perm = body["index_permissions"][0]
         assert "dls" in index_perm
         assert '"acme-corp"' in index_perm["dls"]
+        assert '"platform"' in index_perm["dls"]  # includes shared platform docs
         assert "fls" not in index_perm
+
+    @pytest.mark.asyncio
+    async def test_reader_role_covers_audit_index(self, provisioner, mock_client):
+        await provisioner.provision_tenant("acme-corp")
+
+        calls = mock_client.transport.perform_request.call_args_list
+        reader_call = next(c for c in calls if "stoa_gw_tenant_acme_corp" in str(c) and "roles/" in str(c))
+
+        body = reader_call.kwargs.get("body") or reader_call[1].get("body") or reader_call[0][2]
+        index_perm = body["index_permissions"][0]
+        assert "audit*" in index_perm["index_patterns"]
+        assert "stoa-gw-*" in index_perm["index_patterns"]
 
     @pytest.mark.asyncio
     async def test_viewer_role_has_dls_and_fls(self, provisioner, mock_client):
@@ -153,7 +166,9 @@ class TestProvisionTenant:
         calls = mock_client.transport.perform_request.call_args_list
         reader_call = next(c for c in calls if "stoa_gw_tenant_oasis_gunters" in str(c) and "roles/" in str(c))
         body = reader_call.kwargs.get("body") or reader_call[1].get("body") or reader_call[0][2]
-        assert "oasis-gunters" in body["index_permissions"][0]["dls"]
+        dls = body["index_permissions"][0]["dls"]
+        assert "oasis-gunters" in dls
+        assert "platform" in dls
 
 
 class TestDeprovisionTenant:

@@ -93,6 +93,7 @@ from .routers import (
     skills,
     subscriptions,
     system,
+    tenant_ca,
     tenant_webhooks,
     tenants,
     traces,
@@ -771,6 +772,9 @@ app.include_router(llm_usage.router)
 
 # Environments (ADR-040 — Born GitOps)
 app.include_router(environments.router)
+
+# Tenant CA — per-tenant CA keypair management (CAB-1787)
+app.include_router(tenant_ca.router)
 
 # Consumer Onboarding (CAB-1121)
 app.include_router(consumers.router)

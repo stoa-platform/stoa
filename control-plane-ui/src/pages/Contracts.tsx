@@ -27,6 +27,8 @@ import type {
   ContractStatus,
   GeneratedBinding,
 } from '../types';
+import { SubNav } from '../components/SubNav';
+import { apiCatalogTabs } from '../components/subNavGroups';
 
 const PROTOCOL_ORDER: ProtocolType[] = ['rest', 'mcp', 'graphql', 'grpc', 'kafka'];
 
@@ -175,6 +177,9 @@ export function Contracts() {
           )}
         </div>
       </div>
+
+      {/* Contextual sub-navigation (CAB-1785) */}
+      <SubNav tabs={apiCatalogTabs} />
 
       {loading ? (
         <div className="text-center py-12 text-neutral-500">{t('common.loading')}</div>

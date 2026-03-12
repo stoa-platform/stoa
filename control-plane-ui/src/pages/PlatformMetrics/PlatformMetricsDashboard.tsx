@@ -31,6 +31,8 @@ import { MetricTimeseries } from '../../components/metrics/MetricTimeseries';
 import { config } from '../../config';
 import { observabilityPath } from '../../utils/navigation';
 import type { TopAPI } from '../../services/api';
+import { SubNav } from '../../components/SubNav';
+import { observabilityTabs } from '../../components/subNavGroups';
 
 const AUTO_REFRESH_INTERVAL = 15_000;
 const dashboards = config.services.grafana.dashboards;
@@ -177,6 +179,8 @@ export function PlatformMetricsDashboard() {
           </button>
         </div>
       </div>
+
+      <SubNav tabs={observabilityTabs} />
 
       {/* Cross-links */}
       <div className="flex items-center gap-4 text-sm">

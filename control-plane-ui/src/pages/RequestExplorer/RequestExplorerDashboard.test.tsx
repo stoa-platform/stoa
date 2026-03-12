@@ -7,6 +7,10 @@ import type { PersonaRole } from '../../test/helpers';
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
+vi.mock('../../components/SubNav', () => ({
+  SubNav: () => null,
+}));
+
 // Mock dependencies
 vi.mock('../../hooks/usePrometheus', () => ({
   usePrometheusQuery: vi.fn(() => ({

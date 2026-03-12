@@ -13,7 +13,20 @@ exports[`Subscriptions > snapshot: cpi-admin persona > matches structural snapsh
   "headings": [
     "Subscriptions",
   ],
-  "links": [],
+  "links": [
+    {
+      "href": "/apis",
+      "text": "APIs",
+    },
+    {
+      "href": "/subscriptions",
+      "text": "Subscriptions",
+    },
+    {
+      "href": "/contracts",
+      "text": "Contracts",
+    },
+  ],
 }
 `;
 
@@ -30,7 +43,20 @@ exports[`Subscriptions > snapshot: devops persona > matches structural snapshot 
   "headings": [
     "Subscriptions",
   ],
-  "links": [],
+  "links": [
+    {
+      "href": "/apis",
+      "text": "APIs",
+    },
+    {
+      "href": "/subscriptions",
+      "text": "Subscriptions",
+    },
+    {
+      "href": "/contracts",
+      "text": "Contracts",
+    },
+  ],
 }
 `;
 
@@ -47,7 +73,20 @@ exports[`Subscriptions > snapshot: tenant-admin persona > matches structural sna
   "headings": [
     "Subscriptions",
   ],
-  "links": [],
+  "links": [
+    {
+      "href": "/apis",
+      "text": "APIs",
+    },
+    {
+      "href": "/subscriptions",
+      "text": "Subscriptions",
+    },
+    {
+      "href": "/contracts",
+      "text": "Contracts",
+    },
+  ],
 }
 `;
 
@@ -64,6 +103,19 @@ exports[`Subscriptions > snapshot: viewer persona > matches structural snapshot 
   "headings": [
     "Subscriptions",
   ],
-  "links": [],
+  "links": [
+    {
+      "href": "/apis",
+      "text": "APIs",
+    },
+    {
+      "href": "/subscriptions",
+      "text": "Subscriptions",
+    },
+    {
+      "href": "/contracts",
+      "text": "Contracts",
+    },
+  ],
 }
 `;

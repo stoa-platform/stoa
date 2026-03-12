@@ -1,4 +1,15 @@
-name: Reusable Kubernetes Deploy
+# =============================================================================
+# DEPRECATED — Use reusable-gitops-deploy.yml instead
+# =============================================================================
+# This workflow performs direct kubectl mutations (set image, rollout restart).
+# All component CI workflows now use reusable-gitops-deploy.yml which dispatches
+# image updates to stoa-infra for ArgoCD to sync.
+#
+# Kept for backward compatibility. Will be removed after GitOps migration is
+# fully validated.
+# =============================================================================
+
+name: Reusable Kubernetes Deploy (DEPRECATED)
 
 on:
   workflow_call:

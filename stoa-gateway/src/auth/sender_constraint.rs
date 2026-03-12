@@ -133,10 +133,26 @@ pub async fn sender_constraint_middleware(
         return Ok(next.run(request).await);
     }
 
+    // Begin latency tracking for identity stage (CAB-1790)
+    let tracker = request
+        .extensions()
+        .get::<crate::diagnostics::latency::SharedTracker>()
+        .cloned();
+    if let Some(ref t) = tracker {
+        if let Ok(mut guard) = t.lock() {
+            guard.begin_stage(crate::diagnostics::latency::Stage::Identity);
+        }
+    }
+
     // Extract authenticated user (set by JWT middleware)
     let user = request.extensions().get::<AuthenticatedUser>().cloned();
     let Some(user) = user else {
         // No authenticated user → anonymous request, skip constraint check
+        if let Some(ref t) = tracker {
+            if let Ok(mut guard) = t.lock() {
+                guard.end_stage();
+            }
+        }
         debug!("sender_constraint: no authenticated user, skipping");
         return Ok(next.run(request).await);
     };
@@ -146,11 +162,21 @@ pub async fn sender_constraint_middleware(
 
     // Check DPoP binding
     if let Some(err) = check_dpop_binding(cnf, &config, &request, tenant) {
+        if let Some(ref t) = tracker {
+            if let Ok(mut guard) = t.lock() {
+                guard.end_stage();
+            }
+        }
         return Err(err);
     }
 
     // Check mTLS binding
     if let Some(err) = check_mtls_binding(cnf, &config, &request, tenant) {
+        if let Some(ref t) = tracker {
+            if let Ok(mut guard) = t.lock() {
+                guard.end_stage();
+            }
+        }
         return Err(err);
     }
 
@@ -158,6 +184,13 @@ pub async fn sender_constraint_middleware(
     if cnf.is_some() {
         debug!(tenant = tenant, "sender_constraint: all bindings verified");
         metrics::record_sender_constraint_check("pass", "combined", tenant);
+    }
+
+    // End identity stage
+    if let Some(ref t) = tracker {
+        if let Ok(mut guard) = t.lock() {
+            guard.end_stage();
+        }
     }
 
     Ok(next.run(request).await)

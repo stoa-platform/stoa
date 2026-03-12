@@ -2,7 +2,7 @@
 # GitHub Actions: STOA Gateway (Rust) CI/CD
 # =============================================================================
 # Thin orchestrator — delegates to reusable workflows (ADR-031)
-# Deployment managed by ArgoCD (CAB-1109) — CI only builds + triggers restart
+# Deployment via GitOps: CI pushes image → dispatches to stoa-infra → ArgoCD syncs
 # =============================================================================
 
 name: STOA Gateway CI/CD
@@ -16,6 +16,7 @@ on:
       - '.github/workflows/stoa-gateway-ci.yml'
       - '.github/workflows/reusable-rust-ci.yml'
       - '.github/workflows/reusable-docker-ghcr.yml'
+      - '.github/workflows/reusable-gitops-deploy.yml'
       - '.github/actions/**'
 
   pull_request:
@@ -83,62 +84,19 @@ jobs:
       attestations: write
     secrets: inherit
 
-  # === Apply manifest: push k8s/deployment.yaml to cluster (env vars, labels, etc.) ===
-  apply-manifest:
+  # === GitOps Deploy: dispatch to stoa-infra → ArgoCD syncs ===
+  deploy:
     needs: docker
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    environment:
-      name: ${{ github.event.inputs.environment || 'dev' }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
-      - name: Configure kubeconfig
-        run: |
-          if [ -z "$KUBECONFIG_B64" ]; then
-            echo "::warning::KUBECONFIG_B64 secret not set. Skipping manifest apply."
-            exit 0
-          fi
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
-      - name: Apply k8s manifest
-        run: |
-          kubectl apply -f stoa-gateway/k8s/deployment.yaml 2>&1 || {
-            echo "Apply failed (likely immutable selector). Deleting and recreating..."
-            kubectl delete deployment stoa-gateway -n stoa-system --ignore-not-found
-            kubectl apply -f stoa-gateway/k8s/deployment.yaml
-          }
-
-  # === Deploy: trigger pod restart to pull new GHCR image ===
-  deploy:
-    needs: [docker, apply-manifest]
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    environment:
-      name: ${{ github.event.inputs.environment || 'dev' }}
-      url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev
-    steps:
-      - name: Configure kubeconfig
-        run: |
-          if [ -z "$KUBECONFIG_B64" ]; then
-            echo "::warning::KUBECONFIG_B64 secret not set. Skipping deployment."
-            exit 0
-          fi
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
-      - name: Restart deployment (pull new image from GHCR)
-        run: |
-          kubectl rollout restart deployment/stoa-gateway -n stoa-system
-          kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=600s
+    uses: ./.github/workflows/reusable-gitops-deploy.yml
+    with:
+      component: stoa-gateway
+      image-tag: ${{ needs.docker.outputs.image-tag }}
+      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment-url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev
+      verify-endpoint: https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev/health/ready
+      verify-timeout: 300
+    secrets: inherit
 
   # === Smoke Test: health checks after deploy (Tier 1) ===
   # Full E2E with personas runs nightly (e2e-nightly.yml)
@@ -152,61 +110,19 @@ jobs:
     permissions:
       contents: read
 
-  # === Staging: apply manifest + deploy + smoke on staging cluster ===
-  apply-manifest-staging:
-    needs: smoke-test
-    if: github.event_name == 'push' && needs.smoke-test.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    environment:
-      name: staging
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
-      - name: Configure kubeconfig
-        run: |
-          if [ -z "$KUBECONFIG_B64" ]; then
-            echo "::warning::KUBECONFIG_B64 secret not set for staging. Skipping."
-            exit 0
-          fi
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
-      - name: Apply k8s manifest
-        run: |
-          kubectl apply -f stoa-gateway/k8s/deployment.yaml 2>&1 || {
-            echo "Apply failed (likely immutable selector). Deleting and recreating..."
-            kubectl delete deployment stoa-gateway -n stoa-system --ignore-not-found
-            kubectl apply -f stoa-gateway/k8s/deployment.yaml
-          }
-
+  # === Staging: GitOps deploy to staging cluster ===
   deploy-staging:
-    needs: [docker, apply-manifest-staging]
-    if: github.event_name == 'push' && needs.apply-manifest-staging.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    environment:
-      name: staging
-      url: https://staging-mcp.gostoa.dev
-    steps:
-      - name: Configure kubeconfig
-        run: |
-          if [ -z "$KUBECONFIG_B64" ]; then
-            echo "::warning::KUBECONFIG_B64 secret not set for staging. Skipping."
-            exit 0
-          fi
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
-      - name: Restart deployment (pull new image from GHCR)
-        run: |
-          kubectl rollout restart deployment/stoa-gateway -n stoa-system
-          kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=600s
+    needs: [docker, smoke-test]
+    if: github.event_name == 'push' && needs.smoke-test.result == 'success'
+    uses: ./.github/workflows/reusable-gitops-deploy.yml
+    with:
+      component: stoa-gateway
+      image-tag: ${{ needs.docker.outputs.image-tag }}
+      environment: staging
+      environment-url: https://staging-mcp.gostoa.dev
+      verify-endpoint: https://staging-mcp.gostoa.dev/health/ready
+      verify-timeout: 300
+    secrets: inherit
 
   smoke-test-staging:
     needs: deploy-staging

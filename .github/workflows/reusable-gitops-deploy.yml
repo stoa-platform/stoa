@@ -1,0 +1,111 @@
+# =============================================================================
+# Reusable GitOps Deploy — Dispatch image update to stoa-infra
+# =============================================================================
+# Replaces direct kubectl deployments. Instead of mutating cluster state,
+# this workflow dispatches an image-updated event to stoa-infra, which updates
+# Helm chart values. ArgoCD auto-syncs the change to the cluster.
+#
+# Flow: CI builds image → push to GHCR → dispatch to stoa-infra → ArgoCD syncs
+#
+# Requires: STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)
+# =============================================================================
+
+name: Reusable GitOps Deploy
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Component name matching stoa-infra chart (e.g., control-plane-api)'
+        required: true
+        type: string
+      image-tag:
+        description: 'Full Docker image tag (e.g., ghcr.io/stoa-platform/control-plane-api:dev-abc123)'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment (dev, staging, prod)'
+        required: false
+        type: string
+        default: 'dev'
+      environment-url:
+        description: 'Environment URL (for GitHub environment link)'
+        required: false
+        type: string
+        default: ''
+      verify-endpoint:
+        description: 'URL to poll after dispatch (waits for healthy response)'
+        required: false
+        type: string
+        default: ''
+      verify-timeout:
+        description: 'Seconds to wait for verify-endpoint to be healthy'
+        required: false
+        type: number
+        default: 180
+
+jobs:
+  gitops-deploy:
+    name: GitOps Deploy ${{ inputs.component }} to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment-url }}
+
+    steps:
+      - name: Dispatch image update to stoa-infra
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # v3
+        with:
+          token: ${{ secrets.STOA_INFRA_DISPATCH_TOKEN }}
+          repository: PotoMitan/stoa-infra
+          event-type: image-updated
+          client-payload: >-
+            {
+              "component": "${{ inputs.component }}",
+              "image_tag": "${{ inputs.image-tag }}",
+              "environment": "${{ inputs.environment }}",
+              "sha": "${{ github.sha }}",
+              "source_repo": "${{ github.repository }}",
+              "source_workflow": "${{ github.workflow }}",
+              "source_run_id": "${{ github.run_id }}"
+            }
+
+      - name: Wait for ArgoCD sync
+        if: inputs.verify-endpoint != ''
+        run: |
+          echo "Waiting for ArgoCD to sync ${{ inputs.component }} in ${{ inputs.environment }}..."
+          echo "Polling ${{ inputs.verify-endpoint }} (timeout: ${{ inputs.verify-timeout }}s)"
+
+          TIMEOUT=${{ inputs.verify-timeout }}
+          INTERVAL=15
+          ELAPSED=0
+
+          # Initial delay for stoa-infra to process dispatch + ArgoCD to detect change
+          sleep 30
+
+          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${{ inputs.verify-endpoint }}" 2>/dev/null) || HTTP_CODE="000"
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Endpoint healthy (HTTP $HTTP_CODE) after ${ELAPSED}s"
+              exit 0
+            fi
+            echo "  ${ELAPSED}s — HTTP $HTTP_CODE (waiting...)"
+            sleep "$INTERVAL"
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          echo "::warning::Endpoint not healthy after ${TIMEOUT}s (last: HTTP $HTTP_CODE). ArgoCD sync may still be in progress."
+
+      - name: Deploy Summary
+        if: always()
+        run: |
+          echo "### GitOps Deploy: ${{ inputs.component }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ inputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Method | GitOps (stoa-infra → ArgoCD) |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY

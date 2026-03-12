@@ -96,7 +96,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ inputs.component }}
           cache-to: type=gha,mode=max,scope=${{ inputs.component }}
-          build-args: ${{ inputs.build-args }}
+          build-args: |
+            ${{ inputs.build-args }}
+            CACHEBUST=${{ github.sha }}
 
       - name: Generate SLSA provenance (attestation)
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2

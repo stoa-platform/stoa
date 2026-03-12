@@ -29,7 +29,7 @@ class APITransaction(BaseModel):
     id: str
     trace_id: str
     api_name: str
-    tenant_id: str
+    tenant_id: str | None = None
     method: str
     path: str
     status_code: int

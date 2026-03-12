@@ -14,6 +14,91 @@ from ..schemas.monitoring import (
 logger = logging.getLogger(__name__)
 
 
+HTTP_STATUS_TEXT: dict[int, str] = {
+    200: "OK",
+    201: "Created",
+    204: "No Content",
+    301: "Moved Permanently",
+    304: "Not Modified",
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    405: "Method Not Allowed",
+    409: "Conflict",
+    422: "Unprocessable Entity",
+    429: "Too Many Requests",
+    500: "Internal Server Error",
+    501: "Not Implemented",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+    504: "Gateway Timeout",
+}
+
+# Map path prefixes to error source labels
+_ERROR_SOURCE_PATTERNS: list[tuple[str, str]] = [
+    ("/v1/certificates", "certificates"),
+    ("/v1/monitoring", "monitoring"),
+    ("/v1/gateways", "gateway-adapter"),
+    ("/v1/deployments", "deployment"),
+    ("/v1/tenants", "tenant-mgmt"),
+    ("/v1/portal", "portal"),
+    ("/v1/subscriptions", "subscriptions"),
+    ("/v1/api-keys", "api-keys"),
+    ("/v1/applications", "applications"),
+    ("/v1/apis", "api-catalog"),
+]
+
+
+def _status_text(code: int) -> str:
+    """Return human-readable HTTP status text."""
+    return HTTP_STATUS_TEXT.get(code, f"HTTP {code}")
+
+
+def _error_source(path: str, code: int) -> str | None:
+    """Identify the origin of an error from the HTTP status code and request path.
+
+    Uses status code semantics first (certain codes always come from a specific
+    layer regardless of path), then falls back to path-based detection.
+
+    Returns None for successful responses (no error source needed).
+    """
+    if code < 400:
+        return None
+
+    # --- Layer-based detection (code semantics override path) ---
+
+    # Auth layer: 401 is always the auth middleware (Keycloak JWT validation)
+    if code == 401:
+        return "auth"
+
+    # RBAC layer: 403 is always the authorization/permission check
+    if code == 403:
+        return "rbac"
+
+    # Rate limiting: 429 is always the rate-limiter middleware
+    if code == 429:
+        return "rate-limiter"
+
+    # Gateway/proxy errors: 502/503/504 indicate upstream failure
+    if code in (502, 503, 504):
+        return "gateway"
+
+    # --- Path-based detection (for codes where the endpoint matters) ---
+
+    # 501 Not Implemented = the endpoint itself doesn't support the operation
+    # 400/404/405/409/422 = the endpoint rejected the request
+    # 500 = the endpoint crashed
+    for prefix, source in _ERROR_SOURCE_PATTERNS:
+        if path.startswith(prefix):
+            return source
+
+    # Fallback for unrecognized paths
+    if code >= 500:
+        return "backend"
+    return "api"
+
+
 def _status_from_code(code: int) -> str:
     """Derive transaction status from HTTP status code."""
     if code == 504:
@@ -93,6 +178,8 @@ class MonitoringService:
                         path=path,
                         status_code=code,
                         status=_status_from_code(code),
+                        status_text=_status_text(code),
+                        error_source=_error_source(path, code),
                         started_at=src.get("@timestamp", ""),
                         total_duration_ms=int(res.get("latency_ms", 0)),
                         spans_count=1,
@@ -225,14 +312,20 @@ class MonitoringService:
             latency = int(res.get("latency_ms", 0))
             path = req.get("path", "")
 
+            source = _error_source(path, code) or "control-plane-api"
             span = TransactionSpan(
                 name="api_request",
-                service="control-plane-api",
+                service=source if code >= 400 else "control-plane-api",
                 start_offset_ms=0,
                 duration_ms=latency,
                 status=_status_from_code(code),
                 metadata={"correlation_id": src.get("correlation_id", "")},
             )
+
+            error_msg = None
+            if code >= 400:
+                detail_error = src.get("details", {}).get("error")
+                error_msg = f"{_status_text(code)}: {detail_error}" if detail_error else _status_text(code)
 
             return APITransaction(
                 id=src.get("event_id", hits[0]["_id"]),
@@ -243,12 +336,14 @@ class MonitoringService:
                 path=path,
                 status_code=code,
                 status=_status_from_code(code),
+                status_text=_status_text(code),
+                error_source=_error_source(path, code),
                 client_ip=actor.get("ip_address"),
                 user_id=actor.get("id"),
                 started_at=src.get("@timestamp", ""),
                 total_duration_ms=latency,
                 spans=[span],
-                error_message=src.get("details", {}).get("error") if code >= 400 else None,
+                error_message=error_msg,
             )
 
         except Exception:

@@ -573,6 +573,7 @@ export interface APITransaction {
   request_headers?: Record<string, string>;
   response_headers?: Record<string, string>;
   error_message?: string;
+  demo_mode?: boolean;
 }
 
 export interface APITransactionSummary {

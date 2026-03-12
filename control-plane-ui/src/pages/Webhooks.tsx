@@ -36,6 +36,8 @@ import type {
   WebhookListResponse,
   WebhookDeliveryListResponse,
 } from '../types';
+import { SubNav } from '../components/SubNav';
+import { applicationsTabs } from '../components/subNavGroups';
 
 // Available webhook events
 const WEBHOOK_EVENTS: { value: WebhookEventType; label: string; description: string }[] = [
@@ -302,6 +304,9 @@ export function Webhooks() {
           Add Webhook
         </button>
       </div>
+
+      {/* Contextual sub-navigation (CAB-1785) */}
+      <SubNav tabs={applicationsTabs} />
 
       {/* Test Result Toast */}
       {testResult && (

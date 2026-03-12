@@ -145,7 +145,7 @@ describe('Consumers', () => {
   it('renders the page title', async () => {
     renderConsumers();
     await waitFor(() => {
-      expect(screen.getByText('Consumers')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Consumers/i })).toBeInTheDocument();
     });
   });
 
@@ -256,7 +256,7 @@ describe('Consumers', () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderConsumers();
         await waitFor(() => {
-          expect(screen.getByText('Consumers')).toBeInTheDocument();
+          expect(screen.getByRole('heading', { name: /Consumers/i })).toBeInTheDocument();
         });
       });
     }

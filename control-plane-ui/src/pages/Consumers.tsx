@@ -14,6 +14,8 @@ import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { ConsumerDetailModal } from '../components/ConsumerDetailModal';
 import { CertificateHealthBadge } from '../components/CertificateHealthBadge';
 import { Button } from '@stoa/shared/components/Button';
+import { SubNav } from '../components/SubNav';
+import { consumersTabs } from '../components/subNavGroups';
 
 const PAGE_SIZE = 20;
 
@@ -268,6 +270,9 @@ export function Consumers() {
           API consumers with mTLS certificate bindings
         </p>
       </div>
+
+      {/* Contextual sub-navigation (CAB-1785) */}
+      <SubNav tabs={consumersTabs} />
 
       {/* Filters */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">

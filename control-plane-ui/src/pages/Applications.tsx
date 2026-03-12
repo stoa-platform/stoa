@@ -11,6 +11,8 @@ import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { Application, ApplicationCreate, API, SecurityProfile } from '../types';
+import { SubNav } from '../components/SubNav';
+import { applicationsTabs } from '../components/subNavGroups';
 import {
   ENV_ORDER,
   ENV_LABELS,
@@ -289,6 +291,9 @@ export function Applications() {
           Create Application
         </Button>
       </div>
+
+      {/* Contextual sub-navigation (CAB-1785) */}
+      <SubNav tabs={applicationsTabs} />
 
       {/* Environment Tabs (like Gateways page) */}
       <div className="flex gap-2 flex-wrap">

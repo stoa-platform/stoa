@@ -106,7 +106,7 @@ describe('CredentialMappings', () => {
 
   it('renders the page title and add button', async () => {
     renderWithProviders(<CredentialMappings />);
-    expect(screen.getByText('Credential Mappings')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Credential Mappings/i })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText('Add Mapping')).toBeInTheDocument();
     });
@@ -148,7 +148,7 @@ describe('CredentialMappings', () => {
       it('renders the page', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderWithProviders(<CredentialMappings />);
-        expect(screen.getByText('Credential Mappings')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Credential Mappings/i })).toBeInTheDocument();
       });
     }
   );
@@ -191,7 +191,7 @@ describe('CredentialMappings', () => {
       it('shows tenant selector only for cpi-admin (isAdmin)', async () => {
         renderWithProviders(<CredentialMappings />);
         await waitFor(() => {
-          expect(screen.getByText('Credential Mappings')).toBeInTheDocument();
+          expect(screen.getByRole('heading', { name: /Credential Mappings/i })).toBeInTheDocument();
         });
         // isAdmin = hasRole('cpi-admin') AND user has no tenant_id (cross-tenant admin)
         // cpi-admin mock user has tenant_id='gregarious-games', so the selector is hidden

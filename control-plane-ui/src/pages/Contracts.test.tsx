@@ -157,7 +157,7 @@ describe('Contracts', () => {
 
   it('renders the page title and create button', async () => {
     renderWithProviders(<Contracts />);
-    expect(screen.getByText('Contracts')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Contracts/i })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText('Create Contract')).toBeInTheDocument();
     });
@@ -606,7 +606,7 @@ describe('Contracts', () => {
       it('renders the page', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderWithProviders(<Contracts />);
-        expect(screen.getByText('Contracts')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Contracts/i })).toBeInTheDocument();
       });
     }
   );

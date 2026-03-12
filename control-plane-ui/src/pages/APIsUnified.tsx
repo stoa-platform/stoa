@@ -14,6 +14,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { APIs } from './APIs';
 import { BackendApisList } from './BackendApis';
 import { InternalApisList } from './InternalApis';
+import { SubNav } from '../components/SubNav';
+import { apiCatalogTabs } from '../components/subNavGroups';
 
 type TabId = 'catalog' | 'backends' | 'platform';
 
@@ -51,6 +53,9 @@ export function APIsUnified() {
           Manage API catalog, backend registrations, and platform proxy backends
         </p>
       </div>
+
+      {/* Contextual sub-navigation (CAB-1785) */}
+      <SubNav tabs={apiCatalogTabs} />
 
       {/* Tabs */}
       <div className="border-b border-neutral-200 dark:border-neutral-700">

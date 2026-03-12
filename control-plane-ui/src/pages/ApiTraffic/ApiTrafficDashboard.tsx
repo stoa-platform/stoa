@@ -30,6 +30,8 @@ import {
   type ProxyBackendResponse,
   type ProxyBackendHealthStatus,
 } from '../../services/proxyBackendService';
+import { SubNav } from '../../components/SubNav';
+import { observabilityTabs } from '../../components/subNavGroups';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
 
@@ -238,6 +240,8 @@ export function ApiTrafficDashboard() {
           </button>
         </div>
       </div>
+
+      <SubNav tabs={observabilityTabs} />
 
       {/* Error banner */}
       {error && (

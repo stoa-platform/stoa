@@ -30,6 +30,8 @@ import type {
   CredentialMappingUpdate,
   CredentialAuthType,
 } from '../types';
+import { SubNav } from '../components/SubNav';
+import { consumersTabs } from '../components/subNavGroups';
 
 const AUTH_TYPE_LABELS: Record<CredentialAuthType, string> = {
   api_key: 'API Key',
@@ -265,6 +267,9 @@ export function CredentialMappings() {
           )}
         </div>
       </div>
+
+      {/* Contextual sub-navigation (CAB-1785) */}
+      <SubNav tabs={consumersTabs} />
 
       {/* Admin tenant selector */}
       {isAdmin && !user?.tenant_id && (

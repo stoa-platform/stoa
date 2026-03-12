@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@stoa/shared/components/Button';
 import type { GatewayInstance, GatewayInstanceStatus, GatewayMode } from '../../types';
+import { SubNav } from '../../components/SubNav';
+import { gatewayTabs } from '../../components/subNavGroups';
 
 // ---------------------------------------------------------------------------
 // Constants — colors from shared constants (green=dev, amber=staging, red=prod)
@@ -383,6 +385,8 @@ export function GatewayList() {
           </Button>
         </div>
       </div>
+
+      <SubNav tabs={gatewayTabs} />
 
       {/* Error Banner */}
       {error && (

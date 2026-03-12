@@ -83,7 +83,7 @@ describe('ApiTrafficDashboard', () => {
     renderWithProviders(<ApiTrafficDashboard />, { route: '/api-traffic' });
 
     await waitFor(() => {
-      expect(screen.getByText('API Traffic')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /API Traffic/i })).toBeInTheDocument();
     });
 
     expect(screen.getByText('Linear Issue Tracker')).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe('ApiTrafficDashboard', () => {
       it('renders the page heading', async () => {
         renderWithProviders(<ApiTrafficDashboard />, { route: '/api-traffic' });
         await waitFor(() => {
-          expect(screen.getByText('API Traffic')).toBeInTheDocument();
+          expect(screen.getByRole('heading', { name: /API Traffic/i })).toBeInTheDocument();
         });
       });
 

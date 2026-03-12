@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useGatewayStatus, useGatewayPlatformInfo } from '../hooks/useGatewayStatus';
 import { config } from '../config';
 import { observabilityPath, logsPath } from '../utils/navigation';
+import { SubNav } from '../components/SubNav';
+import { gatewayTabs } from '../components/subNavGroups';
 import {
   Server,
   Activity,
@@ -211,6 +213,9 @@ export default function GatewayStatus() {
           Refresh
         </button>
       </div>
+
+      {/* Contextual sub-navigation (CAB-1785) */}
+      <SubNav tabs={gatewayTabs} />
 
       {/* Main Status Card */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm">

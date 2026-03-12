@@ -174,7 +174,7 @@ describe('Subscriptions', () => {
 
   it('renders the page title', async () => {
     renderSubscriptions();
-    expect(await screen.findByText('Subscriptions')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Subscriptions/i })).toBeInTheDocument();
   });
 
   it('renders status tabs', async () => {
@@ -246,7 +246,7 @@ describe('Subscriptions', () => {
 
       it('renders the page without errors', async () => {
         renderSubscriptions();
-        expect(await screen.findByText('Subscriptions')).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: /Subscriptions/i })).toBeInTheDocument();
       });
 
       it('renders the subscription table', async () => {
@@ -273,7 +273,7 @@ describe('Subscriptions', () => {
       it('matches structural snapshot', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         const { container } = renderSubscriptions();
-        await screen.findByText('Subscriptions');
+        await screen.findByRole('heading', { name: /Subscriptions/i });
         const buttons = [...container.querySelectorAll('button')].map(
           (b) => b.textContent?.trim() || ''
         );

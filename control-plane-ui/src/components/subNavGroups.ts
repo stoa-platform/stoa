@@ -1,0 +1,58 @@
+/**
+ * SubNav tab group definitions (CAB-1785)
+ *
+ * Separated from SubNav.tsx to avoid react-refresh/only-export-components warnings.
+ * Import the relevant group constant in each page alongside the SubNav component.
+ */
+
+import {
+  Layers,
+  FileText,
+  ScrollText,
+  Users,
+  ShieldCheck,
+  KeyRound,
+  AppWindow,
+  Webhook,
+  Shield,
+  Server,
+  GitCompareArrows,
+  ArrowUpDown,
+  Gauge,
+  Activity,
+  BarChart3,
+  Search,
+} from 'lucide-react';
+import type { SubNavTab } from './SubNav';
+
+export const apiCatalogTabs: SubNavTab[] = [
+  { label: 'APIs', href: '/apis', icon: Layers },
+  { label: 'Subscriptions', href: '/subscriptions', icon: FileText },
+  { label: 'Contracts', href: '/contracts', icon: ScrollText },
+];
+
+export const consumersTabs: SubNavTab[] = [
+  { label: 'Consumers', href: '/consumers', icon: Users },
+  { label: 'Certificates', href: '/certificates', icon: ShieldCheck },
+  { label: 'Credential Mappings', href: '/credential-mappings', icon: KeyRound },
+];
+
+export const applicationsTabs: SubNavTab[] = [
+  { label: 'Applications', href: '/applications', icon: AppWindow },
+  { label: 'Webhooks', href: '/webhooks', icon: Webhook },
+  { label: 'Security Profiles', href: '/security-posture', icon: Shield },
+];
+
+export const gatewayTabs: SubNavTab[] = [
+  { label: 'Status', href: '/gateway', icon: Server },
+  { label: 'Registry', href: '/gateways', icon: Server },
+  { label: 'Drift Detection', href: '/drift', icon: GitCompareArrows },
+  { label: 'Deployments', href: '/gateway-deployments', icon: ArrowUpDown },
+];
+
+export const observabilityTabs: SubNavTab[] = [
+  { label: 'Observability', href: '/observability', icon: Gauge },
+  { label: 'Monitoring', href: '/monitoring', icon: Activity },
+  { label: 'API Traffic', href: '/api-traffic', icon: BarChart3 },
+  { label: 'Logs', href: '/logs', icon: Search },
+];

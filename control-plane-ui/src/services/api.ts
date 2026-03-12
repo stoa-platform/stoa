@@ -64,6 +64,8 @@ import type {
   PromotionRollbackRequest,
   PromotionListResponse,
   PromotionDiffResponse,
+  TenantCAInfo,
+  CSRSignResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -385,6 +387,33 @@ class ApiService {
       consumer_ids: consumerIds,
     });
     return data;
+  }
+
+  // Tenant CA (CAB-1787/1788 — per-tenant CA management)
+  async getTenantCA(tenantId: string): Promise<TenantCAInfo> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/ca`);
+    return data;
+  }
+
+  async generateTenantCA(tenantId: string): Promise<TenantCAInfo> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/ca/generate`);
+    return data;
+  }
+
+  async signCSR(
+    tenantId: string,
+    csrPem: string,
+    validityDays: number = 365
+  ): Promise<CSRSignResponse> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/ca/sign`, {
+      csr_pem: csrPem,
+      validity_days: validityDays,
+    });
+    return data;
+  }
+
+  async revokeTenantCA(tenantId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/ca`);
   }
 
   // Deployments (CAB-1353 lifecycle API)

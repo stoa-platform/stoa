@@ -33,12 +33,14 @@ class ExternalMCPServersService {
    */
   async listServers(params?: {
     enabled_only?: boolean;
+    environment?: string;
     page?: number;
     page_size?: number;
   }): Promise<ExternalMCPServerListResponse> {
     const { data } = await apiService.get('/v1/admin/external-mcp-servers', {
       params: {
         enabled_only: params?.enabled_only,
+        environment: params?.environment,
         page: params?.page || 1,
         page_size: params?.page_size || 20,
       },

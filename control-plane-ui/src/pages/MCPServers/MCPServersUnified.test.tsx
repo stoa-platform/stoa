@@ -16,6 +16,24 @@ const mockCreateServer = vi.fn();
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
+vi.mock('../../contexts/EnvironmentContext', () => ({
+  useEnvironment: () => ({
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+    environments: [],
+    endpoints: null,
+    switchEnvironment: vi.fn(),
+    loading: false,
+    error: null,
+  }),
+}));
+
+vi.mock('../../config', () => ({
+  config: {
+    features: { enableMcpCatalog: true },
+  },
+}));
+
 vi.mock('../../services/mcpConnectorsApi', () => ({
   mcpConnectorsService: {
     listConnectors: (...args: unknown[]) => mockListConnectors(...args),

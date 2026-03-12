@@ -100,6 +100,14 @@ class ExternalMCPServer(Base):
     # Multi-tenancy (null = platform-wide)
     tenant_id = Column(String(255), nullable=True, index=True)
 
+    # Multi-environment dataplane binding (CAB-1791)
+    environment = Column(String(50), nullable=True, server_default="dev")  # dev / staging / production
+    gateway_instance_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("gateway_instances.id", ondelete="SET NULL"),
+        nullable=True,
+    )  # Which dataplane gateway proxies this server
+
     # Timestamps and audit
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -116,7 +124,10 @@ class ExternalMCPServer(Base):
     tools = relationship("ExternalMCPServerTool", back_populates="server", cascade="all, delete-orphan")
 
     # Indexes
-    __table_args__ = (Index("ix_external_mcp_servers_tenant_enabled", "tenant_id", "enabled"),)
+    __table_args__ = (
+        Index("ix_external_mcp_servers_tenant_enabled", "tenant_id", "enabled"),
+        Index("ix_external_mcp_servers_environment", "environment"),
+    )
 
     def __repr__(self) -> str:
         return f"<ExternalMCPServer {self.name} url={self.base_url}>"

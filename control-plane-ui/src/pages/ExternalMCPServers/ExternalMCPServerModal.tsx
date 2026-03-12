@@ -254,7 +254,7 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 placeholder="Enter API key"
               />
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Stored securely in Vault. Leave empty to keep existing.
+                Encrypted at rest. Leave empty to keep existing.
               </p>
             </div>
           )}
@@ -273,7 +273,7 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 placeholder="Enter bearer token"
               />
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Stored securely in Vault. Leave empty to keep existing.
+                Encrypted at rest. Leave empty to keep existing.
               </p>
             </div>
           )}

@@ -48,12 +48,12 @@ pub static MCP_TOOL_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Failed to create stoa_mcp_tool_duration_seconds metric")
 });
 
-/// Counter of MCP tool calls
+/// Counter of MCP tool calls (includes consumer_id for per-consumer analytics, CAB-1782)
 pub static MCP_TOOL_CALLS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "stoa_mcp_tools_calls_total",
         "Total number of MCP tool calls",
-        &["tool", "tenant", "status"]
+        &["tool", "tenant", "status", "consumer_id"]
     )
     .expect("Failed to create stoa_mcp_tools_calls_total metric")
 });
@@ -451,15 +451,22 @@ pub static UPSTREAM_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 /// When OTel tracing is active, the histogram observation includes
 /// a `trace_id` exemplar, enabling click-through from Grafana metrics
 /// panels directly to the Tempo trace view.
-pub fn record_tool_call(tool: &str, tenant: &str, status: &str, duration_secs: f64) {
+pub fn record_tool_call(
+    tool: &str,
+    tenant: &str,
+    status: &str,
+    duration_secs: f64,
+    consumer_id: &str,
+) {
     let histogram = MCP_TOOL_DURATION.with_label_values(&[tool, tenant, status]);
 
     // CAB-1088: exemplar support blocked on prometheus crate 0.14
     // (observe_with_exemplar not available in 0.13; track upstream PR)
     histogram.observe(duration_secs);
 
+    // CAB-1782: consumer_id on CounterVec only (not HistogramVec — cardinality guard)
     MCP_TOOL_CALLS_TOTAL
-        .with_label_values(&[tool, tenant, status])
+        .with_label_values(&[tool, tenant, status, consumer_id])
         .inc();
 }
 
@@ -832,7 +839,7 @@ mod tests {
     #[test]
     fn test_record_tool_call() {
         // Should not panic
-        record_tool_call("test_tool", "tenant-1", "success", 0.05);
+        record_tool_call("test_tool", "tenant-1", "success", 0.05, "consumer-1");
     }
 
     #[test]
@@ -844,7 +851,7 @@ mod tests {
     #[test]
     fn test_get_requests_total() {
         // Record some calls and verify total is non-negative
-        record_tool_call("metric_test_tool", "metric-tenant", "success", 0.01);
+        record_tool_call("metric_test_tool", "metric-tenant", "success", 0.01, "consumer-1");
         let total = get_requests_total();
         assert!(total >= 1, "Expected at least 1 request, got {}", total);
     }
@@ -852,7 +859,7 @@ mod tests {
     #[test]
     fn test_get_error_rate_with_no_errors() {
         // Record only success calls
-        record_tool_call("rate_test_tool", "rate-tenant", "success", 0.01);
+        record_tool_call("rate_test_tool", "rate-tenant", "success", 0.01, "consumer-1");
         let rate = get_error_rate();
         // Rate should be between 0.0 and 1.0
         assert!(
@@ -865,8 +872,8 @@ mod tests {
     #[test]
     fn test_get_error_rate_with_errors() {
         // Record both success and error calls
-        record_tool_call("err_test_tool", "err-tenant", "success", 0.01);
-        record_tool_call("err_test_tool", "err-tenant", "error", 0.05);
+        record_tool_call("err_test_tool", "err-tenant", "success", 0.01, "consumer-1");
+        record_tool_call("err_test_tool", "err-tenant", "error", 0.05, "consumer-1");
         let rate = get_error_rate();
         assert!(rate > 0.0, "Expected non-zero error rate, got {}", rate);
         assert!(rate <= 1.0, "Error rate out of range: {}", rate);

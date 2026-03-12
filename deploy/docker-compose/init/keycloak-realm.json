@@ -227,11 +227,14 @@
       "protocol": "openid-connect",
       "redirectUris": [
         "http://localhost/logs/*",
-        "http://localhost:5601/*"
+        "http://localhost:5601/*",
+        "https://opensearch.gostoa.dev/*",
+        "https://opensearch.gostoa.dev/auth/openid/login"
       ],
       "webOrigins": [
         "http://localhost",
-        "http://localhost:5601"
+        "http://localhost:5601",
+        "https://opensearch.gostoa.dev"
       ],
       "defaultClientScopes": [
         "web-origins",

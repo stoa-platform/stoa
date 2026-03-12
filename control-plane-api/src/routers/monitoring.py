@@ -248,7 +248,7 @@ async def list_transactions(
     Returns transaction summaries for efficient list display.
     Uses real OpenSearch data when available, falls back to demo data.
     """
-    tenant_id = user.tenant_id or "demo"
+    tenant_id = user.tenant_id
 
     # Try real data from OpenSearch
     svc = _get_monitoring_service()
@@ -292,7 +292,7 @@ async def get_transaction_stats(
     Returns aggregated metrics about API calls.
     Uses real OpenSearch data when available, falls back to demo data.
     """
-    tenant_id = user.tenant_id or "demo"
+    tenant_id = user.tenant_id
 
     # Try real data from OpenSearch
     svc = _get_monitoring_service()
@@ -316,7 +316,7 @@ async def get_transaction(
     Includes all spans with timing and metadata.
     Uses real OpenSearch data when available, falls back to demo data.
     """
-    tenant_id = user.tenant_id or "demo"
+    tenant_id = user.tenant_id
 
     # Try real data from OpenSearch
     svc = _get_monitoring_service()

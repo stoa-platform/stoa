@@ -55,12 +55,12 @@ def pem_to_jwk(pem_data: str) -> dict:
             "e": _int_to_base64url(numbers.e),
         }
     elif isinstance(public_key, ec.EllipticCurvePublicKey):
-        numbers = public_key.public_numbers()
-        if not isinstance(numbers.curve, SECP256R1):
-            raise ValueError(f"Unsupported EC curve: {type(numbers.curve).__name__}. Use P-256.")
+        ec_numbers = public_key.public_numbers()
+        if not isinstance(ec_numbers.curve, SECP256R1):
+            raise ValueError(f"Unsupported EC curve: {type(ec_numbers.curve).__name__}. Use P-256.")
         # EC coordinates must be exactly 32 bytes for P-256
-        x_bytes = numbers.x.to_bytes(32, byteorder="big")
-        y_bytes = numbers.y.to_bytes(32, byteorder="big")
+        x_bytes = ec_numbers.x.to_bytes(32, byteorder="big")
+        y_bytes = ec_numbers.y.to_bytes(32, byteorder="big")
         return {
             "kty": "EC",
             "use": "sig",

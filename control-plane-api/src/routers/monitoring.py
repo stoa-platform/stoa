@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/monitoring", tags=["Monitoring"])
 
+# In-memory cache for demo transactions so detail is coherent with list
+_demo_cache: dict[str, APITransactionSummary] = {}
+
 
 # =============================================================================
 # OPENSEARCH SERVICE DEPENDENCY
@@ -116,21 +119,58 @@ def generate_demo_transactions(count: int = 50, tenant_id: str | None = None) ->
 
     # Sort by time, most recent first
     transactions.sort(key=lambda x: x.started_at, reverse=True)
+
+    # Cache for coherent detail lookups
+    _demo_cache.clear()
+    for t in transactions:
+        _demo_cache[t.id] = t
+
     return transactions
 
 
+def _error_span_name(status_code: int) -> str:
+    """Determine which span should show the error based on status code."""
+    if status_code == 401:
+        return "auth_validation"
+    if status_code == 403:
+        return "auth_validation"
+    if status_code == 429:
+        return "rate_limiting"
+    if status_code in (502, 503, 504):
+        return "gateway_ingress"
+    # 400, 404, 500, 501, etc. → backend
+    return "backend_call"
+
+
 def generate_transaction_detail(tx_id: str, tenant_id: str = "demo") -> APITransaction:
-    """Generate detailed transaction data."""
-    apis = ["customer-api", "order-api", "inventory-api", "payment-api"]
-    api_name = random.choice(apis)
+    """Generate detailed transaction data, coherent with the list cache."""
+    # Use cached summary if available (same process, same demo session)
+    cached = _demo_cache.get(tx_id)
 
-    base_time = datetime.utcnow() - timedelta(minutes=random.randint(1, 30))
-    is_error = random.random() < 0.1
+    if cached:
+        api_name = cached.api_name
+        status_code = cached.status_code
+        status = cached.status
+        method = cached.method
+        path = cached.path
+        started_at = cached.started_at
+        total_hint = cached.total_duration_ms
+    else:
+        apis = ["customer-api", "order-api", "inventory-api", "payment-api"]
+        api_name = random.choice(apis)
+        status_code = 200
+        status = "success"
+        method = random.choice(["GET", "POST", "PUT"])
+        path = f"/v1/{api_name}/{api_name.replace('-api', '')}s/12345"
+        started_at = (datetime.utcnow() - timedelta(minutes=random.randint(1, 30))).isoformat() + "Z"
+        total_hint = 0
 
-    # Generate spans for the transaction
+    is_error = status_code >= 400
+    error_at = _error_span_name(status_code) if is_error else ""
+
+    # Generate spans — error span stops the chain (later spans skipped)
     spans = []
     current_offset = 0
-
     span_configs = [
         ("gateway_ingress", "api-gateway", 5, 20),
         ("auth_validation", "auth-service", 10, 50),
@@ -142,31 +182,41 @@ def generate_transaction_detail(tx_id: str, tenant_id: str = "demo") -> APITrans
 
     for name, service, min_ms, max_ms in span_configs:
         duration = random.randint(min_ms, max_ms)
-        span_status = "error" if is_error and name == "backend_call" else "success"
-
-        spans.append(
-            TransactionSpan(
-                name=name,
-                service=service,
-                start_offset_ms=current_offset,
-                duration_ms=duration,
-                status=span_status,
-                metadata={"processed": True},
+        if name == error_at:
+            # This span failed — mark error, chain stops here
+            spans.append(
+                TransactionSpan(
+                    name=name,
+                    service=service,
+                    start_offset_ms=current_offset,
+                    duration_ms=duration,
+                    status="error",
+                    metadata={"status_code": status_code, "error": _status_text(status_code)},
+                )
             )
-        )
-        current_offset += duration
+            current_offset += duration
+            break
+        else:
+            spans.append(
+                TransactionSpan(
+                    name=name,
+                    service=service,
+                    start_offset_ms=current_offset,
+                    duration_ms=duration,
+                    status="success",
+                    metadata={"processed": True},
+                )
+            )
+            current_offset += duration
 
-    total_duration = current_offset
-    status_code = 500 if is_error else 200
-    status = "error" if is_error else "success"
+    total_duration = total_hint if total_hint else current_offset
 
-    path = f"/v1/{api_name}/{api_name.replace('-api', '')}s/12345"
     return APITransaction(
         id=tx_id,
-        trace_id=f"trace-{random.randint(100000, 999999)}",
+        trace_id=cached.trace_id if cached else f"trace-{random.randint(100000, 999999)}",
         api_name=api_name,
         tenant_id=tenant_id,
-        method=random.choice(["GET", "POST", "PUT"]),
+        method=method,
         path=path,
         status_code=status_code,
         status=status,
@@ -174,7 +224,7 @@ def generate_transaction_detail(tx_id: str, tenant_id: str = "demo") -> APITrans
         error_source=_error_source(path, status_code),
         client_ip=f"10.0.{random.randint(1, 255)}.{random.randint(1, 255)}",
         user_id=f"user-{random.randint(1000, 9999)}",
-        started_at=base_time.isoformat() + "Z",
+        started_at=started_at,
         total_duration_ms=total_duration,
         spans=spans,
         request_headers={"Content-Type": "application/json", "Authorization": "Bearer ***"},

@@ -386,6 +386,17 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
         className="px-4 py-4 bg-neutral-50 dark:bg-neutral-900 border-t border-b border-neutral-200 dark:border-neutral-700"
       >
         <div className="space-y-4">
+          {/* Demo Mode Warning */}
+          {transaction.demo_mode && (
+            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span>
+                Span detail unavailable in OpenSearch — showing simulated flow. The transaction
+                summary above reflects real data.
+              </span>
+            </div>
+          )}
+
           {/* Flow Visualization */}
           <div>
             <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">

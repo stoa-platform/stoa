@@ -7,6 +7,11 @@ on:
         description: 'Component/deployment name in k8s'
         required: true
         type: string
+      container-name:
+        description: 'Container name inside the pod (defaults to component)'
+        required: false
+        type: string
+        default: ''
       image-tag:
         description: 'Full Docker image tag to deploy'
         required: true
@@ -81,9 +86,10 @@ jobs:
       - name: Deploy
         if: steps.kubeconfig.outputs.CLUSTER_READY == 'true'
         run: |
-          echo "Deploying ${{ inputs.component }} with image: ${{ inputs.image-tag }}"
+          CONTAINER="${{ inputs.container-name || inputs.component }}"
+          echo "Deploying ${{ inputs.component }} (container: $CONTAINER) with image: ${{ inputs.image-tag }}"
           kubectl set image deployment/${{ inputs.component }} \
-            ${{ inputs.component }}=${{ inputs.image-tag }} \
+            "$CONTAINER"=${{ inputs.image-tag }} \
             -n ${{ inputs.namespace }}
           kubectl rollout restart deployment/${{ inputs.component }} -n ${{ inputs.namespace }}
           if ! kubectl rollout status deployment/${{ inputs.component }} \

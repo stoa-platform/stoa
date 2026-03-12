@@ -129,6 +129,7 @@ jobs:
     uses: ./.github/workflows/reusable-k8s-deploy.yml
     with:
       component: stoa-control-plane-api
+      container-name: control-plane-api
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
       environment-url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-api') || 'api' }}.gostoa.dev
@@ -157,6 +158,7 @@ jobs:
     uses: ./.github/workflows/reusable-k8s-deploy.yml
     with:
       component: stoa-control-plane-api
+      container-name: control-plane-api
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: staging
       environment-url: https://staging-api.gostoa.dev

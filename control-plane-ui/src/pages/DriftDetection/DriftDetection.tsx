@@ -22,6 +22,8 @@ import type {
   GatewayDeployment,
   DeploymentStatusSummary,
 } from '../../types';
+import { SubNav } from '../../components/SubNav';
+import { gatewayTabs } from '../../components/subNavGroups';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
 
@@ -219,6 +221,8 @@ export function DriftDetection() {
           Refresh
         </button>
       </div>
+
+      <SubNav tabs={gatewayTabs} />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

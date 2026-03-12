@@ -33,6 +33,8 @@ import { useNavigate } from 'react-router-dom';
 import { config } from '../config';
 import { observabilityPath } from '../utils/navigation';
 import { clsx } from 'clsx';
+import { SubNav } from '../components/SubNav';
+import { observabilityTabs } from '../components/subNavGroups';
 
 // =============================================================================
 // STATUS CONFIGURATIONS
@@ -667,6 +669,8 @@ export function APIMonitoring() {
           </button>
         </div>
       </div>
+
+      <SubNav tabs={observabilityTabs} />
 
       {/* Stats Cards */}
       {stats && (

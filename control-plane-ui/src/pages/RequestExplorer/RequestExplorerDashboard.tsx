@@ -13,6 +13,8 @@ import { StatCard } from '@stoa/shared/components/StatCard';
 import { TimeRangeSelector, RANGE_CONFIG } from '@stoa/shared/components/TimeRangeSelector';
 import type { TimeRange } from '@stoa/shared/components/TimeRangeSelector';
 import { usePrometheusQuery, scalarValue, groupByLabel } from '../../hooks/usePrometheus';
+import { SubNav } from '../../components/SubNav';
+import { observabilityTabs } from '../../components/subNavGroups';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
 
@@ -154,6 +156,8 @@ export function RequestExplorerDashboard() {
           </button>
         </div>
       </div>
+
+      <SubNav tabs={observabilityTabs} />
 
       {/* Prometheus unavailable banner */}
       {!prometheusAvailable && (

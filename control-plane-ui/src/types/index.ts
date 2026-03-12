@@ -746,6 +746,8 @@ export interface ExternalMCPServer {
   last_sync_at?: string;
   sync_error?: string;
   tenant_id?: string;
+  environment?: string;
+  gateway_instance_id?: string;
   tools_count: number;
   created_at: string;
   updated_at: string;
@@ -780,6 +782,8 @@ export interface ExternalMCPServerCreate {
   credentials?: ExternalMCPServerCredentials;
   tool_prefix?: string;
   tenant_id?: string;
+  environment?: string;
+  gateway_instance_id?: string;
 }
 
 export interface ExternalMCPServerUpdate {
@@ -792,6 +796,8 @@ export interface ExternalMCPServerUpdate {
   credentials?: ExternalMCPServerCredentials;
   tool_prefix?: string;
   enabled?: boolean;
+  environment?: string;
+  gateway_instance_id?: string;
 }
 
 export interface ExternalMCPServerListResponse {

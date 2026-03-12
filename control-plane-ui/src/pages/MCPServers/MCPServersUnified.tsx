@@ -14,11 +14,13 @@ import {
 import { mcpConnectorsService } from '../../services/mcpConnectorsApi';
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
 import { useAuth } from '../../contexts/AuthContext';
+import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { ExternalMCPServerModal } from '../ExternalMCPServers/ExternalMCPServerModal';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { config } from '../../config';
 import type {
   ConnectorTemplate,
   ExternalMCPServer,
@@ -26,6 +28,8 @@ import type {
   ExternalMCPServerUpdate,
   ExternalMCPHealthStatus,
 } from '../../types';
+
+const ENABLE_MCP_CATALOG = config.features?.enableMcpCatalog ?? false;
 
 type TabId = 'catalog' | 'custom';
 
@@ -81,7 +85,8 @@ const ALL_CATEGORY = '__all__';
 
 export function MCPServersUnified() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as TabId) || 'catalog';
+  const defaultTab: TabId = ENABLE_MCP_CATALOG ? 'catalog' : 'custom';
+  const activeTab = (searchParams.get('tab') as TabId) || defaultTab;
   const setActiveTab = useCallback(
     (tab: TabId) => setSearchParams({ tab }, { replace: true }),
     [setSearchParams]
@@ -100,17 +105,19 @@ export function MCPServersUnified() {
       {/* Tabs */}
       <div className="border-b border-neutral-200 dark:border-neutral-700">
         <nav className="-mb-px flex gap-6" aria-label="Tabs">
-          <button
-            onClick={() => setActiveTab('catalog')}
-            className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'catalog'
-                ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
-                : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200'
-            }`}
-          >
-            <Puzzle className="inline h-4 w-4 mr-1.5 -mt-0.5" />
-            Catalog
-          </button>
+          {ENABLE_MCP_CATALOG && (
+            <button
+              onClick={() => setActiveTab('catalog')}
+              className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'catalog'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200'
+              }`}
+            >
+              <Puzzle className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+              Catalog
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('custom')}
             className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
@@ -126,7 +133,7 @@ export function MCPServersUnified() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'catalog' ? <CatalogTab /> : <CustomServersTab />}
+      {activeTab === 'catalog' && ENABLE_MCP_CATALOG ? <CatalogTab /> : <CustomServersTab />}
     </div>
   );
 }
@@ -335,6 +342,7 @@ function CatalogTab() {
 function CustomServersTab() {
   const navigate = useNavigate();
   const { isReady } = useAuth();
+  const { activeEnvironment } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [servers, setServers] = useState<ExternalMCPServer[]>([]);
@@ -351,12 +359,14 @@ function CustomServersTab() {
     return () => {
       mountedRef.current = false;
     };
-  }, [isReady]);
+  }, [isReady, activeEnvironment]);
 
   async function loadServers() {
     try {
       setLoading(true);
-      const response = await externalMcpServersService.listServers();
+      const response = await externalMcpServersService.listServers({
+        environment: activeEnvironment,
+      });
       if (!mountedRef.current) return;
       setServers(response.servers);
       setError(null);
@@ -372,7 +382,11 @@ function CustomServersTab() {
   const handleCreate = useCallback(
     async (data: ExternalMCPServerCreate | ExternalMCPServerUpdate) => {
       try {
-        await externalMcpServersService.createServer(data as ExternalMCPServerCreate);
+        const createData = {
+          ...(data as ExternalMCPServerCreate),
+          environment: activeEnvironment,
+        };
+        await externalMcpServersService.createServer(createData);
         setShowCreateModal(false);
         await loadServers();
       } catch (err: unknown) {
@@ -380,7 +394,7 @@ function CustomServersTab() {
         throw new Error(message);
       }
     },
-    []
+    [activeEnvironment]
   );
 
   const handleTestConnection = useCallback(
@@ -714,6 +728,12 @@ function ServerCard({
           <div className="flex justify-between">
             <span className="text-neutral-500 dark:text-neutral-400">Prefix:</span>
             <span className="font-mono">{server.tool_prefix}__</span>
+          </div>
+        )}
+        {server.environment && (
+          <div className="flex justify-between">
+            <span className="text-neutral-500 dark:text-neutral-400">Environment:</span>
+            <span className="capitalize">{server.environment}</span>
           </div>
         )}
         <div className="flex justify-between items-center">

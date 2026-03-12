@@ -99,7 +99,13 @@ impl ToolSpan {
         );
 
         // Record metrics
-        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "success", duration, &self.consumer_id);
+        crate::metrics::record_tool_call(
+            &self.tool_name,
+            &self.tenant_id,
+            "success",
+            duration,
+            &self.consumer_id,
+        );
     }
 
     /// Mark span as failed with error
@@ -116,7 +122,13 @@ impl ToolSpan {
         );
 
         // Record metrics
-        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "error", duration, &self.consumer_id);
+        crate::metrics::record_tool_call(
+            &self.tool_name,
+            &self.tenant_id,
+            "error",
+            duration,
+            &self.consumer_id,
+        );
     }
 
     /// Mark span as cache hit (no execution)
@@ -132,7 +144,13 @@ impl ToolSpan {
         );
 
         // Record metrics with cache_hit status
-        crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "cache_hit", duration, &self.consumer_id);
+        crate::metrics::record_tool_call(
+            &self.tool_name,
+            &self.tenant_id,
+            "cache_hit",
+            duration,
+            &self.consumer_id,
+        );
     }
 
     /// Mark span as circuit breaker open (fast fail)
@@ -162,7 +180,13 @@ impl Drop for ToolSpan {
         // If not explicitly finished, record as error (likely panic)
         if !self.finished {
             let duration = self.elapsed_secs();
-            crate::metrics::record_tool_call(&self.tool_name, &self.tenant_id, "dropped", duration, &self.consumer_id);
+            crate::metrics::record_tool_call(
+                &self.tool_name,
+                &self.tenant_id,
+                "dropped",
+                duration,
+                &self.consumer_id,
+            );
         }
     }
 }
@@ -305,7 +329,8 @@ mod tests {
 
     #[test]
     fn test_tool_span_with_no_uac() {
-        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer").with_uac(None, None, None, None);
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_uac(None, None, None, None);
         span.finish_success();
     }
 }

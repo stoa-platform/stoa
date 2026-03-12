@@ -17,10 +17,11 @@ import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { CertificateHealthBadge } from '../components/CertificateHealthBadge';
 import { ConsumerDetailModal } from '../components/ConsumerDetailModal';
+import { CertificateGenerationWizard } from '../components/CertificateGenerationWizard';
 import { Button } from '@stoa/shared/components/Button';
 import { SubNav } from '../components/SubNav';
 import { consumersTabs } from '../components/subNavGroups';
-import { ShieldCheck, AlertTriangle, ShieldOff, Clock, ArrowUpDown } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, ShieldOff, Clock, ArrowUpDown, Plus } from 'lucide-react';
 
 type SortField = 'name' | 'status' | 'expiry' | 'fingerprint';
 type SortDir = 'asc' | 'desc';
@@ -48,6 +49,7 @@ export function Certificates() {
   const [selectedConsumer, setSelectedConsumer] = useState<Consumer | null>(null);
   const [sortField, setSortField] = useState<SortField>('expiry');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [showWizard, setShowWizard] = useState(false);
 
   // Fetch tenants
   const { data: tenants = [], isLoading: tenantsLoading } = useQuery({
@@ -268,11 +270,19 @@ export function Certificates() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Certificates</h1>
-        <p className="text-neutral-500 dark:text-neutral-400 mt-1">
-          mTLS certificate lifecycle management across all consumers
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Certificates</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
+            mTLS certificate lifecycle management across all consumers
+          </p>
+        </div>
+        {canEdit && activeTenant && (
+          <Button onClick={() => setShowWizard(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Generate Certificate
+          </Button>
+        )}
       </div>
 
       <SubNav tabs={consumersTabs} />
@@ -549,6 +559,22 @@ export function Certificates() {
           consumer={selectedConsumer}
           tenantId={activeTenant}
           onClose={() => setSelectedConsumer(null)}
+        />
+      )}
+
+      {showWizard && activeTenant && (
+        <CertificateGenerationWizard
+          tenantId={activeTenant}
+          tenantName={
+            tenants.find((t) => t.id === activeTenant)?.display_name ||
+            tenants.find((t) => t.id === activeTenant)?.name ||
+            activeTenant
+          }
+          onClose={() => setShowWizard(false)}
+          onComplete={() => {
+            setShowWizard(false);
+            invalidateConsumers();
+          }}
         />
       )}
 

@@ -291,11 +291,11 @@ class MonitoringService:
                 [{"term": {"tenant_id": tenant_id}}] if tenant_id else []
             )
 
-            # Try event_id field first
+            # Try event_id.keyword first (event_id is mapped as text, term needs keyword subfield)
             body = {
                 "query": {
                     "bool": {
-                        "filter": [{"term": {"event_id": event_id}}, *tenant_filter]
+                        "filter": [{"term": {"event_id.keyword": event_id}}, *tenant_filter]
                     }
                 },
                 "size": 1,

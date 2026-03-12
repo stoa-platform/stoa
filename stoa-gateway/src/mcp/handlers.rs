@@ -418,7 +418,13 @@ pub async fn mcp_tools_call(
                     t
                 } else {
                     warn!(tool = %request.name, "Tool not found (after sync refresh)");
-                    metrics::record_tool_call(&request.name, &auth.tenant_id, "not_found", 0.0, &auth.consumer_id);
+                    metrics::record_tool_call(
+                        &request.name,
+                        &auth.tenant_id,
+                        "not_found",
+                        0.0,
+                        &auth.consumer_id,
+                    );
                     emit_metering_event(
                         &state,
                         &auth,
@@ -447,7 +453,13 @@ pub async fn mcp_tools_call(
                 }
             } else {
                 warn!(tool = %request.name, "Tool not found (cache loaded, no sync refresh)");
-                metrics::record_tool_call(&request.name, &auth.tenant_id, "not_found", 0.0, &auth.consumer_id);
+                metrics::record_tool_call(
+                    &request.name,
+                    &auth.tenant_id,
+                    "not_found",
+                    0.0,
+                    &auth.consumer_id,
+                );
                 emit_metering_event(
                     &state,
                     &auth,
@@ -887,7 +899,13 @@ pub async fn mcp_tools_call(
     let tool_cb = state.circuit_breakers.get_or_create(&tool_cb_key);
     if !tool_cb.allow_request() {
         warn!(tool = %request.name, "Tool circuit breaker open — fast-failing");
-        metrics::record_tool_call(&request.name, &auth.tenant_id, "circuit_open", 0.0, &auth.consumer_id);
+        metrics::record_tool_call(
+            &request.name,
+            &auth.tenant_id,
+            "circuit_open",
+            0.0,
+            &auth.consumer_id,
+        );
         return with_rate_limit_headers(
             StatusCode::SERVICE_UNAVAILABLE,
             Json(ToolsCallResponse {
@@ -931,7 +949,13 @@ pub async fn mcp_tools_call(
             let duration_secs = duration.as_secs_f64();
             let t_gateway_ms = (t_auth + t_policy).as_millis() as u64;
 
-            metrics::record_tool_call(&request.name, &auth.tenant_id, "success", duration_secs, &auth.consumer_id);
+            metrics::record_tool_call(
+                &request.name,
+                &auth.tenant_id,
+                "success",
+                duration_secs,
+                &auth.consumer_id,
+            );
             if is_federation_request {
                 let sub_id = auth.sub_account_id.as_ref().expect("checked above");
                 let master_id = auth.master_account_id.as_ref().expect("checked above");

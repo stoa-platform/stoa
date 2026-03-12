@@ -377,8 +377,7 @@ pub async fn handle_sse_post(
     // Always return Mcp-Session-Id header (required by Streamable HTTP transport)
     let mut resp = Json(response).into_response();
     if let Ok(header_value) = session_id.parse() {
-        resp.headers_mut()
-            .insert("Mcp-Session-Id", header_value);
+        resp.headers_mut().insert("Mcp-Session-Id", header_value);
     }
     resp
 }

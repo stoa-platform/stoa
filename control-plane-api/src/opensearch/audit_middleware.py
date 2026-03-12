@@ -266,6 +266,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         start_time = time.time()
 
         # Process request
+        response = None
         try:
             response = await call_next(request)
             outcome = "success" if response.status_code < 400 else "failure"
@@ -299,7 +300,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "body_hash": await self._hash_body(request),
                 },
                 response={
-                    "status_code": response.status_code,
+                    "status_code": response.status_code if response else 500,
                     "latency_ms": round(latency_ms, 2),
                 },
                 correlation_id=correlation_id,

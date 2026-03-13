@@ -46,7 +46,7 @@ spec:
                 - -c
                 - |
                   set -e
-                  API_URL="http://control-plane-api.stoa-system.svc:8000"
+                  API_URL="http://stoa-control-plane-api.stoa-system.svc"
                   AUTH_HEADER=""
                   if [ -n "${SERVICE_TOKEN:-}" ]; then
                     AUTH_HEADER="Authorization: Bearer $SERVICE_TOKEN"

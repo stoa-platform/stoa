@@ -55,7 +55,7 @@ spec:
             - name: STOA_HOST
               value: "0.0.0.0"
             - name: STOA_CONTROL_PLANE_URL
-              value: {{ .Values.stoaGateway.controlPlaneUrl | default "http://control-plane-api.stoa-system.svc.cluster.local:8000" | quote }}
+              value: {{ .Values.stoaGateway.controlPlaneUrl | default "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80" | quote }}
             - name: STOA_KEYCLOAK_URL
               value: {{ .Values.stoaGateway.keycloakUrl | default "" | quote }}
             - name: STOA_KEYCLOAK_REALM

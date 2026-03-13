@@ -39,7 +39,7 @@ spec:
               echo "==> Starting OpenAPI sync to webMethods Gateway"
 
               # Configuration
-              BACKEND_URL="{{ .Values.gatewaySync.backendUrl | default "http://control-plane-api.stoa-system.svc.cluster.local:8000" }}"
+              BACKEND_URL="{{ .Values.gatewaySync.backendUrl | default "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80" }}"
               GATEWAY_URL="{{ .Values.gatewaySync.gatewayUrl | default "http://apigateway.stoa-system.svc.cluster.local:5555" }}"
               GATEWAY_USER="${GATEWAY_USER:-Administrator}"
               GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
@@ -170,7 +170,7 @@ spec:
 
           # Wait for API to be ready
           echo "[INFO] Waiting for Control-Plane-API to be ready..."
-          BACKEND_URL="{{ .Values.gatewaySync.backendUrl | default "http://control-plane-api.stoa-system.svc.cluster.local:8000" }}"
+          BACKEND_URL="{{ .Values.gatewaySync.backendUrl | default "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80" }}"
           for i in $(seq 1 30); do
             if curl -sf "$BACKEND_URL/health/live" > /dev/null 2>&1; then
               echo "[OK] Backend is ready"

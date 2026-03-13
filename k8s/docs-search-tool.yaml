@@ -10,7 +10,7 @@ spec:
   description: >
     Search STOA platform documentation, guides, ADRs, and blog posts.
     Returns relevant results with titles, URLs, and snippets.
-  endpoint: http://control-plane-api.stoa-system.svc:8000/v1/docs/search
+  endpoint: http://stoa-control-plane-api.stoa-system.svc/v1/docs/search
   method: GET
   inputSchema:
     type: object

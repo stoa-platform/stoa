@@ -181,7 +181,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apiService.setTokenRefresher(async () => {
       try {
         const renewed = await oidc.signinSilent();
-        return renewed?.access_token ?? null;
+        if (renewed?.access_token) {
+          return renewed.access_token;
+        }
+        // Silent renew succeeded but no token — session expired
+        oidc.signinRedirect();
+        return null;
       } catch {
         oidc.signinRedirect();
         return null;

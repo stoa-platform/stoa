@@ -59,6 +59,14 @@ CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 
 ## 📋 NEXT
 
+CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (44 pts) — Council 8.25/10
+- [ ] CAB-1796 Setup Vault on spare-gra-vps (8 pts) — Phase 0
+- [ ] CAB-1797 Migrate Infisical → Vault (5 pts) — Phase 1
+- [ ] CAB-1798 ESO → Vault (8 pts) — Phase 2
+- [ ] CAB-1799 Vault Agent VPS (13 pts) — Phase 3
+- [ ] CAB-1801 Rotation extended (5 pts) — Phase 4
+- [ ] CAB-1802 SSH + PKI (5 pts) — Phase 5
+
 **Human-only**: CAB-1132 Business Model (8), CAB-1126 Video (8), CAB-1125 Punchline (8)
 **Deferred**: CAB-1473 WASM (21, 5.00), CAB-1462 ErrorSnap (21, 5.75), CAB-1512 Federation (21, 5.50)
 

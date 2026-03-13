@@ -1,0 +1,3 @@
+hcv.gostoa.dev {
+	reverse_proxy vault:8200
+}

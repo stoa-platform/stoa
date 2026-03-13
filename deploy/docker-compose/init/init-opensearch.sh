@@ -13,7 +13,7 @@
 set -e
 
 OS_HOST="https://opensearch:9200"
-OS_AUTH="-u ${OPENSEARCH_ADMIN_USER:-admin}:${OPENSEARCH_ADMIN_PASSWORD:-StOa_Admin_2026!}"
+OS_AUTH="-u ${OPENSEARCH_ADMIN_USER:-admin}:${OPENSEARCH_ADMIN_PASSWORD:?OPENSEARCH_ADMIN_PASSWORD must be set in .env}"
 CURL_OPTS="-sfk ${OS_AUTH}"
 
 log() { echo "[INIT] $1"; }

@@ -34,6 +34,15 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-protect-infra.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-no-k8s-secrets.sh\""
+          }
+        ]
       }
     ],
     "PostToolUse": [

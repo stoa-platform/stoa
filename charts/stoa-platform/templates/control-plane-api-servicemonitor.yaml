@@ -3,7 +3,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: control-plane-api
+  name: stoa-control-plane-api
   namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: stoa-control-plane-api

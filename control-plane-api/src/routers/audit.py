@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user, require_tenant_access
+from ..auth.rbac import require_role
 from ..database import get_db
 from ..opensearch.opensearch_integration import OpenSearchService
 from ..services.audit_service import AuditService
@@ -88,6 +89,15 @@ class SecurityEventsResponse(BaseModel):
     events: list[SecurityEvent]
     total: int
     summary: dict[str, int]
+
+
+class PiiErasureResponse(BaseModel):
+    """Response for GDPR Article 17 PII erasure (CAB-1794)."""
+
+    user_id: str
+    pg_records_affected: int
+    os_records_deleted: int
+    pseudo_id: str
 
 
 # =============================================================================
@@ -532,6 +542,79 @@ async def test_tenant_isolation(
         "message": "Same tenant access is permitted",
         "tenant_id": tenant_id,
     }
+
+
+@router.delete("/users/{user_id}/pii", response_model=PiiErasureResponse)
+async def erase_user_pii(
+    user_id: str,
+    tenant_id: str | None = Query(default=None, description="Scope erasure to a specific tenant"),
+    user: User = Depends(require_role(["cpi-admin"])),
+    db: AsyncSession = Depends(get_db),
+) -> PiiErasureResponse:
+    """
+    GDPR Article 17 — Right to Erasure (CAB-1794).
+
+    Pseudonymizes PII in PostgreSQL audit records and deletes matching
+    documents from OpenSearch for the specified user.
+
+    Requires cpi-admin role. Creates a meta-audit record of the erasure.
+    """
+    audit_svc = AuditService(db)
+
+    # 1. Pseudonymize in PostgreSQL
+    pg_result = await audit_svc.erase_user_pii(user_id, tenant_id=tenant_id)
+
+    # 2. Delete from OpenSearch
+    os_deleted = 0
+    service = OpenSearchService.get_instance()
+    if service.client:
+        try:
+            query_body: dict = {"query": {"term": {"actor.id": user_id}}}
+            if tenant_id:
+                query_body = {
+                    "query": {
+                        "bool": {
+                            "must": [
+                                {"term": {"actor.id": user_id}},
+                                {"term": {"actor.tenant_id": tenant_id}},
+                            ]
+                        }
+                    }
+                }
+            os_resp = await service.client.delete_by_query(index="audit-*", body=query_body)
+            os_deleted = os_resp.get("deleted", 0)
+        except Exception as e:
+            logger.warning(f"OpenSearch PII erasure failed for user {user_id}: {e}")
+
+    # 3. Meta-audit: record the erasure itself
+    try:
+        await audit_svc.record_event(
+            tenant_id=tenant_id or "global",
+            action="gdpr.erasure",
+            method="DELETE",
+            path=f"/v1/audit/users/{user_id}/pii",
+            resource_type="user_pii",
+            resource_id=user_id,
+            actor_id=user.id,
+            actor_email=getattr(user, "email", None),
+            outcome="success",
+            details={
+                "pg_records_affected": pg_result["records_affected"],
+                "os_records_deleted": os_deleted,
+                "pseudo_id": pg_result["pseudo_id"],
+            },
+        )
+        await db.commit()
+    except Exception as e:
+        logger.error(f"Failed to record GDPR erasure meta-audit: {e}")
+        await db.commit()
+
+    return PiiErasureResponse(
+        user_id=user_id,
+        pg_records_affected=pg_result["records_affected"],
+        os_records_deleted=os_deleted,
+        pseudo_id=pg_result["pseudo_id"],
+    )
 
 
 @router.get("/global/summary")

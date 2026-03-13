@@ -270,3 +270,44 @@ class TestPurgeBefore:
 
         assert count == 42
         mock_session.execute.assert_awaited_once()
+
+
+class TestEraseUserPii:
+    """Tests for AuditService.erase_user_pii() — GDPR Art. 17 (CAB-1794)."""
+
+    @pytest.mark.asyncio
+    async def test_erase_user_pii_pseudonymizes_records(self, audit_service, mock_session):
+        """Erasure returns affected count and pseudo ID."""
+        result = MagicMock()
+        result.rowcount = 15
+        mock_session.execute = AsyncMock(return_value=result)
+
+        response = await audit_service.erase_user_pii("user-123")
+
+        assert response["records_affected"] == 15
+        assert response["pseudo_id"].startswith("erased-")
+        mock_session.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_erase_user_pii_scoped_to_tenant(self, audit_service, mock_session):
+        """Erasure can be scoped to a specific tenant."""
+        result = MagicMock()
+        result.rowcount = 5
+        mock_session.execute = AsyncMock(return_value=result)
+
+        response = await audit_service.erase_user_pii("user-123", tenant_id="acme")
+
+        assert response["records_affected"] == 5
+        mock_session.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_erase_user_pii_no_matching_records(self, audit_service, mock_session):
+        """Erasure for unknown user returns zero affected."""
+        result = MagicMock()
+        result.rowcount = 0
+        mock_session.execute = AsyncMock(return_value=result)
+
+        response = await audit_service.erase_user_pii("nonexistent-user")
+
+        assert response["records_affected"] == 0
+        assert response["pseudo_id"].startswith("erased-")

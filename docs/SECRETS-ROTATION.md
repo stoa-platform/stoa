@@ -3,128 +3,149 @@
 ## Architecture
 
 ```
-Infisical (self-hosted, vault.gostoa.dev)
+HashiCorp Vault (hcvault.gostoa.dev) — Source of Truth
        │
-       ├── prod/cloudflare    → Cloudflare API token
-       ├── prod/hetzner       → Hetzner Cloud token
-       ├── prod/ovh           → OVH API keys (5)
-       └── dev/, staging/     → Environment-specific secrets
+       ├── stoa/k8s/*         → K8s Secrets (via ESO)
+       ├── stoa/vps/*         → VPS service secrets (via Vault Agent)
+       ├── stoa/shared/*      → Cross-cutting creds (KC, Anthropic, Slack, etc.)
        │
-       ▼
-Machine Identity (Universal Auth)
-  Client ID + Client Secret → 24h access token
+       ├─→ K8s (OVH Prod)
+       │   └── External Secrets Operator → K8s Secrets (auto-sync, 5 min)
        │
-       ▼
-K8s Secrets (envFrom / secretKeyRef) → Pods
+       ├─→ VPS Services (n8n, Kong, Gravitee, webMethods)
+       │   └── Vault Agent (systemd) → /opt/secrets/*.env → Docker Compose
+       │
+       └─→ HEGEMON Workers (5x Contabo)
+           └── vault-loader.sh → env vars in memory (no disk)
+
+Infisical (vault.gostoa.dev) — Legacy (dual-write during transition)
+       │
+       └── prod/*             → Historical paths, read-only after migration
 ```
 
-**Infisical** replaced HashiCorp Vault + AWS Secrets Manager + External Secrets Operator (ESO) in February 2026. All references to Vault, ESO, and AWS SM in this codebase are historical.
+**HashiCorp Vault** is the primary secrets backend since March 2026 (CAB-1795).
+Infisical remains as dual-write target during transition. ESO syncs from Vault, not Infisical.
 
 ## Infrastructure
+
+### Vault (Primary)
+
+| Component | Detail |
+|-----------|--------|
+| URL | `https://hcvault.gostoa.dev` |
+| Host | OVH spare-gra-vps (`51.255.193.129`) |
+| Path | `/opt/vault/` |
+| Stack | HashiCorp Vault 1.18+ (binary) + Caddy (TLS) |
+| Storage | File backend (`/opt/vault/data/`) |
+| Auth | AppRole (VPS agents), Kubernetes (ESO), Token (admin) |
+| KV Engine | `stoa/` (KV v2, versioned) |
+
+### Infisical (Legacy)
 
 | Component | Detail |
 |-----------|--------|
 | URL | `https://vault.gostoa.dev` |
-| Host | Hetzner master-1 (`46.225.112.68`) |
-| Path | `/opt/infisical/` |
+| Host | OVH infisical-vps (`213.199.45.108`) |
 | Stack | `infisical:latest` + `postgres:15-alpine` + `redis:7-alpine` |
-| RAM | ~800 MB |
-| Ingress | Traefik (K3s), TLS via `letsencrypt-production` ClusterIssuer |
-| Admin | `admin@gostoa.dev` (superAdmin) |
-| Org ID | `0c9506ce-668c-4ecd-8e6f-5845952eeb50` |
 | Project | `stoa-infra` (`97972ffc-990b-4d28-9c4d-0664d217f03b`) |
+| Status | **Dual-write target** — to be decommissioned after 30-day transition |
 
 ## Secret Inventory
 
 ### Tier 0 — IAM & Platform Admin
 
-| Env | Path | Secret | Purpose | Rotation | Script |
-|-----|------|--------|---------|----------|--------|
-| `prod` | `/keycloak` | `ADMIN_PASSWORD` | Keycloak admin (master realm) | 90 days | `rotate-secrets.sh keycloak-admin` |
+| Vault Path | Secret | Purpose | Rotation | Script |
+|------------|--------|---------|----------|--------|
+| `shared/keycloak` | `ADMIN_PASSWORD` | Keycloak admin (master realm) | 90 days | `rotate-secrets.sh keycloak-admin` |
 
-### Tier 1 — Service-to-Service
+### Tier 1 — Service-to-Service (K8s)
 
-| Env | Path | Secret | Purpose | Rotation | Script |
-|-----|------|--------|---------|----------|--------|
-| `prod` | `/keycloak/clients` | `CONTROL_PLANE_API_CLIENT_SECRET` | CP API OIDC client | 90 days | `rotate-secrets.sh oidc-clients` |
-| `prod` | `/keycloak/clients` | `MCP_GATEWAY_CLIENT_SECRET` | MCP Gateway OIDC client | 90 days | `rotate-secrets.sh oidc-clients` |
-| `prod` | `/keycloak/clients` | `OPENSEARCH_DASHBOARDS_CLIENT_SECRET` | OpenSearch Dashboards OIDC | N/A (public client) | N/A |
-| `prod` | `/keycloak/clients` | `OBSERVABILITY_CLIENT_SECRET` | Grafana/Prometheus OIDC | 90 days | `rotate-secrets.sh oidc-clients` |
-| `prod` | `/opensearch` | `ADMIN_PASSWORD` | OpenSearch admin | 90 days | `rotate-secrets.sh opensearch` |
-| `prod` | `/gateway/arena` | `ADMIN_API_TOKEN` | VPS Arena gateway admin | 90 days | `rotate-secrets.sh arena-token` |
+| Vault Path | Secret | Purpose | Rotation | Script |
+|------------|--------|---------|----------|--------|
+| `shared/keycloak/clients` | `CONTROL_PLANE_API_CLIENT_SECRET` | CP API OIDC client | 90 days | `rotate-secrets.sh oidc-clients` |
+| `shared/keycloak/clients` | `MCP_GATEWAY_CLIENT_SECRET` | MCP Gateway OIDC client | 90 days | `rotate-secrets.sh oidc-clients` |
+| `shared/keycloak/clients` | `OBSERVABILITY_CLIENT_SECRET` | Grafana/Prometheus OIDC | 90 days | `rotate-secrets.sh oidc-clients` |
+| `k8s/opensearch` | `ADMIN_PASSWORD` | OpenSearch admin | 90 days | `rotate-secrets.sh opensearch` |
+
+### Tier 1b — VPS Services
+
+| Vault Path | Secret | VPS | Rotation | Script |
+|------------|--------|-----|----------|--------|
+| `vps/webmethods` | `ADMIN_PASSWORD` | 51.255.201.17 | 90 days | `rotate-secrets.sh webmethods-admin` |
+| `vps/kong` | `KONG_ADMIN_TOKEN` | 51.83.45.13 | 90 days | `rotate-secrets.sh kong-admin` |
+| `vps/gravitee` | `ADMIN_PASSWORD` | 54.36.209.237 | 90 days | `rotate-secrets.sh gravitee-admin` |
+| `vps/n8n` | `POSTGRES_PASSWORD` | 51.254.139.205 | 90 days | `rotate-secrets.sh n8n-db` |
+| `vps/arena` | `ADMIN_API_TOKEN` | 51.83.45.13 | 90 days | `rotate-secrets.sh arena-token` |
 
 ### Tier 2 — E2E Personas (Test Users)
 
-| Env | Path | Secret | Purpose | Rotation | Script |
-|-----|------|--------|---------|----------|--------|
-| `prod` | `/e2e-personas` | `PARZIVAL_PASSWORD` | E2E persona (tenant-admin) | On demand | `rotate-secrets.sh personas` |
-| `prod` | `/e2e-personas` | `ART3MIS_PASSWORD` | E2E persona (devops) | On demand | `rotate-secrets.sh personas` |
-| `prod` | `/e2e-personas` | `AECH_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
-| `prod` | `/e2e-personas` | `SORRENTO_PASSWORD` | E2E persona (tenant-admin) | On demand | `rotate-secrets.sh personas` |
-| `prod` | `/e2e-personas` | `I_R0K_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
-| `prod` | `/e2e-personas` | `ANORAK_PASSWORD` | E2E persona (cpi-admin) | On demand | `rotate-secrets.sh personas` |
-| `prod` | `/e2e-personas` | `ALEX_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
+| Vault Path | Secret | Purpose | Rotation | Script |
+|------------|--------|---------|----------|--------|
+| `k8s/e2e-personas` | `PARZIVAL_PASSWORD` | E2E persona (tenant-admin) | On demand | `rotate-secrets.sh personas` |
+| `k8s/e2e-personas` | `ART3MIS_PASSWORD` | E2E persona (devops) | On demand | `rotate-secrets.sh personas` |
+| `k8s/e2e-personas` | `AECH_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
+| `k8s/e2e-personas` | `SORRENTO_PASSWORD` | E2E persona (tenant-admin) | On demand | `rotate-secrets.sh personas` |
+| `k8s/e2e-personas` | `I_R0K_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
+| `k8s/e2e-personas` | `ANORAK_PASSWORD` | E2E persona (cpi-admin) | On demand | `rotate-secrets.sh personas` |
+| `k8s/e2e-personas` | `ALEX_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
 
 ### Tier 3 — Infrastructure
 
-| Env | Path | Secret | Purpose | Rotation | Script |
-|-----|------|--------|---------|----------|--------|
-| `prod` | `/cloudflare` | `API_TOKEN` | Cloudflare DNS API (DNS Edit scope) | 90 days | Manual |
-| `prod` | `/hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API | 90 days | Manual |
-| `prod` | `/ovh` | `OVH_APPLICATION_KEY` | OVH API key | 90 days | Manual |
-| `prod` | `/ovh` | `OVH_APPLICATION_SECRET` | OVH API secret | 90 days | Manual |
-| `prod` | `/ovh` | `OVH_CONSUMER_KEY` | OVH consumer key | 90 days | Manual |
-| `prod` | `/ovh` | `OVH_CLOUD_PROJECT_ID` | OVH project ID | Never (static) | N/A |
-| `prod` | `/ovh` | `OVH_OPENSTACK_PASSWORD` | OVH OpenStack password | 90 days | Manual |
+| Vault Path | Secret | Purpose | Rotation | Script |
+|------------|--------|---------|----------|--------|
+| `shared/cloudflare` | `API_TOKEN` | Cloudflare DNS API (DNS Edit scope) | 90 days | Manual |
+| `shared/ovh` | `OVH_APPLICATION_KEY` | OVH API key | 90 days | Manual |
+| `shared/ovh` | `OVH_APPLICATION_SECRET` | OVH API secret | 90 days | Manual |
+| `shared/ovh` | `OVH_CONSUMER_KEY` | OVH consumer key | 90 days | Manual |
+| `shared/ovh` | `OVH_CLOUD_PROJECT_ID` | OVH project ID | Never (static) | N/A |
+| `shared/ovh` | `OVH_OPENSTACK_PASSWORD` | OVH OpenStack password | 90 days | Manual |
 
 ## Authentication
 
-### Machine Identity (Universal Auth) — Primary Method
-
-Like AWS IAM roles: Client ID + Client Secret → short-lived access token (24h), auto-renewable.
-
-| Component | Value |
-|-----------|-------|
-| Identity | `stoa-cli-local` (`597c4a1e-ee10-44f7-8654-3b3cb4d01d84`) |
-| Client ID | `91417b6e-d6fd-424f-a9f0-b5e3ba063e2f` (in `~/.zprofile`) |
-| Client Secret | macOS Keychain (`infisical-client-secret`) |
-| Token TTL | 24h (auto-renewable, max 30 days) |
-| Project Role | `admin` on `stoa-infra` |
+### Vault Token — Primary Method
 
 ```bash
-# Quick — sets INFISICAL_TOKEN in current shell
+# Admin token (stored in Infisical, for human rotation ops)
+export VAULT_TOKEN=<admin-token>
+
+# Verify access
+curl -sf https://hcvault.gostoa.dev/v1/stoa/data/shared/keycloak \
+  -H "X-Vault-Token: $VAULT_TOKEN" | jq '.data.data | keys'
+```
+
+### Vault Auth Methods
+
+| Method | Used By | How |
+|--------|---------|-----|
+| Token | Human operators (`rotate-secrets.sh`) | `VAULT_TOKEN` env var |
+| AppRole | Vault Agent on VPS services | role-id + secret-id files |
+| Kubernetes | External Secrets Operator (ESO) | K8s service account JWT |
+
+### Infisical — Legacy (dual-write period)
+
+```bash
+# Still available during transition
 eval $(infisical-token)
-
-# Raw token for scripts
-export INFISICAL_TOKEN=$(infisical-token --raw)
+infisical secrets get API_TOKEN --env=prod --path=/cloudflare
 ```
-
-### Browser Login — Fallback
-
-```bash
-infisical login --domain=https://vault.gostoa.dev/api
-```
-
-Opens browser, session stored in `~/.infisical/`, expires in 10 days.
 
 ## Retrieving Secrets
 
 ```bash
-# Ensure you have a token
-eval $(infisical-token)
+# From Vault (primary)
+export VAULT_TOKEN=<token>
 
 # Single secret
-infisical secrets get API_TOKEN --env=prod --path=/cloudflare
+curl -sf https://hcvault.gostoa.dev/v1/stoa/data/vps/n8n \
+  -H "X-Vault-Token: $VAULT_TOKEN" | jq '.data.data'
 
-# All secrets in a path
+# List paths
+curl -sf https://hcvault.gostoa.dev/v1/stoa/metadata/vps?list=true \
+  -H "X-Vault-Token: $VAULT_TOKEN" | jq '.data.keys'
+
+# From Infisical (legacy, still works)
+eval $(infisical-token)
 infisical secrets --env=prod --path=/cloudflare
-
-# Inject into a command
-infisical run --env=prod --path=/cloudflare -- curl -H "Authorization: Bearer $API_TOKEN" ...
-
-# Direct API (without CLI)
-curl -s "https://vault.gostoa.dev/api/v3/secrets/raw?workspaceId=97972ffc-990b-4d28-9c4d-0664d217f03b&environment=prod&secretPath=/cloudflare" \
-  -H "Authorization: Bearer $INFISICAL_TOKEN"
 ```
 
 ## Automated Rotation Scripts
@@ -134,8 +155,11 @@ All rotation scripts are in `scripts/ops/`. They are idempotent and support `--d
 ### Quick Reference
 
 ```bash
-# Setup: get Infisical token first
-eval $(infisical-token)
+# Setup: Vault token (primary) + optional Infisical token (dual-write)
+export VAULT_TOKEN=<vault-admin-token>
+eval $(infisical-token)  # optional, for dual-write during transition
+
+# === Keycloak + K8s commands ===
 
 # Rotate Keycloak admin password
 KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh keycloak-admin
@@ -146,17 +170,37 @@ KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh personas
 # Rotate OIDC client secrets (causes brief service interruption)
 KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh oidc-clients
 
-# Rotate OpenSearch admin (semi-manual — stores in Infisical, prints manual steps)
+# Rotate OpenSearch admin (semi-manual — stores in Vault, prints manual steps)
 ./scripts/ops/rotate-secrets.sh opensearch
 
-# Rotate VPS arena gateway token (stores in Infisical, prints manual steps)
+# === VPS service commands ===
+
+# Rotate webMethods admin password (Vault Agent auto-restarts Docker)
+./scripts/ops/rotate-secrets.sh webmethods-admin
+
+# Rotate Kong admin token
+./scripts/ops/rotate-secrets.sh kong-admin
+
+# Rotate Gravitee admin password
+./scripts/ops/rotate-secrets.sh gravitee-admin
+
+# Rotate n8n PostgreSQL password (causes brief downtime)
+./scripts/ops/rotate-secrets.sh n8n-db
+
+# Rotate VPS arena gateway token
 ./scripts/ops/rotate-secrets.sh arena-token
 
-# Rotate everything
+# Rotate all VPS secrets
+./scripts/ops/rotate-secrets.sh all-vps
+
+# Rotate everything (KC + K8s + VPS)
 KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh all
 
 # Dry run (show what would change)
 KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh all --dry-run
+
+# Skip Infisical dual-write (Vault only)
+./scripts/ops/rotate-secrets.sh kong-admin --no-infisical
 ```
 
 ### Keycloak Password Policy
@@ -181,25 +225,37 @@ KC_ADMIN_PASSWORD=<current> ./scripts/ops/configure-keycloak-policy.sh --dry-run
 
 ## Rotation Procedures
 
-### Application Secrets (Cloudflare, Hetzner, OVH)
+### How Vault Agent Propagates Secrets
+
+When `rotate-secrets.sh` writes a new value to Vault, the propagation differs by target:
+
+| Target | Mechanism | Latency | Restart |
+|--------|-----------|---------|---------|
+| K8s Pods | ESO polls Vault → updates K8s Secret → pod env refresh | ~5 min | Rolling restart if needed |
+| VPS Docker | Vault Agent renders `.env.tpl` → `/opt/secrets/*.env` → Docker restart | ~5 min | Auto (via Agent `command`) |
+| HEGEMON | vault-loader.sh reads on shell start | Next session | No (env vars in memory) |
+
+### Application Secrets (Cloudflare, OVH)
 
 90-day rotation schedule. Steps:
 
 ```bash
 # 1. Generate new credential at the provider
-#    (Cloudflare dashboard, Hetzner console, OVH API panel)
+#    (Cloudflare dashboard, OVH API panel)
 
-# 2. Update in Infisical
-eval $(infisical-token)
-infisical secrets set API_TOKEN=<new-value> --env=prod --path=/cloudflare
+# 2. Update in Vault (primary)
+export VAULT_TOKEN=<admin-token>
+curl -X POST https://hcvault.gostoa.dev/v1/stoa/data/shared/cloudflare \
+  -H "X-Vault-Token: $VAULT_TOKEN" \
+  -d '{"data": {"API_TOKEN": "<new-value>"}}'
 
-# 3. Restart affected pods to pick up new value
+# 3. ESO syncs to K8s within 5 min, or force:
+kubectl annotate externalsecret -n stoa-system <name> force-sync=$(date +%s) --overwrite
+
+# 4. Restart affected pods
 kubectl rollout restart deployment/<name> -n stoa-system
 
-# 4. Verify pod is running with new secret
-kubectl logs deployment/<name> -n stoa-system --tail=10
-
-# 5. Test the service
+# 5. Verify
 curl -s https://api.gostoa.dev/health
 ```
 
@@ -286,12 +342,20 @@ CI secrets are managed in GitHub repo/org settings, not in Infisical.
 ## Verification
 
 ```bash
-# Check that a secret is accessible
-eval $(infisical-token)
-infisical secrets get API_TOKEN --env=prod --path=/cloudflare
+# Check Vault is accessible
+curl -sf https://hcvault.gostoa.dev/v1/sys/health | jq '.initialized, .sealed'
 
-# List all secrets in a path
-infisical secrets --env=prod --path=/cloudflare
+# Read a secret from Vault (key names only, never values in logs)
+curl -sf https://hcvault.gostoa.dev/v1/stoa/data/vps/n8n \
+  -H "X-Vault-Token: $VAULT_TOKEN" | jq '.data.data | keys'
+
+# Verify ESO sync (K8s)
+kubectl get externalsecrets -n stoa-system
+kubectl get secrets -n stoa-system -l app.kubernetes.io/part-of=stoa-platform
+
+# Verify Vault Agent on VPS
+ssh -i ~/.ssh/id_ed25519_stoa debian@<VPS_IP> 'systemctl status vault-agent'
+ssh -i ~/.ssh/id_ed25519_stoa debian@<VPS_IP> 'ls -la /opt/secrets/'
 
 # Verify API health after rotation
 curl -s https://api.gostoa.dev/health
@@ -304,29 +368,37 @@ kubectl exec -n stoa-system deploy/control-plane-api -- env | grep -c "DATABASE_
 
 | Script | Location | Purpose |
 |--------|----------|---------|
-| `infisical-token` | `~/.local/bin/` | Get fresh access token (24h TTL) |
-| `infisical-rotate-secret` | `~/.local/bin/` | Rotate Machine Identity client secret |
-| `rotate-secrets.sh` | `scripts/ops/` | Multi-component secret rotation (KC, personas, OIDC, OS, arena) |
+| `rotate-secrets.sh` | `scripts/ops/` | Multi-component secret rotation (KC, personas, OIDC, VPS services) |
 | `configure-keycloak-policy.sh` | `scripts/ops/` | Password policy + brute-force hardening |
+| `vault-agent deploy.sh` | `deploy/vps/vault-agent/` | Deploy Vault Agent to VPS (systemd + templates) |
+| `vault-agent deploy-hegemon.sh` | `deploy/vps/vault-agent/` | Deploy vault-loader.sh to HEGEMON workers |
+| `vault-config.sh` | `deploy/external-secrets/` | Configure Vault K8s auth for ESO |
+| `infisical-token` | `~/.local/bin/` | Get Infisical access token (legacy, dual-write) |
+| `infisical-rotate-secret` | `~/.local/bin/` | Rotate Infisical Machine Identity (legacy) |
 
-`infisical-*` scripts use macOS Keychain. `scripts/ops/` scripts use Infisical API + Keycloak Admin API.
+`rotate-secrets.sh` writes to both Vault (primary, via HTTP API) and Infisical (legacy, via CLI/API).
+Use `--no-infisical` to skip Infisical writes after transition is complete.
 
 ## Audit
 
-All secret operations are logged in Infisical audit log (accessible via UI at `vault.gostoa.dev`). K8s secret mutations are visible in:
+All secret operations are traced in Vault's audit log. K8s and VPS mutations are visible in:
+- Vault audit: `curl -sf https://hcvault.gostoa.dev/v1/sys/audit -H "X-Vault-Token: $VAULT_TOKEN"`
 - K8s events: `kubectl get events -n stoa-system`
-- Infisical audit: Settings → Audit Logs in web UI
+- Vault Agent logs (VPS): `journalctl -u vault-agent -f`
+- Infisical audit (legacy): Settings → Audit Logs in web UI
 
 ## Rotation History
 
 | Date | Credential | Action | PRs |
 |------|-----------|--------|-----|
+| 2026-03-13 | Vault migration | All secrets migrated Infisical → Vault. Rotation script extended with VPS commands | #1729 |
+| 2026-03-13 | Vault Agent | Deployed on VPS services (n8n, Kong, Gravitee, webMethods). Auto-rotation via templates | #1728 |
+| 2026-03-13 | ESO → Vault | External Secrets Operator pointed to Vault (was Infisical) | #1727 |
 | 2026-02-15 | KC password policy | Applied NIST 800-63B + DORA (staging + prod) | #533 |
 | 2026-02-15 | KC brute-force | Hardened (5 attempts, 15 min lockout, both realms) | #533 |
 | 2026-02-15 | KC admin (staging) | Rotated to random 32 chars, stored in Infisical | #536 |
 | 2026-02-15 | KC admin (prod) | Rotated to random 32 chars, stored in Infisical | #536 |
 | 2026-02-15 | OIDC clients (3) | Verified already non-default (not `*-dev-secret`) | — |
-| 2026-02-15 | OIDC opensearch-dashboards | Public client — no secret to rotate | — |
 | 2026-02-15 | E2E personas (7) | Rotated in KC + stored in Infisical + GitHub Secrets | #543 |
 | 2026-02-15 | OpenSearch admin | Rotated via securityadmin.sh + stored in Infisical | — |
 | 2026-02-15 | Arena VPS token | Rotated on VPS + stored in Infisical | — |
@@ -334,11 +406,15 @@ All secret operations are logged in Infisical audit log (accessible via UI at `v
 ### Known Issues
 
 - **`opensearch-dashboards`** is `publicClient: true` in production KC — no client secret needed for OIDC flow. JWKS token validation only.
-- **OpenSearch securityadmin.sh** requires HTTP TLS enabled. Production runs with HTTP TLS disabled. Procedure: temporarily enable TLS, run securityadmin, revert, restart.
-- **Infisical self-hosted v3 API** requires encrypted fields for REST API writes. Use `infisical secrets set` CLI instead (handles encryption transparently). PR #543 fixed `store_infisical()`.
+- **OpenSearch securityadmin.sh** requires HTTP TLS enabled. Production runs with HTTP TLS disabled.
+- **Vault Agent restart latency**: After writing to Vault, Agent polls every 5 min. For urgent rotation, SSH and restart the Agent: `sudo systemctl restart vault-agent`
+- **Dual-write period**: `rotate-secrets.sh` writes to both Vault and Infisical. After 30 days of stable Vault operation, use `--no-infisical` flag exclusively.
 
 ## References
 
-- Infisical docs: https://infisical.com/docs
-- Machine Identity: https://infisical.com/docs/documentation/platform/identities/universal-auth
-- `.claude/rules/secrets-management.md` — Full technical reference
+- Vault docs: https://developer.hashicorp.com/vault/docs
+- Vault KV v2: https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2
+- Vault Agent: https://developer.hashicorp.com/vault/docs/agent-and-proxy/agent
+- ESO + Vault: https://external-secrets.io/latest/provider/hashicorp-vault/
+- `.claude/rules/secrets-management.md` — Internal AI Factory reference
+- `deploy/vps/vault-agent/README.md` — VPS deploy guide

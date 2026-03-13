@@ -9,6 +9,7 @@ Flow:
 import base64
 import hashlib
 import logging
+import os
 import secrets
 import uuid
 from datetime import datetime, timedelta
@@ -93,9 +94,8 @@ class ConnectorOAuthService:
                 status_code=409,
             )
 
-        # Retrieve provider client_id from Vault
-        provider_creds = await self._get_provider_credentials(template.slug)
-        client_id = provider_creds.get("client_id", "")
+        # Resolve provider client_id: template column → env var → Vault (fallback)
+        client_id = self._resolve_client_id(template)
         if not client_id:
             raise ConnectorOAuthError(
                 f"Provider credentials not configured for '{template.slug}'",
@@ -189,10 +189,9 @@ class ConnectorOAuthService:
         # Delete session immediately (single-use)
         await self.session_repo.delete(pending)
 
-        # Get provider credentials
-        provider_creds = await self._get_provider_credentials(template.slug)
-        client_id = provider_creds.get("client_id", "")
-        client_secret = provider_creds.get("client_secret", "")
+        # Resolve provider credentials: template/env → Vault fallback
+        client_id = self._resolve_client_id(template)
+        client_secret = self._resolve_client_secret(template)
 
         # Exchange code for tokens
         tokens = await self._exchange_code_for_tokens(
@@ -285,16 +284,61 @@ class ConnectorOAuthService:
 
         return server_id
 
-    async def _get_provider_credentials(self, slug: str) -> dict[str, Any]:
-        """Retrieve provider app credentials (client_id/secret) from Vault.
+    # ── Credential resolution (template → env → Vault fallback) ──
+
+    @staticmethod
+    def _resolve_client_id(template: MCPConnectorTemplate) -> str:
+        """Resolve OAuth client_id for a connector.
+
+        Priority:
+        1. Template column (oauth_client_id) — set via migration seed or admin API
+        2. Env var MCP_OAUTH_{SLUG}_CLIENT_ID — injected via Infisical → K8s Secret
+        3. Vault at secret/data/mcp-connector-templates/{slug} (legacy fallback)
+        """
+        # 1. Template column (preferred — no external dependency)
+        if template.oauth_client_id:
+            return template.oauth_client_id
+
+        # 2. Env var
+        env_key = f"MCP_OAUTH_{template.slug.upper()}_CLIENT_ID"
+        env_val = os.environ.get(env_key, "")
+        if env_val:
+            return env_val
+
+        # 3. Vault fallback (legacy path)
+        vault_creds = ConnectorOAuthService._get_vault_provider_credentials(template.slug)
+        return vault_creds.get("client_id", "")
+
+    @staticmethod
+    def _resolve_client_secret(template: MCPConnectorTemplate) -> str:
+        """Resolve OAuth client_secret for a connector.
+
+        For PKCE-only providers (e.g. Linear), client_secret is not needed and
+        this returns empty string — the token exchange works with code_verifier alone.
+
+        Priority:
+        1. Env var MCP_OAUTH_{SLUG}_CLIENT_SECRET — injected via Infisical → K8s Secret
+        2. Vault at secret/data/mcp-connector-templates/{slug} (legacy fallback)
+        """
+        # 1. Env var (preferred — no Vault dependency for app-level secrets)
+        env_key = f"MCP_OAUTH_{template.slug.upper()}_CLIENT_SECRET"
+        env_val = os.environ.get(env_key, "")
+        if env_val:
+            return env_val
+
+        # 2. Vault fallback
+        vault_creds = ConnectorOAuthService._get_vault_provider_credentials(template.slug)
+        return vault_creds.get("client_secret", "")
+
+    @staticmethod
+    def _get_vault_provider_credentials(slug: str) -> dict[str, Any]:
+        """Legacy fallback: retrieve provider app credentials from Vault.
 
         Provider credentials are stored at: secret/data/mcp-connector-templates/{slug}
-        (separate path from user tokens at external-mcp-servers/{server_id}).
         """
         try:
             vault = get_vault_client()
             if not vault.enabled:
-                logger.warning("Vault disabled — provider credentials unavailable for '%s'", slug)
                 return {}
             vault._ensure_unsealed()
             client = vault._get_client()
@@ -307,10 +351,10 @@ class ConnectorOAuthService:
                 return response["data"]["data"]
             return {}
         except InvalidPath:
-            logger.warning(f"Provider credentials not found in Vault for '{slug}'")
+            logger.debug("Provider credentials not found in Vault for '%s'", slug)
             return {}
         except Exception as e:
-            logger.error(f"Failed to retrieve provider credentials for '{slug}': {e}")
+            logger.warning("Failed to retrieve provider credentials for '%s': %s", slug, e)
             return {}
 
     async def _exchange_code_for_tokens(

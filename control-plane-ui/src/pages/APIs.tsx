@@ -646,7 +646,7 @@ export function APIs() {
 interface APIFormModalProps {
   api?: API;
   onClose: () => void;
-  onSubmit: (data: APICreate, deployToDev: boolean) => void;
+  onSubmit: (data: APICreate, deployToDev: boolean) => Promise<void>;
   title: string;
   isEdit?: boolean;
 }
@@ -656,6 +656,7 @@ type CreateMode = 'manual' | 'openapi';
 function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalProps) {
   const [mode, setMode] = useState<CreateMode>('manual');
   const [deployToDev, setDeployToDev] = useState(!isEdit);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<APICreate>({
     name: api?.name || '',
     display_name: api?.display_name || '',
@@ -741,8 +742,9 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     // Build tags array based on portal_promoted flag
     const tags = [...(formData.tags || [])].filter((tag) => tag !== 'portal:published');
@@ -755,7 +757,12 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
       tags,
     };
 
-    onSubmit(submitData, deployToDev);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(submitData, deployToDev);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1080,7 +1087,7 @@ paths:
             <Button variant="secondary" type="button" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit">
+            <Button type="submit" loading={isSubmitting}>
               {isEdit ? 'Update API' : deployToDev ? 'Create & Deploy' : 'Create API'}
             </Button>
           </div>

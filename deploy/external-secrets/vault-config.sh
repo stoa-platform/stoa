@@ -3,7 +3,7 @@
 # Run this from a machine with Vault CLI access and kubectl access
 #
 # Prerequisites:
-#   - VAULT_ADDR=https://hcv.gostoa.dev
+#   - VAULT_ADDR=https://hcvault.gostoa.dev
 #   - VAULT_TOKEN set (admin token)
 #   - kubectl configured for OVH prod cluster
 #
@@ -12,7 +12,7 @@
 
 set -e
 
-VAULT_ADDR="${VAULT_ADDR:-https://hcv.gostoa.dev}"
+VAULT_ADDR="${VAULT_ADDR:-https://hcvault.gostoa.dev}"
 NAMESPACE="stoa-system"
 
 echo "Configuring Vault for External Secrets Operator..."

@@ -190,8 +190,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [oidc]);
 
   // Auto-login if we have auth params in URL (callback from Keycloak)
+  // Skip on /mcp-connectors/callback — those code/state params are from the MCP
+  // provider (e.g. Linear), not Keycloak. Without this check, oidc-client-ts
+  // misinterprets the MCP OAuth callback as a Keycloak callback and redirects to login.
   useEffect(() => {
-    if (!oidc.isAuthenticated && !oidc.isLoading && hasAuthParams()) {
+    const isMcpCallback = window.location.pathname.startsWith('/mcp-connectors/callback');
+    if (!oidc.isAuthenticated && !oidc.isLoading && hasAuthParams() && !isMcpCallback) {
       oidc.signinRedirect();
     }
   }, [oidc.isAuthenticated, oidc.isLoading, oidc]);

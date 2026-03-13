@@ -12,7 +12,7 @@
 #   ./scripts/ops/migrate-to-vault.sh --generate-approle-creds  # Generate AppRole creds
 #
 # Prerequisites:
-#   - VAULT_ADDR=https://hcv.gostoa.dev
+#   - VAULT_ADDR=https://hcvault.gostoa.dev
 #   - VAULT_TOKEN set (admin token from init-keys.json)
 #   - INFISICAL_TOKEN set: eval $(infisical-token)
 #   - infisical CLI installed
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-VAULT_ADDR="${VAULT_ADDR:-https://hcv.gostoa.dev}"
+VAULT_ADDR="${VAULT_ADDR:-https://hcvault.gostoa.dev}"
 INFISICAL_PROJECT_ID="97972ffc-990b-4d28-9c4d-0664d217f03b"
 DRY_RUN=false
 VERIFY_ONLY=false

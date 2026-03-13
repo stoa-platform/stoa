@@ -2,6 +2,10 @@
 # Backend: file (simple, no external deps)
 # Listener: TCP on 0.0.0.0:8200 (TLS terminated by Caddy)
 
+# Disable mlock — required when IPC_LOCK cap is unavailable (OVH VPS kernel)
+# Vault data is encrypted at rest; mlock is defense-in-depth for swap, not critical
+disable_mlock = true
+
 storage "file" {
   path = "/vault/data"
 }
@@ -12,7 +16,7 @@ listener "tcp" {
 }
 
 # API address — used by Vault to construct redirect URLs
-api_addr = "https://hcv.gostoa.dev"
+api_addr = "https://hcvault.gostoa.dev"
 
 # Cluster address — single node, not clustered
 cluster_addr = "https://127.0.0.1:8201"

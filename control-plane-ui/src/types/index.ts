@@ -569,8 +569,9 @@ export interface TransactionSpan {
   name: string;
   service: string;
   status: TransactionStatus;
-  started_at: string;
+  start_offset_ms: number;
   duration_ms: number;
+  started_at?: string;
   error?: string;
   metadata?: Record<string, unknown>;
 }

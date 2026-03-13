@@ -2,11 +2,12 @@
 Gateway Health Worker - Universal health checking for all gateway types (ADR-028).
 
 Two strategies:
-1. **Heartbeat-based** (STOA, STOA_SIDECAR): marks stale gateways as OFFLINE
+1. **Heartbeat-based** (all STOA types): marks stale gateways as OFFLINE
    when heartbeat times out (default: 90 seconds).
 2. **Active polling** (Kong, Gravitee, webMethods, Apigee, AWS, Azure): periodically
    calls adapter.health_check() with a per-check timeout (default: 10s) and updates
-   status based on response. 3 consecutive failures → OFFLINE.
+   status based on response. 3 consecutive failures → OFFLINE (only if gateway was
+   previously confirmed healthy; never-reachable gateways keep their seeded status).
 
 Both strategies run on the same interval (GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS).
 """
@@ -26,7 +27,15 @@ from ..models.gateway_instance import GatewayInstance, GatewayInstanceStatus, Ga
 logger = logging.getLogger(__name__)
 
 # STOA types use heartbeat-based health (auto-register + send heartbeats)
-_HEARTBEAT_TYPES = frozenset({GatewayType.STOA, GatewayType.STOA_SIDECAR})
+_HEARTBEAT_TYPES = frozenset(
+    {
+        GatewayType.STOA,
+        GatewayType.STOA_EDGE_MCP,
+        GatewayType.STOA_SIDECAR,
+        GatewayType.STOA_PROXY,
+        GatewayType.STOA_SHADOW,
+    }
+)
 
 # Max consecutive failures before marking OFFLINE
 _MAX_CONSECUTIVE_FAILURES = 3
@@ -203,14 +212,25 @@ class GatewayHealthWorker:
         }
 
         if consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
-            gateway.status = GatewayInstanceStatus.OFFLINE
-            gateway.health_details["offline_reason"] = "consecutive_failures"
-            gateway.health_details["marked_offline_at"] = now.isoformat()
-            logger.warning(
-                "Gateway %s marked OFFLINE after %d consecutive failures",
-                gateway.name,
-                consecutive_failures,
-            )
+            # Only transition to OFFLINE if gateway was previously confirmed healthy.
+            # Gateways that have never been reachable from this worker (e.g. external VPS
+            # not accessible from K8s) keep their seeded status to avoid false negatives.
+            if gateway.last_health_check is not None:
+                gateway.status = GatewayInstanceStatus.OFFLINE
+                gateway.health_details["offline_reason"] = "consecutive_failures"
+                gateway.health_details["marked_offline_at"] = now.isoformat()
+                logger.warning(
+                    "Gateway %s marked OFFLINE after %d consecutive failures",
+                    gateway.name,
+                    consecutive_failures,
+                )
+            else:
+                logger.info(
+                    "Gateway %s has %d consecutive failures but was never reachable, keeping status %s",
+                    gateway.name,
+                    consecutive_failures,
+                    gateway.status.value,
+                )
 
 
 # Global instance

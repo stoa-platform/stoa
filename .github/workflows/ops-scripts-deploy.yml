@@ -51,7 +51,7 @@ jobs:
       - name: Install SSH key
         if: matrix.worker != ''
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.HEGEMON_SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.HEGEMON_WORKERS_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
           printenv SSH_PRIVATE_KEY > ~/.ssh/id_ed25519

@@ -46,8 +46,10 @@ jobs:
             echo "Detected fix PR via title: $PR_TITLE"
           fi
 
-          # Check body for bug/fix keywords (per Council adjustment)
-          if echo "$PR_BODY" | grep -qiE '(regression|bug.?fix|fixes #|fixes CAB-|root cause)'; then
+          # Check body for bug/fix keywords — only if title is NOT feat/chore/refactor/docs
+          # (avoids false positives when feat PRs mention "regression" in context)
+          if ! echo "$PR_TITLE" | grep -qiE '^(feat|chore|refactor|docs|style|perf|test|ci|build)\(' \
+             && echo "$PR_BODY" | grep -qiE '(fixes regression|regression fix|bug.?fix|fixes #|fixes CAB-|root cause)'; then
             IS_FIX="true"
             echo "Detected fix PR via body keywords"
           fi

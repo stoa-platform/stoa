@@ -94,11 +94,24 @@ class ConnectorOAuthService:
                 status_code=409,
             )
 
-        # Resolve provider client_id: template column → env var → Vault (fallback)
+        # Resolve provider client_id: DCR → template column → env var → Vault
         client_id = self._resolve_client_id(template)
+        if not client_id and template.oauth_registration_url:
+            # Dynamic Client Registration (RFC 7591) — one-click connect
+            client_id = await self._dynamic_client_registration(
+                registration_url=template.oauth_registration_url,
+                redirect_uri=redirect_uri,
+                client_name=f"STOA Platform ({template.slug})",
+            )
+            # Cache the DCR client_id in the template for future authorizations
+            template.oauth_client_id = client_id
+            self.template_repo.session.add(template)
+            logger.info("DCR: registered client for '%s', client_id cached", template.slug)
+
         if not client_id:
             raise ConnectorOAuthError(
-                f"Provider credentials not configured for '{template.slug}'",
+                f"Provider credentials not configured for '{template.slug}'. "
+                "This connector requires manual OAuth app setup.",
                 status_code=503,
             )
 
@@ -356,6 +369,59 @@ class ConnectorOAuthService:
         except Exception as e:
             logger.warning("Failed to retrieve provider credentials for '%s': %s", slug, e)
             return {}
+
+    async def _dynamic_client_registration(
+        self,
+        registration_url: str,
+        redirect_uri: str,
+        client_name: str = "STOA Platform",
+    ) -> str:
+        """Register a client dynamically via RFC 7591 (MCP OAuth DCR).
+
+        Used by providers like Linear and Sentry that expose a registration
+        endpoint in their MCP OAuth metadata.
+
+        Returns:
+            The dynamically assigned client_id.
+        """
+        payload = {
+            "client_name": client_name,
+            "redirect_uris": [redirect_uri],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "none",
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                registration_url,
+                json=payload,
+                headers={"Accept": "application/json"},
+            )
+
+        if response.status_code not in (200, 201):
+            logger.error(
+                "DCR failed at %s: %s %s",
+                registration_url,
+                response.status_code,
+                response.text[:300],
+            )
+            raise ConnectorOAuthError(
+                f"Dynamic client registration failed (HTTP {response.status_code})",
+                status_code=502,
+            )
+
+        data = response.json()
+        client_id = data.get("client_id")
+        if not client_id:
+            raise ConnectorOAuthError("DCR response missing client_id", status_code=502)
+
+        logger.info(
+            "DCR success at %s: client_id=%s",
+            registration_url,
+            client_id[:12] + "...",
+        )
+        return client_id
 
     async def _exchange_code_for_tokens(
         self,

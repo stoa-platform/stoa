@@ -47,6 +47,7 @@ def _mock_template(**overrides):
         "oauth_pkce_required": True,
         "documentation_url": "https://developers.linear.app",
         "oauth_client_id": "test-client-id",
+        "oauth_registration_url": None,
         "is_featured": True,
         "enabled": True,
         "sort_order": 10,
@@ -774,3 +775,151 @@ class TestConnectorOAuthService:
         expected = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
         assert challenge == expected
+
+    def test_initiate_authorize_dcr_when_no_client_id(self):
+        """DCR is used when no client_id exists but registration_url is set."""
+        import asyncio
+
+        from src.services.connector_oauth import ConnectorOAuthService
+
+        template = _mock_template(
+            oauth_client_id=None,
+            oauth_registration_url="https://mcp.linear.app/register",
+            oauth_authorize_url="https://mcp.linear.app/authorize",
+        )
+        session_repo = MagicMock()
+        session_repo.create = AsyncMock()
+        session_repo.cleanup_expired = AsyncMock()
+        connector_server_repo = MagicMock()
+        connector_server_repo.get_by_template_and_tenant = AsyncMock(return_value=None)
+        template_repo = MagicMock()
+        template_repo.session = MagicMock()
+
+        service = ConnectorOAuthService(
+            template_repo=template_repo,
+            session_repo=session_repo,
+            connector_server_repo=connector_server_repo,
+            server_repo=MagicMock(),
+        )
+
+        dcr_response = MagicMock()
+        dcr_response.status_code = 201
+        dcr_response.json.return_value = {"client_id": "dcr-client-id-123"}
+
+        with patch("src.services.connector_oauth.httpx.AsyncClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=dcr_response)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            url, state = asyncio.get_event_loop().run_until_complete(
+                service.initiate_authorize(
+                    template=template,
+                    user_id="user-1",
+                    tenant_id="acme",
+                    redirect_after="/connectors",
+                    redirect_uri="https://console.gostoa.dev/mcp-connectors/callback",
+                )
+            )
+
+        assert "client_id=dcr-client-id-123" in url
+        assert "mcp.linear.app/authorize" in url
+        # Verify DCR client_id was cached in template
+        assert template.oauth_client_id == "dcr-client-id-123"
+
+    def test_initiate_authorize_503_no_dcr_no_client_id(self):
+        """Returns 503 when no client_id AND no DCR registration URL."""
+        import asyncio
+
+        from src.services.connector_oauth import ConnectorOAuthError, ConnectorOAuthService
+
+        template = _mock_template(
+            oauth_client_id=None,
+            oauth_registration_url=None,
+        )
+        connector_server_repo = MagicMock()
+        connector_server_repo.get_by_template_and_tenant = AsyncMock(return_value=None)
+
+        service = ConnectorOAuthService(
+            template_repo=MagicMock(),
+            session_repo=MagicMock(),
+            connector_server_repo=connector_server_repo,
+            server_repo=MagicMock(),
+        )
+
+        with patch.dict("os.environ", {}, clear=False):
+            with pytest.raises(ConnectorOAuthError) as exc_info:
+                asyncio.get_event_loop().run_until_complete(
+                    service.initiate_authorize(
+                        template=template,
+                        user_id="u",
+                        tenant_id="t",
+                        redirect_uri="https://example.com/callback",
+                    )
+                )
+        assert exc_info.value.status_code == 503
+        assert "manual OAuth app setup" in exc_info.value.message
+
+
+# ============== needs_setup Logic ==============
+
+
+class TestNeedsSetup:
+    """Tests for _needs_manual_setup logic in the router."""
+
+    def test_dcr_provider_no_setup_needed(self, app_with_cpi_admin, mock_db_session):
+        """DCR-capable provider returns needs_setup=False even without client_id."""
+        template = _mock_template(
+            oauth_client_id=None,
+            oauth_registration_url="https://mcp.linear.app/register",
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+        ):
+            MockTemplateRepo.return_value.list_all = AsyncMock(return_value=[template])
+            MockConnServerRepo.return_value.list_connected_template_ids = AsyncMock(return_value={})
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(BASE)
+
+        data = response.json()
+        assert data["connectors"][0]["needs_setup"] is False
+
+    def test_no_dcr_no_client_id_needs_setup(self, app_with_cpi_admin, mock_db_session):
+        """Provider without DCR and without client_id returns needs_setup=True."""
+        template = _mock_template(
+            oauth_client_id=None,
+            oauth_registration_url=None,
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+        ):
+            MockTemplateRepo.return_value.list_all = AsyncMock(return_value=[template])
+            MockConnServerRepo.return_value.list_connected_template_ids = AsyncMock(return_value={})
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(BASE)
+
+        data = response.json()
+        assert data["connectors"][0]["needs_setup"] is True
+
+    def test_has_client_id_no_setup_needed(self, app_with_cpi_admin, mock_db_session):
+        """Provider with client_id set returns needs_setup=False."""
+        template = _mock_template(oauth_client_id="existing-id", oauth_registration_url=None)
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+        ):
+            MockTemplateRepo.return_value.list_all = AsyncMock(return_value=[template])
+            MockConnServerRepo.return_value.list_connected_template_ids = AsyncMock(return_value={})
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(BASE)
+
+        data = response.json()
+        assert data["connectors"][0]["needs_setup"] is False

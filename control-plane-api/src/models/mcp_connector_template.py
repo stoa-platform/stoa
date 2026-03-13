@@ -35,6 +35,7 @@ class MCPConnectorTemplate(Base):
     oauth_scopes = Column(String(500), nullable=True)
     oauth_pkce_required = Column(Boolean, nullable=False, default=False)
     oauth_client_id = Column(String(255), nullable=True)  # Public OAuth app client_id (not a secret)
+    oauth_registration_url = Column(String(500), nullable=True)  # RFC 7591 DCR endpoint (one-click connect)
 
     # Metadata
     documentation_url = Column(String(500), nullable=True)

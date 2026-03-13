@@ -3,8 +3,11 @@
 Provides secure storage and retrieval of credentials for external MCP servers.
 Uses Kubernetes authentication in cluster, token auth for development.
 
-Reference: External MCP Server Registration Plan
+Graceful degradation: when Vault is unavailable or disabled, credential operations
+return None/False instead of crashing. The MCP server feature works without Vault
+(credentials just won't be persisted securely).
 """
+
 import logging
 import os
 from typing import Any
@@ -15,6 +18,10 @@ from hvac.exceptions import InvalidPath, VaultError
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class VaultUnavailableError(Exception):
+    """Raised when Vault is disabled or unreachable."""
 
 
 class VaultSealedException(VaultError):
@@ -28,6 +35,7 @@ class VaultClient:
     """HashiCorp Vault client for external MCP server credentials.
 
     Stores credentials at: secret/data/external-mcp-servers/{server_id}
+    Gracefully degrades when Vault is unavailable (returns None instead of crashing).
     """
 
     def __init__(
@@ -36,23 +44,31 @@ class VaultClient:
         vault_token: str | None = None,
         kubernetes_role: str | None = None,
         mount_point: str = "secret",
+        enabled: bool = True,
     ):
-        """Initialize Vault client.
-
-        Args:
-            vault_addr: Vault server URL (e.g., https://vault.gostoa.dev)
-            vault_token: Vault token for authentication (dev mode)
-            kubernetes_role: Kubernetes auth role name (production)
-            mount_point: KV secrets engine mount point
-        """
         self.vault_addr = vault_addr
         self.mount_point = mount_point
+        self.enabled = enabled
         self._client: hvac.Client | None = None
         self._vault_token = vault_token
         self._kubernetes_role = kubernetes_role
+        self._available: bool | None = None  # Cached availability after first check
+
+    @property
+    def is_available(self) -> bool:
+        """Check if Vault is enabled and reachable."""
+        if not self.enabled:
+            return False
+        if self._available is not None:
+            return self._available
+        self._available = self.health_check()
+        return self._available
 
     def _get_client(self) -> hvac.Client:
         """Get or create authenticated Vault client."""
+        if not self.enabled:
+            raise VaultUnavailableError("Vault is disabled via VAULT_ENABLED=false")
+
         if self._client is not None and self._client.is_authenticated():
             return self._client
 
@@ -101,19 +117,15 @@ class VaultClient:
         self,
         server_id: str,
         credentials: dict[str, Any],
-    ) -> str:
+    ) -> str | None:
         """Store credentials for an external MCP server.
 
-        Args:
-            server_id: External MCP server ID
-            credentials: Credential data (api_key, bearer_token, or oauth2 config)
-
-        Returns:
-            The Vault path where credentials are stored
-
-        Raises:
-            VaultSealedException: If Vault is sealed
+        Returns the Vault path if stored, None if Vault is unavailable.
         """
+        if not self.enabled:
+            logger.warning("Vault disabled — credentials not stored for server %s", server_id)
+            return None
+
         self._ensure_unsealed()
         client = self._get_client()
         path = f"external-mcp-servers/{server_id}"
@@ -142,15 +154,12 @@ class VaultClient:
     async def retrieve_credential(self, server_id: str) -> dict[str, Any] | None:
         """Retrieve credentials for an external MCP server.
 
-        Args:
-            server_id: External MCP server ID
-
-        Returns:
-            Credentials dict if found, None otherwise
-
-        Raises:
-            VaultSealedException: If Vault is sealed
+        Returns credentials dict if found, None if not found or Vault unavailable.
         """
+        if not self.enabled:
+            logger.debug("Vault disabled — cannot retrieve credentials for server %s", server_id)
+            return None
+
         self._ensure_unsealed()
         client = self._get_client()
         path = f"external-mcp-servers/{server_id}"
@@ -187,21 +196,17 @@ class VaultClient:
     async def delete_credential(self, server_id: str) -> bool:
         """Delete credentials for an external MCP server.
 
-        Args:
-            server_id: External MCP server ID
-
-        Returns:
-            True if deleted, False if not found
-
-        Raises:
-            VaultSealedException: If Vault is sealed
+        Returns True if deleted, False if not found or Vault unavailable.
         """
+        if not self.enabled:
+            logger.debug("Vault disabled — cannot delete credentials for server %s", server_id)
+            return False
+
         self._ensure_unsealed()
         client = self._get_client()
         path = f"external-mcp-servers/{server_id}"
 
         try:
-            # Permanently delete all versions
             client.secrets.kv.v2.delete_metadata_and_all_versions(
                 path=path,
                 mount_point=self.mount_point,
@@ -230,9 +235,10 @@ class VaultClient:
     def health_check(self) -> bool:
         """Check if Vault is accessible and authenticated.
 
-        Returns:
-            True if healthy, False otherwise
+        Returns True if healthy, False otherwise. Never raises.
         """
+        if not self.enabled:
+            return False
         try:
             client = self._get_client()
             status = client.sys.read_health_status(method="GET")
@@ -246,15 +252,19 @@ _vault_client: VaultClient | None = None
 
 
 def get_vault_client() -> VaultClient:
-    """Get or create the global Vault client instance."""
+    """Get or create the global Vault client instance.
+
+    Uses settings from config.py (VAULT_ADDR, VAULT_TOKEN, etc.).
+    """
     global _vault_client
 
     if _vault_client is None:
         _vault_client = VaultClient(
-            vault_addr=f"https://vault.{settings.BASE_DOMAIN}",
-            vault_token=os.environ.get("VAULT_TOKEN"),
-            kubernetes_role="control-plane-api",
-            mount_point="secret",
+            vault_addr=settings.VAULT_ADDR,
+            vault_token=settings.VAULT_TOKEN or None,
+            kubernetes_role=settings.VAULT_KUBERNETES_ROLE,
+            mount_point=settings.VAULT_MOUNT_POINT,
+            enabled=settings.VAULT_ENABLED,
         )
 
     return _vault_client

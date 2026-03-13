@@ -235,10 +235,12 @@ class ConnectorOAuthService:
         try:
             vault = get_vault_client()
             vault_path = await vault.store_credential(str(server.id), vault_data)
-            server.credential_vault_path = vault_path
+            if vault_path:
+                server.credential_vault_path = vault_path
+            else:
+                logger.warning("Vault unavailable — OAuth tokens not stored for connector '%s'", template.slug)
         except Exception as e:
-            logger.error(f"Failed to store tokens in Vault for connector '{template.slug}': {e}")
-            raise ConnectorOAuthError("Failed to store credentials securely", status_code=500)
+            logger.warning("Vault error — OAuth tokens not stored for connector '%s': %s", template.slug, e)
 
         server = await self.server_repo.create(server)
 
@@ -291,6 +293,9 @@ class ConnectorOAuthService:
         """
         try:
             vault = get_vault_client()
+            if not vault.enabled:
+                logger.warning("Vault disabled — provider credentials unavailable for '%s'", slug)
+                return {}
             vault._ensure_unsealed()
             client = vault._get_client()
             path = f"mcp-connector-templates/{slug}"

@@ -1,0 +1,40 @@
+# Vault Agent — Parameterized Configuration Template
+# Deployed by deploy.sh to /etc/vault-agent/config.hcl
+#
+# Variables replaced by deploy.sh at deploy time:
+#   __VAULT_ADDR__       — Vault server URL
+#   __APPROLE_NAME__     — AppRole name (e.g., vps-n8n)
+#   __TEMPLATE_STANZAS__ — Rendered template blocks (per-service)
+
+vault {
+  address = "__VAULT_ADDR__"
+  retry {
+    num_retries = 5
+  }
+}
+
+auto_auth {
+  method "approle" {
+    config = {
+      role_id_file_path   = "/etc/vault-agent/role-id"
+      secret_id_file_path = "/etc/vault-agent/secret-id"
+      remove_secret_id_file_after_reading = false
+    }
+  }
+
+  sink "file" {
+    config = {
+      path = "/tmp/vault-agent-token"
+      mode = 0640
+    }
+  }
+}
+
+# Agent caches tokens to reduce Vault load
+cache {
+  use_auto_auth_token = true
+}
+
+# Template rendering — each template block renders a .env file
+# and optionally restarts the Docker service on change
+__TEMPLATE_STANZAS__

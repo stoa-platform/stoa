@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/apis", tags=["APIs"])
 
 
+def _require_git_service() -> None:
+    """Guard: raise 503 if GitLab integration is not connected."""
+    if not git_service._project:
+        raise HTTPException(
+            status_code=503,
+            detail="GitLab integration is not configured. API creation via GitOps is unavailable.",
+        )
+
+
 class APICreate(BaseModel):
     name: str
     display_name: str
@@ -97,6 +106,7 @@ async def list_apis(
 
     Optionally filter by environment — only returns APIs deployed to that environment.
     """
+    _require_git_service()
     try:
         apis = await git_service.list_apis(tenant_id)
         all_items = [_api_from_yaml(tenant_id, api) for api in apis]
@@ -122,6 +132,7 @@ async def list_apis(
 @require_tenant_access
 async def get_api(tenant_id: str, api_id: str, user: User = Depends(get_current_user)):
     """Get API by ID from GitLab"""
+    _require_git_service()
     try:
         api_data = await git_service.get_api(tenant_id, api_id)
         if not api_data:
@@ -151,6 +162,8 @@ async def create_api(
     - Max 3 APIs (configurable via tenant.settings.max_apis)
     - 402 after 30-day trial expires
     """
+    _require_git_service()
+
     # Trial limits enforcement (CAB-1549)
     from ..routers.tenants import get_tenant_limits
     from ..services.trial_service import check_trial_expiry
@@ -231,7 +244,7 @@ async def create_api(
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to create API {api.name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create API: {e!s}")
+        raise HTTPException(status_code=500, detail="Failed to create API. Please try again or contact support.")
 
 
 @router.put("/{api_id}", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
@@ -239,6 +252,7 @@ async def create_api(
 @require_tenant_access
 async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = Depends(get_current_user)):
     """Update API in GitLab"""
+    _require_git_service()
     try:
         # Get current API
         current = await git_service.get_api(tenant_id, api_id)
@@ -281,7 +295,7 @@ async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = D
         raise
     except Exception as e:
         logger.error(f"Failed to update API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update API: {e!s}")
+        raise HTTPException(status_code=500, detail="Failed to update API. Please try again or contact support.")
 
 
 @router.delete("/{api_id}", dependencies=[Depends(require_writable_environment)])
@@ -289,6 +303,7 @@ async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = D
 @require_tenant_access
 async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_current_user)):
     """Delete API from GitLab"""
+    _require_git_service()
     try:
         # Verify API exists
         api_data = await git_service.get_api(tenant_id, api_id)
@@ -323,4 +338,4 @@ async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_curre
         raise
     except Exception as e:
         logger.error(f"Failed to delete API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete API: {e!s}")
+        raise HTTPException(status_code=500, detail="Failed to delete API. Please try again or contact support.")

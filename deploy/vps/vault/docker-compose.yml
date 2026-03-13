@@ -1,4 +1,4 @@
-# HashiCorp Vault — OVH VPS (hcv.gostoa.dev)
+# HashiCorp Vault — OVH VPS (hcvault.gostoa.dev)
 # Source of truth for all STOA secrets (replaces Infisical)
 #
 # Stack: Vault (file backend) + Caddy (auto-TLS)
@@ -6,7 +6,7 @@
 # Usage:
 #   ./deploy/vps/vault/deploy.sh
 #
-# Health: curl https://hcv.gostoa.dev/v1/sys/health
+# Health: curl https://hcvault.gostoa.dev/v1/sys/health
 
 services:
   vault:
@@ -26,7 +26,9 @@ services:
       VAULT_API_ADDR: "http://127.0.0.1:8200"
     command: vault server -config=/vault/config/vault.hcl
     healthcheck:
-      test: ["CMD", "vault", "status", "-format=json"]
+      # vault status exits non-zero when sealed/uninitialized — use HTTP API instead
+      # 200=ready, 429=standby, 472=perf-standby, 501=uninitialized, 503=sealed — all mean "running"
+      test: ["CMD", "sh", "-c", "wget -qO- http://127.0.0.1:8200/v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

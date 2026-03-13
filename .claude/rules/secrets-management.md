@@ -7,7 +7,7 @@ globs: "deploy/**,terraform/**,.infisical.json,**/vault*"
 ## Architecture
 
 ```
-HashiCorp Vault (hcv.gostoa.dev) — Source of Truth (CAB-1795)
+HashiCorp Vault (hcvault.gostoa.dev) — Source of Truth (CAB-1795)
     │
     ├── K8s (OVH Prod)
     │   └── External Secrets Operator → ClusterSecretStore → ExternalSecret CRs
@@ -22,7 +22,7 @@ Infisical (vault.gostoa.dev) — Legacy, read-only reference during transition
 ```
 
 - **Vault** = primary secrets manager (self-hosted on spare-gra-vps)
-- **URL**: `https://hcv.gostoa.dev`
+- **URL**: `https://hcvault.gostoa.dev`
 - **Auth**: AppRole (VPS agents), Kubernetes (ESO), Token (admin/human)
 - **Infisical** = legacy, read-only reference. URL: `https://vault.gostoa.dev`
 

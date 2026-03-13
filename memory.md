@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-10 (fix(gateway) audit remediations PR #1633)
+> Derniere MAJ: 2026-03-13 (feat(security) Vault setup + migration scripts PR #1710)
 
 ## ✅ DONE
 
@@ -50,6 +50,14 @@ CAB-1696: [MEGA] AI Factory Audit Remediation (34 pts) — Phase 1 in progress
 - [ ] CAB-1700: E2E smoke mock server (5 pts) — blocked by P1
 - [ ] CAB-1701: OpenAPI→TS contract testing (3 pts) — blocked by P1
 
+CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (44 pts) — Council 8.25/10
+- ✅ CAB-1796 Setup Vault on spare-gra-vps (8 pts) — PR #1710
+- ✅ CAB-1797 Migrate Infisical → Vault (5 pts) — PR #1710
+- [ ] CAB-1798 ESO → Vault (8 pts) — Phase 2 (blocked: needs Vault live)
+- [ ] CAB-1799 Vault Agent VPS (13 pts) — Phase 3 (blocked: needs Vault live)
+- [ ] CAB-1801 Rotation extended (5 pts) — Phase 4
+- [ ] CAB-1802 SSH + PKI (5 pts) — Phase 5
+
 CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 - ✅ CAB-1739 PAR proxy (5 pts) — PR #1526
 - ✅ CAB-1741 KC 26.5.3 unify (3 pts) — PR #1526
@@ -58,14 +66,6 @@ CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 - [ ] CAB-1743 FAPI 2.0 docs (5 pts) — ADR-056 drafted, needs stoa-docs PR
 
 ## 📋 NEXT
-
-CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (44 pts) — Council 8.25/10
-- [ ] CAB-1796 Setup Vault on spare-gra-vps (8 pts) — Phase 0
-- [ ] CAB-1797 Migrate Infisical → Vault (5 pts) — Phase 1
-- [ ] CAB-1798 ESO → Vault (8 pts) — Phase 2
-- [ ] CAB-1799 Vault Agent VPS (13 pts) — Phase 3
-- [ ] CAB-1801 Rotation extended (5 pts) — Phase 4
-- [ ] CAB-1802 SSH + PKI (5 pts) — Phase 5
 
 **Human-only**: CAB-1132 Business Model (8), CAB-1126 Video (8), CAB-1125 Punchline (8)
 **Deferred**: CAB-1473 WASM (21, 5.00), CAB-1462 ErrorSnap (21, 5.75), CAB-1512 Federation (21, 5.50)

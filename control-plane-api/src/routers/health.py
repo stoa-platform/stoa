@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from ..config import settings
 from ..services import git_service, kafka_service, keycloak_service
 from ..services.gateway_service import gateway_service
+from ..services.vault_client import get_vault_client
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -122,6 +123,18 @@ async def readiness():
         checks["gateway"] = "ok" if gateway_healthy else "disconnected"
     except Exception as e:
         checks["gateway"] = f"error: {e!s}"
+
+    # Check Vault connection (non-critical — MCP credentials feature)
+    try:
+        vault = get_vault_client()
+        if not vault.enabled:
+            checks["vault"] = "disabled"
+        elif vault.health_check():
+            checks["vault"] = "ok"
+        else:
+            checks["vault"] = "disconnected"
+    except Exception as e:
+        checks["vault"] = f"error: {e!s}"
 
     status = "healthy" if all_healthy else "degraded"
 

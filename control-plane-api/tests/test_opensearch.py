@@ -251,15 +251,83 @@ class TestAuditMiddleware:
     def test_extract_resource(self):
         """Test resource extraction from path."""
         from audit_middleware import AuditMiddleware
-        
+
         request = MagicMock()
         request.url.path = "/api/v1/subscriptions/sub-123"
-        
+
         middleware = AuditMiddleware(MagicMock(), MagicMock())
         resource = middleware._extract_resource(request)
-        
+
         assert resource["type"] == "subscription"
         assert resource["id"] == "sub-123"
+
+    @pytest.mark.asyncio
+    async def test_extract_actor_captures_jwt_user(self):
+        """Actor extraction captures JWT user from request.state.user (CAB-1793).
+
+        Regression: actor was extracted BEFORE call_next, so request.state.user
+        was not yet populated by endpoint-level Depends(get_current_user).
+        """
+        from src.opensearch.audit_middleware import AuditMiddleware
+
+        middleware = AuditMiddleware(MagicMock(), MagicMock())
+        request = MagicMock()
+        request.client.host = "10.0.0.1"
+        request.headers = {"User-Agent": "test-agent"}
+        request.state.user = {
+            "sub": "user-123",
+            "email": "admin@gostoa.dev",
+            "name": "Admin User",
+            "tenant_id": "oasis",
+        }
+
+        actor = await middleware._extract_actor(request)
+
+        assert actor["type"] == "user"
+        assert actor["id"] == "user-123"
+        assert actor["email"] == "admin@gostoa.dev"
+        assert actor["name"] == "Admin User"
+        assert actor["tenant_id"] == "oasis"
+
+    @pytest.mark.asyncio
+    async def test_extract_actor_anonymous_without_auth(self):
+        """Actor defaults to anonymous when no auth state is set (CAB-1793)."""
+        from src.opensearch.audit_middleware import AuditMiddleware
+
+        middleware = AuditMiddleware(MagicMock(), MagicMock())
+        request = MagicMock()
+        request.client.host = "10.0.0.1"
+        request.headers = {"User-Agent": "test-agent"}
+        # Simulate no auth — state exists but has no user or api_key attrs
+        request.state = MagicMock(spec=[])
+
+        actor = await middleware._extract_actor(request)
+
+        assert actor["type"] == "anonymous"
+        assert "id" not in actor
+
+    @pytest.mark.asyncio
+    async def test_extract_actor_api_key(self):
+        """Actor extraction captures API key auth (CAB-1793)."""
+        from src.opensearch.audit_middleware import AuditMiddleware
+
+        middleware = AuditMiddleware(MagicMock(), MagicMock())
+        request = MagicMock(spec=["client", "headers", "state"])
+        request.client.host = "10.0.0.1"
+        request.headers = {"User-Agent": "test-agent"}
+        # No user attr, but has api_key
+        del request.state.user
+        request.state.api_key = {
+            "id": "key-456",
+            "name": "My API Key",
+            "tenant_id": "oasis",
+        }
+
+        actor = await middleware._extract_actor(request)
+
+        assert actor["type"] == "api_key"
+        assert actor["id"] == "key-456"
+        assert actor["tenant_id"] == "oasis"
 
 
 # =============================================================================

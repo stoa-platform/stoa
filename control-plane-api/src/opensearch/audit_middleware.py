@@ -281,9 +281,6 @@ class AuditMiddleware(BaseHTTPMiddleware):
         correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
         correlation_id_ctx.set(correlation_id)
 
-        # Extract actor from JWT
-        actor = await self._extract_actor(request)
-
         # Start timing
         start_time = time.time()
 
@@ -298,6 +295,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
             severity = EventSeverity.ERROR
             raise
         finally:
+            # Extract actor AFTER call_next so that endpoint-level
+            # Depends(get_current_user) has populated request.state.user
+            actor = await self._extract_actor(request)
+
             # Calculate latency
             latency_ms = (time.time() - start_time) * 1000
 

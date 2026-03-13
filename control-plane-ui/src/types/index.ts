@@ -1494,6 +1494,7 @@ export interface ConnectorTemplate {
   is_connected: boolean;
   connected_server_id?: string;
   connection_health?: string;
+  needs_setup: boolean;
 }
 
 export interface ConnectorCatalogResponse {

@@ -9,6 +9,7 @@ Endpoints:
 """
 
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +33,7 @@ from ..schemas.mcp_connector import (
     DisconnectResponse,
 )
 from ..services.connector_oauth import ConnectorOAuthError, ConnectorOAuthService
+from ..services.vault_client import get_vault_client
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +66,14 @@ def _build_oauth_service(db: AsyncSession) -> ConnectorOAuthService:
 def _build_redirect_uri() -> str:
     """Build the OAuth callback redirect URI from settings."""
     return f"https://console.{settings.BASE_DOMAIN}/mcp-connectors/callback"
+
+
+def _has_client_id(template) -> bool:  # type: ignore[no-untyped-def]
+    """Check if a connector template has a client_id configured (DB, env, or Vault)."""
+    if template.oauth_client_id:
+        return True
+    env_key = f"MCP_OAUTH_{template.slug.upper()}_CLIENT_ID"
+    return bool(os.environ.get(env_key, ""))
 
 
 @router.get("", response_model=ConnectorCatalogResponse)
@@ -107,6 +117,7 @@ async def list_connectors(
                 is_connected=connected_info is not None,
                 connected_server_id=connected_info[0] if connected_info else None,
                 connection_health=connected_info[1] if connected_info else None,
+                needs_setup=not _has_client_id(t),
             )
         )
 
@@ -177,6 +188,25 @@ async def authorize_connector(
 
     if not template.enabled:
         raise HTTPException(status_code=400, detail=f"Connector '{slug}' is disabled")
+
+    # Save client credentials if provided (first-time setup from UI)
+    if request.client_id:
+        template.oauth_client_id = request.client_id
+        db.add(template)
+        if request.client_secret:
+            try:
+                vault = get_vault_client()
+                if vault.enabled:
+                    vault._ensure_unsealed()
+                    client = vault._get_client()
+                    client.secrets.kv.v2.create_or_update_secret(
+                        path=f"mcp-connector-templates/{slug}",
+                        secret={"client_id": request.client_id, "client_secret": request.client_secret},
+                        mount_point=vault.mount_point,
+                    )
+                    logger.info("Stored provider credentials in Vault for '%s'", slug)
+            except Exception as e:
+                logger.warning("Failed to store client_secret in Vault for '%s': %s", slug, e)
 
     service = _build_oauth_service(db)
     redirect_uri = _build_redirect_uri()

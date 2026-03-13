@@ -134,6 +134,7 @@ export function APIs() {
         if (deployToDev) {
           await apiService.createDeployment(selectedTenant, {
             api_id: created.id,
+            api_name: api.name,
             environment: 'dev',
             version: api.version,
           });
@@ -196,6 +197,7 @@ export function APIs() {
       try {
         await apiService.createDeployment(selectedTenant, {
           api_id: api.id,
+          api_name: api.name,
           environment,
           version: api.version,
         });

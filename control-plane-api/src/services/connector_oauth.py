@@ -70,6 +70,7 @@ class ConnectorOAuthService:
         tenant_id: str | None,
         redirect_after: str | None = None,
         redirect_uri: str = "",
+        client_secret: str | None = None,
     ) -> tuple[str, str]:
         """Build the OAuth authorize URL and save CSRF state.
 
@@ -79,6 +80,7 @@ class ConnectorOAuthService:
             tenant_id: Tenant to connect for (None = platform-wide)
             redirect_after: UI URL to redirect after callback
             redirect_uri: The callback URL registered with the provider
+            client_secret: Provider client_secret from setup dialog (non-DCR providers)
 
         Returns:
             Tuple of (authorize_url, state_token)
@@ -133,6 +135,7 @@ class ConnectorOAuthService:
             user_id=user_id,
             tenant_id=tenant_id,
             code_verifier=code_verifier,
+            client_secret=client_secret,
             redirect_after=redirect_after,
             created_at=datetime.utcnow(),
             expires_at=datetime.utcnow() + timedelta(minutes=STATE_EXPIRY_MINUTES),
@@ -196,15 +199,18 @@ class ConnectorOAuthService:
 
         redirect_after = pending.redirect_after
         code_verifier = pending.code_verifier
+        pending_client_secret = pending.client_secret
         user_id = pending.user_id
         tenant_id = pending.tenant_id
 
         # Delete session immediately (single-use)
         await self.session_repo.delete(pending)
 
-        # Resolve provider credentials: template/env → Vault fallback
+        # Resolve provider credentials: template/env → Vault → pending session fallback
         client_id = self._resolve_client_id(template)
         client_secret = self._resolve_client_secret(template)
+        if not client_secret and pending_client_secret:
+            client_secret = pending_client_secret
 
         # Exchange code for tokens
         tokens = await self._exchange_code_for_tokens(

@@ -16,7 +16,7 @@ paths = [
   '''.*README\.md''',
   '''.*\.example''',
   '''tests/.*''',
-  # Docker compose main file (env var defaults for local dev only)
+  # Docker compose main files (env var defaults for local dev only)
   '''deploy/docker-compose/docker-compose\.yml''',
   '''deploy/docker-compose/docker-compose\..*\.yml''',
   # External Secrets manifests (references, not actual secrets)
@@ -31,8 +31,8 @@ paths = [
   '''PLAN_DETAILLE\.md''',
   # Demo scripts with test/demo credentials (not real secrets)
   '''scripts/demo/.*''',
-  # AI Factory rules with curl examples using default trial credentials
-  '''\.claude/rules/gateway-adapters\.md''',
+  # AI Factory rules (examples and anti-pattern documentation, not real secrets)
+  '''\.claude/rules/.*\.md''',
   # VPS benchmark deploy scripts with example Pushgateway credentials
   '''deploy/vps/bench/.*''',
   # Onboarding wizard with curl template literals (${trialKey} interpolation, not real secrets)
@@ -58,10 +58,14 @@ regexes = [
   '''REDACTED''',
 ]
 
-# Specific commits to ignore (false positives in schema examples)
+# Specific commits to ignore (false positives and historical secrets now removed)
 commits = [
   "c3b53982772666b3cd95ae38004dc57f14c7e977",
   "9bfdc8d235b1ad553cb333423fa7ce57fe74d8be",
+  # Historical secrets (removed in fix/audit-k8s-secrets-in-gitops)
+  "aaeedd6b41789b2889715bf86e5cf6657d422edf",  # OpenSearch passwords + bcrypt hashes
+  "92cf56ea3f31054ce04a76571c50d32a3257264b",  # PostgreSQL password in statefulset
+  "7ebe3629d5f8efe4c242f18f31cf14925f31e5a6",  # Ansible playbook db_password
 ]
 
 # Rules to modify or disable

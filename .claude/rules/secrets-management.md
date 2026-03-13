@@ -38,9 +38,9 @@ Access layers:
 
 | Allowed | Forbidden |
 |---------|-----------|
-| `REPLACE_FROM_INFISICAL` placeholder | `stoa-db-password-2026` (real password) |
-| `${VAR}` env substitution | `$2b$12$...` (bcrypt hash) |
-| `CHANGE_ME` placeholder | `# Password: Admin123!` (plaintext in comment) |
+| `REPLACE_FROM_INFISICAL` placeholder | Real password values in stringData |
+| `${VAR}` env substitution | bcrypt hashes in config files |
+| `CHANGE_ME` placeholder | Plaintext password in YAML comment |
 | ExternalSecret CRD referencing Vault | `stringData` with real values |
 
 **Enforcement** (3 layers):

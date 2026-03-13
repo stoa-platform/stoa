@@ -31,6 +31,8 @@ class ConnectorTemplateResponse(BaseModel):
     is_connected: bool = False
     connected_server_id: UUID | None = None
     connection_health: str | None = None
+    # True when OAuth client_id is not yet configured (UI should show setup dialog)
+    needs_setup: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,6 +52,8 @@ class AuthorizeRequest(BaseModel):
 
     tenant_id: str | None = Field(None, description="Tenant to connect for (null = personal)")
     redirect_after: str | None = Field(None, description="UI URL to redirect after callback")
+    client_id: str | None = Field(None, description="OAuth app client_id (saved for future use)")
+    client_secret: str | None = Field(None, description="OAuth app client_secret (stored in Vault)")
 
 
 class AuthorizeResponse(BaseModel):

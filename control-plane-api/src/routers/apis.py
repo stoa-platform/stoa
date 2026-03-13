@@ -77,6 +77,13 @@ def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
     promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
     portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
 
+    deployed_dev = deployments.get("dev", False)
+    deployed_staging = deployments.get("staging", False)
+
+    # Derive status from deployment state — if deployed anywhere, it's published
+    raw_status = api_data.get("status", "draft")
+    status = "published" if raw_status == "draft" and (deployed_dev or deployed_staging) else raw_status
+
     return APIResponse(
         id=api_data.get("id", api_data.get("name", "")),
         tenant_id=tenant_id,
@@ -85,9 +92,9 @@ def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
         version=api_data.get("version", "1.0.0"),
         description=api_data.get("description", ""),
         backend_url=api_data.get("backend_url", ""),
-        status=api_data.get("status", "draft"),
-        deployed_dev=deployments.get("dev", False),
-        deployed_staging=deployments.get("staging", False),
+        status=status,
+        deployed_dev=deployed_dev,
+        deployed_staging=deployed_staging,
         tags=tags,
         portal_promoted=portal_promoted,
     )
@@ -112,13 +119,16 @@ async def list_apis(
         all_items = [_api_from_yaml(tenant_id, api) for api in apis]
         # Filter by environment if specified
         if environment:
-            all_items = [
-                api
-                for api in all_items
-                if (environment == "dev" and api.deployed_dev)
-                or (environment == "staging" and api.deployed_staging)
-                or (environment == "prod")  # prod filter deferred to Phase 5
-            ]
+            if environment == "dev":
+                # DEV shows deployed APIs + drafts (not yet deployed anywhere)
+                all_items = [
+                    api for api in all_items if api.deployed_dev or (not api.deployed_dev and not api.deployed_staging)
+                ]
+            elif environment == "staging":
+                all_items = [api for api in all_items if api.deployed_staging]
+            elif environment == "prod":
+                # Prod shows only APIs deployed to both dev AND staging (promotion path)
+                all_items = [api for api in all_items if api.deployed_dev and api.deployed_staging]
         total = len(all_items)
         start = (page - 1) * page_size
         items = all_items[start : start + page_size]

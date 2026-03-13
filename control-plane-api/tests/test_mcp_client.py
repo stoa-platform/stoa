@@ -136,41 +136,23 @@ class TestSSEConnection:
         self.svc = MCPClientService(timeout=5)
 
     async def test_success(self):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.mcp_client.httpx.AsyncClient", return_value=mock_client):
-            result = await self.svc._test_sse_connection("http://host/sse", "none", None)
+        self.svc._sse_initialize = AsyncMock(
+            return_value=("http://host/messages", {"name": "test-server"})
+        )
+        self.svc._sse_tools_count = AsyncMock(return_value=3)
+        result = await self.svc._test_sse_connection("http://host/sse", "none", None)
         assert result.success is True
+        assert result.tools_discovered == 3
 
-    async def test_non_200(self):
-        mock_response = MagicMock()
-        mock_response.status_code = 401
-        mock_response.text = "Unauthorized"
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.mcp_client.httpx.AsyncClient", return_value=mock_client):
-            result = await self.svc._test_sse_connection("http://host/sse", "none", None)
+    async def test_no_endpoint(self):
+        self.svc._sse_initialize = AsyncMock(return_value=(None, None))
+        result = await self.svc._test_sse_connection("http://host/sse", "none", None)
         assert result.success is False
-        assert "401" in result.error
+        assert "no endpoint" in result.error
 
     async def test_connect_error(self):
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.mcp_client.httpx.AsyncClient", return_value=mock_client):
-            result = await self.svc._test_sse_connection("http://host/sse", "none", None)
+        self.svc._sse_initialize = AsyncMock(side_effect=httpx.ConnectError("refused"))
+        result = await self.svc._test_sse_connection("http://host/sse", "none", None)
         assert result.success is False
         assert "Connection failed" in result.error
 
@@ -248,8 +230,9 @@ class TestDiscoverToolsCount:
     def setup_method(self):
         self.svc = MCPClientService()
 
-    async def test_sse_returns_none(self):
-        result = await self.svc._discover_tools_count_sse("http://host", {}, MagicMock())
+    async def test_sse_connect_error_returns_none(self):
+        with patch("src.services.mcp_client.httpx_sse.aconnect_sse", side_effect=httpx.ConnectError("refused")):
+            result = await self.svc._sse_tools_count("http://host/sse", "http://host/messages", {})
         assert result is None
 
     async def test_http_success(self):
@@ -380,15 +363,15 @@ class TestListToolsSSE:
     def setup_method(self):
         self.svc = MCPClientService()
 
-    async def test_falls_back_to_http(self):
-        self.svc._list_tools_http = AsyncMock(return_value=[MCPTool(name="t")])
-        tools = await self.svc._list_tools_sse("http://host", "none", None)
-        assert len(tools) == 1
+    async def test_connect_error_propagates(self):
+        with patch("src.services.mcp_client.httpx_sse.aconnect_sse", side_effect=httpx.ConnectError("refused")):
+            with pytest.raises(httpx.ConnectError):
+                await self.svc._list_tools_sse("http://host", "none", None)
 
-    async def test_fallback_exception_returns_empty(self):
-        self.svc._list_tools_http = AsyncMock(side_effect=Exception("fail"))
-        tools = await self.svc._list_tools_sse("http://host", "none", None)
-        assert tools == []
+    async def test_generic_exception_propagates(self):
+        with patch("src.services.mcp_client.httpx_sse.aconnect_sse", side_effect=Exception("fail")):
+            with pytest.raises(Exception, match="fail"):
+                await self.svc._list_tools_sse("http://host", "none", None)
 
 
 # ── Global service ──

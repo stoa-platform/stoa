@@ -33,6 +33,8 @@ def _mock_server(**kwargs):
     srv.last_sync_at = kwargs.get("last_sync_at", None)
     srv.sync_error = kwargs.get("sync_error", None)
     srv.tenant_id = kwargs.get("tenant_id", "acme")
+    srv.environment = kwargs.get("environment", "dev")
+    srv.gateway_instance_id = kwargs.get("gateway_instance_id", None)
     srv.created_at = kwargs.get("created_at", datetime.utcnow())
     srv.updated_at = kwargs.get("updated_at", datetime.utcnow())
     srv.created_by = kwargs.get("created_by", "tenant-admin-user-id")

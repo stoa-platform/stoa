@@ -1,64 +1,66 @@
-# External Secrets Operator Setup
+# External Secrets Operator — Vault Integration
 
-Synchronizes secrets from HashiCorp Vault to Kubernetes.
+Synchronizes secrets from HashiCorp Vault (hcvault.gostoa.dev) to Kubernetes.
 
-## Installation
+## Prerequisites
+
+1. **Vault operational** (Phase 0 — CAB-1796)
+2. **Secrets migrated** (Phase 1 — CAB-1797)
+3. **ESO installed** on K8s cluster
 
 ```bash
-# Add Helm repo
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo update
-
-# Install ESO
 helm install external-secrets external-secrets/external-secrets \
-  -n external-secrets \
-  --create-namespace \
-  --set installCRDs=true
+  -n external-secrets --create-namespace --set installCRDs=true
 ```
 
-## Configuration
+## Setup (Phase 2 — CAB-1798)
 
-### 1. Create SecretStore
+### 1. Configure Vault K8s auth
+
+```bash
+export VAULT_TOKEN="<admin-token>"
+export VAULT_ADDR="https://hcvault.gostoa.dev"
+export KUBECONFIG=~/.kube/config-stoa-ovh
+./vault-config.sh
+```
+
+### 2. Apply SecretStore + ExternalSecrets
 
 ```bash
 kubectl apply -f secret-store.yaml
-```
-
-### 2. Create ExternalSecrets
-
-```bash
+kubectl apply -f external-secret-gateway.yaml
+kubectl apply -f external-secret-opensearch.yaml
 kubectl apply -f external-secret-database.yaml
-kubectl apply -f external-secret-minio.yaml
 ```
 
 ## Vault Paths
 
-| Path | Description |
-|------|-------------|
-| `secret/apim/dev/database` | PostgreSQL credentials |
-| `secret/apim/dev/minio` | MinIO credentials |
-| `secret/apim/dev/gateway-admin` | Gateway admin credentials |
-| `secret/apim/dev/keycloak-admin` | Keycloak admin credentials |
+| Vault Path | K8s Secret | Component | Keys |
+|---|---|---|---|
+| `k8s/gateway` | `stoa-gateway-secrets` | stoa-gateway | STOA_CONTROL_PLANE_API_KEY, STOA_KEYCLOAK_CLIENT_SECRET |
+| `k8s/opensearch` | `stoa-opensearch-secret` | control-plane-api | 6 OpenSearch keys |
+| `dev/env` | `postgresql-credentials` | control-plane-api | DEV_PG_* (5 keys) |
 
 ## Verification
 
 ```bash
-# Check SecretStore status
 kubectl get secretstore -n stoa-system
-
-# Check ExternalSecret sync status
 kubectl get externalsecret -n stoa-system
-
-# View synced secrets
-kubectl get secrets -n stoa-system | grep -E "minio|postgres|database"
+kubectl get secrets -n stoa-system | grep -E "gateway|opensearch|postgresql"
 ```
 
 ## Troubleshooting
 
 ```bash
-# Check ESO logs
+# ESO logs
 kubectl logs -n external-secrets -l app.kubernetes.io/name=external-secrets
 
-# Check ExternalSecret events
+# ExternalSecret events
 kubectl describe externalsecret -n stoa-system
+
+# Test Vault connectivity from cluster
+kubectl run vault-test --rm -it --image=curlimages/curl -- \
+  curl -sf https://hcvault.gostoa.dev/v1/sys/health
 ```

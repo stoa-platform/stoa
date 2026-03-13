@@ -85,3 +85,36 @@ YYYY-MM-DDTHH:MM | RULES-BUDGET | always_loaded_bytes=N files_without_globs=N me
 ```
 
 Logged by `rules-budget-lint.sh` on every Stop event.
+
+## Quality Metrics (AI Regression Tracking)
+
+Script: `scripts/ai-ops/quality-metrics.sh` — weekly cron (Monday 07:00 UTC).
+
+### Metrics
+
+| Metric | Prometheus Name | What | Target |
+|--------|----------------|------|--------|
+| Regression Rate | `ai_factory_regression_rate` | fix PRs / feat PRs (AI vs human) | < 0.3 |
+| Time-to-Regression | `ai_factory_time_to_regression_hours` | Avg hours feat→fix on same files | > 72h |
+| PR Rejection Rate | `ai_factory_pr_rejection_rate` | PRs with CI failure on first commit | < 0.2 |
+
+### Usage
+
+```bash
+# Local report (no push)
+bash scripts/ai-ops/quality-metrics.sh --days 30
+
+# JSON output for scripting
+bash scripts/ai-ops/quality-metrics.sh --days 30 --json
+
+# Push to Pushgateway (cron)
+PUSHGATEWAY_URL=https://push.gostoa.dev bash scripts/ai-ops/quality-metrics.sh --push
+```
+
+### Thresholds
+
+| Level | Regression Rate | Action |
+|-------|----------------|--------|
+| Green | < 0.2 | Normal — AI Factory producing stable code |
+| Yellow | 0.2 - 0.4 | Review recent feat PRs for test gaps |
+| Red | > 0.4 | Pause autonomous pipeline, investigate root cause |

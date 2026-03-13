@@ -233,16 +233,18 @@ async def create_server(
         created_by=user.id,
     )
 
-    # Store credentials in Vault if provided
+    # Store credentials in Vault if provided (graceful degradation if Vault unavailable)
     if request.credentials and request.auth_type != AuthTypeEnum.NONE:
         try:
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            server.credential_vault_path = vault_path
+            if vault_path:
+                server.credential_vault_path = vault_path
+            else:
+                logger.warning("Vault unavailable — credentials not stored for server %s", server.name)
         except Exception as e:
-            logger.error(f"Failed to store credentials in Vault: {e}")
-            raise HTTPException(status_code=500, detail="Failed to store credentials securely")
+            logger.warning(f"Vault error — credentials not stored: {e}")
 
     try:
         server = await repo.create(server)
@@ -318,16 +320,18 @@ async def update_server(
     if request.gateway_instance_id is not None:
         server.gateway_instance_id = request.gateway_instance_id
 
-    # Update credentials in Vault if provided
+    # Update credentials in Vault if provided (graceful degradation)
     if request.credentials:
         try:
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            server.credential_vault_path = vault_path
+            if vault_path:
+                server.credential_vault_path = vault_path
+            else:
+                logger.warning("Vault unavailable — credentials not updated for server %s", server.name)
         except Exception as e:
-            logger.error(f"Failed to update credentials in Vault: {e}")
-            raise HTTPException(status_code=500, detail="Failed to update credentials securely")
+            logger.warning(f"Vault error — credentials not updated: {e}")
 
     try:
         server = await repo.update(server)
@@ -396,15 +400,14 @@ async def test_connection(
     if not _has_tenant_access(user, server.tenant_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Retrieve credentials from Vault
+    # Retrieve credentials from Vault (graceful degradation — test without auth if unavailable)
     credentials = None
     if server.credential_vault_path and server.auth_type != ExternalMCPAuthType.NONE:
         try:
             vault = get_vault_client()
             credentials = await vault.retrieve_credential(str(server.id))
         except Exception as e:
-            logger.error(f"Failed to retrieve credentials from Vault: {e}")
-            return TestConnectionResponse(success=False, error="Failed to retrieve credentials")
+            logger.warning(f"Vault unavailable — testing connection without credentials: {e}")
 
     # Test connection
     mcp_client = get_mcp_client_service()
@@ -451,15 +454,14 @@ async def sync_tools(
     if not _has_tenant_access(user, server.tenant_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Retrieve credentials from Vault
+    # Retrieve credentials from Vault (graceful degradation — sync without auth if unavailable)
     credentials = None
     if server.credential_vault_path and server.auth_type != ExternalMCPAuthType.NONE:
         try:
             vault = get_vault_client()
             credentials = await vault.retrieve_credential(str(server.id))
         except Exception as e:
-            logger.error(f"Failed to retrieve credentials from Vault: {e}")
-            raise HTTPException(status_code=500, detail="Failed to retrieve credentials")
+            logger.warning(f"Vault unavailable — syncing tools without credentials: {e}")
 
     # Discover tools
     mcp_client = get_mcp_client_service()

@@ -256,6 +256,13 @@ class Settings(BaseSettings):
     LOG_MASKING_ENABLED: bool = True
     LOG_MASKING_PATTERNS: str = '["password", "secret", "token", "api_key", "authorization"]'
 
+    # HashiCorp Vault (runtime secrets — MCP server credentials, OAuth tokens)
+    VAULT_ADDR: str = f"https://vault.{_BASE_DOMAIN}"
+    VAULT_TOKEN: str = ""  # Dev mode token; production uses K8s auth
+    VAULT_KUBERNETES_ROLE: str = "control-plane-api"
+    VAULT_MOUNT_POINT: str = "secret"
+    VAULT_ENABLED: bool = True  # Set to False to skip Vault operations (credentials not stored)
+
     # Backend API encryption (Fernet key for BYOK credential storage — CAB-1188)
     BACKEND_ENCRYPTION_KEY: str = ""
 

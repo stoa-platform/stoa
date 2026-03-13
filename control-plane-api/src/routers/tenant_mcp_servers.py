@@ -247,16 +247,18 @@ async def create_tenant_mcp_server(
         created_by=user.id,
     )
 
-    # Store credentials in Vault if provided
+    # Store credentials in Vault if provided (graceful degradation)
     if request.credentials and request.auth_type != AuthTypeEnum.NONE:
         try:
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            server.credential_vault_path = vault_path
+            if vault_path:
+                server.credential_vault_path = vault_path
+            else:
+                logger.warning("Vault unavailable — credentials not stored for server %s", request.name)
         except Exception as e:
-            logger.error("Failed to store credentials in Vault: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to store credentials securely")
+            logger.warning("Vault error — credentials not stored: %s", e)
 
     server = await repo.create(server)
     await db.commit()
@@ -309,10 +311,12 @@ async def update_tenant_mcp_server(
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            server.credential_vault_path = vault_path
+            if vault_path:
+                server.credential_vault_path = vault_path
+            else:
+                logger.warning("Vault unavailable — credentials not updated for server %s", server.name)
         except Exception as e:
-            logger.error("Failed to update credentials in Vault: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to update credentials securely")
+            logger.warning("Vault error — credentials not updated: %s", e)
 
     server = await repo.update(server)
     await db.commit()
@@ -375,8 +379,7 @@ async def test_tenant_mcp_server_connection(
             vault = get_vault_client()
             credentials = await vault.retrieve_credential(str(server.id))
         except Exception as e:
-            logger.error("Failed to retrieve credentials from Vault: %s", e)
-            return TestConnectionResponse(success=False, error="Failed to retrieve credentials")
+            logger.warning("Vault unavailable — testing connection without credentials: %s", e)
 
     mcp_client = get_mcp_client_service()
     result = await mcp_client.test_connection(
@@ -421,8 +424,7 @@ async def sync_tenant_mcp_server_tools(
             vault = get_vault_client()
             credentials = await vault.retrieve_credential(str(server.id))
         except Exception as e:
-            logger.error("Failed to retrieve credentials from Vault: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to retrieve credentials")
+            logger.warning("Vault unavailable — syncing tools without credentials: %s", e)
 
     mcp_client = get_mcp_client_service()
     try:

@@ -27,10 +27,11 @@ class ConnectorTemplateResponse(BaseModel):
     is_featured: bool = False
     enabled: bool = True
     sort_order: int = 0
-    # Connection status (populated per-request based on tenant)
+    # Connection status (populated per-request based on tenant + environment)
     is_connected: bool = False
     connected_server_id: UUID | None = None
     connection_health: str | None = None
+    connected_environment: str | None = None
     # True when provider requires manual OAuth app setup (no DCR, no client_id configured)
     needs_setup: bool = False
 
@@ -95,3 +96,27 @@ class DisconnectResponse(BaseModel):
     slug: str
     disconnected: bool = True
     server_id: UUID | None = None
+
+
+# ============== Promote Schemas ==============
+
+
+class PromoteRequest(BaseModel):
+    """Request to promote a connector to a target environment."""
+
+    target_environment: str = Field(..., description="Target environment: dev, staging, production")
+    tenant_id: str | None = Field(None, description="Tenant to promote for (cpi-admin only)")
+    confirm: bool = Field(False, description="Required for high-risk connectors promoting to production")
+
+
+class PromoteResponse(BaseModel):
+    """Response after promoting a connector to a target environment."""
+
+    slug: str
+    source_environment: str
+    target_environment: str
+    server_id: UUID
+    server_name: str
+    credentials_cloned: bool = False
+
+    model_config = ConfigDict(from_attributes=True)

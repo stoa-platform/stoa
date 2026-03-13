@@ -49,6 +49,13 @@ async def get_current_user(
     if operator_key and operator_key in settings.gateway_api_keys_list:
         logger.info("Operator authenticated via X-Operator-Key")
         bind_request_context(user_id="stoa-operator")
+        # Store on request.state for audit middleware (CAB-1793)
+        request.state.user = {
+            "sub": "stoa-operator",
+            "email": "",
+            "name": "stoa-operator",
+            "tenant_id": None,
+        }
         return User(
             id="stoa-operator",
             email="",
@@ -210,6 +217,14 @@ async def get_current_user(
 
         # Bind user context for all subsequent logs in this request
         bind_request_context(user_id=user_id, tenant_id=tenant_id)
+
+        # Store user info on request.state for audit middleware (CAB-1793)
+        request.state.user = {
+            "sub": user_id,
+            "email": email,
+            "name": username,
+            "tenant_id": tenant_id,
+        }
 
         if not user_id:
             logger.error(

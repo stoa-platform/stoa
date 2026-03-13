@@ -23,6 +23,7 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write  # GitHub OIDC → Vault JWT auth
 
 jobs:
   deploy:
@@ -48,13 +49,22 @@ jobs:
         with:
           sparse-checkout: scripts/ai-ops
 
+      - name: Fetch SSH key from Vault
+        if: matrix.worker != ''
+        uses: hashicorp/vault-action@v3
+        with:
+          url: https://hcvault.gostoa.dev
+          method: jwt
+          role: gha-stoa-deploy
+          jwtGithubAudience: https://github.com/stoa-platform/stoa
+          secrets: |
+            stoa/data/ssh/hegemon-workers private_key_b64 | SSH_KEY_B64
+
       - name: Install SSH key
         if: matrix.worker != ''
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.HEGEMON_SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printenv SSH_PRIVATE_KEY > ~/.ssh/id_ed25519
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf "Host worker\n  HostName %s\n  User hegemon\n  IdentityFile ~/.ssh/id_ed25519\n  StrictHostKeyChecking accept-new\n  ConnectTimeout 10\n" "${{ matrix.worker }}" > ~/.ssh/config
           chmod 600 ~/.ssh/config

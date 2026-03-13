@@ -19,7 +19,7 @@ import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { ConnectorTemplate } from '../../types';
 
 const categoryLabels: Record<string, string> = {
-  project_management: 'Project Management',
+  'project-management': 'Project Management',
   development: 'Development',
   communication: 'Communication',
   monitoring: 'Monitoring',

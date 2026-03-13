@@ -162,9 +162,8 @@ async def create_api(
     - Max 3 APIs (configurable via tenant.settings.max_apis)
     - 402 after 30-day trial expires
     """
-    _require_git_service()
-
-    # Trial limits enforcement (CAB-1549)
+    # Trial limits enforcement (CAB-1549) — checked before git_service guard
+    # so expired/overlimit tenants get proper 402/429 instead of 503
     from ..routers.tenants import get_tenant_limits
     from ..services.trial_service import check_trial_expiry
 
@@ -177,6 +176,8 @@ async def create_api(
         current_apis = await git_service.list_apis(tenant_id)
         if len(current_apis) >= max_apis:
             raise HTTPException(status_code=429, detail=f"API limit reached ({max_apis})")
+
+    _require_git_service()
 
     api_id = str(uuid.uuid4())
 

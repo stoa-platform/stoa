@@ -661,10 +661,12 @@ jobs:
 
             Steps:
             1. Create a feature branch: feat/issue-${{ github.event.issue.number }}-<slug>
-            2. Implement the code following the plan
-            3. Run quality gates (lint, test, format)
-            4. Commit with conventional messages
-            5. Create a PR referencing the issue
+            2. For feat() and fix() changes: write FAILING tests FIRST that assert the expected behavior
+            3. Implement the code to make the tests pass
+            4. For fix() PRs: include a regression test (test_regression_* / regression/*.test.ts / fn regression_*)
+            5. Run quality gates (lint, test, format)
+            6. Commit with conventional messages
+            7. Create a PR referencing the issue
 
             Use Ship/Show/Ask classification from the Council comment.
             If Ship or Show: merge after CI green.

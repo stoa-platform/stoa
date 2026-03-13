@@ -46,7 +46,7 @@ description: Core behavioral rules — Ship/Show/Ask, DoD, State Machine, Operat
 | 5 | Format clean | Zero diffs | `cargo fmt --check` / `npm run format:check` |
 | 6 | No secrets | Zero matches | `gitleaks detect --no-git` on changed files |
 | 7 | PR created | PR URL exists | `gh pr view` |
-| 8 | CI green | 3 required checks pass | `gh pr checks` |
+| 8 | CI green | 4 required checks pass | `gh pr checks` |
 | 9 | State files updated | `memory.md` reflects changes | Manual check |
 | 10 | Session logged | SESSION-START exists in operations.log | `tail -20 operations.log` |
 

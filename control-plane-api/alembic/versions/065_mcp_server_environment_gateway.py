@@ -13,7 +13,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "065_mcp_server_environment_gateway"
-down_revision = "064_create_tenant_cas_table"
+down_revision = "064"
 branch_labels = None
 depends_on = None
 

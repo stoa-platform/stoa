@@ -1494,6 +1494,7 @@ export interface ConnectorTemplate {
   is_connected: boolean;
   connected_server_id?: string;
   connection_health?: string;
+  connected_environment?: string;
   needs_setup: boolean;
 }
 
@@ -1514,6 +1515,15 @@ export interface CallbackResponse {
   slug: string;
   tools_sync_triggered: boolean;
   redirect_url?: string;
+}
+
+export interface PromoteResponse {
+  slug: string;
+  source_environment: string;
+  target_environment: string;
+  server_id: string;
+  server_name: string;
+  credentials_cloned: boolean;
 }
 
 // ============== Subscription Management (CAB-1635) ==============

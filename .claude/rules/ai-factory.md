@@ -83,16 +83,18 @@ Every implementation plan MUST follow this structure:
 - **P1**: security-reviewer → test-writer → k8s-ops (sequential pipeline)
 - **P2** (`/parallel-review`): all 3 in parallel → synthesize → Go/Fix/Redo verdict
 
-### Pattern 3: Feature Development
-`[Inline] Plan → Branch → Code → [test-writer] Tests → [security-reviewer] Review → Quality gate → PR → CI → Merge → CD verify → State files`
+### Pattern 3: Feature Development (test-first DEFAULT for feat/fix)
+`[Inline] Plan → Branch → [test-writer] Failing tests → Implement to pass → [security-reviewer] Review → Quality gate → PR → CI → Merge → CD verify → State files`
+
+**Test-first is the default** for all `feat()` and `fix()` tickets. Write failing tests FIRST, then implement to make them pass. This ensures every change has test coverage from the start and prevents regressions. Pattern 5 (code-first) remains available for `refactor()`, `chore()`, `docs()`, `style()`.
 
 ### Pattern 4: Agent Teams (opt-in, experimental)
 Activation: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Prereq: `tmux`. Max 3 teammates (Sonnet), lead (Opus). Only for multi-component independent scopes >= 300 LOC. Must write `.claude/claims/` files (Claim File Bridge). See `phase-ownership.md`.
 
 ### Pattern 5-7: CI-first / Content compliance / Spec-driven
-- **P5**: Branch → code → pre-commit checklist → tests → security → merge → CD verify
+- **P5** (code-first): Branch → code → pre-commit checklist → tests → security → merge → CD verify. **Only for refactor/chore/docs/style** — never for feat/fix.
 - **P6**: docs-writer → content-reviewer → security-reviewer → corrections → PR
-- **P7** (Osmani): Plan → test-writer (failing tests first) → implement → security → merge
+- **P7** (Osmani): Plan → test-writer (failing tests first) → implement → security → merge. **Merged into Pattern 3 as default behavior.**
 
 ### Pattern 8-9: Decompose + Phase Ownership
 - **P8** (`/decompose`): MEGA → N component sub-issues on Linear → N parallel instances/worktrees

@@ -55,6 +55,9 @@ def _mock_server(**overrides):
         "last_sync_at": None,
         "sync_error": None,
         "tenant_id": "acme",
+        "environment": "dev",
+        "gateway_instance_id": None,
+        "tools_count": 0,
         "tools": [],
         "credential_vault_path": None,
         "created_at": datetime(2026, 2, 1, tzinfo=UTC),
@@ -466,13 +469,16 @@ class TestVaultCredentials:
 
         assert response.status_code == 201
 
-    def test_create_server_vault_failure_500(self, app_with_cpi_admin, mock_db_session):
-        """Vault failure during create returns 500."""
+    def test_create_server_vault_failure_graceful(self, app_with_cpi_admin, mock_db_session):
+        """Vault failure during create still creates server (graceful degradation)."""
+        mock_srv = _mock_server()
+
         with (
             patch(REPO_PATH) as MockRepo,
             patch(VAULT_PATH) as MockVault,
         ):
             MockRepo.return_value.get_by_name = AsyncMock(return_value=None)
+            MockRepo.return_value.create = AsyncMock(return_value=mock_srv)
             MockVault.return_value.store_credential = AsyncMock(side_effect=Exception("vault unavailable"))
 
             with TestClient(app_with_cpi_admin) as client:
@@ -487,8 +493,7 @@ class TestVaultCredentials:
                     },
                 )
 
-        assert response.status_code == 500
-        assert "credentials" in response.json()["detail"].lower()
+        assert response.status_code == 201
 
     def test_update_server_with_vault_credentials(self, app_with_cpi_admin, mock_db_session):
         """Update server stores new credentials in vault."""
@@ -511,8 +516,8 @@ class TestVaultCredentials:
 
         assert response.status_code == 200
 
-    def test_update_server_vault_failure_500(self, app_with_cpi_admin, mock_db_session):
-        """Vault failure during update returns 500."""
+    def test_update_server_vault_failure_graceful(self, app_with_cpi_admin, mock_db_session):
+        """Vault failure during update still updates server (graceful degradation)."""
         server_id = uuid4()
         mock_srv = _mock_server(id=server_id)
 
@@ -521,6 +526,7 @@ class TestVaultCredentials:
             patch(VAULT_PATH) as MockVault,
         ):
             MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+            MockRepo.return_value.update = AsyncMock(return_value=mock_srv)
             MockVault.return_value.store_credential = AsyncMock(side_effect=Exception("vault down"))
 
             with TestClient(app_with_cpi_admin) as client:
@@ -529,8 +535,7 @@ class TestVaultCredentials:
                     json={"credentials": {"bearer_token": "secret"}},
                 )
 
-        assert response.status_code == 500
-        assert "credentials" in response.json()["detail"].lower()
+        assert response.status_code == 200
 
     def test_delete_server_with_vault_cleanup(self, app_with_cpi_admin, mock_db_session):
         """Delete server cleans up vault credentials."""
@@ -603,8 +608,8 @@ class TestVaultCredentials:
         assert response.status_code == 200
         assert response.json()["success"] is True
 
-    def test_test_connection_vault_failure_returns_error(self, app_with_cpi_admin, mock_db_session):
-        """Vault failure during test-connection returns error without 500."""
+    def test_test_connection_vault_failure_continues_without_creds(self, app_with_cpi_admin, mock_db_session):
+        """Vault failure during test-connection proceeds without credentials (graceful degradation)."""
         server_id = uuid4()
         auth_mock = MagicMock()
         auth_mock.value = "bearer_token"
@@ -614,12 +619,22 @@ class TestVaultCredentials:
             auth_type=auth_mock,
         )
 
+        mock_result = MagicMock()
+        mock_result.success = False
+        mock_result.latency_ms = 100
+        mock_result.error = "Unauthorized"
+        mock_result.server_info = None
+        mock_result.tools_discovered = None
+
         with (
             patch(REPO_PATH) as MockRepo,
             patch(VAULT_PATH) as MockVault,
+            patch(MCP_CLIENT_PATH) as MockMCPClient,
         ):
             MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+            MockRepo.return_value.update_health_status = AsyncMock()
             MockVault.return_value.retrieve_credential = AsyncMock(side_effect=Exception("vault down"))
+            MockMCPClient.return_value.test_connection = AsyncMock(return_value=mock_result)
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(f"{BASE}/{server_id}/test-connection")
@@ -627,10 +642,9 @@ class TestVaultCredentials:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
-        assert "credentials" in data["error"].lower()
 
-    def test_sync_tools_vault_failure_500(self, app_with_cpi_admin, mock_db_session):
-        """Vault failure during sync-tools returns 500."""
+    def test_sync_tools_vault_failure_continues_without_creds(self, app_with_cpi_admin, mock_db_session):
+        """Vault failure during sync-tools proceeds without credentials (graceful degradation)."""
         server_id = uuid4()
         auth_mock = MagicMock()
         auth_mock.value = "bearer_token"
@@ -638,19 +652,29 @@ class TestVaultCredentials:
             id=server_id,
             credential_vault_path="/v1/secret/data/srv",
             auth_type=auth_mock,
+            tools=[_mock_tool()],
         )
+        mock_srv_refreshed = _mock_server(id=server_id, tools=[_mock_tool()])
+
+        mock_discovered = MagicMock()
+        mock_discovered.name = "create_issue"
+        mock_discovered.description = "Create issue"
+        mock_discovered.input_schema = {"type": "object"}
 
         with (
             patch(REPO_PATH) as MockRepo,
             patch(VAULT_PATH) as MockVault,
+            patch(MCP_CLIENT_PATH) as MockMCPClient,
         ):
-            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+            MockRepo.return_value.get_by_id = AsyncMock(side_effect=[mock_srv, mock_srv_refreshed])
+            MockRepo.return_value.sync_tools = AsyncMock(return_value=(1, 0))
             MockVault.return_value.retrieve_credential = AsyncMock(side_effect=Exception("vault down"))
+            MockMCPClient.return_value.list_tools = AsyncMock(return_value=[mock_discovered])
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(f"{BASE}/{server_id}/sync-tools")
 
-        assert response.status_code == 500
+        assert response.status_code == 200
 
 
 # ============ Tenant Access Denied ============

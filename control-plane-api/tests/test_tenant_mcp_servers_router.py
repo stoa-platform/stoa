@@ -10,7 +10,6 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-
 # ============== Helpers ==============
 
 
@@ -21,7 +20,7 @@ def _mock_server(**kwargs):
     srv.name = kwargs.get("name", "acme--my-linear")
     srv.display_name = kwargs.get("display_name", "My Linear")
     srv.description = kwargs.get("description", "Linear integration")
-    srv.icon = kwargs.get("icon", None)
+    srv.icon = kwargs.get("icon")
     srv.base_url = kwargs.get("base_url", "https://mcp.linear.app/sse")
     srv.transport = MagicMock(value=kwargs.get("transport", "sse"))
     srv.auth_type = MagicMock(value=kwargs.get("auth_type", "bearer_token"))
@@ -29,10 +28,13 @@ def _mock_server(**kwargs):
     srv.tool_prefix = kwargs.get("tool_prefix", "linear")
     srv.enabled = kwargs.get("enabled", True)
     srv.health_status = MagicMock(value=kwargs.get("health_status", "unknown"))
-    srv.last_health_check = kwargs.get("last_health_check", None)
-    srv.last_sync_at = kwargs.get("last_sync_at", None)
-    srv.sync_error = kwargs.get("sync_error", None)
+    srv.last_health_check = kwargs.get("last_health_check")
+    srv.last_sync_at = kwargs.get("last_sync_at")
+    srv.sync_error = kwargs.get("sync_error")
     srv.tenant_id = kwargs.get("tenant_id", "acme")
+    srv.environment = kwargs.get("environment", "dev")
+    srv.gateway_instance_id = kwargs.get("gateway_instance_id")
+    srv.tools_count = kwargs.get("tools_count", 0)
     srv.created_at = kwargs.get("created_at", datetime.utcnow())
     srv.updated_at = kwargs.get("updated_at", datetime.utcnow())
     srv.created_by = kwargs.get("created_by", "tenant-admin-user-id")
@@ -62,7 +64,6 @@ def app_with_devops(app, mock_db_session):
     """App with devops user auth for tenant 'acme'."""
     from src.auth.dependencies import get_current_user
     from src.database import get_db
-
     from tests.conftest import User
 
     devops_user = User(
@@ -92,7 +93,6 @@ def app_with_viewer(app, mock_db_session):
     """App with viewer user auth for tenant 'acme'."""
     from src.auth.dependencies import get_current_user
     from src.database import get_db
-
     from tests.conftest import User
 
     viewer_user = User(

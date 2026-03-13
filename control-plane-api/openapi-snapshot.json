@@ -2,6 +2,16 @@
   "openapi": "3.1.0",
   "info": {
     "title": "STOA Control-Plane API",
+    "description": "\n## STOA Platform API\n\n**The European Agent Gateway** \u2014 AI-Native API Gateway for modern enterprises.\n\n### Key Features\n\n- **MCP Server Subscriptions** \u2014 Subscribe to AI tools and manage API keys\n- **Tools Catalog** \u2014 Browse and discover MCP tools with role-based visibility\n- **Usage Tracking** \u2014 Monitor your API consumption in real-time\n- **Multi-tenant Management** \u2014 Create and manage isolated API tenants\n- **GitOps Integration** \u2014 Automatic sync with GitLab repositories\n- **Event-Driven Architecture** \u2014 Kafka/Redpanda message bus for async operations\n- **Pipeline Monitoring** \u2014 End-to-end tracing of deployments\n- **RBAC** \u2014 Role-based access control via Keycloak\n\n### Quick Start\n\n1. **Get a token** from Keycloak (`POST /realms/stoa/protocol/openid-connect/token`)\n2. **Browse MCP servers** (`GET /v1/mcp/servers`)\n3. **Subscribe to a server** (`POST /v1/mcp/subscriptions`)\n4. **Use your API key** with MCP Gateway (`https://mcp.gostoa.dev`)\n\n### Authentication\n\nAll endpoints require a valid JWT token from Keycloak (realm: `stoa`).\nInclude the token in the `Authorization: Bearer <token>` header.\n\n```\nAuthorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...\n```\n\n### Environments\n\n| Environment | Base URL |\n|-------------|----------|\n| Production | `https://api.gostoa.dev` |\n| Via Gateway | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` |\n\n### Changelog\n\n#### v2.1.0 (Current)\n- Added MCP Server Subscriptions with admin approval workflow\n- Added API key rotation with grace period support\n- Added Dashboard home page stats (`/v1/dashboard`)\n- Added Service Accounts for M2M authentication\n\n#### v2.0.0\n- Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring\n- Added GitLab Webhook integration (`/webhooks/gitlab`)\n- Added Kafka integration for event-driven deployments\n- Added Kafka integration for event-driven gateway orchestration\n\n#### v1.0.0\n- Initial release with tenant, API, and application management\n",
+    "contact": {
+      "name": "CAB Ing\u00e9nierie",
+      "url": "https://gostoa.dev/",
+      "email": "support@gostoa.dev"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
     "version": "2.0.0"
   },
   "paths": {
@@ -10333,7 +10343,7 @@
           "External MCP Servers - Admin"
         ],
         "summary": "List Servers",
-        "description": "List all external MCP servers.\n\nCPI admins see all servers.\nTenant admins see platform-wide servers and their tenant's servers.",
+        "description": "List all external MCP servers.\n\nCPI admins see all servers.\nTenant admins see platform-wide servers and their tenant's servers.\nSupports environment filtering for multi-dataplane deployments.",
         "operationId": "list_servers",
         "security": [
           {
@@ -10352,6 +10362,24 @@
               "title": "Enabled Only"
             },
             "description": "Filter to enabled servers only"
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev/staging/production)",
+              "title": "Environment"
+            },
+            "description": "Filter by environment (dev/staging/production)"
           },
           {
             "name": "page",
@@ -11303,6 +11331,24 @@
               "type": "string",
               "title": "Tenant Id"
             }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev/staging/production)",
+              "title": "Environment"
+            },
+            "description": "Filter by environment (dev/staging/production)"
           },
           {
             "name": "page",
@@ -20980,6 +21026,72 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Test Tenant Isolation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/users/{user_id}/pii": {
+      "delete": {
+        "tags": [
+          "Audit"
+        ],
+        "summary": "Erase User Pii",
+        "description": "GDPR Article 17 \u2014 Right to Erasure (CAB-1794).\n\nPseudonymizes PII in PostgreSQL audit records and deletes matching\ndocuments from OpenSearch for the specified user.\n\nRequires cpi-admin role. Creates a meta-audit record of the erasure.",
+        "operationId": "erase_user_pii",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scope erasure to a specific tenant",
+              "title": "Tenant Id"
+            },
+            "description": "Scope erasure to a specific tenant"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiErasureResponse"
                 }
               }
             }
@@ -33496,7 +33608,7 @@
                 "type": "null"
               }
             ],
-            "description": "Credentials (stored in Vault)"
+            "description": "Credentials (stored securely)"
           },
           "tool_prefix": {
             "anyOf": [
@@ -33523,6 +33635,26 @@
             ],
             "title": "Tenant Id",
             "description": "Tenant ID (null = platform-wide)"
+          },
+          "environment": {
+            "type": "string",
+            "maxLength": 50,
+            "title": "Environment",
+            "description": "Target environment (dev/staging/production)",
+            "default": "dev"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id",
+            "description": "Bound gateway instance for dataplane routing"
           }
         },
         "type": "object",
@@ -33541,6 +33673,7 @@
           },
           "description": "Linear issue tracking integration",
           "display_name": "Linear",
+          "environment": "dev",
           "name": "linear",
           "tool_prefix": "linear",
           "transport": "sse"
@@ -33659,6 +33792,30 @@
             ],
             "title": "Tenant Id"
           },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "default": "dev"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
+          },
           "tools_count": {
             "type": "integer",
             "title": "Tools Count",
@@ -33762,6 +33919,30 @@
               }
             ],
             "title": "Tenant Id"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "default": "dev"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
           },
           "tools": {
             "items": {
@@ -33927,6 +34108,30 @@
               }
             ],
             "title": "Tenant Id"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "default": "dev"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
           },
           "tools_count": {
             "type": "integer",
@@ -34134,7 +34339,7 @@
                 "type": "null"
               }
             ],
-            "description": "New credentials (updates Vault)"
+            "description": "New credentials (updates securely)"
           },
           "tool_prefix": {
             "anyOf": [
@@ -34158,6 +34363,32 @@
               }
             ],
             "title": "Enabled"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "Target environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id",
+            "description": "Bound gateway instance"
           }
         },
         "type": "object",
@@ -39992,6 +40223,35 @@
         ],
         "title": "PersonalTenantResponse",
         "description": "Response for personal tenant provisioning."
+      },
+      "PiiErasureResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "pg_records_affected": {
+            "type": "integer",
+            "title": "Pg Records Affected"
+          },
+          "os_records_deleted": {
+            "type": "integer",
+            "title": "Os Records Deleted"
+          },
+          "pseudo_id": {
+            "type": "string",
+            "title": "Pseudo Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "pg_records_affected",
+          "os_records_deleted",
+          "pseudo_id"
+        ],
+        "title": "PiiErasureResponse",
+        "description": "Response for GDPR Article 17 PII erasure (CAB-1794)."
       },
       "PlanCreate": {
         "properties": {
@@ -46995,7 +47255,7 @@
                 "type": "null"
               }
             ],
-            "description": "Credentials (stored in Vault)"
+            "description": "Credentials (stored securely)"
           },
           "tool_prefix": {
             "anyOf": [
@@ -47009,6 +47269,26 @@
             ],
             "title": "Tool Prefix",
             "description": "Prefix for tool names"
+          },
+          "environment": {
+            "type": "string",
+            "maxLength": 50,
+            "title": "Environment",
+            "description": "Target environment (dev/staging/production)",
+            "default": "dev"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id",
+            "description": "Bound gateway instance for dataplane routing"
           }
         },
         "type": "object",
@@ -47026,6 +47306,7 @@
           },
           "description": "Team's Linear integration",
           "display_name": "My Linear",
+          "environment": "dev",
           "tool_prefix": "linear",
           "transport": "sse"
         }
@@ -47136,6 +47417,30 @@
               }
             ],
             "title": "Sync Error"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "default": "dev"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
           },
           "tools_count": {
             "type": "integer",
@@ -47314,6 +47619,30 @@
             ],
             "title": "Sync Error"
           },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "default": "dev"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
+          },
           "tools_count": {
             "type": "integer",
             "title": "Tools Count",
@@ -47422,7 +47751,7 @@
                 "type": "null"
               }
             ],
-            "description": "New credentials (updates Vault)"
+            "description": "New credentials (stored securely)"
           },
           "tool_prefix": {
             "anyOf": [
@@ -47446,6 +47775,32 @@
               }
             ],
             "title": "Enabled"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "Target environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id",
+            "description": "Bound gateway instance"
           }
         },
         "type": "object",
@@ -50694,5 +51049,151 @@
         "scheme": "bearer"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Tenants",
+      "description": "Tenant management operations"
+    },
+    {
+      "name": "APIs",
+      "description": "API lifecycle management"
+    },
+    {
+      "name": "Applications",
+      "description": "Application and subscription management"
+    },
+    {
+      "name": "Deployments",
+      "description": "Deployment operations and status"
+    },
+    {
+      "name": "Git",
+      "description": "GitLab integration (commits, MRs, files) \u2014 Advanced"
+    },
+    {
+      "name": "Events",
+      "description": "Real-time event streaming (SSE)"
+    },
+    {
+      "name": "Webhooks",
+      "description": "GitLab webhook handlers for GitOps"
+    },
+    {
+      "name": "Traces",
+      "description": "Pipeline monitoring and tracing"
+    },
+    {
+      "name": "Gateway",
+      "description": "webMethods Gateway administration via OIDC proxy"
+    },
+    {
+      "name": "Subscriptions",
+      "description": "API subscription and API key management"
+    },
+    {
+      "name": "Tenant Webhooks",
+      "description": "Webhook notifications for subscription events (CAB-315)"
+    },
+    {
+      "name": "certificates",
+      "description": "Certificate validation for mTLS subscriptions (CAB-313)"
+    },
+    {
+      "name": "Search",
+      "description": "Full-text search across tools and APIs (CAB-307)"
+    },
+    {
+      "name": "Usage",
+      "description": "Usage dashboard for API consumers (CAB-280)"
+    },
+    {
+      "name": "Dashboard",
+      "description": "Home dashboard stats and activity (CAB-299)"
+    },
+    {
+      "name": "Service Accounts",
+      "description": "OAuth2 Service Accounts for MCP access (CAB-296)"
+    },
+    {
+      "name": "Contracts",
+      "description": "Universal API Contracts with multi-protocol bindings (UAC)"
+    },
+    {
+      "name": "MCP Servers",
+      "description": "Browse and discover MCP servers"
+    },
+    {
+      "name": "MCP Subscriptions",
+      "description": "Subscribe to MCP servers and manage API keys"
+    },
+    {
+      "name": "MCP Validation",
+      "description": "API key validation for MCP Gateway (internal)"
+    },
+    {
+      "name": "MCP Admin - Subscriptions",
+      "description": "Admin approval workflow for MCP subscriptions"
+    },
+    {
+      "name": "MCP Admin - Servers",
+      "description": "MCP server management (admin)"
+    },
+    {
+      "name": "Portal",
+      "description": "Developer Portal API catalog and MCP server browsing"
+    },
+    {
+      "name": "MCP GitOps",
+      "description": "GitOps synchronization for MCP servers"
+    },
+    {
+      "name": "MCP Tools",
+      "description": "MCP tools discovery and invocation (proxy to MCP Gateway)"
+    },
+    {
+      "name": "Platform",
+      "description": "Platform status and GitOps observability (CAB-654)"
+    },
+    {
+      "name": "Gateways",
+      "description": "Gateway instance management (multi-gateway orchestration)"
+    },
+    {
+      "name": "Gateway Deployments",
+      "description": "API deployment to gateways (sync engine)"
+    },
+    {
+      "name": "Gateway Policies",
+      "description": "Gateway-agnostic policy management"
+    },
+    {
+      "name": "Gateway Observability",
+      "description": "Multi-gateway health and sync metrics"
+    },
+    {
+      "name": "Gateway Internal",
+      "description": "Internal gateway auto-registration (ADR-028)"
+    },
+    {
+      "name": "Consumers",
+      "description": "Consumer onboarding and lifecycle management (CAB-1121)"
+    },
+    {
+      "name": "Plans",
+      "description": "Subscription plan management with quotas (CAB-1121)"
+    },
+    {
+      "name": "Quotas",
+      "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)"
+    },
+    {
+      "name": "MCP Discovery",
+      "description": "Gateway discovery for UAC-generated MCP tools (CAB-605)"
+    },
+    {
+      "name": "Data Governance",
+      "description": "Source-of-truth classification, drift detection, reconciliation (CAB-1324)"
+    }
+  ]
 }

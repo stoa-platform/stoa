@@ -214,6 +214,7 @@ class ConnectorOAuthService:
             client_secret=client_secret,
             redirect_uri=redirect_uri,
             code_verifier=code_verifier,
+            slug=template.slug,
         )
 
         # Create ExternalMCPServer
@@ -431,25 +432,42 @@ class ConnectorOAuthService:
         client_secret: str,
         redirect_uri: str,
         code_verifier: str | None = None,
+        slug: str = "",
     ) -> dict[str, Any]:
-        """Exchange an authorization code for access/refresh tokens."""
-        data: dict[str, str] = {
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": client_id,
-        }
-        if client_secret:
-            data["client_secret"] = client_secret
-        if code_verifier:
-            data["code_verifier"] = code_verifier
+        """Exchange an authorization code for access/refresh tokens.
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                token_url,
-                data=data,
-                headers={"Accept": "application/json"},
-            )
+        Most providers accept standard form POST with client_id/client_secret in the body.
+        Notion requires HTTP Basic auth + JSON body (their API rejects form-encoded).
+        """
+        headers: dict[str, str] = {"Accept": "application/json"}
+
+        # Notion uses Basic auth + JSON body (not standard form POST)
+        if slug == "notion":
+            import base64 as b64
+
+            credentials = b64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+            headers["Authorization"] = f"Basic {credentials}"
+            headers["Content-Type"] = "application/json"
+            json_body: dict[str, str] = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+            }
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(token_url, json=json_body, headers=headers)
+        else:
+            data: dict[str, str] = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": client_id,
+            }
+            if client_secret:
+                data["client_secret"] = client_secret
+            if code_verifier:
+                data["code_verifier"] = code_verifier
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(token_url, data=data, headers=headers)
 
         if response.status_code != 200:
             logger.error(

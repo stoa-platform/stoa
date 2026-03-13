@@ -45,7 +45,7 @@ const mockConnectors = [
     display_name: 'Linear',
     description: 'Project management for modern teams',
     icon_url: 'https://example.com/linear.png',
-    category: 'project_management',
+    category: 'project-management',
     mcp_base_url: 'https://mcp.linear.app',
     transport: 'sse',
     oauth_scopes: 'read write',

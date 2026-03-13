@@ -46,6 +46,10 @@ const oidcConfig = {
     // Remove OIDC params from URL after successful login
     window.history.replaceState({}, document.title, window.location.pathname);
   },
+  // Skip automatic signin callback processing on MCP connector OAuth callback.
+  // Without this, oidc-client-ts detects the provider's code/state params and tries
+  // to exchange them with Keycloak (which fails, causing a redirect to login).
+  skipSigninCallback: window.location.pathname.startsWith('/mcp-connectors/callback'),
 };
 
 function render() {

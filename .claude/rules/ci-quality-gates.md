@@ -51,6 +51,9 @@ Each workflow only triggers on its own component paths:
 2. **SBOM Generation** — CycloneDX + SPDX
 3. **Verify Signed Commits** — signature check
 
+1 required check from `regression-guard.yml`:
+4. **Regression Test Guard** — blocks `fix()` PRs without regression tests (bypass: `skip-regression` label)
+
 > `security-scan.yml` runs the heavy jobs (SAST, dependency audit, secrets, container scan) in parallel but is NOT required for merge.
 
 ### Post-merge verification
@@ -151,9 +154,9 @@ cargo clippy --all-targets --all-features -- \
   -W clippy::panic
 ```
 
-## Regression Guard (regression-guard.yml)
+## Regression Guard (regression-guard.yml) — REQUIRED CHECK
 
-Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and checks for regression tests.
+Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and **blocks merge** if no regression test is present.
 
 | Detection | Source |
 |-----------|--------|
@@ -167,7 +170,12 @@ Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and che
 | `fn regression_*` functions in `.rs` diff | Rust |
 | `@regression` tag in `.feature` diff | E2E (Playwright BDD) |
 
-**Mode**: Warning (non-blocking annotation). Promotes to blocking after stabilization.
+**Mode**: **Blocking** (required check, exit 1 on missing regression test).
+
+**Bypasses**:
+- `skip-regression` label on PR — for documented hotfixes where regression test is impractical
+- Docs-only fix PRs (only `.md`, `.yml`, `.yaml`, `.json`, `.toml`, `.claude/`, `.github/` changed) — auto-pass
+- Non-fix PRs (`feat()`, `chore()`, `refactor()`, etc.) — auto-pass
 
 ## Docker Build
 

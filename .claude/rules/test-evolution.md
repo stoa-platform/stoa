@@ -58,7 +58,7 @@ Every `fix()` PR MUST include a dedicated regression test that reproduces the or
 
 Each regression test MUST document: PR number, ticket ID, root cause, and the invariant being protected.
 
-CI enforces this via the `regression-guard.yml` workflow (warning mode — non-blocking).
+CI enforces this via the `regression-guard.yml` workflow (**blocking** — required check). Bypass: `skip-regression` label for documented hotfixes.
 
 ### Detection
 When reviewing a PR, check:

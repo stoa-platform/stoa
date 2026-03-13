@@ -225,7 +225,7 @@ async def create_api(
         logger.info(f"Created API {api.name} for tenant {tenant_id} by {user.username}")
 
         return APIResponse(
-            id=api_id,
+            id=api.name,
             tenant_id=tenant_id,
             name=api.name,
             display_name=api.display_name,

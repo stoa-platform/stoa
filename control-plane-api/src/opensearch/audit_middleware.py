@@ -445,6 +445,22 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "tenant_id": api_key.get("tenant_id"),
                 }
             )
+        elif request.headers.get("X-Gateway-Key"):
+            actor.update(
+                {
+                    "id": "stoa-gateway",
+                    "name": "stoa-gateway",
+                    "type": "service",
+                }
+            )
+        elif request.url.path.startswith("/v1/internal/"):
+            actor.update(
+                {
+                    "id": "internal-service",
+                    "name": "internal-service",
+                    "type": "service",
+                }
+            )
         else:
             actor["type"] = "anonymous"
 

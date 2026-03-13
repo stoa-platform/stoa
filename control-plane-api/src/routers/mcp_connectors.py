@@ -227,6 +227,7 @@ async def authorize_connector(
             tenant_id=effective_tenant_id,
             redirect_after=request.redirect_after,
             redirect_uri=redirect_uri,
+            client_secret=request.client_secret,
         )
         await db.commit()
     except ConnectorOAuthError as e:

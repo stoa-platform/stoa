@@ -3281,6 +3281,17 @@
             "title": "Category",
             "type": "string"
           },
+          "connected_environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected Environment"
+          },
           "connected_server_id": {
             "anyOf": [
               {
@@ -15932,6 +15943,79 @@
           "page_size"
         ],
         "title": "PortalMCPServersResponse",
+        "type": "object"
+      },
+      "PromoteRequest": {
+        "description": "Request to promote a connector to a target environment.",
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "Required for high-risk connectors promoting to production",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "target_environment": {
+            "description": "Target environment: dev, staging, production",
+            "title": "Target Environment",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tenant to promote for (cpi-admin only)",
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "target_environment"
+        ],
+        "title": "PromoteRequest",
+        "type": "object"
+      },
+      "PromoteResponse": {
+        "description": "Response after promoting a connector to a target environment.",
+        "properties": {
+          "credentials_cloned": {
+            "default": false,
+            "title": "Credentials Cloned",
+            "type": "boolean"
+          },
+          "server_id": {
+            "format": "uuid",
+            "title": "Server Id",
+            "type": "string"
+          },
+          "server_name": {
+            "title": "Server Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "source_environment": {
+            "title": "Source Environment",
+            "type": "string"
+          },
+          "target_environment": {
+            "title": "Target Environment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "source_environment",
+          "target_environment",
+          "server_id",
+          "server_name"
+        ],
+        "title": "PromoteResponse",
         "type": "object"
       },
       "PromotionCreate": {
@@ -28950,6 +29034,24 @@
               "description": "Tenant to check connection status for",
               "title": "Tenant Id"
             }
+          },
+          {
+            "description": "Filter by environment (dev, staging, production)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev, staging, production)",
+              "title": "Environment"
+            }
           }
         ],
         "responses": {
@@ -29057,6 +29159,24 @@
               ],
               "description": "Tenant to check connection status for",
               "title": "Tenant Id"
+            }
+          },
+          {
+            "description": "Filter by environment (dev, staging, production)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev, staging, production)",
+              "title": "Environment"
             }
           }
         ],
@@ -29212,6 +29332,64 @@
           }
         ],
         "summary": "Disconnect Connector",
+        "tags": [
+          "MCP Connectors - Catalog"
+        ]
+      }
+    },
+    "/v1/admin/mcp-connectors/{slug}/promote": {
+      "post": {
+        "description": "Promote a connector from its current environment to a target environment.\n\nClones the server record and Vault credentials. Idempotent \u2014 re-promoting\nupdates the existing target record.\n\nHigh-risk connectors (stripe, cloudflare) require ``confirm: true`` for production.",
+        "operationId": "promote_connector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Promote Connector",
         "tags": [
           "MCP Connectors - Catalog"
         ]

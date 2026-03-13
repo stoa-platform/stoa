@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Deploy HashiCorp Vault to OVH VPS (hcv.gostoa.dev)
+# Deploy HashiCorp Vault to OVH VPS (hcvault.gostoa.dev)
 # Phase 0 of Unified Secrets Management (CAB-1796)
 #
 # Prerequisites:
 #   - SSH key: ~/.ssh/id_ed25519_stoa
-#   - DNS: hcv.gostoa.dev → 51.255.193.129 (Cloudflare, DNS-only)
+#   - DNS: hcvault.gostoa.dev → 51.255.193.129 (Cloudflare, DNS-only)
 #   - Docker + Docker Compose installed on VPS
 #   - Vault NOT yet initialized (first run) OR already running (update)
 #
@@ -16,7 +16,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSH_KEY=~/.ssh/id_ed25519_stoa
 VPS_IP="51.255.193.129"
-VPS_USER="root"
+VPS_USER="debian"
 REMOTE_DIR="/opt/vault"
 INIT_MODE=false
 
@@ -28,20 +28,20 @@ done
 
 echo "=== HashiCorp Vault Deploy ==="
 echo "Target: ${VPS_USER}@${VPS_IP} (spare-gra-vps)"
-echo "URL:    https://hcv.gostoa.dev"
+echo "URL:    https://hcvault.gostoa.dev"
 echo ""
 
 # Step 1: Ensure Docker is installed
 echo "[1/7] Checking Docker on VPS..."
 ssh -i "$SSH_KEY" "${VPS_USER}@${VPS_IP}" "docker --version && docker compose version" || {
   echo "Docker not found. Installing..."
-  ssh -i "$SSH_KEY" "${VPS_USER}@${VPS_IP}" "curl -fsSL https://get.docker.com | sh"
+  ssh -i "$SSH_KEY" "${VPS_USER}@${VPS_IP}" "curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker ${VPS_USER}"
   echo "Docker installed."
 }
 
 # Step 2: Create remote directories
 echo "[2/7] Creating remote directories..."
-ssh -i "$SSH_KEY" "${VPS_USER}@${VPS_IP}" "mkdir -p ${REMOTE_DIR}/config ${REMOTE_DIR}/policies"
+ssh -i "$SSH_KEY" "${VPS_USER}@${VPS_IP}" "sudo mkdir -p ${REMOTE_DIR}/config ${REMOTE_DIR}/policies && sudo chown -R \$(id -u):\$(id -g) ${REMOTE_DIR}"
 
 # Step 3: Copy files
 echo "[3/7] Copying configuration files..."
@@ -115,8 +115,8 @@ echo "  Status: $FINAL_STATUS"
 echo ""
 echo "=== Deploy Complete ==="
 echo ""
-echo "Vault: https://hcv.gostoa.dev"
-echo "UI:    https://hcv.gostoa.dev/ui/"
+echo "Vault: https://hcvault.gostoa.dev"
+echo "UI:    https://hcvault.gostoa.dev/ui/"
 echo ""
 if [ "$INIT_MODE" = true ]; then
   echo "CRITICAL: Back up init-keys.json from the VPS to a secure location!"
@@ -124,11 +124,11 @@ if [ "$INIT_MODE" = true ]; then
   echo ""
 fi
 echo "Next steps:"
-echo "  1. Create DNS: hcv.gostoa.dev → ${VPS_IP} (Cloudflare, DNS-only)"
+echo "  1. Create DNS: hcvault.gostoa.dev → ${VPS_IP} (Cloudflare, DNS-only)"
 echo "  2. First deploy: ./deploy.sh --init"
 echo "  3. Back up init-keys.json to Infisical (one-time)"
 echo "  4. Run migrate-to-vault.sh (Phase 1)"
 echo ""
 echo "Verify:"
-echo "  curl -s https://hcv.gostoa.dev/v1/sys/health | jq ."
+echo "  curl -s https://hcvault.gostoa.dev/v1/sys/health | jq ."
 echo "  ssh -i $SSH_KEY ${VPS_USER}@${VPS_IP} 'cd ${REMOTE_DIR} && docker compose logs --tail=20'"

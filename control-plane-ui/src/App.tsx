@@ -247,7 +247,6 @@ function ProtectedRoutes() {
                 <Route path="/errors" element={<ErrorSnapshots />} />
                 <Route path="/mcp-servers" element={<MCPServersUnified />} />
                 <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
-                <Route path="/mcp-connectors/callback" element={<ConnectorCallback />} />
                 <Route
                   path="/mcp-connectors"
                   element={<Navigate to="/mcp-servers?tab=catalog" replace />}
@@ -386,6 +385,17 @@ function App() {
             <AuthProvider>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                {/* MCP connector callback is outside ProtectedRoutes — the API
+                    callback endpoint uses CSRF state for security (no auth needed),
+                    and oidc-client-ts would intercept the code/state params. */}
+                <Route
+                  path="/mcp-connectors/callback"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <ConnectorCallback />
+                    </Suspense>
+                  }
+                />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>
             </AuthProvider>

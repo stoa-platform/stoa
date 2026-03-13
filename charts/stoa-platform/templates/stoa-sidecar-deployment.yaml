@@ -95,7 +95,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.stoaSidecar.secretName }}
-                  key: control-plane-api-key
+                  key: STOA_CONTROL_PLANE_API_KEY
                   optional: true
             {{- end }}
 
@@ -111,7 +111,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.stoaSidecar.secretName }}
-                  key: keycloak-client-secret
+                  key: STOA_KEYCLOAK_CLIENT_SECRET
                   optional: true
             {{- end }}
 

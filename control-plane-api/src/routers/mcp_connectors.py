@@ -68,12 +68,21 @@ def _build_redirect_uri() -> str:
     return f"https://console.{settings.BASE_DOMAIN}/mcp-connectors/callback"
 
 
-def _has_client_id(template) -> bool:  # type: ignore[no-untyped-def]
-    """Check if a connector template has a client_id configured (DB, env, or Vault)."""
+def _needs_manual_setup(template) -> bool:  # type: ignore[no-untyped-def]
+    """Check if a connector requires manual OAuth app setup.
+
+    Returns False (no setup needed) when:
+    - Provider supports DCR (oauth_registration_url is set), OR
+    - A client_id is already configured (DB column, env var)
+    """
+    # DCR-capable providers never need manual setup
+    if template.oauth_registration_url:
+        return False
+    # Already has a client_id from DB or env
     if template.oauth_client_id:
-        return True
+        return False
     env_key = f"MCP_OAUTH_{template.slug.upper()}_CLIENT_ID"
-    return bool(os.environ.get(env_key, ""))
+    return not os.environ.get(env_key, "")
 
 
 @router.get("", response_model=ConnectorCatalogResponse)
@@ -117,7 +126,7 @@ async def list_connectors(
                 is_connected=connected_info is not None,
                 connected_server_id=connected_info[0] if connected_info else None,
                 connection_health=connected_info[1] if connected_info else None,
-                needs_setup=not _has_client_id(t),
+                needs_setup=_needs_manual_setup(t),
             )
         )
 

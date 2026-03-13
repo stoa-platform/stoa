@@ -31,7 +31,7 @@ class ConnectorTemplateResponse(BaseModel):
     is_connected: bool = False
     connected_server_id: UUID | None = None
     connection_health: str | None = None
-    # True when OAuth client_id is not yet configured (UI should show setup dialog)
+    # True when provider requires manual OAuth app setup (no DCR, no client_id configured)
     needs_setup: bool = False
 
     model_config = ConfigDict(from_attributes=True)

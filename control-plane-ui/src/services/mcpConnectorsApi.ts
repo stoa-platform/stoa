@@ -26,7 +26,12 @@ class MCPConnectorsService {
    */
   async authorize(
     slug: string,
-    body: { tenant_id?: string; redirect_after?: string }
+    body: {
+      tenant_id?: string;
+      redirect_after?: string;
+      client_id?: string;
+      client_secret?: string;
+    }
   ): Promise<AuthorizeResponse> {
     const { data } = await apiService.post(`/v1/admin/mcp-connectors/${slug}/authorize`, body);
     return data;

@@ -1,0 +1,29 @@
+[Unit]
+Description=HashiCorp Vault Agent — Secret Template Renderer
+Documentation=https://developer.hashicorp.com/vault/docs/agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vault agent -config=/etc/vault-agent/config.hcl
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+KillMode=process
+KillSignal=SIGINT
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/secrets /tmp/vault-agent-token /etc/vault-agent
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vault-agent
+
+[Install]
+WantedBy=multi-user.target

@@ -34,6 +34,7 @@ class MCPConnectorTemplate(Base):
     oauth_token_url = Column(String(500), nullable=False)
     oauth_scopes = Column(String(500), nullable=True)
     oauth_pkce_required = Column(Boolean, nullable=False, default=False)
+    oauth_client_id = Column(String(255), nullable=True)  # Public OAuth app client_id (not a secret)
 
     # Metadata
     documentation_url = Column(String(500), nullable=True)

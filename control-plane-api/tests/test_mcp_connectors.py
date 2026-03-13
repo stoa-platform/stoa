@@ -46,6 +46,7 @@ def _mock_template(**overrides):
         "oauth_scopes": "read write",
         "oauth_pkce_required": True,
         "documentation_url": "https://developers.linear.app",
+        "oauth_client_id": "test-client-id",
         "is_featured": True,
         "enabled": True,
         "sort_order": 10,
@@ -662,20 +663,16 @@ class TestConnectorOAuthService:
             server_repo=server_repo,
         )
 
-        with patch.object(
-            service,
-            "_get_provider_credentials",
-            new=AsyncMock(return_value={"client_id": "test-client-id", "client_secret": "secret"}),
-        ):
-            url, state = asyncio.get_event_loop().run_until_complete(
-                service.initiate_authorize(
-                    template=template,
-                    user_id="user-1",
-                    tenant_id="acme",
-                    redirect_after="/connectors",
-                    redirect_uri="https://console.gostoa.dev/mcp-connectors/callback",
-                )
+        # client_id comes from template.oauth_client_id (set in _mock_template)
+        url, state = asyncio.get_event_loop().run_until_complete(
+            service.initiate_authorize(
+                template=template,
+                user_id="user-1",
+                tenant_id="acme",
+                redirect_after="/connectors",
+                redirect_uri="https://console.gostoa.dev/mcp-connectors/callback",
             )
+        )
 
         assert "linear.app/oauth/authorize" in url
         assert "client_id=test-client-id" in url
@@ -727,19 +724,16 @@ class TestConnectorOAuthService:
             server_repo=MagicMock(),
         )
 
-        with patch.object(
-            service,
-            "_get_provider_credentials",
-            new=AsyncMock(return_value={"client_id": "gh-id"}),
-        ):
-            url, _state = asyncio.get_event_loop().run_until_complete(
-                service.initiate_authorize(
-                    template=template,
-                    user_id="u",
-                    tenant_id="t",
-                    redirect_uri="https://example.com/callback",
-                )
+        # client_id comes from template.oauth_client_id
+        template.oauth_client_id = "gh-id"
+        url, _state = asyncio.get_event_loop().run_until_complete(
+            service.initiate_authorize(
+                template=template,
+                user_id="u",
+                tenant_id="t",
+                redirect_uri="https://example.com/callback",
             )
+        )
 
         assert "code_challenge" not in url
         assert "code_challenge_method" not in url

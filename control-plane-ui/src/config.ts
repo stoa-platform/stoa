@@ -134,7 +134,7 @@ export const config = {
     enableApplications: import.meta.env.VITE_ENABLE_APPLICATIONS !== 'false',
     enableAITools: import.meta.env.VITE_ENABLE_AI_TOOLS !== 'false',
     enableI18n: import.meta.env.VITE_ENABLE_I18N !== 'false',
-    enableMcpCatalog: import.meta.env.VITE_ENABLE_MCP_CATALOG === 'true',
+    enableMcpCatalog: import.meta.env.VITE_ENABLE_MCP_CATALOG !== 'false',
   },
 
   // UI Configuration

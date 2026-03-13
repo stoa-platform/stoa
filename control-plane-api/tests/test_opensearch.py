@@ -298,6 +298,7 @@ class TestAuditMiddleware:
         request = MagicMock()
         request.client.host = "10.0.0.1"
         request.headers = {"User-Agent": "test-agent"}
+        request.url.path = "/v1/tenants"
         # Simulate no auth — state exists but has no user or api_key attrs
         request.state = MagicMock(spec=[])
 
@@ -305,6 +306,40 @@ class TestAuditMiddleware:
 
         assert actor["type"] == "anonymous"
         assert "id" not in actor
+
+    @pytest.mark.asyncio
+    async def test_extract_actor_gateway_key(self):
+        """Actor identified as stoa-gateway when X-Gateway-Key present (CAB-1793)."""
+        from src.opensearch.audit_middleware import AuditMiddleware
+
+        middleware = AuditMiddleware(MagicMock(), MagicMock())
+        request = MagicMock()
+        request.client.host = "10.2.0.5"
+        request.headers = {"User-Agent": "stoa-gateway/0.1", "X-Gateway-Key": "secret"}
+        request.url.path = "/v1/internal/gateways/abc/heartbeat"
+        request.state = MagicMock(spec=[])
+
+        actor = await middleware._extract_actor(request)
+
+        assert actor["type"] == "service"
+        assert actor["id"] == "stoa-gateway"
+
+    @pytest.mark.asyncio
+    async def test_extract_actor_internal_endpoint(self):
+        """Actor identified as internal-service for /v1/internal/* paths (CAB-1793)."""
+        from src.opensearch.audit_middleware import AuditMiddleware
+
+        middleware = AuditMiddleware(MagicMock(), MagicMock())
+        request = MagicMock()
+        request.client.host = "10.2.0.5"
+        request.headers = {"User-Agent": "stoa-gateway/0.1"}
+        request.url.path = "/v1/internal/catalog/apis"
+        request.state = MagicMock(spec=[])
+
+        actor = await middleware._extract_actor(request)
+
+        assert actor["type"] == "service"
+        assert actor["id"] == "internal-service"
 
     @pytest.mark.asyncio
     async def test_extract_actor_api_key(self):

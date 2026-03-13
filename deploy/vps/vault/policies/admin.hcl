@@ -35,3 +35,18 @@ path "sys/mounts/*" {
 path "transit/*" {
   capabilities = ["create", "read", "update", "delete", "list"]
 }
+
+# SSH secrets engine (CA-based signing)
+path "ssh-client-signer/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+
+# PKI engine (Root CA)
+path "pki/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+
+# PKI engine (Intermediate CA)
+path "pki_int/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}

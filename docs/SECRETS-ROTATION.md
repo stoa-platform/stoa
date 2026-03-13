@@ -364,6 +364,77 @@ curl -s https://api.gostoa.dev/health
 kubectl exec -n stoa-system deploy/control-plane-api -- env | grep -c "DATABASE_URL"
 ```
 
+## SSH Signing (Vault CA)
+
+Vault's SSH secrets engine replaces static key distribution. Instead of copying public keys
+to every VPS (`distribute-ssh-key.sh`), Vault signs short-lived SSH certificates.
+
+### How It Works
+
+```
+User → vault write ssh-client-signer/sign/admin public_key=@~/.ssh/id_ed25519.pub
+     → Vault signs certificate (TTL 24h)
+     → ssh -o CertificateFile=~/.ssh/id_ed25519-cert.pub debian@<vps>
+     → VPS sshd trusts Vault CA (TrustedUserCAKeys /etc/ssh/vault-ca.pub)
+```
+
+### Roles
+
+| Role | TTL | Max TTL | Principals | Use Case |
+|------|-----|---------|------------|----------|
+| `admin` | 24h | 72h | debian, root | Human SSH access |
+| `ci-deploy` | 30m | 2h | debian | CI/CD deploy scripts |
+
+### Setup & Deploy
+
+```bash
+# 1. Configure SSH engine + CA + roles (once)
+./deploy/vps/vault/setup-ssh-engine.sh
+
+# 2. Deploy CA trust to all VPS (once per fleet change)
+./deploy/vps/vault/deploy-ssh-trust.sh
+
+# 3. Sign your key (daily)
+./deploy/vps/vault/setup-ssh-engine.sh --sign ~/.ssh/id_ed25519.pub
+
+# 4. Verify
+./deploy/vps/vault/deploy-ssh-trust.sh --verify
+```
+
+**Migration**: Both mechanisms coexist. Static keys (`authorized_keys`) still work alongside
+Vault-signed certificates. Remove static keys once all operators use Vault signing.
+
+## PKI Engine (mTLS Certificates)
+
+Vault acts as an intermediate CA for issuing mTLS certificates, used by stoa-gateway
+and internal service-to-service authentication.
+
+### CA Hierarchy
+
+```
+pki/       → Root CA (EC P-256, 10y TTL, signs intermediate only)
+pki_int/   → Intermediate CA (EC P-256, 5y TTL, issues leaf certs)
+```
+
+### Roles
+
+| Role | Domains | TTL | Use Case |
+|------|---------|-----|----------|
+| `gateway-mtls` | `*.gostoa.dev`, `*.svc.cluster.local` | 30d | Gateway client/server mTLS |
+| `service-mesh` | `*.svc.cluster.local` | 7d | K8s internal service-to-service |
+
+### Setup & Test
+
+```bash
+# 1. Configure PKI engines + CA hierarchy + roles (once)
+./deploy/vps/vault/setup-pki-engine.sh
+
+# 2. Issue a test certificate
+./deploy/vps/vault/setup-pki-engine.sh --issue mcp.gostoa.dev
+```
+
+**Future**: cert-manager + Vault issuer for automatic K8s cert rotation.
+
 ## Helper Scripts
 
 | Script | Location | Purpose |
@@ -373,6 +444,9 @@ kubectl exec -n stoa-system deploy/control-plane-api -- env | grep -c "DATABASE_
 | `vault-agent deploy.sh` | `deploy/vps/vault-agent/` | Deploy Vault Agent to VPS (systemd + templates) |
 | `vault-agent deploy-hegemon.sh` | `deploy/vps/vault-agent/` | Deploy vault-loader.sh to HEGEMON workers |
 | `vault-config.sh` | `deploy/external-secrets/` | Configure Vault K8s auth for ESO |
+| `setup-ssh-engine.sh` | `deploy/vps/vault/` | Configure Vault SSH CA signing engine + roles |
+| `deploy-ssh-trust.sh` | `deploy/vps/vault/` | Deploy SSH CA public key to all VPS |
+| `setup-pki-engine.sh` | `deploy/vps/vault/` | Configure Vault PKI CA hierarchy + mTLS roles |
 | `infisical-token` | `~/.local/bin/` | Get Infisical access token (legacy, dual-write) |
 | `infisical-rotate-secret` | `~/.local/bin/` | Rotate Infisical Machine Identity (legacy) |
 
@@ -391,6 +465,7 @@ All secret operations are traced in Vault's audit log. K8s and VPS mutations are
 
 | Date | Credential | Action | PRs |
 |------|-----------|--------|-----|
+| 2026-03-13 | SSH + PKI engines | Vault SSH CA signing (replaces static keys) + PKI intermediate CA for mTLS | #1731 |
 | 2026-03-13 | Vault migration | All secrets migrated Infisical → Vault. Rotation script extended with VPS commands | #1729 |
 | 2026-03-13 | Vault Agent | Deployed on VPS services (n8n, Kong, Gravitee, webMethods). Auto-rotation via templates | #1728 |
 | 2026-03-13 | ESO → Vault | External Secrets Operator pointed to Vault (was Infisical) | #1727 |
@@ -415,6 +490,8 @@ All secret operations are traced in Vault's audit log. K8s and VPS mutations are
 - Vault docs: https://developer.hashicorp.com/vault/docs
 - Vault KV v2: https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2
 - Vault Agent: https://developer.hashicorp.com/vault/docs/agent-and-proxy/agent
+- Vault SSH: https://developer.hashicorp.com/vault/docs/secrets/ssh/signed-ssh-certificates
+- Vault PKI: https://developer.hashicorp.com/vault/docs/secrets/pki
 - ESO + Vault: https://external-secrets.io/latest/provider/hashicorp-vault/
 - `.claude/rules/secrets-management.md` — Internal AI Factory reference
 - `deploy/vps/vault-agent/README.md` — VPS deploy guide

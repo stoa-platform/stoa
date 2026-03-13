@@ -102,7 +102,7 @@ if [[ "$STORE_KEYS" == "true" ]]; then
   echo "Paste each private key when prompted (Ctrl+D to end)."
   echo ""
 
-  for key_name in hegemon-workers hegemon-daemon ovh-prod; do
+  for key_name in hegemon-workers ovh-prod vault-vps; do
     echo "  Key: stoa/ssh/${key_name}"
     echo "  Enter path to private key file (or 'skip'):"
     read -r key_path

@@ -113,7 +113,7 @@ class TestListConnectors:
         """Connected templates show is_connected=True and server_id."""
         template = _mock_template()
         server_id = uuid4()
-        connected_map = {template.id: (server_id, "healthy")}
+        connected_map = {template.id: (server_id, "healthy", "dev")}
 
         with (
             patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
@@ -632,6 +632,195 @@ class TestDisconnect:
 
             with TestClient(app_with_tenant_admin) as client:
                 response = client.delete(f"{BASE}/linear/disconnect")
+
+        assert response.status_code == 200
+
+
+# ============== Promote ==============
+
+
+class TestPromoteConnector:
+    """POST /v1/admin/mcp-connectors/{slug}/promote"""
+
+    def test_promote_success(self, app_with_cpi_admin, mock_db_session):
+        """Promotes connector from dev to staging."""
+        template = _mock_template()
+        source_server = _mock_server(environment="dev")
+        promoted_server = _mock_server(
+            name="linear-abcd1234-staging",
+            environment="staging",
+            credential_vault_path="external-mcp-servers/new-uuid",
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+            patch(SESSION_REPO_PATH),
+            patch(EXT_SERVER_REPO_PATH),
+            patch(OAUTH_SERVICE_PATH) as MockOAuthService,
+        ):
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+            # First call (dev) returns source, second (staging) is the promote service
+            MockConnServerRepo.return_value.get_by_template_and_tenant = AsyncMock(
+                return_value=source_server
+            )
+            mock_service = MockOAuthService.return_value
+            mock_service.promote = AsyncMock(return_value=promoted_server)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/linear/promote",
+                    json={"target_environment": "staging"},
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["slug"] == "linear"
+        assert data["source_environment"] == "dev"
+        assert data["target_environment"] == "staging"
+        assert data["credentials_cloned"] is True
+
+    def test_promote_invalid_environment(self, app_with_cpi_admin, mock_db_session):
+        """Returns 400 for invalid target environment."""
+        template = _mock_template()
+
+        with patch(TEMPLATE_REPO_PATH) as MockTemplateRepo:
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/linear/promote",
+                    json={"target_environment": "invalid"},
+                )
+
+        assert response.status_code == 400
+        assert "Invalid target environment" in response.json()["detail"]
+
+    def test_promote_high_risk_requires_confirm(self, app_with_cpi_admin, mock_db_session):
+        """Stripe to production requires confirm=true."""
+        template = _mock_template(slug="stripe", display_name="Stripe")
+
+        with patch(TEMPLATE_REPO_PATH) as MockTemplateRepo:
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/stripe/promote",
+                    json={"target_environment": "production"},
+                )
+
+        assert response.status_code == 400
+        assert "explicit confirmation" in response.json()["detail"]
+
+    def test_promote_high_risk_with_confirm(self, app_with_cpi_admin, mock_db_session):
+        """Stripe to production succeeds with confirm=true."""
+        template = _mock_template(slug="stripe", display_name="Stripe")
+        source_server = _mock_server(environment="staging")
+        promoted_server = _mock_server(
+            name="stripe-staging-production",
+            environment="production",
+            credential_vault_path="external-mcp-servers/prod-uuid",
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+            patch(SESSION_REPO_PATH),
+            patch(EXT_SERVER_REPO_PATH),
+            patch(OAUTH_SERVICE_PATH) as MockOAuthService,
+        ):
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+            MockConnServerRepo.return_value.get_by_template_and_tenant = AsyncMock(
+                return_value=source_server
+            )
+            mock_service = MockOAuthService.return_value
+            mock_service.promote = AsyncMock(return_value=promoted_server)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/stripe/promote",
+                    json={"target_environment": "production", "confirm": True},
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["target_environment"] == "production"
+
+    def test_promote_no_source_404(self, app_with_cpi_admin, mock_db_session):
+        """Returns 404 when no source connector exists."""
+        template = _mock_template()
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+            patch(SESSION_REPO_PATH),
+            patch(EXT_SERVER_REPO_PATH),
+            patch(OAUTH_SERVICE_PATH),
+        ):
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+            MockConnServerRepo.return_value.get_by_template_and_tenant = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/linear/promote",
+                    json={"target_environment": "staging"},
+                )
+
+        assert response.status_code == 404
+        assert "not connected in any source" in response.json()["detail"]
+
+    def test_promote_template_not_found(self, app_with_cpi_admin, mock_db_session):
+        """Returns 404 for unknown slug."""
+        with patch(TEMPLATE_REPO_PATH) as MockTemplateRepo:
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/nonexistent/promote",
+                    json={"target_environment": "staging"},
+                )
+
+        assert response.status_code == 404
+
+    def test_promote_403_viewer(self, app_with_no_tenant_user, mock_db_session):
+        """Viewer gets 403."""
+        with TestClient(app_with_no_tenant_user) as client:
+            response = client.post(
+                f"{BASE}/linear/promote",
+                json={"target_environment": "staging"},
+            )
+
+        assert response.status_code == 403
+
+    def test_promote_non_high_risk_to_production_no_confirm(self, app_with_cpi_admin, mock_db_session):
+        """Non-high-risk connector (linear) can promote to production without confirm."""
+        template = _mock_template()
+        source_server = _mock_server(environment="staging")
+        promoted_server = _mock_server(
+            name="linear-staging-production",
+            environment="production",
+            credential_vault_path="external-mcp-servers/prod-uuid",
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+            patch(SESSION_REPO_PATH),
+            patch(EXT_SERVER_REPO_PATH),
+            patch(OAUTH_SERVICE_PATH) as MockOAuthService,
+        ):
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+            MockConnServerRepo.return_value.get_by_template_and_tenant = AsyncMock(
+                return_value=source_server
+            )
+            mock_service = MockOAuthService.return_value
+            mock_service.promote = AsyncMock(return_value=promoted_server)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/linear/promote",
+                    json={"target_environment": "production"},
+                )
 
         assert response.status_code == 200
 

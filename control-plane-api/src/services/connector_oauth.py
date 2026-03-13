@@ -270,6 +270,111 @@ class ConnectorOAuthService:
 
         return server, redirect_after
 
+    # High-risk connectors that require explicit confirmation for production promotion
+    HIGH_RISK_SLUGS = {"stripe", "cloudflare"}
+
+    async def promote(
+        self,
+        template: MCPConnectorTemplate,
+        tenant_id: str | None,
+        source_environment: str,
+        target_environment: str,
+        user_id: str,
+    ) -> ExternalMCPServer:
+        """Promote a connector from one environment to another.
+
+        Clones the server record and Vault credentials to the target environment.
+        Idempotent: if already promoted, updates the existing record.
+
+        Args:
+            template: The connector template
+            tenant_id: Tenant to promote for
+            source_environment: Source environment (e.g., "dev")
+            target_environment: Target environment (e.g., "staging", "production")
+            user_id: User performing the promotion
+
+        Returns:
+            The created/updated server in the target environment
+
+        Raises:
+            ConnectorOAuthError: If source not connected or clone fails
+        """
+        # Find source server
+        source = await self.connector_server_repo.get_by_template_and_tenant(
+            template.id, tenant_id, environment=source_environment
+        )
+        if not source:
+            raise ConnectorOAuthError(
+                f"Connector '{template.slug}' is not connected in '{source_environment}'",
+                status_code=404,
+            )
+
+        # Check if target already exists (idempotent)
+        existing = await self.connector_server_repo.get_by_template_and_tenant(
+            template.id, tenant_id, environment=target_environment
+        )
+
+        # Clone Vault credentials to a new path for the target environment
+        target_vault_path = None
+        if source.credential_vault_path:
+            try:
+                vault = get_vault_client()
+                source_creds = await vault.retrieve_credential(str(source.id))
+                if source_creds:
+                    target_server_id = str(existing.id) if existing else str(uuid.uuid4())
+                    target_vault_path = await vault.store_credential(target_server_id, source_creds)
+            except Exception as e:
+                logger.warning(
+                    "Failed to clone Vault credentials for promote '%s' %s→%s: %s",
+                    template.slug,
+                    source_environment,
+                    target_environment,
+                    e,
+                )
+
+        if existing:
+            # Update existing — idempotent promote
+            existing.credential_vault_path = target_vault_path or existing.credential_vault_path
+            self.server_repo.session.add(existing)
+            server = existing
+            logger.info(
+                "Updated promoted connector '%s' in '%s'",
+                template.slug,
+                target_environment,
+                extra={"server_id": str(server.id), "user_id": user_id},
+            )
+        else:
+            # Create new server in target environment
+            tenant_suffix = f"-{tenant_id[:8]}" if tenant_id else ""
+            server_name = f"{template.slug}{tenant_suffix}-{target_environment}"
+
+            server = ExternalMCPServer(
+                id=uuid.uuid4() if not target_vault_path else uuid.UUID(target_server_id),
+                name=server_name,
+                display_name=f"{template.display_name} ({target_environment})",
+                description=template.description,
+                icon=template.icon_url,
+                base_url=template.mcp_base_url,
+                transport=ExternalMCPTransport(template.transport),
+                auth_type=ExternalMCPAuthType.OAUTH2,
+                tool_prefix=template.slug,
+                tenant_id=tenant_id,
+                environment=target_environment,
+                created_by=user_id,
+                connector_template_id=template.id,
+                credential_vault_path=target_vault_path,
+            )
+            server = await self.server_repo.create(server)
+            logger.info(
+                "Promoted connector '%s' from '%s' to '%s'",
+                template.slug,
+                source_environment,
+                target_environment,
+                extra={"server_id": str(server.id), "user_id": user_id},
+            )
+
+        return server
+
     async def disconnect(
         self,
         template: MCPConnectorTemplate,

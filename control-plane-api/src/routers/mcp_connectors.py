@@ -5,6 +5,7 @@ Endpoints:
 - GET    /v1/admin/mcp-connectors/{slug}        — Template detail
 - POST   /v1/admin/mcp-connectors/{slug}/authorize  — Initiate OAuth flow
 - POST   /v1/admin/mcp-connectors/callback      — OAuth callback (code+state exchange)
+- POST   /v1/admin/mcp-connectors/{slug}/promote    — Promote connector to another environment
 - DELETE /v1/admin/mcp-connectors/{slug}/disconnect  — Disconnect connector
 """
 
@@ -31,6 +32,8 @@ from ..schemas.mcp_connector import (
     ConnectorCatalogResponse,
     ConnectorTemplateResponse,
     DisconnectResponse,
+    PromoteRequest,
+    PromoteResponse,
 )
 from ..services.connector_oauth import ConnectorOAuthError, ConnectorOAuthService
 from ..services.vault_client import get_vault_client
@@ -88,6 +91,7 @@ def _needs_manual_setup(template) -> bool:  # type: ignore[no-untyped-def]
 @router.get("", response_model=ConnectorCatalogResponse)
 async def list_connectors(
     tenant_id: str | None = Query(None, description="Tenant to check connection status for"),
+    environment: str | None = Query(None, description="Filter by environment (dev, staging, production)"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -101,8 +105,10 @@ async def list_connectors(
 
     templates = await template_repo.list_all(enabled_only=True)
 
-    # Get connection status for the tenant
-    connected_map = await connector_server_repo.list_connected_template_ids(effective_tenant_id)
+    # Get connection status for the tenant + environment
+    connected_map = await connector_server_repo.list_connected_template_ids(
+        effective_tenant_id, environment=environment
+    )
 
     result = []
     for t in templates:
@@ -126,6 +132,7 @@ async def list_connectors(
                 is_connected=connected_info is not None,
                 connected_server_id=connected_info[0] if connected_info else None,
                 connection_health=connected_info[1] if connected_info else None,
+                connected_environment=connected_info[2] if connected_info else None,
                 needs_setup=_needs_manual_setup(t),
             )
         )
@@ -137,6 +144,7 @@ async def list_connectors(
 async def get_connector(
     slug: str,
     tenant_id: str | None = Query(None, description="Tenant to check connection status for"),
+    environment: str | None = Query(None, description="Filter by environment (dev, staging, production)"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -151,7 +159,9 @@ async def get_connector(
         raise HTTPException(status_code=404, detail=f"Connector '{slug}' not found")
 
     connector_server_repo = ConnectorServerRepository(db)
-    connected_map = await connector_server_repo.list_connected_template_ids(effective_tenant_id)
+    connected_map = await connector_server_repo.list_connected_template_ids(
+        effective_tenant_id, environment=environment
+    )
     connected_info = connected_map.get(template.id)
 
     return ConnectorTemplateResponse(
@@ -172,6 +182,7 @@ async def get_connector(
         is_connected=connected_info is not None,
         connected_server_id=connected_info[0] if connected_info else None,
         connection_health=connected_info[1] if connected_info else None,
+        connected_environment=connected_info[2] if connected_info else None,
     )
 
 
@@ -268,6 +279,93 @@ async def oauth_callback(
         display_name=server.display_name,
         slug=server.tool_prefix or server.name,
         redirect_url=redirect_after,
+    )
+
+
+@router.post("/{slug}/promote", response_model=PromoteResponse)
+async def promote_connector(
+    slug: str,
+    request: PromoteRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Promote a connector from its current environment to a target environment.
+
+    Clones the server record and Vault credentials. Idempotent — re-promoting
+    updates the existing target record.
+
+    High-risk connectors (stripe, cloudflare) require ``confirm: true`` for production.
+    """
+    _require_admin(user)
+
+    effective_tenant_id = _get_tenant_id(user, request.tenant_id)
+
+    template_repo = ConnectorTemplateRepository(db)
+    template = await template_repo.get_by_slug(slug)
+    if not template:
+        raise HTTPException(status_code=404, detail=f"Connector '{slug}' not found")
+
+    # Validate target environment
+    valid_environments = {"dev", "staging", "production"}
+    if request.target_environment not in valid_environments:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid target environment '{request.target_environment}'. Must be one of: {', '.join(sorted(valid_environments))}",
+        )
+
+    # High-risk confirmation gate for production
+    if (
+        request.target_environment == "production"
+        and template.slug in ConnectorOAuthService.HIGH_RISK_SLUGS
+        and not request.confirm
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Promoting '{slug}' to production requires explicit confirmation. Set confirm=true.",
+        )
+
+    # Find the source environment (the most recent connected one)
+    service = _build_oauth_service(db)
+    connector_server_repo = ConnectorServerRepository(db)
+
+    # Determine source: look for the connector in environments ordered by promotion path
+    source_environment = None
+    promotion_order = ["dev", "staging", "production"]
+    for env in promotion_order:
+        if env == request.target_environment:
+            continue
+        existing = await connector_server_repo.get_by_template_and_tenant(
+            template.id, effective_tenant_id, environment=env
+        )
+        if existing:
+            source_environment = env
+            break
+
+    if not source_environment:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Connector '{slug}' is not connected in any source environment",
+        )
+
+    try:
+        server = await service.promote(
+            template=template,
+            tenant_id=effective_tenant_id,
+            source_environment=source_environment,
+            target_environment=request.target_environment,
+            user_id=user.id,
+        )
+        await db.commit()
+    except ConnectorOAuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    return PromoteResponse(
+        slug=slug,
+        source_environment=source_environment,
+        target_environment=request.target_environment,
+        server_id=server.id,
+        server_name=server.name,
+        credentials_cloned=server.credential_vault_path is not None,
     )
 
 

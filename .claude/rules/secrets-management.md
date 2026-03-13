@@ -32,11 +32,30 @@ Access layers:
 5. **CI/CD secret** → GitHub repo/org secrets (`${{ secrets.NAME }}`)
 6. **Rotation scripts are human-only** — never run by agents
 
+## K8s Secret Manifests in GitOps
+
+**NEVER commit real credential values in `kind: Secret` manifests.** This is a GitOps repo — secrets in YAML are visible in git history forever.
+
+| Allowed | Forbidden |
+|---------|-----------|
+| `REPLACE_FROM_INFISICAL` placeholder | `stoa-db-password-2026` (real password) |
+| `${VAR}` env substitution | `$2b$12$...` (bcrypt hash) |
+| `CHANGE_ME` placeholder | `# Password: Admin123!` (plaintext in comment) |
+| ExternalSecret CRD referencing Vault | `stringData` with real values |
+
+**Enforcement** (3 layers):
+1. **gitleaks** — custom rules `k8s-secret-password`, `password-in-comment`, `bcrypt-hash` in `.gitleaks.toml`
+2. **PreToolUse hook** — `pre-edit-no-k8s-secrets.sh` blocks AI Factory from writing secrets in YAML files
+3. **CI** — `security-scan.yml` runs gitleaks on every PR
+
 ## Anti-Patterns
 
 | Anti-Pattern | Correct Approach |
 |-------------|-----------------|
 | Hardcoded password in code | Infisical → K8s Secret |
+| Real password in `stringData:` | `REPLACE_FROM_INFISICAL` placeholder |
+| Password in YAML comment | `# Credential managed via Infisical /path` |
+| bcrypt hash in config file | `REPLACE_WITH_BCRYPT_HASH_FROM_INFISICAL` |
 | `kubectl create secret` manual | Infisical + Helm `templates/` |
 | Secret in `ConfigMap` | Use `Secret` resource (encrypted etcd) |
 | Secret in `Dockerfile ENV` | Runtime env from K8s Secret |

@@ -8,7 +8,9 @@ from uuid import uuid4
 import pytest
 
 from src.models.gateway_instance import GatewayInstanceStatus, GatewayType
-from src.workers.gateway_health_worker import GatewayHealthWorker
+from src.workers.gateway_health_worker import _MAX_CONSECUTIVE_FAILURES, GatewayHealthWorker
+
+_MAX_FAILURES = _MAX_CONSECUTIVE_FAILURES
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -354,3 +356,99 @@ class TestMarkStaleGatewaysOffline:
 
         # The query was executed — confirms the cutoff logic ran without error
         assert "stmt" in captured_stmt
+
+
+# ---------------------------------------------------------------------------
+# _handle_failure() — never-reachable gateways keep seeded status
+# ---------------------------------------------------------------------------
+
+
+class TestHandleFailureNeverReachable:
+    """Gateways that were never reachable (last_health_check is None) must NOT
+    be transitioned to OFFLINE. They keep their seeded status (typically ONLINE)
+    to avoid false negatives from network partitioning (e.g., K8s pod can't
+    reach external VPS gateways)."""
+
+    def test_never_reachable_gateway_keeps_online_status(self) -> None:
+        worker = GatewayHealthWorker()
+        gw = _make_gateway(
+            name="kong-prod",
+            gateway_type=GatewayType.KONG,
+            status=GatewayInstanceStatus.ONLINE,
+        )
+        gw.last_health_check = None  # Never reachable
+
+        worker._handle_failure(gw, {}, _MAX_FAILURES, "connection refused", datetime.now(UTC))
+
+        assert gw.status == GatewayInstanceStatus.ONLINE
+
+    def test_never_reachable_gateway_records_failure_details(self) -> None:
+        worker = GatewayHealthWorker()
+        gw = _make_gateway(
+            name="webmethods-prod",
+            gateway_type=GatewayType.WEBMETHODS,
+            status=GatewayInstanceStatus.ONLINE,
+        )
+        gw.last_health_check = None
+
+        worker._handle_failure(gw, {}, _MAX_FAILURES, "timeout", datetime.now(UTC))
+
+        assert gw.health_details["consecutive_failures"] == _MAX_FAILURES
+        assert gw.health_details["last_error"] == "timeout"
+        assert "offline_reason" not in gw.health_details
+
+    def test_previously_healthy_gateway_goes_offline(self) -> None:
+        worker = GatewayHealthWorker()
+        last_check = datetime.now(UTC) - timedelta(minutes=5)
+        gw = _make_gateway(
+            name="kong-staging",
+            gateway_type=GatewayType.KONG,
+            status=GatewayInstanceStatus.ONLINE,
+            last_health_check=last_check,
+        )
+
+        worker._handle_failure(gw, {}, _MAX_FAILURES, "connection refused", datetime.now(UTC))
+
+        assert gw.status == GatewayInstanceStatus.OFFLINE
+        assert gw.health_details["offline_reason"] == "consecutive_failures"
+
+    def test_below_threshold_does_not_change_status(self) -> None:
+        worker = GatewayHealthWorker()
+        last_check = datetime.now(UTC) - timedelta(minutes=5)
+        gw = _make_gateway(
+            name="kong-staging",
+            gateway_type=GatewayType.KONG,
+            status=GatewayInstanceStatus.ONLINE,
+            last_health_check=last_check,
+        )
+
+        worker._handle_failure(gw, {}, _MAX_FAILURES - 1, "connection refused", datetime.now(UTC))
+
+        assert gw.status == GatewayInstanceStatus.ONLINE
+
+
+# ---------------------------------------------------------------------------
+# _HEARTBEAT_TYPES includes all STOA modes
+# ---------------------------------------------------------------------------
+
+
+class TestHeartbeatTypes:
+    def test_stoa_edge_mcp_is_heartbeat_type(self) -> None:
+        from src.workers.gateway_health_worker import _HEARTBEAT_TYPES
+
+        assert GatewayType.STOA_EDGE_MCP in _HEARTBEAT_TYPES
+
+    def test_stoa_proxy_is_heartbeat_type(self) -> None:
+        from src.workers.gateway_health_worker import _HEARTBEAT_TYPES
+
+        assert GatewayType.STOA_PROXY in _HEARTBEAT_TYPES
+
+    def test_stoa_shadow_is_heartbeat_type(self) -> None:
+        from src.workers.gateway_health_worker import _HEARTBEAT_TYPES
+
+        assert GatewayType.STOA_SHADOW in _HEARTBEAT_TYPES
+
+    def test_kong_is_not_heartbeat_type(self) -> None:
+        from src.workers.gateway_health_worker import _HEARTBEAT_TYPES
+
+        assert GatewayType.KONG not in _HEARTBEAT_TYPES

@@ -1,0 +1,58 @@
+# HashiCorp Vault — OVH VPS (hcv.gostoa.dev)
+# Source of truth for all STOA secrets (replaces Infisical)
+#
+# Stack: Vault (file backend) + Caddy (auto-TLS)
+#
+# Usage:
+#   ./deploy/vps/vault/deploy.sh
+#
+# Health: curl https://hcv.gostoa.dev/v1/sys/health
+
+services:
+  vault:
+    image: hashicorp/vault:1.18
+    container_name: vault
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "127.0.0.1:8200:8200"
+    volumes:
+      - vault_data:/vault/data
+      - vault_logs:/vault/logs
+      - ./config:/vault/config:ro
+    environment:
+      VAULT_ADDR: "http://127.0.0.1:8200"
+      VAULT_API_ADDR: "http://127.0.0.1:8200"
+    command: vault server -config=/vault/config/vault.hcl
+    healthcheck:
+      test: ["CMD", "vault", "status", "-format=json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: vault-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      vault:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  vault_data:
+  vault_logs:
+  caddy_data:
+  caddy_config:

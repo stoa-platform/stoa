@@ -204,6 +204,48 @@ class TestGatewayRegistration:
 
             assert resp.status_code == 201
 
+    def test_register_connect_mode(self, client):
+        """Connect mode registers with STOA type and preserves mode as 'connect' (CAB-1819)."""
+        from src.models.gateway_instance import GatewayType
+
+        gw = _make_gateway_instance(
+            name="kong-vps-connect-production",
+            display_name="STOA Gateway (connect)",
+            gateway_type=GatewayType.STOA,
+            mode="connect",
+            tags=["mode:connect", "auto-registered"],
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
+            mock_repo.create = AsyncMock(return_value=gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json=_registration_payload(
+                    hostname="kong-vps",
+                    mode="connect",
+                    environment="production",
+                    capabilities=["rest"],
+                    admin_url="http://kong-vps:8001",
+                ),
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 201
+            data = resp.json()
+            assert data["mode"] == "connect"
+            assert data["gateway_type"] == "stoa"
+            mock_repo.create.assert_awaited_once()
+
     def test_register_adopts_argocd_entry(self, client):
         """Gateway registration adopts existing ArgoCD entry instead of creating duplicate."""
         argocd_gw = _make_gateway_instance(
@@ -513,6 +555,7 @@ class TestHelperFunctions:
         assert _mode_to_gateway_type("edge-mcp") == GatewayType.STOA_EDGE_MCP
         assert _mode_to_gateway_type("edge_mcp") == GatewayType.STOA_EDGE_MCP
         assert _mode_to_gateway_type("sidecar") == GatewayType.STOA_SIDECAR
+        assert _mode_to_gateway_type("connect") == GatewayType.STOA
         assert _mode_to_gateway_type("unknown") == GatewayType.STOA
 
     def test_normalize_mode(self):
@@ -526,4 +569,21 @@ class TestHelperFunctions:
         assert _normalize_mode("sidecar") == "sidecar"
         assert _normalize_mode("proxy") == "proxy"
         assert _normalize_mode("shadow") == "shadow"
+        assert _normalize_mode("connect") == "connect"
         assert _normalize_mode("unknown") == "edge-mcp"  # default fallback
+
+    def test_regression_connect_mode_not_fallthrough(self):
+        """Regression: connect mode must NOT fall through to edge-mcp (CAB-1819).
+
+        Root cause: _normalize_mode had no "connect" entry, so it fell through
+        to the default "edge-mcp", misrepresenting all stoa-connect agents.
+        """
+        from src.models.gateway_instance import GatewayType
+        from src.routers.gateway_internal import _mode_to_gateway_type, _normalize_mode
+
+        # connect must be preserved as-is, not mapped to edge-mcp
+        assert _normalize_mode("connect") == "connect"
+        assert _normalize_mode("connect") != "edge-mcp"
+
+        # connect maps to GatewayType.STOA (bridge agent, not a new adapter type)
+        assert _mode_to_gateway_type("connect") == GatewayType.STOA

@@ -25,6 +25,7 @@ const Tenants = lazy(() => import('./pages/Tenants').then((m) => ({ default: m.T
 const APIsUnified = lazy(() =>
   import('./pages/APIsUnified').then((m) => ({ default: m.APIsUnified }))
 );
+const APIDetail = lazy(() => import('./pages/APIDetail').then((m) => ({ default: m.APIDetail })));
 const Applications = lazy(() =>
   import('./pages/Applications').then((m) => ({ default: m.Applications }))
 );
@@ -234,6 +235,7 @@ function ProtectedRoutes() {
                 <Route path="/" element={<PlatformDashboard />} />
                 <Route path="/tenants" element={<Tenants />} />
                 <Route path="/apis" element={<APIsUnified />} />
+                <Route path="/apis/:tenantId/:apiId" element={<APIDetail />} />
                 <Route path="/ai-tools" element={<ToolCatalog />} />
                 <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
                 <Route path="/ai-tools/usage" element={<UsageDashboard />} />

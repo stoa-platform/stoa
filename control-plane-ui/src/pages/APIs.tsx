@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiService } from '../services/api';
@@ -34,6 +35,7 @@ export function APIs() {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const toast = useToastActions();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [confirm, ConfirmDialog] = useConfirm();
   const { celebrate } = useCelebration();
   const [selectedTenant, setSelectedTenant] = useState<string>('');
@@ -488,7 +490,11 @@ export function APIs() {
               </thead>
               <tbody className="bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700">
                 {paginatedApis.map((api) => (
-                  <tr key={api.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                  <tr
+                    key={api.id}
+                    className="hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
+                    onClick={() => navigate(`/apis/${selectedTenant}/${api.id}`)}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-neutral-900 dark:text-white">
@@ -541,7 +547,10 @@ export function APIs() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <td
+                      className="px-6 py-4 whitespace-nowrap text-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div className="flex gap-2">
                         {canDeploy && (
                           <>

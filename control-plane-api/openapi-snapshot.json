@@ -432,6 +432,35 @@
         "title": "APIUpdate",
         "type": "object"
       },
+      "APIVersionEntry": {
+        "description": "A single version entry from git history.",
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "sha": {
+            "title": "Sha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sha",
+          "message",
+          "author",
+          "date"
+        ],
+        "title": "APIVersionEntry",
+        "type": "object"
+      },
       "AccessRequestCreate": {
         "description": "Public form submission: profile + optional company/role.",
         "properties": {
@@ -11174,6 +11203,47 @@
           "apis"
         ],
         "title": "InternalAPIsResponse",
+        "type": "object"
+      },
+      "InternalToolDef": {
+        "description": "Tool definition in the format expected by the gateway (ToolsListResponse).",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "inputSchema": {
+            "additionalProperties": true,
+            "title": "Inputschema",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "InternalToolDef",
+        "type": "object"
+      },
+      "InternalToolsListResponse": {
+        "description": "Response matching the gateway's ToolsListResponse format.",
+        "properties": {
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/InternalToolDef"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tools"
+        ],
+        "title": "InternalToolsListResponse",
         "type": "object"
       },
       "KeyRotationRequest": {
@@ -35600,6 +35670,115 @@
         ]
       }
     },
+    "/v1/internal/gateways/tools": {
+      "get": {
+        "description": "Internal tool discovery for gateways/sidecars (CAB-1817).\n\nReturns UAC-generated tools in the gateway's expected format (ToolsListResponse),\nauthenticated via X-Gateway-Key. Allows STOA Link sidecars to discover tools\nwithout OIDC client credentials.",
+        "operationId": "get_internal_tools",
+        "parameters": [
+          {
+            "description": "Tenant ID (optional filter)",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Tenant ID (optional filter)",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalToolsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Internal Tools",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
+    "/v1/internal/gateways/tools/generated": {
+      "get": {
+        "description": "Internal tool discovery for gateways/sidecars (CAB-1817).\n\nReturns UAC-generated tools for a tenant, authenticated via X-Gateway-Key\ninstead of user JWT. This allows STOA Link sidecars to discover tools\nwithout needing OIDC client credentials.",
+        "operationId": "get_internal_generated_tools",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "description": "Tenant ID",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantToolsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Internal Generated Tools",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
     "/v1/internal/gateways/{gateway_id}/config": {
       "get": {
         "description": "Get configuration for a registered gateway.\n\nFuture: Return pending deployments, policies, etc. for the gateway to apply.\nCurrently returns basic gateway info.",
@@ -42704,6 +42883,81 @@
           }
         ],
         "summary": "Update Api",
+        "tags": [
+          "APIs"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/apis/{api_id}/versions": {
+      "get": {
+        "description": "List version history (git commits) for a specific API.",
+        "operationId": "list_api_versions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max commits to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Max commits to return",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/APIVersionEntry"
+                  },
+                  "title": "Response List Api Versions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Api Versions",
         "tags": [
           "APIs"
         ]

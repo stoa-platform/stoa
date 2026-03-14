@@ -35,22 +35,26 @@ echo "=== Deploying stoa-connect to ${VPS_HOST} (${INSTANCE_NAME}) ==="
 
 # --- Step 1: Download binary ---
 echo "[1/5] Downloading stoa-connect binary..."
+# Release uses tarballs: stoa-connect_0.2.0_linux_amd64.tar.gz
 if [ "${RELEASE_VERSION}" = "latest" ]; then
-    DOWNLOAD_URL="https://github.com/${RELEASE_REPO}/releases/latest/download/${BINARY_NAME}-linux-amd64"
+    DOWNLOAD_URL="https://github.com/${RELEASE_REPO}/releases/latest/download/${BINARY_NAME}_latest_linux_amd64.tar.gz"
 else
-    DOWNLOAD_URL="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_VERSION}/${BINARY_NAME}-linux-amd64"
+    # Strip 'v' prefix for tarball name: v0.2.0 -> 0.2.0
+    VERSION_CLEAN="${RELEASE_VERSION#v}"
+    DOWNLOAD_URL="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_VERSION}/${BINARY_NAME}_${VERSION_CLEAN}_linux_amd64.tar.gz"
 fi
 
-TMPBIN="$(mktemp)"
-curl -fSL "${DOWNLOAD_URL}" -o "${TMPBIN}"
-chmod +x "${TMPBIN}"
-echo "  Downloaded $(du -h "${TMPBIN}" | cut -f1) binary"
+TMPDIR="$(mktemp -d)"
+curl -fSL "${DOWNLOAD_URL}" -o "${TMPDIR}/${BINARY_NAME}.tar.gz"
+tar xzf "${TMPDIR}/${BINARY_NAME}.tar.gz" -C "${TMPDIR}"
+chmod +x "${TMPDIR}/${BINARY_NAME}"
+echo "  Downloaded $(du -h "${TMPDIR}/${BINARY_NAME}" | cut -f1) binary"
 
 # --- Step 2: Upload binary ---
 echo "[2/5] Uploading binary to ${VPS_HOST}:${INSTALL_PATH}..."
-scp ${SSH_OPTS} "${TMPBIN}" "root@${VPS_HOST}:/tmp/${BINARY_NAME}"
+scp ${SSH_OPTS} "${TMPDIR}/${BINARY_NAME}" "root@${VPS_HOST}:/tmp/${BINARY_NAME}"
 ssh ${SSH_OPTS} "root@${VPS_HOST}" "mv /tmp/${BINARY_NAME} ${INSTALL_PATH} && chmod +x ${INSTALL_PATH}"
-rm -f "${TMPBIN}"
+rm -rf "${TMPDIR}"
 
 # --- Step 3: Verify secrets file exists ---
 echo "[3/5] Verifying Vault Agent rendered secrets..."

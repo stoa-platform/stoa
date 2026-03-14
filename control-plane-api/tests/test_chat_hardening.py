@@ -674,12 +674,12 @@ class TestToolSecurity:
         # Tenant isolation: attacker cannot access acme's conversations
         assert resp.status_code == 403
 
-    def test_tool_list_has_seven_known_tools(self):
-        """CHAT_TOOLS must contain exactly 7 registered tools."""
+    def test_tool_list_has_ten_known_tools(self):
+        """CHAT_TOOLS must contain exactly 10 registered tools."""
         from src.services.chat_tools import CHAT_TOOLS
 
         tool_names = [t["name"] for t in CHAT_TOOLS]
-        assert len(tool_names) == 7
+        assert len(tool_names) == 10
         expected = {
             "list_tenants",
             "list_apis",
@@ -688,6 +688,9 @@ class TestToolSecurity:
             "list_deployments",
             "platform_info",
             "search_docs",
+            "list_my_subscriptions",
+            "subscribe_api",
+            "revoke_subscription",
         }
         assert set(tool_names) == expected
 

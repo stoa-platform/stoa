@@ -9,6 +9,7 @@
  * fetch() + ReadableStream (not EventSource — we need the Authorization header).
  *
  * CAB-1816: Progressive streaming + tool rendering + conversation management.
+ * CAB-1816 Phase 2: Mutation tool confirmation + token budget.
  */
 import { useCallback, useRef, useState } from 'react';
 
@@ -26,6 +27,13 @@ export interface ChatToolCall {
   result?: string;
 }
 
+export interface PendingConfirmation {
+  tool_use_id: string;
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  description: string;
+}
+
 export interface StreamCallbacks {
   /** Called for each text chunk as it arrives */
   onDelta?: (text: string) => void;
@@ -33,6 +41,8 @@ export interface StreamCallbacks {
   onToolStart?: (toolUseId: string, toolName: string) => void;
   /** Called when a tool call result arrives */
   onToolResult?: (toolUseId: string, toolName: string, result: string) => void;
+  /** Called when a mutation tool requires user confirmation */
+  onConfirmationRequired?: (confirmation: PendingConfirmation) => void;
   /** Called when an error occurs during streaming */
   onError?: (error: string) => void;
   /** Called when the full response is complete */
@@ -44,6 +54,15 @@ export interface ConversationSummary {
   title: string;
   status: string;
   updated_at: string;
+}
+
+export interface TokenBudgetStatus {
+  user_tokens_today: number;
+  tenant_tokens_today: number;
+  daily_budget: number;
+  remaining: number;
+  budget_exceeded: boolean;
+  usage_percent: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,45 +155,11 @@ export function useChatService() {
   }, []);
 
   // -------------------------------------------------------------------------
-  // Streaming message send
+  // SSE stream parser (shared between sendMessageStream and confirmTool)
   // -------------------------------------------------------------------------
 
-  const sendMessageStream = useCallback(
-    async (message: string, callbacks: StreamCallbacks = {}): Promise<void> => {
-      const tenantId = getTenantId();
-      const token = getToken();
-
-      // Lazy-create conversation on first message
-      if (!conversationId.current) {
-        const conv = await apiService.createChatConversation(tenantId);
-        conversationId.current = conv.id;
-        setActiveConversationId(conv.id);
-      }
-
-      const url = `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations/${conversationId.current}/messages`;
-
-      // Abort any previous in-flight request
-      abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content: message }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const detail = await res.text();
-        const errMsg = `Chat request failed (${res.status}): ${detail}`;
-        callbacks.onError?.(errMsg);
-        throw new Error(errMsg);
-      }
-
+  const parseSSEStream = useCallback(
+    async (res: Response, callbacks: StreamCallbacks): Promise<void> => {
       const reader = res.body?.getReader();
       if (!reader) {
         callbacks.onError?.('No response body');
@@ -228,11 +213,18 @@ export function useChatService() {
                   callbacks.onToolResult?.(payload.tool_use_id, payload.tool_name, payload.result);
                   break;
                 }
+                case 'confirmation_required':
+                  callbacks.onConfirmationRequired?.({
+                    tool_use_id: payload.tool_use_id,
+                    tool_name: payload.tool_name,
+                    tool_input: payload.tool_input,
+                    description: payload.description,
+                  });
+                  break;
                 case 'error':
                   callbacks.onError?.(payload.error || 'Unknown error');
                   break;
                 case 'message_end':
-                  // Final event — streaming complete
                   break;
                 default:
                   break;
@@ -248,8 +240,122 @@ export function useChatService() {
 
       callbacks.onComplete?.(fullText, toolCalls);
     },
-    [getTenantId, getToken, abort]
+    []
   );
+
+  // -------------------------------------------------------------------------
+  // Streaming message send
+  // -------------------------------------------------------------------------
+
+  const sendMessageStream = useCallback(
+    async (message: string, callbacks: StreamCallbacks = {}): Promise<void> => {
+      const tenantId = getTenantId();
+      const token = getToken();
+
+      // Lazy-create conversation on first message
+      if (!conversationId.current) {
+        const conv = await apiService.createChatConversation(tenantId);
+        conversationId.current = conv.id;
+        setActiveConversationId(conv.id);
+      }
+
+      const url = `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations/${conversationId.current}/messages`;
+
+      // Abort any previous in-flight request
+      abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: message }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const detail = await res.text();
+        const errMsg = `Chat request failed (${res.status}): ${detail}`;
+        callbacks.onError?.(errMsg);
+        throw new Error(errMsg);
+      }
+
+      await parseSSEStream(res, callbacks);
+    },
+    [getTenantId, getToken, abort, parseSSEStream]
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool confirmation (CAB-1816 Phase 2)
+  // -------------------------------------------------------------------------
+
+  const confirmTool = useCallback(
+    async (
+      confirmation: PendingConfirmation,
+      approved: boolean,
+      callbacks: StreamCallbacks = {}
+    ): Promise<void> => {
+      const tenantId = getTenantId();
+      const token = getToken();
+
+      if (!conversationId.current) {
+        callbacks.onError?.('No active conversation');
+        return;
+      }
+
+      const url = `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations/${conversationId.current}/messages`;
+
+      abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          content: approved
+            ? `Confirmed: ${confirmation.tool_name}`
+            : `Cancelled: ${confirmation.tool_name}`,
+          tool_confirmation: {
+            tool_use_id: confirmation.tool_use_id,
+            tool_name: confirmation.tool_name,
+            tool_input: confirmation.tool_input,
+            approved,
+          },
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const detail = await res.text();
+        callbacks.onError?.(`Confirmation failed (${res.status}): ${detail}`);
+        return;
+      }
+
+      await parseSSEStream(res, callbacks);
+    },
+    [getTenantId, getToken, abort, parseSSEStream]
+  );
+
+  // -------------------------------------------------------------------------
+  // Token budget status (CAB-1816 Phase 2)
+  // -------------------------------------------------------------------------
+
+  const fetchBudgetStatus = useCallback(async (): Promise<TokenBudgetStatus | null> => {
+    const tenantId = getTenantId();
+    const token = getToken();
+    const res = await fetch(`${config.api.baseUrl}/v1/tenants/${tenantId}/chat/usage/budget`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  }, [getTenantId, getToken]);
 
   // -------------------------------------------------------------------------
   // Backward-compatible: accumulate full response (used by simple callers)
@@ -273,6 +379,10 @@ export function useChatService() {
     sendMessage,
     /** Send a message with streaming callbacks */
     sendMessageStream,
+    /** Confirm or reject a pending mutation tool */
+    confirmTool,
+    /** Fetch token budget status */
+    fetchBudgetStatus,
     /** Abort the current streaming request */
     abort,
     /** Load conversation list */

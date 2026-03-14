@@ -3,10 +3,12 @@
  *
  * Fixed-position chat bubble at bottom-right of the console.
  * Supports progressive SSE streaming, tool call rendering,
- * and conversation list management.
+ * mutation tool confirmation, and conversation list management.
  *
  * Integration: rendered inside ProtectedRoutes (above Layout)
  * so it floats over all pages without being re-mounted on navigation.
+ *
+ * CAB-1816 Phase 2: Mutation tool confirmation + token budget.
  */
 
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
@@ -24,9 +26,18 @@ import {
   Trash2,
   Loader2,
   Square,
+  CheckCircle2,
+  XCircle,
+  Zap,
 } from 'lucide-react';
 
-import type { ChatToolCall, StreamCallbacks, ConversationSummary } from '@/hooks/useChatService';
+import type {
+  ChatToolCall,
+  StreamCallbacks,
+  ConversationSummary,
+  PendingConfirmation,
+  TokenBudgetStatus,
+} from '@/hooks/useChatService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +57,14 @@ export interface FloatingChatProps {
   initialOpen?: boolean;
   /** Send message with streaming callbacks (primary) */
   onSendMessageStream?: (message: string, callbacks: StreamCallbacks) => Promise<void>;
+  /** Confirm or reject a pending mutation tool */
+  onConfirmTool?: (
+    confirmation: PendingConfirmation,
+    approved: boolean,
+    callbacks: StreamCallbacks
+  ) => Promise<void>;
+  /** Fetch token budget status */
+  onFetchBudgetStatus?: () => Promise<TokenBudgetStatus | null>;
   /** Abort the current stream */
   onAbort?: () => void;
   /** Load conversations list */
@@ -107,6 +126,95 @@ function ToolBlock({ tool }: { tool: ChatToolCall }) {
           {truncated}
         </pre>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ConfirmationBlock — inline confirm/cancel for mutation tools
+// ---------------------------------------------------------------------------
+
+function ConfirmationBlock({
+  confirmation,
+  onConfirm,
+  onCancel,
+  isProcessing,
+}: {
+  confirmation: PendingConfirmation;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isProcessing: boolean;
+}) {
+  return (
+    <div className="mt-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs">
+      <div className="flex items-start gap-2 mb-2">
+        <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="font-medium text-amber-800 dark:text-amber-200">
+            Action requires confirmation
+          </p>
+          <p className="text-amber-700 dark:text-amber-300 mt-0.5">{confirmation.description}</p>
+          <p className="text-amber-600 dark:text-amber-400 mt-1">
+            Tool:{' '}
+            <code className="bg-amber-100 dark:bg-amber-800/40 px-1 rounded">
+              {confirmation.tool_name}
+            </code>
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2 ml-5">
+        <button
+          onClick={onConfirm}
+          disabled={isProcessing}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-medium transition-colors"
+          aria-label="Confirm action"
+        >
+          {isProcessing ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <CheckCircle2 className="w-3 h-3" />
+          )}
+          Confirm
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={isProcessing}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-200 dark:bg-neutral-600 hover:bg-neutral-300 dark:hover:bg-neutral-500 disabled:opacity-50 text-neutral-700 dark:text-neutral-200 text-xs font-medium transition-colors"
+          aria-label="Cancel action"
+        >
+          <XCircle className="w-3 h-3" />
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BudgetWidget — token usage bar
+// ---------------------------------------------------------------------------
+
+function BudgetWidget({ budget }: { budget: TokenBudgetStatus }) {
+  const pct = Math.min(budget.usage_percent, 100);
+  const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-green-500';
+
+  return (
+    <div className="px-4 py-1.5 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-850">
+      <div className="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">
+        <span>Daily tokens</span>
+        <span>{Math.round(pct)}%</span>
+      </div>
+      <div className="h-1 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${barColor} rounded-full transition-all duration-300`}
+          style={{ width: `${pct}%` }}
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Token budget: ${Math.round(pct)}% used`}
+        />
+      </div>
     </div>
   );
 }
@@ -188,6 +296,8 @@ function ConversationList({
 export function FloatingChat({
   initialOpen = false,
   onSendMessageStream,
+  onConfirmTool,
+  onFetchBudgetStatus,
   onAbort,
   onLoadConversations,
   onSwitchConversation,
@@ -202,6 +312,8 @@ export function FloatingChat({
   const [isLoading, setIsLoading] = useState(false);
   const [showConversations, setShowConversations] = useState(false);
   const [conversationList, setConversationList] = useState<ConversationSummary[]>([]);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
+  const [budgetStatus, setBudgetStatus] = useState<TokenBudgetStatus | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -226,6 +338,15 @@ export function FloatingChat({
       void onLoadConversations().then(setConversationList);
     }
   }, [showConversations, onLoadConversations]);
+
+  // Fetch budget status when panel opens
+  useEffect(() => {
+    if (isOpen && onFetchBudgetStatus) {
+      void onFetchBudgetStatus().then((b) => {
+        if (b) setBudgetStatus(b);
+      });
+    }
+  }, [isOpen, onFetchBudgetStatus]);
 
   const handleToggle = useCallback(() => setIsOpen((prev) => !prev), []);
   const handleClose = useCallback(() => setIsOpen(false), []);
@@ -298,6 +419,9 @@ export function FloatingChat({
               )
             );
           },
+          onConfirmationRequired: (confirmation) => {
+            setPendingConfirmation(confirmation);
+          },
           onError: (error) => {
             setMessages((prev) =>
               prev.map((m) =>
@@ -365,6 +489,84 @@ export function FloatingChat({
     setIsLoading(false);
     setMessages((prev) => prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)));
   }, [onAbort]);
+
+  const handleConfirmation = useCallback(
+    async (approved: boolean) => {
+      if (!pendingConfirmation || !onConfirmTool) return;
+      const confirmation = pendingConfirmation;
+      setPendingConfirmation(null);
+      setIsLoading(true);
+
+      const assistantId = generateId();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          toolCalls: [],
+          isStreaming: true,
+        },
+      ]);
+
+      try {
+        await onConfirmTool(confirmation, approved, {
+          onDelta: (delta) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m))
+            );
+          },
+          onToolResult: (toolUseId, toolName, result) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      toolCalls: [
+                        ...(m.toolCalls || []),
+                        { tool_use_id: toolUseId, tool_name: toolName, result },
+                      ],
+                    }
+                  : m
+              )
+            );
+          },
+          onError: (error) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: m.content || `Error: ${error}`, isStreaming: false }
+                  : m
+              )
+            );
+          },
+          onComplete: () => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
+            );
+          },
+        });
+      } catch {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: m.content || 'Failed to process confirmation', isStreaming: false }
+              : m
+          )
+        );
+      } finally {
+        setIsLoading(false);
+        // Refresh budget after mutation
+        if (onFetchBudgetStatus) {
+          void onFetchBudgetStatus().then((b) => {
+            if (b) setBudgetStatus(b);
+          });
+        }
+      }
+    },
+    [pendingConfirmation, onConfirmTool, onFetchBudgetStatus]
+  );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -442,6 +644,9 @@ export function FloatingChat({
             </div>
           </div>
 
+          {/* Token budget bar */}
+          {budgetStatus && <BudgetWidget budget={budgetStatus} />}
+
           <div className="flex flex-1 overflow-hidden">
             {/* Conversation sidebar */}
             {showConversations && (
@@ -512,6 +717,16 @@ export function FloatingChat({
                     </div>
                   </div>
                 ))}
+
+                {/* Pending confirmation */}
+                {pendingConfirmation && (
+                  <ConfirmationBlock
+                    confirmation={pendingConfirmation}
+                    onConfirm={() => void handleConfirmation(true)}
+                    onCancel={() => void handleConfirmation(false)}
+                    isProcessing={isLoading}
+                  />
+                )}
 
                 {/* Scroll anchor */}
                 <div ref={messagesEndRef} />

@@ -29,7 +29,7 @@ from ..services.chat_security import (
     detect_jailbreak,
     sanitize_tool_output,
 )
-from ..services.chat_tools import CHAT_TOOLS, execute_tool, filter_tools_for_role
+from ..services.chat_tools import CHAT_TOOLS, MUTATION_TOOLS, TOOL_RBAC, execute_tool, filter_tools_for_role
 from ..services.encryption_service import decrypt_auth_config, encrypt_auth_config
 
 logger = logging.getLogger(__name__)
@@ -461,8 +461,37 @@ class ChatService:
 
                 # Execute each tool and build tool_result messages
                 tool_results: list[dict[str, Any]] = []
+                has_pending_confirmation = False
                 for tc in tool_calls:
-                    raw_result = await execute_tool(tc["tool_name"], tc["input"], self.session, user_roles=user_roles)
+                    # Mutation tools require user confirmation (CAB-1816 Phase 2)
+                    if tc["tool_name"] in MUTATION_TOOLS:
+                        yield {
+                            "event": "confirmation_required",
+                            "data": {
+                                "tool_use_id": tc["tool_use_id"],
+                                "tool_name": tc["tool_name"],
+                                "tool_input": tc["input"],
+                                "description": f"This will {tc['tool_name'].replace('_', ' ')} — please confirm.",
+                            },
+                        }
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tc["tool_use_id"],
+                                "content": json.dumps(
+                                    {
+                                        "status": "pending_confirmation",
+                                        "message": "Action requires user confirmation. Waiting for approval.",
+                                    }
+                                ),
+                            }
+                        )
+                        has_pending_confirmation = True
+                        continue
+
+                    raw_result = await execute_tool(
+                        tc["tool_name"], tc["input"], self.session, user_roles=user_roles, user_id=user_id
+                    )
                     result = sanitize_tool_output(raw_result, user_roles=user_roles)
                     tool_results.append(
                         {
@@ -492,6 +521,10 @@ class ChatService:
                             "result": result,
                         },
                     }
+
+                # If any mutation tool is pending confirmation, stop the loop
+                if has_pending_confirmation:
+                    break
                 history.append({"role": "user", "content": tool_results})
                 continue  # Re-call the LLM with tool results
 
@@ -528,6 +561,72 @@ class ChatService:
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
             )
+
+    # ------------------------------------------------------------------
+    # Tool confirmation execution (CAB-1816 Phase 2)
+    # ------------------------------------------------------------------
+
+    async def execute_confirmed_tool(
+        self,
+        *,
+        conversation_id: UUID,
+        tenant_id: str,
+        user_id: str,
+        tool_name: str,
+        tool_input: dict[str, Any],
+        approved: bool,
+        user_roles: list[str] | None = None,
+        client_ip: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Execute a previously deferred mutation tool after user confirmation."""
+        if not approved:
+            yield {
+                "event": "tool_use_result",
+                "data": {
+                    "tool_use_id": "confirmed",
+                    "tool_name": tool_name,
+                    "result": json.dumps({"status": "cancelled", "message": "User cancelled the action."}),
+                },
+            }
+            yield {"event": "message_end", "data": {"stop_reason": "end_turn", "input_tokens": 0, "output_tokens": 0}}
+            return
+
+        if tool_name not in MUTATION_TOOLS:
+            yield {
+                "event": "error",
+                "data": {"error": f"Tool '{tool_name}' is not a mutation tool"},
+            }
+            return
+
+        allowed_roles = TOOL_RBAC.get(tool_name, [])
+        if user_roles is not None and not any(r in allowed_roles for r in user_roles):
+            yield {"event": "error", "data": {"error": "Access denied"}}
+            return
+
+        raw_result = await execute_tool(tool_name, tool_input, self.session, user_roles=user_roles, user_id=user_id)
+        result = sanitize_tool_output(raw_result, user_roles=user_roles)
+
+        await self._audit(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            action="chat_tool_call",
+            resource_type="chat_tool",
+            resource_name=tool_name,
+            resource_id=str(conversation_id),
+            outcome="failure" if '"error"' in raw_result else "success",
+            client_ip=client_ip,
+            details={"tool_name": tool_name, "confirmed": True},
+        )
+
+        yield {
+            "event": "tool_use_result",
+            "data": {
+                "tool_use_id": "confirmed",
+                "tool_name": tool_name,
+                "result": result,
+            },
+        }
+        yield {"event": "message_end", "data": {"stop_reason": "end_turn", "input_tokens": 0, "output_tokens": 0}}
 
     # ------------------------------------------------------------------
     # Tenant API key helpers

@@ -214,6 +214,8 @@ function PageLoader() {
 function ConnectedFloatingChat() {
   const {
     sendMessageStream,
+    confirmTool,
+    fetchBudgetStatus,
     abort,
     loadConversations,
     switchConversation,
@@ -225,6 +227,8 @@ function ConnectedFloatingChat() {
   return (
     <FloatingChat
       onSendMessageStream={sendMessageStream}
+      onConfirmTool={confirmTool}
+      onFetchBudgetStatus={fetchBudgetStatus}
       onAbort={abort}
       onLoadConversations={loadConversations}
       onSwitchConversation={switchConversation}

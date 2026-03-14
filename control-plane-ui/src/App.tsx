@@ -212,8 +212,27 @@ function PageLoader() {
 }
 
 function ConnectedFloatingChat() {
-  const { sendMessage } = useChatService();
-  return <FloatingChat onSendMessage={(msg) => sendMessage(msg)} />;
+  const {
+    sendMessageStream,
+    abort,
+    loadConversations,
+    switchConversation,
+    newConversation,
+    deleteConversation,
+    activeConversationId,
+  } = useChatService();
+
+  return (
+    <FloatingChat
+      onSendMessageStream={sendMessageStream}
+      onAbort={abort}
+      onLoadConversations={loadConversations}
+      onSwitchConversation={switchConversation}
+      onNewConversation={newConversation}
+      onDeleteConversation={deleteConversation}
+      activeConversationId={activeConversationId}
+    />
+  );
 }
 
 function ProtectedRoutes() {

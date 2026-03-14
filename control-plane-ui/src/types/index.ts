@@ -62,6 +62,13 @@ export interface APICreate {
   portal_promoted?: boolean; // Add portal:published tag when true
 }
 
+export interface APIVersionEntry {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
 // Application types
 export interface Application {
   id: string;

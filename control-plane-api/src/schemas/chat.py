@@ -52,10 +52,20 @@ class ConversationArchive(BaseModel):
     status: ConversationStatus
 
 
+class ToolConfirmation(BaseModel):
+    """Confirmation payload for a mutation tool call."""
+
+    tool_use_id: str = Field(..., max_length=200)
+    tool_name: str = Field(..., max_length=100)
+    tool_input: dict = Field(default_factory=dict)
+    approved: bool
+
+
 class MessageSend(BaseModel):
     """Send a message in a conversation."""
 
     content: str = Field(..., min_length=1, max_length=100000)
+    tool_confirmation: ToolConfirmation | None = None
 
 
 class ProviderKeySet(BaseModel):

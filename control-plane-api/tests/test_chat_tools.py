@@ -24,8 +24,8 @@ from src.services.chat_tools import (
 class TestChatToolsFormat:
     """Verify all tool definitions conform to Anthropic tools schema."""
 
-    def test_seven_tools_defined(self):
-        assert len(CHAT_TOOLS) == 7
+    def test_ten_tools_defined(self):
+        assert len(CHAT_TOOLS) == 10
 
     @pytest.mark.parametrize("tool", CHAT_TOOLS, ids=[t["name"] for t in CHAT_TOOLS])
     def test_tool_has_required_fields(self, tool):
@@ -44,6 +44,9 @@ class TestChatToolsFormat:
             "list_deployments",
             "platform_info",
             "search_docs",
+            "list_my_subscriptions",
+            "subscribe_api",
+            "revoke_subscription",
         }
         assert names == expected
 
@@ -460,7 +463,7 @@ class TestFilterToolsForRole:
 
     def test_cpi_admin_sees_all_tools(self):
         result = filter_tools_for_role(CHAT_TOOLS, ["cpi-admin"])
-        assert len(result) == 7
+        assert len(result) == 10
 
     def test_viewer_sees_limited_tools(self):
         result = filter_tools_for_role(CHAT_TOOLS, ["viewer"])
@@ -478,10 +481,10 @@ class TestFilterToolsForRole:
         assert "list_tenants" not in names
         assert "list_gateway_instances" in names
 
-    def test_tenant_admin_sees_six_tools(self):
+    def test_tenant_admin_sees_nine_tools(self):
         result = filter_tools_for_role(CHAT_TOOLS, ["tenant-admin"])
         names = {t["name"] for t in result}
-        assert len(names) == 6
+        assert len(names) == 9
         assert "list_tenants" not in names
 
     def test_empty_roles_sees_nothing(self):

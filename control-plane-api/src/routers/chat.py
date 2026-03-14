@@ -354,6 +354,27 @@ async def send_message(
     fingerprint = compute_session_fingerprint(ip, user_agent) if ip else None
 
     async def event_generator():  # type: ignore[return]
+        # Handle tool confirmation flow (CAB-1816 Phase 2)
+        if body.tool_confirmation:
+            tc = body.tool_confirmation
+            async for event in svc.execute_confirmed_tool(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                user_id=user.id,
+                tool_name=tc.tool_name,
+                tool_input=tc.tool_input,
+                approved=tc.approved,
+                user_roles=user.roles,
+                client_ip=ip or None,
+            ):
+                if await request.is_disconnected():
+                    break
+                yield {
+                    "event": event.get("event", "message"),
+                    "data": json.dumps(event.get("data", {})),
+                }
+            return
+
         async for event in svc.send_message(
             conversation_id=conversation_id,
             tenant_id=tenant_id,

@@ -9,7 +9,8 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { FloatingChat } from './FloatingChat';
-import type { ChatMessage, ChatToolUse } from './FloatingChat';
+import type { ChatMessage } from './FloatingChat';
+import type { ChatToolCall } from '@/hooks/useChatService';
 
 // jsdom does not implement scrollIntoView — mock it globally
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -194,31 +195,34 @@ describe('FloatingChat message sending', () => {
 // ---- loading state ----
 
 describe('FloatingChat loading state', () => {
-  test('shows typing indicator while waiting for response', async () => {
+  test('shows thinking indicator while waiting for streaming response', async () => {
     const user = userEvent.setup();
-    let resolve: (value: string) => void = () => {};
-    const onSendMessage = vi.fn<SendHandler>().mockImplementation(
-      () =>
-        new Promise<string>((r) => {
-          resolve = r;
+    let resolveStream: () => void = () => {};
+    const onSendMessageStream = vi.fn().mockImplementation(
+      (_msg: string, callbacks: { onComplete?: () => void }) =>
+        new Promise<void>((r) => {
+          resolveStream = () => {
+            callbacks.onComplete?.();
+            r();
+          };
         })
     );
-    render(<FloatingChat initialOpen={true} onSendMessage={onSendMessage} />);
+    render(<FloatingChat initialOpen={true} onSendMessageStream={onSendMessageStream} />);
 
     await user.type(screen.getByRole('textbox', { name: /message input/i }), 'Loading?');
     await user.click(screen.getByRole('button', { name: /send message/i }));
 
-    expect(screen.getByLabelText(/assistant is typing/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/assistant is thinking/i)).toBeInTheDocument();
 
     await act(async () => {
-      resolve('Done!');
+      resolveStream();
     });
     await waitFor(() => {
-      expect(screen.queryByLabelText(/assistant is typing/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/assistant is thinking/i)).not.toBeInTheDocument();
     });
   });
 
-  test('send button is disabled while loading', async () => {
+  test('shows abort button while loading instead of send', async () => {
     const user = userEvent.setup();
     let resolve: (value: string) => void = () => {};
     const onSendMessage = vi.fn<SendHandler>().mockImplementation(
@@ -232,7 +236,9 @@ describe('FloatingChat loading state', () => {
     await user.type(screen.getByRole('textbox', { name: /message input/i }), 'Wait');
     await user.click(screen.getByRole('button', { name: /send message/i }));
 
-    expect(screen.getByRole('button', { name: /send message/i })).toBeDisabled();
+    // Send button is replaced by abort button during streaming
+    expect(screen.queryByRole('button', { name: /send message/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /stop generating/i })).toBeInTheDocument();
 
     await act(async () => {
       resolve('Done!');
@@ -336,7 +342,7 @@ describe('FloatingChat message history', () => {
 describe('FloatingChat tool use blocks', () => {
   test('renders tool use blocks when message has toolUse', async () => {
     const user = userEvent.setup();
-    const toolData: ChatToolUse[] = [
+    const toolData: ChatToolCall[] = [
       { tool_use_id: 'tu-1', tool_name: 'list_apis', result: '{"total":3}' },
     ];
     const onSendMessage = vi.fn<SendHandler>().mockResolvedValue('Found 3 APIs.');
@@ -353,8 +359,8 @@ describe('FloatingChat tool use blocks', () => {
     expect(toolData[0].tool_name).toBe('list_apis');
   });
 
-  test('ChatToolUse type has required fields', () => {
-    const tool: ChatToolUse = {
+  test('ChatToolCall type has required fields', () => {
+    const tool: ChatToolCall = {
       tool_use_id: 'tu-1',
       tool_name: 'platform_info',
       result: '{"status":"ok"}',

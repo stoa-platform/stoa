@@ -772,7 +772,7 @@ class TestKafkaMetering:
 
 class TestChatToolDefinitions:
     def test_chat_tools_count(self):
-        assert len(CHAT_TOOLS) == 7
+        assert len(CHAT_TOOLS) == 10
 
     def test_each_tool_has_required_fields(self):
         for tool in CHAT_TOOLS:

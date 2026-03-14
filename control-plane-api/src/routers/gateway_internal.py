@@ -98,6 +98,7 @@ def _mode_to_gateway_type(mode: str) -> GatewayType:
         "sidecar": GatewayType.STOA_SIDECAR,
         "proxy": GatewayType.STOA_PROXY,
         "shadow": GatewayType.STOA_SHADOW,
+        "connect": GatewayType.STOA,
     }
     return mode_map.get(mode_lower, GatewayType.STOA)
 
@@ -113,6 +114,7 @@ def _normalize_mode(mode: str) -> str:
         "sidecar": "sidecar",
         "proxy": "proxy",
         "shadow": "shadow",
+        "connect": "connect",
     }
     return mode_map.get(mode_lower, "edge-mcp")
 

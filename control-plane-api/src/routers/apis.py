@@ -69,6 +69,15 @@ class APIResponse(BaseModel):
     portal_promoted: bool = False  # True if API has portal:published tag
 
 
+class APIVersionEntry(BaseModel):
+    """A single version entry from git history."""
+
+    sha: str
+    message: str
+    author: str
+    date: str
+
+
 def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
     """Convert GitLab YAML data to API response"""
     deployments = api_data.get("deployments", {})
@@ -350,3 +359,30 @@ async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_curre
     except Exception as e:
         logger.error(f"Failed to delete API {api_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete API. Please try again or contact support.")
+
+
+@router.get("/{api_id}/versions", response_model=list[APIVersionEntry])
+@require_tenant_access
+async def list_api_versions(
+    tenant_id: str,
+    api_id: str,
+    limit: int = Query(default=20, ge=1, le=100, description="Max commits to return"),
+    user: User = Depends(get_current_user),
+):
+    """List version history (git commits) for a specific API."""
+    _require_git_service()
+    try:
+        # Verify API exists
+        api_data = await git_service.get_api(tenant_id, api_id)
+        if not api_data:
+            raise HTTPException(status_code=404, detail="API not found")
+
+        # Get commits for this API's directory in the tenant repo
+        api_path = f"tenants/{tenant_id}/apis/{api_id}"
+        commits = await git_service.list_commits(path=api_path, limit=limit)
+        return [APIVersionEntry(**c) for c in commits]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list versions for API {api_id}: {e}")
+        return []

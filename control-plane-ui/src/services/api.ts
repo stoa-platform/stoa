@@ -6,6 +6,7 @@ import type {
   TenantCreate,
   API,
   APICreate,
+  APIVersionEntry,
   Application,
   ApplicationCreate,
   Consumer,
@@ -261,6 +262,13 @@ class ApiService {
 
   async deleteApi(tenantId: string, apiId: string): Promise<void> {
     await this.client.delete(`/v1/tenants/${tenantId}/apis/${apiId}`);
+  }
+
+  async getApiVersions(tenantId: string, apiId: string, limit = 20): Promise<APIVersionEntry[]> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis/${apiId}/versions`, {
+      params: { limit },
+    });
+    return data;
   }
 
   async updateApiAudience(

@@ -1083,7 +1083,7 @@ export type GatewayType =
   | 'stoa_sidecar'
   | 'stoa_proxy'
   | 'stoa_shadow';
-export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow';
+export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow' | 'connect';
 export type GatewayInstanceStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 export type DeploymentSyncStatus =
   | 'pending'

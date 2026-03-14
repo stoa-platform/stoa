@@ -216,9 +216,7 @@ impl AppState {
         if let Some(ref key) = config.control_plane_api_key {
             tool_proxy = tool_proxy.with_api_key(key.clone());
         }
-        let control_plane = Arc::new(
-            tool_proxy.with_circuit_breakers(circuit_breakers.clone()),
-        );
+        let control_plane = Arc::new(tool_proxy.with_circuit_breakers(circuit_breakers.clone()));
         let route_registry = Arc::new(RouteRegistry::new());
         let policy_registry = Arc::new(PolicyRegistry::new());
 

@@ -270,7 +270,10 @@ impl ToolProxyClient {
         }
 
         let list: ToolsListResponse = resp.json().await.map_err(|e| e.to_string())?;
-        info!(count = list.tools.len(), "Discovered tools (internal, API key)");
+        info!(
+            count = list.tools.len(),
+            "Discovered tools (internal, API key)"
+        );
         Ok(list.tools)
     }
 
@@ -1031,8 +1034,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = ToolProxyClient::new(&mock_server.uri(), None)
-            .with_api_key("gw-key-123".to_string());
+        let client =
+            ToolProxyClient::new(&mock_server.uri(), None).with_api_key("gw-key-123".to_string());
         let tools = client.discover_tools().await.unwrap();
         assert_eq!(tools.len(), 2);
         assert_eq!(tools[0].name, "tool_a");
@@ -1069,8 +1072,8 @@ mod tests {
             client_secret: "secret".to_string(),
         };
 
-        let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc))
-            .with_api_key("gw-key".to_string());
+        let client =
+            ToolProxyClient::new(&mock_server.uri(), Some(oidc)).with_api_key("gw-key".to_string());
         let tools = client.discover_tools().await.unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "internal_tool");
@@ -1094,8 +1097,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = ToolProxyClient::new(&mock_server.uri(), None)
-            .with_api_key("gw-key-123".to_string());
+        let client =
+            ToolProxyClient::new(&mock_server.uri(), None).with_api_key("gw-key-123".to_string());
         let tools = client.discover_generated_tools("acme").await.unwrap();
         // Only enabled tools returned
         assert_eq!(tools.len(), 1);
@@ -1112,8 +1115,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = ToolProxyClient::new(&mock_server.uri(), None)
-            .with_api_key("bad-key".to_string());
+        let client =
+            ToolProxyClient::new(&mock_server.uri(), None).with_api_key("bad-key".to_string());
         let result = client.discover_tools().await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("401"));

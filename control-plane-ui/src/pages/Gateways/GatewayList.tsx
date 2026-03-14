@@ -104,6 +104,7 @@ const TYPE_DISPLAY: Record<string, { label: string; icon: typeof Server }> = {
   aws_apigateway: { label: 'AWS API GW', icon: Server },
   azure_apim: { label: 'Azure APIM', icon: Server },
   gravitee: { label: 'Gravitee', icon: Server },
+  stoa_connect: { label: 'STOA Connect', icon: GitBranch },
 };
 
 const MODE_LABELS: Record<GatewayMode, string> = {
@@ -111,6 +112,7 @@ const MODE_LABELS: Record<GatewayMode, string> = {
   sidecar: 'STOA Link',
   proxy: 'Proxy',
   shadow: 'Shadow',
+  connect: 'Connect',
 };
 
 // ---------------------------------------------------------------------------

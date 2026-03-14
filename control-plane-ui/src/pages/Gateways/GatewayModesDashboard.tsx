@@ -51,6 +51,15 @@ const modeConfigs: ModeConfig[] = [
     bgColor: 'bg-orange-50 dark:bg-orange-950/30',
     borderColor: 'border-orange-200 dark:border-orange-800',
   },
+  {
+    id: 'connect',
+    name: 'Connect',
+    description: 'Lightweight agent bridging third-party gateways to the Control Plane',
+    icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1',
+    color: 'text-teal-600',
+    bgColor: 'bg-teal-50 dark:bg-teal-950/30',
+    borderColor: 'border-teal-200 dark:border-teal-800',
+  },
 ];
 
 interface ModeStats {
@@ -142,7 +151,7 @@ export function GatewayModesDashboard() {
           </div>
           <div className="text-right">
             <p className="text-indigo-100 text-sm">Unified Architecture</p>
-            <p className="text-lg font-medium mt-1">4 Deployment Modes</p>
+            <p className="text-lg font-medium mt-1">5 Deployment Modes</p>
           </div>
         </div>
       </div>
@@ -219,10 +228,7 @@ export function GatewayModesDashboard() {
           STOA Gateway Architecture (ADR-024)
         </h2>
         <div className="prose prose-sm text-neutral-600 dark:text-neutral-400">
-          <p>
-            The STOA Gateway uses a unified architecture with 4 deployment modes, all from a single
-            Rust binary:
-          </p>
+          <p>The STOA Gateway uses a unified architecture with 5 deployment modes:</p>
           <ul className="mt-2 space-y-1">
             <li>
               <strong className="text-neutral-900 dark:text-white">Edge MCP:</strong> Native MCP
@@ -239,6 +245,10 @@ export function GatewayModesDashboard() {
             <li>
               <strong className="text-neutral-900 dark:text-white">Shadow:</strong> Passive traffic
               observation for auto-generating API contracts
+            </li>
+            <li>
+              <strong className="text-neutral-900 dark:text-white">Connect:</strong> Lightweight
+              agent bridging third-party gateways (Kong, Gravitee, webMethods) to the Control Plane
             </li>
           </ul>
         </div>

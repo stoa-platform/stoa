@@ -79,6 +79,10 @@ export function APIDetail() {
         ? [...currentTags.filter((t) => t !== 'portal:published'), 'portal:published']
         : currentTags.filter((t) => t !== 'portal:published');
       await apiService.updateApi(tenantId!, apiId!, { tags: newTags });
+      // Trigger catalog sync so the Portal DB picks up the change
+      await apiService.triggerCatalogSync(tenantId!).catch(() => {
+        /* sync is best-effort — tag update already succeeded */
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api', tenantId, apiId] });
@@ -96,6 +100,8 @@ export function APIDetail() {
         environment,
         version: api?.version || '1.0.0',
       });
+      // Sync catalog so deployment flags are reflected in Portal
+      await apiService.triggerCatalogSync(tenantId!).catch(() => {});
     },
     onSuccess: (_data, environment) => {
       queryClient.invalidateQueries({ queryKey: ['api', tenantId, apiId] });

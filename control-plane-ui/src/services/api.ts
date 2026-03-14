@@ -282,6 +282,10 @@ class ApiService {
     return data;
   }
 
+  async triggerCatalogSync(tenantId: string): Promise<void> {
+    await this.client.post(`/v1/admin/catalog/sync/tenant/${tenantId}`);
+  }
+
   // Applications
   async getApplications(tenantId: string): Promise<Application[]> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/applications`, {

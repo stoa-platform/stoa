@@ -493,7 +493,7 @@ export function APIs() {
                   <tr
                     key={api.id}
                     className="hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
-                    onClick={() => navigate(`/apis/${selectedTenant}/${api.id}`)}
+                    onClick={() => navigate(`/apis/${selectedTenant}/${api.name}`)}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>

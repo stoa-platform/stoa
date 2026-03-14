@@ -6,6 +6,7 @@
 //! Run: `cargo test --test contract`
 //! Review: `cargo insta review`
 
+mod a2a;
 mod common;
 mod discovery;
 mod errors;

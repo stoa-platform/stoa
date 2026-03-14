@@ -204,7 +204,7 @@ mod tests {
     fn test_task(id: &str) -> Task {
         Task {
             id: id.to_string(),
-            session_id: None,
+            context_id: None,
             status: TaskStatus {
                 state: TaskState::Submitted,
                 message: None,

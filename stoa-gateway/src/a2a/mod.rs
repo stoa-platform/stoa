@@ -5,9 +5,10 @@
 //!
 //! Endpoints:
 //! - GET  /.well-known/agent.json — Agent Card discovery
-//! - POST /a2a — JSON-RPC 2.0 task operations
-//! - GET  /a2a/agents — List registered agent cards
+//! - POST /a2a — JSON-RPC 2.0 task operations (with MCP tool bridge)
+//! - Admin: CRUD for agent registrations (under /admin/a2a/agents)
 
+pub mod admin;
 pub mod discovery;
 pub mod handlers;
 pub mod registry;

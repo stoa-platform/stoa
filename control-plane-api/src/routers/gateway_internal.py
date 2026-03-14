@@ -2,13 +2,16 @@
 
 These endpoints are called by STOA gateways for auto-registration and heartbeat.
 Not exposed on public ingress — internal traffic only.
+
+Includes tool discovery endpoints (CAB-1817) authenticated via X-Gateway-Key
+instead of user JWT, so sidecars (STOA Link) can discover tools without OIDC.
 """
 
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +25,9 @@ from src.models.gateway_instance import (
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.repositories.gateway_policy import GatewayPolicyRepository
+from src.schemas.contract import McpToolDefinition, TenantToolsResponse
 from src.schemas.gateway import GatewayInstanceResponse
+from src.services.uac_tool_generator import UacToolGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +266,100 @@ async def gateway_heartbeat(
         gateway_id,
         payload.uptime_seconds,
         payload.routes_count,
+    )
+
+
+class InternalToolDef(BaseModel):
+    """Tool definition in the format expected by the gateway (ToolsListResponse)."""
+
+    name: str
+    description: str
+    inputSchema: dict = Field(default_factory=lambda: {"type": "object", "properties": {}, "required": []})
+
+
+class InternalToolsListResponse(BaseModel):
+    """Response matching the gateway's ToolsListResponse format."""
+
+    tools: list[InternalToolDef]
+
+
+@router.get("/tools", response_model=InternalToolsListResponse)
+async def get_internal_tools(
+    tenant_id: str = Query(default="", description="Tenant ID (optional filter)"),
+    x_gateway_key: str = Header(..., alias="X-Gateway-Key"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Internal tool discovery for gateways/sidecars (CAB-1817).
+
+    Returns UAC-generated tools in the gateway's expected format (ToolsListResponse),
+    authenticated via X-Gateway-Key. Allows STOA Link sidecars to discover tools
+    without OIDC client credentials.
+    """
+    _validate_gateway_key(x_gateway_key)
+
+    if not tenant_id:
+        return InternalToolsListResponse(tools=[])
+
+    generator = UacToolGenerator(db)
+    tools = await generator.get_tools_for_tenant(tenant_id)
+
+    import json as _json
+
+    result = []
+    for t in tools:
+        if not t.enabled:
+            continue
+        input_schema = _json.loads(t.input_schema) if t.input_schema else {"type": "object", "properties": {}, "required": []}
+        result.append(
+            InternalToolDef(
+                name=t.tool_name,
+                description=t.description or "",
+                inputSchema=input_schema,
+            )
+        )
+
+    return InternalToolsListResponse(tools=result)
+
+
+@router.get("/tools/generated", response_model=TenantToolsResponse)
+async def get_internal_generated_tools(
+    tenant_id: str = Query(..., description="Tenant ID"),
+    x_gateway_key: str = Header(..., alias="X-Gateway-Key"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Internal tool discovery for gateways/sidecars (CAB-1817).
+
+    Returns UAC-generated tools for a tenant, authenticated via X-Gateway-Key
+    instead of user JWT. This allows STOA Link sidecars to discover tools
+    without needing OIDC client credentials.
+    """
+    _validate_gateway_key(x_gateway_key)
+
+    generator = UacToolGenerator(db)
+    tools = await generator.get_tools_for_tenant(tenant_id)
+
+    return TenantToolsResponse(
+        tenant_id=tenant_id,
+        tools=[_internal_tool_to_response(t) for t in tools],
+        total=len(tools),
+    )
+
+
+def _internal_tool_to_response(tool) -> McpToolDefinition:
+    """Convert ORM tool to response schema (reused from contracts.py)."""
+    import json as _json
+
+    return McpToolDefinition(
+        tool_name=tool.tool_name,
+        description=tool.description,
+        input_schema=_json.loads(tool.input_schema) if tool.input_schema else None,
+        output_schema=_json.loads(tool.output_schema) if tool.output_schema else None,
+        backend_url=tool.backend_url,
+        http_method=tool.http_method,
+        path_pattern=tool.path_pattern,
+        version=tool.version,
+        spec_hash=tool.spec_hash,
+        enabled=tool.enabled,
     )
 
 

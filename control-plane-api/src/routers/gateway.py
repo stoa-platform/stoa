@@ -415,8 +415,8 @@ async def gateway_health(user: User = Depends(get_current_user), token: str = De
             "proxy_url": settings.GATEWAY_ADMIN_PROXY_URL if settings.GATEWAY_USE_OIDC_PROXY else None,
             "gateway_health": health,
         }
-    except Exception as e:
-        logger.error(f"Gateway health check failed: {e}")
+    except Exception:
+        logger.exception("Gateway health check failed")
         return {
             "status": "unhealthy",
             "proxy_mode": settings.GATEWAY_USE_OIDC_PROXY,

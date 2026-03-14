@@ -88,8 +88,8 @@ impl std::fmt::Debug for AuthenticatedUser {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AuthenticatedUser")
             .field("user_id", &self.user_id)
-            .field("username", &self.username)
-            .field("email", &self.email)
+            .field("username", &"[REDACTED]")
+            .field("email", &"[REDACTED]")
             .field("tenant_id", &self.tenant_id)
             .field("raw_token", &"[REDACTED]")
             .finish()

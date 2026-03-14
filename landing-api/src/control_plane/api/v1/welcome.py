@@ -1,11 +1,11 @@
 """Welcome endpoint for invite token validation."""
 
 import re
+from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from urllib.parse import quote
 
 from control_plane.config import settings
 from control_plane.database import get_db
@@ -86,8 +86,17 @@ async def welcome(
             detail={"code": "invalid_token_format", "message": "Invalid token format"},
         )
 
-    # Build redirect URL with URL-encoded token (defense in depth)
+    # Build redirect URL — fixed path with URL-encoded token as query param
+    allowed_host = urlparse(settings.portal_url).netloc
     redirect_url = f"{settings.portal_url}/onboarding?token={quote(token, safe='')}"
+
+    # Validate redirect stays within our domain (prevents open redirect)
+    parsed = urlparse(redirect_url)
+    if parsed.netloc != allowed_host:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_redirect", "message": "Invalid redirect target"},
+        )
 
     # Create redirect response with custom header
     response = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)

@@ -247,8 +247,8 @@ async def get_gitlab_health(
             "default_branch": "main",
         }
 
-    except Exception as e:
-        logger.error(f"GitLab health check failed: {e}")
+    except Exception:
+        logger.exception("GitLab health check failed")
         return {
             "status": "unhealthy",
             "error": "GitLab connection failed. Check server logs for details.",

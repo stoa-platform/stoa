@@ -763,6 +763,94 @@ pub fn track_grpc_bridge_response(method: &str, success: bool) {
         .inc();
 }
 
+// === GraphQL Protocol Metrics (CAB-1756) ===
+
+static GRAPHQL_PROXY_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_proxy_requests_total",
+        "Total GraphQL proxy requests",
+        &["route_id"]
+    )
+    .expect("Failed to create stoa_graphql_proxy_requests_total metric")
+});
+
+static GRAPHQL_PROXY_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_proxy_responses_total",
+        "Total GraphQL proxy responses by success/failure",
+        &["route_id", "success"]
+    )
+    .expect("Failed to create stoa_graphql_proxy_responses_total metric")
+});
+
+static GRAPHQL_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_bridge_requests_total",
+        "Total GraphQL bridge tool requests",
+        &["field"]
+    )
+    .expect("Failed to create stoa_graphql_bridge_requests_total metric")
+});
+
+static GRAPHQL_BRIDGE_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_bridge_responses_total",
+        "Total GraphQL bridge tool responses by success/failure",
+        &["field", "success"]
+    )
+    .expect("Failed to create stoa_graphql_bridge_responses_total metric")
+});
+
+pub fn track_graphql_proxy_request(route_id: &str) {
+    GRAPHQL_PROXY_REQUESTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_graphql_proxy_response(route_id: &str, success: bool) {
+    GRAPHQL_PROXY_RESPONSES
+        .with_label_values(&[route_id, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_graphql_bridge_request(field: &str) {
+    GRAPHQL_BRIDGE_REQUESTS.with_label_values(&[field]).inc();
+}
+
+pub fn track_graphql_bridge_response(field: &str, success: bool) {
+    GRAPHQL_BRIDGE_RESPONSES
+        .with_label_values(&[field, if success { "true" } else { "false" }])
+        .inc();
+}
+
+// === Kafka Event Bridge Metrics (CAB-1757) ===
+
+static KAFKA_BRIDGE_PUBLISH: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_kafka_bridge_publish_total",
+        "Total Kafka bridge publish requests by topic and success/failure",
+        &["topic", "success"]
+    )
+    .expect("Failed to create stoa_kafka_bridge_publish_total metric")
+});
+
+static KAFKA_BRIDGE_SUBSCRIBE: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_kafka_bridge_subscribe_total",
+        "Total Kafka bridge subscribe requests by tenant",
+        &["tenant_id"]
+    )
+    .expect("Failed to create stoa_kafka_bridge_subscribe_total metric")
+});
+
+pub fn track_kafka_bridge_publish(topic: &str, success: bool) {
+    KAFKA_BRIDGE_PUBLISH
+        .with_label_values(&[topic, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_kafka_bridge_subscribe(tenant_id: &str) {
+    KAFKA_BRIDGE_SUBSCRIBE.with_label_values(&[tenant_id]).inc();
+}
+
 /// Update session count gauge
 pub fn update_session_count(count: usize) {
     MCP_SESSIONS_ACTIVE.set(count as f64);

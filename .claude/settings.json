@@ -34,6 +34,15 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-protect-infra.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-no-k8s-secrets.sh\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -47,6 +56,10 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/hegemon/tools/state/hook-state-tracker.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-merge-verify.sh\""
           }
         ]
       },
@@ -65,6 +78,26 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-instance-capture.sh\""
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/permission-request-contabo.sh\""
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-compact-state.sh\""
           }
         ]
       }

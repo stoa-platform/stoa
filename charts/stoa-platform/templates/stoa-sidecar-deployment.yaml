@@ -89,13 +89,13 @@ spec:
 
             # Control Plane connection
             - name: STOA_CONTROL_PLANE_URL
-              value: {{ .Values.stoaSidecar.controlPlaneUrl | default "http://control-plane-api.stoa-system.svc.cluster.local:8000" | quote }}
+              value: {{ .Values.stoaSidecar.controlPlaneUrl | default "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80" | quote }}
             {{- if .Values.stoaSidecar.secretName }}
             - name: STOA_CONTROL_PLANE_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.stoaSidecar.secretName }}
-                  key: control-plane-api-key
+                  key: STOA_CONTROL_PLANE_API_KEY
                   optional: true
             {{- end }}
 
@@ -111,7 +111,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.stoaSidecar.secretName }}
-                  key: keycloak-client-secret
+                  key: STOA_KEYCLOAK_CLIENT_SECRET
                   optional: true
             {{- end }}
 

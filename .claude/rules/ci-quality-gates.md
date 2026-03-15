@@ -7,34 +7,35 @@ globs: ".github/**,*-ci.yml"
 
 ## Full Deployment Lifecycle
 
-A change is NOT done until the pod is updated on EKS. The complete lifecycle:
+A change is NOT done until ArgoCD has synced the new image. The complete lifecycle:
 
 ```
 1. PR created          → CI (lint, test, coverage) + security-scan.yml
 2. CI Green            → 3 required checks pass (License Compliance, SBOM Generation, Verify Signed Commits)
-3. Merge to main       → CI re-runs on main + Docker build + ECR push
-4. CI Green on main    → apply-manifest (if applicable) + deploy (rollout restart)
-5. CD Green            → smoke-test (@smoke E2E) + notify
-6. Pod updated         → verify: kubectl get pods -n stoa-system (new image running)
+3. Merge to main       → CI re-runs on main + Docker build + GHCR push
+4. CI Green on main    → dispatch image-updated event to stoa-infra
+5. stoa-infra          → updates Helm chart values with new image tag
+6. ArgoCD auto-sync    → deploys new image (selfHeal + prune enabled)
+7. CD Green            → smoke-test (health endpoint checks) + notify
+8. Pod updated         → verify: ArgoCD Synced + Healthy
 ```
 
 ### What runs when
 
-| Event | CI | Docker | Apply Manifest | Deploy | Smoke Test |
-|-------|-----|--------|---------------|--------|------------|
-| PR to main | Yes | No | No | No | No |
-| Push to main (merge) | Yes | Yes | Yes (UI/portal) | Yes | Yes |
-| workflow_dispatch | Yes | Yes | Yes (UI/portal) | Yes | Yes |
+| Event | CI | Docker | GitOps Dispatch | Smoke Test |
+|-------|-----|--------|----------------|------------|
+| PR to main | Yes | No | No | No |
+| Push to main (merge) | Yes | Yes | Yes | Yes |
+| workflow_dispatch | Yes | Yes | Yes | Yes |
 
 ### Pipeline per component
 
 | Component | Pipeline on merge | Deploy method |
 |-----------|-------------------|---------------|
-| control-plane-api | ci → integration → docker → deploy | `kubectl set image` |
-| control-plane-ui | ci → docker → apply-manifest → deploy | `kubectl apply` + `set image` |
-| portal | ci → docker → apply-manifest → deploy | `kubectl apply` + `set image` |
-| stoa-gateway | ci → docker → deploy | `kubectl rollout restart` (ArgoCD-managed) |
-| mcp-gateway | ci → docker → deploy | `kubectl set image` |
+| control-plane-api | ci → integration → docker → gitops-deploy | ArgoCD (stoa-infra dispatch) |
+| control-plane-ui | ci → docker → gitops-deploy | ArgoCD (stoa-infra dispatch) |
+| portal | ci → docker → gitops-deploy | ArgoCD (stoa-infra dispatch) |
+| stoa-gateway | ci → docker → gitops-deploy | ArgoCD (stoa-infra dispatch) |
 
 ### Path triggers
 
@@ -50,6 +51,9 @@ Each workflow only triggers on its own component paths:
 2. **SBOM Generation** — CycloneDX + SPDX
 3. **Verify Signed Commits** — signature check
 
+1 required check from `regression-guard.yml`:
+4. **Regression Test Guard** — blocks `fix()` PRs without regression tests (bypass: `skip-regression` label)
+
 > `security-scan.yml` runs the heavy jobs (SAST, dependency audit, secrets, container scan) in parallel but is NOT required for merge.
 
 ### Post-merge verification
@@ -59,23 +63,23 @@ After merge, verify the full pipeline completed:
 # Check CI + deploy status on main
 gh run list --branch main --limit 5
 
-# Verify pod is running new image
-kubectl get pods -n stoa-system -o wide
-kubectl describe deployment/<name> -n stoa-system | grep Image
+# Verify ArgoCD sync status (all apps managed by ArgoCD)
+KUBECONFIG=~/.kube/config-stoa-ovh kubectl get applications -n argocd \
+  -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'
 
-# For ArgoCD-managed (stoa-gateway)
-kubectl get applications -n argocd
+# Verify pod is running new image
+KUBECONFIG=~/.kube/config-stoa-ovh kubectl get pods -n stoa-system -o wide
+KUBECONFIG=~/.kube/config-stoa-ovh kubectl describe deployment/<name> -n stoa-system | grep Image
 ```
 
 ### Component → CD verification map
 
 | Component | CI Workflow | ArgoCD App | Deploy Method | AWX? |
 |-----------|-----------|------------|---------------|------|
-| control-plane-api | `control-plane-api-ci` | `control-plane-api` | `kubectl set image` | No |
-| control-plane-ui | `control-plane-ui-ci` | `control-plane-ui` | `kubectl apply` + `set image` | No |
-| portal | `stoa-portal-ci` | `stoa-portal` | `kubectl apply` + `set image` | No |
-| stoa-gateway | `stoa-gateway-ci` | `stoa-gateway` | `kubectl rollout restart` | No |
-| mcp-gateway | `mcp-gateway-ci` | `mcp-gateway` | `kubectl set image` | No |
+| control-plane-api | `control-plane-api-ci` | `control-plane-api` | GitOps (stoa-infra → ArgoCD) | No |
+| control-plane-ui | `control-plane-ui-ci` | `control-plane-ui` | GitOps (stoa-infra → ArgoCD) | No |
+| portal | `stoa-portal-ci` | `stoa-portal` | GitOps (stoa-infra → ArgoCD) | No |
+| stoa-gateway | `stoa-gateway-ci` | `stoa-gateway` | GitOps (stoa-infra → ArgoCD) | No |
 | keycloak | N/A | N/A | AWX job template | Yes |
 | apigateway (wM) | N/A | N/A | AWX job template | Yes |
 
@@ -150,9 +154,9 @@ cargo clippy --all-targets --all-features -- \
   -W clippy::panic
 ```
 
-## Regression Guard (regression-guard.yml)
+## Regression Guard (regression-guard.yml) — REQUIRED CHECK
 
-Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and checks for regression tests.
+Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and **blocks merge** if no regression test is present.
 
 | Detection | Source |
 |-----------|--------|
@@ -166,7 +170,12 @@ Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and che
 | `fn regression_*` functions in `.rs` diff | Rust |
 | `@regression` tag in `.feature` diff | E2E (Playwright BDD) |
 
-**Mode**: Warning (non-blocking annotation). Promotes to blocking after stabilization.
+**Mode**: **Blocking** (required check, exit 1 on missing regression test).
+
+**Bypasses**:
+- `skip-regression` label on PR — for documented hotfixes where regression test is impractical
+- Docs-only fix PRs (only `.md`, `.yml`, `.yaml`, `.json`, `.toml`, `.claude/`, `.github/` changed) — auto-pass
+- Non-fix PRs (`feat()`, `chore()`, `refactor()`, etc.) — auto-pass
 
 ## Docker Build
 
@@ -188,15 +197,20 @@ Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and che
 | Cargo audit | stoa-gateway | Non-blocking (`continue-on-error: true`) |
 | pip-audit / npm audit | All components | Non-blocking |
 
-## K8s Deploy Pipeline
+## GitOps Deploy Pipeline
 
-Every component CI MUST have `apply-manifest` between `docker` and `deploy`:
+All components use GitOps for deployment. CI dispatches image updates to stoa-infra,
+ArgoCD auto-syncs the change to the cluster:
 ```
-ci → docker → apply-manifest → deploy (rollout restart)
+ci → docker → gitops-deploy (dispatch to stoa-infra) → ArgoCD sync → smoke-test
 ```
 
-Components with `apply-manifest`: stoa-gateway, control-plane-ui, portal.
-Exception: control-plane-api (naming mismatch, standalone manifest uses `stoa-control-plane-api`).
+Workflow: `reusable-gitops-deploy.yml` — dispatches `image-updated` event to `PotoMitan/stoa-infra`.
+Requires: `STOA_INFRA_DISPATCH_TOKEN` secret (PAT with repo scope).
+
+ArgoCD apps (OVH prod): `control-plane-api`, `control-plane-ui`, `stoa-portal`, `stoa-gateway`.
+All have `automated.selfHeal: true` + `automated.prune: true`.
+Source: `stoa-infra` Helm charts (`charts/<component>/values.yaml`).
 
 ## CI Health Policy
 

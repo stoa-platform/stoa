@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     GATEWAY_HEARTBEAT_TIMEOUT_SECONDS: int = 90
     # Health check interval in seconds (how often to check for stale gateways)
     GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS: int = 30
+    # ArgoCD reconciler interval (how often to sync ArgoCD apps → gateway_instances)
+    GATEWAY_RECONCILER_INTERVAL_SECONDS: int = 60
 
     # Docs Search — Algolia integration (CAB-1327)
     ALGOLIA_APP_ID: str = "GIWP67WK7V"
@@ -140,6 +142,9 @@ class Settings(BaseSettings):
     # Chat Agent — Anthropic integration (CAB-286)
     CHAT_ENABLED: bool = False
     CHAT_PROVIDER_API_KEY: str = ""  # Anthropic key — via Infisical
+    # Gateway routing (CAB-1822) — when set, chat routes through Stoa Gateway LLM proxy
+    CHAT_GATEWAY_URL: str = ""  # e.g. http://stoa-gateway.stoa-system.svc.cluster.local:80
+    CHAT_GATEWAY_API_KEY: str = ""  # STOA consumer API key for gateway auth
 
     # Docs Search — Semantic / Embedding (CAB-1327 Phase 2)
     EMBEDDING_PROVIDER: str = "openai"  # openai | none
@@ -253,6 +258,13 @@ class Settings(BaseSettings):
     # Logging - Masking
     LOG_MASKING_ENABLED: bool = True
     LOG_MASKING_PATTERNS: str = '["password", "secret", "token", "api_key", "authorization"]'
+
+    # HashiCorp Vault (runtime secrets — MCP server credentials, OAuth tokens)
+    VAULT_ADDR: str = f"https://hcvault.{_BASE_DOMAIN}"
+    VAULT_TOKEN: str = ""  # Dev mode token; production uses K8s auth
+    VAULT_KUBERNETES_ROLE: str = "control-plane-api"
+    VAULT_MOUNT_POINT: str = "secret"
+    VAULT_ENABLED: bool = True  # Set to False to skip Vault operations (credentials not stored)
 
     # Backend API encryption (Fernet key for BYOK credential storage — CAB-1188)
     BACKEND_ENCRYPTION_KEY: str = ""

@@ -1,6 +1,6 @@
 ---
 description: AI-native development workflow, session management, context management, and state files protocol
-globs: "memory.md,plan.md,.claude/**"
+globs: "memory.md,plan.md"
 ---
 
 # AI Workflow Rules

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { apiService } from '../services/api';
 import type {
   APITransaction,
@@ -18,11 +18,6 @@ import {
   ChevronDown,
   Search,
   Filter,
-  ArrowRight,
-  Server,
-  Database,
-  Globe,
-  Zap,
   TrendingUp,
   AlertTriangle,
   Timer,
@@ -33,6 +28,8 @@ import { useNavigate } from 'react-router-dom';
 import { config } from '../config';
 import { observabilityPath } from '../utils/navigation';
 import { clsx } from 'clsx';
+import { SubNav } from '../components/SubNav';
+import { observabilityTabs } from '../components/subNavGroups';
 
 // =============================================================================
 // STATUS CONFIGURATIONS
@@ -158,10 +155,35 @@ function StatsCard({
 }
 
 // =============================================================================
-// TRANSACTION FLOW VISUALIZATION
+// SPAN WATERFALL VISUALIZATION (CAB-1790 Phase 3)
 // =============================================================================
 
-function TransactionFlow({ spans }: { spans: TransactionSpan[] }) {
+const spanBarColors: Record<TransactionStatus, { bar: string; text: string }> = {
+  success: {
+    bar: 'bg-green-500 dark:bg-green-600',
+    text: 'text-green-700 dark:text-green-400',
+  },
+  error: {
+    bar: 'bg-red-500 dark:bg-red-600',
+    text: 'text-red-700 dark:text-red-400',
+  },
+  timeout: {
+    bar: 'bg-orange-500 dark:bg-orange-600',
+    text: 'text-orange-700 dark:text-orange-400',
+  },
+  pending: {
+    bar: 'bg-blue-400 dark:bg-blue-600',
+    text: 'text-blue-700 dark:text-blue-400',
+  },
+};
+
+function SpanWaterfall({
+  spans,
+  totalDurationMs,
+}: {
+  spans: TransactionSpan[];
+  totalDurationMs: number;
+}) {
   if (!spans || spans.length === 0) {
     return (
       <div className="text-sm text-neutral-500 dark:text-neutral-400 italic">
@@ -170,44 +192,73 @@ function TransactionFlow({ spans }: { spans: TransactionSpan[] }) {
     );
   }
 
-  const serviceIcons: Record<string, typeof Server> = {
-    gateway: Globe,
-    kafka: Database,
-    backend: Server,
-    cache: Zap,
-  };
+  // Use the total duration or the max span end, whichever is larger
+  const maxEnd = Math.max(
+    totalDurationMs,
+    ...spans.map((s) => (s.start_offset_ms ?? 0) + s.duration_ms)
+  );
+  const scale = maxEnd > 0 ? maxEnd : 1;
+
+  // Time axis ticks (4 markers)
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((pct) => Math.round(pct * scale));
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto py-2">
+    <div className="space-y-0.5">
+      {/* Time axis */}
+      <div className="flex items-center ml-[140px] mr-2 mb-1 relative h-4">
+        {ticks.map((ms, i) => (
+          <span
+            key={i}
+            className="absolute text-[10px] text-neutral-400 dark:text-neutral-500 -translate-x-1/2"
+            style={{ left: `${(ms / scale) * 100}%` }}
+          >
+            {ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`}
+          </span>
+        ))}
+      </div>
+
+      {/* Span rows */}
       {spans.map((span, index) => {
-        const config = statusConfig[span.status];
-        const Icon = serviceIcons[span.service.toLowerCase()] || Server;
+        const offset = span.start_offset_ms ?? 0;
+        const leftPct = (offset / scale) * 100;
+        const widthPct = Math.max((span.duration_ms / scale) * 100, 0.5); // min 0.5% for visibility
+        const colors = spanBarColors[span.status] || spanBarColors.pending;
 
         return (
-          <div key={index} className="flex items-center">
-            <div
-              className={clsx(
-                'flex items-center gap-2 px-3 py-2 rounded-lg border',
-                span.status === 'success'
-                  ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
-                  : span.status === 'error'
-                    ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-                    : span.status === 'timeout'
-                      ? 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20'
-                      : 'border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800'
-              )}
-            >
-              <Icon className={clsx('h-4 w-4', config.color)} />
-              <div className="text-xs">
-                <div className="font-medium text-neutral-900 dark:text-white">{span.service}</div>
-                <div className="text-neutral-500 dark:text-neutral-400">
-                  {formatDuration(span.duration_ms)}
-                </div>
-              </div>
+          <div key={index} className="flex items-center group" data-testid="waterfall-row">
+            {/* Service label */}
+            <div className="w-[140px] flex-shrink-0 pr-3 text-right">
+              <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 truncate block">
+                {span.name}
+              </span>
+              <span className="text-[10px] text-neutral-400 dark:text-neutral-500 truncate block">
+                {span.service}
+              </span>
             </div>
-            {index < spans.length - 1 && (
-              <ArrowRight className="h-4 w-4 text-neutral-400 mx-1 flex-shrink-0" />
-            )}
+
+            {/* Bar track */}
+            <div className="flex-1 relative h-7 bg-neutral-50 dark:bg-neutral-800 rounded mr-2">
+              {/* The span bar */}
+              <div
+                className={clsx(
+                  'absolute top-1 bottom-1 rounded-sm transition-all',
+                  colors.bar,
+                  'group-hover:brightness-110'
+                )}
+                style={{
+                  left: `${leftPct}%`,
+                  width: `${widthPct}%`,
+                }}
+                title={`${span.name}: ${formatDuration(span.duration_ms)} (offset: ${formatDuration(offset)})`}
+              />
+            </div>
+
+            {/* Duration label */}
+            <div className="w-[60px] flex-shrink-0 text-right">
+              <span className={clsx('text-xs font-mono', colors.text)}>
+                {formatDuration(span.duration_ms)}
+              </span>
+            </div>
           </div>
         );
       })}
@@ -273,21 +324,46 @@ function TransactionRow({
         </div>
       </td>
       <td className="px-4 py-3">
-        <span
-          className={clsx(
-            'px-2 py-1 rounded text-xs font-bold',
-            getStatusCodeColor(transaction.status_code)
+        <div className="flex items-center gap-2">
+          <span
+            className={clsx(
+              'px-2 py-1 rounded text-xs font-bold',
+              getStatusCodeColor(transaction.status_code)
+            )}
+          >
+            {transaction.status_code}
+          </span>
+          {transaction.status_text && transaction.status_code >= 400 && (
+            <span className="text-xs text-neutral-500 dark:text-neutral-400">
+              {transaction.status_text}
+            </span>
           )}
-        >
-          {transaction.status_code}
-        </span>
+        </div>
       </td>
       <td className="px-4 py-3">
-        <div className={clsx('flex items-center gap-1.5', config.color)}>
-          <StatusIcon
-            className={clsx('h-4 w-4', transaction.status === 'pending' && 'animate-spin')}
-          />
-          <span className="text-sm font-medium">{config.label}</span>
+        <div className="flex items-center gap-2">
+          <div className={clsx('flex items-center gap-1.5', config.color)}>
+            <StatusIcon
+              className={clsx('h-4 w-4', transaction.status === 'pending' && 'animate-spin')}
+            />
+            <span className="text-sm font-medium">{config.label}</span>
+          </div>
+          {transaction.error_source && (
+            <span
+              className={clsx(
+                'px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide',
+                transaction.error_source === 'auth' || transaction.error_source === 'rbac'
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                  : transaction.error_source === 'rate-limiter'
+                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                    : transaction.error_source === 'gateway'
+                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400'
+              )}
+            >
+              {transaction.error_source}
+            </span>
+          )}
         </div>
       </td>
       <td className="px-4 py-3">
@@ -359,89 +435,66 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
         className="px-4 py-4 bg-neutral-50 dark:bg-neutral-900 border-t border-b border-neutral-200 dark:border-neutral-700"
       >
         <div className="space-y-4">
-          {/* Flow Visualization */}
-          <div>
-            <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
-              Transaction Flow
-            </h4>
-            <TransactionFlow spans={transaction.spans} />
-          </div>
-
-          {/* Span Details */}
-          <div>
-            <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
-              Span Details
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {transaction.spans.map((span, index) => {
-                const config = statusConfig[span.status];
-                const StatusIcon = config.icon;
-
-                return (
-                  <div
-                    key={index}
-                    className={clsx(
-                      'p-3 rounded-lg border',
-                      span.status === 'success'
-                        ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
-                        : span.status === 'error'
-                          ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-                          : span.status === 'timeout'
-                            ? 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20'
-                            : 'border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800'
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-neutral-900 dark:text-white">
-                        {span.name}
-                      </span>
-                      <StatusIcon className={clsx('h-4 w-4', config.color)} />
-                    </div>
-                    <div className="text-xs space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-neutral-500 dark:text-neutral-400">Service:</span>
-                        <span className="font-medium dark:text-neutral-200">{span.service}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-500 dark:text-neutral-400">Duration:</span>
-                        <span className="font-medium dark:text-neutral-200">
-                          {formatDuration(span.duration_ms)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-500 dark:text-neutral-400">Started:</span>
-                        <span className="font-medium dark:text-neutral-200">
-                          {formatTime(span.started_at)}
-                        </span>
-                      </div>
-                      {span.error && (
-                        <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 rounded text-red-700 dark:text-red-400">
-                          {span.error}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+          {/* Demo Mode Warning */}
+          {transaction.demo_mode && (
+            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span>
+                Span detail unavailable in OpenSearch — showing simulated flow. The transaction
+                summary above reflects real data.
+              </span>
             </div>
+          )}
+
+          {/* Span Waterfall (CAB-1790 Phase 3) */}
+          <div>
+            <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
+              Span Waterfall
+            </h4>
+            <SpanWaterfall
+              spans={transaction.spans}
+              totalDurationMs={transaction.total_duration_ms}
+            />
           </div>
 
           {/* Error Message */}
-          {transaction.error_message && (
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-red-800 dark:text-red-400">
-                    Error Details
-                  </h4>
-                  <p className="text-sm text-red-700 dark:text-red-400 mt-1">
-                    {transaction.error_message}
-                  </p>
+          {(transaction.error_message || transaction.error_source) &&
+            transaction.status_code >= 400 && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-sm font-semibold text-red-800 dark:text-red-400">
+                        {transaction.status_code} {transaction.status_text || 'Error'}
+                      </h4>
+                      {transaction.error_source && (
+                        <span
+                          className={clsx(
+                            'px-2 py-0.5 rounded text-xs font-semibold uppercase',
+                            transaction.error_source === 'auth' ||
+                              transaction.error_source === 'rbac'
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                              : transaction.error_source === 'rate-limiter'
+                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+                                : transaction.error_source === 'gateway'
+                                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                                  : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                          )}
+                        >
+                          Source: {transaction.error_source}
+                        </span>
+                      )}
+                    </div>
+                    {transaction.error_message && (
+                      <p className="text-sm text-red-700 dark:text-red-400">
+                        {transaction.error_message}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Metadata */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
@@ -592,7 +645,7 @@ export function APIMonitoring() {
         <div className="flex items-center gap-3">
           <button
             onClick={() =>
-              navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-incident-response`))
+              navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-gateway-red`))
             }
             className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
           >
@@ -620,6 +673,8 @@ export function APIMonitoring() {
           </button>
         </div>
       </div>
+
+      <SubNav tabs={observabilityTabs} />
 
       {/* Stats Cards */}
       {stats && (
@@ -751,9 +806,8 @@ export function APIMonitoring() {
                 </tr>
               ) : (
                 filteredTransactions.map((transaction) => (
-                  <>
+                  <Fragment key={transaction.id}>
                     <TransactionRow
-                      key={transaction.id}
                       transaction={transaction}
                       isExpanded={expandedId === transaction.id}
                       onToggle={() =>
@@ -763,7 +817,7 @@ export function APIMonitoring() {
                     {expandedId === transaction.id && (
                       <TransactionDetail transactionId={transaction.id} />
                     )}
-                  </>
+                  </Fragment>
                 ))
               )}
             </tbody>

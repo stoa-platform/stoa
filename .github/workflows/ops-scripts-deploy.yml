@@ -1,0 +1,104 @@
+# =============================================================================
+# GitHub Actions: Ops Scripts Deploy
+# =============================================================================
+# Sync scripts/ai-ops/ to /opt/stoa-ops/ on all HEGEMON workers via SCP.
+# Triggered on push to main when scripts change, or manually via workflow_dispatch.
+# =============================================================================
+
+name: Ops Scripts Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/ai-ops/**'
+      - '.github/workflows/ops-scripts-deploy.yml'
+
+  workflow_dispatch:
+
+concurrency:
+  group: ops-scripts-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write  # GitHub OIDC → Vault JWT auth
+
+jobs:
+  deploy:
+    name: Deploy to Workers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: ${{ fromJson(vars.HEGEMON_WORKER_HOSTS || '[]') }}
+
+    steps:
+      - name: Skip if no workers configured
+        if: matrix.worker == ''
+        run: |
+          echo "::notice::No HEGEMON_WORKER_HOSTS configured — skipping deploy"
+          echo "Set repo variable HEGEMON_WORKER_HOSTS as JSON array: [\"ip1\",\"ip2\",...]"
+
+      - name: Checkout
+        if: matrix.worker != ''
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ai-ops
+
+      - name: Fetch SSH key from Vault
+        if: matrix.worker != ''
+        uses: hashicorp/vault-action@v3
+        with:
+          url: https://hcvault.gostoa.dev
+          method: jwt
+          role: gha-stoa-deploy
+          jwtGithubAudience: https://github.com/stoa-platform/stoa
+          secrets: |
+            stoa/data/ssh/hegemon-workers private_key_b64 | SSH_KEY_B64
+
+      - name: Install SSH key
+        if: matrix.worker != ''
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf "Host worker\n  HostName %s\n  User hegemon\n  IdentityFile ~/.ssh/id_ed25519\n  StrictHostKeyChecking accept-new\n  ConnectTimeout 10\n" "${{ matrix.worker }}" > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Ensure target directory
+        if: matrix.worker != ''
+        run: |
+          ssh worker "sudo mkdir -p /opt/stoa-ops && sudo chown hegemon:hegemon /opt/stoa-ops"
+
+      - name: Deploy scripts
+        if: matrix.worker != ''
+        run: |
+          scp -r scripts/ai-ops/* worker:/opt/stoa-ops/
+          ssh worker "chmod +x /opt/stoa-ops/*.sh 2>/dev/null || true"
+
+      - name: Verify deployment
+        if: matrix.worker != ''
+        run: |
+          echo "--- Deployed scripts on ${{ matrix.worker }} ---"
+          ssh worker "ls -la /opt/stoa-ops/*.sh | head -20"
+          echo ""
+          echo "--- Verify key scripts ---"
+          ssh worker "test -x /opt/stoa-ops/quality-metrics.sh && echo 'quality-metrics.sh: OK' || echo 'quality-metrics.sh: MISSING'"
+          ssh worker "test -x /opt/stoa-ops/coverage-ratchet.sh && echo 'coverage-ratchet.sh: OK' || echo 'coverage-ratchet.sh: MISSING'"
+          ssh worker "test -x /opt/stoa-ops/daily-cost-report.sh && echo 'daily-cost-report.sh: OK' || echo 'daily-cost-report.sh: MISSING'"
+
+  notify:
+    name: Notify
+    needs: deploy
+    if: always()
+    uses: ./.github/workflows/reusable-notify.yml
+    with:
+      component: Ops Scripts
+      ci-result: ${{ needs.deploy.result }}
+      deploy-result: ${{ needs.deploy.result }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

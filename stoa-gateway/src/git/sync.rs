@@ -13,9 +13,9 @@
 #![allow(dead_code)] // Git sync infrastructure, wired incrementally
 
 use chrono::{DateTime, Duration, Utc};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use parking_lot::RwLock;
 use thiserror::Error;
 use tracing::{error, info, warn};
 

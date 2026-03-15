@@ -52,7 +52,7 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
-// Mock config with dashboards (panels config no longer needed — native components)
+// Mock config with dashboards
 vi.mock('../../config', () => ({
   config: {
     services: {
@@ -60,8 +60,9 @@ vi.mock('../../config', () => ({
         url: '/grafana/',
         dashboards: {
           slo: '/grafana/d/stoa-slo-dashboard/slo-dashboard',
-          incidentResponse: '/grafana/d/stoa-incident-response/incident-response',
-          gatewayFleet: '/grafana/d/stoa-gw-unified/gateway-fleet-unified',
+          gatewayRed: '/grafana/d/stoa-gateway-red/gateway-red-method',
+          controlPlaneApi: '/grafana/d/stoa-control-plane-api/control-plane-api',
+          platformOverview: '/grafana/d/stoa-platform-overview/platform-overview',
           platformHealth: '/grafana/d/platform-health-l2/platform-health',
           serviceHealth: '/grafana/d/stoa-service-health/service-health',
           gatewayArena: '/grafana/d/gateway-arena/gateway-arena-leaderboard',
@@ -84,18 +85,10 @@ vi.mock('@stoa/shared/components/Skeleton', () => ({
   ),
 }));
 
-// Mock MetricCard and MetricTimeseries — render as simple divs
+// Mock MetricCard — render as simple divs
 vi.mock('../../components/metrics/MetricCard', () => ({
   MetricCard: ({ label, query }: { label: string; query: string }) => (
     <div data-testid="metric-card" data-query={query}>
-      {label}
-    </div>
-  ),
-}));
-
-vi.mock('../../components/metrics/MetricTimeseries', () => ({
-  MetricTimeseries: ({ label, query }: { label: string; query: string }) => (
-    <div data-testid="metric-timeseries" data-query={query}>
       {label}
     </div>
   ),
@@ -123,7 +116,7 @@ describe('OperationsDashboard', () => {
   it('renders the subtitle', async () => {
     renderComponent();
     expect(
-      await screen.findByText('Platform health, SLO metrics, and deployment overview')
+      await screen.findByText('SLO metrics, ArgoCD status, and deployment overview')
     ).toBeInTheDocument();
   });
 
@@ -150,14 +143,13 @@ describe('OperationsDashboard', () => {
     });
     const metricCards = screen.getAllByTestId('metric-card');
     expect(metricCards.length).toBeGreaterThanOrEqual(4);
-    // No Grafana iframes
     expect(screen.queryByTestId('grafana-panel')).not.toBeInTheDocument();
   });
 
-  it('renders Platform Health section with ArgoCD components', async () => {
+  it('renders ArgoCD Components section', async () => {
     renderComponent();
     await waitFor(() => {
-      expect(screen.getByText('Platform Health')).toBeInTheDocument();
+      expect(screen.getByText('ArgoCD Components')).toBeInTheDocument();
     });
     expect(screen.getByText('control-plane-api')).toBeInTheDocument();
     expect(screen.getAllByText('stoa-gateway').length).toBeGreaterThanOrEqual(1);
@@ -173,6 +165,11 @@ describe('OperationsDashboard', () => {
     expect(screen.getByText('MCP Tool Calls/h')).toBeInTheDocument();
   });
 
+  it('shows "Full metrics" link to /observability', async () => {
+    renderComponent();
+    expect(await screen.findByText('Full metrics')).toBeInTheDocument();
+  });
+
   it('shows Recent Deployments section', async () => {
     renderComponent();
     await waitFor(() => {
@@ -186,8 +183,9 @@ describe('OperationsDashboard', () => {
       expect(screen.getByText('Observability Dashboards')).toBeInTheDocument();
     });
     expect(screen.getByText('SLO Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Incident Response')).toBeInTheDocument();
-    expect(screen.getByText('Gateway Fleet')).toBeInTheDocument();
+    expect(screen.getByText('Gateway RED Method')).toBeInTheDocument();
+    expect(screen.getByText('Control Plane API')).toBeInTheDocument();
+    expect(screen.getByText('Platform Overview')).toBeInTheDocument();
     expect(screen.getByText('Arena Benchmark')).toBeInTheDocument();
     expect(screen.getByText('Service Health')).toBeInTheDocument();
     expect(screen.getByText('Logs Explorer')).toBeInTheDocument();
@@ -201,7 +199,15 @@ describe('OperationsDashboard', () => {
     expect(screen.queryByText('Prometheus')).not.toBeInTheDocument();
   });
 
-  // RBAC — Persona-based visibility tests
+  it('does NOT render Traffic & Security section (moved to /observability)', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('SLO Overview')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Traffic & Security')).not.toBeInTheDocument();
+  });
+
+  // RBAC — all personas see the same content (no RBAC-restricted sections remain)
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',
     (role) => {
@@ -217,40 +223,4 @@ describe('OperationsDashboard', () => {
       });
     }
   );
-
-  describe('Traffic & Security RBAC', () => {
-    it('shows Traffic & Security for cpi-admin', async () => {
-      renderComponent('cpi-admin');
-      await waitFor(() => {
-        expect(screen.getByText('Traffic & Security')).toBeInTheDocument();
-      });
-      expect(screen.getByText('Error Rate over Time')).toBeInTheDocument();
-      expect(screen.getByText('Active Connections')).toBeInTheDocument();
-      expect(screen.getByText('Security Events')).toBeInTheDocument();
-      expect(screen.getByText('Fleet RPS')).toBeInTheDocument();
-    });
-
-    it('shows Traffic & Security for devops', async () => {
-      renderComponent('devops');
-      await waitFor(() => {
-        expect(screen.getByText('Traffic & Security')).toBeInTheDocument();
-      });
-    });
-
-    it('hides Traffic & Security for tenant-admin', async () => {
-      renderComponent('tenant-admin');
-      await waitFor(() => {
-        expect(screen.getByText('SLO Overview')).toBeInTheDocument();
-      });
-      expect(screen.queryByText('Traffic & Security')).not.toBeInTheDocument();
-    });
-
-    it('hides Traffic & Security for viewer', async () => {
-      renderComponent('viewer');
-      await waitFor(() => {
-        expect(screen.getByText('SLO Overview')).toBeInTheDocument();
-      });
-      expect(screen.queryByText('Traffic & Security')).not.toBeInTheDocument();
-    });
-  });
 });

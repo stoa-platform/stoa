@@ -88,17 +88,22 @@ async def create_deployment(
     Creates a deployment record, emits a deploy-request Kafka event,
     and triggers webhook notifications.
     """
-    api_name = request.api_name or request.api_id
+    # GitLab stores APIs by name (directory slug), not UUID.
+    # Use api_name if provided, otherwise try api_id as the GitLab lookup key.
+    lookup_key = request.api_name or request.api_id
+    api_name = lookup_key
     version = request.version or "1.0.0"
     api_info = None
 
     try:
-        api_info = await git_service.get_api(tenant_id, request.api_id)
+        api_info = await git_service.get_api(tenant_id, lookup_key)
         if api_info:
-            api_name = request.api_name or api_info.get("name", request.api_id)
+            api_name = api_info.get("name", lookup_key)
             version = request.version or api_info.get("version", "1.0.0")
-    except Exception:
-        pass
+        else:
+            logger.warning("API not found in GitLab for tenant=%s key=%s", tenant_id, lookup_key)
+    except Exception as e:
+        logger.warning("Failed to lookup API in GitLab for %s/%s: %s", tenant_id, lookup_key, e)
 
     service = DeploymentService(db)
     deployment = await service.create_deployment(
@@ -117,11 +122,11 @@ async def create_deployment(
     env = request.environment.value
     if env in ("dev", "staging"):
         try:
-            current_api = api_info or await git_service.get_api(tenant_id, request.api_id)
+            current_api = api_info or await git_service.get_api(tenant_id, api_name)
             if current_api:
                 deployments = dict(current_api.get("deployments", {}))
                 deployments[env] = True
-                await git_service.update_api(tenant_id, request.api_id, {"deployments": deployments})
+                await git_service.update_api(tenant_id, api_name, {"deployments": deployments})
         except Exception as e:
             logger.warning("Failed to update deployment flag in GitLab for %s: %s", request.api_id, e)
 

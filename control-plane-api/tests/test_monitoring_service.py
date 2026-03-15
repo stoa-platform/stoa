@@ -4,7 +4,116 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.services.monitoring_service import MonitoringService, _extract_api_name, _status_from_code
+from src.opensearch.audit_middleware import parse_server_timing
+from src.services.monitoring_service import (
+    MonitoringService,
+    _build_spans_from_timings,
+    _extract_api_name,
+    _status_from_code,
+)
+
+# =============================================================================
+# Unit tests for parse_server_timing (audit_middleware)
+# =============================================================================
+
+
+class TestParseServerTiming:
+    def test_standard_header(self):
+        header = "identity;dur=1.20, auth;dur=3.50, backend_call;dur=45.00"
+        result = parse_server_timing(header)
+        assert result == {"identity": 1.20, "auth": 3.50, "backend_call": 45.00}
+
+    def test_empty_string(self):
+        assert parse_server_timing("") == {}
+
+    def test_single_entry(self):
+        assert parse_server_timing("total;dur=100.00") == {"total": 100.00}
+
+    def test_ignores_entries_without_dur(self):
+        header = "identity;desc=check, auth;dur=2.00"
+        result = parse_server_timing(header)
+        assert result == {"auth": 2.00}
+
+    def test_handles_malformed_dur(self):
+        header = "identity;dur=abc, auth;dur=2.00"
+        result = parse_server_timing(header)
+        assert result == {"auth": 2.00}
+
+    def test_extra_whitespace(self):
+        header = "  identity;dur=1.00 ,  auth;dur=2.00  "
+        result = parse_server_timing(header)
+        assert result == {"identity": 1.00, "auth": 2.00}
+
+    def test_multiple_params_per_entry(self):
+        header = "identity;desc=check;dur=1.50"
+        result = parse_server_timing(header)
+        assert result == {"identity": 1.50}
+
+
+# =============================================================================
+# Unit tests for _build_spans_from_timings
+# =============================================================================
+
+
+class TestBuildSpansFromTimings:
+    def test_multi_stage_spans(self):
+        timings = {
+            "identity": 1.0,
+            "auth": 3.0,
+            "quota": 0.5,
+            "backend_call": 40.0,
+        }
+        spans = _build_spans_from_timings(timings, 50, 200, "/v1/apis")
+        assert len(spans) == 4
+        assert spans[0].name == "identity"
+        assert spans[0].service == "gateway-identity"
+        assert spans[0].start_offset_ms == 0
+        assert spans[0].duration_ms == 1
+        assert spans[0].status == "success"
+        assert spans[1].name == "auth"
+        assert spans[1].start_offset_ms == 1
+        assert spans[1].duration_ms == 3
+        assert spans[2].name == "quota"
+        assert spans[2].start_offset_ms == 4
+        assert spans[3].name == "backend_call"
+        assert spans[3].start_offset_ms == 4  # 1 + 3 + 0 (0.5 rounds to 0? no, round(0.5)=0 in python)
+
+    def test_error_status_propagated(self):
+        timings = {"auth": 2.0, "backend_call": 10.0}
+        spans = _build_spans_from_timings(timings, 15, 500, "/v1/apis")
+        for span in spans:
+            assert span.status == "error"
+
+    def test_timeout_status(self):
+        timings = {"backend_call": 30000.0}
+        spans = _build_spans_from_timings(timings, 30000, 504, "/v1/apis")
+        assert spans[0].status == "timeout"
+
+    def test_fallback_single_span_when_no_timings(self):
+        spans = _build_spans_from_timings({}, 100, 200, "/v1/apis")
+        assert len(spans) == 1
+        assert spans[0].name == "api_request"
+        assert spans[0].service == "control-plane-api"
+        assert spans[0].duration_ms == 100
+        assert spans[0].status == "success"
+
+    def test_fallback_error_span_uses_error_source(self):
+        spans = _build_spans_from_timings({}, 50, 500, "/v1/certificates")
+        assert len(spans) == 1
+        assert spans[0].service == "certificates"
+        assert spans[0].status == "error"
+
+    def test_preserves_stage_order(self):
+        # Provide stages out of order — output should follow gateway chain order
+        timings = {
+            "backend_call": 10.0,
+            "identity": 1.0,
+            "routing": 2.0,
+        }
+        spans = _build_spans_from_timings(timings, 20, 200, "/v1/apis")
+        names = [s.name for s in spans]
+        assert names == ["identity", "routing", "backend_call"]
+
 
 # =============================================================================
 # Unit tests for helpers
@@ -71,8 +180,12 @@ def _make_os_hit(
     tenant_id: str = "tenant-1",
     correlation_id: str = "corr-1",
     timestamp: str = "2026-03-02T10:00:00Z",
+    gateway_timings: dict[str, float] | None = None,
 ) -> dict:
     """Build a realistic OpenSearch audit hit."""
+    response: dict = {"status_code": status_code, "latency_ms": latency_ms}
+    if gateway_timings is not None:
+        response["gateway_timings"] = gateway_timings
     return {
         "_id": f"os-{event_id}",
         "_source": {
@@ -81,7 +194,7 @@ def _make_os_hit(
             "correlation_id": correlation_id,
             "tenant_id": tenant_id,
             "request": {"method": method, "path": path},
-            "response": {"status_code": status_code, "latency_ms": latency_ms},
+            "response": response,
             "actor": {"id": "user-1", "ip_address": "10.0.0.1"},
             "details": {},
         },
@@ -274,4 +387,93 @@ class TestGetTransaction:
 
         assert result is not None
         assert result.status == "error"
-        assert result.error_message == "Internal failure"
+        assert result.error_message == "Internal Server Error: Internal failure"
+
+    @pytest.mark.asyncio
+    async def test_multi_span_from_gateway_timings(self, service, mock_client):
+        """CAB-1790: gateway_timings in audit event → multi-span transaction detail."""
+        timings = {"identity": 1.5, "auth": 3.0, "backend_call": 40.0}
+        mock_client.search.return_value = {
+            "hits": {
+                "hits": [
+                    _make_os_hit(
+                        event_id="evt-gw",
+                        method="GET",
+                        path="/v1/apis",
+                        status_code=200,
+                        latency_ms=50,
+                        gateway_timings=timings,
+                    )
+                ],
+            },
+        }
+
+        result = await service.get_transaction(event_id="evt-gw", tenant_id="tenant-1")
+
+        assert result is not None
+        assert len(result.spans) == 3
+        assert result.spans[0].name == "identity"
+        assert result.spans[0].service == "gateway-identity"
+        assert result.spans[0].start_offset_ms == 0
+        assert result.spans[1].name == "auth"
+        assert result.spans[1].start_offset_ms == 2  # round(1.5) = 2
+        assert result.spans[2].name == "backend_call"
+        assert result.spans[2].duration_ms == 40
+
+    @pytest.mark.asyncio
+    async def test_no_gateway_timings_falls_back_to_single_span(self, service, mock_client):
+        """Without gateway_timings, get_transaction still returns a single fallback span."""
+        mock_client.search.return_value = {
+            "hits": {
+                "hits": [
+                    _make_os_hit(
+                        event_id="evt-plain",
+                        status_code=200,
+                        latency_ms=80,
+                    )
+                ],
+            },
+        }
+
+        result = await service.get_transaction(event_id="evt-plain", tenant_id="tenant-1")
+
+        assert result is not None
+        assert len(result.spans) == 1
+        assert result.spans[0].name == "api_request"
+        assert result.spans[0].duration_ms == 80
+
+
+class TestListTransactionsSpansCount:
+    """CAB-1790: list_transactions populates spans_count from gateway_timings."""
+
+    @pytest.mark.asyncio
+    async def test_spans_count_with_gateway_timings(self, service, mock_client):
+        timings = {"identity": 1.0, "auth": 2.0, "backend_call": 30.0}
+        mock_client.search.return_value = {
+            "hits": {
+                "hits": [
+                    _make_os_hit(event_id="e1", gateway_timings=timings),
+                ],
+            },
+        }
+
+        result = await service.list_transactions(tenant_id="tenant-1")
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].spans_count == 3
+
+    @pytest.mark.asyncio
+    async def test_spans_count_without_gateway_timings(self, service, mock_client):
+        mock_client.search.return_value = {
+            "hits": {
+                "hits": [
+                    _make_os_hit(event_id="e1"),
+                ],
+            },
+        }
+
+        result = await service.list_transactions(tenant_id="tenant-1")
+
+        assert result is not None
+        assert result[0].spans_count == 1

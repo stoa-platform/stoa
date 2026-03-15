@@ -12,6 +12,8 @@ import { TableSkeleton, StatCardSkeletonRow } from '@stoa/shared/components/Skel
 import { Button } from '@stoa/shared/components/Button';
 import { Clock, TrendingUp, Users, Timer } from 'lucide-react';
 import type { Subscription, SubscriptionStatus, SubscriptionStats } from '../types';
+import { SubNav } from '../components/SubNav';
+import { apiCatalogTabs } from '../components/subNavGroups';
 
 const PAGE_SIZE = 20;
 
@@ -278,6 +280,9 @@ export function Subscriptions() {
           ))}
         </select>
       </div>
+
+      {/* Contextual sub-navigation (CAB-1785) */}
+      <SubNav tabs={apiCatalogTabs} />
 
       {/* Stats Cards */}
       {stats && <StatsCards stats={stats} />}

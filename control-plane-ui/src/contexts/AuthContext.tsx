@@ -181,7 +181,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apiService.setTokenRefresher(async () => {
       try {
         const renewed = await oidc.signinSilent();
-        return renewed?.access_token ?? null;
+        if (renewed?.access_token) {
+          return renewed.access_token;
+        }
+        // Silent renew succeeded but no token — session expired
+        oidc.signinRedirect();
+        return null;
       } catch {
         oidc.signinRedirect();
         return null;
@@ -190,8 +195,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [oidc]);
 
   // Auto-login if we have auth params in URL (callback from Keycloak)
+  // Skip on /mcp-connectors/callback — those code/state params are from the MCP
+  // provider (e.g. Linear), not Keycloak. Without this check, oidc-client-ts
+  // misinterprets the MCP OAuth callback as a Keycloak callback and redirects to login.
   useEffect(() => {
-    if (!oidc.isAuthenticated && !oidc.isLoading && hasAuthParams()) {
+    const isMcpCallback = window.location.pathname.startsWith('/mcp-connectors/callback');
+    if (!oidc.isAuthenticated && !oidc.isLoading && hasAuthParams() && !isMcpCallback) {
       oidc.signinRedirect();
     }
   }, [oidc.isAuthenticated, oidc.isLoading, oidc]);

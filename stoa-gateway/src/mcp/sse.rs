@@ -337,6 +337,7 @@ pub async fn handle_sse_post(
         raw_token: validated_token,
         skill_instructions: None, // SSE: skills resolved per-tool in handler
         progress_token: None,     // SSE: no progress push (half-duplex)
+        consumer_id: "unknown".to_string(), // SSE: azp not yet extracted in SSE path
     };
 
     // Route to handler
@@ -376,8 +377,7 @@ pub async fn handle_sse_post(
     // Always return Mcp-Session-Id header (required by Streamable HTTP transport)
     let mut resp = Json(response).into_response();
     if let Ok(header_value) = session_id.parse() {
-        resp.headers_mut()
-            .insert("Mcp-Session-Id", header_value);
+        resp.headers_mut().insert("Mcp-Session-Id", header_value);
     }
     resp
 }
@@ -606,6 +606,7 @@ pub async fn process_single_request(
         raw_token: None,
         skill_instructions: None,
         progress_token: None,
+        consumer_id: "unknown".to_string(),
     };
 
     // Route to handler

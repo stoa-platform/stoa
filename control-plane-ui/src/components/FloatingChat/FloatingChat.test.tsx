@@ -1,15 +1,22 @@
 /**
- * FloatingChat tests (CAB-285)
+ * FloatingChat tests (CAB-285, CAB-1816)
  *
  * Covers: toggle open/close, message display, message sending,
- * keyboard shortcuts, loading state, error handling, ARIA attributes.
+ * keyboard shortcuts, loading state, error handling, ARIA attributes,
+ * mutation tool confirmation, token budget widget.
  */
 
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { FloatingChat } from './FloatingChat';
-import type { ChatMessage, ChatToolUse } from './FloatingChat';
+import type { ChatMessage } from './FloatingChat';
+import type {
+  ChatToolCall,
+  PendingConfirmation,
+  StreamCallbacks,
+  TokenBudgetStatus,
+} from '@/hooks/useChatService';
 
 // jsdom does not implement scrollIntoView — mock it globally
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -194,31 +201,34 @@ describe('FloatingChat message sending', () => {
 // ---- loading state ----
 
 describe('FloatingChat loading state', () => {
-  test('shows typing indicator while waiting for response', async () => {
+  test('shows thinking indicator while waiting for streaming response', async () => {
     const user = userEvent.setup();
-    let resolve: (value: string) => void = () => {};
-    const onSendMessage = vi.fn<SendHandler>().mockImplementation(
-      () =>
-        new Promise<string>((r) => {
-          resolve = r;
+    let resolveStream: () => void = () => {};
+    const onSendMessageStream = vi.fn().mockImplementation(
+      (_msg: string, callbacks: { onComplete?: () => void }) =>
+        new Promise<void>((r) => {
+          resolveStream = () => {
+            callbacks.onComplete?.();
+            r();
+          };
         })
     );
-    render(<FloatingChat initialOpen={true} onSendMessage={onSendMessage} />);
+    render(<FloatingChat initialOpen={true} onSendMessageStream={onSendMessageStream} />);
 
     await user.type(screen.getByRole('textbox', { name: /message input/i }), 'Loading?');
     await user.click(screen.getByRole('button', { name: /send message/i }));
 
-    expect(screen.getByLabelText(/assistant is typing/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/assistant is thinking/i)).toBeInTheDocument();
 
     await act(async () => {
-      resolve('Done!');
+      resolveStream();
     });
     await waitFor(() => {
-      expect(screen.queryByLabelText(/assistant is typing/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/assistant is thinking/i)).not.toBeInTheDocument();
     });
   });
 
-  test('send button is disabled while loading', async () => {
+  test('shows abort button while loading instead of send', async () => {
     const user = userEvent.setup();
     let resolve: (value: string) => void = () => {};
     const onSendMessage = vi.fn<SendHandler>().mockImplementation(
@@ -232,7 +242,9 @@ describe('FloatingChat loading state', () => {
     await user.type(screen.getByRole('textbox', { name: /message input/i }), 'Wait');
     await user.click(screen.getByRole('button', { name: /send message/i }));
 
-    expect(screen.getByRole('button', { name: /send message/i })).toBeDisabled();
+    // Send button is replaced by abort button during streaming
+    expect(screen.queryByRole('button', { name: /send message/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /stop generating/i })).toBeInTheDocument();
 
     await act(async () => {
       resolve('Done!');
@@ -336,7 +348,7 @@ describe('FloatingChat message history', () => {
 describe('FloatingChat tool use blocks', () => {
   test('renders tool use blocks when message has toolUse', async () => {
     const user = userEvent.setup();
-    const toolData: ChatToolUse[] = [
+    const toolData: ChatToolCall[] = [
       { tool_use_id: 'tu-1', tool_name: 'list_apis', result: '{"total":3}' },
     ];
     const onSendMessage = vi.fn<SendHandler>().mockResolvedValue('Found 3 APIs.');
@@ -353,8 +365,8 @@ describe('FloatingChat tool use blocks', () => {
     expect(toolData[0].tool_name).toBe('list_apis');
   });
 
-  test('ChatToolUse type has required fields', () => {
-    const tool: ChatToolUse = {
+  test('ChatToolCall type has required fields', () => {
+    const tool: ChatToolCall = {
       tool_use_id: 'tu-1',
       tool_name: 'platform_info',
       result: '{"status":"ok"}',
@@ -362,5 +374,231 @@ describe('FloatingChat tool use blocks', () => {
     expect(tool.tool_use_id).toBe('tu-1');
     expect(tool.tool_name).toBe('platform_info');
     expect(tool.result).toBeDefined();
+  });
+});
+
+// ---- mutation tool confirmation (CAB-1816 Phase 2) ----
+
+describe('FloatingChat mutation tool confirmation', () => {
+  const mockConfirmation: PendingConfirmation = {
+    tool_use_id: 'tc-1',
+    tool_name: 'subscribe_api',
+    tool_input: { api_id: 'api-123', plan: 'basic' },
+    description: 'Subscribe to API "Weather Service" on the basic plan',
+  };
+
+  test('shows confirmation block when onConfirmationRequired fires', async () => {
+    const user = userEvent.setup();
+    const onSendMessageStream = vi
+      .fn()
+      .mockImplementation((_msg: string, callbacks: StreamCallbacks) => {
+        callbacks.onConfirmationRequired?.(mockConfirmation);
+        callbacks.onComplete?.('', []);
+        return Promise.resolve();
+      });
+
+    render(<FloatingChat initialOpen={true} onSendMessageStream={onSendMessageStream} />);
+
+    await user.type(screen.getByRole('textbox', { name: /message input/i }), 'Subscribe me');
+    await user.click(screen.getByRole('button', { name: /send message/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/action requires confirmation/i)).toBeInTheDocument();
+      expect(screen.getByText(/subscribe_api/)).toBeInTheDocument();
+      expect(screen.getByText(mockConfirmation.description)).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: /confirm action/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel action/i })).toBeInTheDocument();
+  });
+
+  test('clicking confirm calls onConfirmTool with approved=true', async () => {
+    const user = userEvent.setup();
+    const onSendMessageStream = vi
+      .fn()
+      .mockImplementation((_msg: string, callbacks: StreamCallbacks) => {
+        callbacks.onConfirmationRequired?.(mockConfirmation);
+        callbacks.onComplete?.('', []);
+        return Promise.resolve();
+      });
+    const onConfirmTool = vi
+      .fn()
+      .mockImplementation(
+        (_conf: PendingConfirmation, _approved: boolean, callbacks: StreamCallbacks) => {
+          callbacks.onDelta?.('Subscription created!');
+          callbacks.onComplete?.('Subscription created!', []);
+          return Promise.resolve();
+        }
+      );
+
+    render(
+      <FloatingChat
+        initialOpen={true}
+        onSendMessageStream={onSendMessageStream}
+        onConfirmTool={onConfirmTool}
+      />
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /message input/i }), 'Subscribe');
+    await user.click(screen.getByRole('button', { name: /send message/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /confirm action/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /confirm action/i }));
+
+    await waitFor(() => {
+      expect(onConfirmTool).toHaveBeenCalledWith(
+        mockConfirmation,
+        true,
+        expect.objectContaining({ onDelta: expect.any(Function) })
+      );
+    });
+  });
+
+  test('clicking cancel calls onConfirmTool with approved=false', async () => {
+    const user = userEvent.setup();
+    const onSendMessageStream = vi
+      .fn()
+      .mockImplementation((_msg: string, callbacks: StreamCallbacks) => {
+        callbacks.onConfirmationRequired?.(mockConfirmation);
+        callbacks.onComplete?.('', []);
+        return Promise.resolve();
+      });
+    const onConfirmTool = vi
+      .fn()
+      .mockImplementation(
+        (_conf: PendingConfirmation, _approved: boolean, callbacks: StreamCallbacks) => {
+          callbacks.onDelta?.('Action cancelled.');
+          callbacks.onComplete?.('Action cancelled.', []);
+          return Promise.resolve();
+        }
+      );
+
+    render(
+      <FloatingChat
+        initialOpen={true}
+        onSendMessageStream={onSendMessageStream}
+        onConfirmTool={onConfirmTool}
+      />
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /message input/i }), 'Subscribe');
+    await user.click(screen.getByRole('button', { name: /send message/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /cancel action/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel action/i }));
+
+    await waitFor(() => {
+      expect(onConfirmTool).toHaveBeenCalledWith(
+        mockConfirmation,
+        false,
+        expect.objectContaining({ onDelta: expect.any(Function) })
+      );
+    });
+  });
+
+  test('confirmation block disappears after user responds', async () => {
+    const user = userEvent.setup();
+    const onSendMessageStream = vi
+      .fn()
+      .mockImplementation((_msg: string, callbacks: StreamCallbacks) => {
+        callbacks.onConfirmationRequired?.(mockConfirmation);
+        callbacks.onComplete?.('', []);
+        return Promise.resolve();
+      });
+    const onConfirmTool = vi
+      .fn()
+      .mockImplementation(
+        (_conf: PendingConfirmation, _approved: boolean, callbacks: StreamCallbacks) => {
+          callbacks.onComplete?.('Done', []);
+          return Promise.resolve();
+        }
+      );
+
+    render(
+      <FloatingChat
+        initialOpen={true}
+        onSendMessageStream={onSendMessageStream}
+        onConfirmTool={onConfirmTool}
+      />
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /message input/i }), 'Sub');
+    await user.click(screen.getByRole('button', { name: /send message/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /confirm action/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /confirm action/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/action requires confirmation/i)).not.toBeInTheDocument();
+    });
+  });
+});
+
+// ---- token budget widget (CAB-1816 Phase 2) ----
+
+describe('FloatingChat budget widget', () => {
+  const mockBudget: TokenBudgetStatus = {
+    user_tokens_today: 5000,
+    tenant_tokens_today: 12000,
+    daily_budget: 50000,
+    remaining: 38000,
+    budget_exceeded: false,
+    usage_percent: 24,
+  };
+
+  test('shows budget widget when budget data is available', async () => {
+    const onFetchBudgetStatus = vi.fn().mockResolvedValue(mockBudget);
+
+    render(<FloatingChat initialOpen={true} onFetchBudgetStatus={onFetchBudgetStatus} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily tokens')).toBeInTheDocument();
+      expect(screen.getByText('24%')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '24');
+  });
+
+  test('does not show budget widget when fetch returns null', async () => {
+    const onFetchBudgetStatus = vi.fn().mockResolvedValue(null);
+
+    render(<FloatingChat initialOpen={true} onFetchBudgetStatus={onFetchBudgetStatus} />);
+
+    // Allow the effect to run
+    await act(async () => {});
+
+    expect(screen.queryByText('Daily tokens')).not.toBeInTheDocument();
+  });
+
+  test('budget widget fetches on panel open', async () => {
+    const onFetchBudgetStatus = vi.fn().mockResolvedValue(mockBudget);
+
+    render(<FloatingChat initialOpen={true} onFetchBudgetStatus={onFetchBudgetStatus} />);
+
+    await waitFor(() => {
+      expect(onFetchBudgetStatus).toHaveBeenCalledOnce();
+    });
+  });
+
+  test('budget widget shows red bar when usage >= 90%', async () => {
+    const highBudget: TokenBudgetStatus = {
+      ...mockBudget,
+      usage_percent: 95,
+    };
+    const onFetchBudgetStatus = vi.fn().mockResolvedValue(highBudget);
+
+    render(<FloatingChat initialOpen={true} onFetchBudgetStatus={onFetchBudgetStatus} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('95%')).toBeInTheDocument();
+    });
   });
 });

@@ -1,23 +1,38 @@
 """MCP Client Service for External Server Communication.
 
 Provides connectivity testing and tool discovery for external MCP servers.
-Supports SSE and HTTP transports with various authentication methods.
+Supports SSE (Server-Sent Events) and HTTP (Streamable HTTP) transports
+with various authentication methods.
 
-Reference: External MCP Server Registration Plan
+SSE Transport (MCP spec):
+  1. GET /sse → SSE stream, first event is `endpoint` with POST URL
+  2. POST to that endpoint with JSON-RPC messages
+  3. Responses arrive as SSE `message` events on the original stream
+
+HTTP Transport (Streamable HTTP, MCP 2025-03-26+):
+  POST with JSON-RPC, response is JSON-RPC directly.
 """
+
+import json
 import logging
 import time
 from dataclasses import dataclass
+from urllib.parse import urljoin
 from uuid import uuid4
 
 import httpx
+import httpx_sse
 
 logger = logging.getLogger(__name__)
+
+MCP_PROTOCOL_VERSION = "2024-11-05"
+CLIENT_INFO = {"name": "STOA Control Plane", "version": "1.0.0"}
 
 
 @dataclass
 class MCPTool:
     """Discovered MCP tool from external server."""
+
     name: str
     description: str | None = None
     input_schema: dict | None = None
@@ -26,6 +41,7 @@ class MCPTool:
 @dataclass
 class TestConnectionResult:
     """Result of test-connection operation."""
+
     success: bool
     latency_ms: int | None = None
     error: str | None = None
@@ -33,12 +49,22 @@ class TestConnectionResult:
     tools_discovered: int | None = None
 
 
+def _jsonrpc_request(method: str, params: dict | None = None) -> dict:
+    """Build a JSON-RPC 2.0 request."""
+    return {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params or {},
+        "id": str(uuid4()),
+    }
+
+
 class MCPClientService:
     """Client for connecting to external MCP servers.
 
     Supports:
-    - SSE transport (Claude Desktop compatible)
-    - HTTP transport (JSON-RPC over HTTP)
+    - SSE transport (MCP spec — bidirectional via SSE stream + POST)
+    - HTTP transport (Streamable HTTP — JSON-RPC over POST)
     - Various auth methods (none, api_key, bearer_token, oauth2)
     """
 
@@ -51,7 +77,7 @@ class MCPClientService:
         credentials: dict | None,
     ) -> dict[str, str]:
         """Build authentication headers from credentials."""
-        headers = {}
+        headers: dict[str, str] = {}
 
         if not credentials or auth_type == "none":
             return headers
@@ -59,7 +85,6 @@ class MCPClientService:
         if auth_type == "api_key":
             api_key = credentials.get("api_key")
             if api_key:
-                # Common API key header patterns
                 headers["X-API-Key"] = api_key
                 headers["Authorization"] = f"ApiKey {api_key}"
 
@@ -69,12 +94,13 @@ class MCPClientService:
                 headers["Authorization"] = f"Bearer {token}"
 
         elif auth_type == "oauth2":
-            # For OAuth2, we assume the access_token has been obtained
             access_token = credentials.get("access_token")
             if access_token:
                 headers["Authorization"] = f"Bearer {access_token}"
 
         return headers
+
+    # ── Test Connection ──────────────────────────────────────────────
 
     async def test_connection(
         self,
@@ -83,50 +109,32 @@ class MCPClientService:
         auth_type: str,
         credentials: dict | None = None,
     ) -> TestConnectionResult:
-        """Test connection to an external MCP server.
-
-        Args:
-            base_url: Server URL
-            transport: Transport type (sse, http, websocket)
-            auth_type: Authentication type
-            credentials: Credentials dict from Vault
-
-        Returns:
-            TestConnectionResult with success status, latency, and discovered tools count
-        """
+        """Test connection to an external MCP server."""
         start_time = time.monotonic()
 
         try:
             if transport == "sse":
                 result = await self._test_sse_connection(base_url, auth_type, credentials)
-            elif transport == "http":
+            elif transport in ("http", "streamable_http"):
                 result = await self._test_http_connection(base_url, auth_type, credentials)
             elif transport == "websocket":
                 result = await self._test_websocket_connection(base_url, auth_type, credentials)
             else:
-                return TestConnectionResult(
-                    success=False,
-                    error=f"Unsupported transport: {transport}"
-                )
+                return TestConnectionResult(success=False, error=f"Unsupported transport: {transport}")
 
-            latency_ms = int((time.monotonic() - start_time) * 1000)
-            result.latency_ms = latency_ms
+            result.latency_ms = int((time.monotonic() - start_time) * 1000)
             return result
 
         except TimeoutError:
             return TestConnectionResult(
                 success=False,
                 latency_ms=self.timeout * 1000,
-                error=f"Connection timeout after {self.timeout}s"
+                error=f"Connection timeout after {self.timeout}s",
             )
         except Exception as e:
             latency_ms = int((time.monotonic() - start_time) * 1000)
             logger.exception(f"Connection test failed: {e}")
-            return TestConnectionResult(
-                success=False,
-                latency_ms=latency_ms,
-                error=str(e)
-            )
+            return TestConnectionResult(success=False, latency_ms=latency_ms, error=str(e))
 
     async def _test_sse_connection(
         self,
@@ -134,40 +142,25 @@ class MCPClientService:
         auth_type: str,
         credentials: dict | None,
     ) -> TestConnectionResult:
-        """Test SSE transport connection."""
+        """Test SSE transport: connect, get endpoint, send initialize."""
         headers = self._build_auth_headers(auth_type, credentials)
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # For SSE, we try to establish connection and read initial events
-            # Most MCP SSE servers respond to a GET request
-            try:
-                response = await client.get(
-                    base_url,
-                    headers={**headers, "Accept": "text/event-stream"},
-                    follow_redirects=True,
+        try:
+            endpoint_url, server_info = await self._sse_initialize(base_url, headers)
+            if endpoint_url:
+                tools_count = await self._sse_tools_count(base_url, endpoint_url, headers)
+                return TestConnectionResult(
+                    success=True,
+                    server_info=server_info or {"transport": "sse", "url": base_url},
+                    tools_discovered=tools_count,
                 )
-
-                if response.status_code == 200:
-                    # Try to discover tools via a simple request
-                    tools_count = await self._discover_tools_count_sse(
-                        base_url, headers, client
-                    )
-                    return TestConnectionResult(
-                        success=True,
-                        server_info={"transport": "sse", "url": base_url},
-                        tools_discovered=tools_count,
-                    )
-                else:
-                    return TestConnectionResult(
-                        success=False,
-                        error=f"HTTP {response.status_code}: {response.text[:200]}"
-                    )
-
-            except httpx.ConnectError as e:
+            else:
                 return TestConnectionResult(
                     success=False,
-                    error=f"Connection failed: {e}"
+                    error="SSE: no endpoint event received",
                 )
+        except httpx.ConnectError as e:
+            return TestConnectionResult(success=False, error=f"Connection failed: {e}")
 
     async def _test_http_connection(
         self,
@@ -179,58 +172,35 @@ class MCPClientService:
         headers = self._build_auth_headers(auth_type, credentials)
         headers["Content-Type"] = "application/json"
 
-        # Send MCP initialize request
-        init_request = {
-            "jsonrpc": "2.0",
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
+        init_request = _jsonrpc_request(
+            "initialize",
+            {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
                 "capabilities": {},
-                "clientInfo": {
-                    "name": "STOA Control Plane",
-                    "version": "1.0.0"
-                }
+                "clientInfo": CLIENT_INFO,
             },
-            "id": str(uuid4())
-        }
+        )
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
-                response = await client.post(
-                    base_url,
-                    json=init_request,
-                    headers=headers,
-                    follow_redirects=True,
-                )
+                response = await client.post(base_url, json=init_request, headers=headers, follow_redirects=True)
 
                 if response.status_code == 200:
                     result = response.json()
                     if "result" in result:
-                        # Successfully initialized, try to list tools
-                        tools_count = await self._discover_tools_count_http(
-                            base_url, headers, client
-                        )
+                        tools_count = await self._discover_tools_count_http(base_url, headers, client)
                         return TestConnectionResult(
                             success=True,
                             server_info=result.get("result", {}).get("serverInfo"),
                             tools_discovered=tools_count,
                         )
                     elif "error" in result:
-                        return TestConnectionResult(
-                            success=False,
-                            error=f"MCP error: {result['error']}"
-                        )
+                        return TestConnectionResult(success=False, error=f"MCP error: {result['error']}")
 
-                return TestConnectionResult(
-                    success=False,
-                    error=f"HTTP {response.status_code}: {response.text[:200]}"
-                )
+                return TestConnectionResult(success=False, error=f"HTTP {response.status_code}: {response.text[:200]}")
 
             except httpx.ConnectError as e:
-                return TestConnectionResult(
-                    success=False,
-                    error=f"Connection failed: {e}"
-                )
+                return TestConnectionResult(success=False, error=f"Connection failed: {e}")
 
     async def _test_websocket_connection(
         self,
@@ -239,54 +209,9 @@ class MCPClientService:
         credentials: dict | None,
     ) -> TestConnectionResult:
         """Test WebSocket transport connection."""
-        # WebSocket support would require additional library (websockets)
-        # For MVP, return not implemented
-        return TestConnectionResult(
-            success=False,
-            error="WebSocket transport not yet implemented"
-        )
+        return TestConnectionResult(success=False, error="WebSocket transport not yet implemented")
 
-    async def _discover_tools_count_sse(
-        self,
-        base_url: str,
-        headers: dict,
-        client: httpx.AsyncClient,
-    ) -> int | None:
-        """Try to discover tools count for SSE transport."""
-        # SSE servers typically require bidirectional communication
-        # For now, return None (unknown) - full discovery in list_tools
-        return None
-
-    async def _discover_tools_count_http(
-        self,
-        base_url: str,
-        headers: dict,
-        client: httpx.AsyncClient,
-    ) -> int | None:
-        """Try to discover tools count for HTTP transport."""
-        try:
-            tools_request = {
-                "jsonrpc": "2.0",
-                "method": "tools/list",
-                "params": {},
-                "id": str(uuid4())
-            }
-
-            response = await client.post(
-                base_url,
-                json=tools_request,
-                headers=headers,
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                tools = result.get("result", {}).get("tools", [])
-                return len(tools)
-
-        except Exception as e:
-            logger.warning(f"Failed to discover tools count: {e}")
-
-        return None
+    # ── Tool Discovery ───────────────────────────────────────────────
 
     async def list_tools(
         self,
@@ -295,19 +220,9 @@ class MCPClientService:
         auth_type: str,
         credentials: dict | None = None,
     ) -> list[MCPTool]:
-        """Discover tools from an external MCP server.
-
-        Args:
-            base_url: Server URL
-            transport: Transport type (sse, http, websocket)
-            auth_type: Authentication type
-            credentials: Credentials dict from Vault
-
-        Returns:
-            List of discovered MCPTool objects
-        """
+        """Discover tools from an external MCP server."""
         try:
-            if transport == "http":
+            if transport in ("http", "streamable_http"):
                 return await self._list_tools_http(base_url, auth_type, credentials)
             elif transport == "sse":
                 return await self._list_tools_sse(base_url, auth_type, credentials)
@@ -330,43 +245,22 @@ class MCPClientService:
         headers["Content-Type"] = "application/json"
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # First initialize
-            init_request = {
-                "jsonrpc": "2.0",
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
+            # Initialize
+            init_request = _jsonrpc_request(
+                "initialize",
+                {
+                    "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": {},
-                    "clientInfo": {
-                        "name": "STOA Control Plane",
-                        "version": "1.0.0"
-                    }
+                    "clientInfo": CLIENT_INFO,
                 },
-                "id": str(uuid4())
-            }
-
-            init_response = await client.post(
-                base_url,
-                json=init_request,
-                headers=headers,
             )
-
+            init_response = await client.post(base_url, json=init_request, headers=headers)
             if init_response.status_code != 200:
                 raise Exception(f"Initialize failed: HTTP {init_response.status_code}")
 
-            # Then list tools
-            tools_request = {
-                "jsonrpc": "2.0",
-                "method": "tools/list",
-                "params": {},
-                "id": str(uuid4())
-            }
-
-            tools_response = await client.post(
-                base_url,
-                json=tools_request,
-                headers=headers,
-            )
+            # List tools
+            tools_request = _jsonrpc_request("tools/list")
+            tools_response = await client.post(base_url, json=tools_request, headers=headers)
 
             if tools_response.status_code != 200:
                 raise Exception(f"tools/list failed: HTTP {tools_response.status_code}")
@@ -393,19 +287,226 @@ class MCPClientService:
     ) -> list[MCPTool]:
         """List tools via SSE transport.
 
-        Note: Full SSE implementation requires the mcp SDK for proper
-        bidirectional communication. This is a simplified version.
+        MCP SSE protocol:
+        1. GET base_url/sse → SSE stream
+        2. First event type=endpoint → POST URL for JSON-RPC
+        3. POST initialize to endpoint
+        4. POST tools/list to endpoint
+        5. Read response from SSE stream (event type=message)
         """
-        # For SSE servers like Linear, we may need the official mcp SDK
-        # For now, try HTTP-style request as some SSE servers support both
+        headers = self._build_auth_headers(auth_type, credentials)
+
+        sse_url = base_url.rstrip("/") + "/sse" if not base_url.endswith("/sse") else base_url
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            # Step 1: Connect SSE and get endpoint
+            endpoint_url = None
+            async with httpx_sse.aconnect_sse(
+                client,
+                "GET",
+                sse_url,
+                headers={**headers, "Accept": "text/event-stream"},
+            ) as event_source:
+                # Read endpoint event
+                async for event in event_source.aiter_sse():
+                    if event.event == "endpoint":
+                        endpoint_url = event.data.strip()
+                        if not endpoint_url.startswith("http"):
+                            endpoint_url = urljoin(base_url, endpoint_url)
+                        break
+
+                if not endpoint_url:
+                    logger.warning("SSE: no endpoint event received from %s", sse_url)
+                    return []
+
+                # Step 2: Initialize via POST
+                init_request = _jsonrpc_request(
+                    "initialize",
+                    {
+                        "protocolVersion": MCP_PROTOCOL_VERSION,
+                        "capabilities": {},
+                        "clientInfo": CLIENT_INFO,
+                    },
+                )
+                await client.post(endpoint_url, json=init_request, headers={"Content-Type": "application/json"})
+
+                # Read initialize response from SSE
+                init_response = None
+                async for event in event_source.aiter_sse():
+                    if event.event == "message":
+                        init_response = json.loads(event.data)
+                        break
+
+                if not init_response or "result" not in init_response:
+                    logger.warning("SSE: initialize failed — %s", init_response)
+                    return []
+
+                # Send initialized notification
+                await client.post(
+                    endpoint_url,
+                    json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+                    headers={"Content-Type": "application/json"},
+                )
+
+                # Step 3: List tools via POST
+                tools_request = _jsonrpc_request("tools/list")
+                await client.post(endpoint_url, json=tools_request, headers={"Content-Type": "application/json"})
+
+                # Read tools response from SSE
+                async for event in event_source.aiter_sse():
+                    if event.event == "message":
+                        result = json.loads(event.data)
+                        if "result" in result:
+                            tools_data = result["result"].get("tools", [])
+                            return [
+                                MCPTool(
+                                    name=t.get("name", ""),
+                                    description=t.get("description"),
+                                    input_schema=t.get("inputSchema"),
+                                )
+                                for t in tools_data
+                            ]
+                        elif "error" in result:
+                            raise Exception(f"MCP error: {result['error']}")
+
+        return []
+
+    # ── Helpers ──────────────────────────────────────────────────────
+
+    async def _sse_initialize(
+        self,
+        base_url: str,
+        headers: dict,
+    ) -> tuple[str | None, dict | None]:
+        """Connect to SSE, get endpoint, send initialize. Returns (endpoint_url, server_info)."""
+        sse_url = base_url.rstrip("/") + "/sse" if not base_url.endswith("/sse") else base_url
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                async with httpx_sse.aconnect_sse(
+                    client,
+                    "GET",
+                    sse_url,
+                    headers={**headers, "Accept": "text/event-stream"},
+                ) as event_source:
+                    # Get endpoint URL
+                    endpoint_url = None
+                    async for event in event_source.aiter_sse():
+                        if event.event == "endpoint":
+                            endpoint_url = event.data.strip()
+                            if not endpoint_url.startswith("http"):
+                                endpoint_url = urljoin(base_url, endpoint_url)
+                            break
+
+                    if not endpoint_url:
+                        return None, None
+
+                    # Send initialize
+                    init_request = _jsonrpc_request(
+                        "initialize",
+                        {
+                            "protocolVersion": MCP_PROTOCOL_VERSION,
+                            "capabilities": {},
+                            "clientInfo": CLIENT_INFO,
+                        },
+                    )
+                    await client.post(endpoint_url, json=init_request, headers={"Content-Type": "application/json"})
+
+                    # Read initialize response
+                    async for event in event_source.aiter_sse():
+                        if event.event == "message":
+                            data = json.loads(event.data)
+                            server_info = data.get("result", {}).get("serverInfo")
+                            return endpoint_url, server_info
+
+            except TimeoutError:
+                logger.warning("SSE initialize timed out for %s", sse_url)
+            except Exception as e:
+                logger.warning("SSE initialize failed for %s: %s", sse_url, e)
+
+        return None, None
+
+    async def _sse_tools_count(
+        self,
+        base_url: str,
+        endpoint_url: str,
+        headers: dict,
+    ) -> int | None:
+        """Send tools/list via already-initialized SSE session. Returns count or None."""
+        sse_url = base_url.rstrip("/") + "/sse" if not base_url.endswith("/sse") else base_url
+
         try:
-            return await self._list_tools_http(base_url, auth_type, credentials)
-        except Exception:
-            # SSE servers typically require proper SSE client
-            logger.warning(
-                "SSE tool discovery requires mcp SDK - returning empty list"
-            )
-            return []
+            async with (
+                httpx.AsyncClient(timeout=self.timeout) as client,
+                httpx_sse.aconnect_sse(
+                    client,
+                    "GET",
+                    sse_url,
+                    headers={**headers, "Accept": "text/event-stream"},
+                ) as event_source,
+            ):
+                # Wait for endpoint event (reconnection gives us a new session)
+                ep = None
+                async for event in event_source.aiter_sse():
+                    if event.event == "endpoint":
+                        ep = event.data.strip()
+                        if not ep.startswith("http"):
+                            ep = urljoin(base_url, ep)
+                        break
+
+                if not ep:
+                    return None
+
+                # Re-initialize on new session
+                init_req = _jsonrpc_request(
+                    "initialize",
+                    {
+                        "protocolVersion": MCP_PROTOCOL_VERSION,
+                        "capabilities": {},
+                        "clientInfo": CLIENT_INFO,
+                    },
+                )
+                await client.post(ep, json=init_req, headers={"Content-Type": "application/json"})
+
+                # Read init response
+                async for event in event_source.aiter_sse():
+                    if event.event == "message":
+                        break
+
+                # Send tools/list
+                tools_req = _jsonrpc_request("tools/list")
+                await client.post(ep, json=tools_req, headers={"Content-Type": "application/json"})
+
+                async for event in event_source.aiter_sse():
+                    if event.event == "message":
+                        data = json.loads(event.data)
+                        tools = data.get("result", {}).get("tools", [])
+                        return len(tools)
+        except Exception as e:
+            logger.warning("SSE tools count failed: %s", e)
+
+        return None
+
+    async def _discover_tools_count_http(
+        self,
+        base_url: str,
+        headers: dict,
+        client: httpx.AsyncClient,
+    ) -> int | None:
+        """Try to discover tools count for HTTP transport."""
+        try:
+            tools_request = _jsonrpc_request("tools/list")
+            response = await client.post(base_url, json=tools_request, headers=headers)
+
+            if response.status_code == 200:
+                result = response.json()
+                tools = result.get("result", {}).get("tools", [])
+                return len(tools)
+
+        except Exception as e:
+            logger.warning(f"Failed to discover tools count: {e}")
+
+        return None
 
 
 # Global service instance

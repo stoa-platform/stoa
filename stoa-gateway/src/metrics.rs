@@ -48,12 +48,12 @@ pub static MCP_TOOL_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Failed to create stoa_mcp_tool_duration_seconds metric")
 });
 
-/// Counter of MCP tool calls
+/// Counter of MCP tool calls (includes consumer_id for per-consumer analytics, CAB-1782)
 pub static MCP_TOOL_CALLS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "stoa_mcp_tools_calls_total",
         "Total number of MCP tool calls",
-        &["tool", "tenant", "status"]
+        &["tool", "tenant", "status", "consumer_id"]
     )
     .expect("Failed to create stoa_mcp_tools_calls_total metric")
 });
@@ -196,6 +196,50 @@ pub static GUARDRAILS_CONTENT_FILTERED: Lazy<CounterVec> = Lazy::new(|| {
         &["action", "category"]
     )
     .expect("Failed to create stoa_guardrails_content_filtered_total metric")
+});
+
+// === Prompt Guard Metrics (CAB-1761) ===
+
+/// Counter of prompt guard detections by category and action.
+pub static PROMPT_GUARD_DETECTED: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_prompt_guard_detected_total",
+        "Total prompt guard threat detections by category and action",
+        &["category", "action"]
+    )
+    .expect("Failed to create stoa_prompt_guard_detected_total metric")
+});
+
+/// Counter of prompts scanned by the prompt guard (pass + detected).
+pub static PROMPT_GUARD_SCANNED: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_prompt_guard_scanned_total",
+        "Total prompts scanned by prompt guard",
+        &["result"]
+    )
+    .expect("Failed to create stoa_prompt_guard_scanned_total metric")
+});
+
+// === RAG Injector Metrics (CAB-1761) ===
+
+/// Counter of RAG context injection attempts by source and result.
+pub static RAG_INJECTIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_rag_injections_total",
+        "Total RAG context injection attempts by source and result",
+        &["source", "result"]
+    )
+    .expect("Failed to create stoa_rag_injections_total metric")
+});
+
+/// Histogram of RAG source fetch duration in seconds.
+pub static RAG_FETCH_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_rag_fetch_duration_seconds",
+        "Duration of RAG context source fetch operations",
+        &["source"]
+    )
+    .expect("Failed to create stoa_rag_fetch_duration_seconds metric")
 });
 
 // === Token Budget Metrics (CAB-1337 Phase 2) ===
@@ -451,15 +495,22 @@ pub static UPSTREAM_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 /// When OTel tracing is active, the histogram observation includes
 /// a `trace_id` exemplar, enabling click-through from Grafana metrics
 /// panels directly to the Tempo trace view.
-pub fn record_tool_call(tool: &str, tenant: &str, status: &str, duration_secs: f64) {
+pub fn record_tool_call(
+    tool: &str,
+    tenant: &str,
+    status: &str,
+    duration_secs: f64,
+    consumer_id: &str,
+) {
     let histogram = MCP_TOOL_DURATION.with_label_values(&[tool, tenant, status]);
 
     // CAB-1088: exemplar support blocked on prometheus crate 0.14
     // (observe_with_exemplar not available in 0.13; track upstream PR)
     histogram.observe(duration_secs);
 
+    // CAB-1782: consumer_id on CounterVec only (not HistogramVec — cardinality guard)
     MCP_TOOL_CALLS_TOTAL
-        .with_label_values(&[tool, tenant, status])
+        .with_label_values(&[tool, tenant, status, consumer_id])
         .inc();
 }
 
@@ -522,6 +573,316 @@ pub fn track_ws_message(direction: &str, method: &str) {
         .inc();
 }
 
+// === WebSocket Proxy Metrics (CAB-1758) ===
+
+pub static WS_PROXY_CONNECTIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "stoa_ws_proxy_connections_active",
+        "Number of active WebSocket proxy connections"
+    )
+    .expect("Failed to create stoa_ws_proxy_connections_active metric")
+});
+
+pub static WS_PROXY_CONNECTION_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_ws_proxy_connection_duration_seconds",
+        "Duration of WebSocket proxy connections",
+        &["tenant"],
+        vec![1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0]
+    )
+    .expect("Failed to create stoa_ws_proxy_connection_duration_seconds metric")
+});
+
+pub static WS_PROXY_MESSAGES_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_ws_proxy_messages_total",
+        "Total WebSocket proxy messages relayed",
+        &["direction", "route_id"]
+    )
+    .expect("Failed to create stoa_ws_proxy_messages_total metric")
+});
+
+pub static WS_PROXY_RATE_LIMITED_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_ws_proxy_rate_limited_total",
+        "Total WebSocket proxy messages dropped by rate limiter",
+        &["route_id", "source"]
+    )
+    .expect("Failed to create stoa_ws_proxy_rate_limited_total metric")
+});
+
+pub fn track_ws_proxy_connect() {
+    WS_PROXY_CONNECTIONS_ACTIVE.inc();
+}
+
+pub fn track_ws_proxy_disconnect(tenant: &str, duration_secs: f64) {
+    WS_PROXY_CONNECTIONS_ACTIVE.dec();
+    WS_PROXY_CONNECTION_DURATION
+        .with_label_values(&[tenant])
+        .observe(duration_secs);
+}
+
+pub fn track_ws_proxy_message(direction: &str, route_id: &str) {
+    WS_PROXY_MESSAGES_TOTAL
+        .with_label_values(&[direction, route_id])
+        .inc();
+}
+
+pub fn track_ws_proxy_rate_limited(route_id: &str, source: &str) {
+    WS_PROXY_RATE_LIMITED_TOTAL
+        .with_label_values(&[route_id, source])
+        .inc();
+}
+
+// === SOAP/XML Bridge Metrics (CAB-1762) ===
+
+static SOAP_PROXY_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_proxy_requests_total",
+        "Total SOAP proxy requests",
+        &["route_id"]
+    )
+    .expect("Failed to create stoa_soap_proxy_requests_total metric")
+});
+
+static SOAP_PROXY_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_proxy_responses_total",
+        "Total SOAP proxy responses by success/failure",
+        &["route_id", "success"]
+    )
+    .expect("Failed to create stoa_soap_proxy_responses_total metric")
+});
+
+static SOAP_PROXY_FAULTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_proxy_faults_total",
+        "Total SOAP faults detected in responses",
+        &["route_id"]
+    )
+    .expect("Failed to create stoa_soap_proxy_faults_total metric")
+});
+
+static SOAP_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_bridge_requests_total",
+        "Total SOAP bridge tool invocations",
+        &["operation"]
+    )
+    .expect("Failed to create stoa_soap_bridge_requests_total metric")
+});
+
+static SOAP_BRIDGE_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_bridge_responses_total",
+        "Total SOAP bridge tool responses by success/failure",
+        &["operation", "success"]
+    )
+    .expect("Failed to create stoa_soap_bridge_responses_total metric")
+});
+
+pub fn track_soap_proxy_request(route_id: &str) {
+    SOAP_PROXY_REQUESTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_soap_proxy_response(route_id: &str, success: bool) {
+    SOAP_PROXY_RESPONSES
+        .with_label_values(&[route_id, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_soap_proxy_fault(route_id: &str) {
+    SOAP_PROXY_FAULTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_soap_bridge_request(operation: &str) {
+    SOAP_BRIDGE_REQUESTS.with_label_values(&[operation]).inc();
+}
+
+pub fn track_soap_bridge_response(operation: &str, success: bool) {
+    SOAP_BRIDGE_RESPONSES
+        .with_label_values(&[operation, if success { "true" } else { "false" }])
+        .inc();
+}
+
+// === gRPC Protocol Metrics (CAB-1755) ===
+
+static GRPC_PROXY_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_grpc_proxy_requests_total",
+        "Total gRPC proxy requests",
+        &["route_id"]
+    )
+    .expect("Failed to create stoa_grpc_proxy_requests_total metric")
+});
+
+static GRPC_PROXY_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_grpc_proxy_responses_total",
+        "Total gRPC proxy responses by success/failure",
+        &["route_id", "success"]
+    )
+    .expect("Failed to create stoa_grpc_proxy_responses_total metric")
+});
+
+static GRPC_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_grpc_bridge_requests_total",
+        "Total gRPC bridge tool invocations",
+        &["method"]
+    )
+    .expect("Failed to create stoa_grpc_bridge_requests_total metric")
+});
+
+static GRPC_BRIDGE_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_grpc_bridge_responses_total",
+        "Total gRPC bridge tool responses by success/failure",
+        &["method", "success"]
+    )
+    .expect("Failed to create stoa_grpc_bridge_responses_total metric")
+});
+
+pub fn track_grpc_proxy_request(route_id: &str) {
+    GRPC_PROXY_REQUESTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_grpc_proxy_response(route_id: &str, success: bool) {
+    GRPC_PROXY_RESPONSES
+        .with_label_values(&[route_id, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_grpc_bridge_request(method: &str) {
+    GRPC_BRIDGE_REQUESTS.with_label_values(&[method]).inc();
+}
+
+pub fn track_grpc_bridge_response(method: &str, success: bool) {
+    GRPC_BRIDGE_RESPONSES
+        .with_label_values(&[method, if success { "true" } else { "false" }])
+        .inc();
+}
+
+// === GraphQL Protocol Metrics (CAB-1756) ===
+
+static GRAPHQL_PROXY_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_proxy_requests_total",
+        "Total GraphQL proxy requests",
+        &["route_id"]
+    )
+    .expect("Failed to create stoa_graphql_proxy_requests_total metric")
+});
+
+static GRAPHQL_PROXY_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_proxy_responses_total",
+        "Total GraphQL proxy responses by success/failure",
+        &["route_id", "success"]
+    )
+    .expect("Failed to create stoa_graphql_proxy_responses_total metric")
+});
+
+static GRAPHQL_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_bridge_requests_total",
+        "Total GraphQL bridge tool requests",
+        &["field"]
+    )
+    .expect("Failed to create stoa_graphql_bridge_requests_total metric")
+});
+
+static GRAPHQL_BRIDGE_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_bridge_responses_total",
+        "Total GraphQL bridge tool responses by success/failure",
+        &["field", "success"]
+    )
+    .expect("Failed to create stoa_graphql_bridge_responses_total metric")
+});
+
+pub fn track_graphql_proxy_request(route_id: &str) {
+    GRAPHQL_PROXY_REQUESTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_graphql_proxy_response(route_id: &str, success: bool) {
+    GRAPHQL_PROXY_RESPONSES
+        .with_label_values(&[route_id, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_graphql_bridge_request(field: &str) {
+    GRAPHQL_BRIDGE_REQUESTS.with_label_values(&[field]).inc();
+}
+
+pub fn track_graphql_bridge_response(field: &str, success: bool) {
+    GRAPHQL_BRIDGE_RESPONSES
+        .with_label_values(&[field, if success { "true" } else { "false" }])
+        .inc();
+}
+
+// === Kafka Event Bridge Metrics (CAB-1757) ===
+
+static KAFKA_BRIDGE_PUBLISH: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_kafka_bridge_publish_total",
+        "Total Kafka bridge publish requests by topic and success/failure",
+        &["topic", "success"]
+    )
+    .expect("Failed to create stoa_kafka_bridge_publish_total metric")
+});
+
+static KAFKA_BRIDGE_SUBSCRIBE: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_kafka_bridge_subscribe_total",
+        "Total Kafka bridge subscribe requests by tenant",
+        &["tenant_id"]
+    )
+    .expect("Failed to create stoa_kafka_bridge_subscribe_total metric")
+});
+
+pub fn track_kafka_bridge_publish(topic: &str, success: bool) {
+    KAFKA_BRIDGE_PUBLISH
+        .with_label_values(&[topic, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_kafka_bridge_subscribe(tenant_id: &str) {
+    KAFKA_BRIDGE_SUBSCRIBE.with_label_values(&[tenant_id]).inc();
+}
+
+// === Plugin SDK Metrics (CAB-1759) ===
+
+/// Counter of plugin executions by plugin name, phase, and result.
+static PLUGIN_EXECUTIONS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_plugin_executions_total",
+        "Total plugin executions by plugin, phase, and result",
+        &["plugin", "phase", "result"]
+    )
+    .expect("Failed to create stoa_plugin_executions_total metric")
+});
+
+/// Counter of plugin load/unload events by plugin name and action.
+static PLUGIN_LIFECYCLE: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_plugin_lifecycle_total",
+        "Total plugin lifecycle events (load, unload, hot-reload)",
+        &["plugin", "action"]
+    )
+    .expect("Failed to create stoa_plugin_lifecycle_total metric")
+});
+
+pub fn track_plugin_execution(plugin: &str, phase: &str, result: &str) {
+    PLUGIN_EXECUTIONS
+        .with_label_values(&[plugin, phase, result])
+        .inc();
+}
+
+pub fn track_plugin_lifecycle(plugin: &str, action: &str) {
+    PLUGIN_LIFECYCLE.with_label_values(&[plugin, action]).inc();
+}
+
 /// Update session count gauge
 pub fn update_session_count(count: usize) {
     MCP_SESSIONS_ACTIVE.set(count as f64);
@@ -577,6 +938,36 @@ pub fn record_guardrails_content_filter(action: &str, category: &str) {
     GUARDRAILS_CONTENT_FILTERED
         .with_label_values(&[action, category])
         .inc();
+}
+
+// === Prompt Guard metrics helpers (CAB-1761) ===
+
+/// Record a prompt guard detection event.
+pub fn record_prompt_guard_detected(category: &str, action: &str) {
+    PROMPT_GUARD_DETECTED
+        .with_label_values(&[category, action])
+        .inc();
+}
+
+/// Record a prompt guard scan result (pass or detected).
+pub fn record_prompt_guard_scanned(result: &str) {
+    PROMPT_GUARD_SCANNED.with_label_values(&[result]).inc();
+}
+
+// === RAG Injector metrics helpers (CAB-1761) ===
+
+/// Record a RAG context injection attempt.
+pub fn record_rag_injection(source: &str, result: &str) {
+    RAG_INJECTIONS_TOTAL
+        .with_label_values(&[source, result])
+        .inc();
+}
+
+/// Record the duration of a RAG source fetch.
+pub fn record_rag_fetch_duration(source: &str, duration_secs: f64) {
+    RAG_FETCH_DURATION
+        .with_label_values(&[source])
+        .observe(duration_secs);
 }
 
 /// Record token consumption for a tenant.
@@ -832,7 +1223,7 @@ mod tests {
     #[test]
     fn test_record_tool_call() {
         // Should not panic
-        record_tool_call("test_tool", "tenant-1", "success", 0.05);
+        record_tool_call("test_tool", "tenant-1", "success", 0.05, "consumer-1");
     }
 
     #[test]
@@ -844,7 +1235,13 @@ mod tests {
     #[test]
     fn test_get_requests_total() {
         // Record some calls and verify total is non-negative
-        record_tool_call("metric_test_tool", "metric-tenant", "success", 0.01);
+        record_tool_call(
+            "metric_test_tool",
+            "metric-tenant",
+            "success",
+            0.01,
+            "consumer-1",
+        );
         let total = get_requests_total();
         assert!(total >= 1, "Expected at least 1 request, got {}", total);
     }
@@ -852,7 +1249,13 @@ mod tests {
     #[test]
     fn test_get_error_rate_with_no_errors() {
         // Record only success calls
-        record_tool_call("rate_test_tool", "rate-tenant", "success", 0.01);
+        record_tool_call(
+            "rate_test_tool",
+            "rate-tenant",
+            "success",
+            0.01,
+            "consumer-1",
+        );
         let rate = get_error_rate();
         // Rate should be between 0.0 and 1.0
         assert!(
@@ -865,8 +1268,8 @@ mod tests {
     #[test]
     fn test_get_error_rate_with_errors() {
         // Record both success and error calls
-        record_tool_call("err_test_tool", "err-tenant", "success", 0.01);
-        record_tool_call("err_test_tool", "err-tenant", "error", 0.05);
+        record_tool_call("err_test_tool", "err-tenant", "success", 0.01, "consumer-1");
+        record_tool_call("err_test_tool", "err-tenant", "error", 0.05, "consumer-1");
         let rate = get_error_rate();
         assert!(rate > 0.0, "Expected non-zero error rate, got {}", rate);
         assert!(rate <= 1.0, "Error rate out of range: {}", rate);

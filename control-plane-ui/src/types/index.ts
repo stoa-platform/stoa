@@ -62,6 +62,13 @@ export interface APICreate {
   portal_promoted?: boolean; // Add portal:published tag when true
 }
 
+export interface APIVersionEntry {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
 // Application types
 export interface Application {
   id: string;
@@ -149,6 +156,27 @@ export interface BulkRevokeResponse {
   failed: number;
   skipped: number;
   errors: string[];
+}
+
+// Tenant CA types (CAB-1787/1788 — per-tenant CA management)
+export interface TenantCAInfo {
+  tenant_id: string;
+  subject_dn: string;
+  serial_number: string;
+  not_before: string;
+  not_after: string;
+  key_algorithm: string;
+  fingerprint_sha256: string;
+  ca_certificate_pem: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface CSRSignResponse {
+  signed_certificate_pem: string;
+  subject_dn: string;
+  issuer_dn: string;
+  validity_days: number;
 }
 
 // Environment types (ADR-040 — Born GitOps)
@@ -548,8 +576,9 @@ export interface TransactionSpan {
   name: string;
   service: string;
   status: TransactionStatus;
-  started_at: string;
+  start_offset_ms: number;
   duration_ms: number;
+  started_at?: string;
   error?: string;
   metadata?: Record<string, unknown>;
 }
@@ -563,6 +592,8 @@ export interface APITransaction {
   path: string;
   status_code: number;
   status: TransactionStatus;
+  status_text?: string;
+  error_source?: string;
   client_ip?: string;
   user_id?: string;
   started_at: string;
@@ -571,6 +602,7 @@ export interface APITransaction {
   request_headers?: Record<string, string>;
   response_headers?: Record<string, string>;
   error_message?: string;
+  demo_mode?: boolean;
 }
 
 export interface APITransactionSummary {
@@ -581,6 +613,8 @@ export interface APITransactionSummary {
   path: string;
   status_code: number;
   status: TransactionStatus;
+  status_text?: string;
+  error_source?: string;
   started_at: string;
   total_duration_ms: number;
   spans_count: number;
@@ -720,6 +754,8 @@ export interface ExternalMCPServer {
   last_sync_at?: string;
   sync_error?: string;
   tenant_id?: string;
+  environment?: string;
+  gateway_instance_id?: string;
   tools_count: number;
   created_at: string;
   updated_at: string;
@@ -754,6 +790,8 @@ export interface ExternalMCPServerCreate {
   credentials?: ExternalMCPServerCredentials;
   tool_prefix?: string;
   tenant_id?: string;
+  environment?: string;
+  gateway_instance_id?: string;
 }
 
 export interface ExternalMCPServerUpdate {
@@ -766,6 +804,8 @@ export interface ExternalMCPServerUpdate {
   credentials?: ExternalMCPServerCredentials;
   tool_prefix?: string;
   enabled?: boolean;
+  environment?: string;
+  gateway_instance_id?: string;
 }
 
 export interface ExternalMCPServerListResponse {
@@ -1043,7 +1083,7 @@ export type GatewayType =
   | 'stoa_sidecar'
   | 'stoa_proxy'
   | 'stoa_shadow';
-export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow';
+export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow' | 'connect';
 export type GatewayInstanceStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 export type DeploymentSyncStatus =
   | 'pending'
@@ -1069,6 +1109,7 @@ export interface GatewayInstance {
   version?: string;
   tags: string[];
   mode?: GatewayMode;
+  source?: 'argocd' | 'self_register' | 'manual';
   protected?: boolean;
   deleted_at?: string | null;
   deleted_by?: string | null;
@@ -1460,6 +1501,8 @@ export interface ConnectorTemplate {
   is_connected: boolean;
   connected_server_id?: string;
   connection_health?: string;
+  connected_environment?: string;
+  needs_setup: boolean;
 }
 
 export interface ConnectorCatalogResponse {
@@ -1479,6 +1522,15 @@ export interface CallbackResponse {
   slug: string;
   tools_sync_triggered: boolean;
   redirect_url?: string;
+}
+
+export interface PromoteResponse {
+  slug: string;
+  source_environment: string;
+  target_environment: string;
+  server_id: string;
+  server_name: string;
+  credentials_cloned: boolean;
 }
 
 // ============== Subscription Management (CAB-1635) ==============

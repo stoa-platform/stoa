@@ -87,6 +87,9 @@ ENV VITE_BASE_DOMAIN=$VITE_BASE_DOMAIN \
     VITE_ITEMS_PER_PAGE=$VITE_ITEMS_PER_PAGE \
     VITE_REFRESH_INTERVAL=$VITE_REFRESH_INTERVAL
 
+# Cache-bust: ARG change invalidates this layer, ensuring fresh Vite build per commit
+# while npm ci layers above remain cached. Prevents stale JS chunks from GHA Docker cache.
+ARG CACHEBUST=unknown
 RUN npm run build
 
 # Production stage - Use nginx-unprivileged for security (non-root)

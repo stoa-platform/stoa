@@ -1,6 +1,6 @@
 ---
 description: AI Factory token budget and cost controls
-globs: ".claude/**"
+globs: ".claude/rules/**,.claude/hooks/**"
 ---
 
 # Cost Guardrails
@@ -27,6 +27,20 @@ globs: ".claude/**"
 **Escalation rule**: Sonnet looping > 15 min → switch to Opus (costs less in total).
 
 **Why Opus for implementation**: With ~40K tokens of system rules, Sonnet saturates its context window after 30+ turns and loops. Opus resolves in 5-15 turns. Data (2026-02-22): 44% of Sonnet sessions > 1h, some > 4h. Same tasks done in < 15 min with Opus.
+
+## Effort Level Routing (Opus 4.6)
+
+Opus 4.6 supports effort levels that trade thoroughness for speed and cost.
+
+| Task Mode | Effort | Command | Use When |
+|-----------|--------|---------|----------|
+| **Ship** (docs, config, style, deps) | `low` | `/effort low` | Routine, low-risk, < 5 pts |
+| **Show** (refactor, tests, bug fix) | `medium` | Default | Standard work, no action needed |
+| **Ask** (features, security, MEGAs) | `high` | `/effort high` | Complex, multi-file, >= 13 pts |
+
+**Fast mode**: Toggle `/fast` for Ship tasks — same Opus 4.6 model, faster output. Combine with `low` effort for maximum speed on routine work.
+
+**Subagent effort**: Subagents inherit the parent's effort level. Override with `model` parameter on Agent tool when needed (e.g., `model: haiku` for Explore agents).
 
 ## Model Selection — CI (GitHub Actions)
 
@@ -85,3 +99,36 @@ YYYY-MM-DDTHH:MM | RULES-BUDGET | always_loaded_bytes=N files_without_globs=N me
 ```
 
 Logged by `rules-budget-lint.sh` on every Stop event.
+
+## Quality Metrics (AI Regression Tracking)
+
+Script: `scripts/ai-ops/quality-metrics.sh` — weekly cron (Monday 07:00 UTC).
+
+### Metrics
+
+| Metric | Prometheus Name | What | Target |
+|--------|----------------|------|--------|
+| Regression Rate | `ai_factory_regression_rate` | fix PRs / feat PRs (AI vs human) | < 0.3 |
+| Time-to-Regression | `ai_factory_time_to_regression_hours` | Avg hours feat→fix on same files | > 72h |
+| PR Rejection Rate | `ai_factory_pr_rejection_rate` | PRs with CI failure on first commit | < 0.2 |
+
+### Usage
+
+```bash
+# Local report (no push)
+bash scripts/ai-ops/quality-metrics.sh --days 30
+
+# JSON output for scripting
+bash scripts/ai-ops/quality-metrics.sh --days 30 --json
+
+# Push to Pushgateway (cron)
+PUSHGATEWAY_URL=https://push.gostoa.dev bash scripts/ai-ops/quality-metrics.sh --push
+```
+
+### Thresholds
+
+| Level | Regression Rate | Action |
+|-------|----------------|--------|
+| Green | < 0.2 | Normal — AI Factory producing stable code |
+| Yellow | 0.2 - 0.4 | Review recent feat PRs for test gaps |
+| Red | > 0.4 | Pause autonomous pipeline, investigate root cause |

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-10 (fix(gateway) audit remediations PR #1633)
+> Derniere MAJ: 2026-03-13 (feat(security) Vault setup + migration scripts PR #1710)
 
 ## ✅ DONE
 
@@ -49,6 +49,14 @@ CAB-1696: [MEGA] AI Factory Audit Remediation (34 pts) — Phase 1 in progress
 - [ ] CAB-1699: Rust coverage gate (5 pts) — blocked by P1
 - [ ] CAB-1700: E2E smoke mock server (5 pts) — blocked by P1
 - [ ] CAB-1701: OpenAPI→TS contract testing (3 pts) — blocked by P1
+
+CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (44 pts) — Council 8.25/10
+- ✅ CAB-1796 Setup Vault on spare-gra-vps (8 pts) — PR #1710
+- ✅ CAB-1797 Migrate Infisical → Vault (5 pts) — PR #1710
+- [ ] CAB-1798 ESO → Vault (8 pts) — Phase 2 (blocked: needs Vault live)
+- [ ] CAB-1799 Vault Agent VPS (13 pts) — Phase 3 (blocked: needs Vault live)
+- [ ] CAB-1801 Rotation extended (5 pts) — Phase 4
+- [ ] CAB-1802 SSH + PKI (5 pts) — Phase 5
 
 CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 - ✅ CAB-1739 PAR proxy (5 pts) — PR #1526

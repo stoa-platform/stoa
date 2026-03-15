@@ -16,8 +16,9 @@ paths = [
   '''.*README\.md''',
   '''.*\.example''',
   '''tests/.*''',
-  # Docker compose files with local-only credentials
-  '''deploy/docker-compose/.*''',
+  # Docker compose main files (env var defaults for local dev only)
+  '''deploy/docker-compose/docker-compose\.yml''',
+  '''deploy/docker-compose/docker-compose\..*\.yml''',
   # External Secrets manifests (references, not actual secrets)
   '''deploy/external-secrets/.*''',
   # Jenkins pipeline files with variable references
@@ -30,8 +31,8 @@ paths = [
   '''PLAN_DETAILLE\.md''',
   # Demo scripts with test/demo credentials (not real secrets)
   '''scripts/demo/.*''',
-  # AI Factory rules with curl examples using default trial credentials
-  '''\.claude/rules/gateway-adapters\.md''',
+  # AI Factory rules (examples and anti-pattern documentation, not real secrets)
+  '''\.claude/rules/.*\.md''',
   # VPS benchmark deploy scripts with example Pushgateway credentials
   '''deploy/vps/bench/.*''',
   # Onboarding wizard with curl template literals (${trialKey} interpolation, not real secrets)
@@ -41,6 +42,8 @@ paths = [
   # Gateway Rust inline test fixtures (#[cfg(test)] blocks) — test RSA keys and fake JWTs
   '''stoa-gateway/src/oauth/client_auth\.rs''',
   '''stoa-gateway/src/oauth/proxy\.rs''',
+  # UI crypto test fixtures — forge-generated test keys (not real secrets)
+  '''control-plane-ui/src/lib/__tests__/crypto\.test\.ts''',
 ]
 
 regexes = [
@@ -55,10 +58,14 @@ regexes = [
   '''REDACTED''',
 ]
 
-# Specific commits to ignore (false positives in schema examples)
+# Specific commits to ignore (false positives and historical secrets now removed)
 commits = [
   "c3b53982772666b3cd95ae38004dc57f14c7e977",
   "9bfdc8d235b1ad553cb333423fa7ce57fe74d8be",
+  # Historical secrets (removed in fix/audit-k8s-secrets-in-gitops)
+  "aaeedd6b41789b2889715bf86e5cf6657d422edf",  # OpenSearch passwords + bcrypt hashes
+  "92cf56ea3f31054ce04a76571c50d32a3257264b",  # PostgreSQL password in statefulset
+  "7ebe3629d5f8efe4c242f18f31cf14925f31e5a6",  # Ansible playbook db_password
 ]
 
 # Rules to modify or disable
@@ -70,5 +77,62 @@ allowlist = { regexes = [
   '''stoa_[a-z]+_[a-zA-Z0-9]{32}''',  # Allow STOA format keys in examples
   '''new_api_key.*example''',
   '''api_key.*example''',
+]}
+
+# K8s Secret manifests: catch hardcoded passwords in stringData blocks
+# Captures the value after the colon — blocks real credentials, allows placeholders
+[[rules]]
+id = "k8s-secret-password"
+description = "Hardcoded password in Kubernetes Secret stringData"
+regex = '''(?i)(?:POSTGRES_PASSWORD|DB_PASSWORD|ADMIN_PASSWORD|KEYCLOAK_PASSWORD|OPENSEARCH_PASSWORD)\s*:\s*["']?([a-zA-Z0-9!@#$%^&*_\-]{8,})["']?'''
+allowlist = { regexes = [
+  '''REPLACE_''',
+  '''CHANGE_ME''',
+  '''REPLACE_ME''',
+  '''\$\{''',
+  '''<YOUR_''',
+  '''xxxxxxxx''',
+  '''REDACTED''',
+  '''placeholder''',
+  '''your[_-]''',
+  '''example''',
+], paths = [
+  '''.github/workflows/.*''',
+  '''tests/.*''',
+  '''.claude/hooks/.*''',
+  '''deploy/secrets/.*\.template''',
+  '''deploy/docker-compose/.*''',
+  '''deploy/demo-federation/.*''',
+  '''deploy/demo-tenants/.*''',
+  '''deploy/observability/.*\.sh''',
+  '''scripts/setup-.*''',
+  '''scripts/validate-.*''',
+]}
+
+# Plaintext password in YAML comments (leaks real passwords as documentation)
+[[rules]]
+id = "password-in-comment"
+description = "Plaintext password exposed in YAML/config comment"
+regex = '''#\s*[Pp]assword\s*:\s*([A-Za-z0-9!@#$%^&*_\-]{6,})'''
+allowlist = { regexes = [
+  '''stored in Infisical''',
+  '''REPLACE_''',
+  '''CHANGE_ME''',
+  '''<your''',
+  '''example''',
+  '''Set via''',
+], paths = [
+  '''.claude/hooks/.*''',
+  '''tests/.*''',
+]}
+
+# bcrypt hashes (often leaked in OpenSearch, htpasswd configs)
+[[rules]]
+id = "bcrypt-hash"
+description = "Bcrypt hash committed to repository"
+regex = '''\$2[aby]?\$[0-9]+\$[./A-Za-z0-9]{53}'''
+allowlist = { paths = [
+  '''tests/.*''',
+  '''stoa-gateway/src/.*\.rs''',  # test fixtures in #[cfg(test)]
 ]}
 

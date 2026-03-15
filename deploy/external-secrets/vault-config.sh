@@ -1,63 +1,76 @@
 #!/bin/bash
-# Configure Vault for External Secrets Operator
-# Run this from a machine with Vault access
+# Configure Vault Kubernetes auth for External Secrets Operator
+# Uses curl (no vault CLI dependency)
+#
+# Prerequisites:
+#   - VAULT_ADDR=https://hcvault.gostoa.dev
+#   - VAULT_TOKEN set (admin token)
+#   - kubectl configured for OVH prod cluster (KUBECONFIG)
+#
+# Phase 2 (CAB-1798) — run after Vault is operational + secrets migrated
 
-set -e
+set -euo pipefail
 
-VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
+VAULT_ADDR="${VAULT_ADDR:-https://hcvault.gostoa.dev}"
 NAMESPACE="stoa-system"
 
-echo "Configuring Vault for External Secrets Operator..."
+echo "=== Configuring Vault for ESO ==="
+echo "Vault: ${VAULT_ADDR}"
+echo ""
 
-# Create policy for external-secrets
-vault policy write external-secrets - <<EOF
-# Read secrets from apim path
-path "secret/data/apim/*" {
-  capabilities = ["read"]
-}
+# Step 1: Create k8s-eso policy (read k8s/*, shared/*, dev/*)
+echo "[1/4] Creating k8s-eso policy..."
+curl -sf -X PUT "${VAULT_ADDR}/v1/sys/policies/acl/k8s-eso" \
+  -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "policy": "path \"stoa/data/k8s/*\" { capabilities = [\"read\"] }\npath \"stoa/metadata/k8s/*\" { capabilities = [\"list\", \"read\"] }\npath \"stoa/data/shared/*\" { capabilities = [\"read\"] }\npath \"stoa/metadata/shared/*\" { capabilities = [\"list\", \"read\"] }\npath \"stoa/data/dev/*\" { capabilities = [\"read\"] }\npath \"stoa/metadata/dev/*\" { capabilities = [\"list\", \"read\"] }"
+  }' && echo "  OK"
 
-path "secret/metadata/apim/*" {
-  capabilities = ["list", "read"]
-}
-EOF
+# Step 2: Enable Kubernetes auth (idempotent)
+echo "[2/4] Enabling Kubernetes auth..."
+curl -sf -X POST "${VAULT_ADDR}/v1/sys/auth/kubernetes" \
+  -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "kubernetes"}' 2>/dev/null && echo "  Enabled" || echo "  Already enabled"
 
-echo "Policy 'external-secrets' created"
-
-# Enable Kubernetes auth if not already enabled
-vault auth enable kubernetes 2>/dev/null || echo "Kubernetes auth already enabled"
-
-# Configure Kubernetes auth
-# Get the Kubernetes API server address
+# Step 3: Configure K8s auth with cluster details
+echo "[3/4] Configuring K8s auth..."
 K8S_HOST=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+K8S_CA_CERT=$(kubectl config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d)
 
-# Get the CA cert from the service account
-K8S_CA_CERT=$(kubectl get secret -n vault vault-token -o jsonpath='{.data.ca\.crt}' 2>/dev/null | base64 -d || \
-  kubectl exec -n vault vault-0 -- cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt)
+curl -sf -X POST "${VAULT_ADDR}/v1/auth/kubernetes/config" \
+  -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "$(python3 -c "
+import json
+config = {
+    'kubernetes_host': '${K8S_HOST}',
+    'kubernetes_ca_cert': '''${K8S_CA_CERT}''',
+    'disable_local_ca_jwt': True
+}
+print(json.dumps(config))
+")" && echo "  Configured for ${K8S_HOST}"
 
-vault write auth/kubernetes/config \
-  kubernetes_host="$K8S_HOST" \
-  kubernetes_ca_cert="$K8S_CA_CERT" \
-  disable_local_ca_jwt=true
-
-echo "Kubernetes auth configured"
-
-# Create role for external-secrets service account
-vault write auth/kubernetes/role/external-secrets \
-  bound_service_account_names=external-secrets-sa \
-  bound_service_account_namespaces=$NAMESPACE \
-  policies=external-secrets \
-  ttl=1h
-
-echo "Role 'external-secrets' created"
+# Step 4: Create role for external-secrets service account
+echo "[4/4] Creating external-secrets role..."
+curl -sf -X POST "${VAULT_ADDR}/v1/auth/kubernetes/role/external-secrets" \
+  -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"bound_service_account_names\": [\"external-secrets-sa\"],
+    \"bound_service_account_namespaces\": [\"${NAMESPACE}\"],
+    \"policies\": [\"k8s-eso\"],
+    \"ttl\": \"1h\"
+  }" && echo "  OK"
 
 echo ""
-echo "Vault configuration complete!"
+echo "=== Vault ESO Configuration Complete ==="
 echo ""
 echo "Next steps:"
-echo "1. Install External Secrets Operator:"
-echo "   helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace"
+echo "  1. Apply SecretStore:     kubectl apply -f secret-store.yaml"
+echo "  2. Apply ExternalSecrets: kubectl apply -f external-secret-*.yaml"
 echo ""
-echo "2. Apply SecretStore and ExternalSecrets:"
-echo "   kubectl apply -f secret-store.yaml"
-echo "   kubectl apply -f external-secret-database.yaml"
-echo "   kubectl apply -f external-secret-minio.yaml"
+echo "Verify:"
+echo "  kubectl get secretstores -n stoa-system"
+echo "  kubectl get externalsecrets -n stoa-system"

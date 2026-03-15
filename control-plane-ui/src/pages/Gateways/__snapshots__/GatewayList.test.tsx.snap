@@ -6,10 +6,12 @@ exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot
     "Show deleted",
     "Refresh",
     "+ Register Gateway",
-    "All21",
-    "Production11",
+    "All32",
+    "Production22",
     "Staging101",
     "Development0",
+    "",
+    "",
     "",
     "",
     "",
@@ -20,7 +22,24 @@ exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot
     "Production",
     "Staging",
   ],
-  "links": [],
+  "links": [
+    {
+      "href": "/gateway",
+      "text": "Status",
+    },
+    {
+      "href": "/gateways",
+      "text": "Registry",
+    },
+    {
+      "href": "/drift",
+      "text": "Drift Detection",
+    },
+    {
+      "href": "/gateway-deployments",
+      "text": "Deployments",
+    },
+  ],
 }
 `;
 
@@ -29,10 +48,12 @@ exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "All21",
-    "Production11",
+    "All32",
+    "Production22",
     "Staging101",
     "Development0",
+    "",
+    "",
     "",
     "",
     "",
@@ -43,7 +64,24 @@ exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`
     "Production",
     "Staging",
   ],
-  "links": [],
+  "links": [
+    {
+      "href": "/gateway",
+      "text": "Status",
+    },
+    {
+      "href": "/gateways",
+      "text": "Registry",
+    },
+    {
+      "href": "/drift",
+      "text": "Drift Detection",
+    },
+    {
+      "href": "/gateway-deployments",
+      "text": "Deployments",
+    },
+  ],
 }
 `;
 
@@ -52,10 +90,12 @@ exports[`GatewayList > snapshot: tenant-admin persona > matches structural snaps
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "All21",
-    "Production11",
+    "All32",
+    "Production22",
     "Staging101",
     "Development0",
+    "",
+    "",
     "",
     "",
     "",
@@ -66,7 +106,24 @@ exports[`GatewayList > snapshot: tenant-admin persona > matches structural snaps
     "Production",
     "Staging",
   ],
-  "links": [],
+  "links": [
+    {
+      "href": "/gateway",
+      "text": "Status",
+    },
+    {
+      "href": "/gateways",
+      "text": "Registry",
+    },
+    {
+      "href": "/drift",
+      "text": "Drift Detection",
+    },
+    {
+      "href": "/gateway-deployments",
+      "text": "Deployments",
+    },
+  ],
 }
 `;
 
@@ -75,10 +132,12 @@ exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "All21",
-    "Production11",
+    "All32",
+    "Production22",
     "Staging101",
     "Development0",
+    "",
+    "",
     "",
     "",
     "",
@@ -89,6 +148,23 @@ exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`
     "Production",
     "Staging",
   ],
-  "links": [],
+  "links": [
+    {
+      "href": "/gateway",
+      "text": "Status",
+    },
+    {
+      "href": "/gateways",
+      "text": "Registry",
+    },
+    {
+      "href": "/drift",
+      "text": "Drift Detection",
+    },
+    {
+      "href": "/gateway-deployments",
+      "text": "Deployments",
+    },
+  ],
 }
 `;

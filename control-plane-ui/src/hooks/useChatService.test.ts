@@ -301,4 +301,253 @@ describe('useChatService', () => {
       expect(response).toBe('split');
     });
   });
+
+  describe('sendMessageStream — confirmation_required event', () => {
+    it('fires onConfirmationRequired callback for confirmation events', async () => {
+      const stream = createSSEStream([
+        'event: content_delta\ndata: {"delta":"I will subscribe you."}\n\n',
+        'event: confirmation_required\ndata: {"tool_use_id":"tc-1","tool_name":"subscribe_api","tool_input":{"api_id":"a1"},"description":"Subscribe to Weather API"}\n\n',
+        'event: message_end\ndata: {}\n\n',
+      ]);
+      mockFetch.mockResolvedValue(okResponse(stream));
+
+      const { result } = renderHook(() => useChatService());
+      const onConfirmationRequired = vi.fn();
+      const onDelta = vi.fn();
+
+      await act(async () => {
+        await result.current.sendMessageStream('subscribe me', {
+          onDelta,
+          onConfirmationRequired,
+          onComplete: vi.fn(),
+        });
+      });
+
+      expect(onDelta).toHaveBeenCalledWith('I will subscribe you.');
+      expect(onConfirmationRequired).toHaveBeenCalledWith({
+        tool_use_id: 'tc-1',
+        tool_name: 'subscribe_api',
+        tool_input: { api_id: 'a1' },
+        description: 'Subscribe to Weather API',
+      });
+    });
+
+    it('fires onError callback for error events', async () => {
+      const stream = createSSEStream(['event: error\ndata: {"error":"Budget exceeded"}\n\n']);
+      mockFetch.mockResolvedValue(okResponse(stream));
+
+      const { result } = renderHook(() => useChatService());
+      const onError = vi.fn();
+
+      await act(async () => {
+        await result.current.sendMessageStream('hello', { onError });
+      });
+
+      expect(onError).toHaveBeenCalledWith('Budget exceeded');
+    });
+
+    it('fires tool_use_start and tool_use_result callbacks', async () => {
+      const stream = createSSEStream([
+        'event: tool_use_start\ndata: {"tool_use_id":"tu-1","tool_name":"list_apis"}\n\n',
+        'event: tool_use_result\ndata: {"tool_use_id":"tu-1","tool_name":"list_apis","result":"[{\\"name\\":\\"API1\\"}]"}\n\n',
+      ]);
+      mockFetch.mockResolvedValue(okResponse(stream));
+
+      const { result } = renderHook(() => useChatService());
+      const onToolStart = vi.fn();
+      const onToolResult = vi.fn();
+
+      await act(async () => {
+        await result.current.sendMessageStream('list', { onToolStart, onToolResult });
+      });
+
+      expect(onToolStart).toHaveBeenCalledWith('tu-1', 'list_apis');
+      expect(onToolResult).toHaveBeenCalledWith('tu-1', 'list_apis', '[{"name":"API1"}]');
+    });
+  });
+
+  describe('confirmTool', () => {
+    it('sends tool_confirmation payload and parses response stream', async () => {
+      // First call: sendMessage to establish conversation
+      const initStream = createSSEStream(['data: {"delta":"init"}\n\n']);
+      mockFetch.mockResolvedValueOnce(okResponse(initStream));
+
+      const { result } = renderHook(() => useChatService());
+      await act(() => result.current.sendMessage('hello'));
+
+      // Second call: confirmTool
+      const confirmStream = createSSEStream([
+        'event: content_delta\ndata: {"delta":"Subscription created!"}\n\n',
+      ]);
+      mockFetch.mockResolvedValueOnce(okResponse(confirmStream));
+
+      const onDelta = vi.fn();
+      const onComplete = vi.fn();
+
+      await act(async () => {
+        await result.current.confirmTool(
+          {
+            tool_use_id: 'tc-1',
+            tool_name: 'subscribe_api',
+            tool_input: { api_id: 'a1' },
+            description: 'Subscribe',
+          },
+          true,
+          { onDelta, onComplete }
+        );
+      });
+
+      // Verify the request body includes tool_confirmation
+      const [, opts] = mockFetch.mock.calls[1];
+      const body = JSON.parse(opts.body as string);
+      expect(body.tool_confirmation).toEqual({
+        tool_use_id: 'tc-1',
+        tool_name: 'subscribe_api',
+        tool_input: { api_id: 'a1' },
+        approved: true,
+      });
+      expect(onDelta).toHaveBeenCalledWith('Subscription created!');
+    });
+
+    it('does nothing when no active conversation', async () => {
+      const { result } = renderHook(() => useChatService());
+      const onError = vi.fn();
+
+      await act(async () => {
+        await result.current.confirmTool(
+          {
+            tool_use_id: 'tc-1',
+            tool_name: 'subscribe_api',
+            tool_input: {},
+            description: 'Test',
+          },
+          true,
+          { onError }
+        );
+      });
+
+      expect(onError).toHaveBeenCalledWith('No active conversation');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fetchBudgetStatus', () => {
+    it('fetches and returns budget data', async () => {
+      const budgetData = {
+        user_tokens_today: 5000,
+        tenant_tokens_today: 12000,
+        daily_budget: 50000,
+        remaining: 38000,
+        budget_exceeded: false,
+        usage_percent: 24,
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue(budgetData),
+      } as unknown as Response);
+
+      const { result } = renderHook(() => useChatService());
+      let budget: unknown;
+      await act(async () => {
+        budget = await result.current.fetchBudgetStatus();
+      });
+
+      expect(budget).toEqual(budgetData);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/chat/usage/budget'),
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer test-token' },
+        })
+      );
+    });
+
+    it('returns null on error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+      } as unknown as Response);
+
+      const { result } = renderHook(() => useChatService());
+      let budget: unknown;
+      await act(async () => {
+        budget = await result.current.fetchBudgetStatus();
+      });
+
+      expect(budget).toBeNull();
+    });
+  });
+
+  describe('conversation management', () => {
+    it('loadConversations fetches and returns conversation list', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          items: [{ id: 'c1', title: 'Chat 1', status: 'active', updated_at: '2026-03-14' }],
+        }),
+      } as unknown as Response);
+
+      const { result } = renderHook(() => useChatService());
+      let convos: unknown;
+      await act(async () => {
+        convos = await result.current.loadConversations();
+      });
+
+      expect(convos).toEqual([
+        { id: 'c1', title: 'Chat 1', status: 'active', updated_at: '2026-03-14' },
+      ]);
+    });
+
+    it('switchConversation updates activeConversationId', () => {
+      const { result } = renderHook(() => useChatService());
+
+      act(() => {
+        result.current.switchConversation('conv-99');
+      });
+
+      expect(result.current.activeConversationId).toBe('conv-99');
+    });
+
+    it('newConversation clears activeConversationId', () => {
+      const { result } = renderHook(() => useChatService());
+
+      act(() => {
+        result.current.switchConversation('conv-99');
+      });
+      act(() => {
+        result.current.newConversation();
+      });
+
+      expect(result.current.activeConversationId).toBeNull();
+    });
+
+    it('deleteConversation removes from list and clears active if matching', async () => {
+      // Setup: load conversations first
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          items: [
+            { id: 'c1', title: 'Chat 1', status: 'active', updated_at: '2026-03-14' },
+            { id: 'c2', title: 'Chat 2', status: 'active', updated_at: '2026-03-14' },
+          ],
+        }),
+      } as unknown as Response);
+
+      const { result } = renderHook(() => useChatService());
+      await act(async () => {
+        await result.current.loadConversations();
+      });
+
+      // Delete c1
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+      } as unknown as Response);
+
+      let deleted!: boolean;
+      await act(async () => {
+        deleted = await result.current.deleteConversation('c1');
+      });
+
+      expect(deleted).toBe(true);
+    });
+  });
 });

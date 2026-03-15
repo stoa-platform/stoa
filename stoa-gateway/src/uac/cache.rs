@@ -8,9 +8,9 @@
 //! 3. TTL-based expiration for automatic refresh
 
 use chrono::{DateTime, Duration, Utc};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use parking_lot::RwLock;
 
 use super::classifications::Classification;
 

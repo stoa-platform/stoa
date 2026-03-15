@@ -1,0 +1,34 @@
+# agentgateway standalone config for Arena benchmarks
+# Routes /echo/* to echo-backend, exposes echo as MCP tool via OpenAPI bridge
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTP
+    routes:
+    # Health endpoint (agentgateway has no built-in /health)
+    - name: health
+      matches:
+      - path:
+          pathPrefix: /health
+      policies:
+        directResponse:
+          body: '{"status":"healthy"}'
+          status: 200
+    # Echo proxy route (for L0 baseline benchmarks)
+    - name: echo-proxy
+      matches:
+      - path:
+          pathPrefix: /echo
+      backends:
+      - host: echo-local:8888
+    # MCP endpoint (Streamable HTTP - JSON-RPC 2.0)
+    - name: mcp
+      matches:
+      - path:
+          pathPrefix: /mcp
+      backends:
+      - mcp:
+          targets:
+          - name: echo-tool
+            mcp:
+              host: http://echo-local:8888/mcp

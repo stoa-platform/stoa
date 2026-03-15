@@ -15,6 +15,7 @@ import type {
   ExternalMCPServerTool,
   TestConnectionResponse,
   SyncToolsResponse,
+  ToolsObservabilityResponse,
 } from '../types';
 
 /**
@@ -107,6 +108,21 @@ class ExternalMCPServersService {
    */
   async syncTools(serverId: string): Promise<SyncToolsResponse> {
     const { data } = await apiService.post(`/v1/admin/external-mcp-servers/${serverId}/sync-tools`);
+    return data;
+  }
+
+  // ==========================================================================
+  // Tool Observability (CAB-1821)
+  // ==========================================================================
+
+  /**
+   * Get per-tool observability data for a server.
+   * Endpoint: GET /v1/admin/external-mcp-servers/{id}/tools-summary
+   */
+  async getToolsSummary(serverId: string): Promise<ToolsObservabilityResponse> {
+    const { data } = await apiService.get(
+      `/v1/admin/external-mcp-servers/${serverId}/tools-summary`
+    );
     return data;
   }
 

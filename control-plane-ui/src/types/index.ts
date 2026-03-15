@@ -829,6 +829,42 @@ export interface SyncToolsResponse {
   tools: ExternalMCPServerTool[];
 }
 
+// Tool Observability types (CAB-1821)
+// =============================================================================
+
+export interface GatewayBindingInfo {
+  gateway_instance_id?: string;
+  gateway_name?: string;
+  gateway_type?: string;
+  gateway_environment?: string;
+  gateway_status?: string;
+}
+
+export interface ToolObservabilityItem {
+  id: string;
+  name: string;
+  namespaced_name: string;
+  display_name?: string;
+  description?: string;
+  enabled: boolean;
+  synced_at: string;
+  input_schema?: Record<string, unknown>;
+}
+
+export interface ToolsObservabilityResponse {
+  server_id: string;
+  server_name: string;
+  server_display_name: string;
+  environment?: string;
+  health_status: string;
+  last_health_check?: string;
+  last_sync_at?: string;
+  gateway: GatewayBindingInfo;
+  tools: ToolObservabilityItem[];
+  tools_count: number;
+  enabled_count: number;
+}
+
 // Admin Prospects types (CAB-911)
 // =============================================================================
 

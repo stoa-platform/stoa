@@ -39,9 +39,12 @@ from ..schemas.external_mcp_server import (
     ExternalMCPServerToolResponse,
     ExternalMCPServerToolUpdate,
     ExternalMCPServerUpdate,
+    GatewayBindingInfo,
     HealthStatusEnum,
     SyncToolsResponse,
     TestConnectionResponse,
+    ToolObservabilityItem,
+    ToolsObservabilityResponse,
     TransportTypeEnum,
 )
 from ..services.mcp_client import get_mcp_client_service
@@ -542,6 +545,74 @@ async def update_tool(
     logger.info(f"Updated tool '{tool.name}' enabled={request.enabled} for server '{server.name}' by {user.email}")
 
     return _convert_tool_to_response(tool)
+
+
+@admin_router.get("/{server_id}/tools-summary", response_model=ToolsObservabilityResponse)
+async def get_tools_summary(
+    server_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get per-tool observability data for an MCP server (CAB-1821).
+
+    Returns tool metadata, gateway binding info, and server health status.
+    Used by Console to display which gateway runs each MCP server and tool status.
+    """
+    _require_admin(user)
+
+    repo = ExternalMCPServerRepository(db)
+    server = await repo.get_by_id(server_id)
+
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    if not _has_tenant_access(user, server.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Resolve gateway instance info if bound
+    gateway_info = GatewayBindingInfo(gateway_instance_id=server.gateway_instance_id)
+    if server.gateway_instance_id:
+        from ..repositories.gateway_instance import GatewayInstanceRepository
+
+        gw_repo = GatewayInstanceRepository(db)
+        gw_instance = await gw_repo.get_by_id(server.gateway_instance_id)
+        if gw_instance:
+            gateway_info = GatewayBindingInfo(
+                gateway_instance_id=gw_instance.id,
+                gateway_name=gw_instance.display_name,
+                gateway_type=gw_instance.gateway_type.value if gw_instance.gateway_type else None,
+                gateway_environment=gw_instance.environment,
+                gateway_status=gw_instance.status.value if gw_instance.status else None,
+            )
+
+    tools = server.tools or []
+    enabled_tools = [t for t in tools if t.enabled]
+
+    return ToolsObservabilityResponse(
+        server_id=server.id,
+        server_name=server.name,
+        server_display_name=server.display_name,
+        environment=server.environment,
+        health_status=HealthStatusEnum(server.health_status.value),
+        last_health_check=server.last_health_check,
+        last_sync_at=server.last_sync_at,
+        gateway=gateway_info,
+        tools=[
+            ToolObservabilityItem(
+                id=tool.id,
+                name=tool.name,
+                namespaced_name=tool.namespaced_name,
+                display_name=tool.display_name,
+                description=tool.description,
+                enabled=tool.enabled,
+                synced_at=tool.synced_at,
+                input_schema=tool.input_schema,
+            )
+            for tool in tools
+        ],
+        tools_count=len(tools),
+        enabled_count=len(enabled_tools),
+    )
 
 
 # ============ Internal Router (for MCP Gateway) ============

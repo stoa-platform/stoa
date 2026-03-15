@@ -897,3 +897,99 @@ class TestErrorPaths:
                 )
 
         assert response.status_code == 404
+
+
+GW_REPO_PATH = "src.repositories.gateway_instance.GatewayInstanceRepository"
+
+
+class TestToolsSummary:
+    """GET /v1/admin/external-mcp-servers/{server_id}/tools-summary (CAB-1821)"""
+
+    def test_tools_summary_success(self, app_with_cpi_admin, mock_db_session):
+        """Returns tool metadata and gateway binding info."""
+        tool = _mock_tool()
+        server = _mock_server(tools=[tool], gateway_instance_id=uuid4())
+
+        gw_mock = MagicMock()
+        gw_mock.id = server.gateway_instance_id
+        gw_mock.display_name = "STOA Edge"
+        gw_type_mock = MagicMock()
+        gw_type_mock.value = "stoa_edge_mcp"
+        gw_mock.gateway_type = gw_type_mock
+        gw_mock.environment = "dev"
+        gw_status_mock = MagicMock()
+        gw_status_mock.value = "online"
+        gw_mock.status = gw_status_mock
+
+        with (
+            patch(REPO_PATH) as MockRepo,
+            patch(GW_REPO_PATH) as MockGwRepo,
+        ):
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=server)
+            MockGwRepo.return_value.get_by_id = AsyncMock(return_value=gw_mock)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(f"{BASE}/{server.id}/tools-summary")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["server_name"] == "linear-mcp"
+        assert data["tools_count"] == 1
+        assert data["enabled_count"] == 1
+        assert data["gateway"]["gateway_name"] == "STOA Edge"
+        assert data["gateway"]["gateway_type"] == "stoa_edge_mcp"
+        assert len(data["tools"]) == 1
+        assert data["tools"][0]["name"] == "create_issue"
+
+    def test_tools_summary_no_gateway(self, app_with_cpi_admin, mock_db_session):
+        """Returns null gateway binding when no gateway bound."""
+        server = _mock_server(tools=[], gateway_instance_id=None)
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=server)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(f"{BASE}/{server.id}/tools-summary")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["gateway"]["gateway_instance_id"] is None
+        assert data["gateway"]["gateway_name"] is None
+        assert data["tools_count"] == 0
+
+    def test_tools_summary_404(self, app_with_cpi_admin, mock_db_session):
+        """Returns 404 for non-existent server."""
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(f"{BASE}/{uuid4()}/tools-summary")
+
+        assert response.status_code == 404
+
+    def test_tools_summary_403_viewer(self, app_with_no_tenant_user, mock_db_session):
+        """Viewer gets 403."""
+        with TestClient(app_with_no_tenant_user) as client:
+            response = client.get(f"{BASE}/{uuid4()}/tools-summary")
+
+        assert response.status_code == 403
+
+    def test_tools_summary_enabled_count(self, app_with_cpi_admin, mock_db_session):
+        """Correctly counts enabled vs disabled tools."""
+        tools = [
+            _mock_tool(enabled=True, name="tool_a"),
+            _mock_tool(enabled=False, name="tool_b"),
+            _mock_tool(enabled=True, name="tool_c"),
+        ]
+        server = _mock_server(tools=tools, gateway_instance_id=None)
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=server)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(f"{BASE}/{server.id}/tools-summary")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["tools_count"] == 3
+        assert data["enabled_count"] == 2

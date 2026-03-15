@@ -138,6 +138,9 @@ class ApiService {
               }
               return this.client(originalRequest);
             }
+            // Token refresh returned null — session expired, reject queued requests
+            this.refreshQueue.forEach(({ reject }) => reject(error));
+            this.refreshQueue = [];
           } catch (refreshError) {
             this.refreshQueue.forEach(({ reject }) => reject(refreshError));
             this.refreshQueue = [];

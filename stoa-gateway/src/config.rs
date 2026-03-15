@@ -676,6 +676,22 @@ pub struct Config {
     /// Env: STOA_PLUGIN_SDK_ENABLED
     #[serde(default)]
     pub plugin_sdk_enabled: bool,
+
+    // === TCP Early Filter (CAB-1830) ===
+    /// Comma-separated IPs/CIDRs to block at TCP level (before HTTP processing).
+    /// Env: STOA_IP_BLOCKLIST
+    #[serde(default)]
+    pub ip_blocklist: String,
+
+    /// Path to file with one IP/CIDR per line (lines starting with # are ignored).
+    /// Env: STOA_IP_BLOCKLIST_FILE
+    #[serde(default)]
+    pub ip_blocklist_file: Option<String>,
+
+    /// Max new TCP connections per second per IP (token bucket). 0 = disabled.
+    /// Env: STOA_TCP_RATE_LIMIT_PER_IP
+    #[serde(default)]
+    pub tcp_rate_limit_per_ip: Option<f64>,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1342,6 +1358,9 @@ impl Default for Config {
             graphql_bridge_enabled: false,
             kafka_bridge_enabled: false,
             plugin_sdk_enabled: false,
+            ip_blocklist: String::new(),
+            ip_blocklist_file: None,
+            tcp_rate_limit_per_ip: None,
         }
     }
 }

@@ -9525,6 +9525,73 @@
         "title": "GatewayApplicationResponse",
         "type": "object"
       },
+      "GatewayBindingInfo": {
+        "description": "Gateway instance binding information for an MCP server.",
+        "properties": {
+          "gateway_environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway environment",
+            "title": "Gateway Environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
+          },
+          "gateway_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway instance display name",
+            "title": "Gateway Name"
+          },
+          "gateway_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway health status",
+            "title": "Gateway Status"
+          },
+          "gateway_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway type (stoa, kong, etc.)",
+            "title": "Gateway Type"
+          }
+        },
+        "title": "GatewayBindingInfo",
+        "type": "object"
+      },
       "GatewayDeploymentCreate": {
         "description": "Schema for deploying an API to gateway(s).",
         "properties": {
@@ -23439,6 +23506,78 @@
         "title": "ToolInvokeResponse",
         "type": "object"
       },
+      "ToolObservabilityItem": {
+        "description": "Per-tool observability data: metadata + gateway binding.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Schema"
+          },
+          "name": {
+            "description": "Original tool name",
+            "title": "Name",
+            "type": "string"
+          },
+          "namespaced_name": {
+            "description": "Prefixed tool name",
+            "title": "Namespaced Name",
+            "type": "string"
+          },
+          "synced_at": {
+            "format": "date-time",
+            "title": "Synced At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "namespaced_name",
+          "synced_at"
+        ],
+        "title": "ToolObservabilityItem",
+        "type": "object"
+      },
       "ToolSearchResult": {
         "description": "Single tool search result.",
         "properties": {
@@ -23560,6 +23699,93 @@
           "avg_latency_ms"
         ],
         "title": "ToolUsageStat",
+        "type": "object"
+      },
+      "ToolsObservabilityResponse": {
+        "description": "Response for tools-summary endpoint \u2014 tool metadata + gateway binding (CAB-1821).",
+        "properties": {
+          "enabled_count": {
+            "default": 0,
+            "title": "Enabled Count",
+            "type": "integer"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "dev",
+            "title": "Environment"
+          },
+          "gateway": {
+            "$ref": "#/components/schemas/GatewayBindingInfo"
+          },
+          "health_status": {
+            "$ref": "#/components/schemas/HealthStatusEnum",
+            "default": "unknown"
+          },
+          "last_health_check": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health Check"
+          },
+          "last_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync At"
+          },
+          "server_display_name": {
+            "title": "Server Display Name",
+            "type": "string"
+          },
+          "server_id": {
+            "format": "uuid",
+            "title": "Server Id",
+            "type": "string"
+          },
+          "server_name": {
+            "title": "Server Name",
+            "type": "string"
+          },
+          "tools": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ToolObservabilityItem"
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "tools_count": {
+            "default": 0,
+            "title": "Tools Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "server_id",
+          "server_name",
+          "server_display_name",
+          "gateway"
+        ],
+        "title": "ToolsObservabilityResponse",
         "type": "object"
       },
       "TopAPI": {
@@ -28301,6 +28527,55 @@
           }
         ],
         "summary": "Test Connection",
+        "tags": [
+          "External MCP Servers - Admin"
+        ]
+      }
+    },
+    "/v1/admin/external-mcp-servers/{server_id}/tools-summary": {
+      "get": {
+        "description": "Get per-tool observability data for an MCP server (CAB-1821).\n\nReturns tool metadata, gateway binding info, and server health status.\nUsed by Console to display which gateway runs each MCP server and tool status.",
+        "operationId": "get_tools_summary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Server Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolsObservabilityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tools Summary",
         "tags": [
           "External MCP Servers - Admin"
         ]

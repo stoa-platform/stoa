@@ -75,9 +75,38 @@ spec:
     - to:
         - podSelector: {}
 ---
+# ArgoCD → Keycloak OIDC via ingress-nginx (hairpin NAT workaround)
+# auth.gostoa.dev resolves to ingress-nginx ClusterIP via CoreDNS rewrite
+# (coredns-custom ConfigMap in kube-system)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-argocd-to-keycloak
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: argocd-oidc
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+---
 # ArgoCD → K8s API server (manages deployments)
 # ArgoCD → GitHub (git polling)
-# ArgoCD → Dex/OIDC (SSO)
+# ArgoCD → OIDC providers (external)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

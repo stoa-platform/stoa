@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 const mockListConnectors = vi.fn();
 const mockAuthorize = vi.fn();
 const mockDisconnect = vi.fn();
+const mockPromote = vi.fn();
 const mockListServers = vi.fn();
 const mockTestConnection = vi.fn();
 const mockSyncTools = vi.fn();
@@ -39,6 +40,7 @@ vi.mock('../../services/mcpConnectorsApi', () => ({
     listConnectors: (...args: unknown[]) => mockListConnectors(...args),
     authorize: (...args: unknown[]) => mockAuthorize(...args),
     disconnect: (...args: unknown[]) => mockDisconnect(...args),
+    promote: (...args: unknown[]) => mockPromote(...args),
   },
 }));
 
@@ -99,6 +101,7 @@ const mockConnectors = [
     is_connected: true,
     connected_server_id: 'srv-1',
     connection_health: 'healthy',
+    connected_environment: 'dev',
   },
   {
     id: '2',
@@ -306,6 +309,69 @@ describe('MCPServersUnified', () => {
     renderComponent(['/mcp-servers?tab=custom']);
     await waitFor(() => {
       expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    });
+  });
+
+  it('shows environment badge for connected connectors', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getAllByText('Linear').length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.getAllByText('Development').length).toBeGreaterThan(0);
+  });
+
+  it('shows promote button for connected dev connectors', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getAllByText('Linear').length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.getAllByTitle('Promote to Staging').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('calls promote API on promote click', async () => {
+    mockPromote.mockResolvedValue({
+      slug: 'linear',
+      source_environment: 'dev',
+      target_environment: 'staging',
+      server_id: 'srv-2',
+      server_name: 'linear-staging',
+      credentials_cloned: true,
+    });
+
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getAllByTitle('Promote to Staging').length).toBeGreaterThanOrEqual(1);
+    });
+
+    fireEvent.click(screen.getAllByTitle('Promote to Staging')[0]);
+
+    await waitFor(() => {
+      expect(mockPromote).toHaveBeenCalledWith('linear', {
+        target_environment: 'staging',
+        confirm: false,
+      });
+    });
+  });
+
+  it('renders environment filter dropdown', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('All environments')).toBeInTheDocument();
+    });
+  });
+
+  it('passes environment filter to API', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getAllByText('Linear').length).toBeGreaterThanOrEqual(1);
+    });
+
+    fireEvent.change(screen.getByDisplayValue('All environments'), {
+      target: { value: 'staging' },
+    });
+
+    await waitFor(() => {
+      expect(mockListConnectors).toHaveBeenCalledWith(undefined, 'staging');
     });
   });
 

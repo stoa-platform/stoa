@@ -763,6 +763,64 @@ pub fn track_grpc_bridge_response(method: &str, success: bool) {
         .inc();
 }
 
+// === GraphQL Protocol Metrics (CAB-1756) ===
+
+static GRAPHQL_PROXY_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_proxy_requests_total",
+        "Total GraphQL proxy requests",
+        &["route_id"]
+    )
+    .expect("graphql proxy requests metric")
+});
+
+static GRAPHQL_PROXY_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_proxy_responses_total",
+        "Total GraphQL proxy responses",
+        &["route_id", "success"]
+    )
+    .expect("graphql proxy responses metric")
+});
+
+static GRAPHQL_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_bridge_requests_total",
+        "Total GraphQL bridge tool requests",
+        &["field"]
+    )
+    .expect("graphql bridge requests metric")
+});
+
+static GRAPHQL_BRIDGE_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_graphql_bridge_responses_total",
+        "Total GraphQL bridge tool responses",
+        &["field", "success"]
+    )
+    .expect("graphql bridge responses metric")
+});
+
+pub fn track_graphql_proxy_request(route_id: &str) {
+    GRAPHQL_PROXY_REQUESTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_graphql_proxy_response(route_id: &str, success: bool) {
+    GRAPHQL_PROXY_RESPONSES
+        .with_label_values(&[route_id, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_graphql_bridge_request(field: &str) {
+    GRAPHQL_BRIDGE_REQUESTS.with_label_values(&[field]).inc();
+}
+
+pub fn track_graphql_bridge_response(field: &str, success: bool) {
+    GRAPHQL_BRIDGE_RESPONSES
+        .with_label_values(&[field, if success { "true" } else { "false" }])
+        .inc();
+}
+
 /// Update session count gauge
 pub fn update_session_count(count: usize) {
     MCP_SESSIONS_ACTIVE.set(count as f64);

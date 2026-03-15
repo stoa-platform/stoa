@@ -36,6 +36,7 @@ See `workflow-essentials.md` for the full 12-type decision matrix. Claude defaul
 branch → code → commit → push → PR → CI green → merge → verify → cleanup
 ```
 No human intervention. Claude handles everything end-to-end.
+Use `/fast` + `/effort low` for Ship tasks (docs, config, style, deps) — same model, faster output, lower cost.
 
 ### Show mode (async review)
 ```

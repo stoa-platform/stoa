@@ -98,11 +98,14 @@ async def record_usage(
     # Use subscription_id as a deterministic api_id (UUID5 from namespace + subscription)
     api_id = uuid.uuid5(uuid.NAMESPACE_URL, f"llm-proxy:{payload.subscription_id}")
 
+    # Strip timezone for TIMESTAMP WITHOUT TIME ZONE column
+    period_start = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+
     await service.record_usage(
         tenant_id=payload.tenant_id,
         api_id=api_id,
         period="daily",
-        period_start=now.replace(hour=0, minute=0, second=0, microsecond=0),
+        period_start=period_start,
         request_count=payload.request_count,
         total_latency_ms=payload.total_latency_ms,
         total_tokens=payload.total_tokens,

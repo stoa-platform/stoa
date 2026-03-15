@@ -208,6 +208,15 @@ pub fn build_router(state: AppState) -> Router {
         .route("/hegemon/events", get(hegemon::metering::list_events))
         // CAB-1709 P6: HEGEMON messaging admin
         .route("/hegemon/messages", get(hegemon::messaging::list_inboxes))
+        // CAB-1754: A2A agent registry admin
+        .route(
+            "/a2a/agents",
+            get(a2a::admin::list_agents).post(a2a::admin::register_agent),
+        )
+        .route(
+            "/a2a/agents/:name",
+            get(a2a::admin::get_agent).delete(a2a::admin::unregister_agent),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

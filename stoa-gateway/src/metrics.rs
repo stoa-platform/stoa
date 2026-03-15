@@ -771,16 +771,16 @@ static GRAPHQL_PROXY_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
         "Total GraphQL proxy requests",
         &["route_id"]
     )
-    .expect("graphql proxy requests metric")
+    .expect("Failed to create stoa_graphql_proxy_requests_total metric")
 });
 
 static GRAPHQL_PROXY_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "stoa_graphql_proxy_responses_total",
-        "Total GraphQL proxy responses",
+        "Total GraphQL proxy responses by success/failure",
         &["route_id", "success"]
     )
-    .expect("graphql proxy responses metric")
+    .expect("Failed to create stoa_graphql_proxy_responses_total metric")
 });
 
 static GRAPHQL_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
@@ -789,16 +789,16 @@ static GRAPHQL_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
         "Total GraphQL bridge tool requests",
         &["field"]
     )
-    .expect("graphql bridge requests metric")
+    .expect("Failed to create stoa_graphql_bridge_requests_total metric")
 });
 
 static GRAPHQL_BRIDGE_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "stoa_graphql_bridge_responses_total",
-        "Total GraphQL bridge tool responses",
+        "Total GraphQL bridge tool responses by success/failure",
         &["field", "success"]
     )
-    .expect("graphql bridge responses metric")
+    .expect("Failed to create stoa_graphql_bridge_responses_total metric")
 });
 
 pub fn track_graphql_proxy_request(route_id: &str) {
@@ -819,6 +819,68 @@ pub fn track_graphql_bridge_response(field: &str, success: bool) {
     GRAPHQL_BRIDGE_RESPONSES
         .with_label_values(&[field, if success { "true" } else { "false" }])
         .inc();
+}
+
+// === Kafka Event Bridge Metrics (CAB-1757) ===
+
+static KAFKA_BRIDGE_PUBLISH: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_kafka_bridge_publish_total",
+        "Total Kafka bridge publish requests by topic and success/failure",
+        &["topic", "success"]
+    )
+    .expect("Failed to create stoa_kafka_bridge_publish_total metric")
+});
+
+static KAFKA_BRIDGE_SUBSCRIBE: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_kafka_bridge_subscribe_total",
+        "Total Kafka bridge subscribe requests by tenant",
+        &["tenant_id"]
+    )
+    .expect("Failed to create stoa_kafka_bridge_subscribe_total metric")
+});
+
+pub fn track_kafka_bridge_publish(topic: &str, success: bool) {
+    KAFKA_BRIDGE_PUBLISH
+        .with_label_values(&[topic, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_kafka_bridge_subscribe(tenant_id: &str) {
+    KAFKA_BRIDGE_SUBSCRIBE.with_label_values(&[tenant_id]).inc();
+}
+
+// === Plugin SDK Metrics (CAB-1759) ===
+
+/// Counter of plugin executions by plugin name, phase, and result.
+static PLUGIN_EXECUTIONS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_plugin_executions_total",
+        "Total plugin executions by plugin, phase, and result",
+        &["plugin", "phase", "result"]
+    )
+    .expect("Failed to create stoa_plugin_executions_total metric")
+});
+
+/// Counter of plugin load/unload events by plugin name and action.
+static PLUGIN_LIFECYCLE: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_plugin_lifecycle_total",
+        "Total plugin lifecycle events (load, unload, hot-reload)",
+        &["plugin", "action"]
+    )
+    .expect("Failed to create stoa_plugin_lifecycle_total metric")
+});
+
+pub fn track_plugin_execution(plugin: &str, phase: &str, result: &str) {
+    PLUGIN_EXECUTIONS
+        .with_label_values(&[plugin, phase, result])
+        .inc();
+}
+
+pub fn track_plugin_lifecycle(plugin: &str, action: &str) {
+    PLUGIN_LIFECYCLE.with_label_values(&[plugin, action]).inc();
 }
 
 /// Update session count gauge

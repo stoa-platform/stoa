@@ -655,15 +655,27 @@ pub struct Config {
     pub grpc_bridge_enabled: bool,
 
     // === GraphQL Protocol Support (CAB-1756) ===
-    /// Enable GraphQL proxy passthrough.
+    /// Enable GraphQL proxy passthrough (default: false).
     /// Env: STOA_GRAPHQL_PROXY_ENABLED
     #[serde(default)]
     pub graphql_proxy_enabled: bool,
 
-    /// Enable GraphQL→MCP bridge (auto-register GraphQL queries/mutations as MCP tools).
+    /// Enable GraphQL→MCP bridge (auto-register queries/mutations as MCP tools).
     /// Env: STOA_GRAPHQL_BRIDGE_ENABLED
     #[serde(default)]
     pub graphql_bridge_enabled: bool,
+
+    // === Kafka Event Bridge (CAB-1757) ===
+    /// Enable Kafka→MCP bridge tools (publish/subscribe via MCP).
+    /// Env: STOA_KAFKA_BRIDGE_ENABLED
+    #[serde(default)]
+    pub kafka_bridge_enabled: bool,
+
+    // === Plugin SDK (CAB-1759) ===
+    /// Enable Plugin SDK for custom gateway plugins.
+    /// Env: STOA_PLUGIN_SDK_ENABLED
+    #[serde(default)]
+    pub plugin_sdk_enabled: bool,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1328,6 +1340,8 @@ impl Default for Config {
             grpc_bridge_enabled: false,
             graphql_proxy_enabled: false,
             graphql_bridge_enabled: false,
+            kafka_bridge_enabled: false,
+            plugin_sdk_enabled: false,
         }
     }
 }

@@ -28,6 +28,20 @@ globs: ".claude/rules/**,.claude/hooks/**"
 
 **Why Opus for implementation**: With ~40K tokens of system rules, Sonnet saturates its context window after 30+ turns and loops. Opus resolves in 5-15 turns. Data (2026-02-22): 44% of Sonnet sessions > 1h, some > 4h. Same tasks done in < 15 min with Opus.
 
+## Effort Level Routing (Opus 4.6)
+
+Opus 4.6 supports effort levels that trade thoroughness for speed and cost.
+
+| Task Mode | Effort | Command | Use When |
+|-----------|--------|---------|----------|
+| **Ship** (docs, config, style, deps) | `low` | `/effort low` | Routine, low-risk, < 5 pts |
+| **Show** (refactor, tests, bug fix) | `medium` | Default | Standard work, no action needed |
+| **Ask** (features, security, MEGAs) | `high` | `/effort high` | Complex, multi-file, >= 13 pts |
+
+**Fast mode**: Toggle `/fast` for Ship tasks — same Opus 4.6 model, faster output. Combine with `low` effort for maximum speed on routine work.
+
+**Subagent effort**: Subagents inherit the parent's effort level. Override with `model` parameter on Agent tool when needed (e.g., `model: haiku` for Explore agents).
+
 ## Model Selection — CI (GitHub Actions)
 
 | Task | Model | Rationale |

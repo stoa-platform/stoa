@@ -106,6 +106,17 @@ pub async fn supervision_middleware(
         return next.run(request).await;
     }
 
+    // Begin latency tracking for supervision stage (CAB-1790)
+    let tracker = request
+        .extensions()
+        .get::<crate::diagnostics::latency::SharedTracker>()
+        .cloned();
+    if let Some(ref t) = tracker {
+        if let Ok(mut guard) = t.lock() {
+            guard.begin_stage(crate::diagnostics::latency::Stage::Supervision);
+        }
+    }
+
     // Extract tier from header, fall back to config default
     let tier = request
         .headers()
@@ -118,6 +129,13 @@ pub async fn supervision_middleware(
 
     let method = request.method().clone();
     let is_mut = is_mutation(&method);
+
+    // End supervision stage before handing off to next middleware
+    if let Some(ref t) = tracker {
+        if let Ok(mut guard) = t.lock() {
+            guard.end_stage();
+        }
+    }
 
     match tier {
         SupervisionTier::Autopilot => {

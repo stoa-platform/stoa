@@ -187,3 +187,90 @@ class AnthropicProvider:
                     "stop_reason": chunk.get("delta", {}).get("stop_reason", "end_turn"),
                 },
             }
+
+
+# ---------------------------------------------------------------------------
+# Gateway-routed Anthropic provider (CAB-1822)
+# ---------------------------------------------------------------------------
+
+
+class GatewayAnthropicProvider(AnthropicProvider):
+    """Routes Anthropic requests through the Stoa Gateway LLM proxy.
+
+    The gateway handles API key injection, metering, and governance.
+    SSE format is identical (Anthropic pass-through), so we reuse _map_chunk.
+    """
+
+    def __init__(self, gateway_url: str, gateway_api_key: str) -> None:
+        self._gateway_url = gateway_url.rstrip("/")
+        self._gateway_api_key = gateway_api_key
+
+    async def stream_response(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        messages: list[dict[str, Any]],
+        system_prompt: str | None = None,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream via Stoa Gateway — gateway injects the real Anthropic key."""
+
+        url = f"{self._gateway_url}/v1/messages"
+
+        headers = {
+            "x-api-key": self._gateway_api_key,
+            "anthropic-version": ANTHROPIC_API_VERSION,
+            "content-type": "application/json",
+        }
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "stream": True,
+            "messages": messages,
+        }
+        if system_prompt:
+            payload["system"] = system_prompt
+        if tools:
+            payload["tools"] = tools
+
+        async with (
+            httpx.AsyncClient(timeout=120.0) as client,
+            client.stream("POST", url, headers=headers, json=payload) as response,
+        ):
+            if response.status_code != 200:
+                body = await response.aread()
+                logger.error(
+                    "Gateway LLM proxy error",
+                    extra={
+                        "status": response.status_code,
+                        "body": body.decode("utf-8", errors="replace")[:500],
+                        "gateway_url": url,
+                    },
+                )
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error": f"Gateway LLM proxy returned {response.status_code}",
+                        "detail": body.decode("utf-8", errors="replace")[:500],
+                    },
+                }
+                return
+
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
+                if line.startswith("event: "):
+                    continue
+                if line.startswith("data: "):
+                    raw = line[6:].strip()
+                    if raw == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    async for evt in self._map_chunk(chunk):
+                        yield evt

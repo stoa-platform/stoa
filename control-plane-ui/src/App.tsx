@@ -25,6 +25,7 @@ const Tenants = lazy(() => import('./pages/Tenants').then((m) => ({ default: m.T
 const APIsUnified = lazy(() =>
   import('./pages/APIsUnified').then((m) => ({ default: m.APIsUnified }))
 );
+const APIDetail = lazy(() => import('./pages/APIDetail').then((m) => ({ default: m.APIDetail })));
 const Applications = lazy(() =>
   import('./pages/Applications').then((m) => ({ default: m.Applications }))
 );
@@ -211,8 +212,33 @@ function PageLoader() {
 }
 
 function ConnectedFloatingChat() {
-  const { sendMessage } = useChatService();
-  return <FloatingChat onSendMessage={(msg) => sendMessage(msg)} />;
+  const {
+    sendMessageStream,
+    confirmTool,
+    fetchBudgetStatus,
+    abort,
+    loadConversations,
+    switchConversation,
+    newConversation,
+    deleteConversation,
+    loadConversationMessages,
+    activeConversationId,
+  } = useChatService();
+
+  return (
+    <FloatingChat
+      onSendMessageStream={sendMessageStream}
+      onConfirmTool={confirmTool}
+      onFetchBudgetStatus={fetchBudgetStatus}
+      onAbort={abort}
+      onLoadConversations={loadConversations}
+      onSwitchConversation={switchConversation}
+      onNewConversation={newConversation}
+      onDeleteConversation={deleteConversation}
+      onLoadConversationMessages={loadConversationMessages}
+      activeConversationId={activeConversationId}
+    />
+  );
 }
 
 function ProtectedRoutes() {
@@ -234,6 +260,7 @@ function ProtectedRoutes() {
                 <Route path="/" element={<PlatformDashboard />} />
                 <Route path="/tenants" element={<Tenants />} />
                 <Route path="/apis" element={<APIsUnified />} />
+                <Route path="/apis/:tenantId/:apiId" element={<APIDetail />} />
                 <Route path="/ai-tools" element={<ToolCatalog />} />
                 <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
                 <Route path="/ai-tools/usage" element={<UsageDashboard />} />
@@ -247,7 +274,6 @@ function ProtectedRoutes() {
                 <Route path="/errors" element={<ErrorSnapshots />} />
                 <Route path="/mcp-servers" element={<MCPServersUnified />} />
                 <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
-                <Route path="/mcp-connectors/callback" element={<ConnectorCallback />} />
                 <Route
                   path="/mcp-connectors"
                   element={<Navigate to="/mcp-servers?tab=catalog" replace />}
@@ -386,6 +412,17 @@ function App() {
             <AuthProvider>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                {/* MCP connector callback is outside ProtectedRoutes — the API
+                    callback endpoint uses CSRF state for security (no auth needed),
+                    and oidc-client-ts would intercept the code/state params. */}
+                <Route
+                  path="/mcp-connectors/callback"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <ConnectorCallback />
+                    </Suspense>
+                  }
+                />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>
             </AuthProvider>

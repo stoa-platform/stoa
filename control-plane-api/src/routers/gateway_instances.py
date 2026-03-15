@@ -85,6 +85,7 @@ async def get_gateway_mode_stats(
     - sidecar: Policy enforcement behind existing gateway
     - proxy: Inline request/response transformation
     - shadow: Passive traffic capture and analysis
+    - connect: Lightweight agent bridging third-party gateways
     """
     # Query aggregated stats by mode for STOA gateways
     stmt = (
@@ -105,9 +106,9 @@ async def get_gateway_mode_stats(
     result = await db.execute(stmt)
     rows = result.all()
 
-    # Build response with all 4 modes (even if count is 0)
+    # Build response with all 5 modes (even if count is 0)
     mode_data = {row.mode: row for row in rows if row.mode}
-    all_modes = ["edge-mcp", "sidecar", "proxy", "shadow"]
+    all_modes = ["edge-mcp", "sidecar", "proxy", "shadow", "connect"]
 
     modes = []
     total_gateways = 0

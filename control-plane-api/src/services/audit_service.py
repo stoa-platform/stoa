@@ -11,7 +11,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.audit_event import AuditEvent
@@ -219,3 +219,48 @@ class AuditService:
         count = result.rowcount
         logger.info(f"Purged {count} audit events for tenant {tenant_id} before {before_date}")
         return count
+
+    # ============ GDPR Article 17 — Right to Erasure (CAB-1794) ============
+
+    async def erase_user_pii(
+        self,
+        user_id: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> dict:
+        """Pseudonymize PII fields for a specific user (GDPR Art. 17).
+
+        Replaces actor_id, actor_email, client_ip, user_agent with
+        pseudonymized values. Preserves non-PII fields (action, resource,
+        outcome, timestamps) for compliance analytics.
+
+        Args:
+            user_id: The actor_id to erase.
+            tenant_id: Optional tenant scope. If None, erases across all tenants.
+
+        Returns:
+            Dict with records_affected count.
+        """
+        pseudo_id = f"erased-{uuid4().hex[:8]}"
+
+        stmt = (
+            update(AuditEvent)
+            .where(AuditEvent.actor_id == user_id)
+            .values(
+                actor_id=pseudo_id,
+                actor_email=None,
+                client_ip=None,
+                user_agent=None,
+            )
+        )
+        if tenant_id:
+            stmt = stmt.where(AuditEvent.tenant_id == tenant_id)
+
+        result = await self.db.execute(stmt)
+        count = result.rowcount
+
+        logger.info(
+            f"GDPR erasure: pseudonymized {count} audit records for user {user_id}"
+            f"{f' in tenant {tenant_id}' if tenant_id else ' (all tenants)'}"
+        )
+        return {"records_affected": count, "pseudo_id": pseudo_id}

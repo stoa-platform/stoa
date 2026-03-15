@@ -20,6 +20,7 @@ Usage:
     app.add_middleware(AuditMiddleware, audit_logger=audit_logger)
 """
 
+import contextlib
 import hashlib
 import logging
 import time
@@ -188,6 +189,27 @@ class AuditLogger:
         await self.log(event)
 
 
+def parse_server_timing(header: str) -> dict[str, float]:
+    """Parse a Server-Timing header into a dict of stage → duration_ms.
+
+    Format: "stage;dur=12.34, stage2;dur=5.67"
+    Returns: {"stage": 12.34, "stage2": 5.67}
+    """
+    timings: dict[str, float] = {}
+    for entry in header.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split(";")
+        name = parts[0].strip()
+        for param in parts[1:]:
+            param = param.strip()
+            if param.startswith("dur="):
+                with contextlib.suppress(ValueError):
+                    timings[name] = float(param[4:])
+    return timings
+
+
 class AuditMiddleware(BaseHTTPMiddleware):
     """FastAPI middleware for automatic audit logging."""
 
@@ -259,9 +281,6 @@ class AuditMiddleware(BaseHTTPMiddleware):
         correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
         correlation_id_ctx.set(correlation_id)
 
-        # Extract actor from JWT
-        actor = await self._extract_actor(request)
-
         # Start timing
         start_time = time.time()
 
@@ -276,6 +295,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
             severity = EventSeverity.ERROR
             raise
         finally:
+            # Extract actor AFTER call_next so that endpoint-level
+            # Depends(get_current_user) has populated request.state.user
+            actor = await self._extract_actor(request)
+
             # Calculate latency
             latency_ms = (time.time() - start_time) * 1000
 
@@ -289,7 +312,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 event_category=category,
                 severity=severity,
                 actor=actor,
-                tenant_id=actor.get("tenant_id"),
+                tenant_id=actor.get("tenant_id") or "platform",
                 resource=self._extract_resource(request),
                 action=f"{request.method} {request.url.path}",
                 outcome=outcome,
@@ -299,10 +322,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "query_params": dict(request.query_params),
                     "body_hash": await self._hash_body(request),
                 },
-                response={
-                    "status_code": response.status_code if response else 500,
-                    "latency_ms": round(latency_ms, 2),
-                },
+                response=self._build_response_dict(response, latency_ms),
                 correlation_id=correlation_id,
                 session_id=request.headers.get("X-Session-ID"),
                 source={
@@ -425,6 +445,22 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "tenant_id": api_key.get("tenant_id"),
                 }
             )
+        elif request.headers.get("X-Gateway-Key"):
+            actor.update(
+                {
+                    "id": "stoa-gateway",
+                    "name": "stoa-gateway",
+                    "type": "service",
+                }
+            )
+        elif request.url.path.startswith("/v1/internal/"):
+            actor.update(
+                {
+                    "id": "internal-service",
+                    "name": "internal-service",
+                    "type": "service",
+                }
+            )
         else:
             actor["type"] = "anonymous"
 
@@ -507,6 +543,20 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 break
 
         return tags
+
+    @staticmethod
+    def _build_response_dict(response: Response | None, latency_ms: float) -> dict:
+        """Build response dict for audit event, including gateway span timings."""
+        resp: dict = {
+            "status_code": response.status_code if response else 500,
+            "latency_ms": round(latency_ms, 2),
+        }
+        # Capture Server-Timing header from upstream (gateway) responses (CAB-1790)
+        if response:
+            server_timing = response.headers.get("server-timing")
+            if server_timing:
+                resp["gateway_timings"] = parse_server_timing(server_timing)
+        return resp
 
     async def _hash_body(self, request: Request) -> str | None:
         """Create a hash of the request body for audit (no sensitive data)."""

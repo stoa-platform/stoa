@@ -55,7 +55,7 @@ spec:
             - name: STOA_HOST
               value: "0.0.0.0"
             - name: STOA_CONTROL_PLANE_URL
-              value: {{ .Values.stoaGateway.controlPlaneUrl | default "http://control-plane-api.stoa-system.svc.cluster.local:8000" | quote }}
+              value: {{ .Values.stoaGateway.controlPlaneUrl | default "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80" | quote }}
             - name: STOA_KEYCLOAK_URL
               value: {{ .Values.stoaGateway.keycloakUrl | default "" | quote }}
             - name: STOA_KEYCLOAK_REALM
@@ -105,25 +105,13 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.stoaGateway.secretName }}
-                  key: control-plane-api-key
-                  optional: true
-            - name: STOA_JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.stoaGateway.secretName }}
-                  key: jwt-secret
+                  key: STOA_CONTROL_PLANE_API_KEY
                   optional: true
             - name: STOA_KEYCLOAK_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.stoaGateway.secretName }}
-                  key: keycloak-client-secret
-                  optional: true
-            - name: STOA_ADMIN_API_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.stoaGateway.secretName }}
-                  key: admin-api-token
+                  key: STOA_KEYCLOAK_CLIENT_SECRET
                   optional: true
             {{- end }}
             {{- with .Values.stoaGateway.extraEnv }}

@@ -46,6 +46,8 @@ def _mock_template(**overrides):
         "oauth_scopes": "read write",
         "oauth_pkce_required": True,
         "documentation_url": "https://developers.linear.app",
+        "oauth_client_id": "test-client-id",
+        "oauth_registration_url": None,
         "is_featured": True,
         "enabled": True,
         "sort_order": 10,
@@ -111,7 +113,7 @@ class TestListConnectors:
         """Connected templates show is_connected=True and server_id."""
         template = _mock_template()
         server_id = uuid4()
-        connected_map = {template.id: (server_id, "healthy")}
+        connected_map = {template.id: (server_id, "healthy", "dev")}
 
         with (
             patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
@@ -634,6 +636,195 @@ class TestDisconnect:
         assert response.status_code == 200
 
 
+# ============== Promote ==============
+
+
+class TestPromoteConnector:
+    """POST /v1/admin/mcp-connectors/{slug}/promote"""
+
+    def test_promote_success(self, app_with_cpi_admin, mock_db_session):
+        """Promotes connector from dev to staging."""
+        template = _mock_template()
+        source_server = _mock_server(environment="dev")
+        promoted_server = _mock_server(
+            name="linear-abcd1234-staging",
+            environment="staging",
+            credential_vault_path="external-mcp-servers/new-uuid",
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+            patch(SESSION_REPO_PATH),
+            patch(EXT_SERVER_REPO_PATH),
+            patch(OAUTH_SERVICE_PATH) as MockOAuthService,
+        ):
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+            # First call (dev) returns source, second (staging) is the promote service
+            MockConnServerRepo.return_value.get_by_template_and_tenant = AsyncMock(
+                return_value=source_server
+            )
+            mock_service = MockOAuthService.return_value
+            mock_service.promote = AsyncMock(return_value=promoted_server)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/linear/promote",
+                    json={"target_environment": "staging"},
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["slug"] == "linear"
+        assert data["source_environment"] == "dev"
+        assert data["target_environment"] == "staging"
+        assert data["credentials_cloned"] is True
+
+    def test_promote_invalid_environment(self, app_with_cpi_admin, mock_db_session):
+        """Returns 400 for invalid target environment."""
+        template = _mock_template()
+
+        with patch(TEMPLATE_REPO_PATH) as MockTemplateRepo:
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/linear/promote",
+                    json={"target_environment": "invalid"},
+                )
+
+        assert response.status_code == 400
+        assert "Invalid target environment" in response.json()["detail"]
+
+    def test_promote_high_risk_requires_confirm(self, app_with_cpi_admin, mock_db_session):
+        """Stripe to production requires confirm=true."""
+        template = _mock_template(slug="stripe", display_name="Stripe")
+
+        with patch(TEMPLATE_REPO_PATH) as MockTemplateRepo:
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/stripe/promote",
+                    json={"target_environment": "production"},
+                )
+
+        assert response.status_code == 400
+        assert "explicit confirmation" in response.json()["detail"]
+
+    def test_promote_high_risk_with_confirm(self, app_with_cpi_admin, mock_db_session):
+        """Stripe to production succeeds with confirm=true."""
+        template = _mock_template(slug="stripe", display_name="Stripe")
+        source_server = _mock_server(environment="staging")
+        promoted_server = _mock_server(
+            name="stripe-staging-production",
+            environment="production",
+            credential_vault_path="external-mcp-servers/prod-uuid",
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+            patch(SESSION_REPO_PATH),
+            patch(EXT_SERVER_REPO_PATH),
+            patch(OAUTH_SERVICE_PATH) as MockOAuthService,
+        ):
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+            MockConnServerRepo.return_value.get_by_template_and_tenant = AsyncMock(
+                return_value=source_server
+            )
+            mock_service = MockOAuthService.return_value
+            mock_service.promote = AsyncMock(return_value=promoted_server)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/stripe/promote",
+                    json={"target_environment": "production", "confirm": True},
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["target_environment"] == "production"
+
+    def test_promote_no_source_404(self, app_with_cpi_admin, mock_db_session):
+        """Returns 404 when no source connector exists."""
+        template = _mock_template()
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+            patch(SESSION_REPO_PATH),
+            patch(EXT_SERVER_REPO_PATH),
+            patch(OAUTH_SERVICE_PATH),
+        ):
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+            MockConnServerRepo.return_value.get_by_template_and_tenant = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/linear/promote",
+                    json={"target_environment": "staging"},
+                )
+
+        assert response.status_code == 404
+        assert "not connected in any source" in response.json()["detail"]
+
+    def test_promote_template_not_found(self, app_with_cpi_admin, mock_db_session):
+        """Returns 404 for unknown slug."""
+        with patch(TEMPLATE_REPO_PATH) as MockTemplateRepo:
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/nonexistent/promote",
+                    json={"target_environment": "staging"},
+                )
+
+        assert response.status_code == 404
+
+    def test_promote_403_viewer(self, app_with_no_tenant_user, mock_db_session):
+        """Viewer gets 403."""
+        with TestClient(app_with_no_tenant_user) as client:
+            response = client.post(
+                f"{BASE}/linear/promote",
+                json={"target_environment": "staging"},
+            )
+
+        assert response.status_code == 403
+
+    def test_promote_non_high_risk_to_production_no_confirm(self, app_with_cpi_admin, mock_db_session):
+        """Non-high-risk connector (linear) can promote to production without confirm."""
+        template = _mock_template()
+        source_server = _mock_server(environment="staging")
+        promoted_server = _mock_server(
+            name="linear-staging-production",
+            environment="production",
+            credential_vault_path="external-mcp-servers/prod-uuid",
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+            patch(SESSION_REPO_PATH),
+            patch(EXT_SERVER_REPO_PATH),
+            patch(OAUTH_SERVICE_PATH) as MockOAuthService,
+        ):
+            MockTemplateRepo.return_value.get_by_slug = AsyncMock(return_value=template)
+            MockConnServerRepo.return_value.get_by_template_and_tenant = AsyncMock(
+                return_value=source_server
+            )
+            mock_service = MockOAuthService.return_value
+            mock_service.promote = AsyncMock(return_value=promoted_server)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    f"{BASE}/linear/promote",
+                    json={"target_environment": "production"},
+                )
+
+        assert response.status_code == 200
+
+
 # ============== Service Unit Tests ==============
 
 
@@ -662,20 +853,16 @@ class TestConnectorOAuthService:
             server_repo=server_repo,
         )
 
-        with patch.object(
-            service,
-            "_get_provider_credentials",
-            new=AsyncMock(return_value={"client_id": "test-client-id", "client_secret": "secret"}),
-        ):
-            url, state = asyncio.get_event_loop().run_until_complete(
-                service.initiate_authorize(
-                    template=template,
-                    user_id="user-1",
-                    tenant_id="acme",
-                    redirect_after="/connectors",
-                    redirect_uri="https://console.gostoa.dev/mcp-connectors/callback",
-                )
+        # client_id comes from template.oauth_client_id (set in _mock_template)
+        url, state = asyncio.get_event_loop().run_until_complete(
+            service.initiate_authorize(
+                template=template,
+                user_id="user-1",
+                tenant_id="acme",
+                redirect_after="/connectors",
+                redirect_uri="https://console.gostoa.dev/mcp-connectors/callback",
             )
+        )
 
         assert "linear.app/oauth/authorize" in url
         assert "client_id=test-client-id" in url
@@ -727,19 +914,16 @@ class TestConnectorOAuthService:
             server_repo=MagicMock(),
         )
 
-        with patch.object(
-            service,
-            "_get_provider_credentials",
-            new=AsyncMock(return_value={"client_id": "gh-id"}),
-        ):
-            url, _state = asyncio.get_event_loop().run_until_complete(
-                service.initiate_authorize(
-                    template=template,
-                    user_id="u",
-                    tenant_id="t",
-                    redirect_uri="https://example.com/callback",
-                )
+        # client_id comes from template.oauth_client_id
+        template.oauth_client_id = "gh-id"
+        url, _state = asyncio.get_event_loop().run_until_complete(
+            service.initiate_authorize(
+                template=template,
+                user_id="u",
+                tenant_id="t",
+                redirect_uri="https://example.com/callback",
             )
+        )
 
         assert "code_challenge" not in url
         assert "code_challenge_method" not in url
@@ -780,3 +964,151 @@ class TestConnectorOAuthService:
         expected = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
         assert challenge == expected
+
+    def test_initiate_authorize_dcr_when_no_client_id(self):
+        """DCR is used when no client_id exists but registration_url is set."""
+        import asyncio
+
+        from src.services.connector_oauth import ConnectorOAuthService
+
+        template = _mock_template(
+            oauth_client_id=None,
+            oauth_registration_url="https://mcp.linear.app/register",
+            oauth_authorize_url="https://mcp.linear.app/authorize",
+        )
+        session_repo = MagicMock()
+        session_repo.create = AsyncMock()
+        session_repo.cleanup_expired = AsyncMock()
+        connector_server_repo = MagicMock()
+        connector_server_repo.get_by_template_and_tenant = AsyncMock(return_value=None)
+        template_repo = MagicMock()
+        template_repo.session = MagicMock()
+
+        service = ConnectorOAuthService(
+            template_repo=template_repo,
+            session_repo=session_repo,
+            connector_server_repo=connector_server_repo,
+            server_repo=MagicMock(),
+        )
+
+        dcr_response = MagicMock()
+        dcr_response.status_code = 201
+        dcr_response.json.return_value = {"client_id": "dcr-client-id-123"}
+
+        with patch("src.services.connector_oauth.httpx.AsyncClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=dcr_response)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            url, state = asyncio.get_event_loop().run_until_complete(
+                service.initiate_authorize(
+                    template=template,
+                    user_id="user-1",
+                    tenant_id="acme",
+                    redirect_after="/connectors",
+                    redirect_uri="https://console.gostoa.dev/mcp-connectors/callback",
+                )
+            )
+
+        assert "client_id=dcr-client-id-123" in url
+        assert "mcp.linear.app/authorize" in url
+        # Verify DCR client_id was cached in template
+        assert template.oauth_client_id == "dcr-client-id-123"
+
+    def test_initiate_authorize_503_no_dcr_no_client_id(self):
+        """Returns 503 when no client_id AND no DCR registration URL."""
+        import asyncio
+
+        from src.services.connector_oauth import ConnectorOAuthError, ConnectorOAuthService
+
+        template = _mock_template(
+            oauth_client_id=None,
+            oauth_registration_url=None,
+        )
+        connector_server_repo = MagicMock()
+        connector_server_repo.get_by_template_and_tenant = AsyncMock(return_value=None)
+
+        service = ConnectorOAuthService(
+            template_repo=MagicMock(),
+            session_repo=MagicMock(),
+            connector_server_repo=connector_server_repo,
+            server_repo=MagicMock(),
+        )
+
+        with patch.dict("os.environ", {}, clear=False):
+            with pytest.raises(ConnectorOAuthError) as exc_info:
+                asyncio.get_event_loop().run_until_complete(
+                    service.initiate_authorize(
+                        template=template,
+                        user_id="u",
+                        tenant_id="t",
+                        redirect_uri="https://example.com/callback",
+                    )
+                )
+        assert exc_info.value.status_code == 503
+        assert "manual OAuth app setup" in exc_info.value.message
+
+
+# ============== needs_setup Logic ==============
+
+
+class TestNeedsSetup:
+    """Tests for _needs_manual_setup logic in the router."""
+
+    def test_dcr_provider_no_setup_needed(self, app_with_cpi_admin, mock_db_session):
+        """DCR-capable provider returns needs_setup=False even without client_id."""
+        template = _mock_template(
+            oauth_client_id=None,
+            oauth_registration_url="https://mcp.linear.app/register",
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+        ):
+            MockTemplateRepo.return_value.list_all = AsyncMock(return_value=[template])
+            MockConnServerRepo.return_value.list_connected_template_ids = AsyncMock(return_value={})
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(BASE)
+
+        data = response.json()
+        assert data["connectors"][0]["needs_setup"] is False
+
+    def test_no_dcr_no_client_id_needs_setup(self, app_with_cpi_admin, mock_db_session):
+        """Provider without DCR and without client_id returns needs_setup=True."""
+        template = _mock_template(
+            oauth_client_id=None,
+            oauth_registration_url=None,
+        )
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+        ):
+            MockTemplateRepo.return_value.list_all = AsyncMock(return_value=[template])
+            MockConnServerRepo.return_value.list_connected_template_ids = AsyncMock(return_value={})
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(BASE)
+
+        data = response.json()
+        assert data["connectors"][0]["needs_setup"] is True
+
+    def test_has_client_id_no_setup_needed(self, app_with_cpi_admin, mock_db_session):
+        """Provider with client_id set returns needs_setup=False."""
+        template = _mock_template(oauth_client_id="existing-id", oauth_registration_url=None)
+
+        with (
+            patch(TEMPLATE_REPO_PATH) as MockTemplateRepo,
+            patch(CONNECTOR_SERVER_REPO_PATH) as MockConnServerRepo,
+        ):
+            MockTemplateRepo.return_value.list_all = AsyncMock(return_value=[template])
+            MockConnServerRepo.return_value.list_connected_template_ids = AsyncMock(return_value={})
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(BASE)
+
+        data = response.json()
+        assert data["connectors"][0]["needs_setup"] is False

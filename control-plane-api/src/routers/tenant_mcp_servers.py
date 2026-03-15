@@ -110,6 +110,8 @@ def _to_response(server: ExternalMCPServer, tenant_id: str) -> TenantMCPServerRe
         last_health_check=server.last_health_check,
         last_sync_at=server.last_sync_at,
         sync_error=server.sync_error,
+        environment=server.environment,
+        gateway_instance_id=server.gateway_instance_id,
         tools_count=len(server.tools) if server.tools else 0,
         created_at=server.created_at,
         updated_at=server.updated_at,
@@ -134,6 +136,8 @@ def _to_detail_response(server: ExternalMCPServer, tenant_id: str) -> TenantMCPS
         last_health_check=server.last_health_check,
         last_sync_at=server.last_sync_at,
         sync_error=server.sync_error,
+        environment=server.environment,
+        gateway_instance_id=server.gateway_instance_id,
         tools_count=len(server.tools) if server.tools else 0,
         created_at=server.created_at,
         updated_at=server.updated_at,
@@ -165,6 +169,7 @@ def _ensure_tenant_owned(server: ExternalMCPServer, tenant_id: str) -> None:
 @router.get("", response_model=TenantMCPServerListResponse)
 async def list_tenant_mcp_servers(
     tenant_id: str,
+    environment: str | None = Query(None, description="Filter by environment (dev/staging/production)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),
@@ -174,7 +179,7 @@ async def list_tenant_mcp_servers(
     _require_read_access(user, tenant_id)
 
     repo = ExternalMCPServerRepository(db)
-    servers, total = await repo.list_by_tenant(tenant_id, page=page, page_size=page_size)
+    servers, total = await repo.list_by_tenant(tenant_id, environment=environment, page=page, page_size=page_size)
 
     return TenantMCPServerListResponse(
         servers=[_to_response(s, tenant_id) for s in servers],
@@ -237,19 +242,23 @@ async def create_tenant_mcp_server(
         auth_type=ExternalMCPAuthType(request.auth_type.value),
         tool_prefix=request.tool_prefix,
         tenant_id=tenant_id,
+        environment=request.environment,
+        gateway_instance_id=request.gateway_instance_id,
         created_by=user.id,
     )
 
-    # Store credentials in Vault if provided
+    # Store credentials in Vault if provided (graceful degradation)
     if request.credentials and request.auth_type != AuthTypeEnum.NONE:
         try:
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            server.credential_vault_path = vault_path
+            if vault_path:
+                server.credential_vault_path = vault_path
+            else:
+                logger.warning("Vault unavailable — credentials not stored for server %s", request.name)
         except Exception as e:
-            logger.error("Failed to store credentials in Vault: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to store credentials securely")
+            logger.warning("Vault error — credentials not stored: %s", e)
 
     server = await repo.create(server)
     await db.commit()
@@ -292,16 +301,22 @@ async def update_tenant_mcp_server(
         server.tool_prefix = request.tool_prefix
     if request.enabled is not None:
         server.enabled = request.enabled
+    if request.environment is not None:
+        server.environment = request.environment
+    if request.gateway_instance_id is not None:
+        server.gateway_instance_id = request.gateway_instance_id
 
     if request.credentials:
         try:
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            server.credential_vault_path = vault_path
+            if vault_path:
+                server.credential_vault_path = vault_path
+            else:
+                logger.warning("Vault unavailable — credentials not updated for server %s", server.name)
         except Exception as e:
-            logger.error("Failed to update credentials in Vault: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to update credentials securely")
+            logger.warning("Vault error — credentials not updated: %s", e)
 
     server = await repo.update(server)
     await db.commit()
@@ -364,8 +379,7 @@ async def test_tenant_mcp_server_connection(
             vault = get_vault_client()
             credentials = await vault.retrieve_credential(str(server.id))
         except Exception as e:
-            logger.error("Failed to retrieve credentials from Vault: %s", e)
-            return TestConnectionResponse(success=False, error="Failed to retrieve credentials")
+            logger.warning("Vault unavailable — testing connection without credentials: %s", e)
 
     mcp_client = get_mcp_client_service()
     result = await mcp_client.test_connection(
@@ -410,8 +424,7 @@ async def sync_tenant_mcp_server_tools(
             vault = get_vault_client()
             credentials = await vault.retrieve_credential(str(server.id))
         except Exception as e:
-            logger.error("Failed to retrieve credentials from Vault: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to retrieve credentials")
+            logger.warning("Vault unavailable — syncing tools without credentials: %s", e)
 
     mcp_client = get_mcp_client_service()
     try:

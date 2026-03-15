@@ -1,5 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Puzzle, RefreshCw, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import {
+  Puzzle,
+  RefreshCw,
+  ExternalLink,
+  CheckCircle,
+  XCircle,
+  Settings,
+  X,
+  KeyRound,
+  ShieldCheck,
+  ArrowUpRight,
+} from 'lucide-react';
 import { mcpConnectorsService } from '../../services/mcpConnectorsApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -9,7 +20,7 @@ import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { ConnectorTemplate } from '../../types';
 
 const categoryLabels: Record<string, string> = {
-  project_management: 'Project Management',
+  'project-management': 'Project Management',
   development: 'Development',
   communication: 'Communication',
   monitoring: 'Monitoring',
@@ -24,7 +35,26 @@ const transportLabels: Record<string, string> = {
   stdio: 'Stdio',
 };
 
+const oauthAppUrls: Record<string, string> = {
+  linear: 'https://linear.app/settings/api/applications/new',
+  github: 'https://github.com/settings/developers',
+  notion: 'https://www.notion.so/my-integrations',
+  slack: 'https://api.slack.com/apps',
+  sentry: 'https://sentry.io/settings/developer-settings/',
+};
+
 const ALL_CATEGORY = '__all__';
+
+const ENVIRONMENTS = ['dev', 'staging', 'production'] as const;
+type Environment = (typeof ENVIRONMENTS)[number];
+
+const environmentLabels: Record<Environment, string> = {
+  dev: 'Development',
+  staging: 'Staging',
+  production: 'Production',
+};
+
+const HIGH_RISK_SLUGS = new Set(['stripe', 'cloudflare']);
 
 export function ConnectorCatalog() {
   const { isReady } = useAuth();
@@ -36,23 +66,19 @@ export function ConnectorCatalog() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY);
+  const [environmentFilter, setEnvironmentFilter] = useState<Environment | ''>('');
   const [connectingSlug, setConnectingSlug] = useState<string | null>(null);
   const [disconnectingSlug, setDisconnectingSlug] = useState<string | null>(null);
+  const [promotingSlug, setPromotingSlug] = useState<string | null>(null);
+  const [setupConnector, setSetupConnector] = useState<ConnectorTemplate | null>(null);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    if (isReady) {
-      loadConnectors();
-    }
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [isReady]);
-
-  async function loadConnectors() {
+  const loadConnectors = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await mcpConnectorsService.listConnectors();
+      const response = await mcpConnectorsService.listConnectors(
+        undefined,
+        environmentFilter || undefined
+      );
       if (!mountedRef.current) return;
       setConnectors(response.connectors);
       setError(null);
@@ -63,14 +89,27 @@ export function ConnectorCatalog() {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }
+  }, [environmentFilter]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    if (isReady) {
+      loadConnectors();
+    }
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [isReady, loadConnectors]);
 
   const handleConnect = useCallback(
-    async (slug: string) => {
+    async (connector: ConnectorTemplate, clientId?: string, clientSecret?: string) => {
       try {
-        setConnectingSlug(slug);
-        const response = await mcpConnectorsService.authorize(slug, {
+        setConnectingSlug(connector.slug);
+        setSetupConnector(null);
+        const response = await mcpConnectorsService.authorize(connector.slug, {
           redirect_after: window.location.href,
+          client_id: clientId,
+          client_secret: clientSecret,
         });
         window.location.href = response.authorize_url;
       } catch (err: unknown) {
@@ -80,6 +119,17 @@ export function ConnectorCatalog() {
       }
     },
     [toast]
+  );
+
+  const handleConnectClick = useCallback(
+    (connector: ConnectorTemplate) => {
+      if (connector.needs_setup) {
+        setSetupConnector(connector);
+      } else {
+        handleConnect(connector);
+      }
+    },
+    [handleConnect]
   );
 
   const handleDisconnect = useCallback(
@@ -103,6 +153,43 @@ export function ConnectorCatalog() {
         toast.error('Disconnect failed', message);
       } finally {
         if (mountedRef.current) setDisconnectingSlug(null);
+      }
+    },
+    [confirm, toast]
+  );
+
+  const handlePromote = useCallback(
+    async (connector: ConnectorTemplate, targetEnvironment: string) => {
+      const isHighRisk = HIGH_RISK_SLUGS.has(connector.slug);
+      const isProduction = targetEnvironment === 'production';
+
+      if (isHighRisk && isProduction) {
+        const confirmed = await confirm({
+          title: `Promote ${connector.display_name} to Production?`,
+          message:
+            'This is a high-risk connector. Promoting to production will clone credentials and make this connector available in the production environment.',
+          confirmLabel: 'Promote to Production',
+          variant: 'danger',
+        });
+        if (!confirmed) return;
+      }
+
+      try {
+        setPromotingSlug(connector.slug);
+        const result = await mcpConnectorsService.promote(connector.slug, {
+          target_environment: targetEnvironment,
+          confirm: isHighRisk && isProduction,
+        });
+        toast.success(
+          'Promoted',
+          `${connector.display_name} promoted from ${result.source_environment} to ${result.target_environment}`
+        );
+        await loadConnectors();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to promote connector';
+        toast.error('Promote failed', message);
+      } finally {
+        if (mountedRef.current) setPromotingSlug(null);
       }
     },
     [confirm, toast]
@@ -146,13 +233,27 @@ export function ConnectorCatalog() {
             Connect third-party services to STOA with one click via OAuth
           </p>
         </div>
-        <button
-          onClick={loadConnectors}
-          className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={environmentFilter}
+            onChange={(e) => setEnvironmentFilter(e.target.value as Environment | '')}
+            className="px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+          >
+            <option value="">All environments</option>
+            {ENVIRONMENTS.map((env) => (
+              <option key={env} value={env}>
+                {environmentLabels[env]}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={loadConnectors}
+            className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Error */}
@@ -174,10 +275,12 @@ export function ConnectorCatalog() {
               <ConnectorCard
                 key={connector.id}
                 connector={connector}
-                onConnect={handleConnect}
+                onConnect={handleConnectClick}
                 onDisconnect={handleDisconnect}
+                onPromote={handlePromote}
                 connectingSlug={connectingSlug}
                 disconnectingSlug={disconnectingSlug}
+                promotingSlug={promotingSlug}
                 featured
               />
             ))}
@@ -219,13 +322,27 @@ export function ConnectorCatalog() {
             <ConnectorCard
               key={connector.id}
               connector={connector}
-              onConnect={handleConnect}
+              onConnect={handleConnectClick}
               onDisconnect={handleDisconnect}
+              onPromote={handlePromote}
               connectingSlug={connectingSlug}
               disconnectingSlug={disconnectingSlug}
+              promotingSlug={promotingSlug}
             />
           ))}
         </div>
+      )}
+
+      {/* Setup Dialog */}
+      {setupConnector && (
+        <SetupDialog
+          connector={setupConnector}
+          onClose={() => setSetupConnector(null)}
+          onSubmit={(clientId, clientSecret) =>
+            handleConnect(setupConnector, clientId, clientSecret)
+          }
+          isLoading={connectingSlug === setupConnector.slug}
+        />
       )}
 
       {ConfirmDialog}
@@ -233,12 +350,188 @@ export function ConnectorCatalog() {
   );
 }
 
+// ─── Setup Dialog ────────────────────────────────────────────────────────────
+
+interface SetupDialogProps {
+  connector: ConnectorTemplate;
+  onClose: () => void;
+  onSubmit: (clientId: string, clientSecret?: string) => void;
+  isLoading: boolean;
+}
+
+function SetupDialog({ connector, onClose, onSubmit, isLoading }: SetupDialogProps) {
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+
+  const oauthUrl = oauthAppUrls[connector.slug];
+  const needsSecret = !connector.oauth_pkce_required;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientId.trim()) return;
+    onSubmit(clientId.trim(), clientSecret.trim() || undefined);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b dark:border-neutral-700">
+          <div className="flex items-center gap-3">
+            {connector.icon_url ? (
+              <img src={connector.icon_url} alt="" className="w-8 h-8 rounded" />
+            ) : (
+              <div className="w-8 h-8 bg-neutral-100 dark:bg-neutral-700 rounded flex items-center justify-center">
+                <Puzzle className="h-4 w-4 text-neutral-500" />
+              </div>
+            )}
+            <div>
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                Connect {connector.display_name}
+              </h2>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Enter your OAuth app credentials to enable the connection
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-500"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="px-6 py-5 space-y-4">
+            {/* Instructions */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <div className="flex gap-2">
+                <KeyRound className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-700 dark:text-blue-300">
+                  <p className="font-medium mb-1">One-time setup</p>
+                  <p>
+                    Create an OAuth app on {connector.display_name}, then paste the credentials
+                    below.
+                    {connector.oauth_pkce_required && (
+                      <span className="ml-1">
+                        This provider uses PKCE — no client secret needed.
+                      </span>
+                    )}
+                  </p>
+                  {oauthUrl && (
+                    <a
+                      href={oauthUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-2 text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      Create {connector.display_name} OAuth app
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Redirect URI hint */}
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900 rounded-lg p-3 font-mono">
+              <span className="text-neutral-400 dark:text-neutral-500">Redirect URI: </span>
+              {window.location.origin}/mcp-connectors/callback
+            </div>
+
+            {/* Client ID */}
+            <div>
+              <label
+                htmlFor="client-id"
+                className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
+              >
+                Client ID <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="client-id"
+                type="text"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                placeholder="e.g. abc123def456"
+                autoFocus
+                className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white placeholder-neutral-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+              />
+            </div>
+
+            {/* Client Secret (only for non-PKCE) */}
+            {needsSecret && (
+              <div>
+                <label
+                  htmlFor="client-secret"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
+                >
+                  Client Secret
+                </label>
+                <input
+                  id="client-secret"
+                  type="password"
+                  value={clientSecret}
+                  onChange={(e) => setClientSecret(e.target.value)}
+                  placeholder="Enter client secret"
+                  className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white placeholder-neutral-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                />
+              </div>
+            )}
+
+            {/* Security note */}
+            <div className="flex items-start gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <ShieldCheck className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <span>
+                Credentials are stored securely and only used to authorize the OAuth connection.
+                {needsSecret && ' The client secret is encrypted in Vault.'}
+              </span>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end gap-3 px-6 py-4 border-t dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900/50">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!clientId.trim() || isLoading}
+              className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Settings className="h-4 w-4" />
+                  Connect
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Connector Card ──────────────────────────────────────────────────────────
+
 interface ConnectorCardProps {
   connector: ConnectorTemplate;
-  onConnect: (slug: string) => void;
+  onConnect: (connector: ConnectorTemplate) => void;
   onDisconnect: (connector: ConnectorTemplate) => void;
+  onPromote: (connector: ConnectorTemplate, targetEnvironment: string) => void;
   connectingSlug: string | null;
   disconnectingSlug: string | null;
+  promotingSlug: string | null;
   featured?: boolean;
 }
 
@@ -246,12 +539,24 @@ function ConnectorCard({
   connector,
   onConnect,
   onDisconnect,
+  onPromote,
   connectingSlug,
   disconnectingSlug,
+  promotingSlug,
   featured,
 }: ConnectorCardProps) {
   const isConnecting = connectingSlug === connector.slug;
   const isDisconnecting = disconnectingSlug === connector.slug;
+  const isPromoting = promotingSlug === connector.slug;
+
+  // Determine next promotion target
+  const nextEnvironment = connector.connected_environment
+    ? connector.connected_environment === 'dev'
+      ? 'staging'
+      : connector.connected_environment === 'staging'
+        ? 'production'
+        : null
+    : null;
 
   return (
     <div
@@ -294,6 +599,26 @@ function ConnectorCard({
             Connected
           </span>
         )}
+        {connector.connected_environment && (
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+              connector.connected_environment === 'production'
+                ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                : connector.connected_environment === 'staging'
+                  ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                  : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+            }`}
+          >
+            {environmentLabels[connector.connected_environment as Environment] ||
+              connector.connected_environment}
+          </span>
+        )}
+        {connector.needs_setup && !connector.is_connected && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+            <Settings className="h-3 w-3" />
+            Setup required
+          </span>
+        )}
       </div>
 
       {/* Actions */}
@@ -308,6 +633,17 @@ function ConnectorCard({
               <XCircle className="h-4 w-4" />
               {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
             </button>
+            {nextEnvironment && (
+              <button
+                onClick={() => onPromote(connector, nextEnvironment)}
+                disabled={isPromoting}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm border border-primary-300 dark:border-primary-700 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 disabled:opacity-50"
+                title={`Promote to ${environmentLabels[nextEnvironment as Environment]}`}
+              >
+                <ArrowUpRight className="h-4 w-4" />
+                {isPromoting ? '...' : environmentLabels[nextEnvironment as Environment]}
+              </button>
+            )}
             {connector.documentation_url && (
               <a
                 href={connector.documentation_url}
@@ -322,11 +658,15 @@ function ConnectorCard({
         ) : (
           <>
             <button
-              onClick={() => onConnect(connector.slug)}
+              onClick={() => onConnect(connector)}
               disabled={isConnecting}
               className="flex-1 px-3 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
-              {isConnecting ? 'Connecting...' : 'Connect'}
+              {isConnecting
+                ? 'Connecting...'
+                : connector.needs_setup
+                  ? 'Set up & Connect'
+                  : 'Connect'}
             </button>
             {connector.documentation_url && (
               <a

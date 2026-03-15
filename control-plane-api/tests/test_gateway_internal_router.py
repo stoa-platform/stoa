@@ -307,3 +307,254 @@ class TestGatewayConfigTenantScoping:
 
         assert resp.status_code == 200
         mock_list_all.assert_awaited_once_with(tenant_id=None)
+
+
+# ---------------------------------------------------------------------------
+# Internal tool discovery — GET /v1/internal/gateways/tools
+# ---------------------------------------------------------------------------
+
+
+def _make_tool(
+    tool_name: str = "acme__payment-api__charge",
+    description: str = "Charge a card",
+    input_schema: str | None = '{"type": "object", "properties": {"amount": {"type": "number"}}, "required": ["amount"]}',
+    output_schema: str | None = None,
+    backend_url: str = "https://api.acme.com",
+    http_method: str = "POST",
+    path_pattern: str = "/charge",
+    version: str = "1.0.0",
+    spec_hash: str | None = "abc123",
+    enabled: bool = True,
+) -> MagicMock:
+    """Build a minimal McpGeneratedTool-like mock."""
+    m = MagicMock()
+    m.tool_name = tool_name
+    m.description = description
+    m.input_schema = input_schema
+    m.output_schema = output_schema
+    m.backend_url = backend_url
+    m.http_method = http_method
+    m.path_pattern = path_pattern
+    m.version = version
+    m.spec_hash = spec_hash
+    m.enabled = enabled
+    return m
+
+
+class TestInternalToolDiscovery:
+    """GET /v1/internal/gateways/tools — internal tool discovery for gateway sidecars."""
+
+    # --- /tools ---
+
+    def test_tools_returns_401_without_key(self, client):
+        """Missing X-Gateway-Key header returns 422 (FastAPI required header validation)."""
+        resp = client.get("/v1/internal/gateways/tools?tenant_id=acme")
+        # FastAPI rejects missing required Header(...) with 422 Unprocessable Entity
+        assert resp.status_code == 422
+
+    def test_tools_returns_401_with_invalid_key(self, client):
+        """Wrong X-Gateway-Key returns 401."""
+        with patch("src.routers.gateway_internal.settings") as mock_settings:
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            resp = client.get(
+                "/v1/internal/gateways/tools?tenant_id=acme",
+                headers={GW_KEY_HEADER: "wrong-key"},
+            )
+        assert resp.status_code == 401
+
+    def test_tools_returns_503_when_no_keys_configured(self, client):
+        """Empty GATEWAY_API_KEYS returns 503."""
+        with patch("src.routers.gateway_internal.settings") as mock_settings:
+            mock_settings.gateway_api_keys_list = []
+            resp = client.get(
+                "/v1/internal/gateways/tools?tenant_id=acme",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+        assert resp.status_code == 503
+
+    def test_tools_returns_empty_without_tenant(self, client):
+        """No tenant_id query param returns empty tools list (default="" short-circuit)."""
+        with patch("src.routers.gateway_internal.settings") as mock_settings:
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            resp = client.get(
+                "/v1/internal/gateways/tools",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+        assert resp.status_code == 200
+        assert resp.json() == {"tools": []}
+
+    def test_tools_returns_tools_for_tenant(self, client):
+        """Valid key + tenant_id returns enabled tools in ToolsListResponse format."""
+        tool = _make_tool()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.UacToolGenerator") as MockGenerator,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_instance = MockGenerator.return_value
+            mock_instance.get_tools_for_tenant = AsyncMock(return_value=[tool])
+
+            resp = client.get(
+                "/v1/internal/gateways/tools?tenant_id=acme",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["tools"]) == 1
+        assert body["tools"][0]["name"] == tool.tool_name
+        assert body["tools"][0]["description"] == tool.description
+        assert "inputSchema" in body["tools"][0]
+
+    def test_tools_skips_disabled_tools(self, client):
+        """Disabled tools are excluded from the response."""
+        enabled_tool = _make_tool(tool_name="active-tool", enabled=True)
+        disabled_tool = _make_tool(tool_name="disabled-tool", enabled=False)
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.UacToolGenerator") as MockGenerator,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_instance = MockGenerator.return_value
+            mock_instance.get_tools_for_tenant = AsyncMock(
+                return_value=[enabled_tool, disabled_tool]
+            )
+
+            resp = client.get(
+                "/v1/internal/gateways/tools?tenant_id=acme",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 200
+        names = [t["name"] for t in resp.json()["tools"]]
+        assert "active-tool" in names
+        assert "disabled-tool" not in names
+
+    def test_tools_parses_input_schema_json(self, client):
+        """input_schema string is parsed into the inputSchema object."""
+        tool = _make_tool(
+            input_schema='{"type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"]}'
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.UacToolGenerator") as MockGenerator,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            MockGenerator.return_value.get_tools_for_tenant = AsyncMock(return_value=[tool])
+
+            resp = client.get(
+                "/v1/internal/gateways/tools?tenant_id=acme",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 200
+        schema = resp.json()["tools"][0]["inputSchema"]
+        assert schema["type"] == "object"
+        assert "q" in schema["properties"]
+
+    def test_tools_uses_default_schema_when_input_schema_is_none(self, client):
+        """Tool with no input_schema gets a default empty object schema."""
+        tool = _make_tool(input_schema=None)
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.UacToolGenerator") as MockGenerator,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            MockGenerator.return_value.get_tools_for_tenant = AsyncMock(return_value=[tool])
+
+            resp = client.get(
+                "/v1/internal/gateways/tools?tenant_id=acme",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 200
+        schema = resp.json()["tools"][0]["inputSchema"]
+        assert schema == {"type": "object", "properties": {}, "required": []}
+
+    # --- /tools/generated ---
+
+    def test_generated_tools_returns_401_without_key(self, client):
+        """Missing X-Gateway-Key header returns 422 for /tools/generated."""
+        resp = client.get("/v1/internal/gateways/tools/generated?tenant_id=acme")
+        assert resp.status_code == 422
+
+    def test_generated_tools_returns_401_with_invalid_key(self, client):
+        """Wrong X-Gateway-Key returns 401 for /tools/generated."""
+        with patch("src.routers.gateway_internal.settings") as mock_settings:
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            resp = client.get(
+                "/v1/internal/gateways/tools/generated?tenant_id=acme",
+                headers={GW_KEY_HEADER: "bad-key"},
+            )
+        assert resp.status_code == 401
+
+    def test_generated_tools_returns_tools_for_tenant(self, client):
+        """Valid key + tenant_id returns TenantToolsResponse format."""
+        tool = _make_tool()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.UacToolGenerator") as MockGenerator,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_instance = MockGenerator.return_value
+            mock_instance.get_tools_for_tenant = AsyncMock(return_value=[tool])
+
+            resp = client.get(
+                "/v1/internal/gateways/tools/generated?tenant_id=acme",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["tenant_id"] == "acme"
+        assert body["total"] == 1
+        assert len(body["tools"]) == 1
+        assert body["tools"][0]["tool_name"] == tool.tool_name
+
+    def test_generated_tools_returns_empty_list_for_unknown_tenant(self, client):
+        """Tenant with no tools returns TenantToolsResponse with empty list."""
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.UacToolGenerator") as MockGenerator,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            MockGenerator.return_value.get_tools_for_tenant = AsyncMock(return_value=[])
+
+            resp = client.get(
+                "/v1/internal/gateways/tools/generated?tenant_id=unknown-tenant",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["tenant_id"] == "unknown-tenant"
+        assert body["total"] == 0
+        assert body["tools"] == []
+
+    def test_generated_tools_total_matches_tools_length(self, client):
+        """total field in TenantToolsResponse matches the actual number of tools."""
+        tools = [
+            _make_tool(tool_name=f"tool-{i}") for i in range(3)
+        ]
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.UacToolGenerator") as MockGenerator,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            MockGenerator.return_value.get_tools_for_tenant = AsyncMock(return_value=tools)
+
+            resp = client.get(
+                "/v1/internal/gateways/tools/generated?tenant_id=acme",
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 3
+        assert len(body["tools"]) == 3

@@ -62,6 +62,13 @@ export interface APICreate {
   portal_promoted?: boolean; // Add portal:published tag when true
 }
 
+export interface APIVersionEntry {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
 // Application types
 export interface Application {
   id: string;
@@ -569,8 +576,9 @@ export interface TransactionSpan {
   name: string;
   service: string;
   status: TransactionStatus;
-  started_at: string;
+  start_offset_ms: number;
   duration_ms: number;
+  started_at?: string;
   error?: string;
   metadata?: Record<string, unknown>;
 }
@@ -746,6 +754,8 @@ export interface ExternalMCPServer {
   last_sync_at?: string;
   sync_error?: string;
   tenant_id?: string;
+  environment?: string;
+  gateway_instance_id?: string;
   tools_count: number;
   created_at: string;
   updated_at: string;
@@ -780,6 +790,8 @@ export interface ExternalMCPServerCreate {
   credentials?: ExternalMCPServerCredentials;
   tool_prefix?: string;
   tenant_id?: string;
+  environment?: string;
+  gateway_instance_id?: string;
 }
 
 export interface ExternalMCPServerUpdate {
@@ -792,6 +804,8 @@ export interface ExternalMCPServerUpdate {
   credentials?: ExternalMCPServerCredentials;
   tool_prefix?: string;
   enabled?: boolean;
+  environment?: string;
+  gateway_instance_id?: string;
 }
 
 export interface ExternalMCPServerListResponse {
@@ -1069,7 +1083,7 @@ export type GatewayType =
   | 'stoa_sidecar'
   | 'stoa_proxy'
   | 'stoa_shadow';
-export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow';
+export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow' | 'connect';
 export type GatewayInstanceStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 export type DeploymentSyncStatus =
   | 'pending'
@@ -1487,6 +1501,8 @@ export interface ConnectorTemplate {
   is_connected: boolean;
   connected_server_id?: string;
   connection_health?: string;
+  connected_environment?: string;
+  needs_setup: boolean;
 }
 
 export interface ConnectorCatalogResponse {
@@ -1506,6 +1522,15 @@ export interface CallbackResponse {
   slug: string;
   tools_sync_triggered: boolean;
   redirect_url?: string;
+}
+
+export interface PromoteResponse {
+  slug: string;
+  source_environment: string;
+  target_environment: string;
+  server_id: string;
+  server_name: string;
+  credentials_cloned: boolean;
 }
 
 // ============== Subscription Management (CAB-1635) ==============

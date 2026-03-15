@@ -34,6 +34,8 @@ class MCPConnectorTemplate(Base):
     oauth_token_url = Column(String(500), nullable=False)
     oauth_scopes = Column(String(500), nullable=True)
     oauth_pkce_required = Column(Boolean, nullable=False, default=False)
+    oauth_client_id = Column(String(255), nullable=True)  # Public OAuth app client_id (not a secret)
+    oauth_registration_url = Column(String(500), nullable=True)  # RFC 7591 DCR endpoint (one-click connect)
 
     # Metadata
     documentation_url = Column(String(500), nullable=True)
@@ -64,6 +66,7 @@ class OAuthPendingSession(Base):
     user_id = Column(String(255), nullable=False)
     tenant_id = Column(String(255), nullable=True)
     code_verifier = Column(String(128), nullable=True)
+    client_secret = Column(String(500), nullable=True)  # Non-DCR providers: passed through from setup dialog
     redirect_after = Column(String(500), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)

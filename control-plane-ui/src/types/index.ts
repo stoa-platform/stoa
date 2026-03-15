@@ -62,6 +62,13 @@ export interface APICreate {
   portal_promoted?: boolean; // Add portal:published tag when true
 }
 
+export interface APIVersionEntry {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
 // Application types
 export interface Application {
   id: string;
@@ -1076,7 +1083,7 @@ export type GatewayType =
   | 'stoa_sidecar'
   | 'stoa_proxy'
   | 'stoa_shadow';
-export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow';
+export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow' | 'connect';
 export type GatewayInstanceStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 export type DeploymentSyncStatus =
   | 'pending'
@@ -1494,6 +1501,7 @@ export interface ConnectorTemplate {
   is_connected: boolean;
   connected_server_id?: string;
   connection_health?: string;
+  connected_environment?: string;
   needs_setup: boolean;
 }
 
@@ -1514,6 +1522,15 @@ export interface CallbackResponse {
   slug: string;
   tools_sync_triggered: boolean;
   redirect_url?: string;
+}
+
+export interface PromoteResponse {
+  slug: string;
+  source_environment: string;
+  target_environment: string;
+  server_id: string;
+  server_name: string;
+  credentials_cloned: boolean;
 }
 
 // ============== Subscription Management (CAB-1635) ==============

@@ -51,7 +51,7 @@ stoaGateway:
   serviceAccount: default
 
   # Control Plane (Python FastAPI backend)
-  controlPlaneUrl: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+  controlPlaneUrl: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
 
   # Keycloak OIDC
   keycloakUrl: ""
@@ -188,7 +188,7 @@ stoaSidecar:
   environment: dev  # dev | staging | prod
 
   # Control Plane connection (for auto-registration)
-  controlPlaneUrl: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+  controlPlaneUrl: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
 
   # Keycloak OIDC (for token validation)
   keycloakUrl: ""
@@ -259,7 +259,7 @@ gatewaySync:
   image: curlimages/curl:8.5.0
 
   # Backend API URL (Control-Plane-API)
-  backendUrl: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+  backendUrl: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
 
   # Gateway admin URL
   gatewayUrl: "http://apigateway.stoa-system.svc.cluster.local:5555"

@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/apis", tags=["APIs"])
 
 
+def _require_git_service() -> None:
+    """Guard: raise 503 if GitLab integration is not connected."""
+    if not git_service._project:
+        raise HTTPException(
+            status_code=503,
+            detail="GitLab integration is not configured. API creation via GitOps is unavailable.",
+        )
+
+
 class APICreate(BaseModel):
     name: str
     display_name: str
@@ -60,6 +69,15 @@ class APIResponse(BaseModel):
     portal_promoted: bool = False  # True if API has portal:published tag
 
 
+class APIVersionEntry(BaseModel):
+    """A single version entry from git history."""
+
+    sha: str
+    message: str
+    author: str
+    date: str
+
+
 def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
     """Convert GitLab YAML data to API response"""
     deployments = api_data.get("deployments", {})
@@ -67,6 +85,13 @@ def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
     # Check if API is promoted to portal
     promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
     portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
+
+    deployed_dev = deployments.get("dev", False)
+    deployed_staging = deployments.get("staging", False)
+
+    # Derive status from deployment state — if deployed anywhere, it's published
+    raw_status = api_data.get("status", "draft")
+    status = "published" if raw_status == "draft" and (deployed_dev or deployed_staging) else raw_status
 
     return APIResponse(
         id=api_data.get("id", api_data.get("name", "")),
@@ -76,9 +101,9 @@ def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
         version=api_data.get("version", "1.0.0"),
         description=api_data.get("description", ""),
         backend_url=api_data.get("backend_url", ""),
-        status=api_data.get("status", "draft"),
-        deployed_dev=deployments.get("dev", False),
-        deployed_staging=deployments.get("staging", False),
+        status=status,
+        deployed_dev=deployed_dev,
+        deployed_staging=deployed_staging,
         tags=tags,
         portal_promoted=portal_promoted,
     )
@@ -97,18 +122,22 @@ async def list_apis(
 
     Optionally filter by environment — only returns APIs deployed to that environment.
     """
+    _require_git_service()
     try:
         apis = await git_service.list_apis(tenant_id)
         all_items = [_api_from_yaml(tenant_id, api) for api in apis]
         # Filter by environment if specified
         if environment:
-            all_items = [
-                api
-                for api in all_items
-                if (environment == "dev" and api.deployed_dev)
-                or (environment == "staging" and api.deployed_staging)
-                or (environment == "prod")  # prod filter deferred to Phase 5
-            ]
+            if environment == "dev":
+                # DEV shows deployed APIs + drafts (not yet deployed anywhere)
+                all_items = [
+                    api for api in all_items if api.deployed_dev or (not api.deployed_dev and not api.deployed_staging)
+                ]
+            elif environment == "staging":
+                all_items = [api for api in all_items if api.deployed_staging]
+            elif environment == "prod":
+                # Prod shows only APIs deployed to both dev AND staging (promotion path)
+                all_items = [api for api in all_items if api.deployed_dev and api.deployed_staging]
         total = len(all_items)
         start = (page - 1) * page_size
         items = all_items[start : start + page_size]
@@ -122,6 +151,7 @@ async def list_apis(
 @require_tenant_access
 async def get_api(tenant_id: str, api_id: str, user: User = Depends(get_current_user)):
     """Get API by ID from GitLab"""
+    _require_git_service()
     try:
         api_data = await git_service.get_api(tenant_id, api_id)
         if not api_data:
@@ -151,7 +181,8 @@ async def create_api(
     - Max 3 APIs (configurable via tenant.settings.max_apis)
     - 402 after 30-day trial expires
     """
-    # Trial limits enforcement (CAB-1549)
+    # Trial limits enforcement (CAB-1549) — checked before git_service guard
+    # so expired/overlimit tenants get proper 402/429 instead of 503
     from ..routers.tenants import get_tenant_limits
     from ..services.trial_service import check_trial_expiry
 
@@ -164,6 +195,8 @@ async def create_api(
         current_apis = await git_service.list_apis(tenant_id)
         if len(current_apis) >= max_apis:
             raise HTTPException(status_code=429, detail=f"API limit reached ({max_apis})")
+
+    _require_git_service()
 
     api_id = str(uuid.uuid4())
 
@@ -211,7 +244,7 @@ async def create_api(
         logger.info(f"Created API {api.name} for tenant {tenant_id} by {user.username}")
 
         return APIResponse(
-            id=api_id,
+            id=api.name,
             tenant_id=tenant_id,
             name=api.name,
             display_name=api.display_name,
@@ -231,7 +264,7 @@ async def create_api(
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to create API {api.name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create API: {e!s}")
+        raise HTTPException(status_code=500, detail="Failed to create API. Please try again or contact support.")
 
 
 @router.put("/{api_id}", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
@@ -239,6 +272,7 @@ async def create_api(
 @require_tenant_access
 async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = Depends(get_current_user)):
     """Update API in GitLab"""
+    _require_git_service()
     try:
         # Get current API
         current = await git_service.get_api(tenant_id, api_id)
@@ -281,7 +315,7 @@ async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = D
         raise
     except Exception as e:
         logger.error(f"Failed to update API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update API: {e!s}")
+        raise HTTPException(status_code=500, detail="Failed to update API. Please try again or contact support.")
 
 
 @router.delete("/{api_id}", dependencies=[Depends(require_writable_environment)])
@@ -289,6 +323,7 @@ async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = D
 @require_tenant_access
 async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_current_user)):
     """Delete API from GitLab"""
+    _require_git_service()
     try:
         # Verify API exists
         api_data = await git_service.get_api(tenant_id, api_id)
@@ -323,4 +358,31 @@ async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_curre
         raise
     except Exception as e:
         logger.error(f"Failed to delete API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete API: {e!s}")
+        raise HTTPException(status_code=500, detail="Failed to delete API. Please try again or contact support.")
+
+
+@router.get("/{api_id}/versions", response_model=list[APIVersionEntry])
+@require_tenant_access
+async def list_api_versions(
+    tenant_id: str,
+    api_id: str,
+    limit: int = Query(default=20, ge=1, le=100, description="Max commits to return"),
+    user: User = Depends(get_current_user),
+):
+    """List version history (git commits) for a specific API."""
+    _require_git_service()
+    try:
+        # Verify API exists
+        api_data = await git_service.get_api(tenant_id, api_id)
+        if not api_data:
+            raise HTTPException(status_code=404, detail="API not found")
+
+        # Get commits for this API's directory in the tenant repo
+        api_path = f"tenants/{tenant_id}/apis/{api_id}"
+        commits = await git_service.list_commits(path=api_path, limit=limit)
+        return [APIVersionEntry(**c) for c in commits]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list versions for API {api_id}: {e}")
+        return []

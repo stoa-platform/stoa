@@ -97,12 +97,17 @@ pub struct OidcConfig {
 }
 
 /// HTTP client that proxies MCP tool operations to the Control Plane.
-/// Authenticates via OIDC client credentials flow (Keycloak).
+/// Authenticates via OIDC client credentials flow (Keycloak) or X-Gateway-Key
+/// for internal endpoints (CAB-1817).
 #[derive(Clone)]
 pub struct ToolProxyClient {
     client: Client,
     base_url: String,
     oidc: Option<OidcConfig>,
+    /// Gateway API key for internal endpoints (X-Gateway-Key auth).
+    /// When set, tool discovery uses /v1/internal/gateways/ endpoints
+    /// instead of /v1/mcp/ endpoints that require user JWT.
+    api_key: Option<String>,
     token_cache: Arc<RwLock<Option<CachedToken>>>,
     /// Per-upstream circuit breaker registry for CP resilience (CAB-1542 Phase 2).
     cb_registry: Option<Arc<CircuitBreakerRegistry>>,
@@ -122,9 +127,18 @@ impl ToolProxyClient {
                 .expect("HTTP client"),
             base_url: base_url.trim_end_matches('/').to_string(),
             oidc,
+            api_key: None,
             token_cache: Arc::new(RwLock::new(None)),
             cb_registry: None,
         }
+    }
+
+    /// Set the gateway API key for internal endpoint auth (CAB-1817).
+    /// When set, discover_generated_tools uses /v1/internal/gateways/tools/generated
+    /// with X-Gateway-Key header instead of OIDC Bearer token.
+    pub fn with_api_key(mut self, api_key: String) -> Self {
+        self.api_key = Some(api_key);
+        self
     }
 
     /// Enable circuit breaker + retry for CP operations (CAB-1542 Phase 2).
@@ -224,6 +238,10 @@ impl ToolProxyClient {
     }
 
     async fn discover_tools_inner(&self) -> Result<Vec<RemoteToolDef>, String> {
+        // Prefer internal endpoint with API key (CAB-1817: sidecars don't have OIDC)
+        if let Some(ref key) = self.api_key {
+            return self.discover_with_api_key(key).await;
+        }
         if self.oidc.is_some() {
             // When OIDC is configured, use authenticated discovery only.
             // Unauthenticated fallback would always 401 since the endpoint requires auth.
@@ -231,6 +249,32 @@ impl ToolProxyClient {
         } else {
             self.discover_unauthenticated().await
         }
+    }
+
+    async fn discover_with_api_key(&self, api_key: &str) -> Result<Vec<RemoteToolDef>, String> {
+        let url = format!("{}/v1/internal/gateways/tools", self.base_url);
+        debug!(url = %url, "Discovering tools (internal, API key)");
+
+        let resp = self
+            .client
+            .get(&url)
+            .header("X-Gateway-Key", api_key)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Internal discovery error {}: {}", status, body));
+        }
+
+        let list: ToolsListResponse = resp.json().await.map_err(|e| e.to_string())?;
+        info!(
+            count = list.tools.len(),
+            "Discovered tools (internal, API key)"
+        );
+        Ok(list.tools)
     }
 
     async fn discover_authenticated(&self) -> Result<Vec<RemoteToolDef>, String> {
@@ -282,12 +326,51 @@ impl ToolProxyClient {
 
     /// Discover UAC-generated tools for a tenant from the Control Plane (CAB-605/606).
     ///
-    /// Calls GET /v1/mcp/generated-tools?tenant_id=X to fetch tools that were
-    /// dynamically generated from UAC contracts via UacToolGenerator.
+    /// Strategy (CAB-1817):
+    /// 1. If API key configured → use internal endpoint with X-Gateway-Key auth
+    /// 2. Else if OIDC configured → use user-facing endpoint with Bearer token
+    /// 3. Fallback → unauthenticated request (will 401 on protected endpoints)
     pub async fn discover_generated_tools(
         &self,
         tenant_id: &str,
     ) -> Result<Vec<GeneratedToolDef>, String> {
+        // Prefer internal endpoint with API key (CAB-1817: sidecars don't have OIDC)
+        if let Some(ref key) = self.api_key {
+            let url = format!(
+                "{}/v1/internal/gateways/tools/generated?tenant_id={}",
+                self.base_url, tenant_id
+            );
+            debug!(url = %url, tenant_id, "Discovering UAC-generated tools (internal, API key)");
+
+            let resp = self
+                .client
+                .get(&url)
+                .header("X-Gateway-Key", key.as_str())
+                .send()
+                .await
+                .map_err(|e| {
+                    warn!(tenant_id, error = %e, "Failed to discover generated tools (internal)");
+                    e.to_string()
+                })?;
+
+            if !resp.status().is_success() {
+                let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
+                return Err(format!(
+                    "Generated tools discovery error {}: {}",
+                    status, body
+                ));
+            }
+
+            let list: GeneratedToolsResponse = resp.json().await.map_err(|e| e.to_string())?;
+            info!(
+                count = list.tools.len(),
+                tenant_id, "Discovered UAC-generated tools (internal)"
+            );
+            return Ok(list.tools.into_iter().filter(|t| t.enabled).collect());
+        }
+
+        // Fallback: user-facing endpoint with OIDC token
         let url = format!(
             "{}/v1/mcp/generated-tools?tenant_id={}",
             self.base_url, tenant_id
@@ -916,6 +999,125 @@ mod tests {
 
         let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
         let result = client.get_token().await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("401"));
+    }
+
+    // === CAB-1817: API key auth for internal tool discovery ===
+
+    #[test]
+    fn test_with_api_key_sets_field() {
+        let client = ToolProxyClient::new("http://localhost:8000", None)
+            .with_api_key("gw-secret-key".to_string());
+        assert_eq!(client.api_key.as_deref(), Some("gw-secret-key"));
+    }
+
+    #[test]
+    fn test_without_api_key_field_is_none() {
+        let client = ToolProxyClient::new("http://localhost:8000", None);
+        assert!(client.api_key.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_discover_tools_with_api_key() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/gateways/tools"))
+            .and(header("X-Gateway-Key", "gw-key-123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [
+                    {"name": "tool_a", "description": "A", "inputSchema": {}},
+                    {"name": "tool_b", "description": "B", "inputSchema": {}}
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client =
+            ToolProxyClient::new(&mock_server.uri(), None).with_api_key("gw-key-123".to_string());
+        let tools = client.discover_tools().await.unwrap();
+        assert_eq!(tools.len(), 2);
+        assert_eq!(tools[0].name, "tool_a");
+    }
+
+    #[tokio::test]
+    async fn test_discover_tools_api_key_preferred_over_oidc() {
+        let mock_server = MockServer::start().await;
+
+        // Internal endpoint (should be called)
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/gateways/tools"))
+            .and(header("X-Gateway-Key", "gw-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [{"name": "internal_tool", "description": "I", "inputSchema": {}}]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        // OIDC endpoint (should NOT be called)
+        Mock::given(method("GET"))
+            .and(path("/v1/mcp/tools"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [{"name": "oidc_tool", "description": "O", "inputSchema": {}}]
+            })))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        let oidc = OidcConfig {
+            token_url: format!("{}/token", mock_server.uri()),
+            client_id: "gw".to_string(),
+            client_secret: "secret".to_string(),
+        };
+
+        let client =
+            ToolProxyClient::new(&mock_server.uri(), Some(oidc)).with_api_key("gw-key".to_string());
+        let tools = client.discover_tools().await.unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "internal_tool");
+    }
+
+    #[tokio::test]
+    async fn test_discover_generated_tools_with_api_key() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/gateways/tools/generated"))
+            .and(header("X-Gateway-Key", "gw-key-123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tenant_id": "acme",
+                "tools": [
+                    {"tool_name": "acme:billing:create", "version": "1.0", "enabled": true},
+                    {"tool_name": "acme:billing:disabled", "version": "1.0", "enabled": false}
+                ],
+                "total": 2
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client =
+            ToolProxyClient::new(&mock_server.uri(), None).with_api_key("gw-key-123".to_string());
+        let tools = client.discover_generated_tools("acme").await.unwrap();
+        // Only enabled tools returned
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].tool_name, "acme:billing:create");
+    }
+
+    #[tokio::test]
+    async fn test_discover_tools_api_key_401_propagated() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/gateways/tools"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Invalid gateway key"))
+            .mount(&mock_server)
+            .await;
+
+        let client =
+            ToolProxyClient::new(&mock_server.uri(), None).with_api_key("bad-key".to_string());
+        let result = client.discover_tools().await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("401"));
     }

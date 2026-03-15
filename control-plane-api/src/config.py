@@ -142,6 +142,9 @@ class Settings(BaseSettings):
     # Chat Agent — Anthropic integration (CAB-286)
     CHAT_ENABLED: bool = False
     CHAT_PROVIDER_API_KEY: str = ""  # Anthropic key — via Infisical
+    # Gateway routing (CAB-1822) — when set, chat routes through Stoa Gateway LLM proxy
+    CHAT_GATEWAY_URL: str = ""  # e.g. http://stoa-gateway.stoa-system.svc.cluster.local:80
+    CHAT_GATEWAY_API_KEY: str = ""  # STOA consumer API key for gateway auth
 
     # Docs Search — Semantic / Embedding (CAB-1327 Phase 2)
     EMBEDDING_PROVIDER: str = "openai"  # openai | none

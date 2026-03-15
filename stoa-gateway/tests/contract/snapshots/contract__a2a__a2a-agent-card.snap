@@ -1,0 +1,71 @@
+---
+source: tests/contract/a2a.rs
+expression: json
+---
+{
+  "authentication": {
+    "schemes": [
+      "bearer",
+      "apiKey"
+    ]
+  },
+  "capabilities": {
+    "pushNotifications": false,
+    "stateTransitionHistory": true,
+    "streaming": false
+  },
+  "description": "European Agent Gateway — A2A proxy with governance, auth, rate limiting, and audit trail. Routes inter-agent tasks through policy enforcement.",
+  "name": "STOA Gateway",
+  "protocolVersion": "1.0",
+  "provider": {
+    "organization": "STOA Platform",
+    "url": "https://gostoa.dev"
+  },
+  "skills": [
+    {
+      "description": "Bridge MCP tools as A2A skills — any registered MCP tool can be invoked via the A2A protocol.",
+      "examples": [
+        "List available tools",
+        "Call a REST API tool"
+      ],
+      "id": "mcp-bridge",
+      "inputModes": [
+        "text",
+        "data"
+      ],
+      "name": "MCP Tool Bridge",
+      "outputModes": [
+        "text",
+        "data"
+      ],
+      "tags": [
+        "mcp",
+        "bridge",
+        "tools"
+      ]
+    },
+    {
+      "description": "Route tasks to registered downstream agents with governance policies (auth, rate limiting, audit).",
+      "examples": [
+        "Send a task to agent X"
+      ],
+      "id": "agent-routing",
+      "inputModes": [
+        "text",
+        "data",
+        "file"
+      ],
+      "name": "Agent Routing",
+      "outputModes": [
+        "text",
+        "data",
+        "file"
+      ],
+      "tags": [
+        "routing",
+        "governance"
+      ]
+    }
+  ],
+  "url": "[url]"
+}

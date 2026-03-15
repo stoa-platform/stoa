@@ -6,6 +6,7 @@ import type {
   TenantCreate,
   API,
   APICreate,
+  APIVersionEntry,
   Application,
   ApplicationCreate,
   Consumer,
@@ -266,6 +267,13 @@ class ApiService {
     await this.client.delete(`/v1/tenants/${tenantId}/apis/${apiId}`);
   }
 
+  async getApiVersions(tenantId: string, apiId: string, limit = 20): Promise<APIVersionEntry[]> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis/${apiId}/versions`, {
+      params: { limit },
+    });
+    return data;
+  }
+
   async updateApiAudience(
     tenantId: string,
     apiId: string,
@@ -275,6 +283,10 @@ class ApiService {
       audience,
     });
     return data;
+  }
+
+  async triggerCatalogSync(tenantId: string): Promise<void> {
+    await this.client.post(`/v1/admin/catalog/sync/tenant/${tenantId}`);
   }
 
   // Applications

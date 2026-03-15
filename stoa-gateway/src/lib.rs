@@ -13,10 +13,13 @@ pub mod events;
 pub mod federation;
 pub mod git;
 pub mod governance;
+pub mod graphql;
+pub mod grpc;
 pub mod guardrails;
 pub mod handlers;
 pub mod hegemon;
 pub mod k8s;
+pub mod kafka;
 pub mod llm;
 pub mod mcp;
 pub mod metering;
@@ -24,20 +27,24 @@ pub mod metrics;
 pub mod mode;
 pub mod oauth;
 pub mod optimization;
+pub mod plugin;
 pub mod policy;
 pub mod proxy;
 pub mod quota;
+pub mod rag;
 pub mod rate_limit;
 pub mod resilience;
 pub mod routes;
 pub mod security_headers;
 pub mod shadow;
 pub mod skills;
+pub mod soap;
 pub mod state;
 pub mod supervision;
 pub mod telemetry;
 pub mod trace_context;
 pub mod uac;
+pub mod ws;
 
 use axum::{
     routing::{delete, get, post},
@@ -208,6 +215,15 @@ pub fn build_router(state: AppState) -> Router {
         .route("/hegemon/events", get(hegemon::metering::list_events))
         // CAB-1709 P6: HEGEMON messaging admin
         .route("/hegemon/messages", get(hegemon::messaging::list_inboxes))
+        // CAB-1754: A2A agent registry admin
+        .route(
+            "/a2a/agents",
+            get(a2a::admin::list_agents).post(a2a::admin::register_agent),
+        )
+        .route(
+            "/a2a/agents/:name",
+            get(a2a::admin::get_agent).delete(a2a::admin::unregister_agent),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -371,6 +387,10 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/.well-known/agent.json", get(a2a::discovery::agent_card))
                 .route("/a2a", post(a2a::handlers::a2a_handler))
                 .route("/a2a/agents", get(a2a::discovery::list_agents))
+                // WebSocket Proxy (CAB-1758): bidirectional relay with governance
+                .route("/ws/:route_id", get(ws::proxy::ws_proxy_upgrade))
+                // SOAP Proxy (CAB-1762): passthrough with auth + fault detection
+                .route("/soap/:route_id", post(soap::proxy::soap_proxy))
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Security profile enforcement: per-subscription DPoP/mTLS (CAB-1744)

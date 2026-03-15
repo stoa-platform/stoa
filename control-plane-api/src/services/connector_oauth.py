@@ -70,6 +70,7 @@ class ConnectorOAuthService:
         tenant_id: str | None,
         redirect_after: str | None = None,
         redirect_uri: str = "",
+        client_secret: str | None = None,
     ) -> tuple[str, str]:
         """Build the OAuth authorize URL and save CSRF state.
 
@@ -79,6 +80,7 @@ class ConnectorOAuthService:
             tenant_id: Tenant to connect for (None = platform-wide)
             redirect_after: UI URL to redirect after callback
             redirect_uri: The callback URL registered with the provider
+            client_secret: Provider client_secret from setup dialog (non-DCR providers)
 
         Returns:
             Tuple of (authorize_url, state_token)
@@ -94,11 +96,24 @@ class ConnectorOAuthService:
                 status_code=409,
             )
 
-        # Resolve provider client_id: template column → env var → Vault (fallback)
+        # Resolve provider client_id: DCR → template column → env var → Vault
         client_id = self._resolve_client_id(template)
+        if not client_id and template.oauth_registration_url:
+            # Dynamic Client Registration (RFC 7591) — one-click connect
+            client_id = await self._dynamic_client_registration(
+                registration_url=template.oauth_registration_url,
+                redirect_uri=redirect_uri,
+                client_name=f"STOA Platform ({template.slug})",
+            )
+            # Cache the DCR client_id in the template for future authorizations
+            template.oauth_client_id = client_id
+            self.template_repo.session.add(template)
+            logger.info("DCR: registered client for '%s', client_id cached", template.slug)
+
         if not client_id:
             raise ConnectorOAuthError(
-                f"Provider credentials not configured for '{template.slug}'",
+                f"Provider credentials not configured for '{template.slug}'. "
+                "This connector requires manual OAuth app setup.",
                 status_code=503,
             )
 
@@ -120,6 +135,7 @@ class ConnectorOAuthService:
             user_id=user_id,
             tenant_id=tenant_id,
             code_verifier=code_verifier,
+            client_secret=client_secret,
             redirect_after=redirect_after,
             created_at=datetime.utcnow(),
             expires_at=datetime.utcnow() + timedelta(minutes=STATE_EXPIRY_MINUTES),
@@ -183,15 +199,18 @@ class ConnectorOAuthService:
 
         redirect_after = pending.redirect_after
         code_verifier = pending.code_verifier
+        pending_client_secret = pending.client_secret
         user_id = pending.user_id
         tenant_id = pending.tenant_id
 
         # Delete session immediately (single-use)
         await self.session_repo.delete(pending)
 
-        # Resolve provider credentials: template/env → Vault fallback
+        # Resolve provider credentials: template/env → Vault → pending session fallback
         client_id = self._resolve_client_id(template)
         client_secret = self._resolve_client_secret(template)
+        if not client_secret and pending_client_secret:
+            client_secret = pending_client_secret
 
         # Exchange code for tokens
         tokens = await self._exchange_code_for_tokens(
@@ -201,6 +220,7 @@ class ConnectorOAuthService:
             client_secret=client_secret,
             redirect_uri=redirect_uri,
             code_verifier=code_verifier,
+            slug=template.slug,
         )
 
         # Create ExternalMCPServer
@@ -249,6 +269,111 @@ class ConnectorOAuthService:
         )
 
         return server, redirect_after
+
+    # High-risk connectors that require explicit confirmation for production promotion
+    HIGH_RISK_SLUGS = {"stripe", "cloudflare"}
+
+    async def promote(
+        self,
+        template: MCPConnectorTemplate,
+        tenant_id: str | None,
+        source_environment: str,
+        target_environment: str,
+        user_id: str,
+    ) -> ExternalMCPServer:
+        """Promote a connector from one environment to another.
+
+        Clones the server record and Vault credentials to the target environment.
+        Idempotent: if already promoted, updates the existing record.
+
+        Args:
+            template: The connector template
+            tenant_id: Tenant to promote for
+            source_environment: Source environment (e.g., "dev")
+            target_environment: Target environment (e.g., "staging", "production")
+            user_id: User performing the promotion
+
+        Returns:
+            The created/updated server in the target environment
+
+        Raises:
+            ConnectorOAuthError: If source not connected or clone fails
+        """
+        # Find source server
+        source = await self.connector_server_repo.get_by_template_and_tenant(
+            template.id, tenant_id, environment=source_environment
+        )
+        if not source:
+            raise ConnectorOAuthError(
+                f"Connector '{template.slug}' is not connected in '{source_environment}'",
+                status_code=404,
+            )
+
+        # Check if target already exists (idempotent)
+        existing = await self.connector_server_repo.get_by_template_and_tenant(
+            template.id, tenant_id, environment=target_environment
+        )
+
+        # Clone Vault credentials to a new path for the target environment
+        target_vault_path = None
+        if source.credential_vault_path:
+            try:
+                vault = get_vault_client()
+                source_creds = await vault.retrieve_credential(str(source.id))
+                if source_creds:
+                    target_server_id = str(existing.id) if existing else str(uuid.uuid4())
+                    target_vault_path = await vault.store_credential(target_server_id, source_creds)
+            except Exception as e:
+                logger.warning(
+                    "Failed to clone Vault credentials for promote '%s' %s→%s: %s",
+                    template.slug,
+                    source_environment,
+                    target_environment,
+                    e,
+                )
+
+        if existing:
+            # Update existing — idempotent promote
+            existing.credential_vault_path = target_vault_path or existing.credential_vault_path
+            self.server_repo.session.add(existing)
+            server = existing
+            logger.info(
+                "Updated promoted connector '%s' in '%s'",
+                template.slug,
+                target_environment,
+                extra={"server_id": str(server.id), "user_id": user_id},
+            )
+        else:
+            # Create new server in target environment
+            tenant_suffix = f"-{tenant_id[:8]}" if tenant_id else ""
+            server_name = f"{template.slug}{tenant_suffix}-{target_environment}"
+
+            server = ExternalMCPServer(
+                id=uuid.uuid4() if not target_vault_path else uuid.UUID(target_server_id),
+                name=server_name,
+                display_name=f"{template.display_name} ({target_environment})",
+                description=template.description,
+                icon=template.icon_url,
+                base_url=template.mcp_base_url,
+                transport=ExternalMCPTransport(template.transport),
+                auth_type=ExternalMCPAuthType.OAUTH2,
+                tool_prefix=template.slug,
+                tenant_id=tenant_id,
+                environment=target_environment,
+                created_by=user_id,
+                connector_template_id=template.id,
+                credential_vault_path=target_vault_path,
+            )
+            server = await self.server_repo.create(server)
+            logger.info(
+                "Promoted connector '%s' from '%s' to '%s'",
+                template.slug,
+                source_environment,
+                target_environment,
+                extra={"server_id": str(server.id), "user_id": user_id},
+            )
+
+        return server
 
     async def disconnect(
         self,
@@ -357,6 +482,59 @@ class ConnectorOAuthService:
             logger.warning("Failed to retrieve provider credentials for '%s': %s", slug, e)
             return {}
 
+    async def _dynamic_client_registration(
+        self,
+        registration_url: str,
+        redirect_uri: str,
+        client_name: str = "STOA Platform",
+    ) -> str:
+        """Register a client dynamically via RFC 7591 (MCP OAuth DCR).
+
+        Used by providers like Linear and Sentry that expose a registration
+        endpoint in their MCP OAuth metadata.
+
+        Returns:
+            The dynamically assigned client_id.
+        """
+        payload = {
+            "client_name": client_name,
+            "redirect_uris": [redirect_uri],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "none",
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                registration_url,
+                json=payload,
+                headers={"Accept": "application/json"},
+            )
+
+        if response.status_code not in (200, 201):
+            logger.error(
+                "DCR failed at %s: %s %s",
+                registration_url,
+                response.status_code,
+                response.text[:300],
+            )
+            raise ConnectorOAuthError(
+                f"Dynamic client registration failed (HTTP {response.status_code})",
+                status_code=502,
+            )
+
+        data = response.json()
+        client_id = data.get("client_id")
+        if not client_id:
+            raise ConnectorOAuthError("DCR response missing client_id", status_code=502)
+
+        logger.info(
+            "DCR success at %s: client_id=%s",
+            registration_url,
+            client_id[:12] + "...",
+        )
+        return client_id
+
     async def _exchange_code_for_tokens(
         self,
         token_url: str,
@@ -365,25 +543,42 @@ class ConnectorOAuthService:
         client_secret: str,
         redirect_uri: str,
         code_verifier: str | None = None,
+        slug: str = "",
     ) -> dict[str, Any]:
-        """Exchange an authorization code for access/refresh tokens."""
-        data: dict[str, str] = {
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": client_id,
-        }
-        if client_secret:
-            data["client_secret"] = client_secret
-        if code_verifier:
-            data["code_verifier"] = code_verifier
+        """Exchange an authorization code for access/refresh tokens.
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                token_url,
-                data=data,
-                headers={"Accept": "application/json"},
-            )
+        Most providers accept standard form POST with client_id/client_secret in the body.
+        Notion requires HTTP Basic auth + JSON body (their API rejects form-encoded).
+        """
+        headers: dict[str, str] = {"Accept": "application/json"}
+
+        # Notion uses Basic auth + JSON body (not standard form POST)
+        if slug == "notion":
+            import base64 as b64
+
+            credentials = b64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+            headers["Authorization"] = f"Basic {credentials}"
+            headers["Content-Type"] = "application/json"
+            json_body: dict[str, str] = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+            }
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(token_url, json=json_body, headers=headers)
+        else:
+            data: dict[str, str] = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": client_id,
+            }
+            if client_secret:
+                data["client_secret"] = client_secret
+            if code_verifier:
+                data["code_verifier"] = code_verifier
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(token_url, data=data, headers=headers)
 
         if response.status_code != 200:
             logger.error(

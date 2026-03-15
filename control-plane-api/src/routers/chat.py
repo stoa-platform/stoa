@@ -338,22 +338,51 @@ async def send_message(
         )
     record_event(user.id, tenant_id, "message")
 
-    api_key = request.headers.get("X-Provider-Api-Key", "")
-    if not api_key:
-        api_key = await svc.get_tenant_api_key(tenant_id) or ""
-    if not api_key:
-        api_key = settings.CHAT_PROVIDER_API_KEY
-    if not api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="No API key: set X-Provider-Api-Key header or configure tenant key via PUT /provider-key",
-        )
+    # Provider selection: gateway mode (CAB-1822) vs direct Anthropic
+    use_gateway = bool(settings.CHAT_GATEWAY_URL and settings.CHAT_GATEWAY_API_KEY)
+
+    if use_gateway:
+        # Gateway handles Anthropic API key injection — use STOA consumer key for auth
+        api_key = settings.CHAT_GATEWAY_API_KEY
+    else:
+        # Direct mode: resolve Anthropic API key from header → tenant → global config
+        api_key = request.headers.get("X-Provider-Api-Key", "")
+        if not api_key:
+            api_key = await svc.get_tenant_api_key(tenant_id) or ""
+        if not api_key:
+            api_key = settings.CHAT_PROVIDER_API_KEY
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="No API key: set X-Provider-Api-Key header or configure tenant key via PUT /provider-key",
+            )
 
     ip = request.client.host if request.client else ""
     user_agent = request.headers.get("User-Agent", "")
     fingerprint = compute_session_fingerprint(ip, user_agent) if ip else None
 
     async def event_generator():  # type: ignore[return]
+        # Handle tool confirmation flow (CAB-1816 Phase 2)
+        if body.tool_confirmation:
+            tc = body.tool_confirmation
+            async for event in svc.execute_confirmed_tool(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                user_id=user.id,
+                tool_name=tc.tool_name,
+                tool_input=tc.tool_input,
+                approved=tc.approved,
+                user_roles=user.roles,
+                client_ip=ip or None,
+            ):
+                if await request.is_disconnected():
+                    break
+                yield {
+                    "event": event.get("event", "message"),
+                    "data": json.dumps(event.get("data", {})),
+                }
+            return
+
         async for event in svc.send_message(
             conversation_id=conversation_id,
             tenant_id=tenant_id,

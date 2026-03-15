@@ -1,0 +1,28 @@
+[Unit]
+Description=STOA Connect Agent — bridges third-party gateways to Control Plane
+Documentation=https://docs.gostoa.dev/concepts/gateway
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/opt/secrets/stoa-connect.env
+Environment=STOA_INSTANCE_NAME=%H
+Environment=STOA_ENVIRONMENT=production
+Environment=STOA_HEARTBEAT_INTERVAL=30s
+ExecStart=/usr/local/bin/stoa-connect
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stoa-connect
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/
+
+[Install]
+WantedBy=multi-user.target

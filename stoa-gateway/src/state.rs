@@ -211,9 +211,12 @@ impl AppState {
         let circuit_breakers = Arc::new(CircuitBreakerRegistry::new(cb_config));
         tracing::info!("Per-upstream circuit breaker registry initialized");
 
-        let control_plane = Arc::new(
-            ToolProxyClient::new(cp_url, oidc).with_circuit_breakers(circuit_breakers.clone()),
-        );
+        let mut tool_proxy = ToolProxyClient::new(cp_url, oidc);
+        // Pass API key for internal tool discovery (CAB-1817: sidecars use X-Gateway-Key)
+        if let Some(ref key) = config.control_plane_api_key {
+            tool_proxy = tool_proxy.with_api_key(key.clone());
+        }
+        let control_plane = Arc::new(tool_proxy.with_circuit_breakers(circuit_breakers.clone()));
         let route_registry = Arc::new(RouteRegistry::new());
         let policy_registry = Arc::new(PolicyRegistry::new());
 

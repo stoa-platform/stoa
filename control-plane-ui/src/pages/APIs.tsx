@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiService } from '../services/api';
@@ -34,6 +35,7 @@ export function APIs() {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const toast = useToastActions();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [confirm, ConfirmDialog] = useConfirm();
   const { celebrate } = useCelebration();
   const [selectedTenant, setSelectedTenant] = useState<string>('');
@@ -134,6 +136,7 @@ export function APIs() {
         if (deployToDev) {
           await apiService.createDeployment(selectedTenant, {
             api_id: created.id,
+            api_name: api.name,
             environment: 'dev',
             version: api.version,
           });
@@ -196,6 +199,7 @@ export function APIs() {
       try {
         await apiService.createDeployment(selectedTenant, {
           api_id: api.id,
+          api_name: api.name,
           environment,
           version: api.version,
         });
@@ -486,7 +490,11 @@ export function APIs() {
               </thead>
               <tbody className="bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700">
                 {paginatedApis.map((api) => (
-                  <tr key={api.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                  <tr
+                    key={api.id}
+                    className="hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
+                    onClick={() => navigate(`/apis/${selectedTenant}/${api.name}`)}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-neutral-900 dark:text-white">
@@ -539,7 +547,10 @@ export function APIs() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <td
+                      className="px-6 py-4 whitespace-nowrap text-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div className="flex gap-2">
                         {canDeploy && (
                           <>
@@ -646,7 +657,7 @@ export function APIs() {
 interface APIFormModalProps {
   api?: API;
   onClose: () => void;
-  onSubmit: (data: APICreate, deployToDev: boolean) => void;
+  onSubmit: (data: APICreate, deployToDev: boolean) => Promise<void>;
   title: string;
   isEdit?: boolean;
 }
@@ -656,6 +667,7 @@ type CreateMode = 'manual' | 'openapi';
 function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalProps) {
   const [mode, setMode] = useState<CreateMode>('manual');
   const [deployToDev, setDeployToDev] = useState(!isEdit);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<APICreate>({
     name: api?.name || '',
     display_name: api?.display_name || '',
@@ -741,8 +753,9 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     // Build tags array based on portal_promoted flag
     const tags = [...(formData.tags || [])].filter((tag) => tag !== 'portal:published');
@@ -755,7 +768,12 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
       tags,
     };
 
-    onSubmit(submitData, deployToDev);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(submitData, deployToDev);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1080,7 +1098,7 @@ paths:
             <Button variant="secondary" type="button" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit">
+            <Button type="submit" loading={isSubmitting}>
               {isEdit ? 'Update API' : deployToDev ? 'Create & Deploy' : 'Create API'}
             </Button>
           </div>

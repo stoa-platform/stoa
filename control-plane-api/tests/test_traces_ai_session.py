@@ -403,3 +403,126 @@ class TestAISessionStats:
             resp = client.get("/v1/traces/stats/ai-sessions?days=0")
 
         assert resp.status_code == 422
+
+
+class TestCostAlertDedup:
+    """Tests for cost alert deduplication (CAB-1691)."""
+
+    def test_ingest_sends_alert_and_records(self, app_with_cpi_admin, mock_db_session):
+        """Alert is sent and recorded on first threshold breach."""
+        trace = _make_trace()
+        mock_svc = MagicMock()
+        mock_svc.create = AsyncMock(return_value=trace)
+        mock_svc.add_step = AsyncMock(return_value=trace)
+        mock_svc.complete = AsyncMock(return_value=trace)
+        mock_svc.get = AsyncMock(return_value=trace)
+        mock_svc.session.commit = AsyncMock()
+        mock_svc.check_cost_alert = AsyncMock(
+            return_value={"alert": True, "today_cost_usd": 55.0, "threshold_usd": 50.0, "sessions_today": 20}
+        )
+        mock_svc.send_cost_alert_slack = AsyncMock(return_value=True)
+        mock_svc.record_cost_alert = AsyncMock()
+        mock_svc.push_cost_metrics = AsyncMock(return_value=True)
+
+        with (
+            patch(SVC_PATH, return_value=mock_svc),
+            patch(INGEST_KEY_PATH, "test-key"),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.post(
+                "/v1/traces/ingest",
+                json=VALID_INGEST_BODY,
+                headers={"X-STOA-API-KEY": "test-key"},
+            )
+
+        assert resp.status_code == 200
+        mock_svc.send_cost_alert_slack.assert_called_once()
+        mock_svc.record_cost_alert.assert_called_once()
+
+    def test_ingest_no_alert_when_below_threshold(self, app_with_cpi_admin, mock_db_session):
+        """No alert sent when cost is below threshold."""
+        trace = _make_trace()
+        mock_svc = MagicMock()
+        mock_svc.create = AsyncMock(return_value=trace)
+        mock_svc.add_step = AsyncMock(return_value=trace)
+        mock_svc.complete = AsyncMock(return_value=trace)
+        mock_svc.get = AsyncMock(return_value=trace)
+        mock_svc.session.commit = AsyncMock()
+        mock_svc.check_cost_alert = AsyncMock(return_value=None)
+        mock_svc.push_cost_metrics = AsyncMock(return_value=True)
+
+        with (
+            patch(SVC_PATH, return_value=mock_svc),
+            patch(INGEST_KEY_PATH, "test-key"),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.post(
+                "/v1/traces/ingest",
+                json=VALID_INGEST_BODY,
+                headers={"X-STOA-API-KEY": "test-key"},
+            )
+
+        assert resp.status_code == 200
+        mock_svc.send_cost_alert_slack.assert_not_called()
+        mock_svc.record_cost_alert.assert_not_called()
+
+    def test_ingest_no_record_when_slack_fails(self, app_with_cpi_admin, mock_db_session):
+        """Alert is NOT recorded if Slack send fails (so it retries next ingest)."""
+        trace = _make_trace()
+        mock_svc = MagicMock()
+        mock_svc.create = AsyncMock(return_value=trace)
+        mock_svc.add_step = AsyncMock(return_value=trace)
+        mock_svc.complete = AsyncMock(return_value=trace)
+        mock_svc.get = AsyncMock(return_value=trace)
+        mock_svc.session.commit = AsyncMock()
+        mock_svc.check_cost_alert = AsyncMock(
+            return_value={"alert": True, "today_cost_usd": 55.0, "threshold_usd": 50.0, "sessions_today": 20}
+        )
+        mock_svc.send_cost_alert_slack = AsyncMock(return_value=False)
+        mock_svc.record_cost_alert = AsyncMock()
+        mock_svc.push_cost_metrics = AsyncMock(return_value=True)
+
+        with (
+            patch(SVC_PATH, return_value=mock_svc),
+            patch(INGEST_KEY_PATH, "test-key"),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.post(
+                "/v1/traces/ingest",
+                json=VALID_INGEST_BODY,
+                headers={"X-STOA-API-KEY": "test-key"},
+            )
+
+        assert resp.status_code == 200
+        mock_svc.send_cost_alert_slack.assert_called_once()
+        mock_svc.record_cost_alert.assert_not_called()
+
+
+class TestPushgatewayPerWorker:
+    """Tests for per-worker Pushgateway metrics (CAB-1695)."""
+
+    def test_ingest_triggers_pushgateway(self, app_with_cpi_admin, mock_db_session):
+        """Ingest triggers push_cost_metrics."""
+        trace = _make_trace()
+        mock_svc = MagicMock()
+        mock_svc.create = AsyncMock(return_value=trace)
+        mock_svc.add_step = AsyncMock(return_value=trace)
+        mock_svc.complete = AsyncMock(return_value=trace)
+        mock_svc.get = AsyncMock(return_value=trace)
+        mock_svc.session.commit = AsyncMock()
+        mock_svc.check_cost_alert = AsyncMock(return_value=None)
+        mock_svc.push_cost_metrics = AsyncMock(return_value=True)
+
+        with (
+            patch(SVC_PATH, return_value=mock_svc),
+            patch(INGEST_KEY_PATH, "test-key"),
+            TestClient(app_with_cpi_admin) as client,
+        ):
+            resp = client.post(
+                "/v1/traces/ingest",
+                json=VALID_INGEST_BODY,
+                headers={"X-STOA-API-KEY": "test-key"},
+            )
+
+        assert resp.status_code == 200
+        mock_svc.push_cost_metrics.assert_called_once()

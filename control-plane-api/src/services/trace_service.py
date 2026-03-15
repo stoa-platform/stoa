@@ -449,7 +449,10 @@ class TraceService:
         return output.getvalue()
 
     async def check_cost_alert(self) -> dict | None:
-        """Check if today's cost exceeds threshold. Returns alert info or None."""
+        """Check if today's cost exceeds threshold.
+
+        Returns alert info or None. Deduplicates: max 1 alert per day (CAB-1691).
+        """
         today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         base_filter = [
             PipelineTraceDB.trigger_type == "ai-session",
@@ -464,6 +467,17 @@ class TraceService:
             today_cost += (meta.get("cost_usd", 0) if meta else 0) or 0
 
         if today_cost >= COST_ALERT_THRESHOLD_USD:
+            # Dedup: check if a cost-alert trace was already created today
+            alert_check = await self.session.execute(
+                select(func.count(PipelineTraceDB.id)).where(
+                    PipelineTraceDB.trigger_type == "cost-alert",
+                    PipelineTraceDB.created_at >= today_start,
+                )
+            )
+            if (alert_check.scalar() or 0) > 0:
+                logger.debug("Cost alert already sent today, skipping (dedup)")
+                return None
+
             return {
                 "alert": True,
                 "today_cost_usd": round(today_cost, 2),
@@ -472,8 +486,26 @@ class TraceService:
             }
         return None
 
+    async def record_cost_alert(self, alert: dict) -> None:
+        """Record a cost-alert trace to prevent duplicate alerts today."""
+        trace = PipelineTraceDB(
+            id=str(uuid.uuid4()),
+            trigger_type="cost-alert",
+            trigger_source="cost-monitor",
+            tenant_id="hegemon",
+            api_name="cost-alert",
+            environment="production",
+            status=TraceStatusDB.SUCCESS,
+            steps=[{"name": "alert-sent", "status": "success", "details": alert}],
+        )
+        self.session.add(trace)
+        await self.session.commit()
+
     async def push_cost_metrics(self) -> bool:
-        """Push aggregated cost metrics to Pushgateway."""
+        """Push aggregated cost metrics to Pushgateway.
+
+        Pushes total, per-worker, and per-model gauges for Grafana dashboards.
+        """
         if not PUSHGATEWAY_URL:
             logger.debug("PUSHGATEWAY_URL not configured, skipping metrics push")
             return False
@@ -498,6 +530,16 @@ class TraceService:
             "# TYPE hegemon_success_rate gauge\n"
             f'hegemon_success_rate {totals["success_rate"]}\n'
         )
+
+        # Per-worker metrics (CAB-1695)
+        for worker_stat in stats.get("workers", []):
+            worker_label = worker_stat["worker"].replace('"', '\\"')
+            metrics += (
+                f'hegemon_cost_by_worker_usd{{worker="{worker_label}"}} {worker_stat["total_cost_usd"]}\n'
+                f'hegemon_tokens_by_worker{{worker="{worker_label}"}} {worker_stat["total_tokens"]}\n'
+                f'hegemon_sessions_by_worker{{worker="{worker_label}"}} {worker_stat["sessions"]}\n'
+                f'hegemon_success_rate_by_worker{{worker="{worker_label}"}} {worker_stat["success_rate"]}\n'
+            )
 
         # Per-model metrics
         for model_stat in stats.get("by_model", []):

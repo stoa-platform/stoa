@@ -616,6 +616,8 @@ pub async fn mcp_tools_call(
         pii_redact: state.config.guardrails_pii_redact,
         injection_enabled: state.config.guardrails_injection_enabled,
         content_filter_enabled: state.config.guardrails_content_filter_enabled,
+        prompt_guard_enabled: state.config.prompt_guard_enabled,
+        prompt_guard_action: state.config.prompt_guard_action,
     };
     let guardrails_cfg = state
         .guardrail_policy_store

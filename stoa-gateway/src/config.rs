@@ -327,6 +327,38 @@ pub struct Config {
     #[serde(default)]
     pub guardrails_content_filter_enabled: bool,
 
+    // === Prompt Guard (CAB-1761) ===
+    /// Enable LLM prompt guard (jailbreak, injection, evasion detection)
+    /// Env: STOA_PROMPT_GUARD_ENABLED
+    #[serde(default)]
+    pub prompt_guard_enabled: bool,
+
+    /// Action when prompt guard detects a threat: block, warn, log_only
+    /// Env: STOA_PROMPT_GUARD_ACTION
+    #[serde(default)]
+    pub prompt_guard_action: crate::guardrails::PromptGuardAction,
+
+    // === RAG Injector (CAB-1761) ===
+    /// Enable RAG context injection for prompts
+    /// Env: STOA_RAG_INJECTOR_ENABLED
+    #[serde(default)]
+    pub rag_injector_enabled: bool,
+
+    /// Maximum RAG context length in characters
+    /// Env: STOA_RAG_MAX_CONTEXT_LENGTH
+    #[serde(default = "default_rag_max_context_length")]
+    pub rag_max_context_length: usize,
+
+    /// RAG source request timeout in milliseconds
+    /// Env: STOA_RAG_SOURCE_TIMEOUT_MS
+    #[serde(default = "default_rag_source_timeout_ms")]
+    pub rag_source_timeout_ms: u64,
+
+    /// Maximum number of RAG context chunks to include
+    /// Env: STOA_RAG_MAX_CHUNKS
+    #[serde(default = "default_rag_max_chunks")]
+    pub rag_max_chunks: usize,
+
     // === Token Budget (CAB-1337 Phase 2) ===
     /// Enable per-tenant token budget tracking
     /// Env: STOA_TOKEN_BUDGET_ENABLED
@@ -1017,6 +1049,18 @@ fn default_guardrails_pii_redact() -> bool {
     true // Redact by default (safer than rejecting)
 }
 
+fn default_rag_max_context_length() -> usize {
+    4096
+}
+
+fn default_rag_source_timeout_ms() -> u64 {
+    3000
+}
+
+fn default_rag_max_chunks() -> usize {
+    5
+}
+
 fn default_token_budget_limit() -> u64 {
     500_000 // 500K tokens per window (~2M chars)
 }
@@ -1197,6 +1241,12 @@ impl Default for Config {
             guardrails_pii_redact: default_guardrails_pii_redact(),
             guardrails_injection_enabled: false,
             guardrails_content_filter_enabled: false,
+            prompt_guard_enabled: false,
+            prompt_guard_action: crate::guardrails::PromptGuardAction::default(),
+            rag_injector_enabled: false,
+            rag_max_context_length: default_rag_max_context_length(),
+            rag_source_timeout_ms: default_rag_source_timeout_ms(),
+            rag_max_chunks: default_rag_max_chunks(),
             token_budget_enabled: false,
             token_budget_default_limit: default_token_budget_limit(),
             token_budget_window_hours: default_token_budget_window_hours(),

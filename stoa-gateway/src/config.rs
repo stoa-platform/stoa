@@ -599,6 +599,17 @@ pub struct Config {
     /// Env: STOA_A2A_MAX_TASKS
     #[serde(default = "default_a2a_max_tasks")]
     pub a2a_max_tasks: usize,
+
+    // === SOAP/XML Bridge (CAB-1762) ===
+    /// Enable SOAP proxy passthrough (default: false).
+    /// Env: STOA_SOAP_PROXY_ENABLED
+    #[serde(default)]
+    pub soap_proxy_enabled: bool,
+
+    /// Enable SOAP→MCP bridge (auto-register SOAP operations as MCP tools).
+    /// Env: STOA_SOAP_BRIDGE_ENABLED
+    #[serde(default)]
+    pub soap_bridge_enabled: bool,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1239,6 +1250,8 @@ impl Default for Config {
             ws_proxy_enabled: false,
             ws_proxy_rate_limit_per_second: default_ws_proxy_rate_limit(),
             ws_proxy_rate_limit_burst: default_ws_proxy_burst(),
+            soap_proxy_enabled: false,
+            soap_bridge_enabled: false,
         }
     }
 }

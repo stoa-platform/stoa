@@ -590,6 +590,77 @@ pub fn track_ws_proxy_rate_limited(route_id: &str, source: &str) {
         .inc();
 }
 
+// === SOAP/XML Bridge Metrics (CAB-1762) ===
+
+static SOAP_PROXY_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_proxy_requests_total",
+        "Total SOAP proxy requests",
+        &["route_id"]
+    )
+    .expect("Failed to create stoa_soap_proxy_requests_total metric")
+});
+
+static SOAP_PROXY_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_proxy_responses_total",
+        "Total SOAP proxy responses by success/failure",
+        &["route_id", "success"]
+    )
+    .expect("Failed to create stoa_soap_proxy_responses_total metric")
+});
+
+static SOAP_PROXY_FAULTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_proxy_faults_total",
+        "Total SOAP faults detected in responses",
+        &["route_id"]
+    )
+    .expect("Failed to create stoa_soap_proxy_faults_total metric")
+});
+
+static SOAP_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_bridge_requests_total",
+        "Total SOAP bridge tool invocations",
+        &["operation"]
+    )
+    .expect("Failed to create stoa_soap_bridge_requests_total metric")
+});
+
+static SOAP_BRIDGE_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_soap_bridge_responses_total",
+        "Total SOAP bridge tool responses by success/failure",
+        &["operation", "success"]
+    )
+    .expect("Failed to create stoa_soap_bridge_responses_total metric")
+});
+
+pub fn track_soap_proxy_request(route_id: &str) {
+    SOAP_PROXY_REQUESTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_soap_proxy_response(route_id: &str, success: bool) {
+    SOAP_PROXY_RESPONSES
+        .with_label_values(&[route_id, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_soap_proxy_fault(route_id: &str) {
+    SOAP_PROXY_FAULTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_soap_bridge_request(operation: &str) {
+    SOAP_BRIDGE_REQUESTS.with_label_values(&[operation]).inc();
+}
+
+pub fn track_soap_bridge_response(operation: &str, success: bool) {
+    SOAP_BRIDGE_RESPONSES
+        .with_label_values(&[operation, if success { "true" } else { "false" }])
+        .inc();
+}
+
 /// Update session count gauge
 pub fn update_session_count(count: usize) {
     MCP_SESSIONS_ACTIVE.set(count as f64);

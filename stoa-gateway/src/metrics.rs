@@ -705,6 +705,64 @@ pub fn track_soap_bridge_response(operation: &str, success: bool) {
         .inc();
 }
 
+// === gRPC Protocol Metrics (CAB-1755) ===
+
+static GRPC_PROXY_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_grpc_proxy_requests_total",
+        "Total gRPC proxy requests",
+        &["route_id"]
+    )
+    .expect("Failed to create stoa_grpc_proxy_requests_total metric")
+});
+
+static GRPC_PROXY_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_grpc_proxy_responses_total",
+        "Total gRPC proxy responses by success/failure",
+        &["route_id", "success"]
+    )
+    .expect("Failed to create stoa_grpc_proxy_responses_total metric")
+});
+
+static GRPC_BRIDGE_REQUESTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_grpc_bridge_requests_total",
+        "Total gRPC bridge tool invocations",
+        &["method"]
+    )
+    .expect("Failed to create stoa_grpc_bridge_requests_total metric")
+});
+
+static GRPC_BRIDGE_RESPONSES: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_grpc_bridge_responses_total",
+        "Total gRPC bridge tool responses by success/failure",
+        &["method", "success"]
+    )
+    .expect("Failed to create stoa_grpc_bridge_responses_total metric")
+});
+
+pub fn track_grpc_proxy_request(route_id: &str) {
+    GRPC_PROXY_REQUESTS.with_label_values(&[route_id]).inc();
+}
+
+pub fn track_grpc_proxy_response(route_id: &str, success: bool) {
+    GRPC_PROXY_RESPONSES
+        .with_label_values(&[route_id, if success { "true" } else { "false" }])
+        .inc();
+}
+
+pub fn track_grpc_bridge_request(method: &str) {
+    GRPC_BRIDGE_REQUESTS.with_label_values(&[method]).inc();
+}
+
+pub fn track_grpc_bridge_response(method: &str, success: bool) {
+    GRPC_BRIDGE_RESPONSES
+        .with_label_values(&[method, if success { "true" } else { "false" }])
+        .inc();
+}
+
 /// Update session count gauge
 pub fn update_session_count(count: usize) {
     MCP_SESSIONS_ACTIVE.set(count as f64);

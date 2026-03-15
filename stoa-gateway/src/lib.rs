@@ -13,6 +13,7 @@ pub mod events;
 pub mod federation;
 pub mod git;
 pub mod governance;
+pub mod grpc;
 pub mod guardrails;
 pub mod handlers;
 pub mod hegemon;

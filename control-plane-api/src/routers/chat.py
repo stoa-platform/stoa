@@ -338,16 +338,24 @@ async def send_message(
         )
     record_event(user.id, tenant_id, "message")
 
-    api_key = request.headers.get("X-Provider-Api-Key", "")
-    if not api_key:
-        api_key = await svc.get_tenant_api_key(tenant_id) or ""
-    if not api_key:
-        api_key = settings.CHAT_PROVIDER_API_KEY
-    if not api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="No API key: set X-Provider-Api-Key header or configure tenant key via PUT /provider-key",
-        )
+    # Provider selection: gateway mode (CAB-1822) vs direct Anthropic
+    use_gateway = bool(settings.CHAT_GATEWAY_URL and settings.CHAT_GATEWAY_API_KEY)
+
+    if use_gateway:
+        # Gateway handles Anthropic API key injection — use STOA consumer key for auth
+        api_key = settings.CHAT_GATEWAY_API_KEY
+    else:
+        # Direct mode: resolve Anthropic API key from header → tenant → global config
+        api_key = request.headers.get("X-Provider-Api-Key", "")
+        if not api_key:
+            api_key = await svc.get_tenant_api_key(tenant_id) or ""
+        if not api_key:
+            api_key = settings.CHAT_PROVIDER_API_KEY
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="No API key: set X-Provider-Api-Key header or configure tenant key via PUT /provider-key",
+            )
 
     ip = request.client.host if request.client else ""
     user_agent = request.headers.get("User-Agent", "")

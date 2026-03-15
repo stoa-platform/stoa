@@ -21,7 +21,7 @@ from ..config import settings
 from ..models.chat import ChatConversation, ChatMessage
 from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
 from ..services.audit_service import AuditService
-from ..services.chat_provider import AnthropicProvider, ChatProviderProtocol
+from ..services.chat_provider import AnthropicProvider, ChatProviderProtocol, GatewayAnthropicProvider
 from ..services.chat_security import (
     CONVERSATION_TIMEOUT_HOURS,
     JAILBREAK_REFUSAL,
@@ -35,9 +35,22 @@ from ..services.encryption_service import decrypt_auth_config, encrypt_auth_conf
 logger = logging.getLogger(__name__)
 
 # Provider registry — extend when adding new LLM backends
-_PROVIDERS: dict[str, ChatProviderProtocol] = {
-    "anthropic": AnthropicProvider(),
-}
+
+
+def _build_providers() -> dict[str, ChatProviderProtocol]:
+    from ..config import settings
+
+    if settings.CHAT_GATEWAY_URL and settings.CHAT_GATEWAY_API_KEY:
+        return {
+            "anthropic": GatewayAnthropicProvider(
+                gateway_url=settings.CHAT_GATEWAY_URL,
+                gateway_api_key=settings.CHAT_GATEWAY_API_KEY,
+            ),
+        }
+    return {"anthropic": AnthropicProvider()}
+
+
+_PROVIDERS: dict[str, ChatProviderProtocol] = _build_providers()
 
 
 class ChatService:

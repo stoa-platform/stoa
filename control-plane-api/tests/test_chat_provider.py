@@ -14,6 +14,7 @@ from src.services.chat_provider import (
     ANTHROPIC_API_VERSION,
     DEFAULT_MAX_TOKENS,
     AnthropicProvider,
+    GatewayAnthropicProvider,
 )
 
 # ── Constants ──
@@ -369,3 +370,139 @@ class TestStreamResponse:
                 events.append(evt)
 
         assert len(events) == 0
+
+
+# ── GatewayAnthropicProvider (CAB-1822) ──
+
+
+class TestGatewayAnthropicProvider:
+    """Test gateway-routed provider."""
+
+    @pytest.fixture()
+    def provider(self):
+        return GatewayAnthropicProvider(
+            gateway_url="http://stoa-gateway:80",
+            gateway_api_key="stoa-key-123",
+        )
+
+    def test_gateway_url_trailing_slash_stripped(self):
+        p = GatewayAnthropicProvider(
+            gateway_url="http://gateway:80/",
+            gateway_api_key="key",
+        )
+        assert p._gateway_url == "http://gateway:80"
+
+    async def test_sends_to_gateway_url(self, provider):
+        """Requests go to gateway /v1/messages, not Anthropic directly."""
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+
+        async def mock_aiter_lines():
+            yield "data: [DONE]"
+
+        mock_response.aiter_lines = mock_aiter_lines
+
+        mock_client = AsyncMock()
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+        mock_client_ctx = AsyncMock()
+        mock_client_ctx.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.services.chat_provider.httpx.AsyncClient", return_value=mock_client_ctx):
+            async for _ in provider.stream_response(
+                api_key="stoa-key-123",
+                model="claude-3",
+                messages=[{"role": "user", "content": "hi"}],
+            ):
+                pass
+
+        call_args = mock_client.stream.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == "http://stoa-gateway:80/v1/messages"
+
+        headers = call_args.kwargs.get("headers") or call_args[1].get("headers")
+        assert headers["x-api-key"] == "stoa-key-123"
+        assert headers["anthropic-version"] == ANTHROPIC_API_VERSION
+
+    async def test_gateway_error_yields_error_event(self, provider):
+        """Non-200 from gateway yields descriptive error."""
+        mock_response = AsyncMock()
+        mock_response.status_code = 502
+        mock_response.aread = AsyncMock(return_value=b'{"error": "upstream timeout"}')
+
+        mock_client = AsyncMock()
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+        mock_client_ctx = AsyncMock()
+        mock_client_ctx.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.services.chat_provider.httpx.AsyncClient", return_value=mock_client_ctx):
+            events = []
+            async for evt in provider.stream_response(
+                api_key="stoa-key-123",
+                model="claude-3",
+                messages=[{"role": "user", "content": "hi"}],
+            ):
+                events.append(evt)
+
+        assert len(events) == 1
+        assert events[0]["event"] == "error"
+        assert "Gateway LLM proxy" in events[0]["data"]["error"]
+        assert "502" in events[0]["data"]["error"]
+
+    async def test_successful_stream_through_gateway(self, provider):
+        """Full streaming works end-to-end through gateway proxy."""
+        sse_lines = [
+            "event: message_start",
+            'data: {"type": "message_start", "message": {"id": "msg-gw", "model": "claude-3"}}',
+            "",
+            "event: content_block_delta",
+            'data: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "Hello from gateway"}}',
+            "",
+            "event: message_delta",
+            'data: {"type": "message_delta", "usage": {"input_tokens": 20, "output_tokens": 10}, "delta": {"stop_reason": "end_turn"}}',
+            "",
+            "data: [DONE]",
+        ]
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+
+        async def mock_aiter_lines():
+            for line in sse_lines:
+                yield line
+
+        mock_response.aiter_lines = mock_aiter_lines
+
+        mock_client = AsyncMock()
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+        mock_client_ctx = AsyncMock()
+        mock_client_ctx.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.services.chat_provider.httpx.AsyncClient", return_value=mock_client_ctx):
+            events = []
+            async for evt in provider.stream_response(
+                api_key="stoa-key-123",
+                model="claude-3",
+                messages=[{"role": "user", "content": "hi"}],
+            ):
+                events.append(evt)
+
+        event_types = [e["event"] for e in events]
+        assert "message_start" in event_types
+        assert "content_delta" in event_types
+        assert "message_end" in event_types
+        assert events[1]["data"]["delta"] == "Hello from gateway"

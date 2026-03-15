@@ -72,6 +72,8 @@ spec:
               value: "https://api.anthropic.com"
             - name: STOA_LLM_PROXY_TIMEOUT_SECS
               value: "300"
+            - name: STOA_LLM_PROXY_SKIP_VALIDATION
+              value: "true"
             - name: STOA_LLM_PROXY_METERING_URL
               value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
             # --- API Proxy backends (CAB-1728: dogfooding low-risk) ---

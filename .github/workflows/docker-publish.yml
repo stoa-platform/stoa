@@ -1,9 +1,14 @@
 # =============================================================================
 # GitHub Actions: Publish Docker Images to GHCR
 # =============================================================================
-# STOA Platform - CAB-915
+# STOA Platform - CAB-915 / CAB-1826
 # Build multi-arch images and publish to GitHub Container Registry
 # Used by the Quick Start docker-compose setup
+#
+# Trigger modes:
+#   1. Release Please (workflow_call): builds only released components
+#   2. Tag push (v* or component-v*): builds matching component(s)
+#   3. Manual dispatch: builds selected services or all
 # =============================================================================
 
 name: Publish Docker Images
@@ -11,12 +16,18 @@ name: Publish Docker Images
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'                    # Legacy: monorepo-wide tag (builds all)
+      - 'control-plane-api-v*'  # Per-component tags from Release Please
+      - 'control-plane-ui-v*'
+      - 'portal-v*'
+      - 'stoa-gateway-v*'
   workflow_call:
     inputs:
-      version:
-        required: true
+      services:
+        description: 'Comma-separated list of services to build'
+        required: false
         type: string
+        default: 'all'
   workflow_dispatch:
     inputs:
       services:
@@ -50,12 +61,25 @@ jobs:
       - name: Set build matrix
         id: set-matrix
         run: |
-          if [ "${{ github.event.inputs.services }}" = "all" ] || [ -z "${{ github.event.inputs.services }}" ]; then
-            echo 'matrix={"service":["control-plane-api","control-plane-ui","keycloak","portal","stoa-gateway"]}' >> $GITHUB_OUTPUT
+          ALL_SERVICES='["control-plane-api","control-plane-ui","keycloak","portal","stoa-gateway"]'
+
+          # Priority 1: workflow_call services input (from Release Please)
+          SERVICES_INPUT="${{ inputs.services }}"
+
+          # Priority 2: tag-based detection
+          TAG="${{ github.ref_name }}"
+
+          if [ -n "$SERVICES_INPUT" ] && [ "$SERVICES_INPUT" != "all" ]; then
+            # Build only the specified services
+            MATRIX=$(echo "$SERVICES_INPUT" | tr ',' '\n' | jq -R . | jq -s -c '{service: .}')
+            echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          elif echo "$TAG" | grep -qE '^(control-plane-api|control-plane-ui|portal|stoa-gateway)-v'; then
+            # Component-scoped tag: extract service name
+            SERVICE=$(echo "$TAG" | sed 's/-v[0-9].*//')
+            echo "matrix={\"service\":[\"$SERVICE\"]}" >> $GITHUB_OUTPUT
           else
-            # Convert comma-separated list to JSON array
-            SERVICES=$(echo "${{ github.event.inputs.services }}" | tr ',' '\n' | jq -R . | jq -s -c '{service: .}')
-            echo "matrix=$SERVICES" >> $GITHUB_OUTPUT
+            # All services (legacy v* tag, manual dispatch "all", or empty)
+            echo "matrix={\"service\":$ALL_SERVICES}" >> $GITHUB_OUTPUT
           fi
 
   # ==========================================================================
@@ -100,6 +124,7 @@ jobs:
         with:
           images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           tags: |
+            type=match,pattern=${{ matrix.service }}-v(.*),group=1
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
@@ -171,7 +196,7 @@ jobs:
   summary:
     name: Build Summary
     runs-on: ubuntu-latest
-    needs: build
+    needs: [setup, build]
     if: always()
     steps:
       - name: Generate summary
@@ -180,13 +205,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| control-plane-api | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| control-plane-ui | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| keycloak | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| portal | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| stoa-gateway | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build matrix | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry:** \`${{ env.REGISTRY }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** \`ghcr.io\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Quick Start Usage" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY

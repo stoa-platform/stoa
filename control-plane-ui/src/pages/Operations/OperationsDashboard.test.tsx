@@ -155,6 +155,16 @@ describe('OperationsDashboard', () => {
     expect(screen.getAllByText('stoa-gateway').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('renders Platform Activity with API and MCP metrics', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Platform Activity')).toBeInTheDocument();
+    });
+    expect(screen.getByText('API Requests/h')).toBeInTheDocument();
+    expect(screen.getByText('API In Progress')).toBeInTheDocument();
+    expect(screen.getByText('MCP Tool Calls/h')).toBeInTheDocument();
+  });
+
   it('shows "Full metrics" link to /observability', async () => {
     renderComponent();
     expect(await screen.findByText('Full metrics')).toBeInTheDocument();
@@ -195,14 +205,6 @@ describe('OperationsDashboard', () => {
       expect(screen.getByText('SLO Overview')).toBeInTheDocument();
     });
     expect(screen.queryByText('Traffic & Security')).not.toBeInTheDocument();
-  });
-
-  it('does NOT render Platform Activity section (moved to /observability)', async () => {
-    renderComponent();
-    await waitFor(() => {
-      expect(screen.getByText('SLO Overview')).toBeInTheDocument();
-    });
-    expect(screen.queryByText('Platform Activity')).not.toBeInTheDocument();
   });
 
   // RBAC — all personas see the same content (no RBAC-restricted sections remain)

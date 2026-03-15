@@ -6209,6 +6209,78 @@
         "title": "DisconnectResponse",
         "type": "object"
       },
+      "DiscoveredAPIItem": {
+        "description": "A single API discovered by stoa-connect on a gateway.",
+        "properties": {
+          "backend_url": {
+            "default": "",
+            "description": "Backend URL",
+            "title": "Backend Url",
+            "type": "string"
+          },
+          "is_active": {
+            "default": true,
+            "description": "Whether the API is active",
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "methods": {
+            "description": "HTTP methods",
+            "items": {
+              "type": "string"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
+          "name": {
+            "description": "API/service name",
+            "title": "Name",
+            "type": "string"
+          },
+          "paths": {
+            "description": "Exposed paths",
+            "items": {
+              "type": "string"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "policies": {
+            "description": "Active policies",
+            "items": {
+              "type": "string"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "version": {
+            "default": "",
+            "description": "API version",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DiscoveredAPIItem",
+        "type": "object"
+      },
+      "DiscoveryPayload": {
+        "description": "Discovery report from stoa-connect.",
+        "properties": {
+          "apis": {
+            "description": "Discovered APIs",
+            "items": {
+              "$ref": "#/components/schemas/DiscoveredAPIItem"
+            },
+            "title": "Apis",
+            "type": "array"
+          }
+        },
+        "title": "DiscoveryPayload",
+        "type": "object"
+      },
       "DocsSearchResponse": {
         "properties": {
           "mode": {
@@ -10603,6 +10675,12 @@
       "HeartbeatPayload": {
         "description": "Heartbeat payload with optional metrics.",
         "properties": {
+          "discovered_apis": {
+            "default": 0,
+            "description": "Number of discovered APIs",
+            "title": "Discovered Apis",
+            "type": "integer"
+          },
           "error_rate": {
             "anyOf": [
               {
@@ -21092,6 +21170,29 @@
         "title": "SuggestResponse",
         "type": "object"
       },
+      "SyncAckPayload": {
+        "description": "Payload from stoa-connect reporting policy sync results.",
+        "properties": {
+          "sync_timestamp": {
+            "description": "ISO timestamp of sync completion",
+            "title": "Sync Timestamp",
+            "type": "string"
+          },
+          "synced_policies": {
+            "description": "Sync results per policy",
+            "items": {
+              "$ref": "#/components/schemas/SyncedPolicyResult"
+            },
+            "title": "Synced Policies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sync_timestamp"
+        ],
+        "title": "SyncAckPayload",
+        "type": "object"
+      },
       "SyncDirection": {
         "description": "Direction of data flow between source and replicas.",
         "enum": [
@@ -21244,6 +21345,39 @@
         ],
         "title": "SyncTypeEnum",
         "type": "string"
+      },
+      "SyncedPolicyResult": {
+        "description": "Result of syncing a single policy on the gateway.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error message if failed",
+            "title": "Error"
+          },
+          "policy_id": {
+            "description": "Policy ID from CP",
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "status": {
+            "description": "Sync result: applied, removed, failed",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_id",
+          "status"
+        ],
+        "title": "SyncedPolicyResult",
+        "type": "object"
       },
       "SystemInfoResponse": {
         "description": "Platform system information \u2014 public endpoint.",
@@ -25819,16 +25953,6 @@
     }
   },
   "info": {
-    "contact": {
-      "email": "support@gostoa.dev",
-      "name": "CAB Ing\u00e9nierie",
-      "url": "https://gostoa.dev/"
-    },
-    "description": "\n## STOA Platform API\n\n**The European Agent Gateway** \u2014 AI-Native API Gateway for modern enterprises.\n\n### Key Features\n\n- **MCP Server Subscriptions** \u2014 Subscribe to AI tools and manage API keys\n- **Tools Catalog** \u2014 Browse and discover MCP tools with role-based visibility\n- **Usage Tracking** \u2014 Monitor your API consumption in real-time\n- **Multi-tenant Management** \u2014 Create and manage isolated API tenants\n- **GitOps Integration** \u2014 Automatic sync with GitLab repositories\n- **Event-Driven Architecture** \u2014 Kafka/Redpanda message bus for async operations\n- **Pipeline Monitoring** \u2014 End-to-end tracing of deployments\n- **RBAC** \u2014 Role-based access control via Keycloak\n\n### Quick Start\n\n1. **Get a token** from Keycloak (`POST /realms/stoa/protocol/openid-connect/token`)\n2. **Browse MCP servers** (`GET /v1/mcp/servers`)\n3. **Subscribe to a server** (`POST /v1/mcp/subscriptions`)\n4. **Use your API key** with MCP Gateway (`https://mcp.gostoa.dev`)\n\n### Authentication\n\nAll endpoints require a valid JWT token from Keycloak (realm: `stoa`).\nInclude the token in the `Authorization: Bearer <token>` header.\n\n```\nAuthorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...\n```\n\n### Environments\n\n| Environment | Base URL |\n|-------------|----------|\n| Production | `https://api.gostoa.dev` |\n| Via Gateway | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` |\n\n### Changelog\n\n#### v2.1.0 (Current)\n- Added MCP Server Subscriptions with admin approval workflow\n- Added API key rotation with grace period support\n- Added Dashboard home page stats (`/v1/dashboard`)\n- Added Service Accounts for M2M authentication\n\n#### v2.0.0\n- Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring\n- Added GitLab Webhook integration (`/webhooks/gitlab`)\n- Added Kafka integration for event-driven deployments\n- Added Kafka integration for event-driven gateway orchestration\n\n#### v1.0.0\n- Initial release with tenant, API, and application management\n",
-    "license": {
-      "name": "Apache 2.0",
-      "url": "https://www.apache.org/licenses/LICENSE-2.0"
-    },
     "title": "STOA Control-Plane API",
     "version": "2.0.0"
   },
@@ -28501,7 +28625,7 @@
     },
     "/v1/admin/gateways/modes/stats": {
       "get": {
-        "description": "Get gateway statistics grouped by mode (ADR-024).\n\nReturns counts of online/offline/degraded gateways for each STOA mode:\n- edge-mcp: MCP protocol with SSE transport\n- sidecar: Policy enforcement behind existing gateway\n- proxy: Inline request/response transformation\n- shadow: Passive traffic capture and analysis",
+        "description": "Get gateway statistics grouped by mode (ADR-024).\n\nReturns counts of online/offline/degraded gateways for each STOA mode:\n- edge-mcp: MCP protocol with SSE transport\n- sidecar: Policy enforcement behind existing gateway\n- proxy: Inline request/response transformation\n- shadow: Passive traffic capture and analysis\n- connect: Lightweight agent bridging third-party gateways",
         "operationId": "get_gateway_mode_stats",
         "responses": {
           "200": {
@@ -35830,6 +35954,67 @@
         ]
       }
     },
+    "/v1/internal/gateways/{gateway_id}/discovery": {
+      "post": {
+        "description": "Receive API discovery report from stoa-connect.\n\nCalled periodically by stoa-connect agents to report APIs/services\ndiscovered on the local gateway's admin API.",
+        "operationId": "report_discovery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Discovery",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
     "/v1/internal/gateways/{gateway_id}/heartbeat": {
       "post": {
         "description": "Gateway heartbeat endpoint.\n\nCalled every 30s by STOA gateways to maintain ONLINE status.\nIf no heartbeat received for 90s, gateway is marked OFFLINE by the health worker.",
@@ -35881,6 +36066,67 @@
           }
         },
         "summary": "Gateway Heartbeat",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
+    "/v1/internal/gateways/{gateway_id}/sync-ack": {
+      "post": {
+        "description": "Acknowledge policy sync results from stoa-connect (CAB-1817 Phase 3).\n\nCalled by stoa-connect after applying/removing policies on the local gateway.\nStores sync results in the gateway's health_details for observability.",
+        "operationId": "sync_ack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncAckPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Ack",
         "tags": [
           "Gateway Internal"
         ]
@@ -51510,151 +51756,5 @@
         ]
       }
     }
-  },
-  "tags": [
-    {
-      "description": "Tenant management operations",
-      "name": "Tenants"
-    },
-    {
-      "description": "API lifecycle management",
-      "name": "APIs"
-    },
-    {
-      "description": "Application and subscription management",
-      "name": "Applications"
-    },
-    {
-      "description": "Deployment operations and status",
-      "name": "Deployments"
-    },
-    {
-      "description": "GitLab integration (commits, MRs, files) \u2014 Advanced",
-      "name": "Git"
-    },
-    {
-      "description": "Real-time event streaming (SSE)",
-      "name": "Events"
-    },
-    {
-      "description": "GitLab webhook handlers for GitOps",
-      "name": "Webhooks"
-    },
-    {
-      "description": "Pipeline monitoring and tracing",
-      "name": "Traces"
-    },
-    {
-      "description": "webMethods Gateway administration via OIDC proxy",
-      "name": "Gateway"
-    },
-    {
-      "description": "API subscription and API key management",
-      "name": "Subscriptions"
-    },
-    {
-      "description": "Webhook notifications for subscription events (CAB-315)",
-      "name": "Tenant Webhooks"
-    },
-    {
-      "description": "Certificate validation for mTLS subscriptions (CAB-313)",
-      "name": "certificates"
-    },
-    {
-      "description": "Full-text search across tools and APIs (CAB-307)",
-      "name": "Search"
-    },
-    {
-      "description": "Usage dashboard for API consumers (CAB-280)",
-      "name": "Usage"
-    },
-    {
-      "description": "Home dashboard stats and activity (CAB-299)",
-      "name": "Dashboard"
-    },
-    {
-      "description": "OAuth2 Service Accounts for MCP access (CAB-296)",
-      "name": "Service Accounts"
-    },
-    {
-      "description": "Universal API Contracts with multi-protocol bindings (UAC)",
-      "name": "Contracts"
-    },
-    {
-      "description": "Browse and discover MCP servers",
-      "name": "MCP Servers"
-    },
-    {
-      "description": "Subscribe to MCP servers and manage API keys",
-      "name": "MCP Subscriptions"
-    },
-    {
-      "description": "API key validation for MCP Gateway (internal)",
-      "name": "MCP Validation"
-    },
-    {
-      "description": "Admin approval workflow for MCP subscriptions",
-      "name": "MCP Admin - Subscriptions"
-    },
-    {
-      "description": "MCP server management (admin)",
-      "name": "MCP Admin - Servers"
-    },
-    {
-      "description": "Developer Portal API catalog and MCP server browsing",
-      "name": "Portal"
-    },
-    {
-      "description": "GitOps synchronization for MCP servers",
-      "name": "MCP GitOps"
-    },
-    {
-      "description": "MCP tools discovery and invocation (proxy to MCP Gateway)",
-      "name": "MCP Tools"
-    },
-    {
-      "description": "Platform status and GitOps observability (CAB-654)",
-      "name": "Platform"
-    },
-    {
-      "description": "Gateway instance management (multi-gateway orchestration)",
-      "name": "Gateways"
-    },
-    {
-      "description": "API deployment to gateways (sync engine)",
-      "name": "Gateway Deployments"
-    },
-    {
-      "description": "Gateway-agnostic policy management",
-      "name": "Gateway Policies"
-    },
-    {
-      "description": "Multi-gateway health and sync metrics",
-      "name": "Gateway Observability"
-    },
-    {
-      "description": "Internal gateway auto-registration (ADR-028)",
-      "name": "Gateway Internal"
-    },
-    {
-      "description": "Consumer onboarding and lifecycle management (CAB-1121)",
-      "name": "Consumers"
-    },
-    {
-      "description": "Subscription plan management with quotas (CAB-1121)",
-      "name": "Plans"
-    },
-    {
-      "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)",
-      "name": "Quotas"
-    },
-    {
-      "description": "Gateway discovery for UAC-generated MCP tools (CAB-605)",
-      "name": "MCP Discovery"
-    },
-    {
-      "description": "Source-of-truth classification, drift detection, reconciliation (CAB-1324)",
-      "name": "Data Governance"
-    }
-  ]
+  }
 }

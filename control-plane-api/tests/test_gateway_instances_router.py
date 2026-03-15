@@ -240,7 +240,7 @@ class TestGatewayInstancesRouter:
     # ============== GET /modes/stats ==============
 
     def test_get_mode_stats_all_modes_present(self, app_with_cpi_admin, mock_db_session):
-        """GET /modes/stats returns all 4 modes with zero counts when no data."""
+        """GET /modes/stats returns all 5 modes with zero counts when no data."""
         # The /modes/stats endpoint queries the DB directly (no service layer).
         # Mock db.execute to return an empty result set.
         mock_result = MagicMock()
@@ -254,12 +254,13 @@ class TestGatewayInstancesRouter:
         data = response.json()
         assert "modes" in data
         assert "total_gateways" in data
-        assert len(data["modes"]) == 4
+        assert len(data["modes"]) == 5
         mode_names = [m["mode"] for m in data["modes"]]
         assert "edge-mcp" in mode_names
         assert "sidecar" in mode_names
         assert "proxy" in mode_names
         assert "shadow" in mode_names
+        assert "connect" in mode_names
         assert data["total_gateways"] == 0
 
     def test_get_mode_stats_with_data(self, app_with_cpi_admin, mock_db_session):

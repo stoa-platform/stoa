@@ -670,6 +670,12 @@ pub struct Config {
     /// Env: STOA_KAFKA_BRIDGE_ENABLED
     #[serde(default)]
     pub kafka_bridge_enabled: bool,
+
+    // === Plugin SDK (CAB-1759) ===
+    /// Enable Plugin SDK for custom gateway plugins.
+    /// Env: STOA_PLUGIN_SDK_ENABLED
+    #[serde(default)]
+    pub plugin_sdk_enabled: bool,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1335,6 +1341,7 @@ impl Default for Config {
             graphql_proxy_enabled: false,
             graphql_bridge_enabled: false,
             kafka_bridge_enabled: false,
+            plugin_sdk_enabled: false,
         }
     }
 }

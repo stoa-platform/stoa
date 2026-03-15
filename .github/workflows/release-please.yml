@@ -20,9 +20,22 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
+      # Per-component release outputs
+      api_release_created: ${{ steps.release.outputs['control-plane-api--release_created'] }}
+      api_tag_name: ${{ steps.release.outputs['control-plane-api--tag_name'] }}
+      api_version: ${{ steps.release.outputs['control-plane-api--version'] }}
+      ui_release_created: ${{ steps.release.outputs['control-plane-ui--release_created'] }}
+      ui_tag_name: ${{ steps.release.outputs['control-plane-ui--tag_name'] }}
+      ui_version: ${{ steps.release.outputs['control-plane-ui--version'] }}
+      portal_release_created: ${{ steps.release.outputs['portal--release_created'] }}
+      portal_tag_name: ${{ steps.release.outputs['portal--tag_name'] }}
+      portal_version: ${{ steps.release.outputs['portal--version'] }}
+      gateway_release_created: ${{ steps.release.outputs['stoa-gateway--release_created'] }}
+      gateway_tag_name: ${{ steps.release.outputs['stoa-gateway--tag_name'] }}
+      gateway_version: ${{ steps.release.outputs['stoa-gateway--version'] }}
+      # Aggregate: true if any component released
+      any_release_created: ${{ steps.aggregate.outputs.any_release }}
+      released_services: ${{ steps.aggregate.outputs.services }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -35,16 +48,60 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - name: Output release info
-        if: ${{ steps.release.outputs.release_created }}
+      - name: Aggregate release outputs
+        id: aggregate
         run: |
-          echo "Release created: ${{ steps.release.outputs.tag_name }}"
-          echo "Version: ${{ steps.release.outputs.version }}"
+          SERVICES=""
+          ANY="false"
+
+          if [ "${{ steps.release.outputs['control-plane-api--release_created'] }}" = "true" ]; then
+            SERVICES="${SERVICES:+$SERVICES,}control-plane-api"
+            ANY="true"
+            echo "control-plane-api released: ${{ steps.release.outputs['control-plane-api--tag_name'] }}"
+          fi
+          if [ "${{ steps.release.outputs['control-plane-ui--release_created'] }}" = "true" ]; then
+            SERVICES="${SERVICES:+$SERVICES,}control-plane-ui"
+            ANY="true"
+            echo "control-plane-ui released: ${{ steps.release.outputs['control-plane-ui--tag_name'] }}"
+          fi
+          if [ "${{ steps.release.outputs['portal--release_created'] }}" = "true" ]; then
+            SERVICES="${SERVICES:+$SERVICES,}portal"
+            ANY="true"
+            echo "portal released: ${{ steps.release.outputs['portal--tag_name'] }}"
+          fi
+          if [ "${{ steps.release.outputs['stoa-gateway--release_created'] }}" = "true" ]; then
+            SERVICES="${SERVICES:+$SERVICES,}stoa-gateway"
+            ANY="true"
+            echo "stoa-gateway released: ${{ steps.release.outputs['stoa-gateway--tag_name'] }}"
+          fi
+
+          echo "any_release=$ANY" >> $GITHUB_OUTPUT
+          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+
+      - name: Output release summary
+        if: ${{ steps.aggregate.outputs.any_release == 'true' }}
+        run: |
+          echo "### Releases Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Version | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------|-----|" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.release.outputs['control-plane-api--release_created'] }}" = "true" ]; then
+            echo "| control-plane-api | ${{ steps.release.outputs['control-plane-api--version'] }} | ${{ steps.release.outputs['control-plane-api--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ steps.release.outputs['control-plane-ui--release_created'] }}" = "true" ]; then
+            echo "| control-plane-ui | ${{ steps.release.outputs['control-plane-ui--version'] }} | ${{ steps.release.outputs['control-plane-ui--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ steps.release.outputs['portal--release_created'] }}" = "true" ]; then
+            echo "| portal | ${{ steps.release.outputs['portal--version'] }} | ${{ steps.release.outputs['portal--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ steps.release.outputs['stoa-gateway--release_created'] }}" = "true" ]; then
+            echo "| stoa-gateway | ${{ steps.release.outputs['stoa-gateway--version'] }} | ${{ steps.release.outputs['stoa-gateway--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
+          fi
 
   trigger-docker:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ needs.release-please.outputs.any_release_created == 'true' }}
     uses: ./.github/workflows/docker-publish.yml
     secrets: inherit
     with:
-      version: ${{ needs.release-please.outputs.tag_name }}
+      services: ${{ needs.release-please.outputs.released_services }}

@@ -12,6 +12,7 @@ import {
   Gauge,
   Layers,
   Award,
+  Zap,
   AlertTriangle,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -27,16 +28,27 @@ const AUTO_REFRESH_INTERVAL = 30_000; // 30 seconds
 
 const dashboards = config.services.grafana.dashboards;
 
-// SLO PromQL queries
-const QUERIES = {
+// PromQL queries — combines Gateway (stoa_http_requests_total, label: status)
+// and Control Plane API (stoa_control_plane_http_requests_total, label: status_code)
+export const QUERIES = {
+  // SLO: availability = 1 - error_rate across both Gateway + API (1h window)
   availability:
     '(1 - (sum(increase(stoa_http_requests_total{status=~"5.."}[1h])) + sum(increase(stoa_control_plane_http_requests_total{status_code=~"5.."}[1h])) or vector(0)) / (sum(increase(stoa_http_requests_total[1h])) + sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(1))) * 100',
+  // SLO: error rate percentage (Gateway + API combined)
   errorRate:
     '((sum(increase(stoa_http_requests_total{status=~"5.."}[1h])) or vector(0)) + (sum(increase(stoa_control_plane_http_requests_total{status_code=~"5.."}[1h])) or vector(0))) / ((sum(increase(stoa_http_requests_total[1h])) or vector(1)) + (sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(1))) * 100',
+  // SLO: p95 latency in ms (Gateway — primary user-facing)
   latencyP95:
     'histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket[1h])) by (le)) * 1000 or vector(0)',
+  // SLO: error budget remaining (target 99.9%, 24h rolling — 30d needs longer retention)
   errorBudget:
     '(1 - ((sum(increase(stoa_http_requests_total{status=~"5.."}[24h])) or vector(0)) / (sum(increase(stoa_http_requests_total[24h])) or vector(1))) / 0.001) * 100',
+  // Platform health: total requests/h (shows activity, not CUJ)
+  platformRequests: 'sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(0)',
+  // API backend: requests in progress
+  apiInProgress: 'sum(stoa_control_plane_http_requests_in_progress) or vector(0)',
+  // MCP: active tool calls
+  mcpToolCalls: 'sum(increase(stoa_mcp_tools_calls_total[1h])) or vector(0)',
 };
 
 interface RecentDeployment {
@@ -129,6 +141,7 @@ const fmtPercent = (v: number | null) => (v === null ? '--' : `${v.toFixed(2)}%`
 const fmtMs = (v: number | null) => (v === null ? '--' : v < 1 ? '<1 ms' : `${v.toFixed(0)} ms`);
 const fmtBudget = (v: number | null) =>
   v === null ? '--' : v > 100 ? '100%' : v < 0 ? '0%' : `${v.toFixed(1)}%`;
+const fmtCount = (v: number | null) => (v === null ? '--' : v.toFixed(0));
 
 export function OperationsDashboard() {
   const navigate = useNavigate();
@@ -365,6 +378,36 @@ export function OperationsDashboard() {
                   ArgoCD status unavailable
                 </p>
               )}
+            </div>
+          </section>
+
+          {/* Platform Activity — real Prometheus metrics */}
+          <section>
+            <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-3">
+              Platform Activity
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <MetricCard
+                label="API Requests/h"
+                query={QUERIES.platformRequests}
+                format={fmtCount}
+                color="#3b82f6"
+                icon={BarChart3}
+              />
+              <MetricCard
+                label="API In Progress"
+                query={QUERIES.apiInProgress}
+                format={fmtCount}
+                color="#10b981"
+                icon={Activity}
+              />
+              <MetricCard
+                label="MCP Tool Calls/h"
+                query={QUERIES.mcpToolCalls}
+                format={fmtCount}
+                color="#8b5cf6"
+                icon={Zap}
+              />
             </div>
           </section>
 

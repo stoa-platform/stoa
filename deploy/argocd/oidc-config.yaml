@@ -1,8 +1,20 @@
-# ArgoCD OIDC Configuration for Keycloak SSO
-# This is applied via Ansible playbook or kubectl patch
-# Reference: https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/keycloak/
+# ArgoCD OIDC Configuration for Keycloak SSO (Native OIDC, no Dex)
+# Applied via: kubectl apply -f deploy/argocd/oidc-config.yaml
+# Reference: https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/
 #
-# IMPORTANT: This configuration supports two authentication flows:
+# IMPORTANT: This uses ArgoCD native OIDC (not Dex). Dex was removed because
+# we have a single IdP (Keycloak) and Dex adds unnecessary complexity.
+#
+# Prerequisites:
+# 1. Keycloak client "argocd" with redirect URI: https://argocd.gostoa.dev/auth/callback
+# 2. Keycloak realm-roles mapper on argocd client: realm roles → "groups" claim
+# 3. CoreDNS rewrite in coredns-custom (kube-system):
+#      rewrite name auth.gostoa.dev ingress-nginx-controller.ingress-nginx.svc.cluster.local
+#    This is needed because auth.gostoa.dev resolves to the nginx-gateway LB external IP,
+#    which is unreachable from inside OVH MKS (no hairpin NAT).
+# 4. NetworkPolicy allow-argocd-to-keycloak (k8s/network-policies/20-argocd.yaml)
+#
+# Two authentication flows:
 # 1. Direct SSO login via ArgoCD UI (standard OIDC flow)
 # 2. API access via Control-Plane-API forwarding user's Keycloak token
 #
@@ -21,10 +33,8 @@ data:
   # ArgoCD URL - MUST match ingress hostname
   url: https://argocd.gostoa.dev
 
-  # OIDC Configuration for Keycloak
+  # Native OIDC Configuration for Keycloak (no Dex)
   # NOTE: Do NOT use enableUserInfoGroups - it breaks API token forwarding
-  # from Control-Plane-API because ArgoCD tries to fetch userinfo with a
-  # cached token that doesn't exist for forwarded tokens.
   oidc.config: |
     name: Keycloak
     issuer: https://auth.gostoa.dev/realms/stoa
@@ -59,34 +69,34 @@ metadata:
     app.kubernetes.io/part-of: argocd
 data:
   # Default policy - all authenticated users get readonly access
-  policy.default: role:authenticated
+  policy.default: role:readonly
 
   # Use glob matching for flexible patterns
   policy.matchMode: glob
 
   # Scopes to use for RBAC
-  # Uses tenant_id claim from Keycloak (contains group memberships like ["argocd-admins"])
-  # This works with both direct SSO login and forwarded API tokens
-  scopes: "[tenant_id, email]"
+  # Uses "groups" claim from Keycloak (contains realm roles via protocol mapper)
+  scopes: "[groups]"
 
   # RBAC Policy
   policy.csv: |
     # ArgoCD RBAC Policy for Keycloak SSO
     # ===================================
     #
-    # Group memberships come from the tenant_id claim in JWT tokens.
-    # Users are assigned to Keycloak groups which map to ArgoCD roles.
+    # Role memberships come from the "groups" claim in JWT tokens.
+    # Keycloak realm roles (cpi-admin, devops, viewer) are mapped to
+    # the "groups" claim via a realm-roles protocol mapper on the argocd client.
 
     # Admin role - full access to all resources
-    p, role:admin, applications, *, */*, allow
-    p, role:admin, clusters, *, *, allow
-    p, role:admin, repositories, *, *, allow
-    p, role:admin, accounts, *, *, allow
-    p, role:admin, certificates, *, *, allow
-    p, role:admin, gpgkeys, *, *, allow
-    p, role:admin, logs, *, *, allow
-    p, role:admin, exec, create, */*, allow
-    p, role:admin, projects, *, *, allow
+    p, role:cpi-admin, applications, *, */*, allow
+    p, role:cpi-admin, clusters, *, *, allow
+    p, role:cpi-admin, repositories, *, *, allow
+    p, role:cpi-admin, accounts, *, *, allow
+    p, role:cpi-admin, certificates, *, *, allow
+    p, role:cpi-admin, gpgkeys, *, *, allow
+    p, role:cpi-admin, logs, *, *, allow
+    p, role:cpi-admin, exec, create, */*, allow
+    p, role:cpi-admin, projects, *, *, allow
 
     # Readonly role - view-only access
     p, role:readonly, applications, get, */*, allow
@@ -103,14 +113,8 @@ data:
     p, role:devops, repositories, get, *, allow
     p, role:devops, projects, get, *, allow
 
-    # Group to role mappings (Keycloak groups via tenant_id claim)
-    g, argocd-admins, role:admin
-    g, argocd-devops, role:devops
-    g, argocd-readonly, role:readonly
-
-    # Authenticated users - baseline read access for all logged-in users
-    # This enables Console UI to display platform status for any user
-    p, role:authenticated, applications, get, */*, allow
-    p, role:authenticated, clusters, get, *, allow
-    p, role:authenticated, projects, get, *, allow
-    g, *, role:authenticated
+    # Keycloak realm role → ArgoCD role mappings (via "groups" claim)
+    g, cpi-admin, role:cpi-admin
+    g, devops, role:devops
+    g, viewer, role:readonly
+    g, stoa-api, role:readonly

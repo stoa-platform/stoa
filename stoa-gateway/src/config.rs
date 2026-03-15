@@ -106,6 +106,21 @@ pub struct Config {
     #[serde(default)]
     pub websocket_enabled: bool,
 
+    /// Enable generic WebSocket proxy (CAB-1758, default: false — opt-in)
+    /// Env: STOA_WS_PROXY_ENABLED
+    #[serde(default)]
+    pub ws_proxy_enabled: bool,
+
+    /// WebSocket proxy: max messages per second per connection (default: 100)
+    /// Env: STOA_WS_PROXY_RATE_LIMIT_PER_SECOND
+    #[serde(default = "default_ws_proxy_rate_limit")]
+    pub ws_proxy_rate_limit_per_second: f64,
+
+    /// WebSocket proxy: burst capacity per connection (default: 50)
+    /// Env: STOA_WS_PROXY_RATE_LIMIT_BURST
+    #[serde(default = "default_ws_proxy_burst")]
+    pub ws_proxy_rate_limit_burst: usize,
+
     // === Policy Engine (Phase 2 OPA) ===
     /// Path to Rego policy file (e.g., /etc/stoa/policies/default.rego)
     /// Env: STOA_POLICY_PATH
@@ -749,6 +764,14 @@ fn default_session_ttl() -> i64 {
     30
 }
 
+fn default_ws_proxy_rate_limit() -> f64 {
+    100.0
+}
+
+fn default_ws_proxy_burst() -> usize {
+    50
+}
+
 fn default_gateway_external_url() -> Option<String> {
     Some("http://localhost:8080".to_string())
 }
@@ -1213,6 +1236,9 @@ impl Default for Config {
             a2a_enabled: false,
             a2a_max_agents: default_a2a_max_agents(),
             a2a_max_tasks: default_a2a_max_tasks(),
+            ws_proxy_enabled: false,
+            ws_proxy_rate_limit_per_second: default_ws_proxy_rate_limit(),
+            ws_proxy_rate_limit_burst: default_ws_proxy_burst(),
         }
     }
 }

@@ -529,6 +529,67 @@ pub fn track_ws_message(direction: &str, method: &str) {
         .inc();
 }
 
+// === WebSocket Proxy Metrics (CAB-1758) ===
+
+pub static WS_PROXY_CONNECTIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "stoa_ws_proxy_connections_active",
+        "Number of active WebSocket proxy connections"
+    )
+    .expect("Failed to create stoa_ws_proxy_connections_active metric")
+});
+
+pub static WS_PROXY_CONNECTION_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_ws_proxy_connection_duration_seconds",
+        "Duration of WebSocket proxy connections",
+        &["tenant"],
+        vec![1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0]
+    )
+    .expect("Failed to create stoa_ws_proxy_connection_duration_seconds metric")
+});
+
+pub static WS_PROXY_MESSAGES_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_ws_proxy_messages_total",
+        "Total WebSocket proxy messages relayed",
+        &["direction", "route_id"]
+    )
+    .expect("Failed to create stoa_ws_proxy_messages_total metric")
+});
+
+pub static WS_PROXY_RATE_LIMITED_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_ws_proxy_rate_limited_total",
+        "Total WebSocket proxy messages dropped by rate limiter",
+        &["route_id", "source"]
+    )
+    .expect("Failed to create stoa_ws_proxy_rate_limited_total metric")
+});
+
+pub fn track_ws_proxy_connect() {
+    WS_PROXY_CONNECTIONS_ACTIVE.inc();
+}
+
+pub fn track_ws_proxy_disconnect(tenant: &str, duration_secs: f64) {
+    WS_PROXY_CONNECTIONS_ACTIVE.dec();
+    WS_PROXY_CONNECTION_DURATION
+        .with_label_values(&[tenant])
+        .observe(duration_secs);
+}
+
+pub fn track_ws_proxy_message(direction: &str, route_id: &str) {
+    WS_PROXY_MESSAGES_TOTAL
+        .with_label_values(&[direction, route_id])
+        .inc();
+}
+
+pub fn track_ws_proxy_rate_limited(route_id: &str, source: &str) {
+    WS_PROXY_RATE_LIMITED_TOTAL
+        .with_label_values(&[route_id, source])
+        .inc();
+}
+
 /// Update session count gauge
 pub fn update_session_count(count: usize) {
     MCP_SESSIONS_ACTIVE.set(count as f64);

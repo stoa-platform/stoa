@@ -844,6 +844,12 @@ function ServerCard({
             <span className="capitalize">{server.environment}</span>
           </div>
         )}
+        {server.gateway_instance_id && (
+          <div className="flex justify-between">
+            <span className="text-neutral-500 dark:text-neutral-400">Gateway:</span>
+            <span className="font-mono text-xs">{server.gateway_instance_id}</span>
+          </div>
+        )}
         <div className="flex justify-between items-center">
           <span className="text-neutral-500 dark:text-neutral-400">Status:</span>
           <span

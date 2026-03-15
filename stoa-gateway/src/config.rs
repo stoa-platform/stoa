@@ -642,6 +642,17 @@ pub struct Config {
     /// Env: STOA_SOAP_BRIDGE_ENABLED
     #[serde(default)]
     pub soap_bridge_enabled: bool,
+
+    // === gRPC Protocol Support (CAB-1755) ===
+    /// Enable gRPC proxy passthrough (default: false).
+    /// Env: STOA_GRPC_PROXY_ENABLED
+    #[serde(default)]
+    pub grpc_proxy_enabled: bool,
+
+    /// Enable gRPC→MCP bridge (auto-register gRPC methods as MCP tools).
+    /// Env: STOA_GRPC_BRIDGE_ENABLED
+    #[serde(default)]
+    pub grpc_bridge_enabled: bool,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1302,6 +1313,8 @@ impl Default for Config {
             ws_proxy_rate_limit_burst: default_ws_proxy_burst(),
             soap_proxy_enabled: false,
             soap_bridge_enabled: false,
+            grpc_proxy_enabled: false,
+            grpc_bridge_enabled: false,
         }
     }
 }

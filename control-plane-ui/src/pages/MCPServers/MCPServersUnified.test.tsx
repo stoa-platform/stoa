@@ -138,6 +138,7 @@ const mockServers = [
     tools_count: 12,
     tool_prefix: 'linear',
     sync_error: null,
+    gateway_instance_id: 'gw-inst-abc123',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },
@@ -373,6 +374,14 @@ describe('MCPServersUnified', () => {
     await waitFor(() => {
       expect(mockListConnectors).toHaveBeenCalledWith(undefined, 'staging');
     });
+  });
+
+  it('shows gateway instance ID for bound servers', async () => {
+    renderComponent(['/mcp-servers?tab=custom']);
+    await waitFor(() => {
+      expect(screen.getByText('My Linear')).toBeInTheDocument();
+    });
+    expect(screen.getByText('gw-inst-abc123')).toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

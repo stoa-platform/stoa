@@ -314,3 +314,47 @@ class ExternalMCPServersForGatewayResponse(BaseModel):
     """Response for gateway internal endpoint."""
 
     servers: list[ExternalMCPServerForGateway]
+
+
+# ============== Tool Observability Schemas (CAB-1821) ==============
+
+
+class ToolObservabilityItem(BaseModel):
+    """Per-tool observability data: metadata + gateway binding."""
+
+    id: UUID
+    name: str = Field(..., description="Original tool name")
+    namespaced_name: str = Field(..., description="Prefixed tool name")
+    display_name: str | None = None
+    description: str | None = None
+    enabled: bool = True
+    synced_at: datetime
+    input_schema: dict | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GatewayBindingInfo(BaseModel):
+    """Gateway instance binding information for an MCP server."""
+
+    gateway_instance_id: UUID | None = None
+    gateway_name: str | None = Field(None, description="Gateway instance display name")
+    gateway_type: str | None = Field(None, description="Gateway type (stoa, kong, etc.)")
+    gateway_environment: str | None = Field(None, description="Gateway environment")
+    gateway_status: str | None = Field(None, description="Gateway health status")
+
+
+class ToolsObservabilityResponse(BaseModel):
+    """Response for tools-summary endpoint — tool metadata + gateway binding (CAB-1821)."""
+
+    server_id: UUID
+    server_name: str
+    server_display_name: str
+    environment: str | None = "dev"
+    health_status: HealthStatusEnum = HealthStatusEnum.UNKNOWN
+    last_health_check: datetime | None = None
+    last_sync_at: datetime | None = None
+    gateway: GatewayBindingInfo
+    tools: list[ToolObservabilityItem] = []
+    tools_count: int = 0
+    enabled_count: int = 0

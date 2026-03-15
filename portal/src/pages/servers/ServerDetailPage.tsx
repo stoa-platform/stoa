@@ -30,6 +30,7 @@ import {
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
 import { mcpServersService } from '../../services/mcpServers';
+import { UsageStats } from '../../components/tools/UsageStats';
 import type { MCPServer, MCPServerSubscription } from '../../types';
 
 export function ServerDetailPage() {
@@ -549,6 +550,9 @@ export function ServerDetailPage() {
           })}
         </div>
       </div>
+
+      {/* Usage Statistics (only for subscribed users) */}
+      {subscription && subscription.status === 'active' && <UsageStats />}
 
       {/* Subscribe Button */}
       {!subscription && (

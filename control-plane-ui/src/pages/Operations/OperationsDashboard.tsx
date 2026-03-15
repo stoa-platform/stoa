@@ -30,7 +30,7 @@ const dashboards = config.services.grafana.dashboards;
 
 // PromQL queries — combines Gateway (stoa_http_requests_total, label: status)
 // and Control Plane API (stoa_control_plane_http_requests_total, label: status_code)
-const QUERIES = {
+export const QUERIES = {
   // SLO: availability = 1 - error_rate across both Gateway + API (1h window)
   availability:
     '(1 - (sum(increase(stoa_http_requests_total{status=~"5.."}[1h])) + sum(increase(stoa_control_plane_http_requests_total{status_code=~"5.."}[1h])) or vector(0)) / (sum(increase(stoa_http_requests_total[1h])) + sum(increase(stoa_control_plane_http_requests_total[1h])) or vector(1))) * 100',

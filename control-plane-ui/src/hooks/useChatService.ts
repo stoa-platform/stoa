@@ -358,6 +358,31 @@ export function useChatService() {
   }, [getTenantId, getToken]);
 
   // -------------------------------------------------------------------------
+  // Load conversation messages (for history switching)
+  // -------------------------------------------------------------------------
+
+  const loadConversationMessages = useCallback(
+    async (convId: string): Promise<{ role: string; content: string; created_at: string }[]> => {
+      const tenantId = getTenantId();
+      const token = getToken();
+      const res = await fetch(
+        `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations/${convId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.messages || []).map(
+        (m: { role: string; content: string; created_at: string }) => ({
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        })
+      );
+    },
+    [getTenantId, getToken]
+  );
+
+  // -------------------------------------------------------------------------
   // Backward-compatible: accumulate full response (used by simple callers)
   // -------------------------------------------------------------------------
 
@@ -393,6 +418,8 @@ export function useChatService() {
     newConversation,
     /** Delete a conversation */
     deleteConversation,
+    /** Load messages for a specific conversation */
+    loadConversationMessages,
     /** List of loaded conversations */
     conversations,
     /** Currently active conversation ID */

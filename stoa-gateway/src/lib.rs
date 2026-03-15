@@ -27,6 +27,7 @@ pub mod metrics;
 pub mod mode;
 pub mod oauth;
 pub mod optimization;
+pub mod plugin;
 pub mod policy;
 pub mod proxy;
 pub mod quota;

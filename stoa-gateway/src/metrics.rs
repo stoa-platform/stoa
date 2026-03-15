@@ -851,6 +851,38 @@ pub fn track_kafka_bridge_subscribe(tenant_id: &str) {
     KAFKA_BRIDGE_SUBSCRIBE.with_label_values(&[tenant_id]).inc();
 }
 
+// === Plugin SDK Metrics (CAB-1759) ===
+
+/// Counter of plugin executions by plugin name, phase, and result.
+static PLUGIN_EXECUTIONS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_plugin_executions_total",
+        "Total plugin executions by plugin, phase, and result",
+        &["plugin", "phase", "result"]
+    )
+    .expect("Failed to create stoa_plugin_executions_total metric")
+});
+
+/// Counter of plugin load/unload events by plugin name and action.
+static PLUGIN_LIFECYCLE: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_plugin_lifecycle_total",
+        "Total plugin lifecycle events (load, unload, hot-reload)",
+        &["plugin", "action"]
+    )
+    .expect("Failed to create stoa_plugin_lifecycle_total metric")
+});
+
+pub fn track_plugin_execution(plugin: &str, phase: &str, result: &str) {
+    PLUGIN_EXECUTIONS
+        .with_label_values(&[plugin, phase, result])
+        .inc();
+}
+
+pub fn track_plugin_lifecycle(plugin: &str, action: &str) {
+    PLUGIN_LIFECYCLE.with_label_values(&[plugin, action]).inc();
+}
+
 /// Update session count gauge
 pub fn update_session_count(count: usize) {
     MCP_SESSIONS_ACTIVE.set(count as f64);

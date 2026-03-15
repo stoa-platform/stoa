@@ -198,6 +198,50 @@ pub static GUARDRAILS_CONTENT_FILTERED: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_guardrails_content_filtered_total metric")
 });
 
+// === Prompt Guard Metrics (CAB-1761) ===
+
+/// Counter of prompt guard detections by category and action.
+pub static PROMPT_GUARD_DETECTED: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_prompt_guard_detected_total",
+        "Total prompt guard threat detections by category and action",
+        &["category", "action"]
+    )
+    .expect("Failed to create stoa_prompt_guard_detected_total metric")
+});
+
+/// Counter of prompts scanned by the prompt guard (pass + detected).
+pub static PROMPT_GUARD_SCANNED: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_prompt_guard_scanned_total",
+        "Total prompts scanned by prompt guard",
+        &["result"]
+    )
+    .expect("Failed to create stoa_prompt_guard_scanned_total metric")
+});
+
+// === RAG Injector Metrics (CAB-1761) ===
+
+/// Counter of RAG context injection attempts by source and result.
+pub static RAG_INJECTIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_rag_injections_total",
+        "Total RAG context injection attempts by source and result",
+        &["source", "result"]
+    )
+    .expect("Failed to create stoa_rag_injections_total metric")
+});
+
+/// Histogram of RAG source fetch duration in seconds.
+pub static RAG_FETCH_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_rag_fetch_duration_seconds",
+        "Duration of RAG context source fetch operations",
+        &["source"]
+    )
+    .expect("Failed to create stoa_rag_fetch_duration_seconds metric")
+});
+
 // === Token Budget Metrics (CAB-1337 Phase 2) ===
 
 /// Total tokens processed per tenant and direction.
@@ -716,6 +760,36 @@ pub fn record_guardrails_content_filter(action: &str, category: &str) {
     GUARDRAILS_CONTENT_FILTERED
         .with_label_values(&[action, category])
         .inc();
+}
+
+// === Prompt Guard metrics helpers (CAB-1761) ===
+
+/// Record a prompt guard detection event.
+pub fn record_prompt_guard_detected(category: &str, action: &str) {
+    PROMPT_GUARD_DETECTED
+        .with_label_values(&[category, action])
+        .inc();
+}
+
+/// Record a prompt guard scan result (pass or detected).
+pub fn record_prompt_guard_scanned(result: &str) {
+    PROMPT_GUARD_SCANNED.with_label_values(&[result]).inc();
+}
+
+// === RAG Injector metrics helpers (CAB-1761) ===
+
+/// Record a RAG context injection attempt.
+pub fn record_rag_injection(source: &str, result: &str) {
+    RAG_INJECTIONS_TOTAL
+        .with_label_values(&[source, result])
+        .inc();
+}
+
+/// Record the duration of a RAG source fetch.
+pub fn record_rag_fetch_duration(source: &str, duration_secs: f64) {
+    RAG_FETCH_DURATION
+        .with_label_values(&[source])
+        .observe(duration_secs);
 }
 
 /// Record token consumption for a tenant.

@@ -27,6 +27,7 @@ pub mod optimization;
 pub mod policy;
 pub mod proxy;
 pub mod quota;
+pub mod rag;
 pub mod rate_limit;
 pub mod resilience;
 pub mod routes;

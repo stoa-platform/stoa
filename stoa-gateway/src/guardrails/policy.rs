@@ -87,6 +87,8 @@ impl GuardrailPolicyStore {
                 pii_redact: global.pii_redact,
                 injection_enabled: global.injection_enabled,
                 content_filter_enabled: global.content_filter_enabled,
+                prompt_guard_enabled: global.prompt_guard_enabled,
+                prompt_guard_action: global.prompt_guard_action,
             },
             Some(t) => GuardrailsConfig {
                 pii_enabled: t.pii_enabled.unwrap_or(global.pii_enabled),
@@ -95,6 +97,8 @@ impl GuardrailPolicyStore {
                 content_filter_enabled: t
                     .content_filter_enabled
                     .unwrap_or(global.content_filter_enabled),
+                prompt_guard_enabled: global.prompt_guard_enabled,
+                prompt_guard_action: global.prompt_guard_action,
             },
         }
     }
@@ -138,11 +142,14 @@ mod tests {
     use super::*;
 
     fn global() -> GuardrailsConfig {
+        use crate::guardrails::PromptGuardAction;
         GuardrailsConfig {
             pii_enabled: false,
             pii_redact: true,
             injection_enabled: false,
             content_filter_enabled: false,
+            prompt_guard_enabled: false,
+            prompt_guard_action: PromptGuardAction::Block,
         }
     }
 

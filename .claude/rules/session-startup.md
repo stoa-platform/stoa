@@ -77,23 +77,40 @@ See `phase-ownership.md` for full protocol, claim schemas, and conflict resoluti
    → "All phases/tickets claimed or blocked. Available MEGAs: [list unclaimed MEGAs]"
    → If user says "what next?" → summarize claim status across all MEGAs
 
+## Step 2b — Effort Level Routing
+
+Set the effort level based on the task's Ship/Show/Ask mode and complexity:
+
+| Task Mode | Effort | When |
+|-----------|--------|------|
+| **Ship** (docs, config, style, deps) | `low` | `/effort low` — fast, cheap, routine |
+| **Show** (refactor, test additions, bug fix) | `medium` | Default — no change needed |
+| **Ask** (features, security, migrations, MEGAs) | `high` | `/effort high` — thorough, complex |
+
+**Rules**:
+- Default is `medium` (Opus 4.6 default for Max). No action needed for most tasks.
+- Toggle `/fast` for Ship-mode tasks (docs, config, `.claude/` changes) — same model, faster output.
+- Use `high` only for Ask-mode tasks or MEGAs >= 13 pts.
+- Subagent Explore calls should use `model: haiku` for cost efficiency.
+
 ## Step 3 — Context Budget
 
-Monitor context window usage throughout the session:
-- **Target**: stay under **60% context** (Ashley Ha / Boris Cherny pattern)
-- **At 50%**: delegate remaining research to subagents, stop exploring inline
-- **At 70%**: use `/compact` to compress conversation, keep working
-- **At 80%**: wrap up current task, commit, update state files, consider fresh session
-- **Never**: keep going past 90% — quality degrades, hallucinations increase
+With 1M context on Opus 4.6, the gates are relaxed vs. the original 200K window:
+
+- **Target**: stay under **80% context**
+- **At 60%**: delegate remaining research to subagents, stop exploring inline
+- **At 80%**: use `/compact` to compress conversation, keep working
+- **At 90%**: wrap up current task, commit, update state files, consider fresh session
+- **Never**: keep going past 95% — quality degrades, hallucinations increase
 
 Use `/clear` aggressively between unrelated tasks in the same session.
 
 ### Orchestrator Override (STOA_INSTANCE=orchestrator or Pane 0)
 
 The orchestrator has **stricter** context limits because it runs continuously:
-- **Target**: stay under **40% context** (vs 60% for implementation instances)
-- **At 30%**: `/compact` proactively
-- **At 50%**: STOP current cycle, update state files, `/clear`, start fresh
+- **Target**: stay under **60% context** (vs 80% for implementation instances)
+- **At 50%**: `/compact` proactively
+- **At 70%**: STOP current cycle, update state files, `/clear`, start fresh
 - **Never open code files** — delegate to Explore subagents or instances
 - **Cycle-based workflow**: each dispatch cycle is a mini-session (dispatch → verify → clear)
 
@@ -128,7 +145,7 @@ This replaces the GHA `plan-validate` job with inline validation by the worker.
 
 After merging a PR for a phase, check if the same MEGA has another unclaimed unblocked phase:
 
-1. **Context budget gate**: Only chain if context usage < **60%**. If over 60%, end session and let a fresh instance pick up the next phase (quality degrades with deep context).
+1. **Context budget gate**: Only chain if context usage < **70%**. If over 70%, end session and let a fresh instance pick up the next phase (quality degrades with deep context).
 2. Read `.claude/claims/<MEGA-ID>.json` → find the phase you just completed
 3. Set `completed_at` on your phase, clear `owner` (release)
 4. Log: `RELEASE | task=<MEGA-ID> phase=<N> instance=<ID> reason=done`

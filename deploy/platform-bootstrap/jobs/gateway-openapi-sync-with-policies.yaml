@@ -24,7 +24,7 @@ spec:
             memory: 256Mi
         env:
         - name: BACKEND_URL
-          value: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+          value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
         - name: GATEWAY_URL
           value: "http://apigateway.stoa-system.svc.cluster.local:5555"
         - name: GATEWAY_USER

@@ -24,9 +24,12 @@ import {
   Lock,
   Eye,
   EyeOff,
+  GitBranch,
 } from 'lucide-react';
 import { Button } from '@stoa/shared/components/Button';
 import type { GatewayInstance, GatewayInstanceStatus, GatewayMode } from '../../types';
+import { SubNav } from '../../components/SubNav';
+import { gatewayTabs } from '../../components/subNavGroups';
 
 // ---------------------------------------------------------------------------
 // Constants — colors from shared constants (green=dev, amber=staging, red=prod)
@@ -92,7 +95,7 @@ const STATUS_CONFIG: Record<GatewayInstanceStatus, { dot: string; label: string;
 const TYPE_DISPLAY: Record<string, { label: string; icon: typeof Server }> = {
   stoa: { label: 'STOA', icon: Zap },
   stoa_edge_mcp: { label: 'STOA Edge MCP', icon: Zap },
-  stoa_sidecar: { label: 'STOA Sidecar', icon: Shield },
+  stoa_sidecar: { label: 'STOA Link', icon: Shield },
   stoa_proxy: { label: 'STOA Proxy', icon: Globe },
   stoa_shadow: { label: 'STOA Shadow', icon: Activity },
   webmethods: { label: 'webMethods', icon: Server },
@@ -101,13 +104,15 @@ const TYPE_DISPLAY: Record<string, { label: string; icon: typeof Server }> = {
   aws_apigateway: { label: 'AWS API GW', icon: Server },
   azure_apim: { label: 'Azure APIM', icon: Server },
   gravitee: { label: 'Gravitee', icon: Server },
+  stoa_connect: { label: 'STOA Connect', icon: GitBranch },
 };
 
 const MODE_LABELS: Record<GatewayMode, string> = {
   'edge-mcp': 'Edge MCP',
-  sidecar: 'Sidecar',
+  sidecar: 'STOA Link',
   proxy: 'Proxy',
   shadow: 'Shadow',
+  connect: 'Connect',
 };
 
 // ---------------------------------------------------------------------------
@@ -382,6 +387,8 @@ export function GatewayList() {
           </Button>
         </div>
       </div>
+
+      <SubNav tabs={gatewayTabs} />
 
       {/* Error Banner */}
       {error && (
@@ -677,6 +684,15 @@ function GatewayRow({
               {MODE_LABELS[gw.mode] ?? gw.mode}
             </span>
           )}
+          {gw.source === 'argocd' && (
+            <span
+              className="flex-shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
+              title="Managed by ArgoCD"
+            >
+              <GitBranch className="w-3 h-3" />
+              GitOps
+            </span>
+          )}
           {gw.protected && (
             <span
               className="flex-shrink-0 text-amber-500 dark:text-amber-400"
@@ -783,6 +799,8 @@ function GatewayDetailPanel({
   onClose: () => void;
 }) {
   const hd = (gw.health_details ?? {}) as Record<string, unknown>;
+  const uptimeSeconds = typeof hd.uptime_seconds === 'number' ? hd.uptime_seconds : null;
+  const routesCount = typeof hd.routes_count === 'number' ? hd.routes_count : null;
   const errorRate = typeof hd.error_rate === 'number' ? hd.error_rate : null;
   const status = STATUS_CONFIG[gw.status];
   const typeInfo = TYPE_DISPLAY[gw.gateway_type] ?? { label: gw.gateway_type, icon: Server };
@@ -830,10 +848,33 @@ function GatewayDetailPanel({
               </span>
             )}
             <span className="text-xs text-neutral-400">{typeInfo.label}</span>
+            {gw.source === 'argocd' && (
+              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-medium rounded bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                <GitBranch className="w-3 h-3" />
+                GitOps
+              </span>
+            )}
           </div>
         </div>
 
         <div className="px-6 py-5 space-y-6">
+          {/* ArgoCD Sync Status */}
+          {gw.source === 'argocd' && !!hd.argocd_sync && (
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
+                ArgoCD Sync
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                <MetricCard label="Health" value={String(hd.argocd_health ?? '--')} />
+                <MetricCard label="Sync" value={String(hd.argocd_sync ?? '--')} />
+                <MetricCard
+                  label="Revision"
+                  value={typeof hd.argocd_revision === 'string' ? hd.argocd_revision : '--'}
+                />
+              </div>
+            </section>
+          )}
+
           {/* Heartbeat Metrics */}
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
@@ -842,18 +883,16 @@ function GatewayDetailPanel({
             <div className="grid grid-cols-3 gap-2">
               <MetricCard
                 label="Uptime"
-                value={
-                  typeof hd.uptime_seconds === 'number' ? formatUptime(hd.uptime_seconds) : '--'
-                }
+                value={uptimeSeconds !== null ? formatUptime(uptimeSeconds) : '--'}
               />
               <MetricCard
                 label="Routes"
-                value={hd.routes_count != null ? String(hd.routes_count) : '--'}
+                value={routesCount !== null ? String(routesCount) : '--'}
               />
               <MetricCard
                 label="Error Rate"
                 value={errorRate !== null ? `${(errorRate * 100).toFixed(1)}%` : '--'}
-                warn={errorRate !== null && errorRate > 0.05}
+                warn={errorRate !== null ? errorRate > 0.05 : false}
               />
             </div>
           </section>
@@ -882,6 +921,18 @@ function GatewayDetailPanel({
                   </a>
                 }
               />
+              {gw.source && (
+                <DetailRow
+                  label="Source"
+                  value={
+                    gw.source === 'argocd'
+                      ? 'ArgoCD (GitOps)'
+                      : gw.source === 'self_register'
+                        ? 'Self-registered'
+                        : 'Manual'
+                  }
+                />
+              )}
               {gw.tenant_id && <DetailRow label="Tenant" value={gw.tenant_id} />}
               {gw.version && <DetailRow label="Version" value={gw.version} mono />}
               <DetailRow label="Created" value={new Date(gw.created_at).toLocaleDateString()} />

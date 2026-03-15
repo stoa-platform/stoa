@@ -6,16 +6,24 @@
  */
 
 import { apiService } from './api';
-import type { ConnectorCatalogResponse, AuthorizeResponse, CallbackResponse } from '../types';
+import type {
+  ConnectorCatalogResponse,
+  AuthorizeResponse,
+  CallbackResponse,
+  PromoteResponse,
+} from '../types';
 
 class MCPConnectorsService {
   /**
    * List all connector templates with connection status.
    * Endpoint: GET /v1/admin/mcp-connectors
    */
-  async listConnectors(tenantId?: string): Promise<ConnectorCatalogResponse> {
+  async listConnectors(tenantId?: string, environment?: string): Promise<ConnectorCatalogResponse> {
+    const params: Record<string, string> = {};
+    if (tenantId) params.tenant_id = tenantId;
+    if (environment) params.environment = environment;
     const { data } = await apiService.get('/v1/admin/mcp-connectors', {
-      params: tenantId ? { tenant_id: tenantId } : undefined,
+      params: Object.keys(params).length > 0 ? params : undefined,
     });
     return data;
   }
@@ -26,7 +34,12 @@ class MCPConnectorsService {
    */
   async authorize(
     slug: string,
-    body: { tenant_id?: string; redirect_after?: string }
+    body: {
+      tenant_id?: string;
+      redirect_after?: string;
+      client_id?: string;
+      client_secret?: string;
+    }
   ): Promise<AuthorizeResponse> {
     const { data } = await apiService.post(`/v1/admin/mcp-connectors/${slug}/authorize`, body);
     return data;
@@ -48,6 +61,22 @@ class MCPConnectorsService {
   async disconnect(slug: string, tenantId?: string): Promise<void> {
     const params = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
     await apiService.delete(`/v1/admin/mcp-connectors/${slug}/disconnect${params}`);
+  }
+
+  /**
+   * Promote a connector to a target environment.
+   * Endpoint: POST /v1/admin/mcp-connectors/{slug}/promote
+   */
+  async promote(
+    slug: string,
+    body: {
+      target_environment: string;
+      tenant_id?: string;
+      confirm?: boolean;
+    }
+  ): Promise<PromoteResponse> {
+    const { data } = await apiService.post(`/v1/admin/mcp-connectors/${slug}/promote`, body);
+    return data;
   }
 }
 

@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from ..config import settings
 from ..services import git_service, kafka_service, keycloak_service
 from ..services.gateway_service import gateway_service
+from ..services.vault_client import get_vault_client
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -38,6 +39,7 @@ def _check_gateway_connected() -> bool:
     # In OIDC proxy mode, no persistent client is created
     # Gateway is "connected" if using proxy mode or has a client
     from ..config import settings
+
     if settings.GATEWAY_USE_OIDC_PROXY:
         return True  # Proxy mode is always available
     return gateway_service._client is not None
@@ -45,6 +47,7 @@ def _check_gateway_connected() -> bool:
 
 class HealthCheck(BaseModel):
     """Health check response model."""
+
     status: str
     version: str
     timestamp: str
@@ -53,6 +56,7 @@ class HealthCheck(BaseModel):
 
 class DependencyStatus(BaseModel):
     """Status of a dependency."""
+
     status: str
     latency_ms: float | None = None
     error: str | None = None
@@ -120,6 +124,18 @@ async def readiness():
     except Exception as e:
         checks["gateway"] = f"error: {e!s}"
 
+    # Check Vault connection (non-critical — MCP credentials feature)
+    try:
+        vault = get_vault_client()
+        if not vault.enabled:
+            checks["vault"] = "disabled"
+        elif vault.health_check():
+            checks["vault"] = "ok"
+        else:
+            checks["vault"] = "disconnected"
+    except Exception as e:
+        checks["vault"] = f"error: {e!s}"
+
     status = "healthy" if all_healthy else "degraded"
 
     response = HealthCheck(
@@ -148,3 +164,17 @@ async def startup():
         version=settings.VERSION,
         timestamp=datetime.now(UTC).isoformat(),
     )
+
+
+@router.get("/workers")
+async def workers_status():
+    """Background workers health status."""
+    from ..workers.gateway_health_worker import gateway_health_worker
+    from ..workers.gateway_reconciler import gateway_reconciler
+
+    return {
+        "gateway_health_worker": {
+            "active": gateway_health_worker._running,
+        },
+        "gateway_reconciler": gateway_reconciler.status,
+    }

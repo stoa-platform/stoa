@@ -291,7 +291,7 @@ export function BusinessDashboard() {
               m.mode === 'edge-mcp'
                 ? 'Edge MCP'
                 : m.mode === 'sidecar'
-                  ? 'Sidecar'
+                  ? 'STOA Link'
                   : m.mode === 'proxy'
                     ? 'Proxy'
                     : 'Shadow',

@@ -30,6 +30,8 @@ slowapi==0.1.9
 aioboto3>=12.0.0
 # Vault client for secure credential storage (CAB-879)
 hvac>=2.1.0
+# SSE client for MCP server tool discovery (CAB-1791)
+httpx-sse>=0.4.0
 # OpenTelemetry distributed tracing (CAB-1088)
 opentelemetry-api>=1.27.0
 opentelemetry-sdk>=1.27.0

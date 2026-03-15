@@ -106,6 +106,21 @@ pub struct Config {
     #[serde(default)]
     pub websocket_enabled: bool,
 
+    /// Enable generic WebSocket proxy (CAB-1758, default: false — opt-in)
+    /// Env: STOA_WS_PROXY_ENABLED
+    #[serde(default)]
+    pub ws_proxy_enabled: bool,
+
+    /// WebSocket proxy: max messages per second per connection (default: 100)
+    /// Env: STOA_WS_PROXY_RATE_LIMIT_PER_SECOND
+    #[serde(default = "default_ws_proxy_rate_limit")]
+    pub ws_proxy_rate_limit_per_second: f64,
+
+    /// WebSocket proxy: burst capacity per connection (default: 50)
+    /// Env: STOA_WS_PROXY_RATE_LIMIT_BURST
+    #[serde(default = "default_ws_proxy_burst")]
+    pub ws_proxy_rate_limit_burst: usize,
+
     // === Policy Engine (Phase 2 OPA) ===
     /// Path to Rego policy file (e.g., /etc/stoa/policies/default.rego)
     /// Env: STOA_POLICY_PATH
@@ -311,6 +326,38 @@ pub struct Config {
     /// Env: STOA_GUARDRAILS_CONTENT_FILTER_ENABLED
     #[serde(default)]
     pub guardrails_content_filter_enabled: bool,
+
+    // === Prompt Guard (CAB-1761) ===
+    /// Enable LLM prompt guard (jailbreak, injection, evasion detection)
+    /// Env: STOA_PROMPT_GUARD_ENABLED
+    #[serde(default)]
+    pub prompt_guard_enabled: bool,
+
+    /// Action when prompt guard detects a threat: block, warn, log_only
+    /// Env: STOA_PROMPT_GUARD_ACTION
+    #[serde(default)]
+    pub prompt_guard_action: crate::guardrails::PromptGuardAction,
+
+    // === RAG Injector (CAB-1761) ===
+    /// Enable RAG context injection for prompts
+    /// Env: STOA_RAG_INJECTOR_ENABLED
+    #[serde(default)]
+    pub rag_injector_enabled: bool,
+
+    /// Maximum RAG context length in characters
+    /// Env: STOA_RAG_MAX_CONTEXT_LENGTH
+    #[serde(default = "default_rag_max_context_length")]
+    pub rag_max_context_length: usize,
+
+    /// RAG source request timeout in milliseconds
+    /// Env: STOA_RAG_SOURCE_TIMEOUT_MS
+    #[serde(default = "default_rag_source_timeout_ms")]
+    pub rag_source_timeout_ms: u64,
+
+    /// Maximum number of RAG context chunks to include
+    /// Env: STOA_RAG_MAX_CHUNKS
+    #[serde(default = "default_rag_max_chunks")]
+    pub rag_max_chunks: usize,
 
     // === Token Budget (CAB-1337 Phase 2) ===
     /// Enable per-tenant token budget tracking
@@ -584,6 +631,51 @@ pub struct Config {
     /// Env: STOA_A2A_MAX_TASKS
     #[serde(default = "default_a2a_max_tasks")]
     pub a2a_max_tasks: usize,
+
+    // === SOAP/XML Bridge (CAB-1762) ===
+    /// Enable SOAP proxy passthrough (default: false).
+    /// Env: STOA_SOAP_PROXY_ENABLED
+    #[serde(default)]
+    pub soap_proxy_enabled: bool,
+
+    /// Enable SOAP→MCP bridge (auto-register SOAP operations as MCP tools).
+    /// Env: STOA_SOAP_BRIDGE_ENABLED
+    #[serde(default)]
+    pub soap_bridge_enabled: bool,
+
+    // === gRPC Protocol Support (CAB-1755) ===
+    /// Enable gRPC proxy passthrough (default: false).
+    /// Env: STOA_GRPC_PROXY_ENABLED
+    #[serde(default)]
+    pub grpc_proxy_enabled: bool,
+
+    /// Enable gRPC→MCP bridge (auto-register gRPC methods as MCP tools).
+    /// Env: STOA_GRPC_BRIDGE_ENABLED
+    #[serde(default)]
+    pub grpc_bridge_enabled: bool,
+
+    // === GraphQL Protocol Support (CAB-1756) ===
+    /// Enable GraphQL proxy passthrough (default: false).
+    /// Env: STOA_GRAPHQL_PROXY_ENABLED
+    #[serde(default)]
+    pub graphql_proxy_enabled: bool,
+
+    /// Enable GraphQL→MCP bridge (auto-register queries/mutations as MCP tools).
+    /// Env: STOA_GRAPHQL_BRIDGE_ENABLED
+    #[serde(default)]
+    pub graphql_bridge_enabled: bool,
+
+    // === Kafka Event Bridge (CAB-1757) ===
+    /// Enable Kafka→MCP bridge tools (publish/subscribe via MCP).
+    /// Env: STOA_KAFKA_BRIDGE_ENABLED
+    #[serde(default)]
+    pub kafka_bridge_enabled: bool,
+
+    // === Plugin SDK (CAB-1759) ===
+    /// Enable Plugin SDK for custom gateway plugins.
+    /// Env: STOA_PLUGIN_SDK_ENABLED
+    #[serde(default)]
+    pub plugin_sdk_enabled: bool,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -747,6 +839,14 @@ fn default_host() -> String {
 
 fn default_session_ttl() -> i64 {
     30
+}
+
+fn default_ws_proxy_rate_limit() -> f64 {
+    100.0
+}
+
+fn default_ws_proxy_burst() -> usize {
+    50
 }
 
 fn default_gateway_external_url() -> Option<String> {
@@ -983,6 +1083,18 @@ fn default_guardrails_pii_redact() -> bool {
     true // Redact by default (safer than rejecting)
 }
 
+fn default_rag_max_context_length() -> usize {
+    4096
+}
+
+fn default_rag_source_timeout_ms() -> u64 {
+    3000
+}
+
+fn default_rag_max_chunks() -> usize {
+    5
+}
+
 fn default_token_budget_limit() -> u64 {
     500_000 // 500K tokens per window (~2M chars)
 }
@@ -1163,6 +1275,12 @@ impl Default for Config {
             guardrails_pii_redact: default_guardrails_pii_redact(),
             guardrails_injection_enabled: false,
             guardrails_content_filter_enabled: false,
+            prompt_guard_enabled: false,
+            prompt_guard_action: crate::guardrails::PromptGuardAction::default(),
+            rag_injector_enabled: false,
+            rag_max_context_length: default_rag_max_context_length(),
+            rag_source_timeout_ms: default_rag_source_timeout_ms(),
+            rag_max_chunks: default_rag_max_chunks(),
             token_budget_enabled: false,
             token_budget_default_limit: default_token_budget_limit(),
             token_budget_window_hours: default_token_budget_window_hours(),
@@ -1213,6 +1331,17 @@ impl Default for Config {
             a2a_enabled: false,
             a2a_max_agents: default_a2a_max_agents(),
             a2a_max_tasks: default_a2a_max_tasks(),
+            ws_proxy_enabled: false,
+            ws_proxy_rate_limit_per_second: default_ws_proxy_rate_limit(),
+            ws_proxy_rate_limit_burst: default_ws_proxy_burst(),
+            soap_proxy_enabled: false,
+            soap_bridge_enabled: false,
+            grpc_proxy_enabled: false,
+            grpc_bridge_enabled: false,
+            graphql_proxy_enabled: false,
+            graphql_bridge_enabled: false,
+            kafka_bridge_enabled: false,
+            plugin_sdk_enabled: false,
         }
     }
 }

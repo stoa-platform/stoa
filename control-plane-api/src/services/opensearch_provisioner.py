@@ -55,13 +55,23 @@ class OpenSearchProvisioner:
         safe_id = tenant_id.replace("-", "_")
         results: dict = {"tenant_id": tenant_id, "roles_created": [], "errors": []}
 
+        # DLS filter: tenant's own docs + shared "platform" docs (anonymous/system requests)
+        tenant_dls = json.dumps({
+            "bool": {
+                "should": [
+                    {"term": {"tenant_id": tenant_id}},
+                    {"term": {"tenant_id": "platform"}},
+                ]
+            }
+        })
+
         # 1. Create tenant-scoped reader role (DLS, no FLS)
         reader_role = f"stoa_gw_tenant_{safe_id}"
         try:
             await self._create_role(
                 role_name=reader_role,
-                index_patterns=["stoa-gw-*"],
-                dls=json.dumps({"term": {"tenant_id": tenant_id}}),
+                index_patterns=["stoa-gw-*", "audit*"],
+                dls=tenant_dls,
                 fls=None,
                 allowed_actions=["read", "search"],
             )
@@ -75,8 +85,8 @@ class OpenSearchProvisioner:
         try:
             await self._create_role(
                 role_name=viewer_role,
-                index_patterns=["stoa-gw-*"],
-                dls=json.dumps({"term": {"tenant_id": tenant_id}}),
+                index_patterns=["stoa-gw-*", "audit*"],
+                dls=tenant_dls,
                 fls=[f"~{field}" for field in PII_FIELDS],
                 allowed_actions=["read", "search"],
             )

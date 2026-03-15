@@ -10,15 +10,18 @@ import {
   Server,
   AlertCircle,
   Clock,
+  ArrowUpRight,
 } from 'lucide-react';
 import { mcpConnectorsService } from '../../services/mcpConnectorsApi';
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
 import { useAuth } from '../../contexts/AuthContext';
+import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { ExternalMCPServerModal } from '../ExternalMCPServers/ExternalMCPServerModal';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { config } from '../../config';
 import type {
   ConnectorTemplate,
   ExternalMCPServer,
@@ -26,6 +29,8 @@ import type {
   ExternalMCPServerUpdate,
   ExternalMCPHealthStatus,
 } from '../../types';
+
+const ENABLE_MCP_CATALOG = config.features?.enableMcpCatalog ?? false;
 
 type TabId = 'catalog' | 'custom';
 
@@ -79,9 +84,21 @@ const healthStatusConfig: Record<
 
 const ALL_CATEGORY = '__all__';
 
+const ENVIRONMENTS = ['dev', 'staging', 'production'] as const;
+type Environment = (typeof ENVIRONMENTS)[number];
+
+const environmentLabels: Record<Environment, string> = {
+  dev: 'Development',
+  staging: 'Staging',
+  production: 'Production',
+};
+
+const HIGH_RISK_SLUGS = new Set(['stripe', 'cloudflare']);
+
 export function MCPServersUnified() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as TabId) || 'catalog';
+  const defaultTab: TabId = ENABLE_MCP_CATALOG ? 'catalog' : 'custom';
+  const activeTab = (searchParams.get('tab') as TabId) || defaultTab;
   const setActiveTab = useCallback(
     (tab: TabId) => setSearchParams({ tab }, { replace: true }),
     [setSearchParams]
@@ -100,17 +117,19 @@ export function MCPServersUnified() {
       {/* Tabs */}
       <div className="border-b border-neutral-200 dark:border-neutral-700">
         <nav className="-mb-px flex gap-6" aria-label="Tabs">
-          <button
-            onClick={() => setActiveTab('catalog')}
-            className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'catalog'
-                ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
-                : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200'
-            }`}
-          >
-            <Puzzle className="inline h-4 w-4 mr-1.5 -mt-0.5" />
-            Catalog
-          </button>
+          {ENABLE_MCP_CATALOG && (
+            <button
+              onClick={() => setActiveTab('catalog')}
+              className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'catalog'
+                  ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200'
+              }`}
+            >
+              <Puzzle className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+              Catalog
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('custom')}
             className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
@@ -126,7 +145,7 @@ export function MCPServersUnified() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'catalog' ? <CatalogTab /> : <CustomServersTab />}
+      {activeTab === 'catalog' && ENABLE_MCP_CATALOG ? <CatalogTab /> : <CustomServersTab />}
     </div>
   );
 }
@@ -143,21 +162,18 @@ function CatalogTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY);
+  const [environmentFilter, setEnvironmentFilter] = useState<Environment | ''>('');
   const [connectingSlug, setConnectingSlug] = useState<string | null>(null);
   const [disconnectingSlug, setDisconnectingSlug] = useState<string | null>(null);
+  const [promotingSlug, setPromotingSlug] = useState<string | null>(null);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    if (isReady) loadConnectors();
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [isReady]);
-
-  async function loadConnectors() {
+  const loadConnectors = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await mcpConnectorsService.listConnectors();
+      const response = await mcpConnectorsService.listConnectors(
+        undefined,
+        environmentFilter || undefined
+      );
       if (!mountedRef.current) return;
       setConnectors(response.connectors);
       setError(null);
@@ -168,7 +184,15 @@ function CatalogTab() {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }
+  }, [environmentFilter]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    if (isReady) loadConnectors();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [isReady, loadConnectors]);
 
   const handleConnect = useCallback(
     async (slug: string) => {
@@ -210,7 +234,44 @@ function CatalogTab() {
         if (mountedRef.current) setDisconnectingSlug(null);
       }
     },
-    [confirm, toast]
+    [confirm, toast, loadConnectors]
+  );
+
+  const handlePromote = useCallback(
+    async (connector: ConnectorTemplate, targetEnvironment: string) => {
+      const isHighRisk = HIGH_RISK_SLUGS.has(connector.slug);
+      const isProduction = targetEnvironment === 'production';
+
+      if (isHighRisk && isProduction) {
+        const confirmed = await confirm({
+          title: `Promote ${connector.display_name} to Production?`,
+          message:
+            'This is a high-risk connector. Promoting to production will clone credentials and make this connector available in the production environment.',
+          confirmLabel: 'Promote to Production',
+          variant: 'danger',
+        });
+        if (!confirmed) return;
+      }
+
+      try {
+        setPromotingSlug(connector.slug);
+        const result = await mcpConnectorsService.promote(connector.slug, {
+          target_environment: targetEnvironment,
+          confirm: isHighRisk && isProduction,
+        });
+        toast.success(
+          'Promoted',
+          `${connector.display_name} promoted from ${result.source_environment} to ${result.target_environment}`
+        );
+        await loadConnectors();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to promote connector';
+        toast.error('Promote failed', message);
+      } finally {
+        if (mountedRef.current) setPromotingSlug(null);
+      }
+    },
+    [confirm, toast, loadConnectors]
   );
 
   const categories = [
@@ -242,7 +303,19 @@ function CatalogTab() {
   return (
     <div className="space-y-6">
       {/* Toolbar */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3">
+        <select
+          value={environmentFilter}
+          onChange={(e) => setEnvironmentFilter(e.target.value as Environment | '')}
+          className="px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+        >
+          <option value="">All environments</option>
+          {ENVIRONMENTS.map((env) => (
+            <option key={env} value={env}>
+              {environmentLabels[env]}
+            </option>
+          ))}
+        </select>
         <button
           onClick={loadConnectors}
           className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
@@ -273,8 +346,10 @@ function CatalogTab() {
                 connector={connector}
                 onConnect={handleConnect}
                 onDisconnect={handleDisconnect}
+                onPromote={handlePromote}
                 connectingSlug={connectingSlug}
                 disconnectingSlug={disconnectingSlug}
+                promotingSlug={promotingSlug}
                 featured
               />
             ))}
@@ -318,8 +393,10 @@ function CatalogTab() {
               connector={connector}
               onConnect={handleConnect}
               onDisconnect={handleDisconnect}
+              onPromote={handlePromote}
               connectingSlug={connectingSlug}
               disconnectingSlug={disconnectingSlug}
+              promotingSlug={promotingSlug}
             />
           ))}
         </div>
@@ -335,6 +412,7 @@ function CatalogTab() {
 function CustomServersTab() {
   const navigate = useNavigate();
   const { isReady } = useAuth();
+  const { activeEnvironment } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [servers, setServers] = useState<ExternalMCPServer[]>([]);
@@ -345,18 +423,12 @@ function CustomServersTab() {
   const [syncingServerId, setSyncingServerId] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    if (isReady) loadServers();
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [isReady]);
-
-  async function loadServers() {
+  const loadServers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await externalMcpServersService.listServers();
+      const response = await externalMcpServersService.listServers({
+        environment: activeEnvironment,
+      });
       if (!mountedRef.current) return;
       setServers(response.servers);
       setError(null);
@@ -367,12 +439,24 @@ function CustomServersTab() {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }
+  }, [activeEnvironment]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    if (isReady) loadServers();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [isReady, loadServers]);
 
   const handleCreate = useCallback(
     async (data: ExternalMCPServerCreate | ExternalMCPServerUpdate) => {
       try {
-        await externalMcpServersService.createServer(data as ExternalMCPServerCreate);
+        const createData = {
+          ...(data as ExternalMCPServerCreate),
+          environment: activeEnvironment,
+        };
+        await externalMcpServersService.createServer(createData);
         setShowCreateModal(false);
         await loadServers();
       } catch (err: unknown) {
@@ -380,7 +464,7 @@ function CustomServersTab() {
         throw new Error(message);
       }
     },
-    []
+    [activeEnvironment, loadServers]
   );
 
   const handleTestConnection = useCallback(
@@ -405,7 +489,7 @@ function CustomServersTab() {
         setTestingServerId(null);
       }
     },
-    [toast]
+    [toast, loadServers]
   );
 
   const handleSyncTools = useCallback(
@@ -425,7 +509,7 @@ function CustomServersTab() {
         setSyncingServerId(null);
       }
     },
-    [toast]
+    [toast, loadServers]
   );
 
   const handleDelete = useCallback(
@@ -447,7 +531,7 @@ function CustomServersTab() {
         toast.error('Delete failed', message);
       }
     },
-    [toast, confirm]
+    [toast, confirm, loadServers]
   );
 
   if (loading) {
@@ -538,8 +622,10 @@ interface ConnectorCardProps {
   connector: ConnectorTemplate;
   onConnect: (slug: string) => void;
   onDisconnect: (connector: ConnectorTemplate) => void;
+  onPromote: (connector: ConnectorTemplate, targetEnvironment: string) => void;
   connectingSlug: string | null;
   disconnectingSlug: string | null;
+  promotingSlug: string | null;
   featured?: boolean;
 }
 
@@ -547,12 +633,23 @@ function ConnectorCard({
   connector,
   onConnect,
   onDisconnect,
+  onPromote,
   connectingSlug,
   disconnectingSlug,
+  promotingSlug,
   featured,
 }: ConnectorCardProps) {
   const isConnecting = connectingSlug === connector.slug;
   const isDisconnecting = disconnectingSlug === connector.slug;
+  const isPromoting = promotingSlug === connector.slug;
+
+  const nextEnvironment = connector.connected_environment
+    ? connector.connected_environment === 'dev'
+      ? 'staging'
+      : connector.connected_environment === 'staging'
+        ? 'production'
+        : null
+    : null;
 
   return (
     <div
@@ -593,6 +690,20 @@ function ConnectorCard({
             Connected
           </span>
         )}
+        {connector.connected_environment && (
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+              connector.connected_environment === 'production'
+                ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                : connector.connected_environment === 'staging'
+                  ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                  : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+            }`}
+          >
+            {environmentLabels[connector.connected_environment as Environment] ||
+              connector.connected_environment}
+          </span>
+        )}
       </div>
 
       <div className="flex gap-2 pt-4 border-t dark:border-neutral-700">
@@ -606,6 +717,17 @@ function ConnectorCard({
               <XCircle className="h-4 w-4" />
               {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
             </button>
+            {nextEnvironment && (
+              <button
+                onClick={() => onPromote(connector, nextEnvironment)}
+                disabled={isPromoting}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm border border-primary-300 dark:border-primary-700 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 disabled:opacity-50"
+                title={`Promote to ${environmentLabels[nextEnvironment as Environment]}`}
+              >
+                <ArrowUpRight className="h-4 w-4" />
+                {isPromoting ? '...' : environmentLabels[nextEnvironment as Environment]}
+              </button>
+            )}
             {connector.documentation_url && (
               <a
                 href={connector.documentation_url}
@@ -714,6 +836,12 @@ function ServerCard({
           <div className="flex justify-between">
             <span className="text-neutral-500 dark:text-neutral-400">Prefix:</span>
             <span className="font-mono">{server.tool_prefix}__</span>
+          </div>
+        )}
+        {server.environment && (
+          <div className="flex justify-between">
+            <span className="text-neutral-500 dark:text-neutral-400">Environment:</span>
+            <span className="capitalize">{server.environment}</span>
           </div>
         )}
         <div className="flex justify-between items-center">

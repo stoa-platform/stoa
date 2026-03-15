@@ -11,6 +11,8 @@ import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { StatCard } from '@stoa/shared/components/StatCard';
 import type { GatewayDeployment, DeploymentStatusSummary } from '../../types';
+import { SubNav } from '../../components/SubNav';
+import { gatewayTabs } from '../../components/subNavGroups';
 
 const PAGE_SIZE = 20;
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -163,6 +165,8 @@ export function GatewayDeploymentsDashboard() {
           </button>
         </div>
       </div>
+
+      <SubNav tabs={gatewayTabs} />
 
       {/* Status Summary Cards */}
       {summary && (

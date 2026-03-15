@@ -11,6 +11,15 @@ When a component, page, or hook is modified, verify its tests exist and are up t
 
 ## Rules
 
+### Test-First Rule (DEFAULT for feat/fix)
+For all `feat()` and `fix()` PRs, write failing tests BEFORE implementation code:
+1. Analyze the requirement or bug → identify expected behavior
+2. Write test(s) that assert the expected behavior → they should FAIL
+3. Implement the code to make tests pass
+4. Verify all tests green, then commit
+
+This is Pattern 3 default (merged from Pattern 7 Osmani). Code-first (Pattern 5) is only for `refactor()`, `chore()`, `docs()`, `style()`.
+
 ### Ratchet Rule
 Coverage thresholds in `vitest.config.ts` / `pyproject.toml` are floors, never ceilings.
 - Coverage can go UP (raise the threshold).
@@ -58,7 +67,7 @@ Every `fix()` PR MUST include a dedicated regression test that reproduces the or
 
 Each regression test MUST document: PR number, ticket ID, root cause, and the invariant being protected.
 
-CI enforces this via the `regression-guard.yml` workflow (warning mode — non-blocking).
+CI enforces this via the `regression-guard.yml` workflow (**blocking** — required check). Bypass: `skip-regression` label for documented hotfixes.
 
 ### Detection
 When reviewing a PR, check:

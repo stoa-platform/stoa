@@ -432,6 +432,35 @@
         "title": "APIUpdate",
         "type": "object"
       },
+      "APIVersionEntry": {
+        "description": "A single version entry from git history.",
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "sha": {
+            "title": "Sha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sha",
+          "message",
+          "author",
+          "date"
+        ],
+        "title": "APIVersionEntry",
+        "type": "object"
+      },
       "AccessRequestCreate": {
         "description": "Public form submission: profile + optional company/role.",
         "properties": {
@@ -1443,6 +1472,30 @@
       "AuthorizeRequest": {
         "description": "Request to initiate an OAuth authorization flow.",
         "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "OAuth app client_id (saved for future use)",
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "OAuth app client_secret (stored in Vault)",
+            "title": "Client Secret"
+          },
           "redirect_after": {
             "anyOf": [
               {
@@ -2347,6 +2400,167 @@
         "title": "BusinessMetrics",
         "type": "object"
       },
+      "CAGenerateResponse": {
+        "properties": {
+          "ca_certificate_pem": {
+            "title": "Ca Certificate Pem",
+            "type": "string"
+          },
+          "fingerprint_sha256": {
+            "title": "Fingerprint Sha256",
+            "type": "string"
+          },
+          "key_algorithm": {
+            "title": "Key Algorithm",
+            "type": "string"
+          },
+          "not_after": {
+            "title": "Not After",
+            "type": "string"
+          },
+          "not_before": {
+            "title": "Not Before",
+            "type": "string"
+          },
+          "serial_number": {
+            "title": "Serial Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_dn": {
+            "title": "Subject Dn",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject_dn",
+          "serial_number",
+          "not_before",
+          "not_after",
+          "key_algorithm",
+          "fingerprint_sha256",
+          "ca_certificate_pem",
+          "status"
+        ],
+        "title": "CAGenerateResponse",
+        "type": "object"
+      },
+      "CAInfoResponse": {
+        "properties": {
+          "ca_certificate_pem": {
+            "title": "Ca Certificate Pem",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "fingerprint_sha256": {
+            "title": "Fingerprint Sha256",
+            "type": "string"
+          },
+          "key_algorithm": {
+            "title": "Key Algorithm",
+            "type": "string"
+          },
+          "not_after": {
+            "title": "Not After",
+            "type": "string"
+          },
+          "not_before": {
+            "title": "Not Before",
+            "type": "string"
+          },
+          "serial_number": {
+            "title": "Serial Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_dn": {
+            "title": "Subject Dn",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject_dn",
+          "serial_number",
+          "not_before",
+          "not_after",
+          "key_algorithm",
+          "fingerprint_sha256",
+          "ca_certificate_pem",
+          "status",
+          "created_at"
+        ],
+        "title": "CAInfoResponse",
+        "type": "object"
+      },
+      "CSRSignRequest": {
+        "properties": {
+          "csr_pem": {
+            "description": "PEM-encoded Certificate Signing Request",
+            "title": "Csr Pem",
+            "type": "string"
+          },
+          "validity_days": {
+            "default": 365,
+            "description": "Certificate validity in days",
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Validity Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "csr_pem"
+        ],
+        "title": "CSRSignRequest",
+        "type": "object"
+      },
+      "CSRSignResponse": {
+        "properties": {
+          "issuer_dn": {
+            "title": "Issuer Dn",
+            "type": "string"
+          },
+          "signed_certificate_pem": {
+            "title": "Signed Certificate Pem",
+            "type": "string"
+          },
+          "subject_dn": {
+            "title": "Subject Dn",
+            "type": "string"
+          },
+          "validity_days": {
+            "title": "Validity Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "signed_certificate_pem",
+          "subject_dn",
+          "issuer_dn",
+          "validity_days"
+        ],
+        "title": "CSRSignResponse",
+        "type": "object"
+      },
       "CallStatus": {
         "description": "Status of an MCP tool call",
         "enum": [
@@ -3096,6 +3310,17 @@
             "title": "Category",
             "type": "string"
           },
+          "connected_environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected Environment"
+          },
           "connected_server_id": {
             "anyOf": [
               {
@@ -3179,6 +3404,11 @@
           "mcp_base_url": {
             "title": "Mcp Base Url",
             "type": "string"
+          },
+          "needs_setup": {
+            "default": false,
+            "title": "Needs Setup",
+            "type": "boolean"
           },
           "oauth_pkce_required": {
             "default": false,
@@ -7977,6 +8207,7 @@
           },
           "description": "Linear issue tracking integration",
           "display_name": "Linear",
+          "environment": "dev",
           "name": "linear",
           "tool_prefix": "linear",
           "transport": "sse"
@@ -8001,7 +8232,7 @@
                 "type": "null"
               }
             ],
-            "description": "Credentials (stored in Vault)"
+            "description": "Credentials (stored securely)"
           },
           "description": {
             "anyOf": [
@@ -8021,6 +8252,26 @@
             "minLength": 1,
             "title": "Display Name",
             "type": "string"
+          },
+          "environment": {
+            "default": "dev",
+            "description": "Target environment (dev/staging/production)",
+            "maxLength": 50,
+            "title": "Environment",
+            "type": "string"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bound gateway instance for dataplane routing",
+            "title": "Gateway Instance Id"
           },
           "icon": {
             "anyOf": [
@@ -8127,6 +8378,30 @@
             "default": true,
             "title": "Enabled",
             "type": "boolean"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "dev",
+            "title": "Environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
           },
           "health_status": {
             "$ref": "#/components/schemas/HealthStatusEnum",
@@ -8266,6 +8541,30 @@
             ],
             "title": "Credentials"
           },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "dev",
+            "title": "Environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -8396,6 +8695,30 @@
             "default": true,
             "title": "Enabled",
             "type": "boolean"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "dev",
+            "title": "Environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
           },
           "health_status": {
             "$ref": "#/components/schemas/HealthStatusEnum",
@@ -8625,7 +8948,7 @@
                 "type": "null"
               }
             ],
-            "description": "New credentials (updates Vault)"
+            "description": "New credentials (updates securely)"
           },
           "description": {
             "anyOf": [
@@ -8661,6 +8984,32 @@
               }
             ],
             "title": "Enabled"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Target environment",
+            "title": "Environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bound gateway instance",
+            "title": "Gateway Instance Id"
           },
           "icon": {
             "anyOf": [
@@ -10854,6 +11203,47 @@
           "apis"
         ],
         "title": "InternalAPIsResponse",
+        "type": "object"
+      },
+      "InternalToolDef": {
+        "description": "Tool definition in the format expected by the gateway (ToolsListResponse).",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "inputSchema": {
+            "additionalProperties": true,
+            "title": "Inputschema",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "InternalToolDef",
+        "type": "object"
+      },
+      "InternalToolsListResponse": {
+        "description": "Response matching the gateway's ToolsListResponse format.",
+        "properties": {
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/InternalToolDef"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tools"
+        ],
+        "title": "InternalToolsListResponse",
         "type": "object"
       },
       "KeyRotationRequest": {
@@ -14529,6 +14919,35 @@
         "title": "PersonalTenantResponse",
         "type": "object"
       },
+      "PiiErasureResponse": {
+        "description": "Response for GDPR Article 17 PII erasure (CAB-1794).",
+        "properties": {
+          "os_records_deleted": {
+            "title": "Os Records Deleted",
+            "type": "integer"
+          },
+          "pg_records_affected": {
+            "title": "Pg Records Affected",
+            "type": "integer"
+          },
+          "pseudo_id": {
+            "title": "Pseudo Id",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "pg_records_affected",
+          "os_records_deleted",
+          "pseudo_id"
+        ],
+        "title": "PiiErasureResponse",
+        "type": "object"
+      },
       "PlanCreate": {
         "description": "Schema for creating a new subscription plan.",
         "example": {
@@ -15083,6 +15502,11 @@
       "PlatformStatusResponse": {
         "description": "Complete platform status response.",
         "properties": {
+          "demo_mode": {
+            "default": false,
+            "title": "Demo Mode",
+            "type": "boolean"
+          },
           "events": {
             "items": {
               "$ref": "#/components/schemas/PlatformEvent"
@@ -15589,6 +16013,79 @@
           "page_size"
         ],
         "title": "PortalMCPServersResponse",
+        "type": "object"
+      },
+      "PromoteRequest": {
+        "description": "Request to promote a connector to a target environment.",
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "Required for high-risk connectors promoting to production",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "target_environment": {
+            "description": "Target environment: dev, staging, production",
+            "title": "Target Environment",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tenant to promote for (cpi-admin only)",
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "target_environment"
+        ],
+        "title": "PromoteRequest",
+        "type": "object"
+      },
+      "PromoteResponse": {
+        "description": "Response after promoting a connector to a target environment.",
+        "properties": {
+          "credentials_cloned": {
+            "default": false,
+            "title": "Credentials Cloned",
+            "type": "boolean"
+          },
+          "server_id": {
+            "format": "uuid",
+            "title": "Server Id",
+            "type": "string"
+          },
+          "server_name": {
+            "title": "Server Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "source_environment": {
+            "title": "Source Environment",
+            "type": "string"
+          },
+          "target_environment": {
+            "title": "Target Environment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "source_environment",
+          "target_environment",
+          "server_id",
+          "server_name"
+        ],
+        "title": "PromoteResponse",
         "type": "object"
       },
       "PromotionCreate": {
@@ -21478,6 +21975,7 @@
           },
           "description": "Team's Linear integration",
           "display_name": "My Linear",
+          "environment": "dev",
           "tool_prefix": "linear",
           "transport": "sse"
         },
@@ -21501,7 +21999,7 @@
                 "type": "null"
               }
             ],
-            "description": "Credentials (stored in Vault)"
+            "description": "Credentials (stored securely)"
           },
           "description": {
             "anyOf": [
@@ -21521,6 +22019,26 @@
             "minLength": 1,
             "title": "Display Name",
             "type": "string"
+          },
+          "environment": {
+            "default": "dev",
+            "description": "Target environment (dev/staging/production)",
+            "maxLength": 50,
+            "title": "Environment",
+            "type": "string"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bound gateway instance for dataplane routing",
+            "title": "Gateway Instance Id"
           },
           "icon": {
             "anyOf": [
@@ -21595,6 +22113,30 @@
             "default": true,
             "title": "Enabled",
             "type": "boolean"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "dev",
+            "title": "Environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
           },
           "has_credentials": {
             "default": false,
@@ -21773,6 +22315,30 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "dev",
+            "title": "Environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Instance Id"
+          },
           "has_credentials": {
             "default": false,
             "title": "Has Credentials",
@@ -21908,7 +22474,7 @@
                 "type": "null"
               }
             ],
-            "description": "New credentials (updates Vault)"
+            "description": "New credentials (stored securely)"
           },
           "description": {
             "anyOf": [
@@ -21944,6 +22510,32 @@
               }
             ],
             "title": "Enabled"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Target environment",
+            "title": "Environment"
+          },
+          "gateway_instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bound gateway instance",
+            "title": "Gateway Instance Id"
           },
           "icon": {
             "anyOf": [
@@ -25324,6 +25916,26 @@
         ]
       }
     },
+    "/health/workers": {
+      "get": {
+        "description": "Background workers health status.",
+        "operationId": "workers_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Workers Status",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
     "/internal/telemetry/ingest": {
       "post": {
         "description": "Accepts a batch of log entries from push-based gateways.",
@@ -27191,7 +27803,7 @@
     },
     "/v1/admin/external-mcp-servers": {
       "get": {
-        "description": "List all external MCP servers.\n\nCPI admins see all servers.\nTenant admins see platform-wide servers and their tenant's servers.",
+        "description": "List all external MCP servers.\n\nCPI admins see all servers.\nTenant admins see platform-wide servers and their tenant's servers.\nSupports environment filtering for multi-dataplane deployments.",
         "operationId": "list_servers",
         "parameters": [
           {
@@ -27204,6 +27816,24 @@
               "description": "Filter to enabled servers only",
               "title": "Enabled Only",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Filter by environment (dev/staging/production)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev/staging/production)",
+              "title": "Environment"
             }
           },
           {
@@ -28474,6 +29104,24 @@
               "description": "Tenant to check connection status for",
               "title": "Tenant Id"
             }
+          },
+          {
+            "description": "Filter by environment (dev, staging, production)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev, staging, production)",
+              "title": "Environment"
+            }
           }
         ],
         "responses": {
@@ -28581,6 +29229,24 @@
               ],
               "description": "Tenant to check connection status for",
               "title": "Tenant Id"
+            }
+          },
+          {
+            "description": "Filter by environment (dev, staging, production)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev, staging, production)",
+              "title": "Environment"
             }
           }
         ],
@@ -28736,6 +29402,64 @@
           }
         ],
         "summary": "Disconnect Connector",
+        "tags": [
+          "MCP Connectors - Catalog"
+        ]
+      }
+    },
+    "/v1/admin/mcp-connectors/{slug}/promote": {
+      "post": {
+        "description": "Promote a connector from its current environment to a target environment.\n\nClones the server record and Vault credentials. Idempotent \u2014 re-promoting\nupdates the existing target record.\n\nHigh-risk connectors (stripe, cloudflare) require ``confirm: true`` for production.",
+        "operationId": "promote_connector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Promote Connector",
         "tags": [
           "MCP Connectors - Catalog"
         ]
@@ -31072,6 +31796,72 @@
           }
         ],
         "summary": "Get Global Audit Summary",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/v1/audit/users/{user_id}/pii": {
+      "delete": {
+        "description": "GDPR Article 17 \u2014 Right to Erasure (CAB-1794).\n\nPseudonymizes PII in PostgreSQL audit records and deletes matching\ndocuments from OpenSearch for the specified user.\n\nRequires cpi-admin role. Creates a meta-audit record of the erasure.",
+        "operationId": "erase_user_pii",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Scope erasure to a specific tenant",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scope erasure to a specific tenant",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiErasureResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Erase User Pii",
         "tags": [
           "Audit"
         ]
@@ -34875,6 +35665,115 @@
           }
         },
         "summary": "Register Gateway",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
+    "/v1/internal/gateways/tools": {
+      "get": {
+        "description": "Internal tool discovery for gateways/sidecars (CAB-1817).\n\nReturns UAC-generated tools in the gateway's expected format (ToolsListResponse),\nauthenticated via X-Gateway-Key. Allows STOA Link sidecars to discover tools\nwithout OIDC client credentials.",
+        "operationId": "get_internal_tools",
+        "parameters": [
+          {
+            "description": "Tenant ID (optional filter)",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Tenant ID (optional filter)",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalToolsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Internal Tools",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
+    "/v1/internal/gateways/tools/generated": {
+      "get": {
+        "description": "Internal tool discovery for gateways/sidecars (CAB-1817).\n\nReturns UAC-generated tools for a tenant, authenticated via X-Gateway-Key\ninstead of user JWT. This allows STOA Link sidecars to discover tools\nwithout needing OIDC client credentials.",
+        "operationId": "get_internal_generated_tools",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "description": "Tenant ID",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantToolsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Internal Generated Tools",
         "tags": [
           "Gateway Internal"
         ]
@@ -41989,6 +42888,81 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/apis/{api_id}/versions": {
+      "get": {
+        "description": "List version history (git commits) for a specific API.",
+        "operationId": "list_api_versions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max commits to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Max commits to return",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/APIVersionEntry"
+                  },
+                  "title": "Response List Api Versions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Api Versions",
+        "tags": [
+          "APIs"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/applications": {
       "get": {
         "description": "List all applications for a tenant (paginated).",
@@ -43084,6 +44058,208 @@
         "summary": "Update Billing Budget",
         "tags": [
           "Billing - Department Budgets"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/ca": {
+      "delete": {
+        "description": "Revoke the active CA for a tenant.\n\nRequires cpi-admin role only. This is a destructive operation \u2014\nall certificates signed by this CA will no longer be trusted.",
+        "operationId": "revoke_tenant_ca",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revoke Tenant Ca",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Tenant Ca",
+        "tags": [
+          "Tenant CA"
+        ]
+      },
+      "get": {
+        "description": "Get the active CA certificate for a tenant.\n\nReturns the public CA certificate only. Private key is never exposed.",
+        "operationId": "get_tenant_ca",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAInfoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tenant Ca",
+        "tags": [
+          "Tenant CA"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/ca/generate": {
+      "post": {
+        "description": "Generate a new CA keypair for a tenant.\n\nRequires cpi-admin or tenant-admin role.\nOnly one active CA per tenant is allowed.",
+        "operationId": "generate_tenant_ca",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAGenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Generate Tenant Ca",
+        "tags": [
+          "Tenant CA"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/ca/sign": {
+      "post": {
+        "description": "Sign a CSR with the tenant's CA private key.\n\nRequires cpi-admin or tenant-admin role.\nThe CSR must have a valid signature.",
+        "operationId": "sign_consumer_csr",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CSRSignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CSRSignResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sign Consumer Csr",
+        "tags": [
+          "Tenant CA"
         ]
       }
     },
@@ -46662,6 +47838,24 @@
             "schema": {
               "title": "Tenant Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Filter by environment (dev/staging/production)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev/staging/production)",
+              "title": "Environment"
             }
           },
           {

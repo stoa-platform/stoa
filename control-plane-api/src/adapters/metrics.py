@@ -13,11 +13,15 @@ Metrics:
 
 import logging
 import time
+from collections.abc import Awaitable
+from typing import TypeVar
 
 from opentelemetry import trace
 from prometheus_client import Counter, Histogram
 
 from .gateway_adapter_interface import AdapterResult, GatewayAdapterInterface
+
+_T = TypeVar("_T")
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +121,7 @@ class InstrumentedAdapter(GatewayAdapterInterface):
         """Proxy attribute access to the inner adapter for non-interface attributes."""
         return getattr(self._inner, name)
 
-    async def _record(self, operation: str, coro):
+    async def _record(self, operation: str, coro: Awaitable[_T]) -> _T:
         """Execute a coroutine and record metrics + OTel spans around it."""
         tracer = trace.get_tracer("stoa.adapter")
         with tracer.start_as_current_span(

@@ -122,7 +122,7 @@ export const apiCatalogService = {
    */
   getAPI: async (id: string): Promise<API | null> => {
     try {
-      const response = await apiClient.get<PortalAPI>(`/v1/portal/apis/${id}`);
+      const response = await apiClient.get<PortalAPI>(`/v1/portal/apis/${encodeURIComponent(id)}`);
       return transformPortalAPI(response.data);
     } catch (error) {
       console.error('Failed to fetch API:', error);
@@ -135,7 +135,9 @@ export const apiCatalogService = {
    */
   getOpenAPISpec: async (id: string): Promise<object | null> => {
     try {
-      const response = await apiClient.get<object>(`/v1/portal/apis/${id}/openapi`);
+      const response = await apiClient.get<object>(
+        `/v1/portal/apis/${encodeURIComponent(id)}/openapi`
+      );
       return response.data;
     } catch (error) {
       console.warn('OpenAPI spec not available for API:', error);

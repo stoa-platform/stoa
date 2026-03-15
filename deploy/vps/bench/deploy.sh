@@ -16,12 +16,11 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 SSH_KEY=~/.ssh/id_ed25519_stoa
 
 # VPS configs: name, IP, GATEWAYS JSON
-# stoa-vps and kong-vps share the same VPS (51.83.45.13)
-# TODO: agentgateway-vps needs a dedicated VPS — currently co-located with stoa/kong for benchmarking
+# Each gateway is isolated on its own VPS for reliable benchmarking (no noisy neighbor)
 declare -A VPS_IPS=(
   ["stoa-vps"]="51.83.45.13"
-  ["kong-vps"]="51.83.45.13"
-  ["agentgateway-vps"]="51.83.45.13"
+  ["kong-vps"]="51.195.43.130"
+  ["agentgateway-vps"]="135.125.204.169"
   ["gravitee-vps"]="54.36.209.237"
   ["bench-vps"]="94.23.107.106"
 )
@@ -31,7 +30,7 @@ declare -A VPS_GATEWAYS=(
   ["kong-vps"]='[{"name":"kong-vps","health":"http://localhost:8001/status","proxy":"http://localhost:8000/echo/get"}]'
   ["agentgateway-vps"]='[{"name":"agentgateway-vps","health":"http://localhost:3000/health","proxy":"http://localhost:3000/echo/get"}]'
   ["gravitee-vps"]='[{"name":"gravitee-vps","health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://localhost:8082/echo/get"}]'
-  ["bench-vps"]='[{"name":"stoa-vps","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/echo/get"},{"name":"kong-vps","health":"http://51.83.45.13:8001/status","proxy":"http://51.83.45.13:8000/echo/get"},{"name":"agentgateway-vps","health":"http://51.83.45.13:3000/health","proxy":"http://51.83.45.13:3000/echo/get"},{"name":"gravitee-vps","health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://54.36.209.237:8082/echo/get"}]'
+  ["bench-vps"]='[{"name":"stoa-vps","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/echo/get"},{"name":"kong-vps","health":"http://51.195.43.130:8001/status","proxy":"http://51.195.43.130:8000/echo/get"},{"name":"agentgateway-vps","health":"http://135.125.204.169:3000/health","proxy":"http://135.125.204.169:3000/echo/get"},{"name":"gravitee-vps","health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://54.36.209.237:8082/echo/get"}]'
 )
 
 # Enterprise GATEWAYS JSON (L1 — with mcp_base, admin_base, features)
@@ -41,19 +40,32 @@ declare -A VPS_GATEWAYS_ENTERPRISE=(
   ["kong-vps"]='[{"name":"kong-vps","target":"http://localhost:8000","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://localhost:8001/status","features":[]}]'
   ["agentgateway-vps"]='[{"name":"agentgateway-vps","target":"http://localhost:3000","mcp_base":"http://localhost:3000/mcp","mcp_protocol":"streamable-http","admin_base":"http://localhost:15000","health":"http://localhost:3000/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","pii_detection","distributed_tracing","federation"]}]'
   ["gravitee-vps"]='[{"name":"gravitee-vps","target":"http://localhost:8082","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://localhost:8083/management/organizations/DEFAULT/environments/DEFAULT","features":["distributed_tracing","quota_burst","resilience"]}]'
-  ["bench-vps"]='[{"name":"stoa-vps","target":"http://51.83.45.13:8080","mcp_base":"http://51.83.45.13:8080/mcp","mcp_protocol":"stoa","admin_base":"http://51.83.45.13:8080","health":"http://51.83.45.13:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]},{"name":"kong-vps","target":"http://51.83.45.13:8000","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://51.83.45.13:8001/status","features":[]},{"name":"agentgateway-vps","target":"http://51.83.45.13:3000","mcp_base":"http://51.83.45.13:3000/mcp","mcp_protocol":"streamable-http","admin_base":"http://51.83.45.13:15000","health":"http://51.83.45.13:3000/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","pii_detection","distributed_tracing","federation"]},{"name":"gravitee-vps","target":"http://54.36.209.237:8082","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","features":["distributed_tracing","quota_burst","resilience"]}]'
+  ["bench-vps"]='[{"name":"stoa-vps","target":"http://51.83.45.13:8080","mcp_base":"http://51.83.45.13:8080/mcp","mcp_protocol":"stoa","admin_base":"http://51.83.45.13:8080","health":"http://51.83.45.13:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]},{"name":"kong-vps","target":"http://51.195.43.130:8000","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://51.195.43.130:8001/status","features":[]},{"name":"agentgateway-vps","target":"http://135.125.204.169:3000","mcp_base":"http://135.125.204.169:3000/mcp","mcp_protocol":"streamable-http","admin_base":"http://135.125.204.169:15000","health":"http://135.125.204.169:3000/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","pii_detection","distributed_tracing","federation"]},{"name":"gravitee-vps","target":"http://54.36.209.237:8082","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","features":["distributed_tracing","quota_burst","resilience"]}]'
 )
 
-# Unique VPS IPs (stoa, kong, and agentgateway share the same VPS)
+# Unique VPS IPs (each gateway isolated on its own VPS)
 declare -A UNIQUE_VPS=(
-  ["51.83.45.13"]="stoa-vps kong-vps agentgateway-vps"
+  ["51.83.45.13"]="stoa-vps"
+  ["51.195.43.130"]="kong-vps"
+  ["135.125.204.169"]="agentgateway-vps"
   ["54.36.209.237"]="gravitee-vps"
   ["94.23.107.106"]="bench-vps"
 )
 
+# SSH users per VPS IP (OVH gateway VPS = debian, OVH dev VPS = stoa)
+declare -A VPS_SSH_USER=(
+  ["51.83.45.13"]="debian"
+  ["51.195.43.130"]="stoa"
+  ["135.125.204.169"]="stoa"
+  ["54.36.209.237"]="debian"
+  ["94.23.107.106"]="debian"
+)
+
 # Instance labels per VPS IP (prevent Pushgateway push overwrites between clusters)
 declare -A VPS_INSTANCE=(
-  ["51.83.45.13"]="vps-stoa-kong-agentgw"
+  ["51.83.45.13"]="vps-stoa"
+  ["51.195.43.130"]="vps-kong"
+  ["135.125.204.169"]="vps-agentgateway"
   ["54.36.209.237"]="vps-gravitee"
   ["94.23.107.106"]="vps-bench"
 )
@@ -106,7 +118,7 @@ for VPS_IP in "${!UNIQUE_VPS[@]}"; do
   COMBINED_GATEWAYS_ENT="${COMBINED_GATEWAYS_ENT}]"
 
   echo "  [1/7] Creating remote directory..."
-  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "mkdir -p ${REMOTE_DIR}/scripts"
+  ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "mkdir -p ${REMOTE_DIR}/scripts"
 
   echo "  [2/7] Copying scripts + docker-compose..."
   scp -i "$SSH_KEY" -q \
@@ -116,15 +128,15 @@ for VPS_IP in "${!UNIQUE_VPS[@]}"; do
     "$REPO_ROOT/scripts/traffic/arena/benchmark-enterprise.js" \
     "$REPO_ROOT/scripts/traffic/arena/run-arena-enterprise.sh" \
     "$REPO_ROOT/scripts/traffic/arena/run-arena-enterprise.py" \
-    "debian@${VPS_IP}:${REMOTE_DIR}/scripts/"
+    "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}:${REMOTE_DIR}/scripts/"
   scp -i "$SSH_KEY" -q \
     "$SCRIPT_DIR/docker-compose.yml" \
     "$SCRIPT_DIR/docker-compose.enterprise.yml" \
-    "debian@${VPS_IP}:${REMOTE_DIR}/"
+    "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}:${REMOTE_DIR}/"
 
   INSTANCE_LABEL="${VPS_INSTANCE[$VPS_IP]}"
   echo "  [3/7] Creating .env file (L0, instance=$INSTANCE_LABEL)..."
-  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "cat > ${REMOTE_DIR}/.env <<ENVEOF
+  ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "cat > ${REMOTE_DIR}/.env <<ENVEOF
 PUSHGATEWAY_URL=${PUSHGATEWAY_URL}
 PUSHGATEWAY_AUTH=arena:arena-push-2026
 RUNS=5
@@ -140,12 +152,12 @@ ENVEOF"
 
   # bench-vps uses centralized OpenSearch (OVH K8s prod)
   if [ "$VPS_IP" = "94.23.107.106" ]; then
-    ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=https://opensearch-api.gostoa.dev|' ${REMOTE_DIR}/.env"
+    ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=https://opensearch-api.gostoa.dev|' ${REMOTE_DIR}/.env"
     echo "    (OpenSearch credentials must be set manually from Infisical: prod/opensearch/ADMIN_PASSWORD)"
   fi
 
   echo "  [4/7] Creating .env.enterprise file (L1, instance=$INSTANCE_LABEL)..."
-  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "cat > ${REMOTE_DIR}/.env.enterprise <<ENVEOF
+  ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "cat > ${REMOTE_DIR}/.env.enterprise <<ENVEOF
 PUSHGATEWAY_URL=${PUSHGATEWAY_URL}
 PUSHGATEWAY_AUTH=arena:arena-push-2026
 RUNS=5
@@ -161,14 +173,14 @@ ENVEOF"
 
   # bench-vps uses centralized OpenSearch (OVH K8s prod)
   if [ "$VPS_IP" = "94.23.107.106" ]; then
-    ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=https://opensearch-api.gostoa.dev|' ${REMOTE_DIR}/.env.enterprise"
+    ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=https://opensearch-api.gostoa.dev|' ${REMOTE_DIR}/.env.enterprise"
   fi
 
   echo "  [5/7] Pulling arena-bench image..."
-  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "docker pull ghcr.io/stoa-platform/arena-bench:0.2.0 2>/dev/null || echo 'Pull failed — ensure docker login ghcr.io'"
+  ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "docker pull ghcr.io/stoa-platform/arena-bench:0.2.0 2>/dev/null || echo 'Pull failed — ensure docker login ghcr.io'"
 
   echo "  [6/7] Installing L0 systemd timer (every 30 min)..."
-  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sudo tee /etc/systemd/system/arena-bench.service > /dev/null <<'SVCEOF'
+  ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "sudo tee /etc/systemd/system/arena-bench.service > /dev/null <<'SVCEOF'
 [Unit]
 Description=Gateway Arena Benchmark (L0)
 After=docker.service
@@ -199,7 +211,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now arena-bench.timer"
 
   echo "  [7/7] Installing L1 enterprise systemd timer (hourly)..."
-  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sudo tee /etc/systemd/system/arena-bench-enterprise.service > /dev/null <<'SVCEOF'
+  ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "sudo tee /etc/systemd/system/arena-bench-enterprise.service > /dev/null <<'SVCEOF'
 [Unit]
 Description=Gateway Arena Enterprise Benchmark (L1)
 After=docker.service
@@ -238,8 +250,9 @@ echo "Timers: L0 every 30 min + L1 enterprise hourly on each VPS"
 echo "Pushgateway: ${PUSHGATEWAY_URL}"
 echo ""
 echo "Verify (manual run):"
-echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose run --rm arena'"
-echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose -f docker-compose.enterprise.yml run --rm arena-enterprise'"
-echo "  ssh -i $SSH_KEY debian@54.36.209.237 'cd /opt/arena && docker compose run --rm arena'"
-echo "  ssh -i $SSH_KEY debian@54.36.209.237 'cd /opt/arena && docker compose -f docker-compose.enterprise.yml run --rm arena-enterprise'"
+echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose run --rm arena'        # STOA"
+echo "  ssh -i $SSH_KEY stoa@51.195.43.130 'cd /opt/arena && docker compose run --rm arena'         # Kong"
+echo "  ssh -i $SSH_KEY stoa@135.125.204.169 'cd /opt/arena && docker compose run --rm arena'       # agentgateway"
+echo "  ssh -i $SSH_KEY debian@54.36.209.237 'cd /opt/arena && docker compose run --rm arena'       # Gravitee"
+echo "  ssh -i $SSH_KEY debian@94.23.107.106 'cd /opt/arena && docker compose run --rm arena'       # bench (all 4 remote)"
 echo "  curl -sf -u arena:arena-push-2026 https://pushgateway.gostoa.dev/metrics | grep enterprise_dimension"

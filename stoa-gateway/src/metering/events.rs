@@ -57,6 +57,9 @@ pub struct ToolCallEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_email: Option<String>,
 
+    /// OAuth client ID (azp claim) — consumer identifier for analytics (CAB-1782)
+    pub consumer_id: String,
+
     /// Tool name
     pub tool_name: String,
 
@@ -133,6 +136,7 @@ impl ToolCallEvent {
             tenant_id,
             user_id: None,
             user_email: None,
+            consumer_id: "unknown".to_string(),
             tool_name,
             action,
             latency_ms: 0,
@@ -157,6 +161,12 @@ impl ToolCallEvent {
     pub fn with_user(mut self, user_id: Option<String>, user_email: Option<String>) -> Self {
         self.user_id = user_id;
         self.user_email = user_email;
+        self
+    }
+
+    /// Set consumer identifier (OAuth client ID / azp claim) (CAB-1782)
+    pub fn with_consumer(mut self, consumer_id: &str) -> Self {
+        self.consumer_id = consumer_id.to_string();
         self
     }
 

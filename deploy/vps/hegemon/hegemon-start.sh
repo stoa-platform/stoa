@@ -33,6 +33,15 @@ git checkout main 2>/dev/null || true
 git pull --ff-only origin main 2>/dev/null || true
 log "Git updated: $(git log --oneline -1)"
 
+# ─── 1b. Sync ops scripts to /opt/stoa-ops/ ─────────────────────────────────
+if [[ -d "${STOA_DIR}/scripts/ai-ops" ]]; then
+  sudo mkdir -p /opt/stoa-ops
+  sudo chown "$(whoami):$(whoami)" /opt/stoa-ops
+  cp -u "${STOA_DIR}"/scripts/ai-ops/*.sh /opt/stoa-ops/ 2>/dev/null || true
+  chmod +x /opt/stoa-ops/*.sh 2>/dev/null || true
+  log "Ops scripts synced to /opt/stoa-ops/"
+fi
+
 # ─── 2. Ensure Claude config (idempotent) ───────────────────────────────────
 ensure_claude_config() {
   python3 << 'PYEOF'

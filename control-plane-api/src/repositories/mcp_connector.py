@@ -76,13 +76,17 @@ class ConnectorServerRepository:
         self,
         template_id: UUID,
         tenant_id: str | None,
+        environment: str | None = None,
     ) -> ExternalMCPServer | None:
-        """Find an existing server connected via a specific template for a tenant."""
+        """Find an existing server connected via a specific template for a tenant + environment."""
         conditions = [ExternalMCPServer.connector_template_id == template_id]
         if tenant_id is not None:
             conditions.append(ExternalMCPServer.tenant_id == tenant_id)
         else:
             conditions.append(ExternalMCPServer.tenant_id.is_(None))
+
+        if environment is not None:
+            conditions.append(ExternalMCPServer.environment == environment)
 
         result = await self.session.execute(select(ExternalMCPServer).where(and_(*conditions)))
         return result.scalar_one_or_none()
@@ -90,23 +94,32 @@ class ConnectorServerRepository:
     async def list_connected_template_ids(
         self,
         tenant_id: str | None,
-    ) -> dict[UUID, tuple[UUID, str]]:
-        """Get a mapping of connected template_id -> (server_id, health_status) for a tenant."""
+        environment: str | None = None,
+    ) -> dict[UUID, tuple[UUID, str, str | None]]:
+        """Get a mapping of connected template_id -> (server_id, health_status, environment) for a tenant."""
         conditions = [ExternalMCPServer.connector_template_id.isnot(None)]
         if tenant_id is not None:
             conditions.append(ExternalMCPServer.tenant_id == tenant_id)
         else:
             conditions.append(ExternalMCPServer.tenant_id.is_(None))
 
+        if environment is not None:
+            conditions.append(ExternalMCPServer.environment == environment)
+
         result = await self.session.execute(
             select(
                 ExternalMCPServer.connector_template_id,
                 ExternalMCPServer.id,
                 ExternalMCPServer.health_status,
+                ExternalMCPServer.environment,
             ).where(and_(*conditions))
         )
 
-        mapping: dict[UUID, tuple[UUID, str]] = {}
+        mapping: dict[UUID, tuple[UUID, str, str | None]] = {}
         for row in result.all():
-            mapping[row[0]] = (row[1], row[2].value if hasattr(row[2], "value") else str(row[2]))
+            mapping[row[0]] = (
+                row[1],
+                row[2].value if hasattr(row[2], "value") else str(row[2]),
+                row[3],
+            )
         return mapping

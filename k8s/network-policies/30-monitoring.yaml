@@ -153,3 +153,80 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+---
+# DNS for all monitoring pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-dns
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# All monitoring pods → K8s API server
+# Required for: Prometheus SD, Prometheus Operator watch, kube-state-metrics
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-k8s-api
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # K8s API server (cluster IP)
+    - to:
+        - ipBlock:
+            cidr: 10.3.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    # K8s API server (alternate port) + kubelet metrics
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 10250
+---
+# Monitoring internal: Prometheus ↔ Pushgateway, Grafana ↔ Prometheus, etc.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-internal
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring

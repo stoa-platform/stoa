@@ -276,8 +276,16 @@ impl GatewayRegistrar {
         }
     }
 
-    /// Get the hostname of this machine
+    /// Get the stable instance name for registration.
+    ///
+    /// Uses STOA_INSTANCE_NAME env var if set (stable across pod restarts),
+    /// otherwise falls back to the pod hostname (changes on every rollout).
     fn get_hostname(&self) -> Result<String, RegistrationError> {
+        if let Ok(name) = std::env::var("STOA_INSTANCE_NAME") {
+            if !name.is_empty() {
+                return Ok(name);
+            }
+        }
         hostname::get()
             .map(|h| h.to_string_lossy().to_string())
             .map_err(|e| RegistrationError::HostnameError(e.to_string()))

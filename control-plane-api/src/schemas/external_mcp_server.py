@@ -95,9 +95,11 @@ class ExternalMCPServerCreate(BaseModel):
     base_url: str = Field(..., description="Base URL of the MCP server")
     transport: TransportTypeEnum = Field(TransportTypeEnum.SSE, description="Transport protocol")
     auth_type: AuthTypeEnum = Field(AuthTypeEnum.NONE, description="Authentication type")
-    credentials: CredentialsInput | None = Field(None, description="Credentials (stored in Vault)")
+    credentials: CredentialsInput | None = Field(None, description="Credentials (stored securely)")
     tool_prefix: str | None = Field(None, max_length=100, description="Prefix for tool names")
     tenant_id: str | None = Field(None, max_length=255, description="Tenant ID (null = platform-wide)")
+    environment: str = Field("dev", max_length=50, description="Target environment (dev/staging/production)")
+    gateway_instance_id: UUID | None = Field(None, description="Bound gateway instance for dataplane routing")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -110,6 +112,7 @@ class ExternalMCPServerCreate(BaseModel):
                 "auth_type": "bearer_token",
                 "credentials": {"bearer_token": "lin_api_xxx"},
                 "tool_prefix": "linear",
+                "environment": "dev",
             }
         }
     )
@@ -124,9 +127,11 @@ class ExternalMCPServerUpdate(BaseModel):
     base_url: str | None = None
     transport: TransportTypeEnum | None = None
     auth_type: AuthTypeEnum | None = None
-    credentials: CredentialsInput | None = Field(None, description="New credentials (updates Vault)")
+    credentials: CredentialsInput | None = Field(None, description="New credentials (updates securely)")
     tool_prefix: str | None = Field(None, max_length=100)
     enabled: bool | None = None
+    environment: str | None = Field(None, max_length=50, description="Target environment")
+    gateway_instance_id: UUID | None = Field(None, description="Bound gateway instance")
 
 
 class ExternalMCPServerResponse(BaseModel):
@@ -147,6 +152,8 @@ class ExternalMCPServerResponse(BaseModel):
     last_sync_at: datetime | None = None
     sync_error: str | None = None
     tenant_id: str | None = None
+    environment: str | None = "dev"
+    gateway_instance_id: UUID | None = None
     tools_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -173,6 +180,8 @@ class TenantMCPServerResponse(BaseModel):
     last_health_check: datetime | None = None
     last_sync_at: datetime | None = None
     sync_error: str | None = None
+    environment: str | None = "dev"
+    gateway_instance_id: UUID | None = None
     tools_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -204,8 +213,10 @@ class TenantMCPServerCreate(BaseModel):
     base_url: str = Field(..., description="Base URL of the MCP server")
     transport: TransportTypeEnum = Field(TransportTypeEnum.SSE, description="Transport protocol")
     auth_type: AuthTypeEnum = Field(AuthTypeEnum.NONE, description="Authentication type")
-    credentials: CredentialsInput | None = Field(None, description="Credentials (stored in Vault)")
+    credentials: CredentialsInput | None = Field(None, description="Credentials (stored securely)")
     tool_prefix: str | None = Field(None, max_length=100, description="Prefix for tool names")
+    environment: str = Field("dev", max_length=50, description="Target environment (dev/staging/production)")
+    gateway_instance_id: UUID | None = Field(None, description="Bound gateway instance for dataplane routing")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -217,6 +228,7 @@ class TenantMCPServerCreate(BaseModel):
                 "auth_type": "bearer_token",
                 "credentials": {"bearer_token": "lin_api_xxx"},
                 "tool_prefix": "linear",
+                "environment": "dev",
             }
         }
     )
@@ -231,9 +243,11 @@ class TenantMCPServerUpdate(BaseModel):
     base_url: str | None = None
     transport: TransportTypeEnum | None = None
     auth_type: AuthTypeEnum | None = None
-    credentials: CredentialsInput | None = Field(None, description="New credentials (updates Vault)")
+    credentials: CredentialsInput | None = Field(None, description="New credentials (stored securely)")
     tool_prefix: str | None = Field(None, max_length=100)
     enabled: bool | None = None
+    environment: str | None = Field(None, max_length=50, description="Target environment")
+    gateway_instance_id: UUID | None = Field(None, description="Bound gateway instance")
 
 
 class ExternalMCPServerDetailResponse(ExternalMCPServerResponse):
@@ -286,9 +300,11 @@ class ExternalMCPServerForGateway(BaseModel):
     base_url: str
     transport: TransportTypeEnum
     auth_type: AuthTypeEnum
-    credentials: dict | None = None  # Decrypted credentials from Vault
+    credentials: dict | None = None  # Decrypted credentials
     tool_prefix: str | None = None
     tenant_id: str | None = None
+    environment: str | None = "dev"
+    gateway_instance_id: UUID | None = None
     tools: list[ExternalMCPServerToolResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

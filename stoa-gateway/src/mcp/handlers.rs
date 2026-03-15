@@ -79,6 +79,8 @@ struct AuthContext {
     sub_account_id: Option<String>,
     /// Federation: master account ID (CAB-1362)
     master_account_id: Option<String>,
+    /// OAuth client ID (azp claim) — used as consumer_id for metrics (CAB-1782)
+    consumer_id: String,
 }
 
 /// Extract and validate JWT from Authorization header (Phase 1: CAB-1105)
@@ -120,6 +122,10 @@ async fn extract_auth_context(state: &AppState, headers: &HeaderMap) -> AuthCont
                             raw_token: Some(token_str.to_string()),
                             sub_account_id: claims.sub_account_id.clone(),
                             master_account_id: claims.master_account_id.clone(),
+                            consumer_id: claims
+                                .azp
+                                .clone()
+                                .unwrap_or_else(|| "unknown".to_string()),
                         };
                     }
                     Err(e) => {
@@ -137,6 +143,7 @@ async fn extract_auth_context(state: &AppState, headers: &HeaderMap) -> AuthCont
         tenant_id: tenant_from_header.unwrap_or_else(|| "default".to_string()),
         roles: vec![],
         scopes: vec!["stoa:read".to_string()],
+        consumer_id: "unknown".to_string(),
         raw_token: None,
         sub_account_id: None,
         master_account_id: None,
@@ -411,7 +418,13 @@ pub async fn mcp_tools_call(
                     t
                 } else {
                     warn!(tool = %request.name, "Tool not found (after sync refresh)");
-                    metrics::record_tool_call(&request.name, &auth.tenant_id, "not_found", 0.0);
+                    metrics::record_tool_call(
+                        &request.name,
+                        &auth.tenant_id,
+                        "not_found",
+                        0.0,
+                        &auth.consumer_id,
+                    );
                     emit_metering_event(
                         &state,
                         &auth,
@@ -440,7 +453,13 @@ pub async fn mcp_tools_call(
                 }
             } else {
                 warn!(tool = %request.name, "Tool not found (cache loaded, no sync refresh)");
-                metrics::record_tool_call(&request.name, &auth.tenant_id, "not_found", 0.0);
+                metrics::record_tool_call(
+                    &request.name,
+                    &auth.tenant_id,
+                    "not_found",
+                    0.0,
+                    &auth.consumer_id,
+                );
                 emit_metering_event(
                     &state,
                     &auth,
@@ -597,6 +616,8 @@ pub async fn mcp_tools_call(
         pii_redact: state.config.guardrails_pii_redact,
         injection_enabled: state.config.guardrails_injection_enabled,
         content_filter_enabled: state.config.guardrails_content_filter_enabled,
+        prompt_guard_enabled: state.config.prompt_guard_enabled,
+        prompt_guard_action: state.config.prompt_guard_action,
     };
     let guardrails_cfg = state
         .guardrail_policy_store
@@ -708,6 +729,7 @@ pub async fn mcp_tools_call(
                 &auth.tenant_id,
                 "budget_exceeded",
                 start.elapsed().as_secs_f64(),
+                &auth.consumer_id,
             );
             return (
                 StatusCode::TOO_MANY_REQUESTS,
@@ -772,6 +794,7 @@ pub async fn mcp_tools_call(
         raw_token: auth.raw_token.clone(),
         skill_instructions,
         progress_token: None,
+        consumer_id: auth.consumer_id.clone(),
     };
 
     // Phase 2: OPA policy evaluation with real scopes/roles
@@ -843,6 +866,7 @@ pub async fn mcp_tools_call(
                 &auth.tenant_id,
                 "cache_hit",
                 start.elapsed().as_secs_f64(),
+                &auth.consumer_id,
             );
             emit_metering_event(
                 &state,
@@ -877,7 +901,13 @@ pub async fn mcp_tools_call(
     let tool_cb = state.circuit_breakers.get_or_create(&tool_cb_key);
     if !tool_cb.allow_request() {
         warn!(tool = %request.name, "Tool circuit breaker open — fast-failing");
-        metrics::record_tool_call(&request.name, &auth.tenant_id, "circuit_open", 0.0);
+        metrics::record_tool_call(
+            &request.name,
+            &auth.tenant_id,
+            "circuit_open",
+            0.0,
+            &auth.consumer_id,
+        );
         return with_rate_limit_headers(
             StatusCode::SERVICE_UNAVAILABLE,
             Json(ToolsCallResponse {
@@ -921,7 +951,13 @@ pub async fn mcp_tools_call(
             let duration_secs = duration.as_secs_f64();
             let t_gateway_ms = (t_auth + t_policy).as_millis() as u64;
 
-            metrics::record_tool_call(&request.name, &auth.tenant_id, "success", duration_secs);
+            metrics::record_tool_call(
+                &request.name,
+                &auth.tenant_id,
+                "success",
+                duration_secs,
+                &auth.consumer_id,
+            );
             if is_federation_request {
                 let sub_id = auth.sub_account_id.as_ref().expect("checked above");
                 let master_id = auth.master_account_id.as_ref().expect("checked above");
@@ -1032,6 +1068,7 @@ pub async fn mcp_tools_call(
                 &auth.tenant_id,
                 "error",
                 duration.as_secs_f64(),
+                &auth.consumer_id,
             );
             if is_federation_request {
                 let sub_id = auth.sub_account_id.as_ref().expect("checked above");
@@ -1121,6 +1158,7 @@ fn emit_metering_event(
             action.to_string(),
         )
         .with_user(auth.user_id.clone(), auth.user_email.clone())
+        .with_consumer(&auth.consumer_id)
         .with_timing(latency_ms, timing.t_gateway_ms, t_backend_ms)
         .with_status(status)
         .with_sizes(sizes.request, sizes.response)
@@ -1170,6 +1208,7 @@ fn emit_error_snapshot(
             action.to_string(),
         )
         .with_user(auth.user_id.clone(), auth.user_email.clone())
+        .with_consumer(&auth.consumer_id)
         .with_timing(latency_ms, timing.t_gateway_ms, timing.t_backend_ms)
         .with_status(EventStatus::Error);
 

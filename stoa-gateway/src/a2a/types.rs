@@ -152,7 +152,8 @@ impl JsonRpcResponse {
 
 // ─── A2A Task Types ───
 
-/// Task state machine: submitted → working → completed | failed | canceled
+/// Task state machine (A2A v1.0):
+/// submitted → working → completed | failed | canceled | input_required | auth_required | rejected
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskState {
@@ -162,6 +163,10 @@ pub enum TaskState {
     Completed,
     Failed,
     Canceled,
+    /// Agent requires authentication/authorization (A2A v1.0)
+    AuthRequired,
+    /// Agent rejected the task (A2A v1.0)
+    Rejected,
 }
 
 /// A task represents a unit of work sent to an agent
@@ -170,9 +175,9 @@ pub enum TaskState {
 pub struct Task {
     /// Unique task identifier
     pub id: String,
-    /// Optional session ID for multi-turn conversations
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
+    /// Context ID for multi-turn conversations (A2A v1.0, replaces session_id)
+    #[serde(alias = "sessionId", skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
     /// Current task status
     pub status: TaskStatus,
     /// Conversation history (input + output messages)
@@ -279,14 +284,25 @@ pub struct Artifact {
 pub struct TaskSendParams {
     /// Task ID (client-generated UUID)
     pub id: String,
-    /// Optional session ID for multi-turn
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
+    /// Context ID for multi-turn (A2A v1.0)
+    #[serde(alias = "sessionId", skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
     /// Message to send
     pub message: Message,
     /// Task metadata
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
+}
+
+/// MCP tool invocation payload — sent as a Data part in A2A messages.
+/// Enables the A2A → MCP bridge: agents invoke MCP tools via the A2A protocol.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolInvocation {
+    /// MCP tool name to invoke
+    pub tool: String,
+    /// Tool arguments (JSON object)
+    #[serde(default)]
+    pub arguments: serde_json::Value,
 }
 
 /// Parameters for tasks/get method
@@ -321,5 +337,5 @@ pub const TASK_NOT_FOUND: i32 = -32001;
 pub const TASK_NOT_CANCELABLE: i32 = -32002;
 pub const AGENT_UNAVAILABLE: i32 = -32003;
 
-/// A2A Protocol version
-pub const A2A_PROTOCOL_VERSION: &str = "0.2.2";
+/// A2A Protocol version (upgraded to v1.0 — CAB-1754)
+pub const A2A_PROTOCOL_VERSION: &str = "1.0";

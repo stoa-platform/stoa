@@ -346,6 +346,20 @@
 
 ### Todo
 
+- [ ] CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (44 pts) — Council 8.25/10, 6 phases
+  - **Phase 0** [owner: —]
+    - [ ] CAB-1796 [infra] Setup Vault on spare-gra-vps (8 pts)
+  - **Phase 1** (after Phase 0) [owner: —]
+    - [ ] CAB-1797 [infra] Migrate secrets Infisical → Vault (5 pts)
+  - **Phase 2** (after Phase 1) [owner: —]
+    - [ ] CAB-1798 [infra] ESO ClusterSecretStore → Vault (8 pts)
+  - **Phase 3** (after Phase 1, parallel with Phase 2) [owner: —]
+    - [ ] CAB-1799 [infra] Vault Agent on VPS services (13 pts)
+  - **Phase 4** (after Phase 2+3) [owner: —]
+    - [ ] CAB-1801 [infra] Extended rotation VPS (5 pts)
+  - **Phase 5** (after Phase 0, nice-to-have) [owner: —]
+    - [ ] CAB-1802 [infra] SSH signing + PKI engine (5 pts)
+- [ ] CAB-1781: feat(infra) Universal Gateway Self-Registration (13 pts) — Council 8.50/10
 - [ ] CAB-1773: fix(ui) Grafana iframe embedding with JWT auth_token (8 pts) — Council 8.50/10
 
 ### Done

@@ -221,6 +221,7 @@ function ConnectedFloatingChat() {
     switchConversation,
     newConversation,
     deleteConversation,
+    loadConversationMessages,
     activeConversationId,
   } = useChatService();
 
@@ -234,6 +235,7 @@ function ConnectedFloatingChat() {
       onSwitchConversation={switchConversation}
       onNewConversation={newConversation}
       onDeleteConversation={deleteConversation}
+      onLoadConversationMessages={loadConversationMessages}
       activeConversationId={activeConversationId}
     />
   );

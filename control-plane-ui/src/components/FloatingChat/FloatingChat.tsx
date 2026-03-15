@@ -12,6 +12,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
+import Markdown from 'react-markdown';
 import {
   MessageCircle,
   X,
@@ -75,6 +76,10 @@ export interface FloatingChatProps {
   onNewConversation?: () => void;
   /** Delete a conversation */
   onDeleteConversation?: (id: string) => Promise<boolean>;
+  /** Load messages for a specific conversation */
+  onLoadConversationMessages?: (
+    id: string
+  ) => Promise<{ role: string; content: string; created_at: string }[]>;
   /** Currently active conversation ID */
   activeConversationId?: string | null;
   /** Backward-compat: simple send that returns full response */
@@ -303,6 +308,7 @@ export function FloatingChat({
   onSwitchConversation,
   onNewConversation,
   onDeleteConversation,
+  onLoadConversationMessages,
   activeConversationId,
   onSendMessage,
 }: FloatingChatProps) {
@@ -587,11 +593,27 @@ export function FloatingChat({
   const handleSwitchConversation = useCallback(
     (id: string) => {
       onSwitchConversation?.(id);
-      // TODO: load conversation messages from backend
-      setMessages([WELCOME_MESSAGE]);
       setShowConversations(false);
+
+      if (onLoadConversationMessages) {
+        setIsLoading(true);
+        void onLoadConversationMessages(id)
+          .then((msgs) => {
+            const loaded: ChatMessage[] = msgs.map((m, i) => ({
+              id: `hist-${id}-${i}`,
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: new Date(m.created_at),
+            }));
+            setMessages(loaded.length > 0 ? loaded : [WELCOME_MESSAGE]);
+          })
+          .catch(() => setMessages([WELCOME_MESSAGE]))
+          .finally(() => setIsLoading(false));
+      } else {
+        setMessages([WELCOME_MESSAGE]);
+      }
     },
-    [onSwitchConversation]
+    [onSwitchConversation, onLoadConversationMessages]
   );
 
   const handleDeleteConversation = useCallback(
@@ -696,7 +718,54 @@ export function FloatingChat({
                             : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-100 rounded-tl-sm'
                         }`}
                       >
-                        {message.content}
+                        {message.role === 'assistant' && message.content ? (
+                          <Markdown
+                            components={{
+                              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                              ul: ({ children }) => (
+                                <ul className="list-disc pl-4 mb-2 last:mb-0">{children}</ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className="list-decimal pl-4 mb-2 last:mb-0">{children}</ol>
+                              ),
+                              li: ({ children }) => <li className="mb-0.5">{children}</li>,
+                              strong: ({ children }) => (
+                                <strong className="font-semibold">{children}</strong>
+                              ),
+                              code: ({ children, className }) =>
+                                className ? (
+                                  <pre className="bg-neutral-200 dark:bg-neutral-600 rounded-lg p-2 my-1 overflow-x-auto text-xs">
+                                    <code>{children}</code>
+                                  </pre>
+                                ) : (
+                                  <code className="bg-neutral-200 dark:bg-neutral-600 px-1 py-0.5 rounded text-xs">
+                                    {children}
+                                  </code>
+                                ),
+                              a: ({ href, children }) => (
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 dark:text-blue-400 underline"
+                                >
+                                  {children}
+                                </a>
+                              ),
+                              h1: ({ children }) => (
+                                <p className="font-bold text-base mb-1">{children}</p>
+                              ),
+                              h2: ({ children }) => <p className="font-bold mb-1">{children}</p>,
+                              h3: ({ children }) => (
+                                <p className="font-semibold mb-1">{children}</p>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </Markdown>
+                        ) : (
+                          message.content
+                        )}
                         {message.isStreaming && !message.content && (
                           <div
                             className="flex gap-1 items-center h-5"

@@ -42,9 +42,8 @@ fi
 
 # Output as JSON with systemMessage
 if [ -n "$STATE" ]; then
-  # Escape for JSON
-  ESCAPED=$(printf '%s' "$STATE" | jq -Rs .)
-  echo "{\"systemMessage\": \"Post-compact state recovery:\\n\" + ${ESCAPED}}"
+  MSG=$(printf 'Post-compact state recovery:\n%s' "$STATE")
+  echo "$MSG" | jq -Rs '{"systemMessage": .}'
 else
   echo '{}'
 fi

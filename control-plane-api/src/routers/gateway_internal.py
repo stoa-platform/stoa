@@ -61,8 +61,27 @@ class HeartbeatPayload(BaseModel):
     uptime_seconds: int = Field(..., description="Gateway uptime in seconds")
     routes_count: int = Field(default=0, description="Number of registered routes")
     policies_count: int = Field(default=0, description="Number of active policies")
+    discovered_apis: int = Field(default=0, description="Number of discovered APIs")
     requests_total: int | None = Field(default=None, description="Total requests served")
     error_rate: float | None = Field(default=None, description="Error rate (0.0-1.0)")
+
+
+class DiscoveredAPIItem(BaseModel):
+    """A single API discovered by stoa-connect on a gateway."""
+
+    name: str = Field(..., description="API/service name")
+    version: str = Field(default="", description="API version")
+    backend_url: str = Field(default="", description="Backend URL")
+    paths: list[str] = Field(default_factory=list, description="Exposed paths")
+    methods: list[str] = Field(default_factory=list, description="HTTP methods")
+    policies: list[str] = Field(default_factory=list, description="Active policies")
+    is_active: bool = Field(default=True, description="Whether the API is active")
+
+
+class DiscoveryPayload(BaseModel):
+    """Discovery report from stoa-connect."""
+
+    apis: list[DiscoveredAPIItem] = Field(default_factory=list, description="Discovered APIs")
 
 
 # --- Helper Functions ---
@@ -256,6 +275,7 @@ async def gateway_heartbeat(
         "uptime_seconds": payload.uptime_seconds,
         "routes_count": payload.routes_count,
         "policies_count": payload.policies_count,
+        "discovered_apis": payload.discovered_apis,
         "requests_total": payload.requests_total,
         "error_rate": payload.error_rate,
     }
@@ -269,6 +289,123 @@ async def gateway_heartbeat(
         payload.uptime_seconds,
         payload.routes_count,
     )
+
+
+@router.post("/{gateway_id}/discovery", status_code=200)
+async def report_discovery(
+    gateway_id: UUID,
+    payload: DiscoveryPayload,
+    x_gateway_key: str = Header(..., alias="X-Gateway-Key"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Receive API discovery report from stoa-connect.
+
+    Called periodically by stoa-connect agents to report APIs/services
+    discovered on the local gateway's admin API.
+    """
+    _validate_gateway_key(x_gateway_key)
+
+    repo = GatewayInstanceRepository(db)
+    instance = await repo.get_by_id(gateway_id)
+
+    if not instance:
+        raise HTTPException(status_code=404, detail="Gateway instance not found")
+
+    # Store discovery snapshot in health_details
+    now = datetime.now(UTC)
+    discovered_apis = [api.model_dump() for api in payload.apis]
+
+    instance.health_details = {
+        **(instance.health_details or {}),
+        "last_discovery": now.isoformat(),
+        "discovered_apis_count": len(payload.apis),
+        "discovered_apis": discovered_apis,
+    }
+
+    await repo.update(instance)
+    await db.commit()
+
+    logger.info(
+        "Gateway discovery report: id=%s, apis_count=%d",
+        gateway_id,
+        len(payload.apis),
+    )
+
+    return {
+        "gateway_id": str(gateway_id),
+        "apis_received": len(payload.apis),
+    }
+
+
+class SyncedPolicyResult(BaseModel):
+    """Result of syncing a single policy on the gateway."""
+
+    policy_id: str = Field(..., description="Policy ID from CP")
+    status: str = Field(..., description="Sync result: applied, removed, failed")
+    error: str | None = Field(default=None, description="Error message if failed")
+
+
+class SyncAckPayload(BaseModel):
+    """Payload from stoa-connect reporting policy sync results."""
+
+    synced_policies: list[SyncedPolicyResult] = Field(
+        default_factory=list, description="Sync results per policy"
+    )
+    sync_timestamp: str = Field(..., description="ISO timestamp of sync completion")
+
+
+@router.post("/{gateway_id}/sync-ack", status_code=200)
+async def sync_ack(
+    gateway_id: UUID,
+    payload: SyncAckPayload,
+    x_gateway_key: str = Header(..., alias="X-Gateway-Key"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Acknowledge policy sync results from stoa-connect (CAB-1817 Phase 3).
+
+    Called by stoa-connect after applying/removing policies on the local gateway.
+    Stores sync results in the gateway's health_details for observability.
+    """
+    _validate_gateway_key(x_gateway_key)
+
+    repo = GatewayInstanceRepository(db)
+    instance = await repo.get_by_id(gateway_id)
+
+    if not instance:
+        raise HTTPException(status_code=404, detail="Gateway instance not found")
+
+    # Store sync results in health_details
+    synced = [r.model_dump() for r in payload.synced_policies]
+    applied = sum(1 for r in payload.synced_policies if r.status == "applied")
+    removed = sum(1 for r in payload.synced_policies if r.status == "removed")
+    failed = sum(1 for r in payload.synced_policies if r.status == "failed")
+
+    instance.health_details = {
+        **(instance.health_details or {}),
+        "last_sync": payload.sync_timestamp,
+        "last_sync_results": synced,
+        "sync_applied": applied,
+        "sync_removed": removed,
+        "sync_failed": failed,
+    }
+
+    await repo.update(instance)
+    await db.commit()
+
+    logger.info(
+        "Gateway sync-ack: id=%s, applied=%d, removed=%d, failed=%d",
+        gateway_id,
+        applied,
+        removed,
+        failed,
+    )
+
+    return {
+        "gateway_id": str(gateway_id),
+        "applied": applied,
+        "removed": removed,
+        "failed": failed,
+    }
 
 
 class InternalToolDef(BaseModel):

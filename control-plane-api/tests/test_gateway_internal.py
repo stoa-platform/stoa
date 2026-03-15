@@ -537,6 +537,211 @@ class TestGatewayConfig:
             assert resp.status_code == 404
 
 
+class TestGatewayDiscovery:
+    """POST /v1/internal/gateways/{id}/discovery"""
+
+    def test_discovery_report_success(self, client):
+        """Discovery report stores APIs in health_details and returns 200."""
+        gw = _make_gateway_instance()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gw)
+            mock_repo.update = AsyncMock(return_value=gw)
+
+            resp = client.post(
+                f"/v1/internal/gateways/{gw.id}/discovery",
+                json={
+                    "apis": [
+                        {
+                            "name": "echo-service",
+                            "version": "1.0",
+                            "backend_url": "http://echo:8888",
+                            "paths": ["/echo"],
+                            "methods": ["GET", "POST"],
+                            "policies": ["rate-limiting"],
+                            "is_active": True,
+                        },
+                        {
+                            "name": "api-service",
+                            "backend_url": "http://api:3000",
+                            "is_active": False,
+                        },
+                    ]
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["apis_received"] == 2
+            assert gw.health_details["discovered_apis_count"] == 2
+            assert len(gw.health_details["discovered_apis"]) == 2
+            assert gw.health_details["discovered_apis"][0]["name"] == "echo-service"
+
+    def test_discovery_report_empty(self, client):
+        """Empty discovery report is accepted."""
+        gw = _make_gateway_instance()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gw)
+            mock_repo.update = AsyncMock(return_value=gw)
+
+            resp = client.post(
+                f"/v1/internal/gateways/{gw.id}/discovery",
+                json={"apis": []},
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert resp.json()["apis_received"] == 0
+
+    def test_discovery_report_invalid_key(self, client):
+        """Discovery with invalid key returns 401."""
+        fake_id = uuid4()
+
+        with patch("src.routers.gateway_internal.settings") as mock_settings:
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            resp = client.post(
+                f"/v1/internal/gateways/{fake_id}/discovery",
+                json={"apis": []},
+                headers={GW_KEY_HEADER: "wrong_key"},
+            )
+
+            assert resp.status_code == 401
+
+    def test_discovery_report_not_found(self, client):
+        """Discovery for non-existent gateway returns 404."""
+        fake_id = uuid4()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=None)
+
+            resp = client.post(
+                f"/v1/internal/gateways/{fake_id}/discovery",
+                json={"apis": [{"name": "test", "is_active": True}]},
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 404
+
+
+class TestGatewaySyncAck:
+    """POST /v1/internal/gateways/{id}/sync-ack"""
+
+    def test_sync_ack_success(self, client):
+        """Sync-ack stores results in health_details."""
+        gw = _make_gateway_instance()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gw)
+            mock_repo.update = AsyncMock(return_value=gw)
+
+            resp = client.post(
+                f"/v1/internal/gateways/{gw.id}/sync-ack",
+                json={
+                    "synced_policies": [
+                        {"policy_id": "pol-1", "status": "applied"},
+                        {"policy_id": "pol-2", "status": "removed"},
+                        {"policy_id": "pol-3", "status": "failed", "error": "timeout"},
+                    ],
+                    "sync_timestamp": "2026-03-15T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["applied"] == 1
+            assert data["removed"] == 1
+            assert data["failed"] == 1
+            assert gw.health_details["last_sync"] == "2026-03-15T12:00:00Z"
+            assert gw.health_details["sync_applied"] == 1
+            assert gw.health_details["sync_removed"] == 1
+            assert gw.health_details["sync_failed"] == 1
+
+    def test_sync_ack_empty(self, client):
+        """Empty sync-ack is accepted."""
+        gw = _make_gateway_instance()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gw)
+            mock_repo.update = AsyncMock(return_value=gw)
+
+            resp = client.post(
+                f"/v1/internal/gateways/{gw.id}/sync-ack",
+                json={
+                    "synced_policies": [],
+                    "sync_timestamp": "2026-03-15T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert resp.json()["applied"] == 0
+
+    def test_sync_ack_invalid_key(self, client):
+        """Sync-ack with invalid key returns 401."""
+        fake_id = uuid4()
+
+        with patch("src.routers.gateway_internal.settings") as mock_settings:
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            resp = client.post(
+                f"/v1/internal/gateways/{fake_id}/sync-ack",
+                json={"synced_policies": [], "sync_timestamp": "2026-03-15T12:00:00Z"},
+                headers={GW_KEY_HEADER: "wrong_key"},
+            )
+
+            assert resp.status_code == 401
+
+    def test_sync_ack_not_found(self, client):
+        """Sync-ack for non-existent gateway returns 404."""
+        fake_id = uuid4()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=None)
+
+            resp = client.post(
+                f"/v1/internal/gateways/{fake_id}/sync-ack",
+                json={
+                    "synced_policies": [{"policy_id": "pol-1", "status": "applied"}],
+                    "sync_timestamp": "2026-03-15T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 404
+
+
 class TestHelperFunctions:
     """Unit tests for internal helper functions."""
 

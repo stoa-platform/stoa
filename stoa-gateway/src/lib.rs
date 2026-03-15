@@ -224,6 +224,8 @@ pub fn build_router(state: AppState) -> Router {
             "/a2a/agents/:name",
             get(a2a::admin::get_agent).delete(a2a::admin::unregister_agent),
         )
+        // CAB-1828: Route hot-reload
+        .route("/routes/reload", post(admin::routes_reload))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

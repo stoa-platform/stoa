@@ -2,8 +2,13 @@
 //!
 //! Routes are registered by the Control Plane via the admin API
 //! and used by the dynamic proxy to route incoming requests.
+//!
+//! Uses `arc_swap::ArcSwap` for lock-free reads on the hot path.
+//! Writes clone-and-swap the table — acceptable since route mutations
+//! are rare (admin API or periodic reload) while reads happen per-request.
 
-use parking_lot::RwLock;
+use arc_swap::ArcSwap;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -37,13 +42,22 @@ pub struct ApiRoute {
     pub contract_key: Option<String>,
 }
 
+/// Snapshot of the full route table (immutable once created).
+pub type RouteTable = HashMap<String, Arc<ApiRoute>>;
+
 /// Thread-safe in-memory registry of API routes.
+///
+/// Uses `ArcSwap<RouteTable>` for lock-free reads on the hot path (CAB-1828).
+/// Writes use a `Mutex` to serialize clone-and-swap operations.
 ///
 /// Routes are stored as `Arc<ApiRoute>` to avoid cloning 7+ String fields
 /// on every lookup. `find_by_path()` returns `Arc<ApiRoute>` — one atomic
 /// increment vs deep clone. (CAB-1332 optimization)
 pub struct RouteRegistry {
-    routes: RwLock<HashMap<String, Arc<ApiRoute>>>,
+    /// Lock-free readable route table.
+    routes: ArcSwap<RouteTable>,
+    /// Serializes write operations (clone-and-swap).
+    write_lock: Mutex<()>,
 }
 
 impl Default for RouteRegistry {
@@ -56,44 +70,74 @@ impl RouteRegistry {
     /// Create an empty registry.
     pub fn new() -> Self {
         Self {
-            routes: RwLock::new(HashMap::new()),
+            routes: ArcSwap::from_pointee(HashMap::new()),
+            write_lock: Mutex::new(()),
         }
     }
 
     /// Insert or update a route. Returns the previous value if it existed.
     pub fn upsert(&self, route: ApiRoute) -> Option<Arc<ApiRoute>> {
-        self.routes
-            .write()
-            .insert(route.id.clone(), Arc::new(route))
+        let _guard = self.write_lock.lock();
+        let old = self.routes.load();
+        let mut new_table = (**old).clone();
+        let prev = new_table.insert(route.id.clone(), Arc::new(route));
+        self.routes.store(Arc::new(new_table));
+        prev
     }
 
     /// Remove a route by ID. Returns the removed route if it existed.
     pub fn remove(&self, id: &str) -> Option<Arc<ApiRoute>> {
-        self.routes.write().remove(id)
+        let _guard = self.write_lock.lock();
+        let old = self.routes.load();
+        let mut new_table = (**old).clone();
+        let prev = new_table.remove(id);
+        self.routes.store(Arc::new(new_table));
+        prev
     }
 
     /// Get a route by ID.
     pub fn get(&self, id: &str) -> Option<Arc<ApiRoute>> {
-        self.routes.read().get(id).map(Arc::clone)
+        self.routes.load().get(id).map(Arc::clone)
     }
 
     /// List all registered routes.
     pub fn list(&self) -> Vec<Arc<ApiRoute>> {
-        self.routes.read().values().map(Arc::clone).collect()
+        self.routes.load().values().map(Arc::clone).collect()
     }
 
     /// Number of registered routes.
     pub fn count(&self) -> usize {
-        self.routes.read().len()
+        self.routes.load().len()
     }
 
     /// Remove all routes generated from a specific contract key.
     /// Returns the number of routes removed.
     pub fn remove_by_contract(&self, contract_key: &str) -> usize {
-        let mut routes = self.routes.write();
-        let before = routes.len();
-        routes.retain(|_, r| r.contract_key.as_deref() != Some(contract_key));
-        before - routes.len()
+        let _guard = self.write_lock.lock();
+        let old = self.routes.load();
+        let mut new_table = (**old).clone();
+        let before = new_table.len();
+        new_table.retain(|_, r| r.contract_key.as_deref() != Some(contract_key));
+        let removed = before - new_table.len();
+        self.routes.store(Arc::new(new_table));
+        removed
+    }
+
+    /// Atomically swap the entire route table with a new snapshot (CAB-1828).
+    ///
+    /// Used by hot-reload (SIGHUP, admin endpoint, watch loop) to replace
+    /// all routes in a single lock-free pointer swap. Readers on the hot path
+    /// never block — they see either the old or the new table, never a partial state.
+    ///
+    /// Returns the number of routes in the new table.
+    pub fn swap_all(&self, routes: Vec<ApiRoute>) -> usize {
+        let new_table: RouteTable = routes
+            .into_iter()
+            .map(|r| (r.id.clone(), Arc::new(r)))
+            .collect();
+        let count = new_table.len();
+        self.routes.store(Arc::new(new_table));
+        count
     }
 
     /// Find the best matching route for a request path.
@@ -104,11 +148,11 @@ impl RouteRegistry {
     /// Returns `Arc<ApiRoute>` — one atomic increment instead of cloning
     /// 7+ String fields per request. (CAB-1332)
     pub fn find_by_path(&self, path: &str) -> Option<Arc<ApiRoute>> {
-        let routes = self.routes.read();
+        let table = self.routes.load();
         let mut best: Option<&Arc<ApiRoute>> = None;
         let mut best_len = 0;
 
-        for route in routes.values() {
+        for route in table.values() {
             if path.starts_with(&route.path_prefix) && route.path_prefix.len() > best_len {
                 best = Some(route);
                 best_len = route.path_prefix.len();
@@ -226,5 +270,53 @@ mod tests {
         reg.upsert(make_route("r3", "/apis/c"));
         let all = reg.list();
         assert_eq!(all.len(), 3);
+    }
+
+    #[test]
+    fn test_swap_all_replaces_entire_table() {
+        let reg = RouteRegistry::new();
+        reg.upsert(make_route("r1", "/apis/old"));
+        reg.upsert(make_route("r2", "/apis/old2"));
+        assert_eq!(reg.count(), 2);
+
+        let new_routes = vec![
+            make_route("r3", "/apis/new1"),
+            make_route("r4", "/apis/new2"),
+            make_route("r5", "/apis/new3"),
+        ];
+        let count = reg.swap_all(new_routes);
+        assert_eq!(count, 3);
+        assert_eq!(reg.count(), 3);
+        // Old routes are gone
+        assert!(reg.get("r1").is_none());
+        assert!(reg.get("r2").is_none());
+        // New routes are present
+        assert!(reg.get("r3").is_some());
+        assert!(reg.get("r4").is_some());
+        assert!(reg.get("r5").is_some());
+    }
+
+    #[test]
+    fn test_swap_all_empty_clears_table() {
+        let reg = RouteRegistry::new();
+        reg.upsert(make_route("r1", "/apis/a"));
+        assert_eq!(reg.count(), 1);
+
+        let count = reg.swap_all(vec![]);
+        assert_eq!(count, 0);
+        assert_eq!(reg.count(), 0);
+    }
+
+    #[test]
+    fn test_swap_all_deduplicates_by_id() {
+        let reg = RouteRegistry::new();
+        let routes = vec![
+            make_route("r1", "/apis/a"),
+            make_route("r1", "/apis/b"), // same ID, different prefix
+        ];
+        let count = reg.swap_all(routes);
+        // HashMap deduplicates by key — last write wins
+        assert_eq!(count, 1);
+        assert_eq!(reg.get("r1").unwrap().path_prefix, "/apis/b");
     }
 }

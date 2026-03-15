@@ -641,6 +641,35 @@ impl AppState {
             cache.clone().start_refresh_task();
         }
 
+        // Start route reload watch loop (CAB-1828)
+        if self.config.route_reload_enabled {
+            let reload_state = self.clone();
+            let interval_secs = self.config.route_reload_interval_secs;
+            tokio::spawn(async move {
+                let mut interval =
+                    tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
+                // Skip the first immediate tick — startup already has the latest routes
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    match crate::handlers::admin::reload_routes_from_cp(&reload_state).await {
+                        Ok(count) => {
+                            crate::metrics::record_route_reload("watch", "success", count);
+                            tracing::debug!(routes = count, "Route table reloaded (watch loop)");
+                        }
+                        Err(e) => {
+                            crate::metrics::record_route_reload("watch", "error", 0);
+                            tracing::warn!(error = %e, "Route reload watch loop failed");
+                        }
+                    }
+                }
+            });
+            tracing::info!(
+                interval_secs = interval_secs,
+                "Route reload watch loop started (CAB-1828)"
+            );
+        }
+
         // Start zombie reaper (CAB-362)
         if let Some(ref zd) = self.zombie_detector {
             let zombie_detector = zd.clone();

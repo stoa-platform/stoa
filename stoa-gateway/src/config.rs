@@ -306,6 +306,17 @@ pub struct Config {
     #[serde(default = "default_access_log_enabled")]
     pub access_log_enabled: bool,
 
+    // === Route Hot-Reload (CAB-1828) ===
+    /// Enable periodic route table reload from Control Plane
+    /// Env: STOA_ROUTE_RELOAD_ENABLED
+    #[serde(default)]
+    pub route_reload_enabled: bool,
+
+    /// Route reload interval in seconds (default: 30)
+    /// Env: STOA_ROUTE_RELOAD_INTERVAL_SECS
+    #[serde(default = "default_route_reload_interval")]
+    pub route_reload_interval_secs: u64,
+
     // === Guardrails (CAB-707) ===
     /// Enable PII detection in tool call arguments
     /// Env: STOA_GUARDRAILS_PII_ENABLED
@@ -1075,6 +1086,10 @@ fn default_quota_daily_limit() -> u32 {
     10_000
 }
 
+fn default_route_reload_interval() -> u64 {
+    30
+}
+
 fn default_access_log_enabled() -> bool {
     true // Enabled by default — structured access logs for observability
 }
@@ -1271,6 +1286,8 @@ impl Default for Config {
             quota_default_rate_per_minute: default_quota_rate_per_minute(),
             quota_default_daily_limit: default_quota_daily_limit(),
             access_log_enabled: default_access_log_enabled(),
+            route_reload_enabled: false,
+            route_reload_interval_secs: default_route_reload_interval(),
             guardrails_pii_enabled: false,
             guardrails_pii_redact: default_guardrails_pii_redact(),
             guardrails_injection_enabled: false,

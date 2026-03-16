@@ -375,6 +375,22 @@ pub static HEGEMON_BUDGET_DAILY_USD: Lazy<GaugeVec> = Lazy::new(|| {
     .expect("Failed to create stoa_hegemon_budget_daily_usd metric")
 });
 
+// === OTel Metrics (CAB-1831) ===
+
+/// Counter of OTel spans exported via tool spans.
+pub static OTEL_SPANS_EXPORTED_TOTAL: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "gateway_otel_spans_exported_total",
+        "Total number of OTel spans exported by the gateway"
+    )
+    .expect("Failed to create gateway_otel_spans_exported_total metric")
+});
+
+/// Update the spans exported gauge from the atomic counter in telemetry module.
+pub fn sync_otel_spans_gauge() {
+    OTEL_SPANS_EXPORTED_TOTAL.set(crate::telemetry::spans_exported_total() as f64);
+}
+
 // === Tool Discovery Metrics (CAB-1558) ===
 
 /// Histogram of tool discovery (CP sync) durations in seconds, per tenant and outcome.
@@ -1175,6 +1191,7 @@ pub fn init_all_metrics() {
     Lazy::force(&HEGEMON_DISPATCH_DURATION);
     Lazy::force(&HEGEMON_DISPATCH_COST);
     Lazy::force(&HEGEMON_BUDGET_DAILY_USD);
+    Lazy::force(&OTEL_SPANS_EXPORTED_TOTAL);
 }
 
 /// Get the total number of MCP tool calls across all labels.

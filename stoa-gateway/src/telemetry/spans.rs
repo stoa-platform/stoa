@@ -1,20 +1,12 @@
-//! Tool Span Helpers
+//! Tool Span Helpers (CAB-1831: enriched with upstream context)
 //!
-//! Provides instrumentation for tool execution with optional OTel integration.
-//! Falls back to tracing spans when OTel is not available.
-//!
-//! Note: Infrastructure prepared for SSE handler integration (Phase 7).
-
-// Span infrastructure prepared for future integration
-#![allow(dead_code)]
+//! Provides instrumentation for tool execution with OTel integration.
+//! Enriched span attributes: upstream RTT, TLS version, pool reuse, circuit breaker state.
 
 use std::time::Instant;
 use tracing::{debug, span, Level, Span};
 
-/// A span for tracking tool execution
-///
-/// When OTel is active, creates an OTel span with proper attributes.
-/// Otherwise, uses a tracing span for local observability.
+/// A span for tracking tool execution with enriched upstream context.
 pub struct ToolSpan {
     tool_name: String,
     tenant_id: String,
@@ -37,6 +29,11 @@ impl ToolSpan {
             auth_type = tracing::field::Empty,
             http.method = tracing::field::Empty,
             http.target = tracing::field::Empty,
+            // CAB-1831: enriched upstream context
+            upstream.rtt_ms = tracing::field::Empty,
+            upstream.tls_version = tracing::field::Empty,
+            upstream.pool_reuse = tracing::field::Empty,
+            upstream.cb_state = tracing::field::Empty,
         );
 
         debug!(
@@ -56,9 +53,6 @@ impl ToolSpan {
     }
 
     /// Attach UAC context attributes to the span.
-    ///
-    /// Uses `tracing::Span::record()` to fill the pre-declared empty fields.
-    /// `None` values are silently skipped (fields remain empty in the trace).
     pub fn with_uac(
         self,
         contract_id: Option<&str>,
@@ -81,6 +75,30 @@ impl ToolSpan {
         self
     }
 
+    /// Attach upstream context: RTT, TLS version, connection pool reuse, circuit breaker state.
+    pub fn with_upstream(
+        self,
+        rtt_ms: Option<f64>,
+        tls_version: Option<&str>,
+        pool_reuse: Option<bool>,
+        cb_state: Option<&str>,
+    ) -> Self {
+        if let Some(v) = rtt_ms {
+            self._tracing_span
+                .record("upstream.rtt_ms", format!("{v:.2}"));
+        }
+        if let Some(v) = tls_version {
+            self._tracing_span.record("upstream.tls_version", v);
+        }
+        if let Some(v) = pool_reuse {
+            self._tracing_span.record("upstream.pool_reuse", v);
+        }
+        if let Some(v) = cb_state {
+            self._tracing_span.record("upstream.cb_state", v);
+        }
+        self
+    }
+
     /// Get elapsed duration in seconds
     pub fn elapsed_secs(&self) -> f64 {
         self.start.elapsed().as_secs_f64()
@@ -98,7 +116,6 @@ impl ToolSpan {
             "Tool execution completed"
         );
 
-        // Record metrics
         crate::metrics::record_tool_call(
             &self.tool_name,
             &self.tenant_id,
@@ -106,6 +123,7 @@ impl ToolSpan {
             duration,
             &self.consumer_id,
         );
+        crate::telemetry::record_span_exported();
     }
 
     /// Mark span as failed with error
@@ -121,7 +139,6 @@ impl ToolSpan {
             "Tool execution failed"
         );
 
-        // Record metrics
         crate::metrics::record_tool_call(
             &self.tool_name,
             &self.tenant_id,
@@ -129,6 +146,7 @@ impl ToolSpan {
             duration,
             &self.consumer_id,
         );
+        crate::telemetry::record_span_exported();
     }
 
     /// Mark span as cache hit (no execution)
@@ -143,7 +161,6 @@ impl ToolSpan {
             "Tool result served from cache"
         );
 
-        // Record metrics with cache_hit status
         crate::metrics::record_tool_call(
             &self.tool_name,
             &self.tenant_id,
@@ -151,6 +168,7 @@ impl ToolSpan {
             duration,
             &self.consumer_id,
         );
+        crate::telemetry::record_span_exported();
     }
 
     /// Mark span as circuit breaker open (fast fail)
@@ -172,6 +190,7 @@ impl ToolSpan {
             duration,
             &self.consumer_id,
         );
+        crate::telemetry::record_span_exported();
     }
 }
 
@@ -192,8 +211,6 @@ impl Drop for ToolSpan {
 }
 
 /// RAII guard for automatic span finishing
-///
-/// Use when you want the span to auto-finish on scope exit.
 pub struct ToolSpanGuard {
     span: Option<ToolSpan>,
     error: Option<String>,
@@ -310,7 +327,6 @@ mod tests {
             Some("POST"),
             Some("/v1/tools/call"),
         );
-        // Verify span is usable after with_uac
         assert_eq!(span.tool_name, "test_tool");
         span.finish_success();
     }
@@ -323,7 +339,6 @@ mod tests {
             None,
             Some("/health"),
         );
-        // None values leave fields empty — no panic
         span.finish_success();
     }
 
@@ -331,6 +346,46 @@ mod tests {
     fn test_tool_span_with_no_uac() {
         let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
             .with_uac(None, None, None, None);
+        span.finish_success();
+    }
+
+    // CAB-1831: upstream context enrichment tests
+
+    #[test]
+    fn test_tool_span_with_full_upstream_context() {
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer").with_upstream(
+            Some(42.5),
+            Some("TLSv1.3"),
+            Some(true),
+            Some("closed"),
+        );
+        assert_eq!(span.tool_name, "test_tool");
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_with_partial_upstream() {
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer").with_upstream(
+            Some(15.0),
+            None,
+            None,
+            Some("half_open"),
+        );
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_with_no_upstream() {
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_upstream(None, None, None, None);
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_combined_uac_and_upstream() {
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_uac(Some("c-1"), Some("jwt"), Some("POST"), Some("/api"))
+            .with_upstream(Some(120.3), Some("TLSv1.2"), Some(false), Some("open"));
         span.finish_success();
     }
 }

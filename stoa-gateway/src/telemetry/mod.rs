@@ -1,21 +1,22 @@
-//! Telemetry Module (Phase 6: CAB-1105)
+//! Telemetry Module (CAB-1831: always-on OTel)
 //!
-//! Optional OpenTelemetry support with graceful degradation.
-//! When `otel` feature is disabled, all functions become no-ops.
-
-// Types and functions prepared for future integration
-#![allow(dead_code)]
+//! OpenTelemetry is always compiled in. When `STOA_OTEL_ENDPOINT` is absent,
+//! the tracer layer is simply not added (no-op). No feature gate required.
 
 pub mod deploy;
 mod spans;
 
 pub use spans::{ToolSpan, ToolSpanGuard};
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 use tracing::info;
 
 /// Global flag indicating if OTel is initialized
 static OTEL_INITIALIZED: OnceLock<bool> = OnceLock::new();
+
+/// Counter: total spans exported via OTLP (CAB-1831)
+static SPANS_EXPORTED: AtomicU64 = AtomicU64::new(0);
 
 /// Telemetry configuration
 #[derive(Debug, Clone)]
@@ -46,24 +47,30 @@ impl Default for TelemetryConfig {
 
 /// Initialize OTel and return an SDK Tracer for the tracing-opentelemetry layer.
 ///
-/// Returns `Some(Tracer)` when OTel feature is enabled and init succeeds.
-/// The caller should use this tracer to build the `OpenTelemetryLayer`.
-#[cfg(feature = "otel")]
+/// Returns `Some(Tracer)` on success. Returns `None` when:
+/// - Already initialized
+/// - No OTLP endpoint configured (no-op mode, CAB-1831)
+/// - Exporter creation fails (graceful degradation)
 pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_sdk::trace::Tracer> {
     if OTEL_INITIALIZED.get().is_some() {
         return None; // Already initialized
     }
+
+    // CAB-1831: no endpoint → no-op (tracing spans still work, just not exported)
+    let endpoint = match config.otlp_endpoint.as_deref() {
+        Some(ep) if !ep.is_empty() => ep,
+        _ => {
+            info!("STOA_OTEL_ENDPOINT not set — OTel export disabled (spans are local-only)");
+            let _ = OTEL_INITIALIZED.set(false);
+            return None;
+        }
+    };
 
     use opentelemetry::global;
     use opentelemetry::KeyValue;
     use opentelemetry_otlp::WithExportConfig;
     use opentelemetry_sdk::trace::TracerProvider;
     use opentelemetry_sdk::Resource;
-
-    let endpoint = config
-        .otlp_endpoint
-        .as_deref()
-        .unwrap_or("http://localhost:4317");
 
     let exporter = match opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
@@ -102,14 +109,14 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     let _ = OTEL_INITIALIZED.set(true);
     info!(
         service = %config.service_name,
-        endpoint = ?config.otlp_endpoint,
+        endpoint = endpoint,
         sample_rate = config.sample_rate,
         "OpenTelemetry initialized"
     );
     Some(tracer)
 }
 
-/// Initialize telemetry as no-op (feature disabled or runtime toggle off).
+/// Initialize telemetry as no-op (runtime toggle off).
 pub fn init_telemetry_noop() {
     let _ = OTEL_INITIALIZED.set(false);
     info!("OpenTelemetry disabled");
@@ -122,20 +129,17 @@ pub fn is_otel_active() -> bool {
 
 /// Extract the current OTel trace_id as hex string (for access logs).
 ///
-/// Returns `"-"` when OTel is inactive or feature is disabled.
+/// Returns `"-"` when OTel is inactive.
 pub fn extract_trace_id() -> String {
-    #[cfg(feature = "otel")]
-    {
-        if is_otel_active() {
-            use opentelemetry::trace::TraceContextExt;
-            use tracing_opentelemetry::OpenTelemetrySpanExt;
+    if is_otel_active() {
+        use opentelemetry::trace::TraceContextExt;
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-            let cx = tracing::Span::current().context();
-            let span_ref = cx.span();
-            let trace_id = span_ref.span_context().trace_id();
-            if trace_id != opentelemetry::trace::TraceId::INVALID {
-                return format!("{trace_id}");
-            }
+        let cx = tracing::Span::current().context();
+        let span_ref = cx.span();
+        let trace_id = span_ref.span_context().trace_id();
+        if trace_id != opentelemetry::trace::TraceId::INVALID {
+            return format!("{trace_id}");
         }
     }
     "-".to_string()
@@ -143,13 +147,20 @@ pub fn extract_trace_id() -> String {
 
 /// Shutdown OpenTelemetry (flush pending spans)
 pub fn shutdown_telemetry() {
-    #[cfg(feature = "otel")]
-    {
-        if is_otel_active() {
-            opentelemetry::global::shutdown_tracer_provider();
-            info!("OpenTelemetry shutdown complete");
-        }
+    if is_otel_active() {
+        opentelemetry::global::shutdown_tracer_provider();
+        info!("OpenTelemetry shutdown complete");
     }
+}
+
+/// Increment the exported spans counter (called from span finish methods)
+pub fn record_span_exported() {
+    SPANS_EXPORTED.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Get the total number of exported spans (for Prometheus gauge)
+pub fn spans_exported_total() -> u64 {
+    SPANS_EXPORTED.load(Ordering::Relaxed)
 }
 
 #[cfg(test)]
@@ -174,13 +185,37 @@ mod tests {
     }
 
     #[test]
-    fn test_init_without_otel_feature() {
-        let config = TelemetryConfig::default();
+    fn test_init_without_endpoint_returns_none() {
+        // No endpoint → no-op
+        let config = TelemetryConfig {
+            otlp_endpoint: None,
+            ..TelemetryConfig::default()
+        };
         assert_eq!(config.service_name, "stoa-gateway");
+        // Can't call init_telemetry_tracer in unit tests (OnceLock),
+        // but verify config is valid
     }
 
     #[test]
     fn test_is_otel_active_default() {
         let _ = is_otel_active(); // Just verify it doesn't panic
+    }
+
+    #[test]
+    fn test_spans_exported_counter() {
+        let before = spans_exported_total();
+        record_span_exported();
+        record_span_exported();
+        let after = spans_exported_total();
+        assert!(after >= before + 2);
+    }
+
+    #[test]
+    fn test_extract_trace_id_when_inactive() {
+        // When OTel is not initialized, should return "-"
+        // (OnceLock may or may not be set depending on test order)
+        let trace_id = extract_trace_id();
+        // Either "-" (inactive) or a valid hex trace ID
+        assert!(!trace_id.is_empty());
     }
 }

@@ -112,3 +112,112 @@ STOA uses Pingora for what it does best (connection pooling) and adds layers Pin
 - Marketing: **"STOA Gateway — powered by Pingora's connection engine"**
 - NOTICE file includes Pingora Apache 2.0 attribution
 - Re-evaluate full migration at v2.0 or 50K+ RPS
+
+---
+
+# ADR-058 : Intégration Pingora — Pool de Connexions Embarqué
+
+**Statut** : Accepté (Intégrer le connecteur Pingora, conserver axum pour le routage)
+**Date** : 2026-03-16 (révisé)
+**Tickets** : CAB-1847, CAB-1849
+
+## Contexte
+
+Le framework Pingora de Cloudflare (Rust, Apache 2.0) a remplacé nginx et gère plus d'un trillion de requêtes/jour. STOA Gateway est construit sur axum + reqwest + tokio. La question : comment STOA doit-il exploiter Pingora ?
+
+## Pourquoi Pingora
+
+### L'argument commercial (facteur décisif)
+
+| Signal | axum seul | Avec Pingora |
+|--------|-----------|-------------|
+| Pitch entreprise | "Gateway Rust custom" | **"Construit sur Pingora — le framework proxy de Cloudflare"** |
+| Positionnement concurrentiel | Même niveau que les proxies custom | **Même niveau que Cloudflare Workers, Fastly Compute** |
+| Checkbox RSSI | Stack inconnue | **Éprouvé en production à 1T+ req/jour** |
+| Crédibilité OSS | Framework générique | **Pedigree infrastructure de niveau mondial** |
+| Unicité marché | Aucune | **Seule API gateway construite sur Pingora** |
+
+Aucun éditeur de gateway API — Kong, Gravitee, Envoy, agentgateway — n'utilise Pingora. C'est un avantage de premier entrant en positionnement.
+
+### L'argument technique
+
+| Fonctionnalité | reqwest (actuel) | Connecteur Pingora |
+|----------------|------------------|--------------------|
+| Pool de connexions | Par instance client | **Partagé entre tous les workers** (avantage clé de Cloudflare) |
+| Multiplexage H2 | Par connexion | **Multiplexage global des streams** |
+| Réutilisation à l'échelle | Se dégrade >10K RPS | **Conçu pour 1T+ req/jour** |
+| Proxy zero-copy | Non (copie userspace) | Kernel splice/sendfile (futur) |
+
+À <1K RPS la différence est de 0.5ms p95. À 50K+ RPS, le pool partagé évite l'épuisement de connexions que les pools par client rencontrent.
+
+## Options évaluées
+
+| Option | Description | Effort | Verdict |
+|--------|-------------|--------|---------|
+| A : Migration complète | Remplacer axum par le serveur Pingora | 55+ pts | Rejeté — réécrit 400+ routes |
+| B : Sidecar | Pingora front-proxy → stoa-gateway | 21 pts | Rejeté — hop supplémentaire, valeur faible |
+| **C : Embarqué** | **Connecteur Pingora dans stoa-gateway** | **13 pts** | **Accepté** |
+| D : Patterns seulement | Copier les patterns Pingora sans le crate | 0 pts | Remplacé par C |
+
+### Pourquoi l'approche embarquée (Option C) a gagné
+
+- **Un seul binaire** — pas de sidecar, pas de hop supplémentaire, pas de complexité de déploiement
+- **Même claim marketing** — "Construit sur Pingora" est tout aussi vrai pour le connecteur embarqué
+- **Valeur réelle** — le pool partagé de Pingora est le vrai avantage de Cloudflare, pas le serveur
+- **Feature-gated** — `--features pingora` l'active ; le build par défaut reste reqwest (pas de dépendance cmake)
+- **Incrémental** — le chemin proxy migre vers PingoraPool graduellement ; MCP/admin/auth restent sur axum
+
+## Décision
+
+**Embarquer `pingora-core::connectors::http::Connector` dans stoa-gateway derrière un feature flag `pingora`.**
+
+### Architecture
+
+```
+Client → stoa-gateway (:8080)
+              │
+              ├─ MCP / admin / auth / OAuth → handlers axum (inchangés)
+              │
+              └─ Routes proxy → PingoraPool.send_request()
+                                    │
+                                    └─ pool de connexions partagé pingora-core
+                                         → Backend (H1/H2, TLS, keepalive)
+```
+
+Un binaire. Un port. Un déploiement. Pingora gère les connexions upstream ; axum gère le routage HTTP.
+
+### Compatibilité des phases
+
+Notre trait `ProxyPhase` (CAB-1834) correspond 1:1 au `ProxyHttp` de Pingora :
+
+| STOA ProxyPhase | Pingora ProxyHttp | Statut |
+|-----------------|-------------------|--------|
+| `request_filter` | `request_filter` | Correspondance |
+| `upstream_select` | `upstream_peer` | Correspondance |
+| `upstream_request_filter` | `upstream_request_filter` | Correspondance |
+| `response_filter` | `upstream_response_filter` | Correspondance |
+| `logging` | `logging` | Correspondance |
+| `error_handler` | `error_while_proxy` | Correspondance |
+
+Si une migration complète vers Pingora est nécessaire en v2.0, les implémentations de phases se portent directement.
+
+## Ce que STOA apporte en plus de Pingora
+
+| Capacité | STOA | Pingora |
+|----------|------|---------|
+| Parsing HTTP kernel-level via eBPF | XDP + TC (CAB-1841/1843) | Non intégré |
+| Enforcement de politiques UAC au niveau kernel | BPF maps synchronisées depuis la gateway (CAB-1848) | Non intégré |
+| Runtime de plugins WASM | wasmtime 42 (CAB-1644) | Non intégré |
+| Protocole MCP (gateway pour agents IA) | SSE/WS/JSON-RPC complet | Non applicable |
+| Fédération multi-gateway | 7 types d'adaptateurs | Non applicable |
+
+STOA utilise Pingora pour ce qu'il fait de mieux (pool de connexions) et ajoute des couches que Pingora n'offre pas.
+
+## Conséquences
+
+- Image de production construite avec `FEATURES=kafka,pingora` (cmake requis dans Docker)
+- `PingoraPool` disponible pour le chemin proxy ; reqwest reste en fallback
+- Le build par défaut (sans features) fonctionne toujours sans dépendance cmake
+- Marketing : **"STOA Gateway — propulsé par le moteur de connexions Pingora"**
+- Fichier NOTICE inclut l'attribution Apache 2.0 de Pingora
+- Réévaluer la migration complète en v2.0 ou à 50K+ RPS

@@ -22,6 +22,7 @@ use crate::llm::{LlmRouter, ProviderRegistry};
 use crate::mcp::pending_requests::PendingRequestTracker;
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
+use crate::memory::MemoryMonitor;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
 use crate::proxy::{ConsumerCredentialStore, CredentialStore};
@@ -138,6 +139,8 @@ pub struct AppState {
     /// A2A agent registry for inter-agent communication (CAB-1754).
     /// None when STOA_A2A_ENABLED=false (default).
     pub a2a_registry: Option<Arc<crate::a2a::registry::AgentRegistry>>,
+    /// Memory budget monitor for backpressure (CAB-1829).
+    pub memory_monitor: MemoryMonitor,
 }
 
 impl AppState {
@@ -542,6 +545,14 @@ impl AppState {
             None
         };
 
+        // Initialize memory monitor (CAB-1829)
+        let memory_monitor = MemoryMonitor::new(config.memory_limit_mb);
+        tracing::info!(
+            limit_mb = config.memory_limit_mb,
+            threshold_mb = memory_monitor.threshold_bytes() / (1024 * 1024),
+            "Memory budget monitor initialized"
+        );
+
         // Initialize A2A agent registry (CAB-1754)
         let a2a_registry = if config.a2a_enabled {
             let registry = crate::a2a::registry::AgentRegistry::new(
@@ -603,11 +614,15 @@ impl AppState {
             api_proxy_registry,
             hegemon,
             a2a_registry,
+            memory_monitor,
         }
     }
 
     /// Start background tasks
     pub fn start_background_tasks(&self) {
+        // Start memory budget polling (CAB-1829)
+        self.memory_monitor.start_polling();
+
         // Start prompt cache file watcher (CAB-1123)
         if let Some(ref watch_dir) = self.config.prompt_cache_watch_dir {
             crate::cache::watcher::spawn_cache_file_watcher(

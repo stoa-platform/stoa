@@ -22,6 +22,7 @@ pub mod k8s;
 pub mod kafka;
 pub mod llm;
 pub mod mcp;
+pub mod memory;
 pub mod metering;
 pub mod metrics;
 pub mod mode;
@@ -78,6 +79,7 @@ pub fn build_router(state: AppState) -> Router {
     use mode::GatewayMode;
 
     let access_log_enabled = state.config.access_log_enabled;
+    let memory_monitor = state.memory_monitor.clone();
 
     // Admin API (shared across all modes)
     let admin_router = Router::new()
@@ -578,9 +580,16 @@ pub fn build_router(state: AppState) -> Router {
         }
     };
 
+    // Memory backpressure: reject early with 503 when RSS exceeds threshold (CAB-1829).
+    // Runs BEFORE trace context / access log to short-circuit without overhead.
+    let with_backpressure = mode_router.layer(axum::middleware::from_fn(move |request, next| {
+        let m = memory_monitor.clone();
+        memory_backpressure_middleware(m, request, next)
+    }));
+
     // W3C Trace Context: extract incoming traceparent header into request extensions.
     // Runs BEFORE access_log so trace_id is available for structured logging.
-    let with_trace_ctx = mode_router.layer(axum::middleware::from_fn(
+    let with_trace_ctx = with_backpressure.layer(axum::middleware::from_fn(
         trace_context::trace_context_middleware,
     ));
 
@@ -713,6 +722,28 @@ async fn ready(
     }
 
     (StatusCode::OK, "READY").into_response()
+}
+
+// === Memory Backpressure Middleware (CAB-1829) ===
+
+/// Rejects requests with 503 + Retry-After when memory is under pressure.
+/// Health and metrics endpoints are exempt to keep probes and scraping alive.
+async fn memory_backpressure_middleware(
+    monitor: memory::MemoryMonitor,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    // Always allow health/metrics so K8s probes and Prometheus scraping work
+    let path = request.uri().path();
+    if path.starts_with("/health") || path.starts_with("/ready") || path == "/metrics" {
+        return next.run(request).await;
+    }
+
+    if monitor.under_pressure() {
+        return memory::backpressure_response();
+    }
+
+    next.run(request).await
 }
 
 async fn prometheus_metrics() -> String {

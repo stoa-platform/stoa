@@ -676,6 +676,12 @@ pub struct Config {
     /// Env: STOA_PLUGIN_SDK_ENABLED
     #[serde(default)]
     pub plugin_sdk_enabled: bool,
+
+    // === Memory Budget (CAB-1829) ===
+    /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
+    /// Env: STOA_MEMORY_LIMIT_MB
+    #[serde(default = "default_memory_limit_mb")]
+    pub memory_limit_mb: u64,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1211,6 +1217,10 @@ fn default_a2a_max_tasks() -> usize {
     10000
 }
 
+fn default_memory_limit_mb() -> u64 {
+    512
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1342,6 +1352,7 @@ impl Default for Config {
             graphql_bridge_enabled: false,
             kafka_bridge_enabled: false,
             plugin_sdk_enabled: false,
+            memory_limit_mb: default_memory_limit_mb(),
         }
     }
 }

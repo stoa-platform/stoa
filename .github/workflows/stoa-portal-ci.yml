@@ -124,7 +124,7 @@ jobs:
   # === Staging: separate Docker build (VITE_* baked at build time) + GitOps deploy ===
   docker-staging:
     needs: smoke-test
-    if: github.event_name == 'push' && needs.smoke-test.result == 'success'
+    if: false # DISABLED: staging deploy overwrites dev ArgoCD app (same stoa-portal chart). Re-enable when staging has its own ArgoCD app.
     uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: portal

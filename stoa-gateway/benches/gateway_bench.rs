@@ -230,6 +230,9 @@ fn bench_route_matching(c: &mut Criterion) {
             activated: true,
             classification: None,
             contract_key: None,
+            upstream_http_version: Default::default(),
+            upstreams: vec![],
+            load_balancer: Default::default(),
         });
     }
 
@@ -253,6 +256,9 @@ fn bench_route_matching(c: &mut Criterion) {
         activated: true,
         classification: None,
         contract_key: None,
+        upstream_http_version: Default::default(),
+        upstreams: vec![],
+        load_balancer: Default::default(),
     });
 
     c.bench_function("route_match_deep_prefix", |b| {

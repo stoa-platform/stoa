@@ -38,19 +38,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize application state
     let state = AppState::new(config.clone());
 
-    // SIGHUP handler for policy hot-reload (CAB-1109)
+    // SIGHUP handler for policy + route hot-reload (CAB-1109, CAB-1828)
     #[cfg(unix)]
     {
         let policy_engine = state.uac_enforcer.policy_engine().clone();
+        let sighup_state = state.clone();
         tokio::spawn(async move {
             let mut sighup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
                 .expect("Failed to install SIGHUP handler");
             loop {
                 sighup.recv().await;
-                info!("Received SIGHUP - reloading policies");
+                info!("Received SIGHUP - reloading policies and routes");
                 match policy_engine.reload() {
                     Ok(()) => info!("Policies reloaded successfully"),
                     Err(e) => error!(error = %e, "Policy reload failed"),
+                }
+                if sighup_state.config.route_reload_enabled {
+                    match stoa_gateway::handlers::admin::reload_routes_from_cp(&sighup_state).await
+                    {
+                        Ok(count) => {
+                            stoa_gateway::metrics::record_route_reload("sighup", "success", count);
+                            info!(routes = count, "Route table reloaded via SIGHUP");
+                        }
+                        Err(e) => {
+                            stoa_gateway::metrics::record_route_reload("sighup", "error", 0);
+                            error!(error = %e, "Route reload via SIGHUP failed");
+                        }
+                    }
                 }
             }
         });
@@ -123,9 +137,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "STOA Gateway listening"
     );
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    // into_make_service_with_connect_info: exposes peer SocketAddr to middleware
+    // (required by tcp_filter::pre_tls_filter for IP-based filtering after accept)
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     // Flush pending OTel spans before exit
     stoa_gateway::telemetry::shutdown_telemetry();
@@ -191,8 +210,8 @@ fn create_tcp_listener(addr: SocketAddr) -> Result<TcpListener, Box<dyn std::err
 
 /// Initialize tracing subscriber with optional OpenTelemetry export.
 ///
-/// Phase 1 (CAB-1455): All JSON log lines include `service=stoa-gateway`
-/// for cross-component correlation in Loki/Grafana.
+/// CAB-1831: OTel is always compiled in. When `STOA_OTEL_ENDPOINT` is set,
+/// spans are exported via OTLP. Otherwise, tracing works locally (no-op export).
 fn init_tracing(config: &Config) {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,stoa_gateway=debug"));
@@ -203,7 +222,6 @@ fn init_tracing(config: &Config) {
         .with_target(true)
         .with_current_span(true);
 
-    #[cfg(feature = "otel")]
     if config.otel_enabled {
         use stoa_gateway::telemetry::{init_telemetry_tracer, TelemetryConfig};
 
@@ -223,11 +241,7 @@ fn init_tracing(config: &Config) {
         }
     }
 
-    // Suppress unused warning when otel feature is not compiled
-    #[cfg(not(feature = "otel"))]
-    let _ = config;
-
-    // OTel disabled: feature not compiled, runtime toggle off, or init failed
+    // OTel disabled: runtime toggle off, no endpoint, or init failed
     stoa_gateway::telemetry::init_telemetry_noop();
     tracing_subscriber::registry()
         .with(filter)

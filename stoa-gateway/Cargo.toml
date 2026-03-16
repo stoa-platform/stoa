@@ -23,10 +23,11 @@ thiserror = "1"
 chrono = { version = "0.4", features = ["serde"] }
 prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }  # RUSTSEC-2023-0071: rsa timing vuln — no upstream fix, low risk (JWT verify only, no RSA decrypt)
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "http2"] }
 async-trait = "0.1"
 
 # === NEW - Phase 1: Quality Fixes ===
+arc-swap = "1"                            # Lock-free route table hot-swap (CAB-1828)
 once_cell = "1"                          # Lazy statics for metrics
 parking_lot = "0.12"                    # Non-poisoning RwLock
 hostname = "0.4"                         # Get local hostname for auto-registration (ADR-028)
@@ -58,6 +59,9 @@ form_urlencoded = "1"                        # Parse application/x-www-form-urle
 # === SOAP/XML Bridge (CAB-1762) ===
 quick-xml = { version = "0.37", features = ["serialize"] }  # SOAP/WSDL XML parsing
 
+# === Memory Budget (CAB-1829) ===
+libc = "0.2"
+
 # === Guardrails: PII + Injection Detection (CAB-707) ===
 regex = "1"
 notify = "8"
@@ -79,16 +83,15 @@ kube = { version = "3.0", features = ["runtime", "derive"], optional = true }
 k8s-openapi = { version = "0.27", features = ["latest"], optional = true }
 schemars = { version = "1", optional = true }
 
-# === Phase 5: OpenTelemetry Distributed Tracing (CAB-1374) ===
-opentelemetry = { version = "0.27", features = ["trace"], optional = true }
-opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"], optional = true }
-opentelemetry-otlp = { version = "0.27", default-features = false, features = ["grpc-tonic", "trace"], optional = true }
-tracing-opentelemetry = { version = "0.28", optional = true }
+# === Phase 5: OpenTelemetry Distributed Tracing (CAB-1374 / CAB-1831: always-on) ===
+opentelemetry = { version = "0.27", features = ["trace"] }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", default-features = false, features = ["grpc-tonic", "trace"] }
+tracing-opentelemetry = "0.28"
 
 [features]
 default = []
 kafka = ["rdkafka"]
-otel = ["opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp", "tracing-opentelemetry"]
 k8s = ["kube", "k8s-openapi", "schemars"]  # K8s CRD watcher (Phase 7)
 pcap = ["pnet"]                              # Port mirror capture (raw packets)
 

@@ -320,11 +320,13 @@ async def ingest_ai_session(
 
     trace = await service.get(trace.id)
 
-    # Check cost alert threshold (CAB-1691) — fire-and-forget
+    # Check cost alert threshold (CAB-1691) — fire-and-forget, deduped (1/day)
     try:
         alert = await service.check_cost_alert()
         if alert:
-            await service.send_cost_alert_slack(alert)
+            sent = await service.send_cost_alert_slack(alert)
+            if sent:
+                await service.record_cost_alert(alert)
     except Exception as e:
         logger.warning(f"Cost alert check failed (non-blocking): {e}")
 

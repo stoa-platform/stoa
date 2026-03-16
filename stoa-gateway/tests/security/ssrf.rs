@@ -82,6 +82,9 @@ fn build_router_with_ssrf_route(backend_url: &str) -> (axum::Router, AppState) {
         activated: true,
         classification: None,
         contract_key: None,
+        upstream_http_version: Default::default(),
+        upstreams: vec![],
+        load_balancer: Default::default(),
     });
     let router = stoa_gateway::build_router(state.clone());
     (router, state)

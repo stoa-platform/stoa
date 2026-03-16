@@ -120,6 +120,9 @@ async fn test_proxy_timeout() {
         activated: true,
         classification: None,
         contract_key: None,
+        upstream_http_version: Default::default(),
+        upstreams: vec![],
+        load_balancer: Default::default(),
     });
     let router = stoa_gateway::build_router(state);
 
@@ -158,6 +161,9 @@ async fn test_deactivated_route_returns_503() {
         activated: false,
         classification: None,
         contract_key: None,
+        upstream_http_version: Default::default(),
+        upstreams: vec![],
+        load_balancer: Default::default(),
     });
     let router = stoa_gateway::build_router(state);
 

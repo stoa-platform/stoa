@@ -136,8 +136,10 @@ impl DeployProgressEvent {
 #[derive(Clone)]
 pub struct DeployProgressEmitter {
     /// Kafka topic for deployment progress events
+    #[cfg_attr(not(feature = "kafka"), allow(dead_code))]
     topic: String,
     /// Reuses the metering producer for Kafka access (fire-and-forget)
+    #[cfg_attr(not(feature = "kafka"), allow(dead_code))]
     producer: Option<Arc<MeteringProducer>>,
 }
 

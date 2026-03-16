@@ -20,8 +20,10 @@ pub mod handlers;
 pub mod hegemon;
 pub mod k8s;
 pub mod kafka;
+pub mod lb;
 pub mod llm;
 pub mod mcp;
+pub mod memory;
 pub mod metering;
 pub mod metrics;
 pub mod mode;
@@ -41,6 +43,7 @@ pub mod skills;
 pub mod soap;
 pub mod state;
 pub mod supervision;
+pub mod tcp_filter;
 pub mod telemetry;
 pub mod trace_context;
 pub mod uac;
@@ -78,6 +81,10 @@ pub fn build_router(state: AppState) -> Router {
     use mode::GatewayMode;
 
     let access_log_enabled = state.config.access_log_enabled;
+    let memory_monitor = state.memory_monitor.clone();
+
+    // Build TCP filter early (before state is moved into with_state)
+    let tcp_filter = std::sync::Arc::new(tcp_filter::TcpFilter::from_config(&state.config));
 
     // Admin API (shared across all modes)
     let admin_router = Router::new()
@@ -224,6 +231,8 @@ pub fn build_router(state: AppState) -> Router {
             "/a2a/agents/:name",
             get(a2a::admin::get_agent).delete(a2a::admin::unregister_agent),
         )
+        // CAB-1828: Route hot-reload
+        .route("/routes/reload", post(admin::routes_reload))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -578,9 +587,16 @@ pub fn build_router(state: AppState) -> Router {
         }
     };
 
+    // Memory backpressure: reject early with 503 when RSS exceeds threshold (CAB-1829).
+    // Runs BEFORE trace context / access log to short-circuit without overhead.
+    let with_backpressure = mode_router.layer(axum::middleware::from_fn(move |request, next| {
+        let m = memory_monitor.clone();
+        memory_backpressure_middleware(m, request, next)
+    }));
+
     // W3C Trace Context: extract incoming traceparent header into request extensions.
     // Runs BEFORE access_log so trace_id is available for structured logging.
-    let with_trace_ctx = mode_router.layer(axum::middleware::from_fn(
+    let with_trace_ctx = with_backpressure.layer(axum::middleware::from_fn(
         trace_context::trace_context_middleware,
     ));
 
@@ -592,11 +608,23 @@ pub fn build_router(state: AppState) -> Router {
         with_trace_ctx
     };
 
-    // Security headers: outermost layer, applied AFTER all routes are registered.
+    // Security headers: applied AFTER all routes are registered.
     // Adds X-Content-Type-Options, X-Frame-Options, etc. to every response.
-    with_access_log.layer(axum::middleware::from_fn(
+    let with_security = with_access_log.layer(axum::middleware::from_fn(
         security_headers::security_headers_middleware,
-    ))
+    ));
+
+    // TCP early filter (CAB-1830): outermost layer — rejects blocked/rate-limited IPs
+    // before any HTTP processing. Requires into_make_service_with_connect_info in main.
+    if tcp_filter.is_enabled() {
+        let filter = tcp_filter.clone();
+        with_security.layer(axum::middleware::from_fn(move |request, next| {
+            let filter = filter.clone();
+            tcp_filter::pre_tls_filter(filter, request, next)
+        }))
+    } else {
+        with_security
+    }
 }
 
 // === HTTP Metrics Middleware ===
@@ -715,8 +743,32 @@ async fn ready(
     (StatusCode::OK, "READY").into_response()
 }
 
+// === Memory Backpressure Middleware (CAB-1829) ===
+
+/// Rejects requests with 503 + Retry-After when memory is under pressure.
+/// Health and metrics endpoints are exempt to keep probes and scraping alive.
+async fn memory_backpressure_middleware(
+    monitor: memory::MemoryMonitor,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    // Always allow health/metrics so K8s probes and Prometheus scraping work
+    let path = request.uri().path();
+    if path.starts_with("/health") || path.starts_with("/ready") || path == "/metrics" {
+        return next.run(request).await;
+    }
+
+    if monitor.under_pressure() {
+        return memory::backpressure_response();
+    }
+
+    next.run(request).await
+}
+
 async fn prometheus_metrics() -> String {
     use prometheus::Encoder;
+    // Sync OTel spans counter before scrape (CAB-1831)
+    metrics::sync_otel_spans_gauge();
     let encoder = prometheus::TextEncoder::new();
     let metric_families = prometheus::gather();
     let mut buffer = Vec::new();

@@ -142,9 +142,9 @@ pub struct Config {
     #[serde(default)]
     pub otel_endpoint: Option<String>,
 
-    /// Enable OpenTelemetry at runtime (requires `otel` feature at compile time).
-    /// Env: STOA_OTEL_ENABLED (default: false)
-    #[serde(default)]
+    /// Enable OpenTelemetry at runtime (CAB-1831: default true, no-op when endpoint absent).
+    /// Env: STOA_OTEL_ENABLED (default: true)
+    #[serde(default = "default_otel_enabled")]
     pub otel_enabled: bool,
 
     /// Head-based sampling rate for OTel traces (0.0 = none, 1.0 = all).
@@ -305,6 +305,17 @@ pub struct Config {
     /// Env: STOA_ACCESS_LOG_ENABLED
     #[serde(default = "default_access_log_enabled")]
     pub access_log_enabled: bool,
+
+    // === Route Hot-Reload (CAB-1828) ===
+    /// Enable periodic route table reload from Control Plane
+    /// Env: STOA_ROUTE_RELOAD_ENABLED
+    #[serde(default)]
+    pub route_reload_enabled: bool,
+
+    /// Route reload interval in seconds (default: 30)
+    /// Env: STOA_ROUTE_RELOAD_INTERVAL_SECS
+    #[serde(default = "default_route_reload_interval")]
+    pub route_reload_interval_secs: u64,
 
     // === Guardrails (CAB-707) ===
     /// Enable PII detection in tool call arguments
@@ -676,6 +687,28 @@ pub struct Config {
     /// Env: STOA_PLUGIN_SDK_ENABLED
     #[serde(default)]
     pub plugin_sdk_enabled: bool,
+
+    // === TCP Early Filter (CAB-1830) ===
+    /// Comma-separated IPs/CIDRs to block at TCP level (before HTTP processing).
+    /// Env: STOA_IP_BLOCKLIST
+    #[serde(default)]
+    pub ip_blocklist: String,
+
+    /// Path to file with one IP/CIDR per line (lines starting with # are ignored).
+    /// Env: STOA_IP_BLOCKLIST_FILE
+    #[serde(default)]
+    pub ip_blocklist_file: Option<String>,
+
+    /// Max new TCP connections per second per IP (token bucket). 0 = disabled.
+    /// Env: STOA_TCP_RATE_LIMIT_PER_IP
+    #[serde(default)]
+    pub tcp_rate_limit_per_ip: Option<f64>,
+
+    // === Memory Budget (CAB-1829) ===
+    /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
+    /// Env: STOA_MEMORY_LIMIT_MB
+    #[serde(default = "default_memory_limit_mb")]
+    pub memory_limit_mb: u64,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1059,6 +1092,10 @@ pub struct SenderConstraintConfig {
     pub mtls_required: bool,
 }
 
+fn default_otel_enabled() -> bool {
+    true // CAB-1831: OTel always on, no-op exporter when STOA_OTEL_ENDPOINT absent
+}
+
 fn default_otel_sample_rate() -> f64 {
     1.0 // Sample all traces by default
 }
@@ -1073,6 +1110,10 @@ fn default_quota_rate_per_minute() -> u32 {
 
 fn default_quota_daily_limit() -> u32 {
     10_000
+}
+
+fn default_route_reload_interval() -> u64 {
+    30
 }
 
 fn default_access_log_enabled() -> bool {
@@ -1211,6 +1252,10 @@ fn default_a2a_max_tasks() -> usize {
     10000
 }
 
+fn default_memory_limit_mb() -> u64 {
+    512
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1240,7 +1285,7 @@ impl Default for Config {
             policy_enabled: default_policy_enabled(),
             log_level: Some("info".to_string()),
             log_format: Some("json".to_string()),
-            otel_enabled: false,
+            otel_enabled: default_otel_enabled(),
             otel_endpoint: None,
             otel_sample_rate: default_otel_sample_rate(),
             gateway_mode: GatewayMode::default(),
@@ -1271,6 +1316,8 @@ impl Default for Config {
             quota_default_rate_per_minute: default_quota_rate_per_minute(),
             quota_default_daily_limit: default_quota_daily_limit(),
             access_log_enabled: default_access_log_enabled(),
+            route_reload_enabled: false,
+            route_reload_interval_secs: default_route_reload_interval(),
             guardrails_pii_enabled: false,
             guardrails_pii_redact: default_guardrails_pii_redact(),
             guardrails_injection_enabled: false,
@@ -1342,6 +1389,10 @@ impl Default for Config {
             graphql_bridge_enabled: false,
             kafka_bridge_enabled: false,
             plugin_sdk_enabled: false,
+            ip_blocklist: String::new(),
+            ip_blocklist_file: None,
+            tcp_rate_limit_per_ip: None,
+            memory_limit_mb: default_memory_limit_mb(),
         }
     }
 }
@@ -1625,5 +1676,14 @@ mod tests {
     fn test_default_otel_sample_rate() {
         let config = Config::default();
         assert!((config.otel_sample_rate - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_otel_enabled_by_default() {
+        let config = Config::default();
+        assert!(
+            config.otel_enabled,
+            "CAB-1831: otel_enabled should default to true"
+        );
     }
 }

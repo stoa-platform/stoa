@@ -60,6 +60,9 @@ impl RestBinder {
                     activated: true,
                     classification: Some(contract.classification),
                     contract_key: Some(contract_key.clone()),
+                    upstream_http_version: Default::default(),
+                    upstreams: vec![],
+                    load_balancer: Default::default(),
                 }
             })
             .collect()
@@ -288,6 +291,9 @@ mod tests {
             activated: true,
             classification: None,
             contract_key: None,
+            upstream_http_version: Default::default(),
+            upstreams: vec![],
+            load_balancer: Default::default(),
         });
 
         let contract = sample_contract();

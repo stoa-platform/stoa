@@ -88,6 +88,18 @@ pub static MCP_SESSIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
         .expect("Failed to create stoa_mcp_sessions_active metric")
 });
 
+// === TCP Early Filter Metrics (CAB-1830) ===
+
+/// Counter of TCP connections rejected before HTTP processing.
+pub static TCP_CONNECTIONS_REJECTED_PRE_TLS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_tcp_connections_rejected_pre_tls_total",
+        "TCP connections rejected before TLS/HTTP processing",
+        &["reason"]
+    )
+    .expect("Failed to create stoa_tcp_connections_rejected_pre_tls_total metric")
+});
+
 // === Rate Limit Metrics ===
 
 /// Counter of rate limit hits
@@ -375,6 +387,22 @@ pub static HEGEMON_BUDGET_DAILY_USD: Lazy<GaugeVec> = Lazy::new(|| {
     .expect("Failed to create stoa_hegemon_budget_daily_usd metric")
 });
 
+// === OTel Metrics (CAB-1831) ===
+
+/// Counter of OTel spans exported via tool spans.
+pub static OTEL_SPANS_EXPORTED_TOTAL: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "gateway_otel_spans_exported_total",
+        "Total number of OTel spans exported by the gateway"
+    )
+    .expect("Failed to create gateway_otel_spans_exported_total metric")
+});
+
+/// Update the spans exported gauge from the atomic counter in telemetry module.
+pub fn sync_otel_spans_gauge() {
+    OTEL_SPANS_EXPORTED_TOTAL.set(crate::telemetry::spans_exported_total() as f64);
+}
+
 // === Tool Discovery Metrics (CAB-1558) ===
 
 /// Histogram of tool discovery (CP sync) durations in seconds, per tenant and outcome.
@@ -475,6 +503,48 @@ pub static API_PROXY_CIRCUIT_OPEN: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_api_proxy_circuit_open_total metric")
 });
 
+// === Connection Pool Metrics (CAB-1832) ===
+
+/// Gauge of active (in-flight) connections per upstream.
+pub static POOL_CONNECTIONS_ACTIVE: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "gateway_pool_connections_active",
+        "Number of active (in-flight) proxy connections per upstream",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_pool_connections_active metric")
+});
+
+/// Gauge of idle connections per upstream.
+pub static POOL_CONNECTIONS_IDLE: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "gateway_pool_connections_idle",
+        "Number of idle proxy connections per upstream",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_pool_connections_idle metric")
+});
+
+/// Gauge of connection reuse ratio per upstream (0.0 = no reuse, 1.0 = all reused).
+pub static POOL_REUSE_RATIO: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "gateway_pool_reuse_ratio",
+        "Connection reuse ratio per upstream (reused / total requests)",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_pool_reuse_ratio metric")
+});
+
+/// Counter of new connections opened per upstream.
+pub static POOL_NEW_CONNECTIONS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "gateway_pool_new_connections_total",
+        "Total new connections opened per upstream",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_pool_new_connections_total metric")
+});
+
 // === Upstream Latency Metrics ===
 
 /// Histogram of upstream (backend) response times in seconds.
@@ -487,6 +557,35 @@ pub static UPSTREAM_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .expect("Failed to create stoa_upstream_latency_seconds metric")
 });
+
+// === Load Balancer Metrics (CAB-1833) ===
+
+/// Counter of load balancer selections by strategy and upstream URL.
+pub static LB_SELECTIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "gateway_lb_selections_total",
+        "Total load balancer upstream selections",
+        &["strategy", "upstream"]
+    )
+    .expect("Failed to create gateway_lb_selections_total metric")
+});
+
+/// Gauge of active connections per upstream (for least_conn visibility).
+pub static LB_UPSTREAM_ACTIVE: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "gateway_lb_upstream_active_connections",
+        "Active connections per upstream",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_lb_upstream_active_connections metric")
+});
+
+/// Record a load balancer selection.
+pub fn record_lb_selection(strategy: &str, upstream: &str) {
+    LB_SELECTIONS_TOTAL
+        .with_label_values(&[strategy, upstream])
+        .inc();
+}
 
 // === Helper Functions ===
 
@@ -1134,6 +1233,37 @@ pub fn normalize_path(path: &str) -> String {
     }
 }
 
+// === Route Reload Metrics (CAB-1828) ===
+
+/// Counter of route table reload attempts by trigger and result.
+pub static ROUTE_RELOAD_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_route_reload_total",
+        "Total route table reload attempts",
+        &["trigger", "result"]
+    )
+    .expect("Failed to create stoa_route_reload_total metric")
+});
+
+/// Gauge of routes loaded after the last successful reload.
+pub static ROUTE_RELOAD_ROUTES_LOADED: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "stoa_route_reload_routes_loaded",
+        "Number of routes loaded after last successful reload"
+    )
+    .expect("Failed to create stoa_route_reload_routes_loaded metric")
+});
+
+/// Record a route reload event.
+pub fn record_route_reload(trigger: &str, result: &str, routes_count: usize) {
+    ROUTE_RELOAD_TOTAL
+        .with_label_values(&[trigger, result])
+        .inc();
+    if result == "success" {
+        ROUTE_RELOAD_ROUTES_LOADED.set(routes_count as f64);
+    }
+}
+
 /// Force-initialize all Lazy metrics so they appear in /metrics output
 /// even before any traffic arrives. Call this once at startup.
 pub fn init_all_metrics() {
@@ -1158,6 +1288,10 @@ pub fn init_all_metrics() {
     Lazy::force(&TOOL_DISCOVERY_FAILURES_TOTAL);
     Lazy::force(&FALLBACK_ATTEMPTS);
     Lazy::force(&FALLBACK_EXHAUSTED);
+    Lazy::force(&POOL_CONNECTIONS_ACTIVE);
+    Lazy::force(&POOL_CONNECTIONS_IDLE);
+    Lazy::force(&POOL_REUSE_RATIO);
+    Lazy::force(&POOL_NEW_CONNECTIONS);
     Lazy::force(&UPSTREAM_LATENCY);
     Lazy::force(&API_PROXY_REQUESTS_TOTAL);
     Lazy::force(&API_PROXY_DURATION);
@@ -1167,6 +1301,7 @@ pub fn init_all_metrics() {
     Lazy::force(&MTLS_BINDING_CHECKS_TOTAL);
     Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
     Lazy::force(&FEDERATION_REQUESTS_TOTAL);
+    Lazy::force(&crate::memory::MEMORY_USAGE_BYTES);
     Lazy::force(&DPOP_VALIDATIONS_TOTAL);
     Lazy::force(&SENDER_CONSTRAINT_CHECKS_TOTAL);
     Lazy::force(&SUPERVISION_DECISIONS_TOTAL);
@@ -1175,6 +1310,12 @@ pub fn init_all_metrics() {
     Lazy::force(&HEGEMON_DISPATCH_DURATION);
     Lazy::force(&HEGEMON_DISPATCH_COST);
     Lazy::force(&HEGEMON_BUDGET_DAILY_USD);
+    Lazy::force(&OTEL_SPANS_EXPORTED_TOTAL);
+    Lazy::force(&TCP_CONNECTIONS_REJECTED_PRE_TLS);
+    Lazy::force(&ROUTE_RELOAD_TOTAL);
+    Lazy::force(&ROUTE_RELOAD_ROUTES_LOADED);
+    Lazy::force(&LB_SELECTIONS_TOTAL);
+    Lazy::force(&LB_UPSTREAM_ACTIVE);
 }
 
 /// Get the total number of MCP tool calls across all labels.

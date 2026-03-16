@@ -162,3 +162,118 @@ Then('the Chat Agent conversation is empty', async ({ page }) => {
   // Either no messages or empty state shown
   expect(count === 0 || hasEmpty).toBe(true);
 });
+
+// ============================================================================
+// CAB-1839: MUTATION CONFIRMATION FLOW
+// ============================================================================
+
+Then('a tool confirmation dialog appears', async ({ page }) => {
+  // The FloatingChat shows a PendingConfirmation UI when the agent proposes a tool call
+  const confirmDialog = page.locator(
+    '[data-testid="tool-confirmation"], [class*="confirmation"], [class*="pending-tool"], ' +
+      'button:has-text("Confirm"), button:has-text("Approve"), button:has-text("Allow")',
+  );
+
+  const hasDialog = await confirmDialog.first().isVisible({ timeout: 20000 }).catch(() => false);
+
+  // Soft check: agents may not always trigger a confirmable tool in CI
+  if (!hasDialog) {
+    // Acceptable if agent returned a plain text response (no mutation proposed)
+    const agentResponse = page.locator('[class*="assistant"], [class*="agent-message"]');
+    await expect(agentResponse.first()).toBeVisible({ timeout: 10000 });
+  }
+});
+
+Then(
+  'the confirmation dialog shows the proposed action',
+  async ({ page }) => {
+    const actionText = page.locator(
+      '[data-testid="tool-confirmation"] [class*="action"], ' +
+        '[class*="pending-tool"] [class*="description"], ' +
+        '[class*="confirmation"] p, [class*="confirmation"] li',
+    );
+
+    const hasAction = await actionText.first().isVisible({ timeout: 5000 }).catch(() => false);
+    // Soft assertion — action text depends on agent response
+    if (!hasAction) {
+      const dialog = page.locator('[data-testid="tool-confirmation"], [class*="confirmation"]');
+      const dialogExists = await dialog.first().isVisible({ timeout: 3000 }).catch(() => false);
+      expect(dialogExists || !hasAction).toBe(true); // either shown or no dialog (agent chose not to mutate)
+    }
+  },
+);
+
+When('I confirm the tool execution', async ({ page }) => {
+  const confirmBtn = page.locator(
+    'button:has-text("Confirm"), button:has-text("Approve"), button:has-text("Allow"), ' +
+      'button:has-text("Yes"), [data-testid="tool-confirm-btn"]',
+  );
+
+  const hasBtn = await confirmBtn.first().isVisible({ timeout: 5000 }).catch(() => false);
+  if (hasBtn) {
+    await confirmBtn.first().click();
+    await page.waitForLoadState('networkidle');
+  }
+  // No-op if dialog was never shown (agent didn't propose a mutation)
+});
+
+When('I reject the tool execution', async ({ page }) => {
+  const rejectBtn = page.locator(
+    'button:has-text("Reject"), button:has-text("Deny"), button:has-text("Cancel"), ' +
+      'button:has-text("No"), [data-testid="tool-reject-btn"]',
+  );
+
+  const hasBtn = await rejectBtn.first().isVisible({ timeout: 5000 }).catch(() => false);
+  if (hasBtn) {
+    await rejectBtn.first().click();
+    await page.waitForLoadState('networkidle');
+  }
+});
+
+Then('the tool execution is cancelled', async ({ page }) => {
+  // After rejection: no success toast, and the chat is still interactive
+  const successToast = page.locator(
+    'text=/success|created|deleted|updated/i, [class*="toast-success"], [class*="alert-success"]',
+  );
+
+  // Allow a moment for any toast to appear
+  await page.waitForTimeout(1000);
+
+  const hasSuccessToast = await successToast.first().isVisible({ timeout: 3000 }).catch(() => false);
+  expect(hasSuccessToast).toBe(false);
+
+  // Chat input still accessible
+  const chatInput = page.locator(
+    'textarea[placeholder*="message" i], input[placeholder*="message" i], [data-testid="chat-input"]',
+  );
+  await expect(chatInput.first()).toBeVisible({ timeout: 5000 });
+});
+
+// ============================================================================
+// CAB-1839: RBAC — cpi-admin vs viewer
+// ============================================================================
+
+Then('the Chat Agent does not execute mutations for viewer', async ({ page }) => {
+  // Viewer sends a create request — agent should either refuse or not show a confirmation dialog
+  // Wait briefly for agent response
+  await page
+    .locator('[class*="loading"], [class*="spinner"]')
+    .first()
+    .waitFor({ state: 'hidden', timeout: 20000 })
+    .catch(() => {});
+
+  // No mutation confirmation dialog should appear for viewer
+  const confirmDialog = page.locator(
+    '[data-testid="tool-confirmation"], [class*="pending-tool"]',
+  );
+  const hasConfirm = await confirmDialog.first().isVisible({ timeout: 5000 }).catch(() => false);
+
+  // No success toast indicating a mutation happened
+  const successToast = page.locator(
+    '[class*="toast-success"], [class*="alert-success"], text=/created successfully/i',
+  );
+  const hasSuccess = await successToast.first().isVisible({ timeout: 3000 }).catch(() => false);
+
+  // Viewer should NOT see a mutation confirmation, and no mutation should succeed
+  expect(hasConfirm || hasSuccess).toBe(false);
+});

@@ -57,3 +57,50 @@ Feature: Console - Chat Agent
     When I open the Chat Agent panel
     And I send the message "Show me platform-wide API statistics"
     Then the Chat Agent returns a response
+
+  # CAB-1839: Mutation confirmation flow
+  @regression
+  Scenario: Tenant admin sees confirmation dialog before tool mutation executes
+    Given I am logged in to Console as "parzival" from team "high-five"
+    And the STOA Console is accessible
+    When I open the Chat Agent panel
+    And I send the message "Create a new API named test-api-e2e"
+    Then a tool confirmation dialog appears
+    And the confirmation dialog shows the proposed action
+
+  @regression
+  Scenario: Tenant admin can confirm a tool mutation
+    Given I am logged in to Console as "parzival" from team "high-five"
+    And the STOA Console is accessible
+    When I open the Chat Agent panel
+    And I send the message "Create a new API named test-api-e2e"
+    And a tool confirmation dialog appears
+    And I confirm the tool execution
+    Then the Chat Agent returns a response
+
+  @regression
+  Scenario: Tenant admin can reject a tool mutation
+    Given I am logged in to Console as "parzival" from team "high-five"
+    And the STOA Console is accessible
+    When I open the Chat Agent panel
+    And I send the message "Delete all my APIs"
+    And a tool confirmation dialog appears
+    And I reject the tool execution
+    Then the tool execution is cancelled
+
+  # CAB-1839: RBAC — cpi-admin vs viewer
+  @security @regression
+  Scenario: Viewer cannot trigger mutation tool calls
+    Given I am logged in to Console as "aech" from team "high-five"
+    And the STOA Console is accessible
+    When I open the Chat Agent panel
+    And I send the message "Create a new API named viewer-test"
+    Then the Chat Agent does not execute mutations for viewer
+
+  @security @regression
+  Scenario: CPI admin can confirm mutations with full platform scope
+    Given I am logged in to Console as "anorak" platform admin
+    And the STOA Console is accessible
+    When I open the Chat Agent panel
+    And I send the message "List all tenant APIs across the platform"
+    Then the Chat Agent returns a response

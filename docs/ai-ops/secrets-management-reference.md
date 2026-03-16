@@ -78,6 +78,15 @@ infisical-rotate-secret --dry-run # Preview
 
 Cadence: every 90 days or after team member departure.
 
+## Vault KV v2 Paths (ESO-Synced)
+
+| Vault Path | K8s Secret | Component | Keys |
+|---|---|---|---|
+| `stoa/k8s/gateway` | `stoa-gateway-secrets` | stoa-gateway | STOA_CONTROL_PLANE_API_KEY, STOA_KEYCLOAK_CLIENT_SECRET |
+| `stoa/k8s/opensearch` | `stoa-opensearch-secret` | control-plane-api | 6 OpenSearch keys |
+| `stoa/k8s/anthropic` | `anthropic-api-key` | control-plane-api | ANTHROPIC_API_KEY |
+| `stoa/dev/env` | `postgresql-credentials` | control-plane-api | DEV_PG_* (5 keys) |
+
 ## GitHub Actions Secrets
 
 | Secret | Used By | Purpose |

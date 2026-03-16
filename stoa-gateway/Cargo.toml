@@ -23,7 +23,7 @@ thiserror = "1"
 chrono = { version = "0.4", features = ["serde"] }
 prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }  # RUSTSEC-2023-0071: rsa timing vuln — no upstream fix, low risk (JWT verify only, no RSA decrypt)
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "http2"] }
 async-trait = "0.1"
 
 # === NEW - Phase 1: Quality Fixes ===

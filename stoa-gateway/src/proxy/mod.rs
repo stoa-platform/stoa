@@ -6,6 +6,7 @@ pub mod dynamic;
 pub mod hardening;
 pub mod hop_detection;
 pub mod llm_proxy;
+pub mod pool_metrics;
 mod webmethods;
 
 pub use api_proxy::ApiProxyRegistry;

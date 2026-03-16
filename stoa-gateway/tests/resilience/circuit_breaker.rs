@@ -26,6 +26,7 @@ fn failing_route(id: &str, prefix: &str) -> ApiRoute {
         activated: true,
         classification: None,
         contract_key: None,
+        upstream_http_version: Default::default(),
         upstreams: vec![],
         load_balancer: Default::default(),
     }
@@ -194,6 +195,7 @@ async fn test_method_not_allowed_does_not_trip_cb() {
         activated: true,
         classification: None,
         contract_key: None,
+        upstream_http_version: Default::default(),
         upstreams: vec![],
         load_balancer: Default::default(),
     });

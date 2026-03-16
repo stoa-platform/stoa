@@ -9,6 +9,7 @@ pub mod cache;
 pub mod config;
 pub mod control_plane;
 pub mod diagnostics;
+pub mod ebpf;
 pub mod events;
 pub mod federation;
 pub mod git;
@@ -235,6 +236,9 @@ pub fn build_router(state: AppState) -> Router {
         )
         // CAB-1828: Route hot-reload
         .route("/routes/reload", post(admin::routes_reload))
+        // CAB-1848: eBPF kernel policy sync
+        .route("/ebpf/sync", post(ebpf::ebpf_sync))
+        .route("/ebpf/status", get(ebpf::ebpf_status))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

@@ -141,6 +141,9 @@ pub struct AppState {
     pub a2a_registry: Option<Arc<crate::a2a::registry::AgentRegistry>>,
     /// Memory budget monitor for backpressure (CAB-1829).
     pub memory_monitor: MemoryMonitor,
+    /// eBPF sync client for kernel-level policy enforcement (CAB-1848).
+    /// None when STOA_EBPF_DAEMON_URL is not set.
+    pub ebpf_client: Option<Arc<crate::ebpf::EbpfSyncClient>>,
 }
 
 impl AppState {
@@ -615,6 +618,9 @@ impl AppState {
             hegemon,
             a2a_registry,
             memory_monitor,
+            ebpf_client: std::env::var("STOA_EBPF_DAEMON_URL")
+                .ok()
+                .map(|url| Arc::new(crate::ebpf::EbpfSyncClient::new(&url))),
         }
     }
 

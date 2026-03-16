@@ -661,7 +661,20 @@ async fn http_metrics_middleware(
         .to_string();
     let start = std::time::Instant::now();
 
-    let response = next.run(request).await;
+    // CAB-1842: inject deployment mode as span attribute for Tempo service graph.
+    // This runs on every request so Tempo dimensions can group by deployment mode.
+    let deployment_mode = state.config.gateway_mode.to_string();
+    let request_span = tracing::span!(
+        tracing::Level::INFO,
+        "http.request",
+        "stoa.deployment_mode" = %deployment_mode,
+        http.method = %method,
+        http.route = %path,
+    );
+    let response = {
+        let _guard = request_span.enter();
+        next.run(request).await
+    };
 
     let duration = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();

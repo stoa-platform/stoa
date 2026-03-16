@@ -149,6 +149,12 @@ const navigationSections: NavSection[] = [
         icon: Sparkles,
         permission: 'apis:read',
       },
+      {
+        name: 'nav.chatSettings',
+        href: '/chat-settings',
+        icon: Bot,
+        permission: 'tenants:write',
+      },
     ],
   },
   {

@@ -688,6 +688,22 @@ pub struct Config {
     #[serde(default)]
     pub plugin_sdk_enabled: bool,
 
+    // === TCP Early Filter (CAB-1830) ===
+    /// Comma-separated IPs/CIDRs to block at TCP level (before HTTP processing).
+    /// Env: STOA_IP_BLOCKLIST
+    #[serde(default)]
+    pub ip_blocklist: String,
+
+    /// Path to file with one IP/CIDR per line (lines starting with # are ignored).
+    /// Env: STOA_IP_BLOCKLIST_FILE
+    #[serde(default)]
+    pub ip_blocklist_file: Option<String>,
+
+    /// Max new TCP connections per second per IP (token bucket). 0 = disabled.
+    /// Env: STOA_TCP_RATE_LIMIT_PER_IP
+    #[serde(default)]
+    pub tcp_rate_limit_per_ip: Option<f64>,
+
     // === Memory Budget (CAB-1829) ===
     /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
     /// Env: STOA_MEMORY_LIMIT_MB
@@ -1373,6 +1389,9 @@ impl Default for Config {
             graphql_bridge_enabled: false,
             kafka_bridge_enabled: false,
             plugin_sdk_enabled: false,
+            ip_blocklist: String::new(),
+            ip_blocklist_file: None,
+            tcp_rate_limit_per_ip: None,
             memory_limit_mb: default_memory_limit_mb(),
         }
     }

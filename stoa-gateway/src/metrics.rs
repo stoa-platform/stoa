@@ -88,6 +88,18 @@ pub static MCP_SESSIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
         .expect("Failed to create stoa_mcp_sessions_active metric")
 });
 
+// === TCP Early Filter Metrics (CAB-1830) ===
+
+/// Counter of TCP connections rejected before HTTP processing.
+pub static TCP_CONNECTIONS_REJECTED_PRE_TLS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_tcp_connections_rejected_pre_tls_total",
+        "TCP connections rejected before TLS/HTTP processing",
+        &["reason"]
+    )
+    .expect("Failed to create stoa_tcp_connections_rejected_pre_tls_total metric")
+});
+
 // === Rate Limit Metrics ===
 
 /// Counter of rate limit hits
@@ -1224,6 +1236,7 @@ pub fn init_all_metrics() {
     Lazy::force(&HEGEMON_DISPATCH_COST);
     Lazy::force(&HEGEMON_BUDGET_DAILY_USD);
     Lazy::force(&OTEL_SPANS_EXPORTED_TOTAL);
+    Lazy::force(&TCP_CONNECTIONS_REJECTED_PRE_TLS);
     Lazy::force(&ROUTE_RELOAD_TOTAL);
     Lazy::force(&ROUTE_RELOAD_ROUTES_LOADED);
 }

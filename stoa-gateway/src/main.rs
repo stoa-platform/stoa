@@ -137,9 +137,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "STOA Gateway listening"
     );
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    // into_make_service_with_connect_info: exposes peer SocketAddr to middleware
+    // (required by tcp_filter::pre_tls_filter for IP-based filtering after accept)
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     // Flush pending OTel spans before exit
     stoa_gateway::telemetry::shutdown_telemetry();

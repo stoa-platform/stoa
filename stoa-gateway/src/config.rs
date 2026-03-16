@@ -1405,6 +1405,17 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Return the Keycloak backend URL for service-to-service calls.
+    ///
+    /// Prefers `keycloak_internal_url` (K8s service DNS) over `keycloak_url` (external)
+    /// to bypass hairpin NAT issues on OVH MKS and similar cloud providers.
+    /// Returns `None` if neither is configured.
+    pub fn keycloak_backend_url(&self) -> Option<&str> {
+        self.keycloak_internal_url
+            .as_deref()
+            .or(self.keycloak_url.as_deref())
+    }
+
     /// Load configuration from file and environment
     #[allow(clippy::result_large_err)]
     pub fn load() -> Result<Self, figment::Error> {
@@ -1691,6 +1702,40 @@ mod tests {
         assert!(
             config.otel_enabled,
             "CAB-1831: otel_enabled should default to true"
+        );
+    }
+
+    /// Regression test for PR #1814: OAuth proxy endpoints must use
+    /// keycloak_internal_url when available, to bypass hairpin NAT on OVH MKS.
+    /// Root cause: proxy.rs used config.keycloak_url (external) for backend
+    /// calls, causing 502 on DCR registration from inside the cluster.
+    #[test]
+    fn regression_keycloak_backend_url_prefers_internal() {
+        let mut config = Config::default();
+
+        // No URLs configured → None
+        assert!(config.keycloak_backend_url().is_none());
+
+        // Only external URL → returns external
+        config.keycloak_url = Some("https://auth.gostoa.dev".to_string());
+        assert_eq!(
+            config.keycloak_backend_url(),
+            Some("https://auth.gostoa.dev")
+        );
+
+        // Both configured → internal wins (bypasses hairpin NAT)
+        config.keycloak_internal_url =
+            Some("http://keycloak.stoa-system.svc.cluster.local:8080".to_string());
+        assert_eq!(
+            config.keycloak_backend_url(),
+            Some("http://keycloak.stoa-system.svc.cluster.local:8080")
+        );
+
+        // Only internal URL → returns internal
+        config.keycloak_url = None;
+        assert_eq!(
+            config.keycloak_backend_url(),
+            Some("http://keycloak.stoa-system.svc.cluster.local:8080")
         );
     }
 }

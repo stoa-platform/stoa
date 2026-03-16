@@ -1,0 +1,179 @@
+# OpenSearch Security Configuration — Production
+# Applies via securityadmin.sh after pod restart.
+# Source of truth for: config.yml, roles.yml, roles_mapping.yml, internal_users.yml
+#
+# Usage:
+#   1. Update this ConfigMap
+#   2. kubectl apply -f k8s/opensearch/security-config.yaml
+#   3. Create/update the Secret from this ConfigMap:
+#      kubectl create secret generic opensearch-cluster-master-securityconfig \
+#        --from-file=config.yml=<(kubectl get cm opensearch-security-source -n opensearch -o jsonpath='{.data.config\.yml}') \
+#        --from-file=roles.yml=<(kubectl get cm opensearch-security-source -n opensearch -o jsonpath='{.data.roles\.yml}') \
+#        --from-file=roles_mapping.yml=<(kubectl get cm opensearch-security-source -n opensearch -o jsonpath='{.data.roles_mapping\.yml}') \
+#        --dry-run=client -o yaml | kubectl apply -f -
+#   4. Restart OpenSearch: kubectl delete pod opensearch-cluster-master-0 -n opensearch
+#   5. Run securityadmin.sh inside the pod
+#
+# NOTE: internal_users.yml hashes are NOT stored here (secrets management).
+#       They live in Vault (k8s/opensearch) and are injected at deploy time.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-security-source
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: stoa-platform
+data:
+  config.yml: |
+    _meta:
+      type: "config"
+      config_version: 2
+
+    config:
+      dynamic:
+        http:
+          anonymous_auth_enabled: false
+        authc:
+          basic_internal_auth_domain:
+            description: "Authenticate via HTTP Basic against internal users database"
+            http_enabled: true
+            transport_enabled: true
+            order: 0
+            http_authenticator:
+              type: basic
+              challenge: false
+            authentication_backend:
+              type: intern
+
+          openid_auth_domain:
+            description: "Authenticate via Keycloak OIDC"
+            http_enabled: true
+            transport_enabled: false
+            order: 1
+            http_authenticator:
+              type: openid
+              challenge: false
+              config:
+                subject_key: preferred_username
+                roles_key: realm_access.roles
+                openid_connect_url: "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
+            authentication_backend:
+              type: noop
+
+  roles_mapping.yml: |
+    _meta:
+      type: "rolesmapping"
+      config_version: 2
+
+    all_access:
+      reserved: false
+      backend_roles:
+        - "admin"
+        - "opensearch-admin"
+        - "cpi-admin"
+      description: "Maps admin and Keycloak cpi-admin to all_access"
+
+    kibana_user:
+      reserved: false
+      backend_roles:
+        - "kibanauser"
+        - "opensearch-admin"
+        - "opensearch-readonly"
+        - "cpi-admin"
+        - "tenant-admin"
+        - "devops"
+        - "viewer"
+      description: "Allow dashboard access for all authenticated Keycloak users"
+
+    kibana_server:
+      reserved: true
+      users:
+        - "kibanaserver"
+        - "admin"
+
+    own_index:
+      reserved: false
+      users:
+        - "*"
+      description: "Allow full access to an index named like the username"
+
+    readall:
+      reserved: false
+      backend_roles:
+        - "readall"
+        - "opensearch-readonly"
+        - "cpi-admin"
+      description: "Maps readonly roles to readall"
+
+    stoa_logs_admin:
+      reserved: false
+      backend_roles:
+        - "cpi-admin"
+      description: "Platform admins see all tenant logs"
+
+    stoa_gw_admin:
+      reserved: false
+      backend_roles:
+        - "cpi-admin"
+      description: "Platform admins see all gateway telemetry"
+
+    stoa_gw_writer:
+      reserved: false
+      users:
+        - "stoa-api"
+      description: "Internal writer for control-plane-api"
+
+    logwriter_role:
+      reserved: false
+      users:
+        - "logwriter"
+      backend_roles:
+        - "logwriter"
+      description: "Fluent-Bit log shipping account"
+
+    stoa_logs_tenant_oasis_gunters:
+      reserved: false
+      users:
+        - "parzival"
+        - "art3mis"
+        - "aech"
+
+    stoa_gw_tenant_oasis_gunters:
+      reserved: false
+      users:
+        - "parzival"
+        - "art3mis"
+        - "aech"
+
+    stoa_gw_viewer_oasis_gunters:
+      reserved: false
+      users: []
+
+    stoa_logs_tenant_ioi_sixers:
+      reserved: false
+      users:
+        - "sorrento"
+        - "sixer42"
+
+    stoa_gw_tenant_ioi_sixers:
+      reserved: false
+      users:
+        - "sorrento"
+        - "sixer42"
+
+    stoa_gw_viewer_ioi_sixers:
+      reserved: false
+      users: []
+
+    manage_snapshots:
+      reserved: false
+      backend_roles:
+        - "snapshotrestore"
+
+    logstash:
+      reserved: false
+      backend_roles:
+        - "logstash"

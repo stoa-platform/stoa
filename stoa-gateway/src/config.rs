@@ -692,6 +692,12 @@ pub struct Config {
     /// Env: STOA_TCP_RATE_LIMIT_PER_IP
     #[serde(default)]
     pub tcp_rate_limit_per_ip: Option<f64>,
+
+    // === Memory Budget (CAB-1829) ===
+    /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
+    /// Env: STOA_MEMORY_LIMIT_MB
+    #[serde(default = "default_memory_limit_mb")]
+    pub memory_limit_mb: u64,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1227,6 +1233,10 @@ fn default_a2a_max_tasks() -> usize {
     10000
 }
 
+fn default_memory_limit_mb() -> u64 {
+    512
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1361,6 +1371,7 @@ impl Default for Config {
             ip_blocklist: String::new(),
             ip_blocklist_file: None,
             tcp_rate_limit_per_ip: None,
+            memory_limit_mb: default_memory_limit_mb(),
         }
     }
 }

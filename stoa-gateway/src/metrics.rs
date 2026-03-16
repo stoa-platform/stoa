@@ -1179,6 +1179,7 @@ pub fn init_all_metrics() {
     Lazy::force(&MTLS_BINDING_CHECKS_TOTAL);
     Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
     Lazy::force(&FEDERATION_REQUESTS_TOTAL);
+    Lazy::force(&crate::memory::MEMORY_USAGE_BYTES);
     Lazy::force(&DPOP_VALIDATIONS_TOTAL);
     Lazy::force(&SENDER_CONSTRAINT_CHECKS_TOTAL);
     Lazy::force(&SUPERVISION_DECISIONS_TOTAL);

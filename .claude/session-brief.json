@@ -1,35 +1,142 @@
 {
-  "generated_at": "2026-03-02T00:15:39Z",
+  "generated_at": "2026-03-15T23:36:05Z",
   "project": "stoa",
-  "sessions": [
+  "sessions": [],
+  "tickets": [
     {
-      "instance_id": "t52032-523e",
-      "role": "frontend",
-      "ticket": "CAB-1611",
-      "step": "pr-created",
-      "pr": 1260
+      "id": "CAB-1582",
+      "title": "[SEC] R\u00e9diger la Data Processing Policy",
+      "status": "Todo",
+      "estimate": 2,
+      "component": "",
+      "summary": "# Contexte  Council N3m0 (8/10) : formaliser une politique de transit des donn\u00e9es pour les 3 modes d..."
+    },
+    {
+      "id": "CAB-1583",
+      "title": "[BENCH] Phase T1 \u2014 Premier test HEGEMON sur Mistral Small",
+      "status": "Duplicate",
+      "estimate": 3,
+      "component": "",
+      "summary": "# Contexte  Council Archi 50x50 (9/10) + strat\u00e9gie Coprocesseur ARM : commencer le multi-provider MAINTENANT, pas demain"
+    },
+    {
+      "id": "CAB-1641",
+      "title": "[MEGA] Chatbot Security Threat Model & Defense Architecture",
+      "status": "InProgress",
+      "estimate": 21,
+      "component": "",
+      "summary": "## Context  Le STOA Portal Chatbot est un \"Conversational Control Plane\" : une interface en langage naturel qui pilote l"
+    },
+    {
+      "id": "CAB-1642",
+      "title": "feat(hegemon): Remote Sync + Health \u2014 PocketBase deploy, stale cleanup, circuit breaker, Grafana",
+      "status": "In Review",
+      "estimate": 8,
+      "component": "backend",
+      "summary": "## Context  Re-scoped Phase A of CAB-1512 (Agent State Store P4-P6). Combines P4+P5 for maximum value.  ## Scope  1. Dep"
+    },
+    {
+      "id": "CAB-1598",
+      "title": "[AI-Factory] Test Phase T1 \u2014 1 t\u00e2che HEGEMON sur Mistral Small",
+      "status": "Duplicate",
+      "estimate": 3,
+      "component": "",
+      "summary": "## Contexte  Council Archi 50x50 : strat\u00e9gie coprocesseur ARM. Phase T1 = t\u00e2ches p\u00e9riph\u00e9riques sur Mistral Small, risque"
+    },
+    {
+      "id": "CAB-1602",
+      "title": "[INFRA] Provisionner VPS STOA-bench (OpenSearch + Arena runner)",
+      "status": "Todo",
+      "estimate": 3,
+      "component": "",
+      "summary": "## Contexte  STOA-bench arena n\u00e9cessite un OpenSearch d\u00e9di\u00e9 pour les r\u00e9sultats de bench + capacit\u00e9 de run des \u00e9valuation"
+    },
+    {
+      "id": "CAB-1664",
+      "title": "[MEGA] feat(ui): full environment scoping \u2014 Console data filtered by active env (CAB-1658 follow-up)",
+      "status": "Todo",
+      "estimate": 21,
+      "component": "frontend",
+      "summary": "## Context  MEGA CAB-1658 delivered the environment switcher infrastructure (API endpoint, UI providers, E2E). But switc"
+    },
+    {
+      "id": "CAB-1666",
+      "title": "feat(api,ui): [MEGA] Hegemon Observability via STOA Console",
+      "status": "Todo",
+      "estimate": 21,
+      "component": "",
+      "summary": "## Context  The Hegemon AI Factory runs 5 autonomous workers (Contabo VPS fleet) that create PRs, run tests, and close L"
+    },
+    {
+      "id": "CAB-1669",
+      "title": "fix(api): JWT tokens missing 'sub' claim \u2014 fallback to email identifier",
+      "status": "InProgress",
+      "estimate": 3,
+      "component": "backend",
+      "summary": "## Context  All authenticated API requests log a warning: `JWT token missing 'sub' claim, using fallback identifier`. Th"
     }
   ],
-  "tickets": [],
   "claims": [],
   "recent_milestones": [
     {
-      "ticket": "CAB-1611",
-      "step": "pr-created",
-      "pr": 1260,
-      "created_at": "2026-03-01T08:05:16Z"
-    },
-    {
-      "ticket": "CAB-1611",
+      "ticket": "CAB-1824",
       "step": "coding",
       "pr": null,
-      "created_at": "2026-03-01T08:05:05Z"
+      "created_at": "2026-03-15T16:56:45Z"
     },
     {
-      "ticket": "CAB-1611",
+      "ticket": "CAB-1824",
+      "step": "pr-created",
+      "pr": 1770,
+      "created_at": "2026-03-15T16:50:20Z"
+    },
+    {
+      "ticket": "CAB-1824",
       "step": "claimed",
       "pr": null,
-      "created_at": "2026-03-01T08:00:32Z"
+      "created_at": "2026-03-15T16:47:39Z"
+    },
+    {
+      "ticket": "CAB-1755",
+      "step": "merged",
+      "pr": 1684,
+      "created_at": "2026-03-15T15:29:11Z"
+    },
+    {
+      "ticket": "CAB-1755",
+      "step": "coding",
+      "pr": null,
+      "created_at": "2026-03-15T15:24:33Z"
+    },
+    {
+      "ticket": "CAB-1823",
+      "step": "pr-created",
+      "pr": 1765,
+      "created_at": "2026-03-15T15:11:45Z"
+    },
+    {
+      "ticket": "CAB-1823",
+      "step": "coding",
+      "pr": null,
+      "created_at": "2026-03-15T15:11:34Z"
+    },
+    {
+      "ticket": "CAB-1823",
+      "step": "claimed",
+      "pr": null,
+      "created_at": "2026-03-15T15:09:32Z"
+    },
+    {
+      "ticket": "CAB-1757",
+      "step": "claimed",
+      "pr": null,
+      "created_at": "2026-03-15T14:33:47Z"
+    },
+    {
+      "ticket": "CAB-1755",
+      "step": "merged",
+      "pr": 1759,
+      "created_at": "2026-03-15T14:31:15Z"
     }
   ]
 }

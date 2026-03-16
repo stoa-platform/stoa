@@ -14,6 +14,9 @@ export default defineConfig({
       'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime'),
       'react/jsx-dev-runtime': path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime'),
       'lucide-react': path.resolve(__dirname, 'node_modules/lucide-react'),
+      '@tanstack/react-query': path.resolve(__dirname, 'node_modules/@tanstack/react-query'),
+      'react-i18next': path.resolve(__dirname, 'node_modules/react-i18next'),
+      'react-markdown': path.resolve(__dirname, 'node_modules/react-markdown'),
     },
   },
   test: {
@@ -31,10 +34,10 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/test/**', 'src/**/*.d.ts', 'src/main.tsx'],
       thresholds: {
-        lines: 65,
-        functions: 53, // lowered from 54: consumer tracking removed (not yet in gateway)
+        lines: 64,
+        functions: 52, // lowered from 53: FloatingChat+useChatService+TokenUsageWidget moved to shared/ (CAB-1836)
         branches: 57, // lowered from 59: CronJob section + demo branches removed (CAB-1774)
-        statements: 65,
+        statements: 64,
       },
     },
   },

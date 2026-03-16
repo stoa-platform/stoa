@@ -837,11 +837,13 @@ mod tests {
     fn test_mark_loaded_updates_timestamp() {
         let registry = ToolRegistry::new();
         registry.mark_loaded("acme");
+        // Sleep to ensure measurable time difference between marks
+        std::thread::sleep(std::time::Duration::from_millis(10));
         let age1 = registry.tenant_cache_age("acme").expect("should exist");
-        // Re-mark should produce a newer (or equal) timestamp
         registry.mark_loaded("acme");
         let age2 = registry.tenant_cache_age("acme").expect("should exist");
-        assert!(age2 <= age1);
+        // age2 is time since the SECOND mark_loaded, so it should be smaller
+        assert!(age2 <= age1, "age2={age2:?} should be <= age1={age1:?}");
     }
 
     #[test]

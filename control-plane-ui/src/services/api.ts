@@ -178,6 +178,7 @@ class ApiService {
   }
 
   // Generic HTTP methods for proxy services
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async get<T = any>(url: string, config?: { params?: Record<string, any> }): Promise<{ data: T }> {
     return this.client.get<T>(url, config);
   }

@@ -56,13 +56,15 @@ pub fn stoa_tc_classify(ctx: TcContext) -> i32 {
 fn try_classify(ctx: TcContext) -> Result<i32, ()> {
     // Parse Ethernet
     let ethhdr: EthHdr = ctx.load(0).map_err(|_| ())?;
-    if ethhdr.ether_type != EtherType::Ipv4 {
+    let ether_type = ethhdr.ether_type;
+    if ether_type != EtherType::Ipv4 {
         return Ok(TC_ACT_PIPE);
     }
 
     // Parse IPv4
     let ipv4hdr: Ipv4Hdr = ctx.load(EthHdr::LEN).map_err(|_| ())?;
-    if ipv4hdr.proto != IpProto::Tcp {
+    let proto = ipv4hdr.proto;
+    if proto != IpProto::Tcp {
         return Ok(TC_ACT_PIPE);
     }
     let src_ip = u32::from_be(ipv4hdr.src_addr);

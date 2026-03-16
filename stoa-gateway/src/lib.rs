@@ -42,6 +42,7 @@ pub mod skills;
 pub mod soap;
 pub mod state;
 pub mod supervision;
+pub mod tcp_filter;
 pub mod telemetry;
 pub mod trace_context;
 pub mod uac;
@@ -80,6 +81,9 @@ pub fn build_router(state: AppState) -> Router {
 
     let access_log_enabled = state.config.access_log_enabled;
     let memory_monitor = state.memory_monitor.clone();
+
+    // Build TCP filter early (before state is moved into with_state)
+    let tcp_filter = std::sync::Arc::new(tcp_filter::TcpFilter::from_config(&state.config));
 
     // Admin API (shared across all modes)
     let admin_router = Router::new()
@@ -603,11 +607,23 @@ pub fn build_router(state: AppState) -> Router {
         with_trace_ctx
     };
 
-    // Security headers: outermost layer, applied AFTER all routes are registered.
+    // Security headers: applied AFTER all routes are registered.
     // Adds X-Content-Type-Options, X-Frame-Options, etc. to every response.
-    with_access_log.layer(axum::middleware::from_fn(
+    let with_security = with_access_log.layer(axum::middleware::from_fn(
         security_headers::security_headers_middleware,
-    ))
+    ));
+
+    // TCP early filter (CAB-1830): outermost layer — rejects blocked/rate-limited IPs
+    // before any HTTP processing. Requires into_make_service_with_connect_info in main.
+    if tcp_filter.is_enabled() {
+        let filter = tcp_filter.clone();
+        with_security.layer(axum::middleware::from_fn(move |request, next| {
+            let filter = filter.clone();
+            tcp_filter::pre_tls_filter(filter, request, next)
+        }))
+    } else {
+        with_security
+    }
 }
 
 // === HTTP Metrics Middleware ===

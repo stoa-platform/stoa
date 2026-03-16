@@ -29,6 +29,8 @@ pub mod metrics;
 pub mod mode;
 pub mod oauth;
 pub mod optimization;
+#[cfg(feature = "phases")]
+pub mod phases;
 pub mod plugin;
 pub mod policy;
 pub mod proxy;

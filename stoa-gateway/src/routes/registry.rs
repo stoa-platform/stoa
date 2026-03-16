@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::lb::{LbStrategy, Upstream};
 use crate::uac::Classification;
 
 /// An API route managed by the Control Plane.
@@ -40,6 +41,12 @@ pub struct ApiRoute {
     /// UAC contract key (tenant_id:name) that generated this route
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contract_key: Option<String>,
+    /// Multiple upstreams for load balancing (overrides backend_url when non-empty)
+    #[serde(default)]
+    pub upstreams: Vec<Upstream>,
+    /// Load balancing strategy (default: round_robin)
+    #[serde(default)]
+    pub load_balancer: LbStrategy,
 }
 
 /// Snapshot of the full route table (immutable once created).
@@ -179,6 +186,8 @@ mod tests {
             activated: true,
             classification: None,
             contract_key: None,
+            upstreams: vec![],
+            load_balancer: LbStrategy::default(),
         }
     }
 

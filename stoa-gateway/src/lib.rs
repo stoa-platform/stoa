@@ -20,6 +20,7 @@ pub mod handlers;
 pub mod hegemon;
 pub mod k8s;
 pub mod kafka;
+pub mod lb;
 pub mod llm;
 pub mod mcp;
 pub mod memory;

@@ -968,6 +968,20 @@ class ApiService {
     return data;
   }
 
+  // Chat Settings (CAB-1852)
+  async getChatSettings(tenantId: string): Promise<TenantChatSettings> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/settings`);
+    return data;
+  }
+
+  async updateChatSettings(
+    tenantId: string,
+    settings: Partial<TenantChatSettings>
+  ): Promise<TenantChatSettings> {
+    const { data } = await this.client.put(`/v1/tenants/${tenantId}/chat/settings`, settings);
+    return data;
+  }
+
   // Chat Token Metering (CAB-288)
   async getChatBudgetStatus(tenantId: string): Promise<TokenBudgetStatus> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/budget`);
@@ -1306,6 +1320,13 @@ export interface TopAPI {
   tool_name: string;
   display_name: string;
   calls: number;
+}
+
+// Chat Settings types (CAB-1852)
+export interface TenantChatSettings {
+  chat_console_enabled: boolean;
+  chat_portal_enabled: boolean;
+  chat_daily_budget: number;
 }
 
 // Chat Token Metering types (CAB-288)

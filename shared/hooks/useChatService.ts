@@ -75,6 +75,8 @@ export interface ChatServiceOptions {
   getTenantId: () => string;
   /** Creates a new chat conversation and returns its ID */
   createConversation: (tenantId: string) => Promise<{ id: string }>;
+  /** Identifies which app is using the chat — sent as X-Chat-Source header (CAB-1852) */
+  source?: 'console' | 'portal';
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +106,17 @@ export function useChatService(options: ChatServiceOptions) {
     return token;
   }, []);
 
+  /** Build base headers including optional X-Chat-Source (CAB-1852). */
+  const buildHeaders = useCallback(
+    (token: string, extra: Record<string, string> = {}): Record<string, string> => {
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}`, ...extra };
+      const src = optionsRef.current.source;
+      if (src) headers['X-Chat-Source'] = src;
+      return headers;
+    },
+    []
+  );
+
   // -------------------------------------------------------------------------
   // Conversation management
   // -------------------------------------------------------------------------
@@ -113,7 +126,7 @@ export function useChatService(options: ChatServiceOptions) {
     const token = getToken();
     const res = await fetch(
       `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/conversations?limit=20&status=active`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: buildHeaders(token) }
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -127,7 +140,7 @@ export function useChatService(options: ChatServiceOptions) {
     );
     setConversations(items);
     return items;
-  }, [getTenantId, getToken]);
+  }, [getTenantId, getToken, buildHeaders]);
 
   const switchConversation = useCallback((id: string | null) => {
     conversationId.current = id;
@@ -145,7 +158,7 @@ export function useChatService(options: ChatServiceOptions) {
       const token = getToken();
       const res = await fetch(
         `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/conversations/${id}`,
-        { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+        { method: 'DELETE', headers: buildHeaders(token) }
       );
       if (res.ok || res.status === 204) {
         setConversations((prev) => prev.filter((c) => c.id !== id));
@@ -156,7 +169,7 @@ export function useChatService(options: ChatServiceOptions) {
       }
       return false;
     },
-    [getTenantId, getToken, newConversation]
+    [getTenantId, getToken, newConversation, buildHeaders]
   );
 
   // -------------------------------------------------------------------------
@@ -282,10 +295,7 @@ export function useChatService(options: ChatServiceOptions) {
 
       const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: buildHeaders(token, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({ content: message }),
         signal: controller.signal,
       });
@@ -299,7 +309,7 @@ export function useChatService(options: ChatServiceOptions) {
 
       await parseSSEStream(res, callbacks);
     },
-    [getTenantId, getToken, abort, parseSSEStream]
+    [getTenantId, getToken, abort, parseSSEStream, buildHeaders]
   );
 
   // -------------------------------------------------------------------------
@@ -328,10 +338,7 @@ export function useChatService(options: ChatServiceOptions) {
 
       const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: buildHeaders(token, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           content: approved
             ? `Confirmed: ${confirmation.tool_name}`
@@ -354,7 +361,7 @@ export function useChatService(options: ChatServiceOptions) {
 
       await parseSSEStream(res, callbacks);
     },
-    [getTenantId, getToken, abort, parseSSEStream]
+    [getTenantId, getToken, abort, parseSSEStream, buildHeaders]
   );
 
   // -------------------------------------------------------------------------
@@ -366,11 +373,11 @@ export function useChatService(options: ChatServiceOptions) {
     const token = getToken();
     const res = await fetch(
       `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/usage/budget`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: buildHeaders(token) }
     );
     if (!res.ok) return null;
     return res.json();
-  }, [getTenantId, getToken]);
+  }, [getTenantId, getToken, buildHeaders]);
 
   // -------------------------------------------------------------------------
   // Load conversation messages (for history switching)
@@ -382,7 +389,7 @@ export function useChatService(options: ChatServiceOptions) {
       const token = getToken();
       const res = await fetch(
         `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/conversations/${convId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: buildHeaders(token) }
       );
       if (!res.ok) return [];
       const data = await res.json();
@@ -394,7 +401,7 @@ export function useChatService(options: ChatServiceOptions) {
         })
       );
     },
-    [getTenantId, getToken]
+    [getTenantId, getToken, buildHeaders]
   );
 
   // -------------------------------------------------------------------------

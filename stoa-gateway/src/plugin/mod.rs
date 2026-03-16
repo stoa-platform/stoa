@@ -41,6 +41,10 @@
 pub mod builtin;
 pub mod registry;
 pub mod sdk;
+#[cfg(feature = "wasm")]
+pub mod wasm_loader;
+#[cfg(feature = "wasm")]
+pub mod wasm_runtime;
 
 pub use registry::PluginRegistry;
 pub use sdk::{Phase, Plugin, PluginContext, PluginMetadata, PluginResult};

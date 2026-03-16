@@ -10,12 +10,9 @@
  *
  * CAB-1816: Progressive streaming + tool rendering + conversation management.
  * CAB-1816 Phase 2: Mutation tool confirmation + token budget.
+ * CAB-1836: Extracted to shared/ for Console + Portal reuse.
  */
 import { useCallback, useRef, useState } from 'react';
-
-import { config } from '@/config';
-import { useAuth } from '@/contexts/AuthContext';
-import { apiService } from '@/services/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,27 +62,44 @@ export interface TokenBudgetStatus {
   usage_percent: number;
 }
 
+/**
+ * App-specific dependencies injected by the consumer (Console or Portal).
+ * Using dependency injection keeps this hook app-agnostic.
+ */
+export interface ChatServiceOptions {
+  /** Base URL for the Control Plane API (e.g. https://api.gostoa.dev) */
+  apiBaseUrl: string;
+  /** Returns the current bearer token, or null if not authenticated */
+  getToken: () => string | null;
+  /** Returns the active tenant ID, or throws if none is available */
+  getTenantId: () => string;
+  /** Creates a new chat conversation and returns its ID */
+  createConversation: (tenantId: string) => Promise<{ id: string }>;
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useChatService() {
-  const { user } = useAuth();
+export function useChatService(options: ChatServiceOptions) {
+  // Store options in a ref so callbacks stay stable across renders
+  // while always using the latest values.
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   const conversationId = useRef<string | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  /** Resolve the active tenant from localStorage or user token. */
+  /** Resolve the active tenant via the injected getTenantId. */
   const getTenantId = useCallback((): string => {
-    const tenantId = localStorage.getItem('stoa-active-tenant') || user?.tenant_id;
-    if (!tenantId) throw new Error('No tenant selected');
-    return tenantId;
-  }, [user]);
+    return optionsRef.current.getTenantId();
+  }, []);
 
-  /** Ensure we have a valid auth token. */
+  /** Ensure we have a valid auth token via the injected getToken. */
   const getToken = useCallback((): string => {
-    const token = apiService.getAuthToken();
+    const token = optionsRef.current.getToken();
     if (!token) throw new Error('Not authenticated');
     return token;
   }, []);
@@ -98,7 +112,7 @@ export function useChatService() {
     const tenantId = getTenantId();
     const token = getToken();
     const res = await fetch(
-      `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations?limit=20&status=active`,
+      `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/conversations?limit=20&status=active`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!res.ok) return [];
@@ -130,7 +144,7 @@ export function useChatService() {
       const tenantId = getTenantId();
       const token = getToken();
       const res = await fetch(
-        `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations/${id}`,
+        `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/conversations/${id}`,
         { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.ok || res.status === 204) {
@@ -254,12 +268,12 @@ export function useChatService() {
 
       // Lazy-create conversation on first message
       if (!conversationId.current) {
-        const conv = await apiService.createChatConversation(tenantId);
+        const conv = await optionsRef.current.createConversation(tenantId);
         conversationId.current = conv.id;
         setActiveConversationId(conv.id);
       }
 
-      const url = `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations/${conversationId.current}/messages`;
+      const url = `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/conversations/${conversationId.current}/messages`;
 
       // Abort any previous in-flight request
       abort();
@@ -306,7 +320,7 @@ export function useChatService() {
         return;
       }
 
-      const url = `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations/${conversationId.current}/messages`;
+      const url = `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/conversations/${conversationId.current}/messages`;
 
       abort();
       const controller = new AbortController();
@@ -350,9 +364,10 @@ export function useChatService() {
   const fetchBudgetStatus = useCallback(async (): Promise<TokenBudgetStatus | null> => {
     const tenantId = getTenantId();
     const token = getToken();
-    const res = await fetch(`${config.api.baseUrl}/v1/tenants/${tenantId}/chat/usage/budget`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(
+      `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/usage/budget`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     if (!res.ok) return null;
     return res.json();
   }, [getTenantId, getToken]);
@@ -366,7 +381,7 @@ export function useChatService() {
       const tenantId = getTenantId();
       const token = getToken();
       const res = await fetch(
-        `${config.api.baseUrl}/v1/tenants/${tenantId}/chat/conversations/${convId}`,
+        `${optionsRef.current.apiBaseUrl}/v1/tenants/${tenantId}/chat/conversations/${convId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) return [];

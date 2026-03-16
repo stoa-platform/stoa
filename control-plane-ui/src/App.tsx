@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { EnvironmentProvider } from './contexts/EnvironmentContext';
 import { Layout } from './components/Layout';
-import { FloatingChat } from './components/FloatingChat';
-import { useChatService } from './hooks/useChatService';
+import { FloatingChat } from '@stoa/shared/components/FloatingChat';
+import { useChatService } from '@stoa/shared/hooks/useChatService';
+import { config } from './config';
+import { apiService } from './services/api';
 import { ToastProvider } from '@stoa/shared/components/Toast';
 import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
 import { ThemeProvider } from '@stoa/shared/contexts';
@@ -212,6 +214,7 @@ function PageLoader() {
 }
 
 function ConnectedFloatingChat() {
+  const { user } = useAuth();
   const {
     sendMessageStream,
     confirmTool,
@@ -223,7 +226,16 @@ function ConnectedFloatingChat() {
     deleteConversation,
     loadConversationMessages,
     activeConversationId,
-  } = useChatService();
+  } = useChatService({
+    apiBaseUrl: config.api.baseUrl,
+    getToken: () => apiService.getAuthToken(),
+    getTenantId: () => {
+      const tenantId = localStorage.getItem('stoa-active-tenant') || user?.tenant_id;
+      if (!tenantId) throw new Error('No tenant selected');
+      return tenantId;
+    },
+    createConversation: (tenantId) => apiService.createChatConversation(tenantId),
+  });
 
   return (
     <FloatingChat

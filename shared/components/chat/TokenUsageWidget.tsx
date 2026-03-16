@@ -1,8 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { Activity, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../contexts/AuthContext';
-import { apiService } from '../../services/api';
+import type { TokenBudgetStatus } from '../../hooks/useChatService';
+
+export interface TokenUsageWidgetProps {
+  /** The active tenant ID — widget renders null when undefined */
+  tenantId: string | undefined;
+  /** Fetches the token budget status for the given tenant */
+  getBudgetStatus: (tenantId: string) => Promise<TokenBudgetStatus>;
+}
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -32,10 +38,8 @@ function usageColor(percent: number): {
   };
 }
 
-export function TokenUsageWidget() {
-  const { user } = useAuth();
+export function TokenUsageWidget({ tenantId, getBudgetStatus }: TokenUsageWidgetProps) {
   const { t } = useTranslation();
-  const tenantId = user?.tenant_id;
 
   const {
     data: budget,
@@ -43,7 +47,7 @@ export function TokenUsageWidget() {
     isError,
   } = useQuery({
     queryKey: ['chat-budget', tenantId],
-    queryFn: () => apiService.getChatBudgetStatus(tenantId!),
+    queryFn: () => getBudgetStatus(tenantId!),
     enabled: !!tenantId,
     staleTime: 60_000,
   });

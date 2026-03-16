@@ -9,3 +9,16 @@ export type {
   SequenceShortcut,
   UseKeyboardShortcutsOptions,
 } from './useKeyboardShortcuts';
+
+export {
+  useChatService,
+} from './useChatService';
+
+export type {
+  ChatToolCall,
+  PendingConfirmation,
+  StreamCallbacks,
+  ConversationSummary,
+  TokenBudgetStatus,
+  ChatServiceOptions,
+} from './useChatService';

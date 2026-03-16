@@ -6,4 +6,4 @@ export type {
   ConversationSummary,
   PendingConfirmation,
   TokenBudgetStatus,
-} from '@/hooks/useChatService';
+} from '../../hooks/useChatService';

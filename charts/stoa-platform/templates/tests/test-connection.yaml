@@ -1,0 +1,78 @@
+{{/*
+  Helm test — verifies core platform services are reachable (CAB-1865).
+  Run: helm test stoa-platform -n stoa-system
+*/}}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "stoa-platform.fullname" . }}-test-connection"
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: test
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: curlimages/curl:8.7.1
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -e
+          PASS=0
+          FAIL=0
+
+          check() {
+            NAME="$1"; URL="$2"
+            if curl -sf --max-time 10 "$URL" >/dev/null 2>&1; then
+              echo "PASS: ${NAME}"
+              PASS=$((PASS + 1))
+            else
+              echo "FAIL: ${NAME} (${URL})"
+              FAIL=$((FAIL + 1))
+            fi
+          }
+
+          echo "=== STOA Platform Connection Tests ==="
+
+          # Control Plane API
+          check "CP API health" \
+            "http://stoa-control-plane-api.{{ .Release.Namespace }}.svc.cluster.local:80/health/ready"
+
+          {{- if .Values.stoaGateway.enabled }}
+          # STOA Gateway
+          check "Gateway health" \
+            "http://stoa-gateway.{{ .Release.Namespace }}.svc.cluster.local:80/health"
+
+          check "Gateway readiness" \
+            "http://stoa-gateway.{{ .Release.Namespace }}.svc.cluster.local:80/ready"
+          {{- end }}
+
+          # Keycloak (if accessible in-cluster)
+          check "Keycloak health" \
+            "http://keycloak-http.{{ .Release.Namespace }}.svc.cluster.local:80/health/ready" || true
+
+          echo ""
+          echo "Results: ${PASS} passed, ${FAIL} failed"
+          [ "$FAIL" -eq 0 ] || exit 1
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi
+      securityContext:
+        privileged: false
+        runAsNonRoot: true
+        runAsUser: 100
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault

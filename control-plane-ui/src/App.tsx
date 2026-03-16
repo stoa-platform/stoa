@@ -95,6 +95,9 @@ const TenantDashboard = lazy(() =>
 const TenantChatSettings = lazy(() =>
   import('./pages/TenantChatSettings').then((m) => ({ default: m.TenantChatSettings }))
 );
+const ChatUsageDashboard = lazy(() =>
+  import('./pages/ChatUsageDashboard').then((m) => ({ default: m.ChatUsageDashboard }))
+);
 const BusinessDashboard = lazy(() =>
   import('./pages/Business').then((m) => ({ default: m.BusinessDashboard }))
 );
@@ -312,6 +315,7 @@ function ProtectedRoutes() {
                 <Route path="/operations" element={<OperationsDashboard />} />
                 <Route path="/my-usage" element={<TenantDashboard />} />
                 <Route path="/chat-settings" element={<TenantChatSettings />} />
+                <Route path="/chat-usage" element={<ChatUsageDashboard />} />
                 <Route path="/business" element={<BusinessDashboard />} />
                 <Route path="/admin/prospects" element={<AdminProspects />} />
                 <Route path="/admin/access-requests" element={<AdminAccessRequests />} />

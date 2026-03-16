@@ -64,7 +64,7 @@ fn try_ratelimit(ctx: XdpContext) -> Result<u32, ()> {
     };
 
     // Update or create per-IP stats
-    let action = if let Some(stats) = unsafe { IP_STATS.get_ptr_mut(&key) } {
+    let action = if let Some(stats) = IP_STATS.get_ptr_mut(&key) {
         let stats = unsafe { &mut *stats };
         // Reset window if expired
         if now_ns - stats.last_reset_ns >= WINDOW_NS {

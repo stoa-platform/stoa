@@ -58,7 +58,10 @@ impl Default for TelemetryConfig {
 /// - Exporter creation fails (graceful degradation)
 pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_sdk::trace::Tracer> {
     // CAB-1866: use eprintln! because tracing subscriber is not yet initialized
-    eprintln!("[otel] init_telemetry_tracer called, endpoint={:?}", config.otlp_endpoint);
+    eprintln!(
+        "[otel] init_telemetry_tracer called, endpoint={:?}",
+        config.otlp_endpoint
+    );
 
     if OTEL_INITIALIZED.get().is_some() {
         eprintln!("[otel] already initialized, skipping");

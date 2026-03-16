@@ -225,8 +225,7 @@ fn init_tracing(config: &Config) {
     // CAB-1866: eprintln because tracing subscriber is not yet initialized
     eprintln!(
         "[stoa-gateway] OTel config: enabled={}, endpoint={:?}",
-        config.otel_enabled,
-        config.otel_endpoint
+        config.otel_enabled, config.otel_endpoint
     );
 
     if config.otel_enabled {

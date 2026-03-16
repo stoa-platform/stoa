@@ -82,8 +82,9 @@ describe('TenantChatSettings', () => {
           <TenantChatSettings />
         </MemoryRouter>
       );
-      await waitFor(() => expect(apiService.getChatSettings).toHaveBeenCalled());
-      fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
+      const saveBtn = await screen.findByRole('button', { name: /Save Settings/i });
+      await waitFor(() => expect(saveBtn).not.toBeDisabled());
+      fireEvent.click(saveBtn);
       await waitFor(() =>
         expect(apiService.updateChatSettings).toHaveBeenCalledWith('test-tenant', defaultSettings)
       );

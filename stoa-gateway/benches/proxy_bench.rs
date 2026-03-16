@@ -35,6 +35,8 @@ fn bench_route_lookup(c: &mut Criterion) {
             activated: true,
             classification: None,
             contract_key: None,
+            upstreams: vec![],
+            load_balancer: Default::default(),
         });
     }
 
@@ -60,6 +62,8 @@ fn bench_route_lookup(c: &mut Criterion) {
             activated: true,
             classification: None,
             contract_key: None,
+            upstreams: vec![],
+            load_balancer: Default::default(),
         });
     }
 

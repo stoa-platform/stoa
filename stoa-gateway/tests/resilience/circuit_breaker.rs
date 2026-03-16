@@ -26,6 +26,8 @@ fn failing_route(id: &str, prefix: &str) -> ApiRoute {
         activated: true,
         classification: None,
         contract_key: None,
+        upstreams: vec![],
+        load_balancer: Default::default(),
     }
 }
 
@@ -192,6 +194,8 @@ async fn test_method_not_allowed_does_not_trip_cb() {
         activated: true,
         classification: None,
         contract_key: None,
+        upstreams: vec![],
+        load_balancer: Default::default(),
     });
     let router = stoa_gateway::build_router(state.clone());
 

@@ -31,6 +31,9 @@ pub struct TelemetryConfig {
     pub console_export: bool,
     /// Head-based sampling rate (0.0 = none, 1.0 = all)
     pub sample_rate: f64,
+    /// Gateway deployment mode (CAB-1842: resource-level attribute for service graph).
+    /// Attached to every span as `stoa.deployment_mode` via OTel Resource.
+    pub deployment_mode: String,
 }
 
 impl Default for TelemetryConfig {
@@ -41,6 +44,8 @@ impl Default for TelemetryConfig {
             service_version: env!("CARGO_PKG_VERSION").to_string(),
             console_export: false,
             sample_rate: 1.0,
+            deployment_mode: std::env::var("STOA_GATEWAY_MODE")
+                .unwrap_or_else(|_| "edge-mcp".to_string()),
         }
     }
 }
@@ -88,6 +93,7 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     let resource = Resource::new([
         KeyValue::new("service.name", config.service_name.clone()),
         KeyValue::new("service.version", config.service_version.clone()),
+        KeyValue::new("stoa.deployment_mode", config.deployment_mode.clone()),
     ]);
 
     // Head-based sampling: ParentBased wrapping ensures child spans inherit parent decision

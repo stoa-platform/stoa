@@ -228,6 +228,7 @@ fn init_tracing(config: &Config) {
         let telem_config = TelemetryConfig {
             otlp_endpoint: config.otel_endpoint.clone(),
             sample_rate: config.otel_sample_rate,
+            deployment_mode: config.gateway_mode.to_string(),
             ..TelemetryConfig::default()
         };
         if let Some(tracer) = init_telemetry_tracer(&telem_config) {

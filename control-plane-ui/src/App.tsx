@@ -175,6 +175,11 @@ const ApiTrafficDashboard = lazy(() =>
   import('./pages/ApiTraffic').then((m) => ({ default: m.ApiTrafficDashboard }))
 );
 
+// CAB-1842: Call Flow Dashboard (service graph visualization)
+const CallFlowDashboard = lazy(() =>
+  import('./pages/CallFlow').then((m) => ({ default: m.CallFlowDashboard }))
+);
+
 // CAB-1487: LLM Cost Dashboard
 const LLMCostDashboard = lazy(() =>
   import('./pages/LLMCost').then((m) => ({ default: m.LLMCostDashboard }))
@@ -340,6 +345,7 @@ function ProtectedRoutes() {
                 <Route path="/hegemon" element={<HegemonDashboard />} />
                 <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
                 <Route path="/api-traffic" element={<ApiTrafficDashboard />} />
+                <Route path="/call-flow" element={<CallFlowDashboard />} />
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
                 <Route path="/webhooks" element={<Webhooks />} />
                 <Route path="/credential-mappings" element={<CredentialMappings />} />

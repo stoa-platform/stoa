@@ -57,24 +57,61 @@ thread_local! {
     static TRACE_RNG: RefCell<SmallRng> = RefCell::new(rand::make_rng());
 }
 
-/// Shared reqwest client for dynamic proxy (created once, reused).
-static PROXY_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+use crate::routes::registry::UpstreamHttpVersion;
 
-fn get_proxy_client() -> &'static reqwest::Client {
-    PROXY_CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .connect_timeout(Duration::from_secs(5))
-            .pool_max_idle_per_host(256)
-            .pool_idle_timeout(Duration::from_secs(90))
-            .tcp_keepalive(Duration::from_secs(60))
-            .tcp_nodelay(true)
-            // Force HTTP/1.1: echo-backend and most legacy APIs don't speak h2.
-            // Avoids ALPN negotiation overhead on every new connection.
-            .http1_only()
-            .build()
-            .expect("Failed to create proxy HTTP client")
+/// Per-HTTP-version proxy clients (CAB-1832).
+///
+/// Three clients cover all upstream scenarios without per-upstream overhead:
+/// - H1: HTTP/1.1 only (legacy backends, avoids ALPN overhead)
+/// - Auto: ALPN negotiation (h2 if supported, h1 fallback)
+/// - H2: HTTP/2 prior knowledge (h2c, no TLS negotiation)
+struct ProxyClients {
+    h1: reqwest::Client,
+    auto_client: reqwest::Client,
+    h2: reqwest::Client,
+}
+
+static PROXY_CLIENTS: std::sync::OnceLock<ProxyClients> = std::sync::OnceLock::new();
+
+fn get_proxy_clients() -> &'static ProxyClients {
+    PROXY_CLIENTS.get_or_init(|| {
+        let base = || {
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .connect_timeout(Duration::from_secs(5))
+                .pool_max_idle_per_host(256)
+                .pool_idle_timeout(Duration::from_secs(90))
+                .tcp_keepalive(Duration::from_secs(60))
+                .tcp_nodelay(true)
+        };
+
+        ProxyClients {
+            h1: base()
+                .http1_only()
+                .build()
+                .expect("Failed to create H1 proxy client"),
+            auto_client: base().build().expect("Failed to create Auto proxy client"),
+            h2: base()
+                .http2_prior_knowledge()
+                .build()
+                .expect("Failed to create H2 proxy client"),
+        }
     })
+}
+
+/// Select the appropriate reqwest client based on upstream HTTP version preference.
+fn get_proxy_client() -> &'static reqwest::Client {
+    &get_proxy_clients().h1
+}
+
+/// Select the appropriate reqwest client for a given HTTP version preference.
+fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Client {
+    let clients = get_proxy_clients();
+    match version {
+        UpstreamHttpVersion::H1 => &clients.h1,
+        UpstreamHttpVersion::Auto => &clients.auto_client,
+        UpstreamHttpVersion::H2 => &clients.h2,
+    }
 }
 
 /// Dynamic proxy handler — catch-all fallback route.
@@ -224,6 +261,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         &target_url,
         resolved_header.as_ref(),
         trace_ctx.as_ref(),
+        route.upstream_http_version,
     )
     .await;
 
@@ -300,8 +338,9 @@ async fn forward_request(
     target_url: &str,
     resolved_header: Option<&(String, String)>,
     trace_ctx: Option<&crate::trace_context::RequestTraceContext>,
+    http_version: UpstreamHttpVersion,
 ) -> Response {
-    let client = get_proxy_client();
+    let client = get_client_for_version(http_version);
     let headers = request.headers().clone();
 
     // Build the proxied request
@@ -798,6 +837,36 @@ mod tests {
             "span_id must differ from incoming (new hop)"
         );
         assert_eq!(parts[3], "01", "flags sampled");
+    }
+
+    #[test]
+    fn test_client_selection_h1() {
+        let client = get_client_for_version(UpstreamHttpVersion::H1);
+        // Should return a valid client (same pointer as h1 field)
+        let clients = get_proxy_clients();
+        assert!(std::ptr::eq(client, &clients.h1));
+    }
+
+    #[test]
+    fn test_client_selection_auto() {
+        let client = get_client_for_version(UpstreamHttpVersion::Auto);
+        let clients = get_proxy_clients();
+        assert!(std::ptr::eq(client, &clients.auto_client));
+    }
+
+    #[test]
+    fn test_client_selection_h2() {
+        let client = get_client_for_version(UpstreamHttpVersion::H2);
+        let clients = get_proxy_clients();
+        assert!(std::ptr::eq(client, &clients.h2));
+    }
+
+    #[test]
+    fn test_default_proxy_client_is_h1() {
+        // get_proxy_client() should return h1 for backward compatibility
+        let client = get_proxy_client();
+        let clients = get_proxy_clients();
+        assert!(std::ptr::eq(client, &clients.h1));
     }
 
     #[test]

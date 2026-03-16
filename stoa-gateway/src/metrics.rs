@@ -503,6 +503,48 @@ pub static API_PROXY_CIRCUIT_OPEN: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_api_proxy_circuit_open_total metric")
 });
 
+// === Connection Pool Metrics (CAB-1832) ===
+
+/// Gauge of active (in-flight) connections per upstream.
+pub static POOL_CONNECTIONS_ACTIVE: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "gateway_pool_connections_active",
+        "Number of active (in-flight) proxy connections per upstream",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_pool_connections_active metric")
+});
+
+/// Gauge of idle connections per upstream.
+pub static POOL_CONNECTIONS_IDLE: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "gateway_pool_connections_idle",
+        "Number of idle proxy connections per upstream",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_pool_connections_idle metric")
+});
+
+/// Gauge of connection reuse ratio per upstream (0.0 = no reuse, 1.0 = all reused).
+pub static POOL_REUSE_RATIO: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "gateway_pool_reuse_ratio",
+        "Connection reuse ratio per upstream (reused / total requests)",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_pool_reuse_ratio metric")
+});
+
+/// Counter of new connections opened per upstream.
+pub static POOL_NEW_CONNECTIONS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "gateway_pool_new_connections_total",
+        "Total new connections opened per upstream",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_pool_new_connections_total metric")
+});
+
 // === Upstream Latency Metrics ===
 
 /// Histogram of upstream (backend) response times in seconds.
@@ -1217,6 +1259,10 @@ pub fn init_all_metrics() {
     Lazy::force(&TOOL_DISCOVERY_FAILURES_TOTAL);
     Lazy::force(&FALLBACK_ATTEMPTS);
     Lazy::force(&FALLBACK_EXHAUSTED);
+    Lazy::force(&POOL_CONNECTIONS_ACTIVE);
+    Lazy::force(&POOL_CONNECTIONS_IDLE);
+    Lazy::force(&POOL_REUSE_RATIO);
+    Lazy::force(&POOL_NEW_CONNECTIONS);
     Lazy::force(&UPSTREAM_LATENCY);
     Lazy::force(&API_PROXY_REQUESTS_TOTAL);
     Lazy::force(&API_PROXY_DURATION);

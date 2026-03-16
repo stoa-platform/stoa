@@ -15,6 +15,24 @@ use std::sync::Arc;
 
 use crate::uac::Classification;
 
+/// HTTP version preference for upstream connections.
+///
+/// Controls which reqwest client is used for proxying to this route's backend.
+/// - `Auto`: TLS ALPN negotiation (h2 if supported, falls back to h1)
+/// - `H1`: Force HTTP/1.1 only (best for legacy backends, avoids ALPN overhead)
+/// - `H2`: Force HTTP/2 prior knowledge (no TLS negotiation, h2c)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UpstreamHttpVersion {
+    /// TLS ALPN negotiation — tries h2, falls back to h1 (default)
+    #[default]
+    Auto,
+    /// Force HTTP/1.1 only
+    H1,
+    /// Force HTTP/2 prior knowledge
+    H2,
+}
+
 /// An API route managed by the Control Plane.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRoute {
@@ -40,6 +58,9 @@ pub struct ApiRoute {
     /// UAC contract key (tenant_id:name) that generated this route
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contract_key: Option<String>,
+    /// HTTP version preference for upstream connections (CAB-1832)
+    #[serde(default)]
+    pub upstream_http_version: UpstreamHttpVersion,
 }
 
 /// Snapshot of the full route table (immutable once created).
@@ -179,6 +200,7 @@ mod tests {
             activated: true,
             classification: None,
             contract_key: None,
+            upstream_http_version: UpstreamHttpVersion::default(),
         }
     }
 
@@ -305,6 +327,41 @@ mod tests {
         let count = reg.swap_all(vec![]);
         assert_eq!(count, 0);
         assert_eq!(reg.count(), 0);
+    }
+
+    #[test]
+    fn test_upstream_http_version_default_auto() {
+        let json = r#"{
+            "id": "r1", "name": "test", "tenant_id": "acme",
+            "path_prefix": "/api", "backend_url": "https://b.test",
+            "methods": [], "spec_hash": "abc", "activated": true
+        }"#;
+        let route: ApiRoute = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(route.upstream_http_version, UpstreamHttpVersion::Auto);
+    }
+
+    #[test]
+    fn test_upstream_http_version_explicit_h1() {
+        let json = r#"{
+            "id": "r1", "name": "test", "tenant_id": "acme",
+            "path_prefix": "/api", "backend_url": "https://b.test",
+            "methods": [], "spec_hash": "abc", "activated": true,
+            "upstream_http_version": "h1"
+        }"#;
+        let route: ApiRoute = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(route.upstream_http_version, UpstreamHttpVersion::H1);
+    }
+
+    #[test]
+    fn test_upstream_http_version_explicit_h2() {
+        let json = r#"{
+            "id": "r1", "name": "test", "tenant_id": "acme",
+            "path_prefix": "/api", "backend_url": "https://b.test",
+            "methods": [], "spec_hash": "abc", "activated": true,
+            "upstream_http_version": "h2"
+        }"#;
+        let route: ApiRoute = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(route.upstream_http_version, UpstreamHttpVersion::H2);
     }
 
     #[test]

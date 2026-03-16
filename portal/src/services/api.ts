@@ -113,4 +113,24 @@ export async function createChatConversation(
   return data;
 }
 
+// Chat Settings (CAB-1853)
+export interface TenantChatSettings {
+  chat_console_enabled: boolean;
+  chat_portal_enabled: boolean;
+  chat_daily_budget: number;
+}
+
+export async function getChatSettings(tenantId: string): Promise<TenantChatSettings> {
+  const { data } = await apiClient.get(`/v1/tenants/${tenantId}/chat/settings`);
+  return data;
+}
+
+export async function updateChatSettings(
+  tenantId: string,
+  settings: Partial<TenantChatSettings>
+): Promise<TenantChatSettings> {
+  const { data } = await apiClient.put(`/v1/tenants/${tenantId}/chat/settings`, settings);
+  return data;
+}
+
 export default apiClient;

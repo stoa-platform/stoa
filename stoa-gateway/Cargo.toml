@@ -78,6 +78,10 @@ rdkafka = { version = "0.39", features = ["cmake-build"], optional = true }
 # === Phase 12: Shadow Capture — Port Mirror (CAB-1380) ===
 pnet = { version = "0.35", optional = true }
 
+# === WASM Plugin Runtime (CAB-1644) ===
+wasmtime = { version = "42", optional = true }
+toml = "0.8"                                         # Plugin manifest parsing
+
 # === Phase 7: K8s CRD + Federation (CAB-1105) ===
 kube = { version = "3.0", features = ["runtime", "derive"], optional = true }
 k8s-openapi = { version = "0.27", features = ["latest"], optional = true }
@@ -92,6 +96,7 @@ tracing-opentelemetry = "0.28"
 [features]
 default = []
 phases = []                                  # Request lifecycle phases (CAB-1834)
+wasm = ["wasmtime"]                          # WASM plugin runtime (CAB-1644)
 kafka = ["rdkafka"]
 k8s = ["kube", "k8s-openapi", "schemars"]  # K8s CRD watcher (Phase 7)
 pcap = ["pnet"]                              # Port mirror capture (raw packets)
@@ -102,6 +107,7 @@ insta = { version = "1", features = ["json", "redactions"] }
 tokio-test = "0.4"
 tower = { version = "0.5", features = ["util"] }
 wiremock = "0.6"
+tempfile = "3"
 
 [[bench]]
 name = "gateway_bench"

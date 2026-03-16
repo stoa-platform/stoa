@@ -1,0 +1,352 @@
+{{/*
+  Bootstrap Job (CAB-1864) — provisions Keycloak realm, OIDC clients, roles,
+  scopes, and default tenant on first install.
+  Runs as a Helm post-install hook. Idempotent — safe to re-run.
+*/}}
+{{- if .Values.stoa.bootstrap.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-bootstrap-script
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: bootstrap
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  bootstrap.sh: |
+    #!/bin/sh
+    set -eu
+
+    KEYCLOAK_URL="http://keycloak-http.{{ .Release.Namespace }}.svc.cluster.local:80"
+    REALM="{{ .Values.stoaGateway.keycloakRealm | default "stoa" }}"
+    ADMIN_USER="${KC_ADMIN_USER}"
+    ADMIN_PASS="${KC_ADMIN_PASSWORD}"
+    DOMAIN="{{ .Values.stoa.domain }}"
+    ADMIN_EMAIL="{{ .Values.stoa.adminEmail }}"
+    DEFAULT_TENANT="{{ .Values.stoa.bootstrap.defaultTenant.name }}"
+    DEFAULT_TENANT_DISPLAY="{{ .Values.stoa.bootstrap.defaultTenant.displayName }}"
+    CP_API_URL="http://stoa-control-plane-api.{{ .Release.Namespace }}.svc.cluster.local:80"
+
+    log() { echo "[bootstrap] $(date -u +%H:%M:%S) $1"; }
+
+    # ---------------------------------------------------------------
+    # Wait for Keycloak
+    # ---------------------------------------------------------------
+    log "Waiting for Keycloak..."
+    for i in $(seq 1 60); do
+      if curl -sf "${KEYCLOAK_URL}/health/ready" >/dev/null 2>&1; then
+        log "Keycloak is ready"
+        break
+      fi
+      [ "$i" = "60" ] && { log "ERROR: Keycloak not ready after 5 min"; exit 1; }
+      sleep 5
+    done
+
+    # ---------------------------------------------------------------
+    # Get admin token (master realm)
+    # ---------------------------------------------------------------
+    get_token() {
+      curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
+        -d "grant_type=password" \
+        -d "client_id=admin-cli" \
+        -d "username=${ADMIN_USER}" \
+        -d "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
+    }
+
+    TOKEN=$(get_token)
+    [ -z "$TOKEN" ] && { log "ERROR: Failed to get admin token"; exit 1; }
+    log "Got admin token"
+
+    AUTH="Authorization: Bearer ${TOKEN}"
+
+    # ---------------------------------------------------------------
+    # Create realm (idempotent)
+    # ---------------------------------------------------------------
+    log "Creating realm '${REALM}'..."
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms" \
+      -H "${AUTH}" -H "Content-Type: application/json" \
+      -d "{
+        \"realm\": \"${REALM}\",
+        \"enabled\": true,
+        \"displayName\": \"STOA Platform\",
+        \"registrationAllowed\": true,
+        \"loginWithEmailAllowed\": true,
+        \"duplicateEmailsAllowed\": false,
+        \"sslRequired\": \"external\"
+      }")
+    case $STATUS in
+      201) log "Realm created" ;;
+      409) log "Realm already exists (OK)" ;;
+      *)   log "WARN: Realm creation returned ${STATUS}" ;;
+    esac
+
+    # Refresh token after realm creation (may take a moment)
+    TOKEN=$(get_token); AUTH="Authorization: Bearer ${TOKEN}"
+
+    # ---------------------------------------------------------------
+    # Create realm roles (idempotent)
+    # ---------------------------------------------------------------
+    for ROLE in cpi-admin tenant-admin devops viewer; do
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        "${KEYCLOAK_URL}/admin/realms/${REALM}/roles" \
+        -H "${AUTH}" -H "Content-Type: application/json" \
+        -d "{\"name\": \"${ROLE}\"}")
+      case $STATUS in
+        201) log "Role '${ROLE}' created" ;;
+        409) log "Role '${ROLE}' exists (OK)" ;;
+        *)   log "WARN: Role '${ROLE}' returned ${STATUS}" ;;
+      esac
+    done
+
+    # ---------------------------------------------------------------
+    # Create client scopes (stoa:read, stoa:write, stoa:admin)
+    # ---------------------------------------------------------------
+    for SCOPE in stoa:read stoa:write stoa:admin; do
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        "${KEYCLOAK_URL}/admin/realms/${REALM}/client-scopes" \
+        -H "${AUTH}" -H "Content-Type: application/json" \
+        -d "{
+          \"name\": \"${SCOPE}\",
+          \"protocol\": \"openid-connect\",
+          \"attributes\": {\"include.in.token.scope\": \"true\"}
+        }")
+      case $STATUS in
+        201) log "Scope '${SCOPE}' created" ;;
+        409) log "Scope '${SCOPE}' exists (OK)" ;;
+        *)   log "WARN: Scope '${SCOPE}' returned ${STATUS}" ;;
+      esac
+    done
+
+    # ---------------------------------------------------------------
+    # Helper: create OIDC client (idempotent via clientId check)
+    # ---------------------------------------------------------------
+    create_client() {
+      CLIENT_ID="$1"
+      PAYLOAD="$2"
+      # Check if client exists
+      EXISTING=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}" \
+        -H "${AUTH}" | grep -c "\"clientId\":\"${CLIENT_ID}\"" || true)
+      if [ "$EXISTING" -gt 0 ]; then
+        log "Client '${CLIENT_ID}' exists (OK)"
+        return
+      fi
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        "${KEYCLOAK_URL}/admin/realms/${REALM}/clients" \
+        -H "${AUTH}" -H "Content-Type: application/json" \
+        -d "${PAYLOAD}")
+      case $STATUS in
+        201) log "Client '${CLIENT_ID}' created" ;;
+        409) log "Client '${CLIENT_ID}' exists (OK)" ;;
+        *)   log "WARN: Client '${CLIENT_ID}' returned ${STATUS}" ;;
+      esac
+    }
+
+    # ---------------------------------------------------------------
+    # Console (control-plane-ui) — public client, PKCE
+    # ---------------------------------------------------------------
+    create_client "control-plane-ui" "{
+      \"clientId\": \"control-plane-ui\",
+      \"name\": \"STOA Console\",
+      \"enabled\": true,
+      \"publicClient\": true,
+      \"standardFlowEnabled\": true,
+      \"directAccessGrantsEnabled\": false,
+      \"redirectUris\": [\"https://console.${DOMAIN}/*\", \"http://localhost:3000/*\"],
+      \"webOrigins\": [\"https://console.${DOMAIN}\", \"http://localhost:3000\"],
+      \"attributes\": {\"pkce.code.challenge.method\": \"S256\"}
+    }"
+
+    # ---------------------------------------------------------------
+    # Portal (stoa-portal) — public client, PKCE
+    # ---------------------------------------------------------------
+    create_client "stoa-portal" "{
+      \"clientId\": \"stoa-portal\",
+      \"name\": \"STOA Developer Portal\",
+      \"enabled\": true,
+      \"publicClient\": true,
+      \"standardFlowEnabled\": true,
+      \"directAccessGrantsEnabled\": false,
+      \"redirectUris\": [\"https://portal.${DOMAIN}/*\", \"http://localhost:5173/*\"],
+      \"webOrigins\": [\"https://portal.${DOMAIN}\", \"http://localhost:5173\"],
+      \"attributes\": {\"pkce.code.challenge.method\": \"S256\"}
+    }"
+
+    # ---------------------------------------------------------------
+    # Gateway (stoa-mcp-gateway) — confidential, client_credentials
+    # ---------------------------------------------------------------
+    create_client "stoa-mcp-gateway" "{
+      \"clientId\": \"stoa-mcp-gateway\",
+      \"name\": \"STOA Gateway\",
+      \"enabled\": true,
+      \"publicClient\": false,
+      \"serviceAccountsEnabled\": true,
+      \"standardFlowEnabled\": false,
+      \"directAccessGrantsEnabled\": false
+    }"
+
+    # ---------------------------------------------------------------
+    # Control Plane API — bearer-only resource server
+    # ---------------------------------------------------------------
+    create_client "control-plane-api" "{
+      \"clientId\": \"control-plane-api\",
+      \"name\": \"STOA Control Plane API\",
+      \"enabled\": true,
+      \"publicClient\": false,
+      \"bearerOnly\": true,
+      \"standardFlowEnabled\": false,
+      \"directAccessGrantsEnabled\": false
+    }"
+
+    # ---------------------------------------------------------------
+    # Create admin user (if adminEmail provided)
+    # ---------------------------------------------------------------
+    if [ -n "${ADMIN_EMAIL}" ]; then
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
+        -H "${AUTH}" -H "Content-Type: application/json" \
+        -d "{
+          \"username\": \"admin\",
+          \"email\": \"${ADMIN_EMAIL}\",
+          \"enabled\": true,
+          \"emailVerified\": true,
+          \"requiredActions\": [\"UPDATE_PASSWORD\"]
+        }")
+      case $STATUS in
+        201) log "Admin user created (password change required on first login)" ;;
+        409) log "Admin user exists (OK)" ;;
+        *)   log "WARN: Admin user creation returned ${STATUS}" ;;
+      esac
+
+      # Assign cpi-admin role to admin user
+      ADMIN_ID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/users?username=admin" \
+        -H "${AUTH}" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
+      if [ -n "$ADMIN_ID" ]; then
+        ROLE_ID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/cpi-admin" \
+          -H "${AUTH}" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+        if [ -n "$ROLE_ID" ]; then
+          curl -sf -X POST \
+            "${KEYCLOAK_URL}/admin/realms/${REALM}/users/${ADMIN_ID}/role-mappings/realm" \
+            -H "${AUTH}" -H "Content-Type: application/json" \
+            -d "[{\"id\": \"${ROLE_ID}\", \"name\": \"cpi-admin\"}]" >/dev/null 2>&1 || true
+          log "Assigned cpi-admin role to admin user"
+        fi
+      fi
+    fi
+
+    # ---------------------------------------------------------------
+    # Wait for Control Plane API
+    # ---------------------------------------------------------------
+    log "Waiting for Control Plane API..."
+    for i in $(seq 1 60); do
+      if curl -sf "${CP_API_URL}/health/ready" >/dev/null 2>&1; then
+        log "Control Plane API is ready"
+        break
+      fi
+      [ "$i" = "60" ] && { log "WARN: CP API not ready — skipping tenant creation"; exit 0; }
+      sleep 5
+    done
+
+    # ---------------------------------------------------------------
+    # Create default tenant (idempotent — 409 = exists)
+    # ---------------------------------------------------------------
+    log "Creating default tenant '${DEFAULT_TENANT}'..."
+
+    # Get a service token for the CP API
+    SVC_TOKEN=$(curl -sf -X POST \
+      "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
+      -d "grant_type=password" \
+      -d "client_id=admin-cli" \
+      -d "username=${ADMIN_USER}" \
+      -d "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+
+    if [ -n "$SVC_TOKEN" ]; then
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        "${CP_API_URL}/v1/tenants" \
+        -H "Authorization: Bearer ${SVC_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"name\": \"${DEFAULT_TENANT}\",
+          \"display_name\": \"${DEFAULT_TENANT_DISPLAY}\",
+          \"owner_email\": \"${ADMIN_EMAIL:-admin@${DOMAIN}}\"
+        }")
+      case $STATUS in
+        201) log "Default tenant created" ;;
+        409|422) log "Default tenant already exists (OK)" ;;
+        *)   log "WARN: Tenant creation returned ${STATUS}" ;;
+      esac
+    else
+      log "WARN: Could not get realm token — skipping tenant creation"
+    fi
+
+    log "Bootstrap complete"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: stoa-bootstrap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: bootstrap
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: bootstrap
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: curlimages/curl:8.7.1
+          command: ["/bin/sh", "/scripts/bootstrap.sh"]
+          env:
+            - name: KC_ADMIN_USER
+              value: {{ .Values.stoa.bootstrap.keycloak.adminUser | quote }}
+            - name: KC_ADMIN_PASSWORD
+              {{- if .Values.stoa.bootstrap.keycloak.adminPassword }}
+              value: {{ .Values.stoa.bootstrap.keycloak.adminPassword | quote }}
+              {{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-credentials
+                  key: admin-password
+                  optional: true
+              {{- end }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 100
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: scripts
+          configMap:
+            name: stoa-bootstrap-script
+            defaultMode: 0755
+{{- end }}

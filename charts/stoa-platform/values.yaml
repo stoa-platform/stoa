@@ -12,6 +12,18 @@ stoa:
   # Anthropic API key — leave empty to auto-disable chat (CHAT_KILL_SWITCH=true)
   anthropicApiKey: ""
 
+  # Bootstrap job (CAB-1864) — runs once on helm install
+  bootstrap:
+    enabled: false
+    # Keycloak admin credentials (required when enabled)
+    keycloak:
+      adminUser: "admin"
+      adminPassword: ""
+    # Default tenant created during bootstrap
+    defaultTenant:
+      name: "default"
+      displayName: "Default Tenant"
+
 # Gateway Configuration (CAB-958: Unified Gateway Architecture)
 # See ADR-024: https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes
 # Currently runs Python mcp-gateway. Will migrate to Rust stoa-gateway Q4 2026.

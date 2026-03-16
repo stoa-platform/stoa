@@ -33,6 +33,7 @@ kubectl apply -f secret-store.yaml
 kubectl apply -f external-secret-gateway.yaml
 kubectl apply -f external-secret-opensearch.yaml
 kubectl apply -f external-secret-database.yaml
+kubectl apply -f external-secret-anthropic.yaml
 ```
 
 ## Vault Paths
@@ -42,13 +43,14 @@ kubectl apply -f external-secret-database.yaml
 | `k8s/gateway` | `stoa-gateway-secrets` | stoa-gateway | STOA_CONTROL_PLANE_API_KEY, STOA_KEYCLOAK_CLIENT_SECRET |
 | `k8s/opensearch` | `stoa-opensearch-secret` | control-plane-api | 6 OpenSearch keys |
 | `dev/env` | `postgresql-credentials` | control-plane-api | DEV_PG_* (5 keys) |
+| `k8s/anthropic` | `anthropic-api-key` | control-plane-api | ANTHROPIC_API_KEY |
 
 ## Verification
 
 ```bash
 kubectl get secretstore -n stoa-system
 kubectl get externalsecret -n stoa-system
-kubectl get secrets -n stoa-system | grep -E "gateway|opensearch|postgresql"
+kubectl get secrets -n stoa-system | grep -E "gateway|opensearch|postgresql|anthropic"
 ```
 
 ## Troubleshooting

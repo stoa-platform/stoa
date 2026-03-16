@@ -1,0 +1,17 @@
+[package]
+name = "stoa-tc-ebpf"
+version = "0.1.0"
+edition = "2021"
+
+# TC classifier eBPF program. Build on Linux only:
+# cargo +nightly build --target bpfel-unknown-none -Z build-std=core --release
+
+[dependencies]
+aya-ebpf = "0.1"
+aya-log-ebpf = "0.1"
+network-types = "0.0.7"
+stoa-xdp-common = { path = "../stoa-xdp-common" }
+
+[[bin]]
+name = "stoa-tc"
+path = "src/main.rs"

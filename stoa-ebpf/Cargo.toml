@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["stoa-xdp", "stoa-xdp-common"]
-exclude = ["stoa-xdp-ebpf"]
+exclude = ["stoa-xdp-ebpf", "stoa-tc-ebpf"]
 
-# eBPF program (stoa-xdp-ebpf) is excluded from the workspace —
-# it compiles to bpfel-unknown-none target (Linux only, requires bpf-linker).
-# Build: cd stoa-xdp-ebpf && cargo +nightly build --target bpfel-unknown-none -Z build-std=core --release
+# eBPF programs are excluded from the workspace —
+# they compile to bpfel-unknown-none target (Linux only, requires bpf-linker).
+# Build XDP: cd stoa-xdp-ebpf && cargo +nightly build --target bpfel-unknown-none -Z build-std=core --release
+# Build TC:  cd stoa-tc-ebpf && cargo +nightly build --target bpfel-unknown-none -Z build-std=core --release

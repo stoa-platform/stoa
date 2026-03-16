@@ -91,6 +91,7 @@ tracing-opentelemetry = "0.28"
 
 [features]
 default = []
+phases = []                                  # Request lifecycle phases (CAB-1834)
 kafka = ["rdkafka"]
 k8s = ["kube", "k8s-openapi", "schemars"]  # K8s CRD watcher (Phase 7)
 pcap = ["pnet"]                              # Port mirror capture (raw packets)

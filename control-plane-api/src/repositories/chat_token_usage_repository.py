@@ -95,7 +95,7 @@ class ChatTokenUsageRepository:
             "usage_percent": usage_percent,
         }
 
-    async def get_usage_stats(self, tenant_id: str, *, days: int = 30) -> dict[str, Any]:
+    async def get_usage_stats(self, tenant_id: str, *, days: int = 30, group_by_source: bool = False) -> dict[str, Any]:
         """Aggregate token usage statistics over a period."""
         start_date = (datetime.now(UTC) - timedelta(days=days)).date()
 
@@ -138,22 +138,45 @@ class ChatTokenUsageRepository:
         top_result = await self.session.execute(top_users_stmt)
         top_users = [{"user_id": r.user_id, "tokens": r.tokens} for r in top_result.all()]
 
-        # Daily breakdown
-        daily_stmt = (
-            select(
-                ChatTokenUsage.period_date.label("day"),
-                func.sum(ChatTokenUsage.total_tokens).label("tokens"),
-                func.sum(ChatTokenUsage.request_count).label("requests"),
+        # Daily breakdown — optionally grouped by source (CAB-1851)
+        if group_by_source:
+            daily_stmt = (
+                select(
+                    ChatTokenUsage.period_date.label("day"),
+                    ChatTokenUsage.source.label("source"),
+                    func.sum(ChatTokenUsage.total_tokens).label("tokens"),
+                    func.sum(ChatTokenUsage.request_count).label("requests"),
+                )
+                .where(
+                    ChatTokenUsage.tenant_id == tenant_id,
+                    ChatTokenUsage.period_date >= start_date,
+                )
+                .group_by(ChatTokenUsage.period_date, ChatTokenUsage.source)
+                .order_by(ChatTokenUsage.period_date)
             )
-            .where(
-                ChatTokenUsage.tenant_id == tenant_id,
-                ChatTokenUsage.period_date >= start_date,
+            daily_result = await self.session.execute(daily_stmt)
+            daily_breakdown = [
+                {"date": str(r.day), "tokens": r.tokens, "requests": r.requests, "source": r.source}
+                for r in daily_result.all()
+            ]
+        else:
+            daily_stmt = (
+                select(
+                    ChatTokenUsage.period_date.label("day"),
+                    func.sum(ChatTokenUsage.total_tokens).label("tokens"),
+                    func.sum(ChatTokenUsage.request_count).label("requests"),
+                )
+                .where(
+                    ChatTokenUsage.tenant_id == tenant_id,
+                    ChatTokenUsage.period_date >= start_date,
+                )
+                .group_by(ChatTokenUsage.period_date)
+                .order_by(ChatTokenUsage.period_date)
             )
-            .group_by(ChatTokenUsage.period_date)
-            .order_by(ChatTokenUsage.period_date)
-        )
-        daily_result = await self.session.execute(daily_stmt)
-        daily_breakdown = [{"date": str(r.day), "tokens": r.tokens, "requests": r.requests} for r in daily_result.all()]
+            daily_result = await self.session.execute(daily_stmt)
+            daily_breakdown = [
+                {"date": str(r.day), "tokens": r.tokens, "requests": r.requests} for r in daily_result.all()
+            ]
 
         return {
             "tenant_id": tenant_id,

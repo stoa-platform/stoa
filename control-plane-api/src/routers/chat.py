@@ -21,6 +21,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -30,6 +31,7 @@ from ..config import settings
 from ..database import get_db
 from ..repositories.chat_token_usage_repository import ChatTokenUsageRepository
 from ..schemas.chat import (
+    ChatSource,
     ChatTenantUsageResponse,
     ChatUsageResponse,
     ConversationArchive,
@@ -40,6 +42,7 @@ from ..schemas.chat import (
     ConversationUpdate,
     MessageSend,
     ProviderKeySet,
+    TenantChatSettings,
     TokenBudgetStatusResponse,
     TokenUsageStatsResponse,
 )
@@ -72,6 +75,30 @@ def _check_kill_switch() -> None:
 
 def _service(db: AsyncSession = Depends(get_db)) -> ChatService:
     return ChatService(db)
+
+
+async def _resolve_source(request: Request) -> ChatSource:
+    """Read X-Chat-Source header, default to console."""
+    raw = request.headers.get("X-Chat-Source", "console").lower()
+    if raw == "portal":
+        return ChatSource.PORTAL
+    return ChatSource.CONSOLE
+
+
+async def _get_tenant_chat_settings(tenant_id: str, db: AsyncSession) -> TenantChatSettings:
+    """Read chat settings from tenant.settings JSON column."""
+    from ..models.tenant import Tenant
+
+    q = select(Tenant).where(Tenant.id == tenant_id)
+    tenant = (await db.execute(q)).scalar_one_or_none()
+    if tenant is None:
+        return TenantChatSettings()
+    s = tenant.settings or {}
+    return TenantChatSettings(
+        chat_console_enabled=s.get("chat_console_enabled", True),
+        chat_portal_enabled=s.get("chat_portal_enabled", True),
+        chat_daily_budget=s.get("chat_daily_budget", 100_000),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +354,18 @@ async def send_message(
     request: Request,
     user: User = Depends(get_current_user),
     svc: ChatService = Depends(_service),
+    db: AsyncSession = Depends(get_db),
 ) -> EventSourceResponse:
+    # Resolve source from header (CAB-1851)
+    source = await _resolve_source(request)
+
+    # Check tenant chat settings — is chat enabled for this source? (CAB-1851)
+    chat_settings = await _get_tenant_chat_settings(tenant_id, db)
+    if source == ChatSource.CONSOLE and not chat_settings.chat_console_enabled:
+        raise HTTPException(status_code=403, detail="Chat is disabled for this application")
+    if source == ChatSource.PORTAL and not chat_settings.chat_portal_enabled:
+        raise HTTPException(status_code=403, detail="Chat is disabled for this application")
+
     # Rate limit check (CAB-1655)
     allowed, reason, retry_after = check_rate_limit(user.id, tenant_id, "message")
     if not allowed:
@@ -392,6 +430,7 @@ async def send_message(
             user_roles=user.roles,
             session_fingerprint=fingerprint,
             client_ip=ip or None,
+            source=source.value,
         ):
             if await request.is_disconnected():
                 break
@@ -469,11 +508,12 @@ async def get_budget_status(
 async def get_usage_stats(
     tenant_id: str,
     days: int = Query(30, ge=1, le=365),
+    group_by: str | None = Query(None, description="Group breakdown by 'source' for per-app stats"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TokenUsageStatsResponse:
     repo = ChatTokenUsageRepository(db)
-    stats = await repo.get_usage_stats(tenant_id, days=days)
+    stats = await repo.get_usage_stats(tenant_id, days=days, group_by_source=group_by == "source")
     return TokenUsageStatsResponse(**stats)
 
 
@@ -556,6 +596,52 @@ async def list_chat_audit(
         page=page,
         page_size=per_page,
     )
+
+
+# ---------------------------------------------------------------------------
+# Tenant chat settings (CAB-1851)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/settings",
+    response_model=TenantChatSettings,
+    summary="Get tenant chat settings",
+)
+@require_tenant_access
+async def get_chat_settings(
+    tenant_id: str,
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
+    db: AsyncSession = Depends(get_db),
+) -> TenantChatSettings:
+    return await _get_tenant_chat_settings(tenant_id, db)
+
+
+@router.put(
+    "/settings",
+    response_model=TenantChatSettings,
+    summary="Update tenant chat settings",
+)
+@require_tenant_access
+async def update_chat_settings(
+    tenant_id: str,
+    body: TenantChatSettings,
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
+    db: AsyncSession = Depends(get_db),
+) -> TenantChatSettings:
+    from ..models.tenant import Tenant
+
+    q = select(Tenant).where(Tenant.id == tenant_id)
+    tenant = (await db.execute(q)).scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    s = dict(tenant.settings or {})
+    s["chat_console_enabled"] = body.chat_console_enabled
+    s["chat_portal_enabled"] = body.chat_portal_enabled
+    s["chat_daily_budget"] = body.chat_daily_budget
+    tenant.settings = s
+    await db.flush()
+    return body
 
 
 # ---------------------------------------------------------------------------

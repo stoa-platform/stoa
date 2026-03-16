@@ -310,6 +310,7 @@ class ChatService:
         user_roles: list[str] | None = None,
         session_fingerprint: str | None = None,
         client_ip: str | None = None,
+        source: str = "console",
     ) -> AsyncIterator[dict[str, Any]]:
         """Persist user message, call provider with agentic tool loop, persist + stream."""
 
@@ -376,6 +377,7 @@ class ChatService:
             conversation_id=conv.id,
             role="user",
             content=content,
+            source=source,
         )
         self.session.add(user_msg)
         await self.session.flush()
@@ -553,6 +555,7 @@ class ChatService:
             content="".join(full_text),
             token_count=str(total_tokens) if total_tokens else None,
             tool_use=tool_data,
+            source=source,
         )
         self.session.add(assistant_msg)
 
@@ -573,6 +576,7 @@ class ChatService:
                 model=conv.model,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
+                source=source,
             )
 
     # ------------------------------------------------------------------
@@ -779,6 +783,7 @@ class ChatService:
         model: str,
         input_tokens: int,
         output_tokens: int,
+        source: str = "console",
     ) -> None:
         """Emit a chat.tokens_used Kafka event (best-effort)."""
         try:
@@ -795,6 +800,7 @@ class ChatService:
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
                     "total_tokens": input_tokens + output_tokens,
+                    "source": source,
                 },
             )
         except Exception:

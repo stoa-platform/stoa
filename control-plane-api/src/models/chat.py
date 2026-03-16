@@ -50,6 +50,7 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     token_count = Column(String(50), nullable=True)
     tool_use = Column(Text, nullable=True)
+    source = Column(String(20), nullable=True, default="console")
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     conversation = relationship("ChatConversation", back_populates="messages")

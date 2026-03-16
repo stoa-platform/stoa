@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["stoa-xdp", "stoa-xdp-common"]
+
+# eBPF program (stoa-xdp-ebpf) is NOT a workspace member —
+# it compiles to bpfel-unknown-none target (Linux only, requires bpf-linker).
+# Build with: cargo +nightly build -p stoa-xdp-ebpf --target bpfel-unknown-none -Z build-std=core

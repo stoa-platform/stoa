@@ -92,6 +92,9 @@ const OperationsDashboard = lazy(() =>
 const TenantDashboard = lazy(() =>
   import('./pages/TenantDashboard').then((m) => ({ default: m.TenantDashboard }))
 );
+const TenantChatSettings = lazy(() =>
+  import('./pages/TenantChatSettings').then((m) => ({ default: m.TenantChatSettings }))
+);
 const BusinessDashboard = lazy(() =>
   import('./pages/Business').then((m) => ({ default: m.BusinessDashboard }))
 );
@@ -240,6 +243,7 @@ function ConnectedFloatingChat() {
       return tenantId;
     },
     createConversation: (tenantId) => apiService.createChatConversation(tenantId),
+    source: 'console',
   });
 
   return (
@@ -307,6 +311,7 @@ function ProtectedRoutes() {
                 <Route path="/gateway-observability" element={<GatewayObservability />} />
                 <Route path="/operations" element={<OperationsDashboard />} />
                 <Route path="/my-usage" element={<TenantDashboard />} />
+                <Route path="/chat-settings" element={<TenantChatSettings />} />
                 <Route path="/business" element={<BusinessDashboard />} />
                 <Route path="/admin/prospects" element={<AdminProspects />} />
                 <Route path="/admin/access-requests" element={<AdminAccessRequests />} />

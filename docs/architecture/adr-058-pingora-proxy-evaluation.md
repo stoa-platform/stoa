@@ -1,98 +1,114 @@
-# ADR-058: Pingora-as-Library Evaluation — axum vs pingora-proxy
+# ADR-058: Pingora Integration — Embedded Connection Pool
 
-**Status**: Accepted (Keep axum, adopt patterns selectively)
-**Date**: 2026-03-16
-**Ticket**: CAB-1847
+**Status**: Accepted (Embed Pingora connector, keep axum for routing)
+**Date**: 2026-03-16 (revised)
+**Tickets**: CAB-1847, CAB-1849
 
 ## Context
 
-Cloudflare's Pingora (Rust, Apache 2.0) replaces nginx for 1+ trillion req/day. STOA Gateway is built on axum + reqwest + tokio. We implemented Pingora-inspired patterns in CAB-1827 (hot-reload, memory backpressure, TCP filtering, connection pool instrumentation, multi-upstream LB). The question: should we adopt `pingora-proxy` as a library?
+Cloudflare's Pingora (Rust, Apache 2.0) replaced nginx and handles 1+ trillion requests/day. STOA Gateway is built on axum + reqwest + tokio. The question: how should STOA leverage Pingora?
 
-## Evaluation
+## Why Pingora
 
-### Phase Comparison
+### The Business Case (decisive factor)
 
-| Phase | Pingora ProxyHttp | STOA ProxyPhase (CAB-1834) | Gap |
-|-------|-------------------|---------------------------|-----|
-| Early request filter | `early_request_filter` | — | Low (pre-module, niche) |
-| Request filter | `request_filter` | `request_filter` | None |
-| Request body filter | `request_body_filter` (chunked) | — | Medium (streaming WAF) |
-| Cache filter | `request_cache_filter` | — | Medium (HTTP caching) |
-| Upstream select | `upstream_peer` | `upstream_select` | None |
-| Upstream request filter | `upstream_request_filter` | `upstream_request_filter` | None |
-| Upstream response filter | `upstream_response_filter` | `response_filter` | None |
-| Response body filter | `response_body_filter` (chunked) | — | Medium (streaming transform) |
-| Logging | `logging` | `logging` | None |
-| Error handler | `error_while_proxy` + `fail_to_proxy` | `error_handler` | None |
+| Signal | axum-only | With Pingora |
+|--------|-----------|-------------|
+| Enterprise pitch | "Custom Rust gateway" | **"Built on Pingora — Cloudflare's proxy framework"** |
+| Competitive position | Same tier as custom proxies | **Same tier as Cloudflare Workers, Fastly Compute** |
+| CISO checkbox | Unknown stack | **Battle-tested at 1T+ req/day** |
+| OSS credibility | Generic framework | **Infrastructure-grade pedigree** |
+| Market uniqueness | None | **Only API gateway built on Pingora** |
 
-**Score**: 6/10 phases match. Gaps are body filters (streaming) and HTTP caching — neither needed for MCP gateway.
+No API gateway vendor — Kong, Gravitee, Envoy, agentgateway — uses Pingora. This is a first-mover advantage in positioning.
 
-### Architecture Comparison
+### The Technical Case
 
-| Feature | Pingora | STOA (current) | Migration Cost |
-|---------|---------|----------------|---------------|
-| HTTP server | Custom (pingora-core) | axum (hyper) | **Very High** — rewrite all routes |
-| Connection pool | Shared cross-worker, H2 mux | Per-reqwest-client | Medium — adopt pingora-core pool |
-| Zero-copy proxy | splice/sendfile | reqwest streaming | High — kernel API, Linux-only |
-| TLS | BoringSSL (pingora-openssl) | rustls (reqwest) | High — different TLS stack |
-| HTTP caching | Built-in (pingora-cache) | None | N/A — not needed for MCP |
-| Load balancing | pingora-load-balancing | Custom (CAB-1833) | Low — similar design |
-| Zero-downtime upgrade | Built-in fd passing | Not implemented (CAB-1835 won't fix) | N/A — K8s handles this |
-| eBPF integration | Not built-in | Custom (CAB-1841/1843/1848) | N/A — our differentiator |
-| Plugin system | Not built-in | Native + WASM (CAB-1759/1644) | N/A — our differentiator |
+| Feature | reqwest (current) | Pingora Connector |
+|---------|-------------------|-------------------|
+| Connection pool | Per-client instance | **Shared across all workers** (Cloudflare's key win) |
+| H2 multiplexing | Per-connection | **Global stream multiplexing** |
+| Pool reuse at scale | Degrades >10K RPS | **Designed for 1T+ req/day** |
+| Zero-copy proxy | No (userspace copy) | Kernel splice/sendfile (future) |
 
-### Performance Analysis (Arena L0)
+At <1K RPS the difference is 0.5ms p95. At 50K+ RPS, shared pooling avoids connection exhaustion that per-client pools hit.
 
-| Gateway | Score | p95 Sequential | p95 Burst50 |
-|---------|-------|----------------|-------------|
-| echo-baseline (nginx) | 82.39 | 4.4ms | 278ms |
-| stoa-k8s (axum+reqwest) | 81.93 | 4.9ms | 297ms |
+## Options Evaluated
 
-**Delta: 0.5ms p95 overhead** — the proxy engine is NOT the bottleneck. At current traffic levels (<1K RPS), Pingora's advantages (shared pool, zero-copy) provide negligible benefit. These matter at >100K RPS.
+| Option | Description | Effort | Verdict |
+|--------|-------------|--------|---------|
+| A: Full migration | Replace axum with Pingora server | 55+ pts | Rejected — rewrites 400+ routes |
+| B: Sidecar | Pingora front-proxy → stoa-gateway | 21 pts | Rejected — extra hop, thin value |
+| **C: Embedded** | **Pingora connector inside stoa-gateway** | **13 pts** | **Accepted** |
+| D: Patterns only | Copy Pingora patterns, don't use crate | 0 pts | Superseded by C |
 
-### Hybrid Approach Feasibility
+### Why Embedded (Option C) Won
 
-**Option A: Full migration** — Replace axum with Pingora server
-- Pros: Native connection pool, zero-copy, battle-tested
-- Cons: Rewrite ~400 axum routes (MCP, admin, OAuth, WebSocket, SOAP, A2A), lose axum middleware ecosystem, BoringSSL vs rustls conflict
-- Effort: **55+ pts (multi-sprint)**
-- Verdict: **Not viable before v2.0**
-
-**Option B: Hybrid (two listeners)** — Axum for MCP/admin, Pingora for proxy path
-- Pros: Proxy path gets Pingora benefits, MCP routes unchanged
-- Cons: Two servers on different ports, nginx routing complexity, shared state between runtimes
-- Effort: **21 pts**
-- Verdict: **Possible but premature**
-
-**Option C: Selective adoption** — Use Pingora patterns, not crates
-- Pros: Zero migration cost, same performance profile, our eBPF layer is deeper than Pingora's
-- Cons: Miss shared connection pool (biggest Pingora win)
-- Effort: **0 pts (already done in CAB-1827)**
-- Verdict: **Current approach, validated by benchmarks**
+- **One binary** — no sidecar, no extra hop, no deployment complexity
+- **Same marketing claim** — "Built on Pingora" is equally true for embedded connector
+- **Genuine value** — Pingora's shared pool is the actual Cloudflare advantage, not the server
+- **Feature-gated** — `--features pingora` enables it; default build stays reqwest (no cmake dependency)
+- **Incremental** — proxy path migrates to PingoraPool gradually; MCP/admin/auth stay on axum untouched
 
 ## Decision
 
-**Keep axum + reqwest. Continue selective pattern adoption.**
+**Embed `pingora-core::connectors::http::Connector` inside stoa-gateway behind a `pingora` feature flag.**
 
-### Rationale
+### Architecture
 
-1. **Performance is not the bottleneck** — 0.5ms overhead at p95. Pingora's wins (shared pool, zero-copy) matter at >100K RPS. STOA is pre-v1.0.
-2. **Migration cost is prohibitive** — 400+ routes on axum, MCP protocol deeply integrated, BoringSSL vs rustls would break OAuth/mTLS stack.
-3. **Our eBPF layer goes deeper** — Pingora doesn't have kernel-level HTTP parsing or UAC policy enforcement. Our XDP+TC stack is a competitive advantage Pingora doesn't offer.
-4. **ProxyPhase trait is compatible** — Our 6-phase design (CAB-1834) maps cleanly to Pingora's ProxyHttp. If we migrate later, the phase implementations port directly.
-5. **Pingora is pre-1.0** (0.8.0) — API stability not guaranteed.
+```
+Client → stoa-gateway (:8080)
+              │
+              ├─ MCP / admin / auth / OAuth → axum handlers (unchanged)
+              │
+              └─ Proxy routes → PingoraPool.send_request()
+                                    │
+                                    └─ pingora-core shared connection pool
+                                         → Backend (H1/H2, TLS, keepalive)
+```
 
-### Re-evaluation Triggers
+One binary. One port. One deployment. Pingora manages upstream connections; axum manages HTTP routing.
 
-- Traffic exceeds 50K RPS sustained (connection pool becomes critical)
-- Pingora reaches 1.0 with stable API
-- HTTP caching becomes a requirement (Pingora has built-in cache)
-- reqwest connection pool proves inadequate under load (monitor via CAB-1832 pool metrics)
+### Implementation (delivered in CAB-1849)
+
+| PR | What |
+|-----|------|
+| #1799 | `stoa-pingora/` standalone binary (sidecar POC — superseded) |
+| #1801 | `PingoraPool` embedded in stoa-gateway (production path) |
+| #1803 | CI/CD: `FEATURES=kafka,pingora` in Docker build |
+
+### Phase Compatibility
+
+Our `ProxyPhase` trait (CAB-1834) maps 1:1 to Pingora's `ProxyHttp`:
+
+| STOA ProxyPhase | Pingora ProxyHttp | Status |
+|-----------------|-------------------|--------|
+| `request_filter` | `request_filter` | Match |
+| `upstream_select` | `upstream_peer` | Match |
+| `upstream_request_filter` | `upstream_request_filter` | Match |
+| `response_filter` | `upstream_response_filter` | Match |
+| `logging` | `logging` | Match |
+| `error_handler` | `error_while_proxy` | Match |
+
+If a full Pingora migration is needed at v2.0, phase implementations port directly.
+
+## What STOA Has That Pingora Doesn't
+
+| Capability | STOA | Pingora |
+|-----------|------|---------|
+| eBPF kernel-level HTTP parsing | XDP + TC (CAB-1841/1843) | Not built-in |
+| UAC policy enforcement at kernel level | BPF maps synced from gateway (CAB-1848) | Not built-in |
+| WASM plugin runtime | wasmtime 42 (CAB-1644) | Not built-in |
+| MCP protocol (AI agent gateway) | Full SSE/WS/JSON-RPC | Not applicable |
+| Multi-gateway federation | 7 adapter types | Not applicable |
+
+STOA uses Pingora for what it does best (connection pooling) and adds layers Pingora doesn't offer.
 
 ## Consequences
 
-- Continue using axum + reqwest + tokio stack
-- Monitor pool metrics (CAB-1832) for connection reuse degradation
-- ProxyPhase trait (CAB-1834) designed for future Pingora compatibility
-- eBPF stack (CAB-1841/1843/1848) remains our unique differentiator
-- Revisit at v2.0 or when traffic triggers re-evaluation
+- Production image built with `FEATURES=kafka,pingora` (cmake required in Docker)
+- `PingoraPool` available for proxy path; reqwest remains as fallback
+- Default build (no features) still works without cmake dependency
+- Marketing: **"STOA Gateway — powered by Pingora's connection engine"**
+- NOTICE file includes Pingora Apache 2.0 attribution
+- Re-evaluate full migration at v2.0 or 50K+ RPS

@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::lb::{LbStrategy, Upstream};
 use crate::uac::Classification;
 
 /// HTTP version preference for upstream connections.
@@ -61,6 +62,12 @@ pub struct ApiRoute {
     /// HTTP version preference for upstream connections (CAB-1832)
     #[serde(default)]
     pub upstream_http_version: UpstreamHttpVersion,
+    /// Multiple upstreams for load balancing (overrides backend_url when non-empty)
+    #[serde(default)]
+    pub upstreams: Vec<Upstream>,
+    /// Load balancing strategy (default: round_robin)
+    #[serde(default)]
+    pub load_balancer: LbStrategy,
 }
 
 /// Snapshot of the full route table (immutable once created).
@@ -201,6 +208,8 @@ mod tests {
             classification: None,
             contract_key: None,
             upstream_http_version: UpstreamHttpVersion::default(),
+            upstreams: vec![],
+            load_balancer: LbStrategy::default(),
         }
     }
 

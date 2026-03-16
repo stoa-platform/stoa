@@ -558,6 +558,35 @@ pub static UPSTREAM_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Failed to create stoa_upstream_latency_seconds metric")
 });
 
+// === Load Balancer Metrics (CAB-1833) ===
+
+/// Counter of load balancer selections by strategy and upstream URL.
+pub static LB_SELECTIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "gateway_lb_selections_total",
+        "Total load balancer upstream selections",
+        &["strategy", "upstream"]
+    )
+    .expect("Failed to create gateway_lb_selections_total metric")
+});
+
+/// Gauge of active connections per upstream (for least_conn visibility).
+pub static LB_UPSTREAM_ACTIVE: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "gateway_lb_upstream_active_connections",
+        "Active connections per upstream",
+        &["upstream"]
+    )
+    .expect("Failed to create gateway_lb_upstream_active_connections metric")
+});
+
+/// Record a load balancer selection.
+pub fn record_lb_selection(strategy: &str, upstream: &str) {
+    LB_SELECTIONS_TOTAL
+        .with_label_values(&[strategy, upstream])
+        .inc();
+}
+
 // === Helper Functions ===
 
 /// Record a tool call with timing and optional trace_id exemplar.
@@ -1285,6 +1314,8 @@ pub fn init_all_metrics() {
     Lazy::force(&TCP_CONNECTIONS_REJECTED_PRE_TLS);
     Lazy::force(&ROUTE_RELOAD_TOTAL);
     Lazy::force(&ROUTE_RELOAD_ROUTES_LOADED);
+    Lazy::force(&LB_SELECTIONS_TOTAL);
+    Lazy::force(&LB_UPSTREAM_ACTIVE);
 }
 
 /// Get the total number of MCP tool calls across all labels.

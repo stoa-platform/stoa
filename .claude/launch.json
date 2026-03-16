@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "control-plane-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "control-plane-ui", "run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "portal",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "portal", "run", "dev"],
+      "port": 3001
+    },
+    {
+      "name": "control-plane-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd control-plane-api && uvicorn src.main:app --reload --port 8000"],
+      "port": 8000
+    },
+    {
+      "name": "stoa-gateway",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": ["run", "--manifest-path", "stoa-gateway/Cargo.toml"],
+      "port": 8080
+    }
+  ]
+}

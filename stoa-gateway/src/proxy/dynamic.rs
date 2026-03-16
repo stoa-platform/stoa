@@ -172,24 +172,73 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         }
     }
 
-    // Per-upstream circuit breaker (CAB-362)
-    let cb = state.circuit_breakers.get_or_create(&route.id);
-    if !cb.allow_request() {
-        warn!(
-            route_id = %route.id,
-            route_name = %route.name,
-            "Circuit breaker open for upstream"
-        );
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            format!("Circuit breaker open for upstream: {}", route.name),
-        )
-            .into_response();
+    // Resolve backend URL: if route has upstreams, use load balancer; otherwise use backend_url.
+    // LB selection checks per-upstream circuit breaker state for health. (CAB-1833)
+    let (selected_backend, lb_info) = if !route.upstreams.is_empty() {
+        let healthy: Vec<bool> = route
+            .upstreams
+            .iter()
+            .map(|u| !state.circuit_breakers.is_open(&u.url))
+            .collect();
+        let lb = crate::lb::create(route.load_balancer, &route.upstreams);
+        match lb.select(&healthy) {
+            Some(idx) => {
+                let upstream = &route.upstreams[idx];
+                crate::metrics::record_lb_selection(
+                    &route.load_balancer.to_string(),
+                    &upstream.url,
+                );
+                (upstream.url.clone(), Some((idx, lb)))
+            }
+            None => {
+                warn!(
+                    route_id = %route.id,
+                    route_name = %route.name,
+                    "All upstreams unhealthy (circuit breakers open)"
+                );
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "All upstreams unavailable".to_string(),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        // Single-backend path: use per-route circuit breaker (CAB-362)
+        let cb = state.circuit_breakers.get_or_create(&route.id);
+        if !cb.allow_request() {
+            warn!(
+                route_id = %route.id,
+                route_name = %route.name,
+                "Circuit breaker open for upstream"
+            );
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!("Circuit breaker open for upstream: {}", route.name),
+            )
+                .into_response();
+        }
+        (route.backend_url.clone(), None)
+    };
+
+    // Track active connections for least_conn (CAB-1833)
+    if let Some((idx, ref lb)) = lb_info {
+        lb.report_start(idx);
+        crate::metrics::LB_UPSTREAM_ACTIVE
+            .with_label_values(&[&selected_backend])
+            .inc();
     }
 
-    // Build target URL: replace path_prefix with backend_url (pre-allocated)
+    // Per-upstream circuit breaker for single-backend routes
+    let cb = if lb_info.is_none() {
+        Some(state.circuit_breakers.get_or_create(&route.id))
+    } else {
+        None
+    };
+
+    // Build target URL: replace path_prefix with backend (pre-allocated)
     let remaining_path = path.strip_prefix(&route.path_prefix).unwrap_or("");
-    let backend = route.backend_url.trim_end_matches('/');
+    let backend = selected_backend.trim_end_matches('/');
     let query = request.uri().query();
     let capacity = backend.len() + remaining_path.len() + query.map_or(0, |q| 1 + q.len());
     let mut target_url = String::with_capacity(capacity);
@@ -309,11 +358,30 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         upstream_duration,
     );
 
-    // Record success/failure for circuit breaker
-    if response.status().is_server_error() {
-        cb.record_failure();
+    // Record success/failure for circuit breaker (single-backend routes)
+    // or per-upstream circuit breaker (multi-upstream routes) (CAB-1833)
+    if let Some(ref cb) = cb {
+        if response.status().is_server_error() {
+            cb.record_failure();
+        } else {
+            cb.record_success();
+        }
     } else {
-        cb.record_success();
+        // Multi-upstream: record on the selected upstream URL's circuit breaker
+        let upstream_cb = state.circuit_breakers.get_or_create(&selected_backend);
+        if response.status().is_server_error() {
+            upstream_cb.record_failure();
+        } else {
+            upstream_cb.record_success();
+        }
+    }
+
+    // Release active connection tracking for LB (CAB-1833)
+    if let Some((idx, ref lb)) = lb_info {
+        lb.report_done(idx);
+        crate::metrics::LB_UPSTREAM_ACTIVE
+            .with_label_values(&[&selected_backend])
+            .dec();
     }
 
     // Inject X-Stoa-Timing debug header with gateway/upstream timing

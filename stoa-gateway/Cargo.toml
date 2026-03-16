@@ -27,6 +27,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 async-trait = "0.1"
 
 # === NEW - Phase 1: Quality Fixes ===
+arc-swap = "1"                            # Lock-free route table hot-swap (CAB-1828)
 once_cell = "1"                          # Lazy statics for metrics
 parking_lot = "0.12"                    # Non-poisoning RwLock
 hostname = "0.4"                         # Get local hostname for auto-registration (ADR-028)

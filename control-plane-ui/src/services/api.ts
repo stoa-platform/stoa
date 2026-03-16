@@ -995,6 +995,17 @@ class ApiService {
     return data;
   }
 
+  // Chat Usage by source — per-app breakdown (CAB-1868)
+  async getChatUsageTenant(
+    tenantId: string,
+    params: { group_by?: string; days?: number } = {}
+  ): Promise<ChatUsageBySource> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/tenant`, {
+      params: { group_by: 'source', ...params },
+    });
+    return data;
+  }
+
   async createChatConversation(
     tenantId: string,
     title = 'New conversation'
@@ -1327,6 +1338,20 @@ export interface TenantChatSettings {
   chat_console_enabled: boolean;
   chat_portal_enabled: boolean;
   chat_daily_budget: number;
+}
+
+// Chat Usage by source — per-app breakdown (CAB-1868)
+export interface ChatSourceEntry {
+  source: string;
+  tokens: number;
+  requests: number;
+}
+
+export interface ChatUsageBySource {
+  sources: ChatSourceEntry[];
+  total_tokens: number;
+  total_requests: number;
+  period_days: number;
 }
 
 // Chat Token Metering types (CAB-288)

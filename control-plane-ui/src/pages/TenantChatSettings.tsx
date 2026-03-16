@@ -4,7 +4,8 @@
  * CAB-1852
  */
 import { useState, useEffect } from 'react';
-import { MessageSquare, Save, AlertTriangle } from 'lucide-react';
+import { MessageSquare, Save, AlertTriangle, BarChart2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import type { TenantChatSettings as Settings } from '../services/api';
@@ -180,6 +181,17 @@ export function TenantChatSettings() {
             <span className="text-sm text-neutral-500 dark:text-neutral-400">tokens / day</span>
           </div>
         </div>
+      </div>
+
+      {/* Usage link */}
+      <div className="flex justify-end">
+        <Link
+          to="/chat-usage"
+          className="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          <BarChart2 className="h-4 w-4" />
+          View token usage
+        </Link>
       </div>
 
       {/* Save button */}

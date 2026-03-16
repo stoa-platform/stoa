@@ -35,6 +35,15 @@ spec:
           env:
             - name: LOG_TRACE_EXPORT_ENDPOINT
               value: "http://stoa-alloy-otlp.stoa-monitoring:4317"
+            # Shared internal keys (CAB-1863)
+            - name: CHAT_GATEWAY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stoa-internal-keys
+                  key: chat-internal-key
+                  optional: true
+            - name: CHAT_GATEWAY_URL
+              value: "http://stoa-gateway.stoa-system.svc.cluster.local:80"
           envFrom:
             - configMapRef:
                 name: stoa-control-plane-api-config
@@ -45,6 +54,9 @@ spec:
                 optional: true
             - secretRef:
                 name: anthropic-api-key
+                optional: true
+            - configMapRef:
+                name: stoa-chat-config
                 optional: true
           resources:
             requests:

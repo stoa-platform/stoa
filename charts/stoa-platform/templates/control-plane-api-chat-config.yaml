@@ -1,0 +1,17 @@
+{{/*
+  Chat configuration ConfigMap for control-plane-api (CAB-1863).
+  When anthropicApiKey is empty, CHAT_KILL_SWITCH is set to "true"
+  to gracefully disable chat without crashing.
+*/}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-chat-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: backend
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+data:
+  CHAT_KILL_SWITCH: {{ if .Values.stoa.anthropicApiKey }}"false"{{ else }}"true"{{ end }}
+  CHAT_GATEWAY_URL: "http://stoa-gateway.{{ .Release.Namespace }}.svc.cluster.local:80"

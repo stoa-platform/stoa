@@ -114,6 +114,13 @@ spec:
                   key: STOA_KEYCLOAK_CLIENT_SECRET
                   optional: true
             {{- end }}
+            # Shared internal keys (CAB-1863)
+            - name: GATEWAY_API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: stoa-internal-keys
+                  key: gateway-consumer-key
+                  optional: true
             {{- with .Values.stoaGateway.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

@@ -553,24 +553,21 @@ fn inject_traceparent(
     builder: reqwest::RequestBuilder,
     incoming_ctx: Option<&crate::trace_context::RequestTraceContext>,
 ) -> reqwest::RequestBuilder {
-    #[cfg(feature = "otel")]
-    {
-        if crate::telemetry::is_otel_active() {
-            use opentelemetry::propagation::TextMapPropagator;
-            use opentelemetry_sdk::propagation::TraceContextPropagator;
-            use tracing_opentelemetry::OpenTelemetrySpanExt;
+    if crate::telemetry::is_otel_active() {
+        use opentelemetry::propagation::TextMapPropagator;
+        use opentelemetry_sdk::propagation::TraceContextPropagator;
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-            let cx = tracing::Span::current().context();
-            let propagator = TraceContextPropagator::new();
-            let mut inject_map = std::collections::HashMap::new();
-            propagator.inject_context(&cx, &mut inject_map);
+        let cx = tracing::Span::current().context();
+        let propagator = TraceContextPropagator::new();
+        let mut inject_map = std::collections::HashMap::new();
+        propagator.inject_context(&cx, &mut inject_map);
 
-            let mut b = builder;
-            for (key, value) in inject_map {
-                b = b.header(key, value);
-            }
-            return b;
+        let mut b = builder;
+        for (key, value) in inject_map {
+            b = b.header(key, value);
         }
+        return b;
     }
 
     // CAB-1455 Phase 2: propagate incoming trace_id with a fresh span_id so

@@ -45,7 +45,8 @@ Optional Cargo features for community/enterprise image split:
 |---------|-------|---------|-----------|
 | `kafka` | rdkafka | Kafka metering | cmake, libsasl2-dev |
 | `k8s` | kube, k8s-openapi, schemars | K8s CRD watcher | None |
-| `otel` | *(placeholder)* | OpenTelemetry tracing | None |
+
+Note: OpenTelemetry is always compiled in (CAB-1831). No-op when `STOA_OTEL_ENDPOINT` is absent.
 
 Default features: **none** (community image — lean, no optional deps).
 

@@ -142,9 +142,9 @@ pub struct Config {
     #[serde(default)]
     pub otel_endpoint: Option<String>,
 
-    /// Enable OpenTelemetry at runtime (requires `otel` feature at compile time).
-    /// Env: STOA_OTEL_ENABLED (default: false)
-    #[serde(default)]
+    /// Enable OpenTelemetry at runtime (CAB-1831: default true, no-op when endpoint absent).
+    /// Env: STOA_OTEL_ENABLED (default: true)
+    #[serde(default = "default_otel_enabled")]
     pub otel_enabled: bool,
 
     /// Head-based sampling rate for OTel traces (0.0 = none, 1.0 = all).
@@ -1092,6 +1092,10 @@ pub struct SenderConstraintConfig {
     pub mtls_required: bool,
 }
 
+fn default_otel_enabled() -> bool {
+    true // CAB-1831: OTel always on, no-op exporter when STOA_OTEL_ENDPOINT absent
+}
+
 fn default_otel_sample_rate() -> f64 {
     1.0 // Sample all traces by default
 }
@@ -1281,7 +1285,7 @@ impl Default for Config {
             policy_enabled: default_policy_enabled(),
             log_level: Some("info".to_string()),
             log_format: Some("json".to_string()),
-            otel_enabled: false,
+            otel_enabled: default_otel_enabled(),
             otel_endpoint: None,
             otel_sample_rate: default_otel_sample_rate(),
             gateway_mode: GatewayMode::default(),
@@ -1672,5 +1676,14 @@ mod tests {
     fn test_default_otel_sample_rate() {
         let config = Config::default();
         assert!((config.otel_sample_rate - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_otel_enabled_by_default() {
+        let config = Config::default();
+        assert!(
+            config.otel_enabled,
+            "CAB-1831: otel_enabled should default to true"
+        );
     }
 }

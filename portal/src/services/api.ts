@@ -102,4 +102,15 @@ apiClient.interceptors.response.use(
   }
 );
 
+/**
+ * Create a new chat conversation for the given tenant
+ */
+export async function createChatConversation(
+  tenantId: string,
+  title = 'New conversation'
+): Promise<{ id: string }> {
+  const { data } = await apiClient.post(`/v1/tenants/${tenantId}/chat/conversations`, { title });
+  return data;
+}
+
 export default apiClient;

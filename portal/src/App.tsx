@@ -7,7 +7,10 @@ import { ErrorBoundary, SkipLink } from './components/common';
 import { captureException } from './services/errorTracking';
 import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { StoaLoader } from '@stoa/shared/components/StoaLoader';
+import { FloatingChat } from '@stoa/shared/components/FloatingChat';
+import { useChatService } from '@stoa/shared/hooks/useChatService';
 import { config } from './config';
+import { getAccessToken, getApiBaseUrl, createChatConversation } from './services/api';
 
 // Lazy load pages for code splitting - reduces initial bundle by ~60%
 const HomePage = lazy(() => import('./pages/Home').then((m) => ({ default: m.HomePage })));
@@ -343,6 +346,47 @@ function LoginScreen() {
   );
 }
 
+// CAB-1838: Floating AI assistant wired with Portal auth + developer-scoped tools
+function ConnectedFloatingChat() {
+  const { user } = useAuth();
+  const {
+    sendMessageStream,
+    confirmTool,
+    fetchBudgetStatus,
+    abort,
+    loadConversations,
+    switchConversation,
+    newConversation,
+    deleteConversation,
+    loadConversationMessages,
+    activeConversationId,
+  } = useChatService({
+    apiBaseUrl: getApiBaseUrl(),
+    getToken: () => getAccessToken(),
+    getTenantId: () => {
+      const tenantId = user?.tenant_id;
+      if (!tenantId) throw new Error('No tenant available');
+      return tenantId;
+    },
+    createConversation: (tenantId) => createChatConversation(tenantId),
+  });
+
+  return (
+    <FloatingChat
+      onSendMessageStream={sendMessageStream}
+      onConfirmTool={confirmTool}
+      onFetchBudgetStatus={fetchBudgetStatus}
+      onAbort={abort}
+      onLoadConversations={loadConversations}
+      onSwitchConversation={switchConversation}
+      onNewConversation={newConversation}
+      onDeleteConversation={deleteConversation}
+      onLoadConversationMessages={loadConversationMessages}
+      activeConversationId={activeConversationId}
+    />
+  );
+}
+
 // Protected route wrapper with RBAC support
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -621,6 +665,8 @@ function AppContent() {
           </Routes>
         </Suspense>
       </Layout>
+      {/* CAB-1838: Floating AI assistant — rendered above Layout so it persists across page navigation */}
+      <ConnectedFloatingChat />
     </ProtectedRoute>
   );
 }

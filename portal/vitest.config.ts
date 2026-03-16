@@ -13,6 +13,9 @@ export default defineConfig({
       'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime'),
       'react/jsx-dev-runtime': path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime'),
       'lucide-react': path.resolve(__dirname, 'node_modules/lucide-react'),
+      '@tanstack/react-query': path.resolve(__dirname, 'node_modules/@tanstack/react-query'),
+      'react-i18next': path.resolve(__dirname, 'node_modules/react-i18next'),
+      'react-markdown': path.resolve(__dirname, 'node_modules/react-markdown'),
     },
   },
   test: {

@@ -17,6 +17,11 @@ class ChatRole(StrEnum):
     SYSTEM = "system"
 
 
+class ChatSource(StrEnum):
+    CONSOLE = "console"
+    PORTAL = "portal"
+
+
 class ChatProvider(StrEnum):
     ANTHROPIC = "anthropic"
 
@@ -29,6 +34,14 @@ class ConversationStatus(StrEnum):
 # ---------------------------------------------------------------------------
 # Request schemas
 # ---------------------------------------------------------------------------
+
+
+class TenantChatSettings(BaseModel):
+    """Per-tenant chat configuration (CAB-1851)."""
+
+    chat_console_enabled: bool = True
+    chat_portal_enabled: bool = True
+    chat_daily_budget: int = Field(default=100_000, ge=0)
 
 
 class ConversationCreate(BaseModel):
@@ -180,6 +193,7 @@ class DailyBreakdown(BaseModel):
     date: str
     tokens: int
     requests: int
+    source: str | None = None
 
 
 class TokenUsageStatsResponse(BaseModel):

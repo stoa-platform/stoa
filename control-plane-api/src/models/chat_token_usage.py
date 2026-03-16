@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import BigInteger, Date, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Date, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,12 +22,14 @@ class ChatTokenUsage(Base):
             "period_date",
             name="uq_chat_token_usage_tenant_user_model_date",
         ),
+        Index("ix_chat_token_usage_tenant_source", "tenant_id", "source"),
     )
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)
+    source: Mapped[str | None] = mapped_column(String(20), nullable=True, default="console")
     period_date: Mapped[datetime] = mapped_column(Date, nullable=False)
     input_tokens: Mapped[int] = mapped_column(BigInteger, default=0)
     output_tokens: Mapped[int] = mapped_column(BigInteger, default=0)

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-13 (feat(security) Vault setup + migration scripts PR #1710)
+> Derniere MAJ: 2026-03-16 (Phase 2 Unified Chat Settings PRs #1807, #1809)
 
 ## ✅ DONE
 
@@ -27,6 +27,9 @@
 - ✅ CAB-1614: Arena 20 Dimensions — Blue Ocean (21 pts) — PRs #1270, #1276
 - ✅ CAB-1552: Lazy MCP Discovery + ADR-051 (5 pts) — PR #1209
 - ✅ Queue-Driven AI Factory (8 pts) — PR #1321
+- ✅ CAB-1852: Console chat settings UI + X-Chat-Source header (5 pts) — PR #1807
+- ✅ CAB-1853: Portal chat settings page + source header (5 pts) — PR #1809
+- ✅ CAB-1851: Tenant chat settings API (Phase 1) — PR #1806
 - ✅ CAB-1708: Portal eslint/vite upgrade (3 pts) — PR #1561
 - ✅ CAB-1707: TokenUsage i18n + persona tests (3 pts) — already on main
 - ✅ CAB-1698: Log rotation + model routing (5 pts) — PR #1559

@@ -9,14 +9,14 @@
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { FloatingChat } from './FloatingChat';
-import type { ChatMessage } from './FloatingChat';
+import { FloatingChat } from '@stoa/shared/components/FloatingChat';
+import type { ChatMessage } from '@stoa/shared/components/FloatingChat';
 import type {
   ChatToolCall,
   PendingConfirmation,
   StreamCallbacks,
   TokenBudgetStatus,
-} from '@/hooks/useChatService';
+} from '@stoa/shared/hooks/useChatService';
 
 // jsdom does not implement scrollIntoView — mock it globally
 window.HTMLElement.prototype.scrollIntoView = vi.fn();

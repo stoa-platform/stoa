@@ -18,3 +18,5 @@ export * from './TrendIndicator';
 export * from './ScoreGauge';
 export * from './ErrorBoundary';
 export * from './EnvironmentChrome';
+export * from './FloatingChat';
+export * from './chat';

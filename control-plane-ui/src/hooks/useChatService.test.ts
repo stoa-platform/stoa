@@ -1,33 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useChatService } from './useChatService';
-import { createAuthMock } from '@/test/helpers';
-
-// ── Module mocks ────────────────────────────────────────────────────────────
-
-vi.mock('@/config', () => ({
-  config: {
-    api: { baseUrl: 'https://api.test.dev' },
-  },
-}));
-
-vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: vi.fn(),
-}));
-
-vi.mock('@/services/api', () => ({
-  apiService: {
-    getAuthToken: vi.fn(),
-    createChatConversation: vi.fn(),
-  },
-}));
-
-import { useAuth } from '@/contexts/AuthContext';
-import { apiService } from '@/services/api';
-
-const mockUseAuth = vi.mocked(useAuth);
-const mockGetAuthToken = vi.mocked(apiService.getAuthToken);
-const mockCreateChatConversation = vi.mocked(apiService.createChatConversation);
+import { useChatService, type ChatServiceOptions } from '@stoa/shared/hooks/useChatService';
 
 // ── SSE stream helpers ───────────────────────────────────────────────────────
 
@@ -57,15 +30,22 @@ function okResponse(stream: ReadableStream<Uint8Array>): Response {
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+const mockCreateConversation = vi.fn().mockResolvedValue({ id: 'conv-42' });
+
+/** Default options for each test — override per-test as needed. */
+function makeOptions(overrides?: Partial<ChatServiceOptions>): ChatServiceOptions {
+  return {
+    apiBaseUrl: 'https://api.test.dev',
+    getToken: () => 'test-token',
+    getTenantId: () => 'gregarious-games',
+    createConversation: mockCreateConversation,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-
-  // Default persona: cpi-admin with tenant_id 'gregarious-games'
-  mockUseAuth.mockReturnValue(createAuthMock('cpi-admin'));
-  mockGetAuthToken.mockReturnValue('test-token');
-  mockCreateChatConversation.mockResolvedValue({ id: 'conv-42' });
-
-  // Clear localStorage between tests
+  mockCreateConversation.mockResolvedValue({ id: 'conv-42' });
   localStorage.clear();
 });
 
@@ -77,23 +57,24 @@ afterEach(() => {
 
 describe('useChatService', () => {
   describe('sendMessage — guard clauses', () => {
-    it('throws "No tenant selected" when localStorage empty and user has no tenant_id', async () => {
-      mockUseAuth.mockReturnValue({
-        ...createAuthMock('cpi-admin'),
-        user: { ...createAuthMock('cpi-admin').user, tenant_id: undefined as unknown as string },
-      });
-
-      const { result } = renderHook(() => useChatService());
+    it('throws "No tenant selected" when getTenantId throws', async () => {
+      const { result } = renderHook(() =>
+        useChatService(
+          makeOptions({
+            getTenantId: () => {
+              throw new Error('No tenant selected');
+            },
+          })
+        )
+      );
 
       await expect(act(() => result.current.sendMessage('hello'))).rejects.toThrow(
         'No tenant selected'
       );
     });
 
-    it('throws "Not authenticated" when getAuthToken returns null', async () => {
-      mockGetAuthToken.mockReturnValue(null);
-
-      const { result } = renderHook(() => useChatService());
+    it('throws "Not authenticated" when getToken returns null', async () => {
+      const { result } = renderHook(() => useChatService(makeOptions({ getToken: () => null })));
 
       await expect(act(() => result.current.sendMessage('hello'))).rejects.toThrow(
         'Not authenticated'
@@ -106,11 +87,11 @@ describe('useChatService', () => {
       const stream = createSSEStream(['data: {"delta":"hi"}\n\n']);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       await act(() => result.current.sendMessage('first'));
 
-      expect(mockCreateChatConversation).toHaveBeenCalledTimes(1);
-      expect(mockCreateChatConversation).toHaveBeenCalledWith('gregarious-games');
+      expect(mockCreateConversation).toHaveBeenCalledTimes(1);
+      expect(mockCreateConversation).toHaveBeenCalledWith('gregarious-games');
     });
 
     it('reuses the conversation ID on subsequent messages', async () => {
@@ -120,13 +101,13 @@ describe('useChatService', () => {
         Promise.resolve(okResponse(createSSEStream(['data: {"delta":"ok"}\n\n'])))
       );
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
 
       await act(() => result.current.sendMessage('first'));
       await act(() => result.current.sendMessage('second'));
 
-      // createChatConversation should only be called once across two messages
-      expect(mockCreateChatConversation).toHaveBeenCalledTimes(1);
+      // createConversation should only be called once across two messages
+      expect(mockCreateConversation).toHaveBeenCalledTimes(1);
 
       // Both fetch calls should use the same conversation ID
       expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -142,7 +123,7 @@ describe('useChatService', () => {
       const stream = createSSEStream(['data: {"delta":"ok"}\n\n']);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       await act(() => result.current.sendMessage('test message'));
 
       expect(mockFetch).toHaveBeenCalledWith(
@@ -158,15 +139,21 @@ describe('useChatService', () => {
       );
     });
 
-    it('prefers localStorage tenant over user.tenant_id', async () => {
+    it('prefers localStorage tenant when getTenantId reads from it', async () => {
       localStorage.setItem('stoa-active-tenant', 'local-tenant');
       const stream = createSSEStream(['data: {"delta":"ok"}\n\n']);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() =>
+        useChatService(
+          makeOptions({
+            getTenantId: () => localStorage.getItem('stoa-active-tenant') || 'gregarious-games',
+          })
+        )
+      );
       await act(() => result.current.sendMessage('hello'));
 
-      expect(mockCreateChatConversation).toHaveBeenCalledWith('local-tenant');
+      expect(mockCreateConversation).toHaveBeenCalledWith('local-tenant');
       const [url] = mockFetch.mock.calls[0];
       expect(url).toContain('/tenants/local-tenant/');
     });
@@ -180,7 +167,7 @@ describe('useChatService', () => {
         text: vi.fn().mockResolvedValue('rate limit exceeded'),
       } as unknown as Response);
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
 
       await expect(act(() => result.current.sendMessage('hello'))).rejects.toThrow(
         'Chat request failed (429): rate limit exceeded'
@@ -194,7 +181,7 @@ describe('useChatService', () => {
         text: vi.fn(),
       } as unknown as Response);
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
 
       await expect(act(() => result.current.sendMessage('hello'))).rejects.toThrow(
         'No response body'
@@ -211,7 +198,7 @@ describe('useChatService', () => {
       ]);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let response!: string;
       await act(async () => {
         response = await result.current.sendMessage('hi');
@@ -224,7 +211,7 @@ describe('useChatService', () => {
       const stream = createSSEStream(['event: status\ndata: {"type":"thinking"}\n\n']);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let response!: string;
       await act(async () => {
         response = await result.current.sendMessage('hi');
@@ -240,7 +227,7 @@ describe('useChatService', () => {
       ]);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let response!: string;
       await act(async () => {
         response = await result.current.sendMessage('hi');
@@ -257,7 +244,7 @@ describe('useChatService', () => {
       ]);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let response!: string;
       await act(async () => {
         response = await result.current.sendMessage('hi');
@@ -271,7 +258,7 @@ describe('useChatService', () => {
       const stream = createSSEStream(['event: ping\n\n', 'data: {"delta":"pong"}\n\n']);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let response!: string;
       await act(async () => {
         response = await result.current.sendMessage('hi');
@@ -292,7 +279,7 @@ describe('useChatService', () => {
       });
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let response!: string;
       await act(async () => {
         response = await result.current.sendMessage('hi');
@@ -311,7 +298,7 @@ describe('useChatService', () => {
       ]);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       const onConfirmationRequired = vi.fn();
       const onDelta = vi.fn();
 
@@ -336,7 +323,7 @@ describe('useChatService', () => {
       const stream = createSSEStream(['event: error\ndata: {"error":"Budget exceeded"}\n\n']);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       const onError = vi.fn();
 
       await act(async () => {
@@ -353,7 +340,7 @@ describe('useChatService', () => {
       ]);
       mockFetch.mockResolvedValue(okResponse(stream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       const onToolStart = vi.fn();
       const onToolResult = vi.fn();
 
@@ -372,7 +359,7 @@ describe('useChatService', () => {
       const initStream = createSSEStream(['data: {"delta":"init"}\n\n']);
       mockFetch.mockResolvedValueOnce(okResponse(initStream));
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       await act(() => result.current.sendMessage('hello'));
 
       // Second call: confirmTool
@@ -410,7 +397,7 @@ describe('useChatService', () => {
     });
 
     it('does nothing when no active conversation', async () => {
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       const onError = vi.fn();
 
       await act(async () => {
@@ -446,7 +433,7 @@ describe('useChatService', () => {
         json: vi.fn().mockResolvedValue(budgetData),
       } as unknown as Response);
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let budget: unknown;
       await act(async () => {
         budget = await result.current.fetchBudgetStatus();
@@ -466,7 +453,7 @@ describe('useChatService', () => {
         ok: false,
       } as unknown as Response);
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let budget: unknown;
       await act(async () => {
         budget = await result.current.fetchBudgetStatus();
@@ -485,7 +472,7 @@ describe('useChatService', () => {
         }),
       } as unknown as Response);
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       let convos: unknown;
       await act(async () => {
         convos = await result.current.loadConversations();
@@ -497,7 +484,7 @@ describe('useChatService', () => {
     });
 
     it('switchConversation updates activeConversationId', () => {
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
 
       act(() => {
         result.current.switchConversation('conv-99');
@@ -507,7 +494,7 @@ describe('useChatService', () => {
     });
 
     it('newConversation clears activeConversationId', () => {
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
 
       act(() => {
         result.current.switchConversation('conv-99');
@@ -531,7 +518,7 @@ describe('useChatService', () => {
         }),
       } as unknown as Response);
 
-      const { result } = renderHook(() => useChatService());
+      const { result } = renderHook(() => useChatService(makeOptions()));
       await act(async () => {
         await result.current.loadConversations();
       });

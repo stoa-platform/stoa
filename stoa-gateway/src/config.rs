@@ -1405,6 +1405,17 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Return the Keycloak backend URL for service-to-service calls.
+    ///
+    /// Prefers `keycloak_internal_url` (K8s service DNS) over `keycloak_url` (external)
+    /// to bypass hairpin NAT issues on OVH MKS and similar cloud providers.
+    /// Returns `None` if neither is configured.
+    pub fn keycloak_backend_url(&self) -> Option<&str> {
+        self.keycloak_internal_url
+            .as_deref()
+            .or(self.keycloak_url.as_deref())
+    }
+
     /// Load configuration from file and environment
     #[allow(clippy::result_large_err)]
     pub fn load() -> Result<Self, figment::Error> {

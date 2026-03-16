@@ -73,7 +73,7 @@ pub async fn token_proxy(
         }
     }
 
-    let keycloak_url = match config.keycloak_url.as_deref() {
+    let keycloak_url = match config.keycloak_backend_url() {
         Some(url) => url.trim_end_matches('/'),
         None => {
             warn!("Keycloak URL not configured — cannot proxy token request");
@@ -154,7 +154,7 @@ pub async fn token_proxy(
 pub async fn par_proxy(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
     let config = &state.config;
 
-    let keycloak_url = match config.keycloak_url.as_deref() {
+    let keycloak_url = match config.keycloak_backend_url() {
         Some(url) => url.trim_end_matches('/'),
         None => {
             warn!("Keycloak URL not configured — cannot proxy PAR request");
@@ -241,7 +241,7 @@ pub async fn par_proxy(State(state): State<AppState>, headers: HeaderMap, body: 
 pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<Value>) -> Response {
     let config = &state.config;
 
-    let keycloak_url = match config.keycloak_url.as_deref() {
+    let keycloak_url = match config.keycloak_backend_url() {
         Some(url) => url.trim_end_matches('/'),
         None => {
             warn!("Keycloak URL not configured — cannot proxy DCR request");
@@ -663,7 +663,7 @@ pub async fn register_get_proxy(
     };
 
     let config = &state.config;
-    let keycloak_url = match config.keycloak_url.as_deref() {
+    let keycloak_url = match config.keycloak_backend_url() {
         Some(url) => url,
         None => return keycloak_not_configured(),
     };
@@ -710,7 +710,7 @@ pub async fn register_update_proxy(
     };
 
     let config = &state.config;
-    let keycloak_url = match config.keycloak_url.as_deref() {
+    let keycloak_url = match config.keycloak_backend_url() {
         Some(url) => url,
         None => return keycloak_not_configured(),
     };
@@ -766,7 +766,7 @@ pub async fn register_delete_proxy(
     };
 
     let config = &state.config;
-    let keycloak_url = match config.keycloak_url.as_deref() {
+    let keycloak_url = match config.keycloak_backend_url() {
         Some(url) => url,
         None => return keycloak_not_configured(),
     };

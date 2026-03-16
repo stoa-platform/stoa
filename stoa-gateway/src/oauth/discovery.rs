@@ -119,7 +119,7 @@ pub async fn openid_configuration(
         .unwrap_or("http://localhost:8080");
     let gateway_url = gateway_url.trim_end_matches('/');
 
-    let keycloak_url = match config.keycloak_url.as_deref() {
+    let keycloak_backend = match config.keycloak_backend_url() {
         Some(url) => url.trim_end_matches('/'),
         None => {
             warn!("Keycloak URL not configured — cannot serve OIDC discovery");
@@ -129,7 +129,7 @@ pub async fn openid_configuration(
     let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
     let discovery_url = format!(
         "{}/realms/{}/.well-known/openid-configuration",
-        keycloak_url, realm
+        keycloak_backend, realm
     );
 
     debug!(url = %discovery_url, "Proxying OIDC discovery from Keycloak");

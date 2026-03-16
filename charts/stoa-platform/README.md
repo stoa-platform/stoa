@@ -27,6 +27,20 @@ kubectl apply -f charts/stoa-platform/crds/
 
 ## Key Values
 
+### Global
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `stoa.domain` | `gostoa.dev` | Base domain for all service URLs |
+| `stoa.adminEmail` | `""` | Admin email for initial setup |
+| `stoa.anthropicApiKey` | `""` | Anthropic key (empty = chat disabled) |
+| `stoa.bootstrap.enabled` | `false` | Run post-install bootstrap Job |
+| `stoa.bootstrap.keycloak.adminUser` | `admin` | Keycloak admin username |
+| `stoa.bootstrap.keycloak.adminPassword` | `""` | Keycloak admin password |
+| `stoa.bootstrap.defaultTenant.name` | `default` | Default tenant slug |
+
+### Gateway
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | `stoaGateway.enabled` | `true` | Deploy the Rust gateway |
@@ -69,6 +83,10 @@ kubectl apply -f charts/stoa-platform/crds/
 | `stoa-gateway-policy-configmap.yaml` | OPA policy ConfigMap |
 | `stoa-sidecar-deployment.yaml` | Sidecar mode Deployment |
 | `gateway-openapi-sync-job.yaml` | OpenAPI sync CronJob |
+| `secret-internal.yaml` | Auto-generated shared keys |
+| `bootstrap-job.yaml` | Post-install bootstrap Job |
+| `control-plane-api-chat-config.yaml` | Chat kill-switch ConfigMap |
+| `tests/test-connection.yaml` | Helm test Pod |
 
 ## CRDs
 

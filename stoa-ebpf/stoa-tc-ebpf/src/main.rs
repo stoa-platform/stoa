@@ -21,7 +21,7 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::info;
 use core::mem;
-use network_types::{eth::EthHdr, ip::Ipv4Hdr, tcp::TcpHdr};
+use network_types::{eth::{EthHdr, EtherType}, ip::{Ipv4Hdr, IpProto}, tcp::TcpHdr};
 use stoa_xdp_common::{ApiKey, ApiPolicy, ApiStats, AuditEvent, MAX_API_ENTRIES, WINDOW_NS};
 
 // --- BPF Maps ---
@@ -41,8 +41,6 @@ static AUDIT_EVENTS: PerfEventArray<AuditEvent> = PerfEventArray::new(0);
 
 // --- Constants ---
 
-const ETH_P_IP: u16 = 0x0800;
-const IPPROTO_TCP: u8 = 6;
 const MAX_HTTP_SCAN: usize = 256;
 
 // --- Entry Point ---
@@ -58,17 +56,17 @@ pub fn stoa_tc_classify(ctx: TcContext) -> i32 {
 fn try_classify(ctx: TcContext) -> Result<i32, ()> {
     // Parse Ethernet
     let ethhdr: EthHdr = ctx.load(0).map_err(|_| ())?;
-    if u16::from_be(ethhdr.h_proto) != ETH_P_IP {
+    if ethhdr.ether_type != EtherType::Ipv4 {
         return Ok(TC_ACT_PIPE);
     }
 
     // Parse IPv4
     let ipv4hdr: Ipv4Hdr = ctx.load(EthHdr::LEN).map_err(|_| ())?;
-    if ipv4hdr.proto != IPPROTO_TCP {
+    if ipv4hdr.proto != IpProto::Tcp {
         return Ok(TC_ACT_PIPE);
     }
     let src_ip = u32::from_be(ipv4hdr.src_addr);
-    let ip_hdr_len = ((ipv4hdr.version_ihl & 0x0F) as usize) * 4;
+    let ip_hdr_len = Ipv4Hdr::LEN; // Standard 20 bytes (options rare in practice)
 
     // Parse TCP
     let tcp_offset = EthHdr::LEN + ip_hdr_len;

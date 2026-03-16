@@ -1150,6 +1150,37 @@ pub fn normalize_path(path: &str) -> String {
     }
 }
 
+// === Route Reload Metrics (CAB-1828) ===
+
+/// Counter of route table reload attempts by trigger and result.
+pub static ROUTE_RELOAD_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_route_reload_total",
+        "Total route table reload attempts",
+        &["trigger", "result"]
+    )
+    .expect("Failed to create stoa_route_reload_total metric")
+});
+
+/// Gauge of routes loaded after the last successful reload.
+pub static ROUTE_RELOAD_ROUTES_LOADED: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "stoa_route_reload_routes_loaded",
+        "Number of routes loaded after last successful reload"
+    )
+    .expect("Failed to create stoa_route_reload_routes_loaded metric")
+});
+
+/// Record a route reload event.
+pub fn record_route_reload(trigger: &str, result: &str, routes_count: usize) {
+    ROUTE_RELOAD_TOTAL
+        .with_label_values(&[trigger, result])
+        .inc();
+    if result == "success" {
+        ROUTE_RELOAD_ROUTES_LOADED.set(routes_count as f64);
+    }
+}
+
 /// Force-initialize all Lazy metrics so they appear in /metrics output
 /// even before any traffic arrives. Call this once at startup.
 pub fn init_all_metrics() {
@@ -1183,6 +1214,7 @@ pub fn init_all_metrics() {
     Lazy::force(&MTLS_BINDING_CHECKS_TOTAL);
     Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
     Lazy::force(&FEDERATION_REQUESTS_TOTAL);
+    Lazy::force(&crate::memory::MEMORY_USAGE_BYTES);
     Lazy::force(&DPOP_VALIDATIONS_TOTAL);
     Lazy::force(&SENDER_CONSTRAINT_CHECKS_TOTAL);
     Lazy::force(&SUPERVISION_DECISIONS_TOTAL);
@@ -1192,6 +1224,8 @@ pub fn init_all_metrics() {
     Lazy::force(&HEGEMON_DISPATCH_COST);
     Lazy::force(&HEGEMON_BUDGET_DAILY_USD);
     Lazy::force(&OTEL_SPANS_EXPORTED_TOTAL);
+    Lazy::force(&ROUTE_RELOAD_TOTAL);
+    Lazy::force(&ROUTE_RELOAD_ROUTES_LOADED);
 }
 
 /// Get the total number of MCP tool calls across all labels.

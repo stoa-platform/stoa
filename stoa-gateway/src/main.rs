@@ -38,19 +38,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize application state
     let state = AppState::new(config.clone());
 
-    // SIGHUP handler for policy hot-reload (CAB-1109)
+    // SIGHUP handler for policy + route hot-reload (CAB-1109, CAB-1828)
     #[cfg(unix)]
     {
         let policy_engine = state.uac_enforcer.policy_engine().clone();
+        let sighup_state = state.clone();
         tokio::spawn(async move {
             let mut sighup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
                 .expect("Failed to install SIGHUP handler");
             loop {
                 sighup.recv().await;
-                info!("Received SIGHUP - reloading policies");
+                info!("Received SIGHUP - reloading policies and routes");
                 match policy_engine.reload() {
                     Ok(()) => info!("Policies reloaded successfully"),
                     Err(e) => error!(error = %e, "Policy reload failed"),
+                }
+                if sighup_state.config.route_reload_enabled {
+                    match stoa_gateway::handlers::admin::reload_routes_from_cp(&sighup_state).await
+                    {
+                        Ok(count) => {
+                            stoa_gateway::metrics::record_route_reload("sighup", "success", count);
+                            info!(routes = count, "Route table reloaded via SIGHUP");
+                        }
+                        Err(e) => {
+                            stoa_gateway::metrics::record_route_reload("sighup", "error", 0);
+                            error!(error = %e, "Route reload via SIGHUP failed");
+                        }
+                    }
                 }
             }
         });

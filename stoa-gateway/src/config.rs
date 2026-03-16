@@ -306,6 +306,17 @@ pub struct Config {
     #[serde(default = "default_access_log_enabled")]
     pub access_log_enabled: bool,
 
+    // === Route Hot-Reload (CAB-1828) ===
+    /// Enable periodic route table reload from Control Plane
+    /// Env: STOA_ROUTE_RELOAD_ENABLED
+    #[serde(default)]
+    pub route_reload_enabled: bool,
+
+    /// Route reload interval in seconds (default: 30)
+    /// Env: STOA_ROUTE_RELOAD_INTERVAL_SECS
+    #[serde(default = "default_route_reload_interval")]
+    pub route_reload_interval_secs: u64,
+
     // === Guardrails (CAB-707) ===
     /// Enable PII detection in tool call arguments
     /// Env: STOA_GUARDRAILS_PII_ENABLED
@@ -676,6 +687,12 @@ pub struct Config {
     /// Env: STOA_PLUGIN_SDK_ENABLED
     #[serde(default)]
     pub plugin_sdk_enabled: bool,
+
+    // === Memory Budget (CAB-1829) ===
+    /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
+    /// Env: STOA_MEMORY_LIMIT_MB
+    #[serde(default = "default_memory_limit_mb")]
+    pub memory_limit_mb: u64,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1079,6 +1096,10 @@ fn default_quota_daily_limit() -> u32 {
     10_000
 }
 
+fn default_route_reload_interval() -> u64 {
+    30
+}
+
 fn default_access_log_enabled() -> bool {
     true // Enabled by default — structured access logs for observability
 }
@@ -1215,6 +1236,10 @@ fn default_a2a_max_tasks() -> usize {
     10000
 }
 
+fn default_memory_limit_mb() -> u64 {
+    512
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1275,6 +1300,8 @@ impl Default for Config {
             quota_default_rate_per_minute: default_quota_rate_per_minute(),
             quota_default_daily_limit: default_quota_daily_limit(),
             access_log_enabled: default_access_log_enabled(),
+            route_reload_enabled: false,
+            route_reload_interval_secs: default_route_reload_interval(),
             guardrails_pii_enabled: false,
             guardrails_pii_redact: default_guardrails_pii_redact(),
             guardrails_injection_enabled: false,
@@ -1346,6 +1373,7 @@ impl Default for Config {
             graphql_bridge_enabled: false,
             kafka_bridge_enabled: false,
             plugin_sdk_enabled: false,
+            memory_limit_mb: default_memory_limit_mb(),
         }
     }
 }

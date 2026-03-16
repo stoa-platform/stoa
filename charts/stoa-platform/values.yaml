@@ -1,6 +1,17 @@
 # STOA Platform Helm Values
 # =========================
 
+# ==============================================================================
+# Global STOA settings (CAB-1863: Zero-Config Bootstrap)
+# ==============================================================================
+stoa:
+  # Base domain — used to derive service URLs
+  domain: "gostoa.dev"
+  # Admin email for initial setup (Keycloak realm admin, cert contacts)
+  adminEmail: ""
+  # Anthropic API key — leave empty to auto-disable chat (CHAT_KILL_SWITCH=true)
+  anthropicApiKey: ""
+
 # Gateway Configuration (CAB-958: Unified Gateway Architecture)
 # See ADR-024: https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes
 # Currently runs Python mcp-gateway. Will migrate to Rust stoa-gateway Q4 2026.

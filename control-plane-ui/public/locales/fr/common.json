@@ -53,7 +53,8 @@
     "contracts": "Contrats",
     "promotions": "Promotions",
     "internalApis": "APIs internes",
-    "aiFactory": "AI Factory"
+    "aiFactory": "AI Factory",
+    "callFlow": "Flux d'appels"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",

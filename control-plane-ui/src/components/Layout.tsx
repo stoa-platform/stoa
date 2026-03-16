@@ -44,6 +44,7 @@ import {
   Sparkles,
   Puzzle,
   Bot,
+  Network,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -180,6 +181,7 @@ const navigationSections: NavSection[] = [
     title: 'nav.insights',
     items: [
       { name: 'nav.observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
+      { name: 'nav.callFlow', href: '/call-flow', icon: Network },
       { name: 'nav.logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
       {
         name: 'nav.analytics',

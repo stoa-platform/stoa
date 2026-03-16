@@ -95,11 +95,12 @@ describe('SubNav', () => {
       ]);
     });
 
-    it('observabilityTabs has 4 tabs', () => {
-      expect(observabilityTabs).toHaveLength(4);
+    it('observabilityTabs has 5 tabs', () => {
+      expect(observabilityTabs).toHaveLength(5);
       expect(observabilityTabs.map((t) => t.href)).toEqual([
         '/observability',
         '/monitoring',
+        '/call-flow',
         '/api-traffic',
         '/logs',
       ]);

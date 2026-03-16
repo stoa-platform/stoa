@@ -122,12 +122,15 @@ tempo:
             - tenant
             - http.method
             - http.status_code
+            - http.route
+            - stoa.deployment_mode
         spanMetrics:
           enabled: true
           dimensions:
             - tenant
             - http.method
             - http.route
+            - stoa.deployment_mode
 
     # Global overrides
     overrides:

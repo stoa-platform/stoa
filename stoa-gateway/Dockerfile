@@ -33,8 +33,8 @@ FROM rust:1.93-bookworm AS builder
 #   empty   = community (default — lean image, no optional deps)
 #   kafka   = Kafka metering (requires cmake for rdkafka)
 #   k8s     = K8s CRD watcher (kube, k8s-openapi)
-#   otel    = OpenTelemetry tracing (placeholder)
-# Example: docker build --build-arg FEATURES="kafka,k8s" .
+#   pingora = Pingora connection pool (pingora-core, needs cmake)
+# Example: docker build --build-arg FEATURES="kafka,pingora" .
 ARG FEATURES=""
 
 # Install cargo-chef and build deps
@@ -44,8 +44,10 @@ RUN cargo install cargo-chef --locked && \
       libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Conditionally install cmake + libs when kafka feature is enabled (rdkafka)
-RUN if echo "${FEATURES}" | grep -q "kafka"; then \
+# Conditionally install cmake + libs for features that need it:
+# - kafka: rdkafka needs cmake + libsasl2
+# - pingora: BoringSSL needs cmake + Go (for build)
+RUN if echo "${FEATURES}" | grep -qE "kafka|pingora"; then \
       apt-get update && apt-get install -y cmake libsasl2-dev libcurl4-openssl-dev \
       && rm -rf /var/lib/apt/lists/*; \
     fi

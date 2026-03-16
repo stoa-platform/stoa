@@ -6,7 +6,7 @@
 pub mod deploy;
 mod spans;
 
-pub use spans::{ToolSpan, ToolSpanGuard};
+pub use spans::{PolicySpan, ToolSpan, ToolSpanGuard};
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;

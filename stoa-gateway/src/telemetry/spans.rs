@@ -2,6 +2,7 @@
 //!
 //! Provides instrumentation for tool execution with OTel integration.
 //! Enriched span attributes: upstream RTT, TLS version, pool reuse, circuit breaker state.
+//! CAB-1842: deployment mode + policy applied attributes for service graph visualization.
 
 use std::time::Instant;
 use tracing::{debug, span, Level, Span};
@@ -14,6 +15,7 @@ pub struct ToolSpan {
     start: Instant,
     _tracing_span: Span,
     finished: bool,
+    policies_applied: Vec<String>,
 }
 
 impl ToolSpan {
@@ -34,6 +36,9 @@ impl ToolSpan {
             upstream.tls_version = tracing::field::Empty,
             upstream.pool_reuse = tracing::field::Empty,
             upstream.cb_state = tracing::field::Empty,
+            // CAB-1842: service graph attributes
+            "stoa.deployment_mode" = tracing::field::Empty,
+            "stoa.policy.applied" = tracing::field::Empty,
         );
 
         debug!(
@@ -49,6 +54,7 @@ impl ToolSpan {
             start: Instant::now(),
             _tracing_span: tracing_span,
             finished: false,
+            policies_applied: Vec::new(),
         }
     }
 
@@ -99,6 +105,32 @@ impl ToolSpan {
         self
     }
 
+    /// Attach gateway deployment mode for service graph differentiation (CAB-1842).
+    ///
+    /// Values: "edge-mcp", "sidecar", "proxy", "shadow", "connect".
+    /// Tempo metrics-generator uses this dimension to color nodes in the service graph.
+    pub fn with_deployment_mode(self, mode: &str) -> Self {
+        self._tracing_span.record("stoa.deployment_mode", mode);
+        self
+    }
+
+    /// Record a policy that was applied during this request (CAB-1842).
+    ///
+    /// Call once per policy middleware (e.g., "auth-oidc", "rate-limit", "pii-guard").
+    /// The accumulated list is flushed to the span attribute on finish.
+    pub fn record_policy(&mut self, policy_name: &str) {
+        self.policies_applied.push(policy_name.to_string());
+    }
+
+    /// Flush accumulated policies to the span attribute.
+    fn flush_policies(&self) {
+        if !self.policies_applied.is_empty() {
+            let policies = self.policies_applied.join(",");
+            self._tracing_span
+                .record("stoa.policy.applied", policies.as_str());
+        }
+    }
+
     /// Get elapsed duration in seconds
     pub fn elapsed_secs(&self) -> f64 {
         self.start.elapsed().as_secs_f64()
@@ -107,6 +139,7 @@ impl ToolSpan {
     /// Mark span as successful
     pub fn finish_success(mut self) {
         self.finished = true;
+        self.flush_policies();
         let duration = self.elapsed_secs();
         debug!(
             tool = %self.tool_name,
@@ -129,6 +162,7 @@ impl ToolSpan {
     /// Mark span as failed with error
     pub fn finish_error(mut self, error: &str) {
         self.finished = true;
+        self.flush_policies();
         let duration = self.elapsed_secs();
         debug!(
             tool = %self.tool_name,
@@ -152,6 +186,7 @@ impl ToolSpan {
     /// Mark span as cache hit (no execution)
     pub fn finish_cache_hit(mut self) {
         self.finished = true;
+        self.flush_policies();
         let duration = self.elapsed_secs();
         debug!(
             tool = %self.tool_name,
@@ -174,6 +209,7 @@ impl ToolSpan {
     /// Mark span as circuit breaker open (fast fail)
     pub fn finish_circuit_open(mut self) {
         self.finished = true;
+        self.flush_policies();
         let duration = self.elapsed_secs();
         debug!(
             tool = %self.tool_name,
@@ -255,6 +291,55 @@ impl Drop for ToolSpanGuard {
                 span.finish_success();
             }
         }
+    }
+}
+
+/// A child span for individual policy/middleware execution (CAB-1842).
+///
+/// Created when `STOA_DETAILED_TRACING=true`. Each policy middleware
+/// (auth, rate-limit, guardrails, quota) gets its own span, enabling
+/// a waterfall breakdown in the trace view.
+pub struct PolicySpan {
+    _tracing_span: Span,
+    start: Instant,
+}
+
+impl PolicySpan {
+    /// Create a child span for a policy middleware step.
+    pub fn new(policy_name: &str, tenant_id: &str) -> Self {
+        let tracing_span = span!(
+            Level::DEBUG,
+            "policy",
+            policy = %policy_name,
+            tenant = %tenant_id,
+            otel.kind = "internal",
+            "stoa.policy.name" = %policy_name,
+            "stoa.policy.verdict" = tracing::field::Empty,
+        );
+
+        Self {
+            _tracing_span: tracing_span,
+            start: Instant::now(),
+        }
+    }
+
+    /// Mark policy as allowed
+    pub fn finish_allow(self) {
+        self._tracing_span.record("stoa.policy.verdict", "allow");
+        debug!(
+            duration_ms = %(self.start.elapsed().as_secs_f64() * 1000.0),
+            "Policy passed"
+        );
+    }
+
+    /// Mark policy as denied
+    pub fn finish_deny(self, reason: &str) {
+        self._tracing_span.record("stoa.policy.verdict", "deny");
+        debug!(
+            duration_ms = %(self.start.elapsed().as_secs_f64() * 1000.0),
+            reason = %reason,
+            "Policy denied"
+        );
     }
 }
 
@@ -387,5 +472,73 @@ mod tests {
             .with_uac(Some("c-1"), Some("jwt"), Some("POST"), Some("/api"))
             .with_upstream(Some(120.3), Some("TLSv1.2"), Some(false), Some("open"));
         span.finish_success();
+    }
+
+    // CAB-1842: deployment mode + policy applied tests
+
+    #[test]
+    fn test_tool_span_with_deployment_mode() {
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_deployment_mode("edge-mcp");
+        assert_eq!(span.tool_name, "test_tool");
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_with_connect_mode() {
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_deployment_mode("connect");
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_with_sidecar_mode() {
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_deployment_mode("sidecar");
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_record_policies() {
+        let mut span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_deployment_mode("edge-mcp");
+        span.record_policy("auth-oidc");
+        span.record_policy("rate-limit");
+        span.record_policy("pii-guard");
+        assert_eq!(span.policies_applied.len(), 3);
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_no_policies() {
+        let span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_deployment_mode("edge-mcp");
+        assert!(span.policies_applied.is_empty());
+        span.finish_success();
+    }
+
+    #[test]
+    fn test_tool_span_full_enrichment() {
+        let mut span = ToolSpan::new("test_tool", "test-tenant", "test-consumer")
+            .with_deployment_mode("edge-mcp")
+            .with_uac(Some("c-1"), Some("jwt"), Some("POST"), Some("/api"))
+            .with_upstream(Some(42.0), Some("TLSv1.3"), Some(true), Some("closed"));
+        span.record_policy("auth-oidc");
+        span.record_policy("quota");
+        span.finish_success();
+    }
+
+    // CAB-1842: PolicySpan tests
+
+    #[test]
+    fn test_policy_span_allow() {
+        let span = PolicySpan::new("auth-oidc", "test-tenant");
+        span.finish_allow();
+    }
+
+    #[test]
+    fn test_policy_span_deny() {
+        let span = PolicySpan::new("rate-limit", "test-tenant");
+        span.finish_deny("quota exceeded");
     }
 }

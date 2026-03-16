@@ -152,6 +152,12 @@ pub struct Config {
     #[serde(default = "default_otel_sample_rate")]
     pub otel_sample_rate: f64,
 
+    /// Enable detailed policy tracing (CAB-1842: opt-in, one span per middleware).
+    /// Produces child spans for auth, rate-limit, guardrails, quota.
+    /// Env: STOA_DETAILED_TRACING (default: false)
+    #[serde(default)]
+    pub detailed_tracing: bool,
+
     // === Gateway Mode (Phase 8) ===
     /// Gateway deployment mode: edge-mcp, sidecar, proxy, shadow
     /// Env: STOA_GATEWAY_MODE (default: edge-mcp)
@@ -1288,6 +1294,7 @@ impl Default for Config {
             otel_enabled: default_otel_enabled(),
             otel_endpoint: None,
             otel_sample_rate: default_otel_sample_rate(),
+            detailed_tracing: false,
             gateway_mode: GatewayMode::default(),
             zombie_detection_enabled: default_zombie_detection(),
             agent_session_ttl_secs: default_agent_session_ttl(),

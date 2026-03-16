@@ -70,6 +70,9 @@ const APIComparePage = lazy(() =>
   import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
 );
 const SignupPage = lazy(() => import('./pages/signup').then((m) => ({ default: m.SignupPage })));
+const ChatSettingsPage = lazy(() =>
+  import('./pages/ChatSettings').then((m) => ({ default: m.ChatSettings }))
+);
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -369,6 +372,7 @@ function ConnectedFloatingChat() {
       return tenantId;
     },
     createConversation: (tenantId) => createChatConversation(tenantId),
+    source: 'portal',
   });
 
   return (
@@ -484,6 +488,7 @@ function AppContent() {
             <Route path="/" element={<HomePage />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/chat-settings" element={<ChatSettingsPage />} />
             <Route path="/onboarding" element={<OnboardingWizardPage />} />
 
             {/* Workspace - tabbed view for apps and subscriptions */}

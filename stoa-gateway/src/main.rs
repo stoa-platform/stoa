@@ -210,8 +210,8 @@ fn create_tcp_listener(addr: SocketAddr) -> Result<TcpListener, Box<dyn std::err
 
 /// Initialize tracing subscriber with optional OpenTelemetry export.
 ///
-/// Phase 1 (CAB-1455): All JSON log lines include `service=stoa-gateway`
-/// for cross-component correlation in Loki/Grafana.
+/// CAB-1831: OTel is always compiled in. When `STOA_OTEL_ENDPOINT` is set,
+/// spans are exported via OTLP. Otherwise, tracing works locally (no-op export).
 fn init_tracing(config: &Config) {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,stoa_gateway=debug"));
@@ -222,7 +222,6 @@ fn init_tracing(config: &Config) {
         .with_target(true)
         .with_current_span(true);
 
-    #[cfg(feature = "otel")]
     if config.otel_enabled {
         use stoa_gateway::telemetry::{init_telemetry_tracer, TelemetryConfig};
 
@@ -242,11 +241,7 @@ fn init_tracing(config: &Config) {
         }
     }
 
-    // Suppress unused warning when otel feature is not compiled
-    #[cfg(not(feature = "otel"))]
-    let _ = config;
-
-    // OTel disabled: feature not compiled, runtime toggle off, or init failed
+    // OTel disabled: runtime toggle off, no endpoint, or init failed
     stoa_gateway::telemetry::init_telemetry_noop();
     tracing_subscriber::registry()
         .with(filter)

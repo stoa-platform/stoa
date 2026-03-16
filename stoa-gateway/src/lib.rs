@@ -766,6 +766,8 @@ async fn memory_backpressure_middleware(
 
 async fn prometheus_metrics() -> String {
     use prometheus::Encoder;
+    // Sync OTel spans counter before scrape (CAB-1831)
+    metrics::sync_otel_spans_gauge();
     let encoder = prometheus::TextEncoder::new();
     let metric_families = prometheus::gather();
     let mut buffer = Vec::new();

@@ -2772,7 +2772,7 @@ mod tests {
             .await
             .unwrap();
         let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(data["enabled"], false);
+        assert_eq!(data["enabled"], true); // CAB-1831: otel_enabled defaults to true
         assert!(data["sample_rate"].is_number());
     }
 

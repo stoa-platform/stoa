@@ -37,7 +37,7 @@ config:
           challenge: false
           config:
             subject_key: "preferred_username"
-            roles_key: "roles"
+            roles_key: "realm_access.roles"
             openid_connect_url: "http://keycloak:8080/realms/stoa/.well-known/openid-configuration"
         authentication_backend:
           type: "noop"

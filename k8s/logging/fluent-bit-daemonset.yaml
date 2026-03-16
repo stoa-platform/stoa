@@ -20,6 +20,12 @@ spec:
         app.kubernetes.io/name: fluent-bit
     spec:
       serviceAccountName: fluent-bit
+      initContainers:
+        - name: increase-inotify
+          image: busybox:1.37
+          command: ["sh", "-c", "sysctl -w fs.inotify.max_user_watches=524288 && sysctl -w fs.inotify.max_user_instances=1024"]
+          securityContext:
+            privileged: true
       containers:
         - name: fluent-bit
           image: fluent/fluent-bit:3.2

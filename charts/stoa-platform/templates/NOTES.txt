@@ -7,6 +7,28 @@
 Your STOA Platform release "{{ .Release.Name }}" has been deployed
 to namespace "{{ .Release.Namespace }}".
 
+Domain: {{ .Values.stoa.domain | default "<not set>" }}
+{{- if .Values.stoa.bootstrap.enabled }}
+
+--------------------------------------------------------------
+  BOOTSTRAP (first install)
+--------------------------------------------------------------
+
+The bootstrap job will automatically provision:
+  - Keycloak realm "{{ .Values.stoaGateway.keycloakRealm | default "stoa" }}"
+  - OIDC clients: control-plane-ui, stoa-portal, stoa-mcp-gateway
+  - Realm roles: cpi-admin, tenant-admin, devops, viewer
+  - Client scopes: stoa:read, stoa:write, stoa:admin
+  {{- if .Values.stoa.adminEmail }}
+  - Admin user ({{ .Values.stoa.adminEmail }}) with cpi-admin role
+  {{- end }}
+  - Default tenant "{{ .Values.stoa.bootstrap.defaultTenant.name }}"
+
+Check bootstrap status:
+  kubectl logs job/stoa-bootstrap -n {{ .Release.Namespace }}
+
+{{- end }}
+
 --------------------------------------------------------------
   POST-UPGRADE VERIFICATION
 --------------------------------------------------------------
@@ -14,25 +36,25 @@ to namespace "{{ .Release.Namespace }}".
 Run the automated verification script:
 
   ./scripts/release/verify-upgrade.sh \
-    --base-domain {{ .Values.baseDomain | default "<YOUR_DOMAIN>" }} \
+    --base-domain {{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }} \
     --namespace {{ .Release.Namespace }}
 
 Or verify manually:
 
   1. API Health:
-     curl -sf https://api.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}/v1/health
+     curl -sf https://api.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}/v1/health
 
   2. Gateway Health:
-     curl -sf https://mcp.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}/health
+     curl -sf https://mcp.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}/health
 
   3. Auth (Keycloak):
-     curl -sf https://auth.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}/realms/stoa/.well-known/openid-configuration
+     curl -sf https://auth.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}/realms/stoa/.well-known/openid-configuration
 
   4. Console UI:
-     curl -sf -o /dev/null -w '%{http_code}' https://console.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}
+     curl -sf -o /dev/null -w '%{http_code}' https://console.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}
 
   5. Portal:
-     curl -sf -o /dev/null -w '%{http_code}' https://portal.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}
+     curl -sf -o /dev/null -w '%{http_code}' https://portal.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}
 
   6. Pod Status:
      kubectl get pods -n {{ .Release.Namespace }}
@@ -40,8 +62,16 @@ Or verify manually:
 {{- if .Values.stoaGateway.enabled }}
 
   7. MCP Discovery:
-     curl -sf https://mcp.{{ .Values.baseDomain | default "<YOUR_DOMAIN>" }}/mcp/capabilities
+     curl -sf https://mcp.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}/mcp/capabilities
 {{- end }}
+
+--------------------------------------------------------------
+  HELM TEST
+--------------------------------------------------------------
+
+Run connection tests to verify all services are reachable:
+
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
 
 --------------------------------------------------------------
   BREAKING CHANGES

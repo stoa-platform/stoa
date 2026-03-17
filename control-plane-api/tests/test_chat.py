@@ -794,7 +794,7 @@ class TestChatToolDefinitions:
         result = await execute_tool("platform_info", {}, session)
         data = json.loads(result)
         assert data["name"] == "STOA Platform"
-        assert "features" in data
+        assert "key_features" in data
         assert data["status"] == "operational"
 
 

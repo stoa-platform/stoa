@@ -34,6 +34,10 @@
     "stoa-gateway": {
       "release-type": "rust",
       "component": "stoa-gateway"
+    },
+    "stoa-go": {
+      "release-type": "go",
+      "component": "stoa-go"
     }
   }
 }

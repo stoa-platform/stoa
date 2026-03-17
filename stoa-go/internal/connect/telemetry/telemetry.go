@@ -10,10 +10,13 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -28,7 +31,7 @@ type Config struct {
 	Version      string
 	InstanceName string
 	Environment  string
-	Endpoint     string  // OTLP gRPC endpoint (e.g., "localhost:4317")
+	Endpoint     string  // OTLP endpoint: gRPC ("localhost:4317") or HTTP ("https://otlp.example.com")
 	SampleRate   float64 // 0.0 to 1.0, default 1.0
 }
 
@@ -78,11 +81,8 @@ func Init(ctx context.Context, cfg Config) (trace.Tracer, Shutdown, error) {
 		semconv.ServiceInstanceID(cfg.InstanceName),
 	)
 
-	// OTLP gRPC exporter
-	exporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(cfg.Endpoint),
-		otlptracegrpc.WithInsecure(), // VPS/K8s internal network
-	)
+	// Create exporter: HTTP if endpoint starts with http(s)://, gRPC otherwise
+	exporter, err := newExporter(ctx, cfg.Endpoint)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create OTLP exporter: %w", err)
 	}
@@ -114,4 +114,28 @@ func Init(ctx context.Context, cfg Config) (trace.Tracer, Shutdown, error) {
 	}
 
 	return tracer, shutdown, nil
+}
+
+// isHTTPEndpoint returns true if the endpoint looks like an HTTP(S) URL.
+func isHTTPEndpoint(endpoint string) bool {
+	return strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://")
+}
+
+// newExporter creates the appropriate OTLP exporter based on the endpoint format.
+// HTTP endpoints (http:// or https://) use OTLP/HTTP — needed for VPS agents
+// going through nginx ingress. Plain host:port uses OTLP/gRPC — used inside K8s.
+// Basic auth for HTTP is handled via OTEL_EXPORTER_OTLP_HEADERS env var
+// (e.g., "Authorization=Basic dXNlcjpwYXNz").
+func newExporter(ctx context.Context, endpoint string) (*otlptrace.Exporter, error) {
+	if isHTTPEndpoint(endpoint) {
+		opts := []otlptracehttp.Option{
+			otlptracehttp.WithEndpointURL(endpoint),
+		}
+		return otlptracehttp.New(ctx, opts...)
+	}
+	// Default: gRPC (K8s internal, insecure)
+	return otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint(endpoint),
+		otlptracegrpc.WithInsecure(),
+	)
 }

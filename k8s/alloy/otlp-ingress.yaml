@@ -1,0 +1,39 @@
+# Exposes the Alloy OTLP HTTP receiver externally for VPS agents
+# (stoa-connect on Contabo workers). Uses basic auth since OVH LB
+# strips client IPs (same pattern as pushgateway-ingress.yaml).
+#
+# VPS agents send traces via OTLP HTTP (port 4318) — HTTP/1.1 works
+# natively through nginx ingress (gRPC would require extra config).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alloy-otlp
+  namespace: stoa-monitoring
+  labels:
+    app: alloy-otlp
+    app.kubernetes.io/component: otlp-receiver
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: alloy-otlp-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "OTLP Collector"
+    # OTLP HTTP uses protobuf by default — allow large payloads
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - otlp.gostoa.dev
+      secretName: otlp-tls
+  rules:
+    - host: otlp.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-alloy-otlp
+                port:
+                  number: 4318

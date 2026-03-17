@@ -10,6 +10,9 @@ EnvironmentFile=/opt/secrets/stoa-connect.env
 Environment=STOA_INSTANCE_NAME=%H
 Environment=STOA_ENVIRONMENT=production
 Environment=STOA_HEARTBEAT_INTERVAL=30s
+# OpenTelemetry — set endpoint to enable tracing (no-op if unset)
+Environment=OTEL_EXPORTER_OTLP_ENDPOINT=
+Environment=OTEL_SAMPLE_RATE=1.0
 ExecStart=/usr/local/bin/stoa-connect
 Restart=on-failure
 RestartSec=10

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, RefreshCw, Zap, AlertTriangle, Network, Gauge, Timer } from 'lucide-react';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { StatCard } from '@stoa/shared/components/StatCard';
@@ -152,6 +153,7 @@ function generateDemoTraces(count: number): TraceEntry[] {
 // ─── Dashboard Component ───
 
 export function CallFlowDashboard() {
+  const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
   const [autoRefresh, setAutoRefresh] = useState(DEFAULT_REFRESH);
   const [traces, setTraces] = useState<TraceEntry[]>([]);
@@ -615,7 +617,10 @@ export function CallFlowDashboard() {
                 {traces.length} recent requests
               </span>
             </div>
-            <LiveTraces traces={traces} />
+            <LiveTraces
+              traces={traces}
+              onSelectTrace={(id) => navigate(`/call-flow/trace/${id}`)}
+            />
           </div>
 
           {/* ─── Per-Mode Sparklines (preserved from v1) ─── */}

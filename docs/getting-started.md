@@ -4,7 +4,7 @@ This guide will help you get STOA Platform running quickly.
 
 ## Prerequisites
 
-- **Docker** and **Docker Compose** (for local development)
+- **Docker 24+** and **Docker Compose v2+** (for local development)
 - **Node.js 18+** (for UI development)
 - **Python 3.11+** (for API development)
 - **kubectl** (for Kubernetes deployment)
@@ -90,3 +90,29 @@ For local development and testing:
 - Check the [documentation index](./README.md)
 - Review [runbooks](./runbooks/) for operational issues
 - Open an issue on [GitHub](https://github.com/PotoMitan/stoa/issues)
+
+## Expected Outputs
+
+### Control-Plane API
+On successful startup you should see:
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Application startup complete.
+```
+
+### Console UI
+```
+Compiled successfully!
+You can now view the app in the browser at http://localhost:3000
+```
+
+### Developer Portal
+```
+  VITE v5.x.x  ready in NNN ms
+  ➜  Local:   http://localhost:5173/
+```
+
+### STOA Gateway
+```
+Gateway listening on 0.0.0.0:9000
+```

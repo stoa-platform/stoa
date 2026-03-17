@@ -29,49 +29,49 @@ export function CallFlowDashboard() {
   const rangeCfg = RANGE_CONFIG[timeRange];
 
   const totalRequests = usePrometheusQuery(
-    `sum(increase(traces_service_graph_request_total{client=~"stoa-.*"}[${timeRange}]))`,
+    `sum(increase(traces_service_graph_request_total{server="stoa-gateway"}[${timeRange}]))`,
     AUTO_REFRESH_INTERVAL
   );
   const totalErrors = usePrometheusQuery(
-    `sum(increase(traces_service_graph_request_failed_total{client=~"stoa-.*"}[${timeRange}]))`,
+    `sum(increase(traces_service_graph_request_failed_total{server="stoa-gateway"}[${timeRange}]))`,
     AUTO_REFRESH_INTERVAL
   );
   const avgLatency = usePrometheusQuery(
-    `sum(rate(traces_service_graph_request_server_seconds_sum{client=~"stoa-.*"}[5m])) / sum(rate(traces_service_graph_request_server_seconds_count{client=~"stoa-.*"}[5m]))`,
+    `sum(rate(traces_service_graph_request_server_seconds_sum{server="stoa-gateway"}[5m])) / sum(rate(traces_service_graph_request_server_seconds_count{server="stoa-gateway"}[5m]))`,
     AUTO_REFRESH_INTERVAL
   );
   const activeModes = usePrometheusQuery(
-    `count(count by (stoa_deployment_mode) (traces_service_graph_request_total{client=~"stoa-.*"}))`,
+    `count(count by (stoa_deployment_mode) (traces_service_graph_request_total{server="stoa-gateway"}))`,
     AUTO_REFRESH_INTERVAL
   );
 
   const requestsByMode = usePrometheusQuery(
-    `sum by (stoa_deployment_mode) (increase(traces_service_graph_request_total{client=~"stoa-.*"}[${timeRange}]))`,
+    `sum by (stoa_deployment_mode) (increase(traces_service_graph_request_total{server="stoa-gateway"}[${timeRange}]))`,
     AUTO_REFRESH_INTERVAL
   );
   const errorsByMode = usePrometheusQuery(
-    `sum by (stoa_deployment_mode) (increase(traces_service_graph_request_failed_total{client=~"stoa-.*"}[${timeRange}]))`,
+    `sum by (stoa_deployment_mode) (increase(traces_service_graph_request_failed_total{server="stoa-gateway"}[${timeRange}]))`,
     AUTO_REFRESH_INTERVAL
   );
   const latencyByMode = usePrometheusQuery(
-    `sum by (stoa_deployment_mode) (rate(traces_service_graph_request_server_seconds_sum{client=~"stoa-.*"}[5m])) / sum by (stoa_deployment_mode) (rate(traces_service_graph_request_server_seconds_count{client=~"stoa-.*"}[5m]))`,
+    `sum by (stoa_deployment_mode) (rate(traces_service_graph_request_server_seconds_sum{server="stoa-gateway"}[5m])) / sum by (stoa_deployment_mode) (rate(traces_service_graph_request_server_seconds_count{server="stoa-gateway"}[5m]))`,
     AUTO_REFRESH_INTERVAL
   );
 
   const edgeMcpTrend = usePrometheusRange(
-    `sum(rate(traces_service_graph_request_total{client=~"stoa-.*",stoa_deployment_mode="edge-mcp"}[5m]))`,
+    `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="edge-mcp"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     AUTO_REFRESH_INTERVAL
   );
   const sidecarTrend = usePrometheusRange(
-    `sum(rate(traces_service_graph_request_total{client=~"stoa-.*",stoa_deployment_mode="sidecar"}[5m]))`,
+    `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="sidecar"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     AUTO_REFRESH_INTERVAL
   );
   const connectTrend = usePrometheusRange(
-    `sum(rate(traces_service_graph_request_total{client=~"stoa-.*",stoa_deployment_mode="connect"}[5m]))`,
+    `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="connect"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     AUTO_REFRESH_INTERVAL

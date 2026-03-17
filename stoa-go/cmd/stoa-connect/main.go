@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stoa-platform/stoa-go/internal/connect"
+	"github.com/stoa-platform/stoa-go/internal/connect/telemetry"
 	"github.com/stoa-platform/stoa-go/pkg/config"
 )
 
@@ -37,10 +38,24 @@ func main() {
 	}
 
 	// Set up CP registration agent
-	agent := connect.New(connect.ConfigFromEnv(Version))
+	agentCfg := connect.ConfigFromEnv(Version)
+	agent := connect.New(agentCfg)
+
+	// Initialize OpenTelemetry (no-op if OTEL_EXPORTER_OTLP_ENDPOINT is not set)
+	ctx := context.Background()
+	otelCfg := telemetry.ConfigFromEnv(Version, agentCfg.InstanceName, agentCfg.Environment)
+	tracer, otelShutdown, err := telemetry.Init(ctx, otelCfg)
+	if err != nil {
+		log.Printf("warning: OTel init failed: %v", err)
+	} else {
+		agent.SetTracer(tracer)
+		if otelCfg.Endpoint != "" {
+			log.Printf("OTel tracing enabled: endpoint=%s sample_rate=%.2f", otelCfg.Endpoint, otelCfg.SampleRate)
+		}
+	}
 
 	// Root context — cancelled on SIGINT/SIGTERM
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Register with Control Plane (if configured)
@@ -104,6 +119,14 @@ func main() {
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
+
+	// Flush OTel spans before exiting
+	if otelShutdown != nil {
+		if err := otelShutdown(shutdownCtx); err != nil {
+			log.Printf("OTel shutdown error: %v", err)
+		}
+	}
+
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("shutdown: %v", err)
 	}

@@ -3,10 +3,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TraceDetail } from './TraceDetail';
 
-// Mock fetch to return demo data
-beforeEach(() => {
-  vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('mock'));
-});
+// Mock apiService to reject (triggers demo data fallback)
+vi.mock('../../services/api', () => ({
+  apiService: {
+    getTransactionDetail: vi.fn().mockRejectedValue(new Error('mock')),
+  },
+}));
 
 function renderWithRoute(traceId: string) {
   return render(
@@ -20,6 +22,10 @@ function renderWithRoute(traceId: string) {
 }
 
 describe('TraceDetail', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renders trace detail after loading', async () => {
     renderWithRoute('test-trace-001');
     await waitFor(

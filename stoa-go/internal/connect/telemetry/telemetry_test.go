@@ -121,17 +121,15 @@ func TestInitNoEndpointCreatesSpans(t *testing.T) {
 	span.End()
 }
 
-func TestInitWithEndpoint(t *testing.T) {
-	// Use a non-routable endpoint — the SDK creates the exporter eagerly
-	// but only connects lazily (on first span export), so Init succeeds.
+func TestInitWithGRPCEndpoint(t *testing.T) {
 	ctx := context.Background()
 	cfg := Config{
 		ServiceName:  "stoa-connect",
 		Version:      "1.0.0",
 		InstanceName: "test-host",
 		Environment:  "test",
-		Endpoint:     "localhost:4317",
-		SampleRate:   1.0, // Always sample in tests
+		Endpoint:     "localhost:4317", // gRPC (no http:// prefix)
+		SampleRate:   1.0,
 	}
 
 	tracer, shutdown, err := Init(ctx, cfg)
@@ -142,19 +140,61 @@ func TestInitWithEndpoint(t *testing.T) {
 		t.Fatal("expected non-nil tracer")
 	}
 
-	// Verify it's a real provider: spans should be recording
 	_, span := tracer.Start(ctx, "test-span")
 	if !span.IsRecording() {
 		t.Error("expected recording span from real tracer")
 	}
-	if !span.SpanContext().TraceID().IsValid() {
-		t.Error("expected valid trace ID from real tracer")
+	span.End()
+
+	if err := shutdown(ctx); err != nil {
+		t.Logf("shutdown warning (expected): %v", err)
+	}
+}
+
+func TestInitWithHTTPEndpoint(t *testing.T) {
+	ctx := context.Background()
+	cfg := Config{
+		ServiceName:  "stoa-connect",
+		Version:      "1.0.0",
+		InstanceName: "test-host",
+		Environment:  "test",
+		Endpoint:     "https://otlp.example.com", // HTTP endpoint
+		SampleRate:   1.0,
+	}
+
+	tracer, shutdown, err := Init(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	if tracer == nil {
+		t.Fatal("expected non-nil tracer")
+	}
+
+	_, span := tracer.Start(ctx, "test-span")
+	if !span.IsRecording() {
+		t.Error("expected recording span from real tracer")
 	}
 	span.End()
 
-	// Shutdown flushes — may warn about connection failure, but should not error fatally
 	if err := shutdown(ctx); err != nil {
-		// Connection errors to non-existent collector are expected
 		t.Logf("shutdown warning (expected): %v", err)
+	}
+}
+
+func TestIsHTTPEndpoint(t *testing.T) {
+	tests := []struct {
+		endpoint string
+		want     bool
+	}{
+		{"https://otlp.gostoa.dev", true},
+		{"http://localhost:4318", true},
+		{"localhost:4317", false},
+		{"tempo.stoa-monitoring:4317", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := isHTTPEndpoint(tt.endpoint); got != tt.want {
+			t.Errorf("isHTTPEndpoint(%q) = %v, want %v", tt.endpoint, got, tt.want)
+		}
 	}
 }

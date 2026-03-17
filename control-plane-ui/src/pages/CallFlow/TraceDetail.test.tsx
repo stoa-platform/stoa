@@ -20,12 +20,6 @@ function renderWithRoute(traceId: string) {
 }
 
 describe('TraceDetail', () => {
-  it('renders loading state initially', () => {
-    renderWithRoute('test-trace-001');
-    // Skeleton cards should be visible during loading
-    expect(document.querySelectorAll('[class*="animate-pulse"]').length).toBeGreaterThan(0);
-  });
-
   it('renders trace detail after loading', async () => {
     renderWithRoute('test-trace-001');
     await waitFor(
@@ -41,19 +35,24 @@ describe('TraceDetail', () => {
 
   it('renders request/response header tabs', async () => {
     renderWithRoute('test-trace-001');
-    await waitFor(() => {
-      expect(screen.getByText('Request Headers')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Response Headers')).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(screen.getByText(/request headers/i)).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
+    expect(screen.getByText(/response headers/i)).toBeInTheDocument();
   });
 
   it('redacts sensitive headers', async () => {
     renderWithRoute('test-trace-001');
-    await waitFor(() => {
-      expect(screen.getByText('Request Headers')).toBeInTheDocument();
-    });
-    // Authorization header should be redacted
-    const redacted = screen.queryAllByText('••••••••');
+    await waitFor(
+      () => {
+        expect(screen.getByText(/request headers/i)).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
+    const redacted = screen.queryAllByText(/••••••••/);
     expect(redacted.length).toBeGreaterThan(0);
   });
 

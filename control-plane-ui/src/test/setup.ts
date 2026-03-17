@@ -228,9 +228,10 @@ Object.assign(navigator, {
   },
 });
 
-// Mock ResizeObserver
-(globalThis as Record<string, unknown>).ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+// Mock ResizeObserver (must be a real constructor for Recharts ResponsiveContainer)
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+(globalThis as Record<string, unknown>).ResizeObserver = MockResizeObserver;

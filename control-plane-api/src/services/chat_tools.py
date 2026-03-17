@@ -388,15 +388,55 @@ def _exec_platform_info() -> str:
     return json.dumps(
         {
             "name": "STOA Platform",
-            "version": "1.0.0",
-            "description": "The European Agent Gateway — AI-Native API Management",
-            "features": [
-                "Universal API Contract (UAC)",
-                "Multi-gateway orchestration",
-                "MCP protocol support",
-                "RBAC with Keycloak",
-                "GitOps deployments",
+            "tagline": "The European Agent Gateway",
+            "description": (
+                "Open-source, AI-native API management platform (Apache 2.0) "
+                "that bridges traditional APIs and AI agents through the Model Context Protocol (MCP)."
+            ),
+            "license": "Apache 2.0",
+            "documentation": "https://docs.gostoa.dev",
+            "architecture": {
+                "control_plane": {
+                    "api": "Python 3.11, FastAPI",
+                    "console_ui": "React 18, TypeScript",
+                    "developer_portal": "React, Vite, TypeScript",
+                    "auth": "Keycloak (OIDC, SAML, OAuth 2.1)",
+                },
+                "data_plane": {
+                    "stoa_gateway": "Rust (Tokio, axum) — high-performance, MCP-native",
+                    "deployment_modes": [
+                        "edge-mcp (production)",
+                        "sidecar (planned)",
+                        "proxy (planned)",
+                        "shadow (planned)",
+                    ],
+                },
+            },
+            "supported_gateways": [
+                {"name": "STOA Gateway", "technology": "Rust", "role": "Primary, MCP-native"},
+                {"name": "Kong", "technology": "DB-less", "role": "Legacy adapter"},
+                {"name": "Gravitee", "technology": "APIM v4", "role": "Legacy adapter"},
+                {"name": "webMethods", "technology": "IBM/Software AG", "role": "Legacy adapter"},
+                {"name": "Apigee", "technology": "Google Cloud", "role": "Legacy adapter"},
+                {"name": "Azure APIM", "technology": "Microsoft", "role": "Legacy adapter"},
+                {"name": "AWS API Gateway", "technology": "Amazon", "role": "Legacy adapter"},
             ],
+            "key_features": [
+                "MCP Gateway — AI agents discover and call APIs via Model Context Protocol",
+                "Universal API Contract (UAC) — define once, expose everywhere",
+                "Multi-tenant architecture — hard isolation per tenant",
+                "AI Gateway — token metering, semantic caching, smart LLM routing",
+                "GitOps Native — ArgoCD-based declarative provisioning",
+                "Legacy Bridge — migration paths from 7+ enterprise gateways",
+                "European Sovereign — EU hosting, NIS2/DORA supportive",
+                "RBAC — 4 roles (cpi-admin, tenant-admin, devops, viewer) via Keycloak",
+            ],
+            "rbac_roles": {
+                "cpi-admin": "Full platform administration",
+                "tenant-admin": "Own tenant management",
+                "devops": "Deploy and promote APIs",
+                "viewer": "Read-only access",
+            },
             "status": "operational",
         }
     )

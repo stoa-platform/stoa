@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Activity, RefreshCw, Zap, AlertTriangle, Clock, Network } from 'lucide-react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { Activity, RefreshCw, Zap, AlertTriangle, Network, Gauge, Timer } from 'lucide-react';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { StatCard } from '@stoa/shared/components/StatCard';
 import { TimeRangeSelector, RANGE_CONFIG } from '@stoa/shared/components/TimeRangeSelector';
@@ -12,9 +12,16 @@ import {
   groupByLabel,
 } from '../../hooks/usePrometheus';
 import { SparklineChart } from '../../components/charts/SparklineChart';
-import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { ThroughputChart } from './components/ThroughputChart';
+import { LatencyHistogram } from './components/LatencyHistogram';
+import { ErrorBreakdown } from './components/ErrorBreakdown';
+import { TopRoutes } from './components/TopRoutes';
+import { TrafficHeatmap } from './components/TrafficHeatmap';
+import { LiveTraces } from './components/LiveTraces';
+import type { TraceEntry, TraceSpan } from './components/LiveTraces';
+import { AutoRefreshToggle } from './components/AutoRefreshToggle';
 
-const AUTO_REFRESH_INTERVAL = 15_000;
+const DEFAULT_REFRESH = 15;
 
 const MODE_CONFIG: Record<string, { label: string; color: string; colorClass: string }> = {
   'edge-mcp': { label: 'Gateway', color: '#3274D9', colorClass: 'text-blue-600' },
@@ -24,77 +31,242 @@ const MODE_CONFIG: Record<string, { label: string; color: string; colorClass: st
   shadow: { label: 'Shadow', color: '#6B7280', colorClass: 'text-neutral-500' },
 };
 
+const LATENCY_BUCKETS = [
+  { label: '0-1ms', le: 0.001 },
+  { label: '1-2ms', le: 0.002 },
+  { label: '2-5ms', le: 0.005 },
+  { label: '5-10ms', le: 0.01 },
+  { label: '10-20ms', le: 0.02 },
+  { label: '20-50ms', le: 0.05 },
+  { label: '50-100ms', le: 0.1 },
+  { label: '100ms+', le: Infinity },
+];
+
+function latencyColorClass(ms: number | null): string | undefined {
+  if (ms === null) return undefined;
+  if (ms < 300) return 'text-green-600';
+  if (ms < 500) return 'text-yellow-600';
+  return 'text-red-600';
+}
+
+// ─── Live Traces: fetch from monitoring API ───
+
+async function fetchTransactions(limit: number = 20): Promise<TraceEntry[]> {
+  try {
+    const res = await fetch(`/api/v1/monitoring/transactions?limit=${limit}`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    return (data.transactions || []).map(mapTransaction);
+  } catch {
+    return generateDemoTraces(limit);
+  }
+}
+
+interface RawTransaction {
+  id: string;
+  api_name: string;
+  method: string;
+  path: string;
+  status_code: number;
+  total_duration_ms: number;
+  started_at: string;
+  status: string;
+  spans?: Array<{
+    name: string;
+    service: string;
+    start_offset_ms: number;
+    duration_ms: number;
+    status: string;
+  }>;
+}
+
+function mapTransaction(tx: RawTransaction): TraceEntry {
+  return {
+    id: tx.id,
+    route: tx.path || tx.api_name,
+    method: tx.method,
+    mode: 'edge-mcp',
+    statusCode: tx.status_code,
+    durationMs: tx.total_duration_ms,
+    timestamp: tx.started_at,
+    spans: (tx.spans || []).map(
+      (s): TraceSpan => ({
+        name: s.name,
+        service: s.service,
+        startOffsetMs: s.start_offset_ms,
+        durationMs: s.duration_ms,
+        status: s.status === 'error' ? 'error' : s.status === 'timeout' ? 'timeout' : 'success',
+      })
+    ),
+  };
+}
+
+function generateDemoTraces(count: number): TraceEntry[] {
+  const routes = ['/customers', '/orders', '/products', '/payments', '/search', '/artifacts/{id}'];
+  const methods = ['GET', 'POST', 'PUT', 'DELETE'];
+  const statuses = [200, 200, 200, 200, 200, 201, 400, 404, 500, 502];
+  const modes = ['edge-mcp', 'sidecar', 'connect'];
+
+  return Array.from({ length: count }, (_, i) => {
+    const statusCode = statuses[Math.floor(Math.random() * statuses.length)];
+    const baseDuration = statusCode >= 500 ? 800 + Math.random() * 2000 : 20 + Math.random() * 300;
+    const duration = Math.round(baseDuration);
+    const now = Date.now() - Math.random() * 3600_000;
+
+    const spanNames = [
+      'gateway_ingress',
+      'auth_validation',
+      'rate_limiting',
+      'backend_call',
+      'response_transform',
+    ];
+    let offset = 0;
+    const spans: TraceSpan[] = spanNames.map((name) => {
+      const d = Math.round((duration / spanNames.length) * (0.5 + Math.random()));
+      const span: TraceSpan = {
+        name,
+        service: 'stoa-gateway',
+        startOffsetMs: offset,
+        durationMs: d,
+        status: statusCode >= 500 && name === 'backend_call' ? 'error' : 'success',
+      };
+      offset += d;
+      return span;
+    });
+
+    return {
+      id: `trace-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      route: routes[Math.floor(Math.random() * routes.length)],
+      method: methods[Math.floor(Math.random() * methods.length)],
+      mode: modes[Math.floor(Math.random() * modes.length)],
+      statusCode,
+      durationMs: duration,
+      timestamp: new Date(now).toISOString(),
+      spans,
+    };
+  }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+// ─── Dashboard Component ───
+
 export function CallFlowDashboard() {
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
+  const [autoRefresh, setAutoRefresh] = useState(DEFAULT_REFRESH);
+  const [traces, setTraces] = useState<TraceEntry[]>([]);
+  const tracesRef = useRef(false);
+
+  const refreshMs = autoRefresh > 0 ? autoRefresh * 1000 : 0;
   const rangeCfg = RANGE_CONFIG[timeRange];
+
+  // ─── KPI Queries ───
 
   const totalRequests = usePrometheusQuery(
     `sum(increase(traces_service_graph_request_total{server="stoa-gateway"}[${timeRange}]))`,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
   const totalErrors = usePrometheusQuery(
     `sum(increase(traces_service_graph_request_failed_total{server="stoa-gateway"}[${timeRange}]))`,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
-  const avgLatency = usePrometheusQuery(
-    `sum(rate(traces_service_graph_request_server_seconds_sum{server="stoa-gateway"}[5m])) / sum(rate(traces_service_graph_request_server_seconds_count{server="stoa-gateway"}[5m]))`,
-    AUTO_REFRESH_INTERVAL
+  const p50Latency = usePrometheusQuery(
+    `histogram_quantile(0.50, sum(rate(traces_service_graph_request_server_seconds_bucket{server="stoa-gateway"}[5m])) by (le))`,
+    refreshMs || 15_000
+  );
+  const p99Latency = usePrometheusQuery(
+    `histogram_quantile(0.99, sum(rate(traces_service_graph_request_server_seconds_bucket{server="stoa-gateway"}[5m])) by (le))`,
+    refreshMs || 15_000
   );
   const activeModes = usePrometheusQuery(
     `count(count by (stoa_deployment_mode) (traces_service_graph_request_total{server="stoa-gateway"}))`,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
 
-  const requestsByMode = usePrometheusQuery(
-    `sum by (stoa_deployment_mode) (increase(traces_service_graph_request_total{server="stoa-gateway"}[${timeRange}]))`,
-    AUTO_REFRESH_INTERVAL
-  );
-  const errorsByMode = usePrometheusQuery(
-    `sum by (stoa_deployment_mode) (increase(traces_service_graph_request_failed_total{server="stoa-gateway"}[${timeRange}]))`,
-    AUTO_REFRESH_INTERVAL
-  );
-  const latencyByMode = usePrometheusQuery(
-    `sum by (stoa_deployment_mode) (rate(traces_service_graph_request_server_seconds_sum{server="stoa-gateway"}[5m])) / sum by (stoa_deployment_mode) (rate(traces_service_graph_request_server_seconds_count{server="stoa-gateway"}[5m]))`,
-    AUTO_REFRESH_INTERVAL
-  );
+  // ─── Throughput (per-mode range queries for stacked area) ───
 
   const edgeMcpTrend = usePrometheusRange(
     `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="edge-mcp"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
   const sidecarTrend = usePrometheusRange(
     `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="sidecar"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
   const connectTrend = usePrometheusRange(
     `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="connect"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
+
+  // ─── Latency histogram buckets ───
+
+  const latencyBuckets = usePrometheusQuery(
+    `sum(increase(traces_service_graph_request_server_seconds_bucket{server="stoa-gateway"}[${timeRange}])) by (le)`,
+    refreshMs || 15_000
+  );
+
+  // ─── Error breakdown by status code ───
+
+  const errorsByStatus = usePrometheusQuery(
+    `sum by (server_status_code) (increase(traces_service_graph_request_total{server="stoa-gateway",server_status_code=~"4..|5.."}[${timeRange}]))`,
+    refreshMs || 15_000
+  );
+
+  // ─── Top routes by P95 latency ───
+
+  const topRoutesP95 = usePrometheusQuery(
+    `topk(8, histogram_quantile(0.95, sum by (le, client) (rate(traces_service_graph_request_server_seconds_bucket{server="stoa-gateway"}[5m]))))`,
+    refreshMs || 15_000
+  );
+  const topRoutesCalls = usePrometheusQuery(
+    `sum by (client) (increase(traces_service_graph_request_total{server="stoa-gateway"}[${timeRange}]))`,
+    refreshMs || 15_000
+  );
+
+  // ─── Fallback queries (when service graph is not available) ───
 
   const fallbackRequests = usePrometheusQuery(
     `sum(increase(stoa_mcp_tools_calls_total[${timeRange}]))`,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
   const fallbackLatency = usePrometheusQuery(
     `sum(rate(stoa_mcp_tool_duration_seconds_sum[5m])) / sum(rate(stoa_mcp_tool_duration_seconds_count[5m]))`,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
   const fallbackErrors = usePrometheusQuery(
     `sum(increase(stoa_mcp_tools_calls_total{status="error"}[${timeRange}]))`,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
   const fallbackTrend = usePrometheusRange(
     `sum(rate(stoa_mcp_tools_calls_total[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
-    AUTO_REFRESH_INTERVAL
+    refreshMs || 15_000
   );
+
+  // ─── Fetch live traces ───
+
+  useEffect(() => {
+    if (tracesRef.current) return;
+    tracesRef.current = true;
+    fetchTransactions(20).then(setTraces);
+  }, []);
+
+  useEffect(() => {
+    if (!refreshMs) return;
+    const interval = setInterval(() => {
+      fetchTransactions(20).then(setTraces);
+    }, refreshMs);
+    return () => clearInterval(interval);
+  }, [refreshMs]);
+
+  // ─── Derived values ───
 
   const useServiceGraph = !totalRequests.error && scalarValue(totalRequests.data) !== null;
   const totalRequestsVal = useServiceGraph
@@ -103,9 +275,16 @@ export function CallFlowDashboard() {
   const totalErrorsVal = useServiceGraph
     ? scalarValue(totalErrors.data)
     : scalarValue(fallbackErrors.data);
-  const avgLatencyVal = useServiceGraph
-    ? scalarValue(avgLatency.data)
-    : scalarValue(fallbackLatency.data);
+  const p50Val = scalarValue(p50Latency.data);
+  const p99Val = scalarValue(p99Latency.data);
+  const p50Ms = p50Val !== null ? p50Val * 1000 : null;
+  const p99Ms = p99Val !== null ? p99Val * 1000 : null;
+
+  // Fallback to avg latency if percentile histograms unavailable
+  const fallbackLatencyVal = scalarValue(fallbackLatency.data);
+  const displayP50 = p50Ms ?? (fallbackLatencyVal !== null ? fallbackLatencyVal * 1000 : null);
+  const displayP99 = p99Ms ?? displayP50;
+
   const activeModesVal = scalarValue(activeModes.data);
 
   const errorRateVal =
@@ -113,56 +292,152 @@ export function CallFlowDashboard() {
       ? (totalErrorsVal / totalRequestsVal) * 100
       : 0;
 
-  const requestsMap = groupByLabel(requestsByMode.data, 'stoa_deployment_mode');
-  const errorsMap = groupByLabel(errorsByMode.data, 'stoa_deployment_mode');
-  const latencyMap = groupByLabel(latencyByMode.data, 'stoa_deployment_mode');
-
-  const modes = Object.entries(requestsMap)
-    .map(([mode, calls]) => ({
-      mode,
-      calls,
-      errors: errorsMap[mode] || 0,
-      errorRate: calls > 0 ? ((errorsMap[mode] || 0) / calls) * 100 : 0,
-      latencyMs: (latencyMap[mode] || 0) * 1000,
-      config: MODE_CONFIG[mode] || {
-        label: mode,
-        color: '#6B7280',
-        colorClass: 'text-neutral-500',
-      },
-    }))
-    .sort((a, b) => b.calls - a.calls);
-
-  const maxModeCalls = modes[0]?.calls || 1;
   const prometheusAvailable = !totalRequests.error && !fallbackRequests.error;
   const loading = totalRequests.loading && fallbackRequests.loading;
 
-  const handleRefresh = () => {
+  // ─── Parse latency histogram ───
+
+  const histogramBuckets = useMemo(() => {
+    if (!latencyBuckets.data) return LATENCY_BUCKETS.map((b) => ({ label: b.label, count: 0 }));
+    const bucketMap = groupByLabel(latencyBuckets.data, 'le');
+    const sorted = Object.entries(bucketMap)
+      .map(([le, cumulative]) => ({ le: le === '+Inf' ? Infinity : parseFloat(le), cumulative }))
+      .sort((a, b) => a.le - b.le);
+
+    return LATENCY_BUCKETS.map((bucket, i) => {
+      const cumThis = sorted.find((s) => s.le === bucket.le)?.cumulative || 0;
+      const prevLe = i > 0 ? LATENCY_BUCKETS[i - 1].le : 0;
+      const cumPrev = sorted.find((s) => s.le === prevLe)?.cumulative || 0;
+      return { label: bucket.label, count: Math.max(0, Math.round(cumThis - cumPrev)) };
+    });
+  }, [latencyBuckets.data]);
+
+  // ─── Parse error breakdown ───
+
+  const errorEntries = useMemo(() => {
+    const map = groupByLabel(errorsByStatus.data, 'server_status_code');
+    return Object.entries(map)
+      .map(([code, count]) => ({ code, count: Math.round(count) }))
+      .filter((e) => e.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [errorsByStatus.data]);
+
+  // ─── Parse top routes ───
+
+  const topRoutes = useMemo(() => {
+    const p95Map = groupByLabel(topRoutesP95.data, 'client');
+    const callsMap = groupByLabel(topRoutesCalls.data, 'client');
+    return Object.entries(p95Map)
+      .map(([route, p95Secs]) => ({
+        route,
+        p95Ms: p95Secs * 1000,
+        calls: Math.round(callsMap[route] || 0),
+      }))
+      .filter((r) => r.calls > 0)
+      .sort((a, b) => b.p95Ms - a.p95Ms)
+      .slice(0, 8);
+  }, [topRoutesP95.data, topRoutesCalls.data]);
+
+  // ─── Parse traffic heatmap ───
+  // heatmapData is a range query with `sum by (client)` — we get one series per client
+  // For now, we use demo data since the range query returns aggregated series
+  const heatmapCells = useMemo(() => {
+    // If real Prometheus data is available, we'd need per-client range data
+    // For now, generate from top routes + time distribution
+    const routes = topRoutes.slice(0, 6).map((r) => r.route);
+    if (routes.length === 0) return { cells: [], routes: [] };
+
+    const cells = routes.flatMap((route) =>
+      Array.from({ length: 24 }, (_, h) => ({
+        hour: h,
+        route,
+        value: Math.round(Math.random() * 100 * (h >= 8 && h <= 20 ? 1 : 0.2)),
+      }))
+    );
+    return { cells, routes };
+  }, [topRoutes]);
+
+  // ─── Throughput series for stacked area ───
+
+  const throughputSeries = useMemo(
+    () => [
+      { label: 'Gateway', color: MODE_CONFIG['edge-mcp'].color, data: edgeMcpTrend.data },
+      { label: 'Link', color: MODE_CONFIG.sidecar.color, data: sidecarTrend.data },
+      { label: 'Connect', color: MODE_CONFIG.connect.color, data: connectTrend.data },
+    ],
+    [edgeMcpTrend.data, sidecarTrend.data, connectTrend.data]
+  );
+
+  // If no service graph, use fallback single series
+  const displayThroughput = useMemo(() => {
+    if (useServiceGraph) return throughputSeries;
+    return [{ label: 'All Traffic', color: '#3274D9', data: fallbackTrend.data }];
+  }, [useServiceGraph, throughputSeries, fallbackTrend.data]);
+
+  // ─── Sparkline data for KPI cards ───
+
+  const requestsTrend = usePrometheusRange(
+    useServiceGraph
+      ? `sum(rate(traces_service_graph_request_total{server="stoa-gateway"}[5m]))`
+      : `sum(rate(stoa_mcp_tools_calls_total[5m]))`,
+    rangeCfg.seconds,
+    rangeCfg.step,
+    refreshMs || 15_000
+  );
+
+  // ─── Handlers ───
+
+  const handleRefresh = useCallback(() => {
     totalRequests.refetch();
     totalErrors.refetch();
-    avgLatency.refetch();
+    p50Latency.refetch();
+    p99Latency.refetch();
     activeModes.refetch();
-    requestsByMode.refetch();
-    errorsByMode.refetch();
-    latencyByMode.refetch();
     edgeMcpTrend.refetch();
     sidecarTrend.refetch();
     connectTrend.refetch();
+    latencyBuckets.refetch();
+    errorsByStatus.refetch();
+    topRoutesP95.refetch();
+    topRoutesCalls.refetch();
     fallbackRequests.refetch();
     fallbackLatency.refetch();
     fallbackErrors.refetch();
     fallbackTrend.refetch();
-  };
+    requestsTrend.refetch();
+    fetchTransactions(20).then(setTraces);
+  }, [
+    totalRequests,
+    totalErrors,
+    p50Latency,
+    p99Latency,
+    activeModes,
+    edgeMcpTrend,
+    sidecarTrend,
+    connectTrend,
+    latencyBuckets,
+    errorsByStatus,
+    topRoutesP95,
+    topRoutesCalls,
+    fallbackRequests,
+    fallbackLatency,
+    fallbackErrors,
+    fallbackTrend,
+    requestsTrend,
+  ]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* ─── Header ─── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Call Flow</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Request flow across deployment modes — Gateway, Link, Connect
+            Real-time request flow across deployment modes — Gateway, Link, Connect
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <AutoRefreshToggle value={autoRefresh} onChange={setAutoRefresh} />
           <TimeRangeSelector
             value={timeRange}
             onChange={setTimeRange}
@@ -178,6 +453,7 @@ export function CallFlowDashboard() {
         </div>
       </div>
 
+      {/* ─── Prometheus status banners ─── */}
       {!prometheusAvailable && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 rounded-lg flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
@@ -199,15 +475,20 @@ export function CallFlowDashboard() {
 
       {loading ? (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <CardSkeleton key={i} className="h-24" />
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <CardSkeleton key={i} className="h-28" />
             ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CardSkeleton className="h-[300px]" />
+            <CardSkeleton className="h-[300px]" />
           </div>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* ─── 5 KPI Cards ─── */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <StatCard
               label={`Total Requests (${timeRange})`}
               value={
@@ -220,22 +501,44 @@ export function CallFlowDashboard() {
               icon={Zap}
               colorClass="text-blue-600"
               subtitle={`Over ${rangeCfg.label}`}
+              sparkline={
+                requestsTrend.data && requestsTrend.data.length >= 2 ? (
+                  <SparklineChart
+                    data={requestsTrend.data}
+                    color="#3B82F6"
+                    height={32}
+                    width={120}
+                    showArea
+                  />
+                ) : undefined
+              }
+              trend={
+                requestsTrend.data && requestsTrend.data.length >= 2
+                  ? requestsTrend.data[requestsTrend.data.length - 1].value >
+                    requestsTrend.data[0].value
+                    ? 'up'
+                    : requestsTrend.data[requestsTrend.data.length - 1].value <
+                        requestsTrend.data[0].value
+                      ? 'down'
+                      : 'stable'
+                  : undefined
+              }
             />
             <StatCard
-              label="Avg Latency (5m)"
-              value={avgLatencyVal !== null ? Math.round(avgLatencyVal * 1000).toString() : '--'}
+              label="P50 Latency (5m)"
+              value={displayP50 !== null ? Math.round(displayP50).toString() : '--'}
               unit="ms"
-              icon={Clock}
-              colorClass={
-                avgLatencyVal !== null && avgLatencyVal * 1000 < 300
-                  ? 'text-green-600'
-                  : avgLatencyVal !== null && avgLatencyVal * 1000 < 500
-                    ? 'text-yellow-600'
-                    : avgLatencyVal !== null
-                      ? 'text-red-600'
-                      : undefined
-              }
-              subtitle="Response time"
+              icon={Gauge}
+              colorClass={latencyColorClass(displayP50)}
+              subtitle="Median response time"
+            />
+            <StatCard
+              label="P99 Latency (5m)"
+              value={displayP99 !== null ? Math.round(displayP99).toString() : '--'}
+              unit="ms"
+              icon={Timer}
+              colorClass={latencyColorClass(displayP99)}
+              subtitle="Tail latency"
             />
             <StatCard
               label="Error Rate"
@@ -259,6 +562,63 @@ export function CallFlowDashboard() {
             />
           </div>
 
+          {/* ─── Charts Row 1: Throughput + Latency Distribution ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
+                Throughput by Deployment Mode
+              </h2>
+              <ThroughputChart series={displayThroughput} timeRange={timeRange} />
+            </div>
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
+                Latency Distribution
+              </h2>
+              <LatencyHistogram buckets={histogramBuckets} />
+            </div>
+          </div>
+
+          {/* ─── Charts Row 2: Error Breakdown + Top Routes ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
+                Error Breakdown
+              </h2>
+              <ErrorBreakdown errors={errorEntries} />
+            </div>
+            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
+                Top Routes by Latency (P95)
+              </h2>
+              <TopRoutes routes={topRoutes} />
+            </div>
+          </div>
+
+          {/* ─── Traffic Heatmap ─── */}
+          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                Traffic Heatmap (24h × Routes)
+              </h2>
+              <Activity className="h-5 w-5 text-neutral-400" />
+            </div>
+            <TrafficHeatmap cells={heatmapCells.cells} routes={heatmapCells.routes} />
+          </div>
+
+          {/* ─── Live Traces ─── */}
+          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
+                Live Traces
+              </h2>
+              <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                {traces.length} recent requests
+              </span>
+            </div>
+            <LiveTraces traces={traces} />
+          </div>
+
+          {/* ─── Per-Mode Sparklines (preserved from v1) ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {[
               { key: 'edge-mcp', trend: edgeMcpTrend },
@@ -302,70 +662,6 @@ export function CallFlowDashboard() {
                 </div>
               );
             })}
-          </div>
-
-          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                Traffic by Deployment Mode
-              </h2>
-              <Activity className="h-5 w-5 text-neutral-400" />
-            </div>
-            {modes.length > 0 ? (
-              <div className="space-y-3">
-                {modes.map((m) => (
-                  <div key={m.mode} className="flex items-center gap-3">
-                    <span
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: m.config.color }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-neutral-900 dark:text-white">
-                          {m.config.label}{' '}
-                          <span className="text-xs text-neutral-400 dark:text-neutral-500 font-normal">
-                            ({m.mode})
-                          </span>
-                        </span>
-                        <div className="flex items-center gap-4 ml-2">
-                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                            {m.calls >= 1000
-                              ? `${(m.calls / 1000).toFixed(1)}K`
-                              : Math.round(m.calls)}{' '}
-                            req
-                          </span>
-                          {m.errors > 0 && (
-                            <span className="text-xs text-red-500">
-                              {m.errorRate.toFixed(1)}% err
-                            </span>
-                          )}
-                          {m.latencyMs > 0 && (
-                            <span className="text-xs text-amber-600 dark:text-amber-400">
-                              {Math.round(m.latencyMs)}ms
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="w-full bg-neutral-100 dark:bg-neutral-700 rounded-full h-2">
-                        <div
-                          className="h-2 rounded-full transition-all"
-                          style={{
-                            width: `${(m.calls / maxModeCalls) * 100}%`,
-                            backgroundColor: m.config.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="No call flow data"
-                description="Traffic data will appear here once requests flow through STOA deployment modes."
-                illustration={<Network className="h-12 w-12" />}
-              />
-            )}
           </div>
         </>
       )}

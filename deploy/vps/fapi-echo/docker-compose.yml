@@ -1,0 +1,16 @@
+# FAPI Echo Backend — simulates banking API (accounts, transfers, balances).
+# Used by the realistic traffic seeder to generate FAPI 2.0 trace data.
+#
+# Deploy: docker compose up -d
+# Test:   curl http://localhost:8889/api/v1/accounts
+# Error:  curl -H "X-Simulate-Error: 500" http://localhost:8889/api/v1/accounts
+
+services:
+  fapi-echo:
+    image: nginx:alpine
+    container_name: fapi-echo
+    restart: unless-stopped
+    ports:
+      - "8889:8889"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

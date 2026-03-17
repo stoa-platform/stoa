@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+RUN pip install --no-cache-dir \
+    requests==2.31.0 \
+    PyJWT==2.9.0 \
+    cryptography==43.0.0
+
+COPY scripts/traffic/realistic-seeder.py /app/realistic-seeder.py
+COPY scripts/traffic/scenarios.py /app/scripts/traffic/scenarios.py
+COPY scripts/traffic/auth_helpers.py /app/scripts/traffic/auth_helpers.py
+
+# Create __init__.py for package imports
+RUN touch /app/scripts/__init__.py /app/scripts/traffic/__init__.py
+
+WORKDIR /app
+
+USER nobody
+
+ENTRYPOINT ["python", "realistic-seeder.py"]

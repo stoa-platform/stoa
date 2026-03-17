@@ -1,0 +1,97 @@
+# Realistic Traffic Seeder CronJob — generates multi-mode, multi-auth
+# API traffic for Call Flow Dashboard with real OTel traces.
+#
+# Runs every 10 minutes, 8-minute duration, concurrencyPolicy: Forbid.
+# Uses traffic-seeder-credentials Secret for API keys + OAuth2 creds.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: traffic-seeder
+  namespace: stoa-system
+  labels:
+    app: traffic-seeder
+    environment: production
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 540
+      template:
+        metadata:
+          labels:
+            app: traffic-seeder
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: seeder
+              image: ghcr.io/stoa-platform/traffic-seeder:latest
+              args: ["--mode", "k8s"]
+              env:
+                - name: GATEWAY_URL
+                  value: "http://stoa-gateway.stoa-system.svc:80"
+                - name: SIDECAR_URL
+                  value: "http://stoa-gateway-sidecar.stoa-system.svc:80"
+                - name: CONNECT_URL
+                  value: "http://stoa-connect.stoa-system.svc:8090"
+                - name: KC_TOKEN_URL
+                  value: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
+                - name: DURATION
+                  value: "480"
+                - name: TENANTS
+                  value: "high-five,oasis,ioi"
+                - name: BUSINESS_HOURS_MULT
+                  value: "3.0"
+                # API keys from Vault via ExternalSecret
+                - name: OPENWEATHERMAP_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: traffic-seeder-credentials
+                      key: OPENWEATHERMAP_API_KEY
+                      optional: true
+                - name: NEWSAPI_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: traffic-seeder-credentials
+                      key: NEWSAPI_KEY
+                      optional: true
+                - name: ALPHAVANTAGE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: traffic-seeder-credentials
+                      key: ALPHAVANTAGE_KEY
+                      optional: true
+                - name: KC_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: traffic-seeder-credentials
+                      key: KC_CLIENT_ID
+                      optional: true
+                - name: KC_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: traffic-seeder-credentials
+                      key: KC_CLIENT_SECRET
+                      optional: true
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL

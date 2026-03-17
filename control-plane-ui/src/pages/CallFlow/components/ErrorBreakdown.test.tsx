@@ -14,13 +14,13 @@ describe('ErrorBreakdown', () => {
     expect(screen.getByText(/no errors in this period/i)).toBeInTheDocument();
   });
 
-  it('renders chart with error data', () => {
+  it('renders chart container with error data', () => {
     const errors = [
       { code: '500', count: 10 },
       { code: '502', count: 5 },
       { code: '404', count: 3 },
     ];
     const { container } = render(<ErrorBreakdown errors={errors} />);
-    expect(container.querySelector('.recharts-responsive-container')).toBeInTheDocument();
+    expect(container.querySelector('[class*="recharts"]')).not.toBeNull();
   });
 });

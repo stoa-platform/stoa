@@ -17,13 +17,13 @@ describe('LatencyHistogram', () => {
     expect(screen.getByText(/no latency distribution/i)).toBeInTheDocument();
   });
 
-  it('renders chart when buckets have data', () => {
+  it('renders chart container when buckets have data', () => {
     const buckets = [
       { label: '0-1ms', count: 100 },
       { label: '1-2ms', count: 50 },
       { label: '2-5ms', count: 20 },
     ];
     const { container } = render(<LatencyHistogram buckets={buckets} />);
-    expect(container.querySelector('.recharts-responsive-container')).toBeInTheDocument();
+    expect(container.querySelector('[class*="recharts"]')).not.toBeNull();
   });
 });

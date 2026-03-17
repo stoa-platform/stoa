@@ -16,6 +16,11 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Config holds the STOA Connect agent configuration.
@@ -105,25 +110,50 @@ type DiscoveredAPIPayload struct {
 type Agent struct {
 	cfg                Config
 	client             *http.Client
+	tracer             trace.Tracer
 	gatewayID          string
 	startTime          time.Time
 	lastDiscoveredAPIs []DiscoveredAPIPayload
 }
 
 // New creates a new STOA Connect agent.
+// The HTTP client is wrapped with otelhttp for automatic W3C traceparent propagation.
 func New(cfg Config) *Agent {
 	return &Agent{
 		cfg: cfg,
 		client: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout:   15 * time.Second,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
 		startTime: time.Now(),
 	}
 }
 
+// SetTracer sets the OpenTelemetry tracer for the agent.
+func (a *Agent) SetTracer(t trace.Tracer) {
+	a.tracer = t
+}
+
+// startSpan creates a new span if a tracer is configured.
+func (a *Agent) startSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
+	if a.tracer == nil {
+		return ctx, trace.SpanFromContext(ctx)
+	}
+	return a.tracer.Start(ctx, name,
+		trace.WithAttributes(attrs...),
+		trace.WithSpanKind(trace.SpanKindClient),
+	)
+}
+
 // Register registers this agent with the Control Plane.
 // Returns the assigned gateway ID.
 func (a *Agent) Register(ctx context.Context, healthPort string) error {
+	ctx, span := a.startSpan(ctx, "stoa-connect.register",
+		attribute.String("stoa.instance_name", a.cfg.InstanceName),
+		attribute.String("stoa.environment", a.cfg.Environment),
+	)
+	defer span.End()
+
 	payload := RegistrationPayload{
 		Hostname:     a.cfg.InstanceName,
 		Mode:         "connect",
@@ -135,12 +165,16 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 
 	data, err := json.Marshal(payload)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "marshal failed")
 		return fmt.Errorf("marshal registration: %w", err)
 	}
 
 	url := fmt.Sprintf("%s/v1/internal/gateways/register", a.cfg.ControlPlaneURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "create request failed")
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -148,22 +182,32 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 
 	resp, err := a.client.Do(req)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("register request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("register failed (%d): %s", resp.StatusCode, string(body))
+		err := fmt.Errorf("register failed (%d): %s", resp.StatusCode, string(body))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "registration rejected")
+		return err
 	}
 
 	var result RegistrationResponse
 	if err := json.Unmarshal(body, &result); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "decode failed")
 		return fmt.Errorf("decode registration response: %w", err)
 	}
 
 	a.gatewayID = result.ID
+	span.SetAttributes(attribute.String("stoa.gateway_id", result.ID))
+	span.SetStatus(codes.Ok, "registered")
 	log.Printf("registered with CP: id=%s name=%s", result.ID, result.Name)
 	return nil
 }
@@ -179,19 +223,33 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 		return fmt.Errorf("not registered")
 	}
 
+	ctx, span := a.startSpan(ctx, "stoa-connect.heartbeat",
+		attribute.String("stoa.gateway_id", a.gatewayID),
+	)
+	defer span.End()
+
 	payload := HeartbeatPayload{
 		UptimeSeconds:  int(time.Since(a.startTime).Seconds()),
 		DiscoveredAPIs: len(a.lastDiscoveredAPIs),
 	}
 
+	span.SetAttributes(
+		attribute.Int("stoa.uptime_seconds", payload.UptimeSeconds),
+		attribute.Int("stoa.discovered_apis", payload.DiscoveredAPIs),
+	)
+
 	data, err := json.Marshal(payload)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "marshal failed")
 		return fmt.Errorf("marshal heartbeat: %w", err)
 	}
 
 	url := fmt.Sprintf("%s/v1/internal/gateways/%s/heartbeat", a.cfg.ControlPlaneURL, a.gatewayID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "create request failed")
 		return fmt.Errorf("create heartbeat request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -199,15 +257,23 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 
 	resp, err := a.client.Do(req)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("heartbeat request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("heartbeat failed (%d): %s", resp.StatusCode, string(body))
+		err := fmt.Errorf("heartbeat failed (%d): %s", resp.StatusCode, string(body))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "heartbeat rejected")
+		return err
 	}
 
+	span.SetStatus(codes.Ok, "heartbeat sent")
 	return nil
 }
 
@@ -242,6 +308,11 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 		return fmt.Errorf("not registered")
 	}
 
+	ctx, span := a.startSpan(ctx, "stoa-connect.discovery",
+		attribute.String("stoa.gateway_id", a.gatewayID),
+	)
+	defer span.End()
+
 	payload := DiscoveryPayload{}
 	// Convert adapters.DiscoveredAPI to DiscoveredAPIPayload
 	switch v := apis.(type) {
@@ -251,21 +322,31 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 		// Marshal and re-unmarshal for type conversion
 		data, err := json.Marshal(apis)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "marshal failed")
 			return fmt.Errorf("marshal discovery apis: %w", err)
 		}
 		if err := json.Unmarshal(data, &payload.APIs); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "convert failed")
 			return fmt.Errorf("convert discovery apis: %w", err)
 		}
 	}
 
+	span.SetAttributes(attribute.Int("stoa.discovered_apis", len(payload.APIs)))
+
 	data, err := json.Marshal(payload)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "marshal failed")
 		return fmt.Errorf("marshal discovery payload: %w", err)
 	}
 
 	url := fmt.Sprintf("%s/v1/internal/gateways/%s/discovery", a.cfg.ControlPlaneURL, a.gatewayID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "create request failed")
 		return fmt.Errorf("create discovery request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -273,15 +354,23 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 
 	resp, err := a.client.Do(req)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("discovery report request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("discovery report failed (%d): %s", resp.StatusCode, string(body))
+		err := fmt.Errorf("discovery report failed (%d): %s", resp.StatusCode, string(body))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "discovery rejected")
+		return err
 	}
 
+	span.SetStatus(codes.Ok, "discovery reported")
 	return nil
 }
 

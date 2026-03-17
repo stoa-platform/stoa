@@ -183,15 +183,14 @@ function generateDemoDetail(traceId: string): TransactionDetail {
   };
 }
 
-// ─── Fetch ───
+// ─── Fetch (authenticated via apiService) ───
+
+import { apiService } from '../../services/api';
 
 async function fetchTraceDetail(traceId: string): Promise<TransactionDetail> {
   try {
-    const res = await fetch(`/api/v1/monitoring/transactions/${traceId}`, {
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!res.ok) throw new Error(`${res.status}`);
-    return await res.json();
+    const data = await apiService.getTransactionDetail(traceId);
+    return data as unknown as TransactionDetail;
   } catch {
     return generateDemoDetail(traceId);
   }

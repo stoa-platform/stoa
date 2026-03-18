@@ -10,6 +10,9 @@ EnvironmentFile=/opt/secrets/stoa-connect.env
 Environment=STOA_INSTANCE_NAME=%H
 Environment=STOA_ENVIRONMENT=production
 Environment=STOA_HEARTBEAT_INTERVAL=30s
+# OpenTelemetry — OTLP HTTP via nginx ingress (basic auth via OTEL_EXPORTER_OTLP_HEADERS in env file)
+Environment=OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.gostoa.dev
+Environment=OTEL_SAMPLE_RATE=1.0
 ExecStart=/usr/local/bin/stoa-connect
 Restart=on-failure
 RestartSec=10

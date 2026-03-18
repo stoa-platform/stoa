@@ -3,11 +3,12 @@ import {
   BookOpen,
   User,
   X,
-  BarChart3,
   ExternalLink,
   Briefcase,
   Store,
+  Layers,
   LucideIcon,
+  ShieldCheck,
 } from 'lucide-react';
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,17 +40,28 @@ const navItems: NavItem[] = [
     scope: 'stoa:catalog:read',
   },
   {
+    name: 'Service Catalog',
+    href: '/services',
+    icon: Layers,
+    scope: 'stoa:catalog:read',
+  },
+  {
     name: 'My Workspace',
     href: '/workspace',
     icon: Briefcase,
     permission: 'apps:read',
   },
   {
-    name: 'Analytics',
-    href: '/usage',
-    icon: BarChart3,
-    enabled: config.features.enableSubscriptions,
-    scope: 'stoa:metrics:read',
+    name: 'Governance',
+    href: '/governance',
+    icon: ShieldCheck,
+    permission: 'apis:update',
+  },
+  {
+    name: 'Documentation',
+    href: config.services.docs.url,
+    icon: BookOpen,
+    external: true,
   },
   { name: 'Profile', href: '/profile', icon: User },
   {

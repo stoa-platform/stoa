@@ -52,26 +52,25 @@ const OnboardingWizardPage = lazy(() =>
 const MarketplacePage = lazy(() =>
   import('./pages/marketplace').then((m) => ({ default: m.MarketplacePage }))
 );
+const ServiceCatalog = lazy(() =>
+  import('./pages/services').then((m) => ({ default: m.ServiceCatalog }))
+);
 const NotificationsPage = lazy(() =>
   import('./pages/notifications/NotificationsPage').then((m) => ({
     default: m.NotificationsPage,
   }))
 );
-const AuditLogPage = lazy(() =>
-  import('./pages/audit-log/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
-);
-const FavoritesPage = lazy(() =>
-  import('./pages/favorites/FavoritesPage').then((m) => ({ default: m.FavoritesPage }))
-);
-const RateLimitsPage = lazy(() =>
-  import('./pages/rate-limits/RateLimitsPage').then((m) => ({ default: m.RateLimitsPage }))
-);
+// CAB-1764: AuditLogPage, FavoritesPage, RateLimitsPage removed from nav
+// Pages retained in codebase, routes redirect to consolidated locations
 const APIComparePage = lazy(() =>
   import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
 );
 const SignupPage = lazy(() => import('./pages/signup').then((m) => ({ default: m.SignupPage })));
 const ChatSettingsPage = lazy(() =>
   import('./pages/ChatSettings').then((m) => ({ default: m.ChatSettings }))
+);
+const GovernancePage = lazy(() =>
+  import('./pages/governance').then((m) => ({ default: m.GovernancePage }))
 );
 
 // Loading indicator for lazy-loaded pages
@@ -489,6 +488,14 @@ function AppContent() {
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/chat-settings" element={<ChatSettingsPage />} />
+            <Route
+              path="/governance"
+              element={
+                <ProtectedRoute permission="apis:update">
+                  <GovernancePage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/onboarding" element={<OnboardingWizardPage />} />
 
             {/* Workspace - tabbed view for apps and subscriptions */}
@@ -507,6 +514,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
                   <MarketplacePage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Service Catalog - grouped API view (CAB-1760) */}
+            <Route
+              path="/services"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <ServiceCatalog />
                 </ProtectedRoute>
               }
             />
@@ -612,30 +629,11 @@ function AppContent() {
             {/* Notifications (CAB-1470) */}
             <Route path="/notifications" element={<NotificationsPage />} />
 
-            {/* Audit Log (CAB-1470) */}
-            <Route
-              path="/audit-log"
-              element={
-                <ProtectedRoute permission="audit:read">
-                  <AuditLogPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Favorites (CAB-1470) */}
-            <Route path="/favorites" element={<FavoritesPage />} />
-
-            {/* Rate Limits (CAB-1470) */}
-            <Route
-              path="/rate-limits"
-              element={
-                <ProtectedRoute scope="stoa:metrics:read">
-                  <RateLimitsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* API Compare (CAB-1470) */}
+            {/* CAB-1764: Removed pages — redirect to consolidated locations */}
+            <Route path="/audit-log" element={<Navigate to="/workspace" replace />} />
+            <Route path="/favorites" element={<Navigate to="/marketplace" replace />} />
+            <Route path="/rate-limits" element={<Navigate to="/workspace?tab=usage" replace />} />
+            {/* API Compare — removed from nav, accessible via Marketplace button */}
             <Route
               path="/api-compare"
               element={
@@ -644,16 +642,6 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-
-            {/* Provider routes — redirected to catalog/console (ADR-055) */}
-            <Route path="/my-servers" element={<Navigate to="/servers" replace />} />
-            <Route path="/my-apis" element={<Navigate to="/apis" replace />} />
-            <Route path="/contracts/new" element={<Navigate to="/workspace" replace />} />
-            <Route path="/contracts/:id" element={<Navigate to="/workspace" replace />} />
-            <Route path="/consumers/register" element={<Navigate to="/" replace />} />
-            <Route path="/gateways" element={<Navigate to="/" replace />} />
-            <Route path="/credentials" element={<Navigate to="/" replace />} />
-            <Route path="/webhooks" element={<Navigate to="/" replace />} />
 
             {/* Provider routes — redirected to catalog/console (ADR-055) */}
             <Route path="/my-servers" element={<Navigate to="/servers" replace />} />

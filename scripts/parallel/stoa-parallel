@@ -1,5 +1,16 @@
 #!/bin/bash
-# stoa-parallel — Launch parallel Claude Code tmux workspace (CAB-1513 v2)
+# stoa-parallel — Launch parallel Claude Code tmux workspace (CAB-1513 v2, CAB-1676 worktrees)
+#
+# Each specialist pane runs in its own git worktree for full filesystem isolation.
+# Two panes can work on different branches simultaneously without interference.
+#
+# Worktree layout (CAB-1676):
+#   ~/hlfh-repos/stoa           → main (ORCHESTRE, read-only)
+#   ~/hlfh-repos/stoa-backend   → wt/backend (BACKEND pane 2)
+#   ~/hlfh-repos/stoa-frontend  → wt/frontend (FRONTEND pane 3)
+#   ~/hlfh-repos/stoa-auth      → wt/auth (AUTH pane 4)
+#   ~/hlfh-repos/stoa-mcp       → wt/mcp (MCP pane 5)
+#   ~/hlfh-repos/stoa-qa        → wt/qa (QA pane 6)
 #
 # Layout (7 panes in 1 window — tiled grid, all visible):
 #   Pane 0: ORCHESTRE  — Lead orchestrator (always Max, full repo access)
@@ -32,14 +43,17 @@
 #   stoa-parallel --all-api                # All on API key
 #   stoa-parallel --all-max                # All on Max (no API key needed)
 #   stoa-parallel --attach                 # Create + attach
-#   stoa-parallel --kill                   # Tear down
+#   stoa-parallel --kill                   # Tear down (removes clean worktrees)
+#   stoa-parallel --kill --keep-worktrees  # Tear down but preserve worktrees
 #   stoa-parallel --no-claude              # Layout only
 
 set -euo pipefail
 
 SESSION="stoa"
 STOA_DIR="$HOME/hlfh-repos/stoa"
+WORKTREE_BASE="$HOME/hlfh-repos"
 LAUNCH_CLAUDE=true
+KEEP_WORKTREES=false
 API_KEY="${ANTHROPIC_API_KEY:-}"
 # Default: panes 0 (ORCHESTRE) and 2 (BACKEND) on Max — 2 Max + 4 API
 MAX_PANES="0,2"
@@ -54,6 +68,9 @@ INSTANCES_DIR="$STOA_DIR/.claude/instances"
 
 # Pane index → role name mapping
 ROLES=(ORCHESTRE MONITOR BACKEND FRONTEND AUTH MCP QA)
+
+# Worker roles that get their own worktree (lowercase)
+WORKER_ROLES=(backend frontend auth mcp qa)
 
 # Fetch API key from Infisical if not already set
 fetch_api_key() {
@@ -91,9 +108,103 @@ fetch_api_key() {
   echo "OK: API key loaded from Infisical (${API_KEY:0:10}...)"
 }
 
+# ── Worktree lifecycle (CAB-1676) ──
+# Each worker role gets its own git worktree for filesystem isolation.
+# Worktrees are created on startup and optionally removed on --kill.
+
+# Get worktree directory for a role
+worktree_dir() {
+  local role="$1"
+  echo "${WORKTREE_BASE}/stoa-${role}"
+}
+
+# Create or reuse git worktrees for all worker roles
+setup_worktrees() {
+  echo "Setting up git worktrees..."
+
+  # Prune stale worktree refs (directories that no longer exist)
+  git -C "$STOA_DIR" worktree prune 2>/dev/null || true
+
+  for role in "${WORKER_ROLES[@]}"; do
+    local wt_dir
+    wt_dir=$(worktree_dir "$role")
+    local wt_branch="wt/${role}"
+
+    if [[ -d "$wt_dir" ]]; then
+      # Worktree already exists — verify it's valid
+      if git -C "$wt_dir" rev-parse --git-dir >/dev/null 2>&1; then
+        echo "  OK: ${role} worktree exists at ${wt_dir} (branch: $(git -C "$wt_dir" branch --show-current))"
+        # Sync with latest main
+        git -C "$wt_dir" fetch origin main --quiet 2>/dev/null || true
+        continue
+      else
+        echo "  WARN: ${wt_dir} exists but is not a valid worktree — recreating"
+        rm -rf "$wt_dir"
+      fi
+    fi
+
+    # Create new worktree on a dedicated branch (wt/<role>) starting from main
+    echo "  Creating worktree: ${wt_dir} (branch: ${wt_branch})"
+    git -C "$STOA_DIR" worktree add "$wt_dir" -b "$wt_branch" origin/main 2>/dev/null || \
+      git -C "$STOA_DIR" worktree add "$wt_dir" "$wt_branch" 2>/dev/null || {
+        echo "  ERROR: Failed to create worktree for ${role}" >&2
+        continue
+      }
+
+    # Symlink shared state files from main repo
+    # .claude/claims/ — cross-instance coordination (single source of truth)
+    mkdir -p "$wt_dir/.claude"
+    if [[ -d "$STOA_DIR/.claude/claims" ]]; then
+      ln -sfn "$STOA_DIR/.claude/claims" "$wt_dir/.claude/claims"
+    fi
+
+    # .env — shared environment (gitignored)
+    if [[ -f "$STOA_DIR/.env" ]]; then
+      ln -sf "$STOA_DIR/.env" "$wt_dir/.env"
+    fi
+
+    # settings.local.json — permissions config
+    if [[ -f "$STOA_DIR/.claude/settings.local.json" ]]; then
+      cp -f "$STOA_DIR/.claude/settings.local.json" "$wt_dir/.claude/settings.local.json"
+    fi
+  done
+
+  echo "OK: Worktrees ready"
+}
+
+# Remove worktrees on --kill (warn on dirty)
+cleanup_worktrees() {
+  echo "Cleaning up worktrees..."
+
+  for role in "${WORKER_ROLES[@]}"; do
+    local wt_dir
+    wt_dir=$(worktree_dir "$role")
+
+    if [[ ! -d "$wt_dir" ]]; then
+      continue
+    fi
+
+    # Check for uncommitted changes
+    if git -C "$wt_dir" diff --quiet 2>/dev/null && git -C "$wt_dir" diff --cached --quiet 2>/dev/null; then
+      echo "  Removing clean worktree: ${wt_dir}"
+      git -C "$STOA_DIR" worktree remove "$wt_dir" --force 2>/dev/null || \
+        echo "  WARN: Could not remove ${wt_dir} (may have untracked files)"
+    else
+      echo "  WARN: ${role} worktree has uncommitted changes — skipping removal"
+      echo "        ${wt_dir}"
+      echo "        To force: git -C ${STOA_DIR} worktree remove ${wt_dir} --force"
+    fi
+  done
+
+  # Clean up stale worktree refs
+  git -C "$STOA_DIR" worktree prune 2>/dev/null || true
+  echo "OK: Worktree cleanup done"
+}
+
 # Parse args
 for arg in "$@"; do
   case "$arg" in
+    --keep-worktrees) KEEP_WORKTREES=true ;;
     --kill)
       echo "Killing session $SESSION..."
       tmux kill-session -t "$SESSION" 2>/dev/null || echo "No session to kill."
@@ -104,6 +215,12 @@ for arg in "$@"; do
         rm -f "$INSTANCES_DIR/${role}.local.md"
       done
       rm -rf /tmp/claude-api-config
+      # Remove worktrees unless --keep-worktrees was passed
+      if [[ "$KEEP_WORKTREES" != "true" ]]; then
+        cleanup_worktrees
+      else
+        echo "Keeping worktrees (--keep-worktrees)"
+      fi
       exit 0
       ;;
     --no-claude) LAUNCH_CLAUDE=false ;;
@@ -119,7 +236,8 @@ Usage: stoa-parallel [OPTIONS]
 
 Options:
   --attach              Create and attach immediately
-  --kill                Kill existing session
+  --kill                Kill existing session + remove clean worktrees
+  --kill --keep-worktrees  Kill session but preserve worktrees
   --no-claude           Create layout without launching Claude instances
   --api-key=sk-ant-...  Set API key for consumption-billed instances
   --max-panes=0,2,5     Pane indices that use Max subscription (default: 0,2,5)
@@ -150,6 +268,14 @@ Instance → Linear label:
   AUTH     → instance:auth      (keycloak, IAM)
   MCP      → instance:mcp       (stoa-gateway)
   QA       → instance:qa        (e2e, tests)
+
+Worktree layout (each pane has its own git HEAD):
+  ~/hlfh-repos/stoa           → main (ORCHESTRE)
+  ~/hlfh-repos/stoa-backend   → wt/backend
+  ~/hlfh-repos/stoa-frontend  → wt/frontend
+  ~/hlfh-repos/stoa-auth      → wt/auth
+  ~/hlfh-repos/stoa-mcp       → wt/mcp
+  ~/hlfh-repos/stoa-qa        → wt/qa
 
 Shared state: PocketBase (state.gostoa.dev) via heg-state CLI
 HELP
@@ -399,20 +525,23 @@ QAEOF
   echo "OK: Context files generated in $INSTANCES_DIR/"
 }
 
+# ── Set up worktrees before creating tmux session (CAB-1676) ──
+setup_worktrees
+
 echo "Creating 7-pane tmux grid..."
 
 # ── Create session with pane 0 (ORCHESTRE) ──
 # Use -x/-y to ensure enough space for 7 panes when detached (resizes on attach)
 tmux new-session -d -s "$SESSION" -n "workspace" -x 220 -y 60 -c "$STOA_DIR"
 
-# ── Create panes 1-6 (apply tiled after each split to redistribute space) ──
+# ── Create panes 1-6 — each worker in its own worktree (CAB-1676) ──
 PANE_DIRS=(
-  "$STOA_DIR"                    # pane 1: MONITOR
-  "$STOA_DIR/control-plane-api"  # pane 2: BACKEND
-  "$STOA_DIR/portal"             # pane 3: FRONTEND
-  "$STOA_DIR"                    # pane 4: AUTH
-  "$STOA_DIR/stoa-gateway"       # pane 5: MCP
-  "$STOA_DIR/e2e"                # pane 6: QA
+  "$STOA_DIR"                          # pane 1: MONITOR (main repo)
+  "$(worktree_dir backend)"            # pane 2: BACKEND worktree
+  "$(worktree_dir frontend)"           # pane 3: FRONTEND worktree
+  "$(worktree_dir auth)"               # pane 4: AUTH worktree
+  "$(worktree_dir mcp)"                # pane 5: MCP worktree
+  "$(worktree_dir qa)"                 # pane 6: QA worktree
 )
 for dir in "${PANE_DIRS[@]}"; do
   tmux split-window -t "$SESSION:workspace" -c "$dir"
@@ -530,25 +659,31 @@ if [[ "$LAUNCH_CLAUDE" == "true" ]]; then
       "hasClaudeMdExternalIncludesApproved": false,
       "hasClaudeMdExternalIncludesWarningShown": false
     },
-    "${STOA_DIR}/control-plane-api": {
+    "${WORKTREE_BASE}/stoa-backend": {
       "hasTrustDialogAccepted": true,
       "allowedTools": [],
       "mcpContextUris": [],
       "mcpServers": {}
     },
-    "${STOA_DIR}/portal": {
+    "${WORKTREE_BASE}/stoa-frontend": {
       "hasTrustDialogAccepted": true,
       "allowedTools": [],
       "mcpContextUris": [],
       "mcpServers": {}
     },
-    "${STOA_DIR}/stoa-gateway": {
+    "${WORKTREE_BASE}/stoa-auth": {
       "hasTrustDialogAccepted": true,
       "allowedTools": [],
       "mcpContextUris": [],
       "mcpServers": {}
     },
-    "${STOA_DIR}/e2e": {
+    "${WORKTREE_BASE}/stoa-mcp": {
+      "hasTrustDialogAccepted": true,
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {}
+    },
+    "${WORKTREE_BASE}/stoa-qa": {
       "hasTrustDialogAccepted": true,
       "allowedTools": [],
       "mcpContextUris": [],
@@ -593,8 +728,15 @@ fi
 tmux select-pane -t "$SESSION:workspace.0"
 
 echo ""
-echo "Session ready (7 panes, tiled grid):"
+echo "Session ready (7 panes, tiled grid — worktree-isolated):"
 echo "  ORCHESTRE(0)  MONITOR(1)  BACKEND(2)  FRONTEND(3)  AUTH(4)  MCP(5)  QA(6)"
+echo ""
+echo "Worktrees:"
+for role in "${WORKER_ROLES[@]}"; do
+  wt=$(worktree_dir "$role")
+  branch=$(git -C "$wt" branch --show-current 2>/dev/null || echo "?")
+  echo "  ${role}: ${wt} (${branch})"
+done
 echo ""
 echo "Navigation:"
 echo "  Ctrl+B q       Show pane numbers (press digit to jump)"

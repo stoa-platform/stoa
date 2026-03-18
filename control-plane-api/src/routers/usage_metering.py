@@ -27,6 +27,7 @@ router = APIRouter(prefix="/v1/usage", tags=["Usage Metering"])
 async def get_usage_summary(
     api_id: uuid.UUID | None = Query(None, description="Filter by API ID"),
     period: str = Query("daily", description="Period type: daily or monthly"),
+    environment: str | None = Query(None, description="Filter by environment"),
     limit: int = Query(50, ge=1, le=200, description="Max results per page"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     current_user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
@@ -46,6 +47,7 @@ async def get_usage_summary(
         tenant_id=tenant_id,
         api_id=api_id,
         period=period,
+        environment=environment,
         limit=limit,
         offset=offset,
     )
@@ -55,6 +57,7 @@ async def get_usage_summary(
 async def get_usage_details(
     api_id: uuid.UUID = Query(..., description="API ID to get details for"),
     period: str = Query("daily", description="Period type: daily or monthly"),
+    environment: str | None = Query(None, description="Filter by environment"),
     current_user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
     db: AsyncSession = Depends(get_db),
 ) -> UsageDetailResponse:
@@ -71,6 +74,7 @@ async def get_usage_details(
         tenant_id=tenant_id,
         api_id=api_id,
         period=period,
+        environment=environment,
     )
     if result is None:
         raise HTTPException(status_code=404, detail="No usage data found for this API")

@@ -27,6 +27,7 @@ class UsageMeteringService:
         tenant_id: str,
         api_id: uuid.UUID | None = None,
         period: str = "daily",
+        environment: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> UsageSummaryListResponse:
@@ -35,6 +36,7 @@ class UsageMeteringService:
             tenant_id=tenant_id,
             api_id=api_id,
             period=period,
+            environment=environment,
             limit=limit,
             offset=offset,
         )
@@ -50,6 +52,7 @@ class UsageMeteringService:
         tenant_id: str,
         api_id: uuid.UUID,
         period: str = "daily",
+        environment: str | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> UsageDetailResponse | None:
@@ -58,6 +61,7 @@ class UsageMeteringService:
             tenant_id=tenant_id,
             api_id=api_id,
             period=period,
+            environment=environment,
             start_date=start_date,
             end_date=end_date,
         )

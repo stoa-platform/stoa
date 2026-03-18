@@ -1,16 +1,22 @@
 import { useSearchParams } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppWindow, CreditCard } from 'lucide-react';
+import { AppWindow, CreditCard, BarChart3, History } from 'lucide-react';
 
 const MyApplications = lazy(() => import('../apps').then((m) => ({ default: m.MyApplications })));
 const MySubscriptions = lazy(() =>
   import('../subscriptions/MySubscriptions').then((m) => ({ default: m.MySubscriptions }))
 );
+const UsagePage = lazy(() => import('../usage').then((m) => ({ default: m.UsagePage })));
+const ExecutionHistoryPage = lazy(() =>
+  import('../executions').then((m) => ({ default: m.ExecutionHistoryPage }))
+);
 
 const allTabs = [
   { id: 'apps', label: 'Apps', icon: AppWindow },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { id: 'usage', label: 'Usage', icon: BarChart3 },
+  { id: 'executions', label: 'Executions', icon: History },
 ] as const;
 
 type TabId = (typeof allTabs)[number]['id'];
@@ -72,6 +78,8 @@ export function WorkspacePage() {
       <Suspense fallback={<TabSkeleton />}>
         {activeTab === 'apps' && <MyApplications />}
         {activeTab === 'subscriptions' && <MySubscriptions />}
+        {activeTab === 'usage' && <UsagePage />}
+        {activeTab === 'executions' && <ExecutionHistoryPage />}
       </Suspense>
     </div>
   );

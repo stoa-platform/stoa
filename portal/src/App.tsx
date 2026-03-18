@@ -57,15 +57,8 @@ const NotificationsPage = lazy(() =>
     default: m.NotificationsPage,
   }))
 );
-const AuditLogPage = lazy(() =>
-  import('./pages/audit-log/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
-);
-const FavoritesPage = lazy(() =>
-  import('./pages/favorites/FavoritesPage').then((m) => ({ default: m.FavoritesPage }))
-);
-const RateLimitsPage = lazy(() =>
-  import('./pages/rate-limits/RateLimitsPage').then((m) => ({ default: m.RateLimitsPage }))
-);
+// CAB-1764: AuditLogPage, FavoritesPage, RateLimitsPage removed from nav
+// Pages retained in codebase, routes redirect to consolidated locations
 const APIComparePage = lazy(() =>
   import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
 );
@@ -612,30 +605,11 @@ function AppContent() {
             {/* Notifications (CAB-1470) */}
             <Route path="/notifications" element={<NotificationsPage />} />
 
-            {/* Audit Log (CAB-1470) */}
-            <Route
-              path="/audit-log"
-              element={
-                <ProtectedRoute permission="audit:read">
-                  <AuditLogPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Favorites (CAB-1470) */}
-            <Route path="/favorites" element={<FavoritesPage />} />
-
-            {/* Rate Limits (CAB-1470) */}
-            <Route
-              path="/rate-limits"
-              element={
-                <ProtectedRoute scope="stoa:metrics:read">
-                  <RateLimitsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* API Compare (CAB-1470) */}
+            {/* CAB-1764: Removed pages — redirect to consolidated locations */}
+            <Route path="/audit-log" element={<Navigate to="/workspace" replace />} />
+            <Route path="/favorites" element={<Navigate to="/marketplace" replace />} />
+            <Route path="/rate-limits" element={<Navigate to="/workspace?tab=usage" replace />} />
+            {/* API Compare — removed from nav, accessible via Marketplace button */}
             <Route
               path="/api-compare"
               element={
@@ -644,16 +618,6 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-
-            {/* Provider routes — redirected to catalog/console (ADR-055) */}
-            <Route path="/my-servers" element={<Navigate to="/servers" replace />} />
-            <Route path="/my-apis" element={<Navigate to="/apis" replace />} />
-            <Route path="/contracts/new" element={<Navigate to="/workspace" replace />} />
-            <Route path="/contracts/:id" element={<Navigate to="/workspace" replace />} />
-            <Route path="/consumers/register" element={<Navigate to="/" replace />} />
-            <Route path="/gateways" element={<Navigate to="/" replace />} />
-            <Route path="/credentials" element={<Navigate to="/" replace />} />
-            <Route path="/webhooks" element={<Navigate to="/" replace />} />
 
             {/* Provider routes — redirected to catalog/console (ADR-055) */}
             <Route path="/my-servers" element={<Navigate to="/servers" replace />} />

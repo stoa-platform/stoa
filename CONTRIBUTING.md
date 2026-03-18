@@ -102,25 +102,94 @@ Issues that don't meet the Marchemalo Standard will be labeled `needs-triage` an
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 20+
-- Rust stable toolchain
-- Docker & Docker Compose
-- kubectl (for K8s development)
+| Tool | Version | Install |
+|------|---------|---------|
+| Docker & Docker Compose | 24+ | [docker.com](https://docs.docker.com/get-docker/) |
+| Python | 3.11+ | `brew install python@3.11` or [python.org](https://www.python.org/) |
+| Node.js | 20 LTS | `brew install node@20` or [nodejs.org](https://nodejs.org/) |
+| Rust | stable | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+| librdkafka | latest | `brew install librdkafka` (macOS) or `apt install librdkafka-dev` (Linux) |
+| cmake | latest | `brew install cmake` (macOS) — needed for gateway Kafka feature |
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup instructions per component.
+### Option 1: Full Platform via Docker Compose (Recommended for first run)
 
-### Local Development
+This starts **everything** — API, UI, Portal, Gateway, Keycloak, PostgreSQL, OpenSearch, Prometheus, Grafana — in one command:
 
 ```bash
-# Clone your fork
-git clone https://github.com/YOUR_USERNAME/stoa.git
+# Clone
+git clone https://github.com/stoa-platform/stoa.git
 cd stoa
 
-# Install dependencies for all components
+# Start all services
+cd deploy/docker-compose
+docker compose up -d
+
+# Wait for all services to be healthy (~2-3 min)
+docker compose ps
+
+# Access the platform:
+#   Console UI:   http://localhost        (via nginx)
+#   Keycloak:     http://localhost:8080   (admin/admin)
+#   OpenSearch:   http://keycloak:5601/logs (OIDC login)
+#   Grafana:      http://localhost/grafana
+#   API:          http://localhost/api/v1/health
+```
+
+**Demo users** (Keycloak):
+
+| User | Password | Role |
+|------|----------|------|
+| halliday | `ReadyPlayer1!rpo` | Platform admin (cpi-admin) |
+| parzival | `CopperKey2045!s` | Tenant admin (oasis-gunters) |
+| art3mis | `JadeKey2045!a` | Tenant admin (oasis-gunters) |
+| sorrento | `CrystalKey2045!x` | Tenant admin (ioi-sixers) |
+
+**Troubleshooting**:
+
+| Symptom | Fix |
+|---------|-----|
+| Keycloak fails with "wrong password" | `docker compose down -v keycloak && docker compose up -d keycloak` (wipe H2 DB) |
+| OpenSearch 401 | `docker volume rm stoa-quickstart_opensearch-data stoa-quickstart_opensearch-security && docker compose up -d opensearch` |
+| Port 8080 in use | Set `PORT_KEYCLOAK=8180` in `.env` |
+
+### Option 2: Component Development (Faster iteration)
+
+Start only the dependencies via Docker Compose, then run the component you're working on locally:
+
+```bash
+# Start dependencies only (DB, Keycloak, message broker)
+cd deploy/docker-compose
+docker compose up -d postgres keycloak redpanda
+
+# In a new terminal — run the component you're working on:
+
+# API (Python)
+cd control-plane-api
+pip install -r requirements.txt
+uvicorn src.main:app --reload --port 8000
+
+# Console UI (React)
+cd control-plane-ui
+npm install
+npm start  # http://localhost:5173
+
+# Portal (React)
+cd portal
+npm install
+npm start  # http://localhost:5174
+
+# Gateway (Rust)
+cd stoa-gateway
+cargo run
+```
+
+### Option 3: Make targets
+
+```bash
+# Install all component dependencies
 make setup
 
-# Start the API, UI, and Gateway (each in a separate terminal)
+# Run components (each in a separate terminal)
 make run-api
 make run-ui
 make run-gateway

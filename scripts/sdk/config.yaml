@@ -1,0 +1,20 @@
+# openapi-python-client configuration for STOA Platform SDK
+# Docs: https://github.com/openapi-generators/openapi-python-client
+
+project_name_override: stoa-platform-client
+package_name_override: stoa_platform_client
+package_version_override: 0.1.0
+
+# Use Literal types instead of Enum classes (simpler, JSON-friendly)
+literal_enums: true
+
+# Put docstrings on attributes for better IDE support
+docstrings_on_attributes: true
+
+# Disable path-based name prefixes (cleaner model names)
+use_path_prefixes_for_title_model_names: false
+
+# Post-generation formatting hooks
+post_hooks:
+  - "ruff check . --fix-only --select I"
+  - "ruff format ."

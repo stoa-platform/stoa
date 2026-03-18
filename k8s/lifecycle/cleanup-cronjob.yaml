@@ -1,0 +1,214 @@
+# Resource Cleanup CronJob — TTL-based lifecycle management (CAB-1878)
+#
+# Scans K8s resources with stoa.dev/ttl labels and cleans up expired ones.
+# Default: dry-run mode (CLEANUP_DRY_RUN=true). Set to false for active deletion.
+#
+# Manual trigger:
+#   kubectl create job --from=cronjob/resource-cleanup cleanup-manual -n stoa-system
+#
+# Active mode (delete expired):
+#   kubectl set env cronjob/resource-cleanup CLEANUP_DRY_RUN=false -n stoa-system
+#
+---
+# ServiceAccount with limited permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: resource-cleanup
+  namespace: stoa-system
+  labels:
+    app: resource-cleanup
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: manual
+---
+# Role: read all resources, delete only non-core ones
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: resource-cleanup
+  namespace: stoa-system
+rules:
+  # Read access for scanning
+  - apiGroups: ["", "apps", "batch"]
+    resources:
+      - deployments
+      - statefulsets
+      - cronjobs
+      - jobs
+      - configmaps
+      - services
+    verbs: ["get", "list"]
+  # Delete access (active mode only — script checks CLEANUP_DRY_RUN)
+  - apiGroups: ["", "apps", "batch"]
+    resources:
+      - deployments
+      - statefulsets
+      - cronjobs
+      - jobs
+      - configmaps
+      - services
+    verbs: ["delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: resource-cleanup
+  namespace: stoa-system
+subjects:
+  - kind: ServiceAccount
+    name: resource-cleanup
+    namespace: stoa-system
+roleRef:
+  kind: Role
+  name: resource-cleanup
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: resource-cleanup
+  namespace: stoa-system
+  labels:
+    app: resource-cleanup
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: manual
+spec:
+  schedule: "0 3 * * *"  # Daily at 03:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300  # 5 min max
+      template:
+        metadata:
+          labels:
+            app: resource-cleanup
+        spec:
+          serviceAccountName: resource-cleanup
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: cleanup
+              image: bitnami/kubectl:1.28
+              command:
+                - /bin/bash
+                - /scripts/resource-cleanup.sh
+              env:
+                - name: NAMESPACE
+                  value: stoa-system
+                - name: CLEANUP_DRY_RUN
+                  value: "true"
+                - name: SLACK_WEBHOOK_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: stoa-slack-webhook
+                      key: webhook-url
+                      optional: true
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+                seccompProfile:
+                  type: RuntimeDefault
+          volumes:
+            - name: scripts
+              configMap:
+                name: resource-cleanup-scripts
+                defaultMode: 0755
+---
+# ConfigMap containing the cleanup script
+# In production, apply this separately or use the script from the image
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resource-cleanup-scripts
+  namespace: stoa-system
+  labels:
+    app: resource-cleanup
+    app.kubernetes.io/part-of: stoa-platform
+data:
+  resource-cleanup.sh: |
+    #!/usr/bin/env bash
+    # Inline version — see scripts/ops/resource-cleanup.sh for full version
+    set -euo pipefail
+
+    NAMESPACE="${NAMESPACE:-stoa-system}"
+    CLEANUP_DRY_RUN="${CLEANUP_DRY_RUN:-true}"
+    SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
+    NOW_EPOCH=$(date +%s)
+    expired=()
+    cleaned=()
+
+    parse_ttl() {
+      if [[ "$1" =~ ^P([0-9]+)D$ ]]; then echo $(( ${BASH_REMATCH[1]} * 86400 )); else echo 0; fi
+    }
+
+    notify() {
+      if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
+        curl -sf -X POST "$SLACK_WEBHOOK_URL" -H "Content-Type: application/json" \
+          -d "{\"text\": \"$1\"}" >/dev/null 2>&1 || true
+      fi
+    }
+
+    echo "=== STOA Resource Cleanup ($(date -u +%Y-%m-%dT%H:%M:%SZ)) ==="
+    echo "Namespace: $NAMESPACE | Dry-run: $CLEANUP_DRY_RUN"
+
+    for rt in deployments statefulsets cronjobs jobs configmaps services; do
+      resources=$(kubectl get "$rt" -n "$NAMESPACE" -l "stoa.dev/ttl" -o json 2>/dev/null || echo '{"items":[]}')
+      for row in $(echo "$resources" | jq -r '.items[] | @base64'); do
+        name=$(echo "$row" | base64 -d | jq -r '.metadata.name')
+        ttl=$(echo "$row" | base64 -d | jq -r '.metadata.labels["stoa.dev/ttl"]')
+        mgr=$(echo "$row" | base64 -d | jq -r '.metadata.labels["stoa.dev/managed-by"] // "unknown"')
+        created=$(echo "$row" | base64 -d | jq -r '.metadata.creationTimestamp')
+
+        [[ "$mgr" == "argocd" || "$mgr" == "helm" ]] && continue
+
+        ttl_s=$(parse_ttl "$ttl")
+        [[ "$ttl_s" == "0" ]] && continue
+
+        created_epoch=$(date -d "$created" +%s 2>/dev/null || echo 0)
+        [[ "$created_epoch" == "0" ]] && continue
+
+        remaining=$(( (created_epoch + ttl_s) - NOW_EPOCH ))
+        if [[ $remaining -le 0 ]]; then
+          overdue=$(( -remaining / 86400 ))
+          echo "EXPIRED $rt/$name (TTL=$ttl, ${overdue}d overdue)"
+          expired+=("$rt/$name")
+          if [[ "$CLEANUP_DRY_RUN" == "false" ]]; then
+            kubectl delete "$rt" "$name" -n "$NAMESPACE" --wait=false 2>/dev/null && cleaned+=("$rt/$name") || true
+          fi
+        elif [[ $((remaining / 86400)) -le 7 ]]; then
+          echo "WARNING $rt/$name (TTL=$ttl, $((remaining / 86400))d left)"
+        fi
+      done
+    done
+
+    echo "--- Summary: ${#expired[@]} expired, ${#cleaned[@]} cleaned ---"
+    if [[ ${#expired[@]} -gt 0 ]]; then
+      mode=$(if [[ "$CLEANUP_DRY_RUN" == "true" ]]; then echo "DRY-RUN"; else echo "CLEANED"; fi)
+      list=$(printf '• %s\\n' "${expired[@]}")
+      notify ":recycle: *STOA Resource Cleanup* ($mode)\\n*Expired*: ${#expired[@]}\\n$list"
+    fi

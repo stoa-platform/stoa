@@ -163,6 +163,46 @@ class CatalogSyncService:
             await self.db.commit()
             raise
 
+    async def sync_single_api(self, tenant_id: str, api_id: str) -> bool:
+        """Sync a single API from GitLab into the catalog cache.
+
+        Called by the catalog-sync consumer when an api-created / api-updated
+        / api-deleted event is received.  Much lighter than a full or tenant
+        sync — only touches one API row.
+
+        Returns True if the API was synced (or soft-deleted) successfully.
+        """
+        if not self.git._project:
+            await self.git.connect()
+
+        commit_sha = await self._get_current_commit_sha()
+
+        api = await self.git.get_api(tenant_id, api_id)
+
+        if api is None:
+            # API no longer exists in Git → soft-delete from catalog
+            await self.db.execute(
+                update(APICatalog)
+                .where(APICatalog.tenant_id == tenant_id)
+                .where(APICatalog.api_id == api_id)
+                .where(APICatalog.deleted_at.is_(None))
+                .values(deleted_at=datetime.now(UTC))
+            )
+            await self.db.commit()
+            logger.info("Catalog sync: soft-deleted %s/%s (removed from Git)", tenant_id, api_id)
+            return True
+
+        # Fetch openapi spec if available
+        openapi_spec = await self.git.get_api_openapi_spec(tenant_id, api_id)
+
+        await self._upsert_api(tenant_id, api_id, api, openapi_spec, commit_sha)
+        if self._enable_gateway_reconciliation:
+            await self._reconcile_gateway_deployments(tenant_id, api_id, api)
+        await self.db.commit()
+
+        logger.info("Catalog sync: synced %s/%s from Git", tenant_id, api_id)
+        return True
+
     async def _get_current_commit_sha(self) -> str | None:
         """Get the current HEAD commit SHA from GitLab"""
         try:

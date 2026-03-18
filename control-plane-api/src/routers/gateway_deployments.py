@@ -99,17 +99,26 @@ async def list_catalog_entries(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin"])),
 ):
-    """List API catalog entries for the deploy dialog."""
+    """List API catalog entries for the deploy dialog.
+
+    Reads from the catalog cache (api_catalog table), kept in sync by
+    the catalog-sync consumer (event-driven) and the periodic catalog
+    sync worker.
+    """
     from src.models.catalog import APICatalog
 
     result = await db.execute(
         select(APICatalog.id, APICatalog.api_name, APICatalog.tenant_id, APICatalog.version)
         .where(APICatalog.status == "active")
+        .where(APICatalog.deleted_at.is_(None))
         .order_by(APICatalog.api_name)
         .limit(200)
     )
     rows = result.all()
-    return [{"id": str(r.id), "api_name": r.api_name, "tenant_id": r.tenant_id, "version": r.version} for r in rows]
+    return [
+        {"id": str(r.id), "api_name": r.api_name, "tenant_id": r.tenant_id, "version": r.version}
+        for r in rows
+    ]
 
 
 @router.get("/{deployment_id}", response_model=GatewayDeploymentResponse)

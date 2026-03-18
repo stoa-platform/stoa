@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     # ArgoCD reconciler interval (how often to sync ArgoCD apps → gateway_instances)
     GATEWAY_RECONCILER_INTERVAL_SECONDS: int = 60
 
+    # Catalog sync worker — periodic full sync from GitLab (safety net)
+    CATALOG_SYNC_INTERVAL_SECONDS: int = 300  # 5 minutes
+
     # Docs Search — Algolia integration (CAB-1327)
     ALGOLIA_APP_ID: str = "GIWP67WK7V"
     ALGOLIA_SEARCH_API_KEY: str = "6f5bb332c047a35c99fd3a151c44cc7f"  # Public search-only key

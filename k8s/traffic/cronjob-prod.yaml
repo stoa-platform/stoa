@@ -5,7 +5,10 @@ metadata:
   namespace: stoa-system
   labels:
     app: traffic-generator
-    environment: production
+    app.kubernetes.io/component: arena
+    app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: manual
 spec:
   schedule: "*/30 * * * *"
   concurrencyPolicy: Forbid

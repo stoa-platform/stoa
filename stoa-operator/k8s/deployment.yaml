@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/name: stoa-operator
     app.kubernetes.io/component: operator
     app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: argocd
 spec:
   replicas: 1
   strategy:

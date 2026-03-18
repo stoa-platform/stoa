@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/name: stoa-portal
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: argocd
 spec:
   replicas: 2
   strategy:

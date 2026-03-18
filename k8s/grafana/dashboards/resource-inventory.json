@@ -1,0 +1,347 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "STOA Resource Inventory — label compliance, TTL tracking, component breakdown (CAB-1879)",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Label Compliance Score",
+      "description": "Percentage of resources with all required STOA labels",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.7 },
+              { "color": "green", "value": 0.9 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(kube_deployment_labels{namespace=\"stoa-system\", label_stoa_dev_environment!=\"\"}) / count(kube_deployment_labels{namespace=\"stoa-system\"})",
+          "legendFormat": "Deployments",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "title": "Total Resources",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(kube_deployment_labels{namespace=\"stoa-system\"}) + count(kube_cronjob_labels{namespace=\"stoa-system\"})",
+          "legendFormat": "Total",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      }
+    },
+    {
+      "title": "Deployments",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(kube_deployment_labels{namespace=\"stoa-system\"})",
+          "legendFormat": "Deployments",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      }
+    },
+    {
+      "title": "CronJobs",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "orange", "value": null }]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(kube_cronjob_labels{namespace=\"stoa-system\"})",
+          "legendFormat": "CronJobs",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      }
+    },
+    {
+      "title": "StatefulSets",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "purple", "value": null }]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(kube_statefulset_labels{namespace=\"stoa-system\"}) or vector(0)",
+          "legendFormat": "StatefulSets",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      }
+    },
+    {
+      "title": "Resources by Component",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count by (label_app_kubernetes_io_component) (kube_deployment_labels{namespace=\"stoa-system\", label_app_kubernetes_io_component!=\"\"})",
+          "legendFormat": "{{label_app_kubernetes_io_component}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right" }
+      }
+    },
+    {
+      "title": "Resources by Management Method",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count by (label_stoa_dev_managed_by) (kube_deployment_labels{namespace=\"stoa-system\", label_stoa_dev_managed_by!=\"\"})",
+          "legendFormat": "{{label_stoa_dev_managed_by}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right" }
+      }
+    },
+    {
+      "title": "Resources by Environment",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count by (label_stoa_dev_environment) (kube_deployment_labels{namespace=\"stoa-system\", label_stoa_dev_environment!=\"\"})",
+          "legendFormat": "{{label_stoa_dev_environment}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none"
+      }
+    },
+    {
+      "title": "Deployment Inventory",
+      "description": "All deployments with their STOA labels",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "kube_deployment_labels{namespace=\"stoa-system\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "uid": true
+            },
+            "renameByName": {
+              "deployment": "Deployment",
+              "namespace": "Namespace",
+              "label_app_kubernetes_io_component": "Component",
+              "label_stoa_dev_environment": "Environment",
+              "label_stoa_dev_managed_by": "Managed By",
+              "label_stoa_dev_ttl": "TTL"
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "Component", "desc": false }]
+      }
+    },
+    {
+      "title": "CronJob Inventory",
+      "description": "All CronJobs with their STOA labels",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 26 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "kube_cronjob_labels{namespace=\"stoa-system\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "uid": true
+            },
+            "renameByName": {
+              "cronjob": "CronJob",
+              "namespace": "Namespace",
+              "label_app_kubernetes_io_component": "Component",
+              "label_stoa_dev_environment": "Environment",
+              "label_stoa_dev_managed_by": "Managed By",
+              "label_stoa_dev_ttl": "TTL"
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "Component", "desc": false }]
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["stoa", "inventory", "lifecycle", "labels"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "stoa-system", "value": "stoa-system" },
+        "hide": 0,
+        "label": "Namespace",
+        "name": "namespace",
+        "options": [],
+        "query": "label_values(kube_deployment_labels, namespace)",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Resource Inventory & Label Compliance",
+  "uid": "resource-inventory",
+  "version": 1
+}

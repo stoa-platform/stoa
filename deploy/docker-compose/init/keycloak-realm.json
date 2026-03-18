@@ -228,12 +228,15 @@
       "redirectUris": [
         "http://localhost/logs/*",
         "http://localhost:5601/*",
+        "http://keycloak:5601/*",
         "https://opensearch.gostoa.dev/*",
         "https://opensearch.gostoa.dev/auth/openid/login"
       ],
       "webOrigins": [
         "http://localhost",
         "http://localhost:5601",
+        "http://keycloak",
+        "http://keycloak:5601",
         "https://opensearch.gostoa.dev"
       ],
       "defaultClientScopes": [
@@ -242,6 +245,9 @@
         "profile",
         "roles",
         "email"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
       ],
       "protocolMappers": [
         {

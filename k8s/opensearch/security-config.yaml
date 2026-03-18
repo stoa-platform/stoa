@@ -58,7 +58,7 @@ data:
               challenge: false
               config:
                 subject_key: sub
-                roles_key: roles
+                roles_key: realm_access.roles
                 openid_connect_url: "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
             authentication_backend:
               type: noop

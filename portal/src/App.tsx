@@ -69,6 +69,9 @@ const SignupPage = lazy(() => import('./pages/signup').then((m) => ({ default: m
 const ChatSettingsPage = lazy(() =>
   import('./pages/ChatSettings').then((m) => ({ default: m.ChatSettings }))
 );
+const GovernancePage = lazy(() =>
+  import('./pages/governance').then((m) => ({ default: m.GovernancePage }))
+);
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -485,6 +488,14 @@ function AppContent() {
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/chat-settings" element={<ChatSettingsPage />} />
+            <Route
+              path="/governance"
+              element={
+                <ProtectedRoute permission="apis:update">
+                  <GovernancePage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/onboarding" element={<OnboardingWizardPage />} />
 
             {/* Workspace - tabbed view for apps and subscriptions */}

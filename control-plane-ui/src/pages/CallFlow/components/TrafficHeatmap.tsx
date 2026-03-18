@@ -1,0 +1,92 @@
+interface HeatmapCell {
+  hour: number;
+  route: string;
+  value: number;
+}
+
+interface TrafficHeatmapProps {
+  cells: HeatmapCell[];
+  routes: string[];
+}
+
+function intensityClass(value: number, max: number): string {
+  if (max === 0) return 'bg-neutral-100 dark:bg-neutral-800';
+  const ratio = value / max;
+  if (ratio === 0) return 'bg-neutral-100 dark:bg-neutral-800';
+  if (ratio < 0.15) return 'bg-blue-100 dark:bg-blue-900/30';
+  if (ratio < 0.35) return 'bg-blue-200 dark:bg-blue-800/40';
+  if (ratio < 0.55) return 'bg-blue-300 dark:bg-blue-700/50';
+  if (ratio < 0.75) return 'bg-blue-400 dark:bg-blue-600/60';
+  return 'bg-blue-500 dark:bg-blue-500/70';
+}
+
+export function TrafficHeatmap({ cells, routes }: TrafficHeatmapProps) {
+  if (cells.length === 0 || routes.length === 0) {
+    return (
+      <div className="h-[200px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
+        No traffic heatmap data
+      </div>
+    );
+  }
+
+  const max = Math.max(...cells.map((c) => c.value), 1);
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+
+  const cellMap = new Map<string, number>();
+  for (const c of cells) {
+    cellMap.set(`${c.route}-${c.hour}`, c.value);
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[600px]">
+        {/* Hour labels */}
+        <div className="flex ml-28 mb-1">
+          {hours.map((h) => (
+            <div
+              key={h}
+              className="flex-1 text-center text-[10px] text-neutral-400 dark:text-neutral-500"
+            >
+              {h % 3 === 0 ? `${h}h` : ''}
+            </div>
+          ))}
+        </div>
+
+        {/* Rows */}
+        {routes.slice(0, 6).map((route) => (
+          <div key={route} className="flex items-center mb-0.5">
+            <div className="w-28 text-xs font-mono text-neutral-500 dark:text-neutral-400 truncate pr-2 text-right">
+              {route}
+            </div>
+            <div className="flex flex-1 gap-px">
+              {hours.map((h) => {
+                const val = cellMap.get(`${route}-${h}`) || 0;
+                return (
+                  <div
+                    key={h}
+                    className={`flex-1 h-5 rounded-sm ${intensityClass(val, max)} transition-colors`}
+                    title={`${route} @ ${h}:00 — ${val} requests`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {/* Legend */}
+        <div className="flex items-center justify-end mt-2 gap-1">
+          <span className="text-[10px] text-neutral-400 mr-1">Low</span>
+          {[
+            'bg-neutral-100 dark:bg-neutral-800',
+            'bg-blue-200 dark:bg-blue-800/40',
+            'bg-blue-400 dark:bg-blue-600/60',
+            'bg-blue-500 dark:bg-blue-500/70',
+          ].map((cls, i) => (
+            <div key={i} className={`w-4 h-3 rounded-sm ${cls}`} />
+          ))}
+          <span className="text-[10px] text-neutral-400 ml-1">High</span>
+        </div>
+      </div>
+    </div>
+  );
+}

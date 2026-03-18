@@ -25,11 +25,13 @@ CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 | Developer Portal | React, Vite, TypeScript | `portal/` |
 | MCP Gateway (archived) | Python 3.11, FastAPI, OPA | `archive/mcp-gateway/` |
 | STOA Gateway | Rust, Tokio, axum | `stoa-gateway/` |
-| CLI | Python, Typer, Rich | `cli/` |
+| STOA Go (stoactl + stoa-connect) | Go 1.22, Cobra, keyring | `stoa-go/` |
+| CLI (legacy) | Python, Typer, Rich | `cli/` |
 | E2E Tests | Playwright, BDD, Gherkin | `e2e/` |
 | Helm Chart | Helm 3 | `charts/stoa-platform/` |
 
 Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024) — edge-mcp (current), sidecar (Q2), proxy (Q3), shadow (deferred).
+STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-connect = VPS agent bridging third-party gateways to Control Plane.
 
 ## RBAC Roles
 - **cpi-admin**: Full platform (stoa:admin)
@@ -55,6 +57,7 @@ Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024)
 | Python | 3.11 | control-plane-api, mcp-gateway, cli |
 | Python | 3.12 | landing-api |
 | Node | 20 | portal, control-plane-ui |
+| Go | 1.22 | stoa-go (stoactl, stoa-connect) |
 | Rust | stable | stoa-gateway |
 
 ## Session Workflow

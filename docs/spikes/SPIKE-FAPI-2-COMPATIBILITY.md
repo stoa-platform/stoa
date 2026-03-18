@@ -47,7 +47,7 @@
 |---|-----------|--------|-------|
 | 1 | On-premise deployment | ✅ | Helm chart, K8s manifests |
 | 2 | Air-gapped operation | 🔶 | Needs offline container registry |
-| 3 | EU data residency | ✅ | OVH FR + Hetzner DE |
+| 3 | EU data residency | ✅ | OVH FR + Contabo DE |
 | 4 | DORA compliance tooling | 🔶 | Audit trail exists, gaps in reporting |
 | 5 | eIDAS 2.0 integration | ❌ | Phase 4 |
 | 6 | Multi-tenancy | ✅ | Tenant isolation via KC realms |

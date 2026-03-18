@@ -1,0 +1,139 @@
+version: 2
+
+project_name: stoactl
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: stoactl
+    main: ./cmd/stoactl
+    binary: stoactl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/stoa-platform/stoa-go/internal/cli/cmd.Version={{.Version}}
+      - -X github.com/stoa-platform/stoa-go/internal/cli/cmd.Commit={{.ShortCommit}}
+
+  - id: stoa-connect
+    main: ./cmd/stoa-connect
+    binary: stoa-connect
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.ShortCommit}}
+
+archives:
+  - id: stoactl
+    ids:
+      - stoactl
+    formats:
+      - tar.gz
+    name_template: "stoactl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE*
+      - README*
+
+  - id: stoa-connect
+    ids:
+      - stoa-connect
+    formats:
+      - tar.gz
+    name_template: "stoa-connect_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE*
+      - README*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+homebrew_casks:
+  - name: stoactl
+    ids:
+      - stoactl
+    repository:
+      owner: stoa-platform
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: "https://gostoa.dev"
+    description: "GitOps-native CLI for STOA Platform"
+
+dockers:
+  - ids:
+      - stoactl
+    image_templates:
+      - "ghcr.io/stoa-platform/stoactl:{{ .Tag }}"
+      - "ghcr.io/stoa-platform/stoactl:v{{ .Major }}"
+      - "ghcr.io/stoa-platform/stoactl:v{{ .Major }}.{{ .Minor }}"
+      - "ghcr.io/stoa-platform/stoactl:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/stoa-platform/stoactl"
+
+release:
+  github:
+    owner: stoa-platform
+    name: stoactl
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+  header: |
+    ## stoactl v{{.Version}}
+
+    GitOps-native CLI for STOA Platform.
+
+    ### Installation
+
+    **Homebrew:**
+    ```bash
+    brew install stoa-platform/tap/stoactl
+    ```
+
+    **Binary:**
+    Download from the assets below or use Homebrew.
+
+    **Docker:**
+    ```bash
+    docker run ghcr.io/stoa-platform/stoactl:{{.Tag}} version
+    ```

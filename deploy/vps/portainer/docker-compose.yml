@@ -1,0 +1,31 @@
+# Portainer CE — VPS Fleet Observability (CAB-1874)
+# Deployed on spare-gra-vps (51.255.193.129)
+# Access: portainer.gostoa.dev (Traefik TLS, same as n8n on this host)
+#
+# Traefik (n8n stack) handles TLS + routing via Docker labels.
+# No extra reverse proxy needed.
+
+services:
+  portainer:
+    image: portainer/portainer-ce:2.25.1
+    container_name: portainer
+    restart: unless-stopped
+    volumes:
+      - portainer_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.gostoa.dev`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+    networks:
+      - traefik_proxy
+
+volumes:
+  portainer_data:
+
+networks:
+  traefik_proxy:
+    external: true
+    name: n8n_default

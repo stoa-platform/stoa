@@ -21,14 +21,14 @@ opensearch.requestHeadersAllowlist: ["Authorization", "securitytenant"]
 # ---------------------------------------------------------------------------
 # Security Plugin - OIDC via Keycloak
 # ---------------------------------------------------------------------------
-opensearch_security.auth.type: ["openid"]
-opensearch_security.auth.multiple_auth_enabled: false
+opensearch_security.auth.type: ["basicauth", "openid"]
+opensearch_security.auth.multiple_auth_enabled: true
 opensearch_security.openid.connect_url: "http://keycloak:8080/realms/stoa/.well-known/openid-configuration"
 opensearch_security.openid.client_id: "opensearch-dashboards"
 opensearch_security.openid.client_secret: "opensearch-dashboards-dev-secret"
-opensearch_security.openid.scope: "openid profile email roles"
-opensearch_security.openid.base_redirect_url: "http://localhost/logs"
-opensearch_security.openid.logout_url: "http://localhost/auth/realms/stoa/protocol/openid-connect/logout?redirect_uri=http://localhost/logs"
+opensearch_security.openid.scope: "openid"
+opensearch_security.openid.base_redirect_url: "http://keycloak:5601/logs"
+opensearch_security.openid.logout_url: "http://keycloak:8080/realms/stoa/protocol/openid-connect/logout?redirect_uri=http://keycloak:5601/logs"
 opensearch_security.openid.root_ca: ""
 opensearch_security.openid.verify_hostnames: false
 opensearch_security.openid.trust_dynamic_headers: true

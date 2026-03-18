@@ -1,0 +1,75 @@
+category_id: specialized
+category_name: Specialized & Compliance
+icon: shield
+
+entries:
+  - id: eu-epo
+    name: epo-ops
+    display_name: "EPO Open Patent Services"
+    description: "European Patent Office — patent search and full-text retrieval"
+    country: EU
+    region: EU
+    spec_url: https://ops.epo.org/3.2/rest-services
+    protocol: openapi
+    auth_type: oauth2
+    tools:
+      - name: search_patents
+        description: Search European patents by keyword or classification
+      - name: get_patent
+        description: Retrieve full patent document
+    status: community
+    tags: [patents, ip, eu]
+    documentation_url: https://www.epo.org/searching-for-patents/data/web-services/ops.html
+    icon: file-badge
+
+  - id: eu-echa
+    name: echa-chemicals
+    display_name: "ECHA Chemicals Database"
+    description: "European Chemicals Agency — REACH, CLP chemical substance data"
+    country: EU
+    region: EU
+    spec_url: https://echa.europa.eu/api
+    protocol: openapi
+    auth_type: none
+    tools:
+      - name: search_substance
+        description: Search for chemical substances by name or CAS number
+      - name: get_substance_details
+        description: Get detailed substance information including REACH dossier
+    status: community
+    tags: [chemicals, reach, compliance, eu]
+    documentation_url: https://echa.europa.eu/
+    icon: flask-conical
+
+  - id: eu-inspire
+    name: inspire-geoportal
+    display_name: "INSPIRE Geoportal"
+    description: "EU spatial data infrastructure — cross-border geospatial datasets"
+    country: EU
+    region: EU
+    spec_url: https://inspire-geoportal.ec.europa.eu/
+    protocol: openapi
+    auth_type: none
+    status: community
+    tags: [geospatial, maps, eu, infrastructure]
+    documentation_url: https://inspire.ec.europa.eu/
+    icon: map
+
+  - id: eu-france-connect-fr
+    name: france-connect
+    display_name: "FranceConnect"
+    description: "French government identity federation — citizen authentication"
+    country: FR
+    region: EU-FR
+    spec_url: https://partenaires.franceconnect.gouv.fr/
+    protocol: openapi
+    auth_type: oauth2
+    tools:
+      - name: authenticate
+        description: Initiate FranceConnect authentication flow
+      - name: get_user_info
+        description: Get authenticated user identity claims
+    status: community
+    tags: [identity, france, authentication, government]
+    documentation_url: https://partenaires.franceconnect.gouv.fr/
+    icon: fingerprint

@@ -17,6 +17,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
 from .config import settings
+from .consumers.catalog_sync_consumer import catalog_sync_consumer
 from .consumers.deployment_consumer import deployment_consumer
 from .features.error_snapshots import (
     add_error_snapshot_middleware,
@@ -130,6 +131,7 @@ from .services import (
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
 from .workers.billing_metering_consumer import billing_metering_consumer
+from .workers.catalog_sync_worker import catalog_sync_worker
 from .workers.chat_metering_consumer import chat_metering_consumer
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.gateway_health_worker import gateway_health_worker
@@ -156,6 +158,8 @@ ENABLE_CHAT_METERING_CONSUMER = os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true
 ENABLE_BILLING_METERING_CONSUMER = os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
 ENABLE_TELEMETRY_WORKER = os.getenv("ENABLE_TELEMETRY_WORKER", "true").lower() == "true"
 ENABLE_GATEWAY_RECONCILER = os.getenv("ENABLE_GATEWAY_RECONCILER", "true").lower() == "true"
+ENABLE_CATALOG_SYNC_CONSUMER = os.getenv("ENABLE_CATALOG_SYNC_CONSUMER", "true").lower() == "true"
+ENABLE_CATALOG_SYNC_WORKER = os.getenv("ENABLE_CATALOG_SYNC_WORKER", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -266,6 +270,24 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start gateway reconciler", error=str(e))
 
+    # Start catalog sync consumer — event-driven sync from stoa.api.lifecycle
+    catalog_sync_consumer_task = None
+    if ENABLE_CATALOG_SYNC_CONSUMER:
+        try:
+            catalog_sync_consumer_task = asyncio.create_task(catalog_sync_consumer.start())
+            logger.info("Catalog sync consumer started")
+        except Exception as e:
+            logger.warning("Failed to start catalog sync consumer", error=str(e))
+
+    # Start catalog sync worker — periodic full sync from GitLab (safety net)
+    catalog_sync_worker_task = None
+    if ENABLE_CATALOG_SYNC_WORKER:
+        try:
+            catalog_sync_worker_task = asyncio.create_task(catalog_sync_worker.start())
+            logger.info("Catalog sync worker started")
+        except Exception as e:
+            logger.warning("Failed to start catalog sync worker", error=str(e))
+
     # Start chat metering consumer (CAB-288)
     chat_metering_task = None
     if ENABLE_CHAT_METERING_CONSUMER:
@@ -339,6 +361,20 @@ async def lifespan(app: FastAPI):
         gateway_reconciler_task.cancel()
         with suppress(asyncio.CancelledError):
             await gateway_reconciler_task
+
+    # Stop catalog sync consumer
+    if ENABLE_CATALOG_SYNC_CONSUMER and catalog_sync_consumer_task:
+        await catalog_sync_consumer.stop()
+        catalog_sync_consumer_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await catalog_sync_consumer_task
+
+    # Stop catalog sync worker
+    if ENABLE_CATALOG_SYNC_WORKER and catalog_sync_worker_task:
+        await catalog_sync_worker.stop()
+        catalog_sync_worker_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await catalog_sync_worker_task
 
     # Stop chat metering consumer (CAB-288)
     if ENABLE_CHAT_METERING_CONSUMER and chat_metering_task:

@@ -9,6 +9,12 @@ import {
   Legend,
 } from 'recharts';
 import type { TimeSeriesPoint } from '../../../hooks/usePrometheus';
+import {
+  CHART_TOOLTIP_STYLE,
+  CHART_AXIS_STYLE,
+  CHART_GRID_STYLE,
+  ChartEmptyState,
+} from '@stoa/shared/components/ChartCard';
 
 interface ModeTimeSeries {
   label: string;
@@ -50,26 +56,22 @@ export function ThroughputChart({ series, timeRange }: ThroughputChartProps) {
   const merged = mergeTimeSeries(series);
 
   if (merged.length === 0) {
-    return (
-      <div className="h-[250px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
-        No throughput data for {timeRange}
-      </div>
-    );
+    return <ChartEmptyState message={`No throughput data for ${timeRange}`} />;
   }
 
   return (
     <ResponsiveContainer width="100%" height={250}>
       <AreaChart data={merged}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+        <CartesianGrid {...CHART_GRID_STYLE} />
         <XAxis
           dataKey="timestamp"
           tickFormatter={formatTime}
-          tick={{ fontSize: 11, fill: '#9CA3AF' }}
+          tick={CHART_AXIS_STYLE}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: '#9CA3AF' }}
+          tick={CHART_AXIS_STYLE}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v: number) =>
@@ -77,12 +79,7 @@ export function ThroughputChart({ series, timeRange }: ThroughputChartProps) {
           }
         />
         <Tooltip
-          contentStyle={{
-            backgroundColor: '#1F2937',
-            border: '1px solid #374151',
-            borderRadius: 8,
-            fontSize: 12,
-          }}
+          contentStyle={CHART_TOOLTIP_STYLE}
           labelFormatter={(label) => formatTime(Number(label))}
           formatter={(value) => [Number(value).toFixed(2), undefined]}
         />

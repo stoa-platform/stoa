@@ -5,6 +5,7 @@ import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { StatCard } from '@stoa/shared/components/StatCard';
 import { TimeRangeSelector, RANGE_CONFIG } from '@stoa/shared/components/TimeRangeSelector';
 import { TrendIndicator } from '@stoa/shared/components/TrendIndicator';
+import { ChartCard } from '@stoa/shared/components/ChartCard';
 import type { TimeRange } from '@stoa/shared/components/TimeRangeSelector';
 import {
   usePrometheusQuery,
@@ -564,53 +565,36 @@ export function CallFlowDashboard() {
 
           {/* ─── Charts Row 1: Throughput + Latency Distribution ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
-                Throughput by Deployment Mode
-              </h2>
+            <ChartCard title="Throughput by Deployment Mode">
               <ThroughputChart series={displayThroughput} timeRange={timeRange} />
-            </div>
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
-                Latency Distribution
-              </h2>
+            </ChartCard>
+            <ChartCard title="Latency Distribution">
               <LatencyHistogram buckets={histogramBuckets} />
-            </div>
+            </ChartCard>
           </div>
 
           {/* ─── Charts Row 2: Error Breakdown + Top Routes ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
-                Error Breakdown
-              </h2>
+            <ChartCard title="Error Breakdown">
               <ErrorBreakdown errors={errorEntries} />
-            </div>
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
-                Top Routes by Latency (P95)
-              </h2>
+            </ChartCard>
+            <ChartCard title="Top Routes by Latency (P95)">
               <TopRoutes routes={topRoutes} />
-            </div>
+            </ChartCard>
           </div>
 
           {/* ─── Traffic Heatmap ─── */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                Traffic Heatmap (24h × Routes)
-              </h2>
-              <Activity className="h-5 w-5 text-neutral-400" />
-            </div>
+          <ChartCard
+            title="Traffic Heatmap (24h × Routes)"
+            icon={<Activity className="h-5 w-5 text-neutral-400" />}
+          >
             <TrafficHeatmap cells={heatmapCells.cells} routes={heatmapCells.routes} />
-          </div>
+          </ChartCard>
 
           {/* ─── Live Traces ─── */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                Live Traces
-              </h2>
+          <ChartCard
+            title="Live Traces"
+            trailing={
               <div className="flex items-center gap-2">
                 {tracesDemo && (
                   <span className="text-[10px] px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full font-medium">
@@ -621,12 +605,13 @@ export function CallFlowDashboard() {
                   {traces.length} recent requests
                 </span>
               </div>
-            </div>
+            }
+          >
             <LiveTraces
               traces={traces}
               onSelectTrace={(id) => navigate(`/call-flow/trace/${id}`)}
             />
-          </div>
+          </ChartCard>
 
           {/* ─── Per-Mode Sparklines (preserved from v1) ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { ChartEmptyState } from '@stoa/shared/components/ChartCard';
+
 interface HeatmapCell {
   hour: number;
   route: string;
@@ -20,13 +23,19 @@ function intensityClass(value: number, max: number): string {
   return 'bg-blue-500 dark:bg-blue-500/70';
 }
 
+interface TooltipState {
+  x: number;
+  y: number;
+  route: string;
+  hour: number;
+  value: number;
+}
+
 export function TrafficHeatmap({ cells, routes }: TrafficHeatmapProps) {
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+
   if (cells.length === 0 || routes.length === 0) {
-    return (
-      <div className="h-[200px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
-        No traffic heatmap data
-      </div>
-    );
+    return <ChartEmptyState message="No traffic heatmap data" height={200} />;
   }
 
   const max = Math.max(...cells.map((c) => c.value), 1);
@@ -38,7 +47,7 @@ export function TrafficHeatmap({ cells, routes }: TrafficHeatmapProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto relative">
       <div className="min-w-[600px]">
         {/* Hour labels */}
         <div className="flex ml-28 mb-1">
@@ -64,8 +73,20 @@ export function TrafficHeatmap({ cells, routes }: TrafficHeatmapProps) {
                 return (
                   <div
                     key={h}
-                    className={`flex-1 h-5 rounded-sm ${intensityClass(val, max)} transition-colors`}
-                    title={`${route} @ ${h}:00 — ${val} requests`}
+                    className={`flex-1 h-5 rounded-sm ${intensityClass(val, max)} transition-colors cursor-crosshair`}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const parent = e.currentTarget.closest('.overflow-x-auto');
+                      const parentRect = parent?.getBoundingClientRect();
+                      setTooltip({
+                        x: rect.left - (parentRect?.left || 0) + rect.width / 2,
+                        y: rect.top - (parentRect?.top || 0) - 8,
+                        route,
+                        hour: h,
+                        value: val,
+                      });
+                    }}
+                    onMouseLeave={() => setTooltip(null)}
                   />
                 );
               })}
@@ -87,6 +108,26 @@ export function TrafficHeatmap({ cells, routes }: TrafficHeatmapProps) {
           <span className="text-[10px] text-neutral-400 ml-1">High</span>
         </div>
       </div>
+
+      {/* Styled tooltip */}
+      {tooltip && (
+        <div
+          className="absolute z-20 pointer-events-none px-2.5 py-1.5 rounded-lg text-xs"
+          style={{
+            left: tooltip.x,
+            top: tooltip.y,
+            transform: 'translate(-50%, -100%)',
+            backgroundColor: '#1F2937',
+            border: '1px solid #374151',
+            color: '#F3F4F6',
+          }}
+        >
+          <div className="font-medium">{tooltip.value.toLocaleString()} requests</div>
+          <div className="text-neutral-400">
+            {tooltip.route} @ {tooltip.hour}:00
+          </div>
+        </div>
+      )}
     </div>
   );
 }

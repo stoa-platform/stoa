@@ -1,6 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { UsageChart, UsageStatsCard } from './UsageChart';
+
+// Mock recharts — JSDOM has no layout engine so Recharts hooks fail.
+// Replace chart components with simple divs that render children.
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="responsive-container">{children}</div>
+  ),
+  BarChart: ({ children }: { children: React.ReactNode }) => (
+    <svg data-testid="bar-chart">{children}</svg>
+  ),
+  Bar: () => <rect data-testid="bar" />,
+  XAxis: () => <g data-testid="x-axis" />,
+  YAxis: () => <g data-testid="y-axis" />,
+  CartesianGrid: () => <g data-testid="grid" />,
+  Tooltip: () => <g data-testid="tooltip" />,
+}));
 
 const mockData = [
   { timestamp: '2026-02-10', calls: 100, successRate: 0.95, avgLatencyMs: 45, costUnits: 0.005 },
@@ -23,13 +39,6 @@ describe('UsageChart', () => {
     expect(screen.getByText('API Calls')).toBeInTheDocument();
   });
 
-  it('renders x-axis labels from first and last data points', () => {
-    render(<UsageChart data={mockData} metric="calls" title="API Calls" />);
-    // First and last labels appear in the x-axis footer
-    const labels = screen.getAllByText(/Feb 1/);
-    expect(labels.length).toBeGreaterThanOrEqual(1);
-  });
-
   it('renders different metrics', () => {
     const { rerender } = render(
       <UsageChart data={mockData} metric="successRate" title="Success Rate" />
@@ -45,24 +54,19 @@ describe('UsageChart', () => {
 
   it('computes trend from 6+ data points', () => {
     render(<UsageChart data={mockData} metric="calls" title="API Calls" />);
-    // With 6 data points, trend is computed — percentage should be rendered
     const trendEl = screen.getByText(/%$/);
     expect(trendEl).toBeInTheDocument();
   });
 
-  it('renders bars for each data point', () => {
-    const { container } = render(<UsageChart data={mockData} metric="calls" title="API Calls" />);
-    // Each data point gets a flex-1 column
-    const bars = container.querySelectorAll('.bg-blue-500');
-    expect(bars.length).toBe(mockData.length);
+  it('renders Recharts BarChart container', () => {
+    render(<UsageChart data={mockData} metric="calls" title="API Calls" />);
+    expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
   });
 
-  it('renders with custom height', () => {
-    const { container } = render(
-      <UsageChart data={mockData} metric="calls" title="API Calls" height={300} />
-    );
-    const chartDiv = container.querySelector('[style*="height: 300px"]');
-    expect(chartDiv).toBeTruthy();
+  it('wraps in ChartCard with title as h2', () => {
+    render(<UsageChart data={mockData} metric="calls" title="API Calls" />);
+    const heading = screen.getByText('API Calls');
+    expect(heading.tagName).toBe('H2');
   });
 });
 

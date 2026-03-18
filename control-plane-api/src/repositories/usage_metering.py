@@ -23,6 +23,7 @@ class UsageMeteringRepository:
         tenant_id: str,
         api_id: uuid.UUID | None = None,
         period: str = "daily",
+        environment: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[UsageSummary], int]:
@@ -30,6 +31,8 @@ class UsageMeteringRepository:
         conditions = [UsageSummary.tenant_id == tenant_id, UsageSummary.period == period]
         if api_id is not None:
             conditions.append(UsageSummary.api_id == api_id)
+        if environment is not None:
+            conditions.append(UsageSummary.environment == environment)
 
         # Count query
         count_query = select(func.count()).select_from(UsageSummary).where(and_(*conditions))
@@ -54,6 +57,7 @@ class UsageMeteringRepository:
         tenant_id: str,
         api_id: uuid.UUID,
         period: str = "daily",
+        environment: str | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> dict | None:
@@ -63,6 +67,8 @@ class UsageMeteringRepository:
             UsageSummary.api_id == api_id,
             UsageSummary.period == period,
         ]
+        if environment is not None:
+            conditions.append(UsageSummary.environment == environment)
         if start_date is not None:
             conditions.append(UsageSummary.period_start >= start_date)
         if end_date is not None:

@@ -33,6 +33,9 @@ done
 # ---------------------------------------------------------------------------
 # 2. Apply security configuration via securityadmin.sh
 # ---------------------------------------------------------------------------
+# Security config (with generated bcrypt hashes) is in /init/security/
+# produced by the opensearch-security-init container.
+# ---------------------------------------------------------------------------
 log "Applying security configuration..."
 SECURITY_ADMIN="/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh"
 if [ -f "$SECURITY_ADMIN" ] && [ -d "/init/security" ]; then

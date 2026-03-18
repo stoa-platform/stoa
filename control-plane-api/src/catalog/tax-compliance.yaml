@@ -1,0 +1,40 @@
+category_id: tax-compliance
+category_name: Tax & VAT Compliance
+icon: receipt
+
+entries:
+  - id: eu-vies
+    name: vies
+    display_name: "VIES VAT Validation (EU)"
+    description: "EU VAT Information Exchange System — validate VAT numbers across member states"
+    country: EU
+    region: EU
+    spec_url: https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number
+    protocol: openapi
+    auth_type: none
+    tools:
+      - name: check_vat_number
+        description: Validate a VAT number against the VIES database
+      - name: check_vat_approx
+        description: Fuzzy VAT validation with company name matching
+    status: verified
+    tags: [tax, vat, compliance, eu]
+    documentation_url: https://ec.europa.eu/taxation_customs/vies/
+    icon: receipt
+
+  - id: eu-dgfip-fr
+    name: dgfip-fr
+    display_name: "DGFiP (France)"
+    description: "Direction Générale des Finances Publiques — French tax administration API"
+    country: FR
+    region: EU-FR
+    spec_url: https://api.gouv.fr/les-api/impot-particulier
+    protocol: openapi
+    auth_type: oauth2
+    tools:
+      - name: get_tax_status
+        description: Retrieve tax status for a given identifier
+    status: community
+    tags: [tax, france, dgfip, fiscal]
+    documentation_url: https://api.gouv.fr/les-api/impot-particulier
+    icon: receipt

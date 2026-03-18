@@ -1,0 +1,40 @@
+category_id: procurement
+category_name: Public Procurement
+icon: gavel
+
+entries:
+  - id: eu-ted
+    name: ted-europa
+    display_name: "TED (Tenders Electronic Daily)"
+    description: "EU public procurement notices — search and access tender documents"
+    country: EU
+    region: EU
+    spec_url: https://ted.europa.eu/api/v3/notices
+    protocol: openapi
+    auth_type: none
+    tools:
+      - name: search_notices
+        description: Search public procurement notices across EU
+      - name: get_notice
+        description: Get full notice details by document ID
+    status: verified
+    tags: [procurement, tenders, eu, public]
+    documentation_url: https://ted.europa.eu/
+    icon: gavel
+
+  - id: eu-boamp-fr
+    name: boamp-fr
+    display_name: "BOAMP (France)"
+    description: "Bulletin Officiel des Annonces de Marchés Publics — French public procurement"
+    country: FR
+    region: EU-FR
+    spec_url: https://boamp.fr/pages/donnees-essentielles/
+    protocol: openapi
+    auth_type: none
+    tools:
+      - name: search_tenders
+        description: Search French public procurement announcements
+    status: community
+    tags: [procurement, tenders, france, boamp]
+    documentation_url: https://boamp.fr/
+    icon: gavel

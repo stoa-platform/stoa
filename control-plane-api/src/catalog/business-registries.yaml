@@ -1,0 +1,97 @@
+category_id: business-registry
+category_name: Business Registries
+icon: building-2
+
+entries:
+  - id: eu-inpi-fr
+    name: inpi-fr
+    display_name: "INPI — Registre National des Entreprises"
+    description: "Institut National de la Propriété Industrielle — French business registry (RNCS/RNE)"
+    country: FR
+    region: EU-FR
+    spec_url: https://data.inpi.fr/api/docs
+    protocol: openapi
+    auth_type: api_key
+    tools:
+      - name: search_company
+        description: Search for a company by name or SIREN/SIRET
+      - name: get_company_details
+        description: Get detailed company information
+      - name: get_financial_reports
+        description: Retrieve financial reports for a company
+    status: verified
+    tags: [business, registry, france, rncs]
+    documentation_url: https://data.inpi.fr/
+    icon: building-2
+
+  - id: eu-handelsregister-de
+    name: handelsregister-de
+    display_name: "Handelsregister (Germany)"
+    description: "German Commercial Register — company registration and business data"
+    country: DE
+    region: EU-DE
+    spec_url: https://www.handelsregister.de/rp_web/api
+    protocol: openapi
+    auth_type: none
+    tools:
+      - name: search_company
+        description: Search German commercial register by company name
+      - name: get_register_entry
+        description: Get official register entry details
+    status: community
+    tags: [business, registry, germany]
+    documentation_url: https://www.handelsregister.de/
+    icon: building-2
+
+  - id: eu-kvk-nl
+    name: kvk-nl
+    display_name: "KvK — Handelsregister (Netherlands)"
+    description: "Kamer van Koophandel — Dutch Chamber of Commerce business registry"
+    country: NL
+    region: EU-NL
+    spec_url: https://developers.kvk.nl/apis
+    protocol: openapi
+    auth_type: api_key
+    tools:
+      - name: search_company
+        description: Search Dutch trade register
+      - name: get_company_profile
+        description: Get company profile by KvK number
+    status: verified
+    tags: [business, registry, netherlands, kvk]
+    documentation_url: https://developers.kvk.nl/
+    icon: building-2
+
+  - id: eu-companies-house-uk
+    name: companies-house-uk
+    display_name: "Companies House (UK)"
+    description: "UK Companies House — company information, filings, and officers"
+    country: GB
+    region: EU-GB
+    spec_url: https://developer.company-information.service.gov.uk/api/docs/
+    protocol: openapi
+    auth_type: api_key
+    tools:
+      - name: search_company
+        description: Search for companies by name
+      - name: get_company_profile
+        description: Get company profile by number
+      - name: get_filing_history
+        description: Get company filing history
+    status: verified
+    tags: [business, registry, uk, companies-house]
+    documentation_url: https://developer.company-information.service.gov.uk/
+    icon: building-2
+
+  - id: eu-bris
+    name: bris
+    display_name: "BRIS (Business Registers Interconnection)"
+    description: "Interconnection of EU business registers — cross-border company search"
+    country: EU
+    region: EU
+    protocol: openapi
+    auth_type: none
+    status: community
+    tags: [business, registry, eu, cross-border]
+    documentation_url: https://e-justice.europa.eu/content_find_a_company-489-en.do
+    icon: globe

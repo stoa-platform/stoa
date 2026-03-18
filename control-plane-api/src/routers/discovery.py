@@ -1,8 +1,8 @@
 """
-API/MCP Discovery — Smart Connector Catalog (CAB-1637)
+API/MCP Discovery — Smart Connector Catalog (CAB-1637, CAB-1639)
 
 Three levels of discovery:
-1. Curated catalog of pre-configured EU public APIs/MCP endpoints
+1. Curated catalog of pre-configured EU public APIs/MCP endpoints (YAML-driven)
 2. Discovery by URL (auto-detect OpenAPI/MCP from pasted URL)
 3. Search across catalog by keyword/domain
 """
@@ -14,6 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.auth.dependencies import User, get_current_user
+from src.catalog.loader import (
+    CatalogResponse,
+    SearchResult,
+    get_catalog,
+    get_categories,
+)
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -21,28 +27,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/v1/discovery", tags=["Discovery"])
 
 
-# ---------- Schemas ----------
-
-
-class CatalogEntry(BaseModel):
-    id: str
-    name: str
-    display_name: str
-    description: str
-    category: str
-    region: str = "EU"
-    spec_url: str | None = None
-    mcp_endpoint: str | None = None
-    protocol: str = Field(description="openapi | mcp | graphql")
-    tags: list[str] = []
-    documentation_url: str | None = None
-    icon: str | None = None
-
-
-class CatalogResponse(BaseModel):
-    entries: list[CatalogEntry]
-    total: int
-    categories: list[str]
+# ---------- Schemas (detect only — catalog schemas moved to catalog.loader) ----------
 
 
 class DetectRequest(BaseModel):
@@ -59,176 +44,6 @@ class DetectedSpec(BaseModel):
     tools_count: int = 0
 
 
-class SearchResult(BaseModel):
-    entries: list[CatalogEntry]
-    total: int
-    query: str
-
-
-# ---------- Curated Catalog Data ----------
-
-CURATED_CATALOG: list[dict] = [
-    {
-        "id": "eu-inpi-fr",
-        "name": "inpi-fr",
-        "display_name": "INPI (France)",
-        "description": "Institut National de la Propriété Industrielle — French business registry (RNCS/RNE)",
-        "category": "business-registry",
-        "region": "EU-FR",
-        "spec_url": "https://data.inpi.fr/api/docs",
-        "protocol": "openapi",
-        "tags": ["business", "registry", "france", "rncs"],
-        "documentation_url": "https://data.inpi.fr/",
-        "icon": "building-2",
-    },
-    {
-        "id": "eu-handelsregister-de",
-        "name": "handelsregister-de",
-        "display_name": "Handelsregister (Germany)",
-        "description": "German Commercial Register — company registration and business data",
-        "category": "business-registry",
-        "region": "EU-DE",
-        "spec_url": "https://www.handelsregister.de/rp_web/api",
-        "protocol": "openapi",
-        "tags": ["business", "registry", "germany"],
-        "documentation_url": "https://www.handelsregister.de/",
-        "icon": "building-2",
-    },
-    {
-        "id": "eu-vies",
-        "name": "vies",
-        "display_name": "VIES VAT Validation (EU)",
-        "description": "EU VAT Information Exchange System — validate VAT numbers across member states",
-        "category": "tax-compliance",
-        "region": "EU",
-        "spec_url": "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number",
-        "protocol": "openapi",
-        "tags": ["tax", "vat", "compliance", "eu"],
-        "documentation_url": "https://ec.europa.eu/taxation_customs/vies/",
-        "icon": "receipt",
-    },
-    {
-        "id": "eu-ted",
-        "name": "ted-europa",
-        "display_name": "TED (Tenders Electronic Daily)",
-        "description": "EU public procurement notices — search and access tender documents",
-        "category": "procurement",
-        "region": "EU",
-        "spec_url": "https://ted.europa.eu/api/v3/notices",
-        "protocol": "openapi",
-        "tags": ["procurement", "tenders", "eu", "public"],
-        "documentation_url": "https://ted.europa.eu/",
-        "icon": "gavel",
-    },
-    {
-        "id": "eu-eurostat",
-        "name": "eurostat",
-        "display_name": "Eurostat Data API",
-        "description": "European statistics — economic, social, environmental indicators",
-        "category": "statistics",
-        "region": "EU",
-        "spec_url": "https://ec.europa.eu/eurostat/api/dissemination/sdmx/2.1",
-        "protocol": "openapi",
-        "tags": ["statistics", "data", "eu", "economics"],
-        "documentation_url": "https://ec.europa.eu/eurostat/",
-        "icon": "bar-chart-3",
-    },
-    {
-        "id": "eu-epo",
-        "name": "epo-ops",
-        "display_name": "EPO Open Patent Services",
-        "description": "European Patent Office — patent search and full-text retrieval",
-        "category": "intellectual-property",
-        "region": "EU",
-        "spec_url": "https://ops.epo.org/3.2/rest-services",
-        "protocol": "openapi",
-        "tags": ["patents", "ip", "eu"],
-        "documentation_url": "https://www.epo.org/searching-for-patents/data/web-services/ops.html",
-        "icon": "file-badge",
-    },
-    {
-        "id": "eu-echa",
-        "name": "echa-chemicals",
-        "display_name": "ECHA Chemicals Database",
-        "description": "European Chemicals Agency — REACH, CLP chemical substance data",
-        "category": "chemicals-compliance",
-        "region": "EU",
-        "spec_url": "https://echa.europa.eu/api",
-        "protocol": "openapi",
-        "tags": ["chemicals", "reach", "compliance", "eu"],
-        "documentation_url": "https://echa.europa.eu/",
-        "icon": "flask-conical",
-    },
-    {
-        "id": "eu-bris",
-        "name": "bris",
-        "display_name": "BRIS (Business Registers Interconnection)",
-        "description": "Interconnection of EU business registers — cross-border company search",
-        "category": "business-registry",
-        "region": "EU",
-        "protocol": "openapi",
-        "tags": ["business", "registry", "eu", "cross-border"],
-        "documentation_url": "https://e-justice.europa.eu/content_find_a_company-489-en.do",
-        "icon": "globe",
-    },
-    {
-        "id": "eu-ecb-sdw",
-        "name": "ecb-sdw",
-        "display_name": "ECB Statistical Data Warehouse",
-        "description": "ECB — exchange rates, monetary statistics, banking data",
-        "category": "finance",
-        "region": "EU",
-        "spec_url": "https://data-api.ecb.europa.eu/service",
-        "protocol": "openapi",
-        "tags": ["finance", "ecb", "exchange-rates", "eu"],
-        "documentation_url": "https://data.ecb.europa.eu/",
-        "icon": "landmark",
-    },
-    {
-        "id": "eu-inspire",
-        "name": "inspire-geoportal",
-        "display_name": "INSPIRE Geoportal",
-        "description": "EU spatial data infrastructure — cross-border geospatial datasets",
-        "category": "geospatial",
-        "region": "EU",
-        "spec_url": "https://inspire-geoportal.ec.europa.eu/",
-        "protocol": "openapi",
-        "tags": ["geospatial", "maps", "eu", "infrastructure"],
-        "documentation_url": "https://inspire.ec.europa.eu/",
-        "icon": "map",
-    },
-    {
-        "id": "mcp-anthropic",
-        "name": "anthropic-mcp",
-        "display_name": "Anthropic Claude (MCP)",
-        "description": "Anthropic Claude AI via Model Context Protocol — tool use, analysis, generation",
-        "category": "ai-services",
-        "region": "global",
-        "mcp_endpoint": "https://api.anthropic.com/v1/mcp",
-        "protocol": "mcp",
-        "tags": ["ai", "llm", "mcp", "anthropic"],
-        "documentation_url": "https://docs.anthropic.com/",
-        "icon": "brain",
-    },
-    {
-        "id": "mcp-openai",
-        "name": "openai-mcp",
-        "display_name": "OpenAI (MCP)",
-        "description": "OpenAI GPT models via MCP-compatible endpoint",
-        "category": "ai-services",
-        "region": "global",
-        "protocol": "mcp",
-        "tags": ["ai", "llm", "mcp", "openai"],
-        "documentation_url": "https://platform.openai.com/docs",
-        "icon": "brain",
-    },
-]
-
-
-def _get_catalog() -> list[CatalogEntry]:
-    return [CatalogEntry(**entry) for entry in CURATED_CATALOG]
-
-
 # ---------- Endpoints ----------
 
 
@@ -241,10 +56,12 @@ async def list_catalog(
     category: str | None = Query(None, description="Filter by category"),
     region: str | None = Query(None, description="Filter by region"),
     protocol: str | None = Query(None, description="Filter by protocol: openapi | mcp"),
+    country: str | None = Query(None, description="Filter by country (ISO 3166-1 alpha-2)"),
+    status: str | None = Query(None, description="Filter by status: verified | community | experimental"),
     _user: User = Depends(get_current_user),
 ) -> CatalogResponse:
     """Return curated catalog of pre-configured EU public APIs and MCP endpoints."""
-    entries = _get_catalog()
+    entries = list(get_catalog())
 
     if category:
         entries = [e for e in entries if e.category == category]
@@ -252,8 +69,12 @@ async def list_catalog(
         entries = [e for e in entries if region.lower() in e.region.lower()]
     if protocol:
         entries = [e for e in entries if e.protocol == protocol]
+    if country:
+        entries = [e for e in entries if e.country.upper() == country.upper()]
+    if status:
+        entries = [e for e in entries if e.status == status]
 
-    categories = sorted({e.category for e in _get_catalog()})
+    categories = get_categories()
 
     return CatalogResponse(entries=entries, total=len(entries), categories=categories)
 
@@ -337,7 +158,7 @@ async def search_catalog(
 ) -> SearchResult:
     """Search the curated catalog by keyword (name, description, tags)."""
     query_lower = q.lower()
-    entries = _get_catalog()
+    entries = get_catalog()
 
     matches = [
         e

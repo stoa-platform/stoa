@@ -237,7 +237,6 @@ curl -s http://localhost:8000/metrics | grep stoa_resources_managed
 | Cluster | Image | Status |
 |---------|-------|--------|
 | OVH Prod | `ghcr.io/stoa-platform/stoa-operator:0.3.0` | Running |
-| Hetzner Staging | `ghcr.io/stoa-platform/stoa-operator:0.3.0` | Running |
 
 ---
 

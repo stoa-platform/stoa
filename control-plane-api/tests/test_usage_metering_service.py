@@ -93,6 +93,7 @@ class TestGetSummary:
             tenant_id="acme",
             api_id=sample_api_id,
             period="monthly",
+            environment=None,
             limit=10,
             offset=5,
         )

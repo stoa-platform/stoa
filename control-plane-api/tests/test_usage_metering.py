@@ -15,6 +15,7 @@ def _mock_summary_row(**overrides) -> MagicMock:
         "tenant_id": "acme",
         "api_id": uuid.uuid4(),
         "consumer_id": None,
+        "environment": None,
         "period": "daily",
         "period_start": datetime.utcnow(),
         "request_count": 100,

@@ -15,7 +15,10 @@ metadata:
   namespace: stoa-system
   labels:
     app: demo-tenant-reset
-    component: demo
+    app.kubernetes.io/component: demo
+    app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: manual
 spec:
   schedule: "0 4 * * *"  # Daily at 04:00 UTC
   concurrencyPolicy: Forbid

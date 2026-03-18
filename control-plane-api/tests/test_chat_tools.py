@@ -70,7 +70,7 @@ class TestPlatformInfo:
         data = json.loads(result)
         assert data["name"] == "STOA Platform"
         assert data["status"] == "operational"
-        assert "Universal API Contract (UAC)" in data["features"]
+        assert any("Universal API Contract" in f for f in data["key_features"])
 
 
 # ── execute_tool dispatcher ──

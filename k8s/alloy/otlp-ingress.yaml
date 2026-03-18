@@ -8,7 +8,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: alloy-otlp
-  namespace: stoa-monitoring
+  namespace: monitoring
   labels:
     app: alloy-otlp
     app.kubernetes.io/component: otlp-receiver
@@ -34,6 +34,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: stoa-alloy-otlp
+                name: alloy
                 port:
                   number: 4318

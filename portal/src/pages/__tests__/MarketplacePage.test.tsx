@@ -49,7 +49,12 @@ vi.mock('../../config', () => ({
   config: {
     api: { baseUrl: 'https://api.gostoa.dev', timeout: 30000 },
     mcp: { baseUrl: 'https://mcp.gostoa.dev', timeout: 30000 },
-    features: { enableI18n: false, enableMarketplace: true, enableFavorites: true },
+    features: {
+      enableI18n: false,
+      enableMarketplace: true,
+      enableFavorites: true,
+      enableAPIComparison: true,
+    },
   },
 }));
 
@@ -302,6 +307,14 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
         );
         expect(favApiLink).toBeDefined();
         expect(favServerLink).toBeDefined();
+      });
+    });
+
+    describe('Compare Button', () => {
+      it('should render Compare button when enableAPIComparison is true', () => {
+        renderWithProviders(<MarketplacePage />);
+
+        expect(screen.getByRole('button', { name: /Compare/i })).toBeInTheDocument();
       });
     });
 

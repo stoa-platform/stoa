@@ -309,9 +309,8 @@ describe('Layout', () => {
       logout: vi.fn(),
       hasPermission: vi
         .fn()
-        .mockImplementation(
-          (p: string) =>
-            ['apis:read', 'apps:read', 'audit:read', 'consumers:read'].includes(p)
+        .mockImplementation((p: string) =>
+          ['apis:read', 'apps:read', 'audit:read', 'consumers:read'].includes(p)
         ),
       hasRole: vi.fn(() => false),
     });

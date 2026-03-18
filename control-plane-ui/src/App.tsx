@@ -186,6 +186,11 @@ const CallFlowDashboard = lazy(() =>
   import('./pages/CallFlow').then((m) => ({ default: m.CallFlowDashboard }))
 );
 
+// CAB-1869: Trace Detail (drill-down from Call Flow)
+const TraceDetail = lazy(() =>
+  import('./pages/CallFlow').then((m) => ({ default: m.TraceDetail }))
+);
+
 // CAB-1487: LLM Cost Dashboard
 const LLMCostDashboard = lazy(() =>
   import('./pages/LLMCost').then((m) => ({ default: m.LLMCostDashboard }))
@@ -355,6 +360,7 @@ function ProtectedRoutes() {
                 <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
                 <Route path="/api-traffic" element={<ApiTrafficDashboard />} />
                 <Route path="/call-flow" element={<CallFlowDashboard />} />
+                <Route path="/call-flow/trace/:traceId" element={<TraceDetail />} />
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
                 <Route path="/webhooks" element={<Webhooks />} />
                 <Route path="/credential-mappings" element={<CredentialMappings />} />

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, RefreshCw, Zap, AlertTriangle, Network, Gauge, Timer } from 'lucide-react';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { StatCard } from '@stoa/shared/components/StatCard';
@@ -49,40 +50,12 @@ function latencyColorClass(ms: number | null): string | undefined {
   return 'text-red-600';
 }
 
-// ─── Live Traces: fetch from monitoring API ───
+// ─── Live Traces: fetch from monitoring API (authenticated) ───
 
-async function fetchTransactions(limit: number = 20): Promise<TraceEntry[]> {
-  try {
-    const res = await fetch(`/api/v1/monitoring/transactions?limit=${limit}`, {
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!res.ok) throw new Error(`${res.status}`);
-    const data = await res.json();
-    return (data.transactions || []).map(mapTransaction);
-  } catch {
-    return generateDemoTraces(limit);
-  }
-}
+import { apiService } from '../../services/api';
+import type { MonitoringTransaction } from '../../services/api';
 
-interface RawTransaction {
-  id: string;
-  api_name: string;
-  method: string;
-  path: string;
-  status_code: number;
-  total_duration_ms: number;
-  started_at: string;
-  status: string;
-  spans?: Array<{
-    name: string;
-    service: string;
-    start_offset_ms: number;
-    duration_ms: number;
-    status: string;
-  }>;
-}
-
-function mapTransaction(tx: RawTransaction): TraceEntry {
+function mapTransaction(tx: MonitoringTransaction): TraceEntry {
   return {
     id: tx.id,
     route: tx.path || tx.api_name,
@@ -91,16 +64,23 @@ function mapTransaction(tx: RawTransaction): TraceEntry {
     statusCode: tx.status_code,
     durationMs: tx.total_duration_ms,
     timestamp: tx.started_at,
-    spans: (tx.spans || []).map(
-      (s): TraceSpan => ({
-        name: s.name,
-        service: s.service,
-        startOffsetMs: s.start_offset_ms,
-        durationMs: s.duration_ms,
-        status: s.status === 'error' ? 'error' : s.status === 'timeout' ? 'timeout' : 'success',
-      })
-    ),
+    spans: [],
   };
+}
+
+async function fetchTransactions(
+  limit: number = 20
+): Promise<{ traces: TraceEntry[]; isDemo: boolean }> {
+  try {
+    const data = await apiService.getTransactions(limit);
+    const transactions = data.transactions || [];
+    if (transactions.length > 0) {
+      return { traces: transactions.map(mapTransaction), isDemo: false };
+    }
+    return { traces: generateDemoTraces(limit), isDemo: true };
+  } catch {
+    return { traces: generateDemoTraces(limit), isDemo: true };
+  }
 }
 
 function generateDemoTraces(count: number): TraceEntry[] {
@@ -152,9 +132,11 @@ function generateDemoTraces(count: number): TraceEntry[] {
 // ─── Dashboard Component ───
 
 export function CallFlowDashboard() {
+  const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
   const [autoRefresh, setAutoRefresh] = useState(DEFAULT_REFRESH);
   const [traces, setTraces] = useState<TraceEntry[]>([]);
+  const [tracesDemo, setTracesDemo] = useState(false);
   const tracesRef = useRef(false);
 
   const refreshMs = autoRefresh > 0 ? autoRefresh * 1000 : 0;
@@ -255,13 +237,19 @@ export function CallFlowDashboard() {
   useEffect(() => {
     if (tracesRef.current) return;
     tracesRef.current = true;
-    fetchTransactions(20).then(setTraces);
+    fetchTransactions(20).then(({ traces: t, isDemo }) => {
+      setTraces(t);
+      setTracesDemo(isDemo);
+    });
   }, []);
 
   useEffect(() => {
     if (!refreshMs) return;
     const interval = setInterval(() => {
-      fetchTransactions(20).then(setTraces);
+      fetchTransactions(20).then(({ traces: t, isDemo }) => {
+        setTraces(t);
+        setTracesDemo(isDemo);
+      });
     }, refreshMs);
     return () => clearInterval(interval);
   }, [refreshMs]);
@@ -342,17 +330,26 @@ export function CallFlowDashboard() {
   // heatmapData is a range query with `sum by (client)` — we get one series per client
   // For now, we use demo data since the range query returns aggregated series
   const heatmapCells = useMemo(() => {
-    // If real Prometheus data is available, we'd need per-client range data
-    // For now, generate from top routes + time distribution
+    // Derive heatmap from topRoutes calls — distribute proportionally across hours
+    // Business hours (8-20) get ~80% of traffic, off-hours get ~20%
     const routes = topRoutes.slice(0, 6).map((r) => r.route);
     if (routes.length === 0) return { cells: [], routes: [] };
 
-    const cells = routes.flatMap((route) =>
-      Array.from({ length: 24 }, (_, h) => ({
-        hour: h,
-        route,
-        value: Math.round(Math.random() * 100 * (h >= 8 && h <= 20 ? 1 : 0.2)),
-      }))
+    // Simple hash for deterministic distribution per route+hour
+    const hash = (s: string, n: number) => {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      return Math.abs((h * (n + 1) * 2654435761) % 100) / 100;
+    };
+
+    const cells = topRoutes.slice(0, 6).flatMap((r) =>
+      Array.from({ length: 24 }, (_, h) => {
+        const businessHour = h >= 8 && h <= 20;
+        const baseFraction = businessHour ? 0.06 : 0.015; // ~78% in business hours
+        const jitter = hash(r.route, h) * 0.04; // ±4% variation
+        const value = Math.round(r.calls * (baseFraction + jitter));
+        return { hour: h, route: r.route, value };
+      })
     );
     return { cells, routes };
   }, [topRoutes]);
@@ -405,7 +402,10 @@ export function CallFlowDashboard() {
     fallbackErrors.refetch();
     fallbackTrend.refetch();
     requestsTrend.refetch();
-    fetchTransactions(20).then(setTraces);
+    fetchTransactions(20).then(({ traces: t, isDemo }) => {
+      setTraces(t);
+      setTracesDemo(isDemo);
+    });
   }, [
     totalRequests,
     totalErrors,
@@ -611,11 +611,21 @@ export function CallFlowDashboard() {
               <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                 Live Traces
               </h2>
-              <span className="text-xs text-neutral-400 dark:text-neutral-500">
-                {traces.length} recent requests
-              </span>
+              <div className="flex items-center gap-2">
+                {tracesDemo && (
+                  <span className="text-[10px] px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full font-medium">
+                    Demo data
+                  </span>
+                )}
+                <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                  {traces.length} recent requests
+                </span>
+              </div>
             </div>
-            <LiveTraces traces={traces} />
+            <LiveTraces
+              traces={traces}
+              onSelectTrace={(id) => navigate(`/call-flow/trace/${id}`)}
+            />
           </div>
 
           {/* ─── Per-Mode Sparklines (preserved from v1) ─── */}

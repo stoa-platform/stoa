@@ -4,15 +4,34 @@ globs: ".github/workflows/claude-*,scripts/ai-ops/n8n-*"
 
 # Instance Dispatch — Parallel tmux Mapping
 
+## Worktree Isolation (CAB-1676)
+
+Each instance operates in its own git worktree for zero filesystem interference:
+
+```
+~/hlfh-repos/stoa            → main (ORCHESTRE, read-only)
+~/hlfh-repos/stoa-backend    → wt/backend (BACKEND pane 2)
+~/hlfh-repos/stoa-frontend   → wt/frontend (FRONTEND pane 3)
+~/hlfh-repos/stoa-auth       → wt/auth (AUTH pane 4)
+~/hlfh-repos/stoa-mcp        → wt/mcp (MCP pane 5)
+~/hlfh-repos/stoa-qa         → wt/qa (QA pane 6)
+```
+
+**Lifecycle**: `stoa-parallel` creates worktrees on startup, removes them on `--kill`. Each worktree starts on `main` via a `wt/<role>` branch. Instances create feature branches in their own worktree.
+
+**Shared state**: `.claude/claims/` is symlinked from each worktree to the main repo for cross-instance coordination. `.claude/settings.local.json` and `.env` are copied/symlinked from main.
+
+**Key constraint**: Two worktrees cannot checkout the same branch simultaneously (git limitation). Each instance must use its own feature branch.
+
 ## Instance Mapping
 
-| Instance Label | Components | Pane | Scope | Commit Prefix |
+| Instance Label | Components | Pane | Worktree | Commit Prefix |
 |---|---|---|---|---|
-| `instance:backend` | cp-api, operator, infra, docs | 2 (BACKEND) | `control-plane-api/`, `charts/`, `k8s/`, `stoa-docs` | `feat(api):`, `chore(infra):` |
-| `instance:frontend` | cp-ui, portal, shared | 3 (FRONTEND) | `control-plane-ui/`, `portal/`, `shared/` | `feat(ui):`, `feat(portal):` |
-| `instance:auth` | keycloak, IAM, OAuth | 4 (AUTH) | `keycloak/`, OAuth configs | `feat(auth):` |
-| `instance:mcp` | stoa-gateway | 5 (MCP) | `stoa-gateway/` | `feat(gateway):` |
-| `instance:qa` | e2e, cross-component tests | 6 (QA) | `e2e/` (read-only on rest) | `test(e2e):` |
+| `instance:backend` | cp-api, operator, infra, docs | 2 (BACKEND) | `stoa-backend/` | `feat(api):`, `chore(infra):` |
+| `instance:frontend` | cp-ui, portal, shared | 3 (FRONTEND) | `stoa-frontend/` | `feat(ui):`, `feat(portal):` |
+| `instance:auth` | keycloak, IAM, OAuth | 4 (AUTH) | `stoa-auth/` | `feat(auth):` |
+| `instance:mcp` | stoa-gateway | 5 (MCP) | `stoa-mcp/` | `feat(gateway):` |
+| `instance:qa` | e2e, cross-component tests | 6 (QA) | `stoa-qa/` | `test(e2e):` |
 
 ## Tagging Rules
 
@@ -38,7 +57,7 @@ Stop hook sends Slack notification with instance role, branch, last 3 commits, P
 
 ## tmux Layout (`stoa-parallel`)
 
-7 panes in single window: ORCHESTRE(0), MONITOR(1), BACKEND(2), FRONTEND(3), AUTH(4), MCP(5), QA(6). Navigation: `Ctrl+B q` (jump), `Ctrl+B z` (zoom), `Ctrl+B o` (cycle). Pane borders show static role labels.
+7 panes in single window: ORCHESTRE(0), MONITOR(1), BACKEND(2), FRONTEND(3), AUTH(4), MCP(5), QA(6). Each worker pane (2-6) runs in its own git worktree. Navigation: `Ctrl+B q` (jump), `Ctrl+B z` (zoom), `Ctrl+B o` (cycle). Pane borders show static role labels.
 
 ### ORCHESTRE Rules (Pane 0)
 
@@ -47,6 +66,13 @@ Dispatcher only — never implements. Does: read state, dispatch via `stoa-dispa
 ### tmux Gotchas
 
 `no space for new pane` → `tmux new-session -x 220 -y 60`. PATH missing → explicit `/opt/homebrew/bin` export. `send-keys` race → sleep 2 after PATH, 0.3 between commands. Setup wizard → pre-populate `.claude.json`.
+
+### Worktree Gotchas
+
+- **Same branch conflict**: `git worktree add` fails if the branch is already checked out elsewhere. Each instance must use its own feature branch.
+- **Gitignored files missing**: `node_modules`, `.venv`, `.env`, `settings.local.json` don't exist in fresh worktrees. `stoa-parallel` handles `.env` (symlink) and `settings.local.json` (copy). Instances must run `npm install` or `pip install` if they need to build/test locally.
+- **Cleanup**: `stoa-parallel --kill` removes all worktrees. Use `--kill --keep-worktrees` to preserve worktree state across sessions (useful for debugging or resuming work).
+- **Stale worktrees**: `git worktree prune` cleans up worktrees whose directories no longer exist. Run automatically on startup.
 
 ## Shared State via PocketBase (CAB-1513)
 

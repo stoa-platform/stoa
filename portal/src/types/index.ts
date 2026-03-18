@@ -1094,3 +1094,35 @@ export interface APIComparisonResult {
   api_names: Record<string, string>;
   fields: APIComparisonField[];
 }
+
+// ============ Governance Types (CAB-1525) ============
+
+export interface GovernanceStats {
+  pending_approvals: number;
+  apis_by_status: Record<string, number>;
+  total_subscriptions: number;
+  active_subscriptions: number;
+}
+
+export type APILifecycleStatus = 'draft' | 'published' | 'deprecated';
+
+export interface APILifecycleTransition {
+  from: APILifecycleStatus;
+  to: APILifecycleStatus;
+  label: string;
+  requiresApproval: boolean;
+}
+
+export interface GovernanceApproval {
+  id: string;
+  type: 'subscription' | 'api_publish';
+  requester_name: string;
+  requester_email: string;
+  resource_name: string;
+  resource_id: string;
+  details: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
+}

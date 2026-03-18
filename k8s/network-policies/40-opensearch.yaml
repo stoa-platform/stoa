@@ -1,5 +1,203 @@
 # opensearch namespace allow rules
-# CAB-1401
+# CAB-1401, CAB-1875
+---
+# OpenSearch master → Keycloak OIDC discovery (CAB-1875)
+# auth.gostoa.dev resolves to the LB external IP (5.196.236.53).
+# OVH MKS supports hairpin NAT, so pods can reach the LB IP.
+# IMPORTANT: The Helm chart sets label app.kubernetes.io/name=opensearch
+# on the StatefulSet pods (NOT app=opensearch). All policies targeting
+# the OpenSearch master MUST use app.kubernetes.io/name selector.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-opensearch-to-keycloak
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1875
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opensearch
+  policyTypes:
+    - Egress
+  egress:
+    # Via ingress-nginx controller ClusterIP (auth.gostoa.dev OIDC + JWKS)
+    # DNS resolves to LB external IP but hairpin NAT fails on OVH MKS.
+    # We override DNS to point to the ingress-nginx ClusterIP instead.
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+    # Direct to KC pods (port 80/8080) — internal HTTP access
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: stoa-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+---
+# OpenSearch Dashboards → Keycloak OIDC (CAB-1875)
+# Dashboards also needs to reach KC for the OIDC login flow
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-osd-to-keycloak
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1875
+spec:
+  podSelector:
+    matchLabels:
+      app: opensearch-dashboards
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+        - port: 8443
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: stoa-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 5.196.236.53/32
+---
+# OpenSearch Dashboards → external HTTPS (OIDC redirects, CDN assets)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-osd-external-egress
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1401
+spec:
+  podSelector:
+    matchLabels:
+      app: opensearch-dashboards
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+---
+# OpenSearch → NGF (for opensearch.gostoa.dev via nginx-gateway)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-opensearch-to-nginx-gateway
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1875
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opensearch
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nginx-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: stoa-nginx
+---
+# OpenSearch Dashboards → NGF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-osd-to-nginx-gateway
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1875
+spec:
+  podSelector:
+    matchLabels:
+      app: opensearch-dashboards
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nginx-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: stoa-nginx
+---
+# Grafana → OpenSearch (metrics/queries)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-grafana-to-opensearch
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1875
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opensearch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: grafana
+      ports:
+        - protocol: TCP
+          port: 9200
 ---
 # OpenSearch Dashboards ingress from NGF
 apiVersion: networking.k8s.io/v1
@@ -58,7 +256,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: opensearch
+      app.kubernetes.io/name: opensearch
   policyTypes:
     - Ingress
   ingress:

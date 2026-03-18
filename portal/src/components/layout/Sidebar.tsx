@@ -1,5 +1,14 @@
 import { NavLink } from 'react-router-dom';
-import { BookOpen, User, X, ExternalLink, Briefcase, Store, LucideIcon } from 'lucide-react';
+import {
+  BookOpen,
+  User,
+  X,
+  ExternalLink,
+  Briefcase,
+  Store,
+  Layers,
+  LucideIcon,
+} from 'lucide-react';
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
 import { TenantBadge } from './TenantBadge';
@@ -27,6 +36,12 @@ const navItems: NavItem[] = [
     href: '/marketplace',
     icon: Store,
     enabled: config.features.enableMarketplace,
+    scope: 'stoa:catalog:read',
+  },
+  {
+    name: 'Service Catalog',
+    href: '/services',
+    icon: Layers,
     scope: 'stoa:catalog:read',
   },
   {

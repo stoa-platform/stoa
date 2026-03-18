@@ -52,6 +52,9 @@ const OnboardingWizardPage = lazy(() =>
 const MarketplacePage = lazy(() =>
   import('./pages/marketplace').then((m) => ({ default: m.MarketplacePage }))
 );
+const ServiceCatalog = lazy(() =>
+  import('./pages/services').then((m) => ({ default: m.ServiceCatalog }))
+);
 const NotificationsPage = lazy(() =>
   import('./pages/notifications/NotificationsPage').then((m) => ({
     default: m.NotificationsPage,
@@ -500,6 +503,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
                   <MarketplacePage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Service Catalog - grouped API view (CAB-1760) */}
+            <Route
+              path="/services"
+              element={
+                <ProtectedRoute scope="stoa:catalog:read">
+                  <ServiceCatalog />
                 </ProtectedRoute>
               }
             />

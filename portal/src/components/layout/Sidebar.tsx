@@ -1,14 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import {
-  BookOpen,
-  User,
-  X,
-  BarChart3,
-  ExternalLink,
-  Briefcase,
-  Store,
-  LucideIcon,
-} from 'lucide-react';
+import { BookOpen, User, X, ExternalLink, Briefcase, Store, LucideIcon } from 'lucide-react';
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
 import { TenantBadge } from './TenantBadge';
@@ -45,11 +36,10 @@ const navItems: NavItem[] = [
     permission: 'apps:read',
   },
   {
-    name: 'Analytics',
-    href: '/usage',
-    icon: BarChart3,
-    enabled: config.features.enableSubscriptions,
-    scope: 'stoa:metrics:read',
+    name: 'Documentation',
+    href: config.services.docs.url,
+    icon: BookOpen,
+    external: true,
   },
   { name: 'Profile', href: '/profile', icon: User },
   {

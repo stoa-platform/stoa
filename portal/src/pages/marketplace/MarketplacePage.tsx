@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Star, ArrowLeftRight } from 'lucide-react';
 import { useMarketplace, useFeaturedItems } from '../../hooks/useMarketplace';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useAuth } from '../../contexts/AuthContext';
@@ -32,7 +33,8 @@ export function MarketplacePage() {
 
   const { data, isLoading, isError } = useMarketplace(filters);
   const { data: featuredItems } = useFeaturedItems();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, hasScope } = useAuth();
+  const navigate = useNavigate();
   const { data: favoritesData } = useFavorites();
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
@@ -59,11 +61,22 @@ export function MarketplacePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Marketplace</h1>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          Discover APIs and AI tools available on the platform
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Marketplace</h1>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+            Discover APIs and AI tools available on the platform
+          </p>
+        </div>
+        {config.features.enableAPIComparison && hasScope('stoa:catalog:read') && (
+          <button
+            onClick={() => navigate('/api-compare')}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+            Compare
+          </button>
+        )}
       </div>
 
       {/* Stats */}

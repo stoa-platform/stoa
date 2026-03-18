@@ -33,6 +33,14 @@ vi.mock('../subscriptions/MySubscriptions', () => ({
   MySubscriptions: () => <div data-testid="my-subscriptions">My Subscriptions Content</div>,
 }));
 
+vi.mock('../usage', () => ({
+  UsagePage: () => <div data-testid="usage-page">Usage Content</div>,
+}));
+
+vi.mock('../executions', () => ({
+  ExecutionHistoryPage: () => <div data-testid="execution-history">Execution History Content</div>,
+}));
+
 describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
   'WorkspacePage — %s persona',
   (role) => {
@@ -61,12 +69,13 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       });
     });
 
-    it('shows Apps and Subscriptions tabs', () => {
+    it('shows all workspace tabs', () => {
       renderWithProviders(<WorkspacePage />);
 
       expect(screen.getByRole('button', { name: /Apps/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Subscriptions/i })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Approvals/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Usage/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Executions/i })).toBeInTheDocument();
     });
 
     it('clicking Subscriptions tab renders subscriptions content', async () => {
@@ -106,6 +115,40 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
         name: /Subscriptions/i,
       });
       expect(subscriptionsTab).toHaveClass('border-transparent');
+    });
+
+    it('clicking Usage tab renders usage content', async () => {
+      const user = userEvent.setup();
+
+      renderWithProviders(<WorkspacePage />);
+
+      const usageTab = screen.getByRole('button', { name: /Usage/i });
+      await user.click(usageTab);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('usage-page')).toBeInTheDocument();
+      });
+    });
+
+    it('clicking Executions tab renders execution history', async () => {
+      const user = userEvent.setup();
+
+      renderWithProviders(<WorkspacePage />);
+
+      const executionsTab = screen.getByRole('button', { name: /Executions/i });
+      await user.click(executionsTab);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('execution-history')).toBeInTheDocument();
+      });
+    });
+
+    it('URL ?tab=usage activates usage tab', async () => {
+      renderWithProviders(<WorkspacePage />, { route: '/?tab=usage' });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('usage-page')).toBeInTheDocument();
+      });
     });
   }
 );

@@ -14,7 +14,10 @@ vi.mock('../../config', () => ({
       enableSubscriptions: true,
       enableGateways: false,
     },
-    services: { console: { url: 'https://console.example.com' } },
+    services: {
+      console: { url: 'https://console.example.com' },
+      docs: { url: 'https://docs.example.com' },
+    },
     app: { version: '1.0.0' },
     baseDomain: 'example.com',
   },
@@ -62,9 +65,9 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       expect(screen.getByText('My Workspace')).toBeInTheDocument();
     });
 
-    it('renders Analytics nav item when subscriptions enabled', () => {
+    it('renders Documentation external link', () => {
       renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.getByText('Analytics')).toBeInTheDocument();
+      expect(screen.getByText('Documentation')).toBeInTheDocument();
     });
 
     it('does not render removed nav items', () => {

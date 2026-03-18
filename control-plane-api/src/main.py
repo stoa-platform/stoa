@@ -456,7 +456,7 @@ app = FastAPI(
             "description": "Application and subscription management",
         },
         {"name": "Deployments", "description": "Deployment operations and status"},
-        {"name": "Git", "description": "GitLab integration (commits, MRs, files) — Advanced"},
+        {"name": "Advanced — GitOps", "description": "GitLab integration (commits, MRs, files, branches)"},
         {"name": "Events", "description": "Real-time event streaming (SSE)"},
         {"name": "Webhooks", "description": "GitLab webhook handlers for GitOps"},
         {"name": "Traces", "description": "Pipeline monitoring and tracing"},

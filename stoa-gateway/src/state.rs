@@ -24,6 +24,7 @@ use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::memory::MemoryMonitor;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
+use crate::observability::SnapshotStore;
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
 use crate::proxy::{ConsumerCredentialStore, CredentialStore};
 use crate::quota::{
@@ -139,6 +140,8 @@ pub struct AppState {
     /// A2A agent registry for inter-agent communication (CAB-1754).
     /// None when STOA_A2A_ENABLED=false (default).
     pub a2a_registry: Option<Arc<crate::a2a::registry::AgentRegistry>>,
+    /// Error snapshot store for 5xx response capture (CAB-1645).
+    pub snapshot_store: Arc<SnapshotStore>,
     /// Memory budget monitor for backpressure (CAB-1829).
     pub memory_monitor: MemoryMonitor,
     /// eBPF sync client for kernel-level policy enforcement (CAB-1848).
@@ -556,6 +559,21 @@ impl AppState {
             "Memory budget monitor initialized"
         );
 
+        // Initialize error snapshot store (CAB-1645)
+        let snapshot_store = if config.snapshot_enabled {
+            let store = SnapshotStore::new(config.snapshot_max_count, config.snapshot_max_age_secs);
+            tracing::info!(
+                max_count = config.snapshot_max_count,
+                max_age_secs = config.snapshot_max_age_secs,
+                body_max_bytes = config.snapshot_body_max_bytes,
+                "Error snapshot capture enabled"
+            );
+            Arc::new(store)
+        } else {
+            tracing::info!("Error snapshot capture disabled (STOA_SNAPSHOT_ENABLED=false)");
+            Arc::new(SnapshotStore::disabled())
+        };
+
         // Initialize A2A agent registry (CAB-1754)
         let a2a_registry = if config.a2a_enabled {
             let registry = crate::a2a::registry::AgentRegistry::new(
@@ -617,6 +635,7 @@ impl AppState {
             api_proxy_registry,
             hegemon,
             a2a_registry,
+            snapshot_store,
             memory_monitor,
             ebpf_client: std::env::var("STOA_EBPF_DAEMON_URL")
                 .ok()
@@ -689,6 +708,19 @@ impl AppState {
                 interval_secs = interval_secs,
                 "Route reload watch loop started (CAB-1828)"
             );
+        }
+
+        // Start snapshot eviction task (CAB-1645)
+        if self.snapshot_store.is_enabled() {
+            let store = self.snapshot_store.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+                loop {
+                    interval.tick().await;
+                    store.evict_expired();
+                }
+            });
+            tracing::info!("Snapshot eviction background task started (60s interval)");
         }
 
         // Start zombie reaper (CAB-362)

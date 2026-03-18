@@ -159,7 +159,9 @@
   "login": {
     "title": "STOA Control Plane",
     "subtitle": "Gestion d'API multi-tenant",
-    "button": "Se connecter avec Keycloak"
+    "button": "Se connecter avec Keycloak",
+    "googleButton": "Se connecter avec Google",
+    "divider": "ou"
   },
   "tenants": {
     "title": "Tenants",

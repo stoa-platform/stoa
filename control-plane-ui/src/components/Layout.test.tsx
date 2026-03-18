@@ -164,9 +164,9 @@ describe('Layout', () => {
   it('renders gateway section with items (CAB-1764)', () => {
     renderLayout();
     expect(screen.getByText('Gateway')).toBeInTheDocument();
-    expect(screen.getByText('Modes')).toBeInTheDocument();
-    expect(screen.getByText('Metrics')).toBeInTheDocument();
-    expect(screen.getByText('Deployments')).toBeInTheDocument();
+    expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.getByText('Config Sync')).toBeInTheDocument();
+    expect(screen.getByText('Backend Health')).toBeInTheDocument();
   });
 
   it('renders breadcrumb component', () => {
@@ -187,10 +187,13 @@ describe('Layout', () => {
     // AI & MCP has accent (⚡ prefix)
     expect(screen.getByText((_, el) => el?.textContent === '\u26A1 AI & MCP')).toBeInTheDocument();
     expect(screen.getByText('Gateway')).toBeInTheDocument();
-    expect(screen.getByText('Insights')).toBeInTheDocument();
-    // Removed sections should not appear
+    expect(screen.getByText('Monitoring')).toBeInTheDocument();
+    expect(screen.getByText('Governance')).toBeInTheDocument();
+    expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('Users & Access')).toBeInTheDocument();
+    // Removed sections
+    expect(screen.queryByText('Insights')).not.toBeInTheDocument();
     expect(screen.queryByText('Access')).not.toBeInTheDocument();
-    expect(screen.queryByText('Governance')).not.toBeInTheDocument();
   });
 
   it('renders STOA badges on unique features', () => {
@@ -244,9 +247,11 @@ describe('Layout', () => {
   it('renders key nav items after rationalization (CAB-1764)', () => {
     renderLayout();
     expect(screen.getByText('Audit Log')).toBeInTheDocument();
-    expect(screen.getByText('Usage Analytics')).toBeInTheDocument();
-    expect(screen.getByText('AI Factory')).toBeInTheDocument();
+    expect(screen.getByText('AI Ops')).toBeInTheDocument();
     expect(screen.getByText('Consumers')).toBeInTheDocument();
+    expect(screen.getByText('Credentials')).toBeInTheDocument();
+    expect(screen.getByText('LLM Cost')).toBeInTheDocument();
+    expect(screen.getByText('API Access Rules')).toBeInTheDocument();
   });
 
   it('does not render removed nav items (CAB-1764)', () => {
@@ -254,7 +259,6 @@ describe('Layout', () => {
     expect(screen.queryByText('Shadow Discovery')).not.toBeInTheDocument();
     expect(screen.queryByText('Token Optimizer')).not.toBeInTheDocument();
     expect(screen.queryByText('Policies')).not.toBeInTheDocument();
-    expect(screen.queryByText('Identity')).not.toBeInTheDocument();
     expect(screen.queryByText('My Usage')).not.toBeInTheDocument();
   });
 
@@ -305,13 +309,18 @@ describe('Layout', () => {
       logout: vi.fn(),
       hasPermission: vi
         .fn()
-        .mockImplementation((p: string) => ['apis:read', 'apps:read', 'audit:read'].includes(p)),
+        .mockImplementation(
+          (p: string) =>
+            ['apis:read', 'apps:read', 'audit:read', 'consumers:read'].includes(p)
+        ),
       hasRole: vi.fn(() => false),
     });
 
     renderLayout();
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('APIs')).toBeInTheDocument();
-    expect(screen.queryByText('Business')).not.toBeInTheDocument();
+    // Viewer lacks admin:* permissions — admin items should be hidden
+    expect(screen.queryByText('Prospects')).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
   });
 });

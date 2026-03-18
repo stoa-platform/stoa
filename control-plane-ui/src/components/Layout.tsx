@@ -29,7 +29,6 @@ import {
   Server,
   ArrowUpDown,
   BarChart3,
-  TrendingUp,
   Menu,
   X,
   Search,
@@ -45,6 +44,17 @@ import {
   Puzzle,
   Bot,
   Network,
+  KeyRound,
+  Shield,
+  GitCompareArrows,
+  FileText,
+  Webhook,
+  Settings,
+  UserPlus,
+  Lock,
+  DollarSign,
+  History,
+  Fingerprint,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -69,7 +79,7 @@ interface NavSection {
 }
 
 // Navigation config — name/title values are i18n keys, resolved via t() in render
-// Rationalized from 8 sections (48 items) to 5 sections (~20 items) for demo clarity.
+// CAB-1764: Rationalized to 8 sections / 34 items (from 50+ items)
 // All routes still work via URL or command palette — only sidebar nav is simplified.
 const navigationSections: NavSection[] = [
   {
@@ -77,31 +87,17 @@ const navigationSections: NavSection[] = [
     items: [
       { name: 'nav.dashboard', href: '/', icon: LayoutDashboard, shortcut: ['g', 'd'] },
       {
-        name: 'nav.operations',
+        name: 'nav.platformStatus',
         href: '/operations',
         icon: Activity,
         permission: 'tenants:read',
         shortcut: ['g', 'o'],
-      },
-      {
-        name: 'nav.business',
-        href: '/business',
-        icon: TrendingUp,
-        permission: 'tenants:read',
-        shortcut: ['g', 'b'],
       },
     ],
   },
   {
     title: 'nav.apiCatalog',
     items: [
-      {
-        name: 'nav.tenants',
-        href: '/tenants',
-        icon: Building2,
-        permission: 'tenants:read',
-        shortcut: ['g', 't'],
-      },
       {
         name: 'nav.apis',
         href: '/apis',
@@ -110,17 +106,17 @@ const navigationSections: NavSection[] = [
         shortcut: ['g', 'a'],
       },
       {
-        name: 'nav.consumers',
-        href: '/consumers',
-        icon: Users,
-        permission: 'consumers:read',
-        shortcut: ['g', 'c'],
+        name: 'nav.subscriptions',
+        href: '/subscriptions',
+        icon: FileText,
+        permission: 'apis:read',
       },
       {
-        name: 'nav.applications',
-        href: '/applications',
-        icon: AppWindow,
-        permission: 'apps:read',
+        name: 'nav.tenants',
+        href: '/tenants',
+        icon: Building2,
+        permission: 'tenants:read',
+        shortcut: ['g', 't'],
       },
     ],
   },
@@ -150,62 +146,176 @@ const navigationSections: NavSection[] = [
         permission: 'apis:read',
       },
       {
-        name: 'nav.chatSettings',
-        href: '/chat-settings',
-        icon: Bot,
-        permission: 'tenants:write',
+        name: 'nav.llmCost',
+        href: '/llm-cost',
+        icon: DollarSign,
+        permission: 'tenants:read',
+      },
+    ],
+  },
+  {
+    title: 'nav.usersAccess',
+    items: [
+      {
+        name: 'nav.consumers',
+        href: '/consumers',
+        icon: Users,
+        permission: 'consumers:read',
+        shortcut: ['g', 'c'],
+      },
+      {
+        name: 'nav.applications',
+        href: '/applications',
+        icon: AppWindow,
+        permission: 'apps:read',
+      },
+      {
+        name: 'nav.credentials',
+        href: '/credential-mappings',
+        icon: KeyRound,
+        permission: 'apps:read',
       },
     ],
   },
   {
     title: 'nav.gateway',
     items: [
-      { name: 'nav.status', href: '/gateway', icon: Server, permission: 'apis:read' },
+      { name: 'nav.gatewayOverview', href: '/gateway', icon: Server, permission: 'apis:read' },
       {
-        name: 'nav.modes',
-        href: '/gateways/modes',
+        name: 'nav.registry',
+        href: '/gateways',
+        icon: Server,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'nav.configSync',
+        href: '/drift',
+        icon: GitCompareArrows,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'nav.backendHealth',
+        href: '/proxy-owner',
+        icon: Activity,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'nav.federation',
+        href: '/federation/accounts',
+        icon: Network,
+        permission: 'tenants:read',
+      },
+    ],
+  },
+  {
+    title: 'nav.monitoring',
+    items: [
+      {
+        name: 'nav.observability',
+        href: '/observability',
         icon: Gauge,
-        permission: 'tenants:read',
-        shortcut: ['g', 'm'],
-        badge: 'STOA',
+        shortcut: ['g', 'g'],
+      },
+      { name: 'nav.logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
+      {
+        name: 'nav.executions',
+        href: '/executions',
+        icon: History,
+        permission: 'apis:read',
       },
       {
-        name: 'nav.deployments',
-        href: '/gateway-deployments',
-        icon: ArrowUpDown,
-        permission: 'tenants:read',
-      },
-      {
-        name: 'nav.metrics',
-        href: '/gateway-observability',
+        name: 'nav.apiTraffic',
+        href: '/api-traffic',
         icon: BarChart3,
         permission: 'tenants:read',
       },
     ],
   },
   {
-    title: 'nav.insights',
+    title: 'nav.governance',
     items: [
-      { name: 'nav.observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
-      { name: 'nav.callFlow', href: '/call-flow', icon: Network },
-      { name: 'nav.logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
       {
-        name: 'nav.analytics',
-        href: '/analytics',
-        icon: BarChart3,
+        name: 'nav.contracts',
+        href: '/contracts',
+        icon: FileText,
         permission: 'apis:read',
       },
       {
-        name: 'nav.aiFactory',
-        href: '/hegemon',
-        icon: Bot,
+        name: 'nav.apiAccessRules',
+        href: '/audience-governance',
+        icon: Shield,
+        permission: 'apis:read',
+      },
+      {
+        name: 'nav.promotions',
+        href: '/promotions',
+        icon: ArrowUpDown,
         permission: 'tenants:read',
+      },
+      {
+        name: 'nav.webhooks',
+        href: '/webhooks',
+        icon: Webhook,
+        permission: 'apps:read',
       },
       {
         name: 'nav.auditLog',
         href: '/audit-log',
         icon: ClipboardList,
         permission: 'audit:read',
+      },
+      {
+        name: 'nav.securityPosture',
+        href: '/security-posture',
+        icon: Shield,
+        permission: 'tenants:read',
+      },
+    ],
+  },
+  {
+    title: 'nav.admin',
+    items: [
+      {
+        name: 'nav.prospects',
+        href: '/admin/prospects',
+        icon: UserPlus,
+        permission: 'admin:prospects',
+      },
+      {
+        name: 'nav.accessRequests',
+        href: '/admin/access-requests',
+        icon: Lock,
+        permission: 'admin:access-requests',
+      },
+      {
+        name: 'nav.users',
+        href: '/admin/users',
+        icon: Users,
+        permission: 'admin:users',
+      },
+      {
+        name: 'nav.roles',
+        href: '/admin/roles',
+        icon: Shield,
+        permission: 'admin:roles',
+      },
+      {
+        name: 'nav.identity',
+        href: '/identity',
+        icon: Fingerprint,
+        permission: 'admin:users',
+      },
+      {
+        name: 'nav.aiOps',
+        href: '/hegemon',
+        icon: Bot,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'nav.settings',
+        href: '/admin/settings',
+        icon: Settings,
+        permission: 'admin:settings',
       },
     ],
   },

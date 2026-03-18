@@ -286,6 +286,18 @@ class TransactionListResponse(BaseModel):
     demo_mode: bool = False
 
 
+class TransactionStatsWithDemoResponse(APITransactionStats):
+    """Transaction stats with demo mode indicator."""
+
+    demo_mode: bool = False
+
+
+class TransactionDetailWithDemoResponse(APITransaction):
+    """Transaction detail with demo mode indicator."""
+
+    demo_mode: bool = False
+
+
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
@@ -338,7 +350,7 @@ async def list_transactions(
     }
 
 
-@router.get("/transactions/stats")
+@router.get("/transactions/stats", response_model=TransactionStatsWithDemoResponse)
 async def get_transaction_stats(
     time_range: int = Query(60, ge=1, le=1440),
     user: User = Depends(get_current_user),
@@ -362,7 +374,7 @@ async def get_transaction_stats(
     return {**generate_stats().model_dump(), "demo_mode": True}
 
 
-@router.get("/transactions/{transaction_id}")
+@router.get("/transactions/{transaction_id}", response_model=TransactionDetailWithDemoResponse)
 async def get_transaction(
     transaction_id: str,
     user: User = Depends(get_current_user),

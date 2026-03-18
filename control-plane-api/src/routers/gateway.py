@@ -97,6 +97,18 @@ class OIDCConfigResponse(BaseModel):
     message: str = ""
 
 
+class GatewayAPIDetailResponse(BaseModel):
+    """Gateway API detail (passthrough from gateway admin API)."""
+
+    model_config = {"extra": "allow"}
+
+    id: str = ""
+    apiName: str = ""
+    apiVersion: str = ""
+    type: str | None = None
+    isActive: bool = False
+
+
 class GatewayActionResponse(BaseModel):
     """Generic gateway action result."""
 
@@ -211,7 +223,7 @@ async def import_gateway_api(
         raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
-@router.get("/apis/{api_id}")
+@router.get("/apis/{api_id}", response_model=GatewayAPIDetailResponse)
 @require_permission(Permission.APIS_READ)
 async def get_gateway_api(api_id: str, user: User = Depends(get_current_user), token: str = Depends(get_auth_token)):
     """Get API details from Gateway.

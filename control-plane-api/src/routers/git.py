@@ -39,7 +39,7 @@ class MergeResultResponse(BaseModel):
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v1/tenants/{tenant_id}/git", tags=["Git"])
+router = APIRouter(prefix="/v1/tenants/{tenant_id}/git", tags=["Advanced — GitOps"])
 
 
 class CommitInfo(BaseModel):
@@ -115,7 +115,7 @@ async def list_commits(
         return []
 
 
-@router.get("/files/{file_path:path}")
+@router.get("/files/{file_path:path}", response_model=FileContent)
 @require_tenant_access
 async def get_file(tenant_id: str, file_path: str, ref: str = "main", user: User = Depends(get_current_user)):
     """Get file content from GitLab"""
@@ -126,7 +126,7 @@ async def get_file(tenant_id: str, file_path: str, ref: str = "main", user: User
     return FileContent(path=file_path, content=content)
 
 
-@router.get("/tree")
+@router.get("/tree", response_model=TreeListResponse)
 @require_tenant_access
 async def get_tree(
     tenant_id: str,
@@ -141,13 +141,13 @@ async def get_tree(
 
     try:
         tree = git_service._project.repository_tree(path=scoped_path, ref=ref)
-        items = [{"name": item["name"], "type": item["type"], "path": item["path"]} for item in tree]
-        return {"items": items}
+        items = [TreeItem(name=item["name"], type=item["type"], path=item["path"]) for item in tree]
+        return TreeListResponse(items=items)
     except Exception:
-        return {"items": []}
+        return TreeListResponse(items=[])
 
 
-@router.post("/files/{file_path:path}", status_code=201)
+@router.post("/files/{file_path:path}", status_code=201, response_model=FileActionResponse)
 @require_permission(Permission.APIS_UPDATE)
 @require_tenant_access
 async def create_or_update_file(
@@ -188,7 +188,7 @@ async def create_or_update_file(
     return {"path": file_path, "action": "updated" if existing else "created"}
 
 
-@router.delete("/files/{file_path:path}")
+@router.delete("/files/{file_path:path}", response_model=MessageResponse)
 @require_permission(Permission.APIS_DELETE)
 @require_tenant_access
 async def delete_file(
@@ -282,7 +282,7 @@ async def create_merge_request(tenant_id: str, mr: MergeRequestCreate, user: Use
         raise HTTPException(status_code=500, detail=f"Failed to create merge request: {e}")
 
 
-@router.post("/merge-requests/{mr_iid}/merge")
+@router.post("/merge-requests/{mr_iid}/merge", response_model=MergeResultResponse)
 @require_permission(Permission.APIS_DEPLOY)
 @require_tenant_access
 async def merge_request(tenant_id: str, mr_iid: int, user: User = Depends(get_current_user)):

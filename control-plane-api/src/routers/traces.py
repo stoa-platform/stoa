@@ -67,6 +67,67 @@ class TraceIngestResponse(BaseModel):
     status: str
 
 
+class TraceStatsResponse(BaseModel):
+    """Aggregated trace statistics."""
+
+    total: int = 0
+    by_status: dict[str, int] = {}
+    avg_duration_ms: int = 0
+    success_rate: float = 0
+
+
+class TraceDetailResponse(BaseModel):
+    """Full trace detail."""
+
+    id: str
+    trigger_type: str | None = None
+    trigger_source: str | None = None
+    git_commit_sha: str | None = None
+    git_commit_message: str | None = None
+    git_branch: str | None = None
+    git_author: str | None = None
+    git_author_email: str | None = None
+    git_project: str | None = None
+    git_files_changed: list[str] | None = None
+    tenant_id: str | None = None
+    api_id: str | None = None
+    api_name: str | None = None
+    environment: str | None = None
+    created_at: str | None = None
+    completed_at: str | None = None
+    total_duration_ms: int | None = None
+    status: str
+    error_summary: str | None = None
+    steps: list[dict] = []
+
+
+class AISessionTotals(BaseModel):
+    """AI session aggregated totals."""
+
+    sessions: int = 0
+    total_duration_ms: int = 0
+    avg_duration_ms: int = 0
+    success_count: int = 0
+    success_rate: float = 0
+    total_cost_usd: float = 0
+    total_tokens: int = 0
+    avg_cost_per_session: float = 0
+    cost_delta_usd: float = 0
+    cost_delta_pct: float = 0
+    tokens_delta: int = 0
+    prev_cost_usd: float = 0
+
+
+class AISessionStatsResponse(BaseModel):
+    """AI session statistics with per-worker and daily breakdowns."""
+
+    days: int
+    totals: AISessionTotals = AISessionTotals()
+    by_model: list[dict] = []
+    workers: list[dict] = []
+    daily: list[dict] = []
+
+
 class TraceTimelineStep(BaseModel):
     """A step in a trace timeline."""
 
@@ -148,7 +209,7 @@ async def list_traces(
     }
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=TraceStatsResponse)
 async def get_trace_stats(
     service: TraceService = Depends(get_service),
 ):
@@ -176,7 +237,7 @@ async def get_live_traces(
     }
 
 
-@router.get("/{trace_id}")
+@router.get("/{trace_id}", response_model=TraceDetailResponse)
 async def get_trace(
     trace_id: str,
     service: TraceService = Depends(get_service),
@@ -343,7 +404,7 @@ async def ingest_ai_session(
     }
 
 
-@router.get("/stats/ai-sessions")
+@router.get("/stats/ai-sessions", response_model=AISessionStatsResponse)
 async def get_ai_session_stats(
     days: int = Query(7, ge=1, le=90),
     worker: str | None = Query(None, description="Filter by worker (trigger_source)"),

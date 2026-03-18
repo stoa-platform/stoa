@@ -44,6 +44,7 @@ def sample_record(sample_api_id):
     record.tenant_id = "acme"
     record.api_id = sample_api_id
     record.consumer_id = None
+    record.environment = None
     record.period = "daily"
     record.period_start = now
     record.request_count = 500

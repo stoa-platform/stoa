@@ -76,6 +76,16 @@ impl PiiScanner {
         }
     }
 
+    /// Redact PII from a plain text string.
+    ///
+    /// Public wrapper for the internal redact_string logic.
+    /// Returns (pii_found, redacted_string).
+    pub fn redact_text(s: &str) -> (bool, String) {
+        let mut found = false;
+        let result = Self::redact_string(s, &mut found);
+        (found, result)
+    }
+
     fn redact_string(s: &str, found: &mut bool) -> String {
         // Strip allowlisted patterns before scanning to avoid false positives
         let sanitized = URL_PATTERN.replace_all(s, "___URL___");

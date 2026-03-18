@@ -8,6 +8,7 @@ import {
   Store,
   Layers,
   LucideIcon,
+  ShieldCheck,
 } from 'lucide-react';
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,6 +50,12 @@ const navItems: NavItem[] = [
     href: '/workspace',
     icon: Briefcase,
     permission: 'apps:read',
+  },
+  {
+    name: 'Governance',
+    href: '/governance',
+    icon: ShieldCheck,
+    permission: 'apis:update',
   },
   {
     name: 'Documentation',

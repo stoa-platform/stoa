@@ -60,7 +60,7 @@ See `velocity.json` for historical cycle data. Current rolling 3-cycle average:
 ## Legacy Phases (archived)
 
 > The original 14-phase plan (Jan 5, 2026) was based on AWS/EKS infrastructure.
-> After migration to OVH MKS + Hetzner K3s (Feb 2026), most phases became obsolete.
+> After migration to OVH MKS (Feb 2026), most phases became obsolete. Hetzner K3s staging was decommissioned Mar 2026.
 > Archived below for historical reference.
 
 <details>
@@ -75,7 +75,7 @@ See `velocity.json` for historical cycle data. Current rolling 3-cycle average:
 | 3 | Vault + Secrets | **Done differently** | Infisical replaces HashiCorp Vault |
 | 4 | OpenSearch + Monitoring | **Partially valid** | OpenSearch deployed but not fully integrated |
 | 4.5 | Jenkins Orchestration | **Obsolete** | GitHub Actions replaced Jenkins entirely |
-| 5 | Multi-environment | **Done differently** | Hetzner staging exists, not AWS-based |
+| 5 | Multi-environment | **Done differently** | Staging was on Hetzner K3s (decommissioned 2026-03) |
 | 6 | Demo Tenant | **Done** | CAB-1304 demo tenant automation |
 | 7 | Security Jobs | **Done differently** | GHA security-scan.yml replaces custom jobs |
 | 8 | Portal Self-Service | **Done** | Portal fully functional |

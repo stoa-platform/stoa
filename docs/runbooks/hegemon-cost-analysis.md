@@ -20,15 +20,10 @@ Break-even at ~15 tickets/month. Cost advantage grows linearly with volume.
 
 **Datacenter**: GRA (Gravelines, France) — same as existing OVH MKS cluster.
 
-### Hetzner Cloud (Blocked — 5 server limit reached)
+### Hetzner Cloud (Decommissioned — March 2026)
 
-| Model | vCPU | RAM | Storage | Price/mo |
-|-------|------|-----|---------|----------|
-| CX22 | 2 | 4 GB | 40 GB | EUR 3.29 |
-| CX32 | 4 | 8 GB | 80 GB | EUR 6.80 |
-| CX42 | 8 | 16 GB | 160 GB | EUR 14.80 |
-
-Hetzner is cheaper per-spec but STOA has reached the 5-server account limit.
+Hetzner K3s staging cluster was decommissioned in March 2026 (CAB-1751).
+All workloads migrated to OVH. Savings: ~€45/month.
 
 ## Cost Model: VPS vs GitHub Actions
 

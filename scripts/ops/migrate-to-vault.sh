@@ -256,6 +256,7 @@ migrate_path "/mistral"    "shared/mistral"
 migrate_path "/cloudflare" "shared/cloudflare"
 migrate_path "/ovh"        "shared/ovh"
 migrate_path "/contabo"    "shared/contabo"
+# Hetzner decommissioned 2026-03 (CAB-1751) — secrets preserved for audit trail
 migrate_path "/hetzner"    "shared/hetzner"
 migrate_path "/algolia"    "shared/algolia"
 

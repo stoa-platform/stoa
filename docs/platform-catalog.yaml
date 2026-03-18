@@ -25,11 +25,6 @@ services:
         namespace: stoa-system
         replicas: 2
         k8sName: stoa-control-plane-api
-      staging:
-        cluster: hetzner-k3s
-        namespace: stoa-system
-        replicas: 1
-        k8sName: stoa-control-plane-api
     dependsOn:
       - postgres
       - keycloak
@@ -67,11 +62,6 @@ services:
         namespace: stoa-system
         replicas: 2
         k8sName: control-plane-ui
-      staging:
-        cluster: hetzner-k3s
-        namespace: stoa-system
-        replicas: 1
-        k8sName: control-plane-ui
     dependsOn:
       - control-plane-api
       - keycloak
@@ -100,11 +90,6 @@ services:
         namespace: stoa-system
         replicas: 2
         k8sName: stoa-portal
-      staging:
-        cluster: hetzner-k3s
-        namespace: stoa-system
-        replicas: 1
-        k8sName: stoa-portal
     dependsOn:
       - control-plane-api
       - keycloak
@@ -132,11 +117,6 @@ services:
         cluster: ovh-mks
         namespace: stoa-system
         replicas: 2
-        k8sName: stoa-gateway
-      staging:
-        cluster: hetzner-k3s
-        namespace: stoa-system
-        replicas: 1
         k8sName: stoa-gateway
     dependsOn:
       - control-plane-api
@@ -312,7 +292,7 @@ services:
     image: infisical/infisical
     deploy:
       prod:
-        cluster: hetzner-standalone
+        cluster: ovh-infisical-vps
         namespace: null
         replicas: 1
         k8sName: null
@@ -642,15 +622,6 @@ clusters:
       - kyverno
       - nginx-gateway
 
-  - name: hetzner-k3s
-    displayName: Hetzner K3s (Staging)
-    provider: Hetzner
-    region: Frankfurt
-    nodes: 1
-    nodeType: K3s single-node
-    namespaces:
-      - stoa-system
-
   - name: vps-ovh
     displayName: OVH VPS Fleet
     provider: OVH
@@ -667,14 +638,14 @@ clusters:
       - name: n8n-vps
         purpose: n8n workflow engine
 
-  - name: hetzner-standalone
-    displayName: Hetzner Dedicated (Infisical)
-    provider: Hetzner
-    region: Frankfurt
+  - name: ovh-infisical-vps
+    displayName: OVH VPS (Infisical)
+    provider: OVH
+    region: GRA
     nodes: 1
-    nodeType: Dedicated
+    nodeType: VPS
     hosts:
-      - name: master-1
+      - name: infisical-vps
         purpose: Infisical secrets vault
 
 # ==============================================================================

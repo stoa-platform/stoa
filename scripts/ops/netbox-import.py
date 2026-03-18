@@ -93,7 +93,7 @@ def import_all(client: NetboxClient) -> None:
     sites = {}
     site_defs = [
         {"name": "OVH GRA9 (MKS Prod)", "slug": "ovh-gra9", "status": "active"},
-        {"name": "Hetzner NBG1 (K3s Staging)", "slug": "hetzner-nbg1", "status": "active"},
+        {"name": "Hetzner NBG1 (K3s Staging)", "slug": "hetzner-nbg1", "status": "decommissioned"},
         {"name": "Contabo NUE (HEGEMON Workers)", "slug": "contabo-nue", "status": "active"},
         {"name": "OVH GRA-VPS (Gateways + Tools)", "slug": "ovh-gra-vps", "status": "active"},
     ]

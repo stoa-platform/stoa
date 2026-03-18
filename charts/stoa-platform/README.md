@@ -67,7 +67,7 @@ kubectl apply -f charts/stoa-platform/crds/
 | File | Environment | Usage |
 |------|-------------|-------|
 | `values-dev.yaml` | Local / CI | `helm upgrade ... -f values-dev.yaml` |
-| `values-staging.yaml` | Hetzner K3s | ArgoCD auto-sync |
+| `values-staging.yaml` | Staging (local/CI) | Manual apply |
 | `values-prod.yaml` | OVH MKS | ArgoCD auto-sync |
 
 ## Templates
@@ -127,4 +127,4 @@ helm diff upgrade stoa-platform ./charts/stoa-platform -n stoa-system
 ## Dependencies
 
 - **Depends on**: Container images (stoa-gateway, mcp-gateway)
-- **Depended on by**: ArgoCD (GitOps deployment to OVH + Hetzner)
+- **Depended on by**: ArgoCD (GitOps deployment to OVH)

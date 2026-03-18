@@ -2,7 +2,7 @@
 # Apply with: kubectl apply -f k8s/networkpolicy-control-plane.yaml
 #
 # Restricts traffic to/from the control plane, gateway, portal, and console pods.
-# CIDR 10.0.0.0/8 covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x) pod networks.
+# CIDR 10.0.0.0/8 covers OVH MKS (10.2.x) pod network.
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -58,7 +58,7 @@ spec:
           port: 8000
 
     # Health checks from cluster network
-    # Covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x)
+    # Covers OVH MKS (10.2.x) pod network
     - from:
         - ipBlock:
             cidr: 10.0.0.0/8
@@ -158,7 +158,7 @@ spec:
           port: 8080
 
     # Health checks from cluster network
-    # Covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x)
+    # Covers OVH MKS (10.2.x) pod network
     - from:
         - ipBlock:
             cidr: 10.0.0.0/8
@@ -246,7 +246,7 @@ spec:
           port: 8080
 
     # Health checks from cluster network
-    # Covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x)
+    # Covers OVH MKS (10.2.x) pod network
     - from:
         - ipBlock:
             cidr: 10.0.0.0/8
@@ -303,7 +303,7 @@ spec:
           port: 8080
 
     # Health checks from cluster network
-    # Covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x)
+    # Covers OVH MKS (10.2.x) pod network
     - from:
         - ipBlock:
             cidr: 10.0.0.0/8

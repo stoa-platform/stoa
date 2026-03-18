@@ -247,7 +247,7 @@ Key expression notes:
 | `OutOfSync` + Kyverno blocked | Missing `privileged: false` | Add to values.yaml securityContext |
 | `Unknown` + Healthy | App source unreachable or auto-sync off | Check repo access, manual sync |
 | Helm-created repo secret conflict | Both Helm and manual secrets exist | Delete Helm one, keep manual with `x-access-token` |
-| Hetzner CoreDNS caching | `forward /etc/resolv.conf` uses Hetzner DNS | Change to `forward . 1.1.1.1 8.8.8.8` |
+| CoreDNS caching | `forward /etc/resolv.conf` uses provider DNS | Change to `forward . 1.1.1.1 8.8.8.8` |
 
 ---
 
@@ -296,7 +296,6 @@ Alert rules and ServiceMonitors deployed by CAB-402:
 | Cluster | ArgoCD URL | Auth |
 |---------|-----------|------|
 | OVH Prod | `https://argocd.gostoa.dev` | Keycloak SSO |
-| Hetzner Staging | `https://staging-argocd.gostoa.dev` | Keycloak SSO |
 
 ### Managed Applications
 

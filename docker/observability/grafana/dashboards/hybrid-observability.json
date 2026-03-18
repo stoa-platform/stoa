@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Hybrid Multi-Cluster Observability — OVH K8s (prod), Hetzner K3s (staging), VPS gateways",
+  "description": "Hybrid Multi-Cluster Observability — OVH K8s (prod), VPS gateways",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,

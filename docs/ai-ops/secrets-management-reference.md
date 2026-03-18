@@ -10,7 +10,7 @@
 | `prod` | `/cloudflare` | `CF_ACCESS_CLIENT_ID` | Cloudflare Access Service Token ID |
 | `prod` | `/cloudflare` | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access Service Token Secret |
 | `prod` | `/contabo` | `VPS_ROOT_PASSWORD` | Root password for 5 HEGEMON VPS |
-| `prod` | `/hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API |
+| `prod` | `/hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API (decommissioned 2026-03, remove after cleanup) |
 | `prod` | `/ovh` | `OVH_APPLICATION_KEY` | OVH API key |
 | `prod` | `/ovh` | `OVH_APPLICATION_SECRET` | OVH API secret |
 | `prod` | `/ovh` | `OVH_CONSUMER_KEY` | OVH consumer key |
@@ -121,8 +121,8 @@ See `docs/runbooks/multi-device-access.md` for the full runbook.
 
 | Component | Detail |
 |-----------|--------|
-| Host | Hetzner master-1 |
+| Host | OVH infisical-vps (`213.199.45.108`) |
 | Path | `/opt/infisical/` |
 | Stack | `infisical:latest` + `postgres:15-alpine` + `redis:7-alpine` |
-| Ingress | Traefik (K3s), TLS via `letsencrypt-production` |
+| Ingress | Caddy (auto-TLS via Let's Encrypt) |
 | DNS | `vault.gostoa.dev` |

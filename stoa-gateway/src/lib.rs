@@ -662,19 +662,19 @@ async fn http_metrics_middleware(
     let start = std::time::Instant::now();
 
     // CAB-1842: inject deployment mode as span attribute for Tempo service graph.
-    // This runs on every request so Tempo dimensions can group by deployment mode.
+    // Uses Instrument (not Span::enter) because next.run().await is async —
+    // Span::enter guard is dropped at the first yield point.
+    use tracing::Instrument;
     let deployment_mode = state.config.gateway_mode.to_string();
     let request_span = tracing::span!(
         tracing::Level::INFO,
         "http.request",
+        otel.kind = "server",
         "stoa.deployment_mode" = %deployment_mode,
         http.method = %method,
         http.route = %path,
     );
-    let response = {
-        let _guard = request_span.enter();
-        next.run(request).await
-    };
+    let response = next.run(request).instrument(request_span).await;
 
     let duration = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();

@@ -1,0 +1,149 @@
+name: STOA Bench — Control Plane API
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Benchmark profile'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - load
+          - stress
+      tags:
+        description: 'Locust tags to run (blank = all)'
+        required: false
+        default: ''
+      host:
+        description: 'Target API URL'
+        required: true
+        default: 'http://localhost:8000'
+
+concurrency:
+  group: stoa-bench
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: API Benchmark (${{ inputs.profile }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: stoa
+          POSTGRES_PASSWORD: stoa
+          POSTGRES_DB: stoa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: control-plane-api
+        run: |
+          pip install -r requirements.txt
+          pip install locust>=2.29
+
+      - name: Start API server
+        working-directory: control-plane-api
+        env:
+          DATABASE_URL: postgresql+asyncpg://stoa:stoa@localhost:5432/stoa
+          KEYCLOAK_ENABLED: 'false'
+          KAFKA_ENABLED: 'false'
+          GITLAB_ENABLED: 'false'
+          VAULT_ENABLED: 'false'
+          OPENSEARCH_ENABLED: 'false'
+          GATEWAY_ENABLED: 'false'
+          SECRET_KEY: bench-secret-key-not-for-production
+        run: |
+          # Run migrations
+          alembic upgrade head || true
+
+          # Start server in background
+          uvicorn src.main:app --host 0.0.0.0 --port 8000 &
+          SERVER_PID=$!
+          echo "SERVER_PID=${SERVER_PID}" >> $GITHUB_ENV
+
+          # Wait for server to be ready
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health/live > /dev/null 2>&1; then
+              echo "Server ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run benchmark
+        env:
+          BENCH_TENANT_ID: oasis
+        run: |
+          mkdir -p benchmark-results
+
+          LOCUST_ARGS=(
+            locust
+            -f control-plane-api/benchmarks/locustfile.py
+            --headless
+            --host http://localhost:8000
+            --csv benchmark-results/bench
+            --csv-full-history
+            --print-stats
+            --only-summary
+          )
+
+          # Profile settings
+          case "${{ inputs.profile }}" in
+            smoke)  LOCUST_ARGS+=(-u 5 -r 5 --run-time 30s) ;;
+            load)   LOCUST_ARGS+=(-u 50 -r 10 --run-time 120s) ;;
+            stress) LOCUST_ARGS+=(-u 200 -r 20 --run-time 180s) ;;
+          esac
+
+          # Optional tags
+          if [[ -n "${{ inputs.tags }}" ]]; then
+            LOCUST_ARGS+=(--tags "${{ inputs.tags }}")
+          fi
+
+          "${LOCUST_ARGS[@]}" || true
+
+      - name: Generate report
+        working-directory: control-plane-api
+        run: |
+          python3 -m benchmarks.report ../benchmark-results/bench > ../benchmark-results/report.md 2>/dev/null || true
+
+          if [[ -f ../benchmark-results/report.md ]]; then
+            echo "## STOA Bench — ${{ inputs.profile }} profile" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            cat ../benchmark-results/report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Stop server
+        if: always()
+        run: kill ${{ env.SERVER_PID }} 2>/dev/null || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: stoa-bench-${{ inputs.profile }}-${{ github.sha }}
+          path: benchmark-results/
+          retention-days: 90

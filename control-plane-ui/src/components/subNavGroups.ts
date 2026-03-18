@@ -45,9 +45,9 @@ export const applicationsTabs: SubNavTab[] = [
 ];
 
 export const gatewayTabs: SubNavTab[] = [
-  { label: 'Status', href: '/gateway', icon: Server },
+  { label: 'Overview', href: '/gateway', icon: Server },
   { label: 'Registry', href: '/gateways', icon: Server },
-  { label: 'Drift Detection', href: '/drift', icon: GitCompareArrows },
+  { label: 'Config Sync', href: '/drift', icon: GitCompareArrows },
   { label: 'Deployments', href: '/gateway-deployments', icon: ArrowUpDown },
 ];
 

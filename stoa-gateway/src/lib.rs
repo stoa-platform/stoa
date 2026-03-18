@@ -29,6 +29,7 @@ pub mod metering;
 pub mod metrics;
 pub mod mode;
 pub mod oauth;
+pub mod observability;
 pub mod optimization;
 #[cfg(feature = "phases")]
 pub mod phases;
@@ -236,6 +237,15 @@ pub fn build_router(state: AppState) -> Router {
         )
         // CAB-1828: Route hot-reload
         .route("/routes/reload", post(admin::routes_reload))
+        // CAB-1645: Error snapshot capture
+        .route(
+            "/snapshots",
+            get(handlers::snapshot::list_snapshots).delete(handlers::snapshot::clear_snapshots),
+        )
+        .route(
+            "/snapshots/:request_id",
+            get(handlers::snapshot::get_snapshot),
+        )
         // CAB-1848: eBPF kernel policy sync
         .route("/ebpf/sync", post(ebpf::ebpf_sync))
         .route("/ebpf/status", get(ebpf::ebpf_status))
@@ -636,7 +646,8 @@ pub fn build_router(state: AppState) -> Router {
 // === HTTP Metrics Middleware ===
 
 /// Middleware that records Prometheus metrics for every HTTP request.
-/// On 5xx responses, triggers the diagnostic engine for automatic root-cause analysis (CAB-1542).
+/// On 5xx responses, triggers the diagnostic engine for automatic root-cause analysis (CAB-1542)
+/// and optionally captures an error snapshot with PII-masked body data (CAB-1645).
 ///
 /// Health, readiness, and metrics endpoints are excluded to avoid unnecessary
 /// overhead on high-frequency probes (K8s liveness/readiness, arena benchmarks).
@@ -661,6 +672,26 @@ async fn http_metrics_middleware(
         .to_string();
     let start = std::time::Instant::now();
 
+    // CAB-1645: Buffer request body + headers for snapshot capture (only when enabled).
+    // When disabled, this block is a no-op boolean check — zero overhead.
+    let snapshot_enabled = state.snapshot_store.is_enabled();
+    let (request_headers_clone, request_body_bytes, request) = if snapshot_enabled {
+        let (parts, body) = request.into_parts();
+        let req_headers = parts.headers.clone();
+        // Cap body buffering at configured max
+        let max_bytes = state.config.snapshot_body_max_bytes;
+        let body_bytes: axum::body::Bytes = match axum::body::to_bytes(body, max_bytes + 1).await {
+            Ok(b) => b,
+            Err(_) => axum::body::Bytes::new(),
+        };
+        // Rebuild the request with the buffered body
+        let rebuilt =
+            axum::http::Request::from_parts(parts, axum::body::Body::from(body_bytes.clone()));
+        (Some(req_headers), Some(body_bytes), rebuilt)
+    } else {
+        (None, None, request)
+    };
+
     // CAB-1842: inject deployment mode as span attribute for Tempo service graph.
     // Uses Instrument (not Span::enter) because next.run().await is async —
     // Span::enter guard is dropped at the first yield point.
@@ -680,10 +711,11 @@ async fn http_metrics_middleware(
     let status = response.status().as_u16();
     metrics::record_http_request(&method, &path, status, duration);
 
-    // Auto-RCA: trigger diagnostic engine on server errors
+    // Auto-RCA + snapshot capture on server errors
     if status >= 500 {
+        // Auto-RCA: trigger diagnostic engine (CAB-1542)
         let input = diagnostics::engine::DiagnosticInput {
-            request_id,
+            request_id: request_id.clone(),
             method: method.clone(),
             path: path.clone(),
             status_code: status,
@@ -703,6 +735,69 @@ async fn http_metrics_middleware(
             duration_ms = duration * 1000.0,
             "auto-RCA triggered for 5xx response"
         );
+
+        // CAB-1645: Capture error snapshot with PII-masked body data.
+        // Skip for streaming responses (SSE, WebSocket upgrades).
+        if snapshot_enabled {
+            let is_streaming = status == 101
+                || response
+                    .headers()
+                    .get("content-type")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|ct| ct.contains("text/event-stream"))
+                    .unwrap_or(false);
+
+            if !is_streaming {
+                // Buffer response body for snapshot
+                let resp_headers = response.headers().clone();
+                let (resp_parts, resp_body) = response.into_parts();
+                let max_bytes = state.config.snapshot_body_max_bytes;
+                let resp_body_bytes = match axum::body::to_bytes(resp_body, max_bytes + 1).await {
+                    Ok(bytes) => bytes,
+                    Err(_) => axum::body::Bytes::new(),
+                };
+
+                // Compile extra PII patterns
+                let extra_patterns: Vec<regex::Regex> = state
+                    .config
+                    .snapshot_extra_pii_patterns
+                    .iter()
+                    .filter_map(|p| regex::Regex::new(p).ok())
+                    .collect();
+
+                let error_category =
+                    diagnostics::taxonomy::ErrorCategory::classify(Some(status), None);
+
+                let empty_headers = axum::http::HeaderMap::new();
+                let req_hdrs = request_headers_clone.as_ref().unwrap_or(&empty_headers);
+                let empty_bytes = axum::body::Bytes::new();
+                let req_body = request_body_bytes.as_ref().unwrap_or(&empty_bytes);
+
+                let snapshot =
+                    observability::capture::build_snapshot(observability::capture::SnapshotInput {
+                        request_id,
+                        method,
+                        path,
+                        status_code: status,
+                        error_category: format!("{:?}", error_category).to_lowercase(),
+                        duration_ms: duration * 1000.0,
+                        request_headers: req_hdrs,
+                        request_body: req_body,
+                        response_headers: &resp_headers,
+                        response_body: &resp_body_bytes,
+                        max_body_bytes: max_bytes,
+                        extra_patterns: &extra_patterns,
+                    });
+
+                state.snapshot_store.push(snapshot);
+
+                // Rebuild the response with the buffered body
+                return axum::http::Response::from_parts(
+                    resp_parts,
+                    axum::body::Body::from(resp_body_bytes),
+                );
+            }
+        }
     }
 
     response

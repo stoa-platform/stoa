@@ -17,7 +17,7 @@ import {
   Shield,
   Server,
   GitCompareArrows,
-  ArrowUpDown,
+  Rocket,
   Gauge,
   Activity,
   BarChart3,
@@ -44,11 +44,14 @@ export const applicationsTabs: SubNavTab[] = [
   { label: 'Security Profiles', href: '/security-posture', icon: Shield },
 ];
 
+export const apiDeploymentTabs: SubNavTab[] = [
+  { label: 'Deployments', href: '/api-deployments', icon: Rocket },
+];
+
 export const gatewayTabs: SubNavTab[] = [
   { label: 'Overview', href: '/gateway', icon: Server },
   { label: 'Registry', href: '/gateways', icon: Server },
   { label: 'Config Sync', href: '/drift', icon: GitCompareArrows },
-  { label: 'Deployments', href: '/gateway-deployments', icon: ArrowUpDown },
 ];
 
 export const observabilityTabs: SubNavTab[] = [

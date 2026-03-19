@@ -61,6 +61,7 @@
     "gatewayOverview": "Overview",
     "usersAccess": "Users & Access",
     "credentials": "Credentials",
+    "apiDeployments": "API Deployments",
     "configSync": "Config Sync",
     "backendHealth": "Backend Health",
     "apiAccessRules": "API Access Rules",

@@ -77,8 +77,10 @@ const GatewayRegistry = lazy(() => gatewaysModule().then((m) => ({ default: m.Ga
 const GatewayModes = lazy(() =>
   gatewaysModule().then((m) => ({ default: m.GatewayModesDashboard }))
 );
-const GatewayDeployments = lazy(() =>
-  import('./pages/GatewayDeployments').then((m) => ({ default: m.GatewayDeploymentsDashboard }))
+const ApiDeployments = lazy(() =>
+  import('./pages/ApiDeployments/ApiDeploymentsDashboard').then((m) => ({
+    default: m.ApiDeploymentsDashboard,
+  }))
 );
 const DriftDetection = lazy(() =>
   import('./pages/DriftDetection').then((m) => ({ default: m.DriftDetection }))
@@ -304,10 +306,14 @@ function ProtectedRoutes() {
                   path="/external-mcp-servers"
                   element={<Navigate to="/mcp-servers?tab=custom" replace />}
                 />
+                <Route path="/api-deployments" element={<ApiDeployments />} />
+                <Route
+                  path="/gateway-deployments"
+                  element={<Navigate to="/api-deployments" replace />}
+                />
                 <Route path="/gateway" element={<GatewayStatus />} />
                 <Route path="/gateways/modes" element={<GatewayModes />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />
-                <Route path="/gateway-deployments" element={<GatewayDeployments />} />
                 <Route path="/drift" element={<DriftDetection />} />
                 <Route path="/gateway-observability" element={<GatewayObservability />} />
                 <Route path="/operations" element={<OperationsDashboard />} />

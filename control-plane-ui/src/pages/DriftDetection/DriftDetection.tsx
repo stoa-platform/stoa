@@ -9,7 +9,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useEnvironment } from '../../contexts/EnvironmentContext';
+
 import { apiService } from '../../services/api';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -77,7 +77,6 @@ function SummaryCard({ label, value, color }: { label: string; value: number; co
 
 export function DriftDetection() {
   const { isReady, hasRole } = useAuth();
-  const { activeEnvironment } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
 
@@ -93,20 +92,18 @@ export function DriftDetection() {
 
   const loadData = useCallback(async () => {
     try {
-      const envParam = activeEnvironment ? { environment: activeEnvironment } : {};
+      // Fetch all gateways regardless of environment (consistent with Registry/Overview)
       const typeParam = gatewayTypeFilter ? { gateway_type: gatewayTypeFilter } : {};
       const [gatewaysResult, driftedResult, errorResult, summaryResult] = await Promise.all([
-        apiService.getGatewayInstances({ page_size: 100, ...envParam }),
+        apiService.getGatewayInstances({ page_size: 100 }),
         apiService.getGatewayDeployments({
           sync_status: 'drifted',
           page_size: 100,
-          ...envParam,
           ...typeParam,
         }),
         apiService.getGatewayDeployments({
           sync_status: 'error',
           page_size: 100,
-          ...envParam,
           ...typeParam,
         }),
         apiService.getDeploymentStatusSummary(),
@@ -124,7 +121,7 @@ export function DriftDetection() {
     } finally {
       setLoading(false);
     }
-  }, [activeEnvironment, gatewayTypeFilter]);
+  }, [gatewayTypeFilter]);
 
   useEffect(() => {
     if (isReady) loadData();

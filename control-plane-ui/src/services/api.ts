@@ -818,6 +818,70 @@ class ApiService {
     return data;
   }
 
+  // API Deployment Orchestration (CAB-1888)
+
+  async getDeployableEnvironments(
+    tenantId: string,
+    apiId: string
+  ): Promise<{
+    environments: {
+      environment: string;
+      deployable: boolean;
+      promotion_status: string;
+    }[];
+  }> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/apis/${apiId}/deployable-environments`
+    );
+    return data;
+  }
+
+  async deployApiToEnv(
+    tenantId: string,
+    apiId: string,
+    payload: { environment: string; gateway_ids?: string[] }
+  ): Promise<{ deployed: number; environment: string; deployment_ids: string[] }> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/apis/${apiId}/deploy`,
+      payload
+    );
+    return data;
+  }
+
+  async getApiGatewayAssignments(
+    tenantId: string,
+    apiId: string,
+    environment?: string
+  ): Promise<{ items: any[]; total: number }> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
+      { params: environment ? { environment } : {} }
+    );
+    return data;
+  }
+
+  async createApiGatewayAssignment(
+    tenantId: string,
+    apiId: string,
+    payload: { gateway_id: string; environment: string; auto_deploy: boolean }
+  ): Promise<any> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteApiGatewayAssignment(
+    tenantId: string,
+    apiId: string,
+    assignmentId: string
+  ): Promise<void> {
+    await this.client.delete(
+      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments/${assignmentId}`
+    );
+  }
+
   // =========================================================================
   // Gateway Observability
   // =========================================================================

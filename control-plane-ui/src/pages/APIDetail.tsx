@@ -30,6 +30,7 @@ import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { Button } from '@stoa/shared/components/Button';
 import { EnvironmentPipeline } from '../components/EnvironmentPipeline';
 import type { API, APIVersionEntry } from '../types';
+import { DeployAPIDialog } from './GatewayDeployments/DeployAPIDialog';
 
 type TabId = 'overview' | 'spec' | 'versions' | 'deployments' | 'promotions';
 
@@ -430,67 +431,126 @@ function VersionsTab({ versions, loading }: { versions: APIVersionEntry[]; loadi
   );
 }
 
-function DeploymentsTab({ api, tenantId }: { api: API; tenantId: string }) {
+function DeploymentsTab({ api }: { api: API; tenantId: string }) {
+  const toast = useToastActions();
+  const queryClient = useQueryClient();
+  const [showDeployDialog, setShowDeployDialog] = useState(false);
+
+  // Query gateway deployments for this specific API
   const { data, isLoading } = useQuery({
-    queryKey: ['deployments', tenantId, api.id],
-    queryFn: () => apiService.listDeployments(tenantId, { page: 1, page_size: 20 }),
-    enabled: !!tenantId,
+    queryKey: ['gateway-deployments', api.id],
+    queryFn: () => apiService.getGatewayDeployments({ page_size: 100 }),
+    enabled: !!api.id,
+  });
+
+  const forceSyncMutation = useMutation({
+    mutationFn: (deploymentId: string) => apiService.forceSyncDeployment(deploymentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gateway-deployments', api.id] });
+      toast.success('Re-sync triggered');
+    },
+    onError: () => toast.error('Failed to trigger re-sync'),
   });
 
   if (isLoading) {
     return <CardSkeleton className="h-32" />;
   }
 
-  const deployments = (data?.items || []).filter(
-    (d: { api_name?: string }) => d.api_name === api.name || d.api_name === api.id
-  );
+  // Filter deployments to this API by matching api_catalog_id
+  const deployments = (data?.items || []).filter((d: any) => d.api_catalog_id === api.id);
 
-  if (deployments.length === 0) {
-    return (
-      <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
-        <Rocket className="h-12 w-12 mx-auto mb-4 text-neutral-300 dark:text-neutral-600" />
-        <p className="text-sm">No deployments yet for this API.</p>
-      </div>
-    );
-  }
-
-  const statusBadge: Record<string, string> = {
+  const syncStatusBadge: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    success: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    syncing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    synced: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    drifted: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+    error: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    deleting: 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300',
   };
 
   return (
-    <div className="space-y-2">
-      {deployments.map(
-        (d: {
-          id: string;
-          environment: string;
-          status: string;
-          version?: string;
-          created_at: string;
-        }) => (
-          <div
-            key={d.id}
-            className="flex items-center justify-between p-3 rounded-lg border border-neutral-100 dark:border-neutral-800"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
-                {d.environment}
-              </span>
-              <span className={`text-xs px-2 py-0.5 rounded ${statusBadge[d.status] || ''}`}>
-                {d.status}
-              </span>
-              {d.version && (
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">v{d.version}</span>
-              )}
+    <div className="space-y-4">
+      {/* Header with deploy button */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          {deployments.length} gateway deployment{deployments.length !== 1 ? 's' : ''}
+        </p>
+        <button
+          onClick={() => setShowDeployDialog(true)}
+          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700"
+        >
+          + Deploy
+        </button>
+      </div>
+
+      {deployments.length === 0 ? (
+        <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
+          <Rocket className="h-12 w-12 mx-auto mb-4 text-neutral-300 dark:text-neutral-600" />
+          <p className="text-sm">No gateway deployments yet for this API.</p>
+          <p className="text-xs mt-1">Click + Deploy to deploy to gateways.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {deployments.map((d: any) => (
+            <div
+              key={d.id}
+              className="flex items-center justify-between p-3 rounded-lg border border-neutral-100 dark:border-neutral-800"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-neutral-900 dark:text-white">
+                  {d.gateway_name || d.gateway_instance_id?.slice(0, 8)}
+                </span>
+                <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
+                  {d.gateway_environment || '—'}
+                </span>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded ${syncStatusBadge[d.sync_status] || ''}`}
+                >
+                  {d.sync_status}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {d.sync_status === 'drifted' && (
+                  <button
+                    onClick={() => forceSyncMutation.mutate(d.id)}
+                    disabled={forceSyncMutation.isPending}
+                    className="text-xs text-orange-600 dark:text-orange-400 hover:underline"
+                  >
+                    Re-deploy
+                  </button>
+                )}
+                {d.sync_status === 'error' && (
+                  <button
+                    onClick={() => forceSyncMutation.mutate(d.id)}
+                    disabled={forceSyncMutation.isPending}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                  >
+                    Retry
+                  </button>
+                )}
+                <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                  {d.last_sync_success
+                    ? new Date(d.last_sync_success).toLocaleString()
+                    : d.created_at
+                      ? new Date(d.created_at).toLocaleString()
+                      : '—'}
+                </span>
+              </div>
             </div>
-            <span className="text-xs text-neutral-400 dark:text-neutral-500">
-              {new Date(d.created_at).toLocaleString()}
-            </span>
-          </div>
-        )
+          ))}
+        </div>
+      )}
+
+      {showDeployDialog && (
+        <DeployAPIDialog
+          onClose={() => setShowDeployDialog(false)}
+          onDeployed={() => {
+            setShowDeployDialog(false);
+            queryClient.invalidateQueries({ queryKey: ['gateway-deployments', api.id] });
+            toast.success('Deployment initiated');
+          }}
+          preselectedApiId={api.id}
+        />
       )}
     </div>
   );

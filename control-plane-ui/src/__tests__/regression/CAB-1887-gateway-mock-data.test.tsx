@@ -1,14 +1,13 @@
 /**
  * Regression test: CAB-1887 — Gateway Dashboard Mock Data
- * PR: #1889
+ * PR: #1889, #1890
  * Root cause: GatewayStatus.tsx displayed hardcoded SLO metrics (99.95%, 342ms, 67.2%)
- * and showed "Connected/Disconnected" instead of the unified "Online/Offline" status enum.
- * Failed API calls silently returned 0 instead of showing an error state.
+ * and was wired to a single webMethods gateway instead of showing all registered gateways.
  *
  * Invariants protected:
  * 1. No hardcoded SLO/error budget values in the gateway dashboard
- * 2. Status labels match the Registry page enum (Online/Offline)
- * 3. Failed API fetches show error state, not silent zeros
+ * 2. Overview shows all gateways, not just one (G5)
+ * 3. No hardcoded "webMethods Gateway" title
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -21,18 +20,53 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 
-vi.mock('../../hooks/useGatewayStatus', () => ({
-  useGatewayStatus: vi.fn(() => ({
+vi.mock('../../hooks/usePlatformMetrics', () => ({
+  useGatewayHealthSummary: vi.fn(() => ({
+    data: { online: 2, offline: 1, degraded: 0, maintenance: 0, total: 3 },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  })),
+  useGatewayInstances: vi.fn(() => ({
     data: {
-      health: { status: 'healthy', proxy_mode: false },
-      apis: [],
-      applications: [],
+      items: [
+        {
+          id: 'gw-1',
+          display_name: 'STOA Edge',
+          gateway_type: 'stoa_edge_mcp',
+          environment: 'production',
+          status: 'online',
+          base_url: 'https://mcp.example.com',
+          capabilities: [],
+          tags: [],
+          auth_config: {},
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 'gw-2',
+          display_name: 'Kong Prod',
+          gateway_type: 'kong',
+          environment: 'production',
+          status: 'online',
+          base_url: 'https://kong.example.com',
+          capabilities: [],
+          tags: [],
+          auth_config: {},
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ],
+      total: 2,
     },
     isLoading: false,
     error: null,
     refetch: vi.fn(),
-    dataUpdatedAt: Date.now(),
   })),
+  useGatewayModeStats: vi.fn(() => ({ data: null, isLoading: false, error: null })),
+}));
+
+vi.mock('../../hooks/useGatewayStatus', () => ({
   useGatewayPlatformInfo: vi.fn(() => ({
     isLoading: false,
     error: null,
@@ -93,27 +127,15 @@ describe('regression/CAB-1887', () => {
     expect(screen.queryByText('67.2%')).not.toBeInTheDocument();
   });
 
-  it('must use Online/Offline labels, not Connected/Disconnected', () => {
+  it('must show multiple gateways, not single webMethods (G5)', () => {
     renderGatewayStatus();
-    expect(screen.getByText('Online')).toBeInTheDocument();
-    expect(screen.queryByText('Connected')).not.toBeInTheDocument();
-    expect(screen.queryByText('Disconnected')).not.toBeInTheDocument();
+    expect(screen.getByText('STOA Edge')).toBeInTheDocument();
+    expect(screen.getByText('Kong Prod')).toBeInTheDocument();
+    expect(screen.queryByText('webMethods Gateway')).not.toBeInTheDocument();
   });
 
-  it('must show error state when API fetch returns null', async () => {
-    const hooks = await import('../../hooks/useGatewayStatus');
-    vi.mocked(hooks.useGatewayStatus).mockReturnValue({
-      data: {
-        health: { status: 'healthy', proxy_mode: false },
-        apis: null,
-        applications: null,
-      },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-      dataUpdatedAt: Date.now(),
-    } as any);
+  it('must show Gateway Overview title, not single-gateway title (G5)', () => {
     renderGatewayStatus();
-    expect(screen.getByText(/Unable to fetch/)).toBeInTheDocument();
+    expect(screen.getByText('Gateway Overview')).toBeInTheDocument();
   });
 });

@@ -1,20 +1,19 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGatewayStatus, useGatewayPlatformInfo } from '../hooks/useGatewayStatus';
+import { useGatewayPlatformInfo } from '../hooks/useGatewayStatus';
+import { useGatewayHealthSummary, useGatewayInstances } from '../hooks/usePlatformMetrics';
 import { config } from '../config';
 import { observabilityPath, logsPath } from '../utils/navigation';
 import { SubNav } from '../components/SubNav';
 import { gatewayTabs } from '../components/subNavGroups';
+import type { GatewayInstance, GatewayInstanceStatus } from '../types';
 import {
   Server,
   Activity,
-  Box,
   RefreshCw,
   CheckCircle2,
   XCircle,
-  AlertCircle,
   ExternalLink,
-  GitBranch,
   GitCommit,
   BarChart3,
   Search,
@@ -22,41 +21,45 @@ import {
   Loader2,
   Target,
   Gauge,
+  Zap,
 } from 'lucide-react';
 
-const healthConfig = {
-  healthy: {
-    bg: 'bg-green-100 dark:bg-green-900/30',
-    text: 'text-green-800 dark:text-green-400',
-    icon: CheckCircle2,
-    label: 'Online',
-  },
-  unhealthy: {
-    bg: 'bg-red-100 dark:bg-red-900/30',
-    text: 'text-red-800 dark:text-red-400',
-    icon: XCircle,
-    label: 'Offline',
-  },
-} as const;
+const STATUS_COLORS: Record<GatewayInstanceStatus, { dot: string; badge: string; label: string }> =
+  {
+    online: {
+      dot: 'bg-green-500',
+      label: 'Online',
+      badge: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    },
+    offline: {
+      dot: 'bg-neutral-400',
+      label: 'Offline',
+      badge: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400',
+    },
+    degraded: {
+      dot: 'bg-yellow-500',
+      label: 'Degraded',
+      badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    },
+    maintenance: {
+      dot: 'bg-blue-500',
+      label: 'Maintenance',
+      badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    },
+  };
 
-const fallbackHealth = {
-  bg: 'bg-neutral-100 dark:bg-neutral-700',
-  text: 'text-neutral-800 dark:text-neutral-300',
-  icon: AlertCircle,
-  label: 'Unknown',
-};
+function isStoa(type: string): boolean {
+  return type.startsWith('stoa');
+}
 
-function StatusBadge({ status }: { status: string }) {
-  const cfg = healthConfig[status as keyof typeof healthConfig] || fallbackHealth;
-  const Icon = cfg.icon;
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}
-    >
-      <Icon className="w-3 h-3 mr-1" />
-      {cfg.label}
-    </span>
-  );
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 const statsColorClasses = {
@@ -153,8 +156,31 @@ function HealthBadge({ status }: { status: string }) {
 
 export default function GatewayStatus() {
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch, dataUpdatedAt } = useGatewayStatus();
   const platform = useGatewayPlatformInfo();
+  const healthSummary = useGatewayHealthSummary();
+  const gatewayInstances = useGatewayInstances();
+
+  const gateways: GatewayInstance[] = useMemo(
+    () => gatewayInstances.data?.items ?? [],
+    [gatewayInstances.data]
+  );
+  const isLoading = healthSummary.isLoading || gatewayInstances.isLoading;
+  const error = healthSummary.error || gatewayInstances.error;
+
+  const refetch = () => {
+    healthSummary.refetch();
+    gatewayInstances.refetch();
+  };
+
+  // Compute aggregated stats
+  const stats = useMemo(() => {
+    const online = gateways.filter((g) => g.status === 'online').length;
+    const offline = gateways.filter((g) => g.status === 'offline').length;
+    const degraded = gateways.filter((g) => g.status === 'degraded').length;
+    const stoaCount = gateways.filter((g) => isStoa(g.gateway_type)).length;
+    const thirdPartyCount = gateways.length - stoaCount;
+    return { online, offline, degraded, total: gateways.length, stoaCount, thirdPartyCount };
+  }, [gateways]);
 
   if (isLoading) {
     return (
@@ -162,7 +188,8 @@ export default function GatewayStatus() {
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-1/4"></div>
           <div className="h-32 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="h-24 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
             <div className="h-24 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
             <div className="h-24 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
             <div className="h-24 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
@@ -183,7 +210,7 @@ export default function GatewayStatus() {
         </div>
         <p className="text-sm text-red-600 dark:text-red-400 mb-3">{(error as Error).message}</p>
         <button
-          onClick={() => refetch()}
+          onClick={refetch}
           className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-neutral-800 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
@@ -193,20 +220,19 @@ export default function GatewayStatus() {
     );
   }
 
-  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'N/A';
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Gateway Adapters</h1>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Gateway Overview</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Zero-Touch GitOps monitoring — configured via Git, not UI
+            {stats.total} gateways — {stats.online} online, {stats.offline} offline
+            {stats.degraded > 0 && `, ${stats.degraded} degraded`}
           </p>
         </div>
         <button
-          onClick={() => refetch()}
+          onClick={refetch}
           className="inline-flex items-center px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700"
         >
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -217,155 +243,106 @@ export default function GatewayStatus() {
       {/* Contextual sub-navigation (CAB-1785) */}
       <SubNav tabs={gatewayTabs} />
 
-      {/* Main Status Card */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm">
-        <div className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                <Server className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
-                  webMethods Gateway
-                </h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  {data?.health.proxy_mode ? 'OIDC Proxy' : 'Direct'} mode
-                </p>
-              </div>
-            </div>
-            <StatusBadge status={data?.health.status || 'unknown'} />
-          </div>
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <StatsCard
-              title="APIs Synced"
-              value={data?.apis === null ? '—' : (data?.apis.length ?? 0)}
-              icon={Box}
-              color="blue"
-            />
-            <StatsCard
-              title="Applications"
-              value={data?.applications === null ? '—' : (data?.applications.length ?? 0)}
-              icon={Activity}
-              color="green"
-            />
-            <StatsCard title="Last Sync" value={lastUpdated} icon={RefreshCw} color="purple" />
-          </div>
-
-          {/* Fetch error notice */}
-          {data && (data.apis === null || data.applications === null) && (
-            <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              Unable to fetch{' '}
-              {data.apis === null && data.applications === null
-                ? 'APIs and applications'
-                : data.apis === null
-                  ? 'APIs'
-                  : 'applications'}{' '}
-              from the gateway. The gateway may be unreachable.
-            </div>
-          )}
-
-          {/* Resource Details (collapsible) */}
-          {data && ((data.apis?.length ?? 0) > 0 || (data.applications?.length ?? 0) > 0) && (
-            <details className="mt-6">
-              <summary className="cursor-pointer text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white">
-                View resource details
-              </summary>
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* APIs */}
-                {data.apis && data.apis.length > 0 && (
-                  <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                      APIs ({data.apis.length})
-                    </h4>
-                    <ul className="space-y-1 text-sm text-neutral-600 dark:text-neutral-400 max-h-40 overflow-y-auto">
-                      {data.apis.slice(0, 10).map((api) => (
-                        <li key={api.id} className="flex items-center">
-                          {api.isActive ? (
-                            <CheckCircle2 className="w-3 h-3 text-green-500 mr-2 flex-shrink-0" />
-                          ) : (
-                            <AlertCircle className="w-3 h-3 text-yellow-500 mr-2 flex-shrink-0" />
-                          )}
-                          {api.apiName}{' '}
-                          <span className="text-neutral-400 dark:text-neutral-500 ml-1">
-                            v{api.apiVersion}
-                          </span>
-                        </li>
-                      ))}
-                      {data.apis.length > 10 && (
-                        <li className="text-neutral-400 dark:text-neutral-500">
-                          ... and {data.apis.length - 10} more
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Applications */}
-                {data.applications && data.applications.length > 0 && (
-                  <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                      Applications ({data.applications.length})
-                    </h4>
-                    <ul className="space-y-1 text-sm text-neutral-600 dark:text-neutral-400 max-h-40 overflow-y-auto">
-                      {data.applications.slice(0, 10).map((app) => (
-                        <li key={app.id} className="flex items-center">
-                          <CheckCircle2 className="w-3 h-3 text-green-500 mr-2 flex-shrink-0" />
-                          {app.name}
-                        </li>
-                      ))}
-                      {data.applications.length > 10 && (
-                        <li className="text-neutral-400 dark:text-neutral-500">
-                          ... and {data.applications.length - 10} more
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </details>
-          )}
-        </div>
-
-        {/* Footer - GitOps */}
-        <div className="bg-neutral-50 dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-700 px-6 py-4 rounded-b-lg">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center text-neutral-600 dark:text-neutral-400">
-              <GitBranch className="w-4 h-4 mr-2" />
-              <span>Configured via GitOps: </span>
-              <code className="ml-1 px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-700 rounded text-xs">
-                webmethods/*.yaml
-              </code>
-            </div>
-            <a
-              href="https://docs.gostoa.dev/guides/hybrid-gateway-adapter"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
-            >
-              Documentation
-              <ExternalLink className="w-3 h-3 ml-1" />
-            </a>
-          </div>
-        </div>
+      {/* Stats Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatsCard title="Total Gateways" value={stats.total} icon={Server} color="blue" />
+        <StatsCard title="Online" value={stats.online} icon={CheckCircle2} color="green" />
+        <StatsCard title="STOA Gateways" value={stats.stoaCount} icon={Zap} color="purple" />
+        <StatsCard
+          title="Third-Party"
+          value={stats.thirdPartyCount}
+          icon={Activity}
+          color="orange"
+        />
       </div>
+
+      {/* Gateway Instance List */}
+      {gateways.length > 0 && (
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm">
+          <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-700">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
+                All Gateways
+              </h2>
+              <button
+                onClick={() => navigate('/gateways')}
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+              >
+                View Registry →
+              </button>
+            </div>
+          </div>
+          <div className="divide-y divide-neutral-100 dark:divide-neutral-700/50">
+            {gateways.slice(0, 10).map((gw) => {
+              const sc = STATUS_COLORS[gw.status];
+              return (
+                <div
+                  key={gw.id}
+                  className="flex items-center gap-4 px-6 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-750 cursor-pointer"
+                  onClick={() => navigate('/gateways')}
+                >
+                  <div className="flex-shrink-0 relative">
+                    <div
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        isStoa(gw.gateway_type)
+                          ? 'bg-indigo-100 dark:bg-indigo-900/30'
+                          : 'bg-neutral-100 dark:bg-neutral-700'
+                      }`}
+                    >
+                      {isStoa(gw.gateway_type) ? (
+                        <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      ) : (
+                        <Server className="w-4 h-4 text-neutral-500 dark:text-neutral-400" />
+                      )}
+                    </div>
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-neutral-800 ${sc.dot}`}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-neutral-900 dark:text-white truncate block">
+                      {gw.display_name}
+                    </span>
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {gw.gateway_type} · {gw.environment}
+                    </span>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full ${sc.badge}`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                    {sc.label}
+                  </span>
+                  <span className="text-xs text-neutral-400 dark:text-neutral-500 w-16 text-right">
+                    {gw.last_health_check ? timeAgo(gw.last_health_check) : 'never'}
+                  </span>
+                </div>
+              );
+            })}
+            {gateways.length > 10 && (
+              <div className="px-6 py-3 text-center">
+                <button
+                  onClick={() => navigate('/gateways')}
+                  className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800"
+                >
+                  View all {gateways.length} gateways →
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* SLO Compliance Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* SLO Compliance Card */}
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
-                <Target className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
-              </div>
-              <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
-                SLO Compliance
-              </h3>
+          <div className="flex items-center mb-4">
+            <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
+              <Target className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
             </div>
+            <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
+              SLO Compliance
+            </h3>
           </div>
           <div className="text-center py-4">
             <p className="text-sm text-neutral-500 dark:text-neutral-400">No metrics available</p>
@@ -374,18 +351,14 @@ export default function GatewayStatus() {
             </p>
           </div>
         </div>
-
-        {/* Error Budget Card */}
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
-                <Gauge className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
-              </div>
-              <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
-                Error Budget
-              </h3>
+          <div className="flex items-center mb-4">
+            <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
+              <Gauge className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
             </div>
+            <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
+              Error Budget
+            </h3>
           </div>
           <div className="text-center py-4">
             <p className="text-sm text-neutral-500 dark:text-neutral-400">No metrics available</p>

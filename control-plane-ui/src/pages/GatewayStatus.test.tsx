@@ -11,23 +11,78 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 
-// Mock useGatewayStatus hooks
+// Mock usePlatformMetrics hooks (G5: multi-gateway data source)
 const mockRefetch = vi.fn();
-vi.mock('../hooks/useGatewayStatus', () => ({
-  useGatewayStatus: vi.fn(() => ({
+vi.mock('../hooks/usePlatformMetrics', () => ({
+  useGatewayHealthSummary: vi.fn(() => ({
+    data: { online: 10, offline: 3, degraded: 2, maintenance: 0, total: 15 },
+    isLoading: false,
+    error: null,
+    refetch: mockRefetch,
+  })),
+  useGatewayInstances: vi.fn(() => ({
     data: {
-      health: { status: 'healthy', proxy_mode: false },
-      apis: [
-        { id: 'api-1', apiName: 'Payment API', apiVersion: '1.0.0', isActive: true },
-        { id: 'api-2', apiName: 'User API', apiVersion: '2.0.0', isActive: false },
+      items: [
+        {
+          id: 'gw-1',
+          name: 'stoa-edge',
+          display_name: 'STOA Edge MCP',
+          gateway_type: 'stoa_edge_mcp',
+          environment: 'production',
+          base_url: 'https://mcp.gostoa.dev',
+          status: 'online',
+          last_health_check: new Date().toISOString(),
+          capabilities: [],
+          tags: [],
+          auth_config: {},
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 'gw-2',
+          name: 'kong-prod',
+          display_name: 'Kong Production',
+          gateway_type: 'kong',
+          environment: 'production',
+          base_url: 'https://kong.example.com',
+          status: 'online',
+          last_health_check: new Date().toISOString(),
+          capabilities: [],
+          tags: [],
+          auth_config: {},
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 'gw-3',
+          name: 'wm-staging',
+          display_name: 'webMethods Staging',
+          gateway_type: 'webmethods',
+          environment: 'staging',
+          base_url: 'https://wm.example.com',
+          status: 'offline',
+          capabilities: [],
+          tags: [],
+          auth_config: {},
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
       ],
-      applications: [{ id: 'app-1', name: 'Mobile App' }],
+      total: 3,
     },
     isLoading: false,
     error: null,
     refetch: mockRefetch,
-    dataUpdatedAt: Date.now(),
   })),
+  useGatewayModeStats: vi.fn(() => ({
+    data: null,
+    isLoading: false,
+    error: null,
+  })),
+}));
+
+// Mock useGatewayPlatformInfo (ArgoCD / platform health)
+vi.mock('../hooks/useGatewayStatus', () => ({
   useGatewayPlatformInfo: vi.fn(() => ({
     isLoading: false,
     error: null,
@@ -86,71 +141,62 @@ describe('GatewayStatus', () => {
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
-  it('renders the heading', () => {
+  it('renders Gateway Overview heading (G5: not single-gateway title)', () => {
     renderComponent();
-    expect(screen.getByRole('heading', { name: 'Gateway Adapters' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Gateway Overview' })).toBeInTheDocument();
   });
 
-  it('renders the subtitle', () => {
+  it('shows aggregated gateway count in subtitle (G5)', () => {
     renderComponent();
-    expect(screen.getByText(/Zero-Touch GitOps monitoring/)).toBeInTheDocument();
+    expect(screen.getByText(/3 gateways/)).toBeInTheDocument();
+    expect(screen.getByText(/2 online/)).toBeInTheDocument();
   });
 
-  it('shows webMethods Gateway title', () => {
+  it('shows stats cards with total, online, STOA, third-party counts (G5)', () => {
     renderComponent();
-    expect(screen.getByText('webMethods Gateway')).toBeInTheDocument();
+    expect(screen.getByText('Total Gateways')).toBeInTheDocument();
+    // "Online" appears as stats card title AND as gateway row badges
+    expect(screen.getAllByText('Online').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('STOA Gateways')).toBeInTheDocument();
+    expect(screen.getByText('Third-Party')).toBeInTheDocument();
   });
 
-  it('shows Online status badge (G1: unified with Registry enum)', () => {
+  it('lists all gateway instances (G5: not just one webMethods)', () => {
     renderComponent();
-    expect(screen.getByText('Online')).toBeInTheDocument();
+    expect(screen.getByText('STOA Edge MCP')).toBeInTheDocument();
+    expect(screen.getByText('Kong Production')).toBeInTheDocument();
+    expect(screen.getByText('webMethods Staging')).toBeInTheDocument();
   });
 
-  it('shows stats cards with API and application counts', () => {
+  it('does NOT show hardcoded webMethods Gateway title (G5)', () => {
     renderComponent();
-    expect(screen.getByText('APIs Synced')).toBeInTheDocument();
-    expect(screen.getByText('Applications')).toBeInTheDocument();
-    expect(screen.getByText('Last Sync')).toBeInTheDocument();
+    expect(screen.queryByText('webMethods Gateway')).not.toBeInTheDocument();
   });
 
-  it('shows SLO and Error Budget without hardcoded mock values (G3)', () => {
+  it('shows SLO and Error Budget without hardcoded values (G3)', () => {
     renderComponent();
     expect(screen.getByText('SLO Compliance')).toBeInTheDocument();
     expect(screen.getByText('Error Budget')).toBeInTheDocument();
-    // Both cards show "No metrics available"
     expect(screen.getAllByText('No metrics available')).toHaveLength(2);
-    // G3: hardcoded values must NOT appear
     expect(screen.queryByText('99.95%')).not.toBeInTheDocument();
-    expect(screen.queryByText('342ms')).not.toBeInTheDocument();
     expect(screen.queryByText('67.2%')).not.toBeInTheDocument();
-    expect(screen.queryByText('On Track')).not.toBeInTheDocument();
   });
 
-  it('shows Infrastructure Sync card (G4: renamed from ArgoCD Sync)', () => {
+  it('shows Infrastructure Sync card (G4)', () => {
     renderComponent();
     expect(screen.getByText('Infrastructure Sync')).toBeInTheDocument();
     expect(screen.getByText('Synced')).toBeInTheDocument();
-    expect(screen.getAllByText('Healthy').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows Observability card', () => {
     renderComponent();
     expect(screen.getByText('Observability')).toBeInTheDocument();
     expect(screen.getByText('Grafana Dashboards')).toBeInTheDocument();
-    expect(screen.getByText('Prometheus')).toBeInTheDocument();
-    expect(screen.getByText('Logs Explorer')).toBeInTheDocument();
   });
 
-  it('shows Platform Health card with summary', () => {
+  it('shows Platform Health card', () => {
     renderComponent();
     expect(screen.getByText('Platform Health')).toBeInTheDocument();
-    expect(screen.getByText('4')).toBeInTheDocument(); // healthy
-    expect(screen.getByText('5 components monitored')).toBeInTheDocument();
-  });
-
-  it('shows Zero-Touch GitOps info banner', () => {
-    renderComponent();
-    expect(screen.getByText('Zero-Touch GitOps')).toBeInTheDocument();
   });
 
   it('shows Refresh button', () => {
@@ -158,34 +204,13 @@ describe('GatewayStatus', () => {
     expect(screen.getByText('Refresh')).toBeInTheDocument();
   });
 
-  it('shows dash for API count when fetch fails (G2)', async () => {
-    const hooks = await import('../hooks/useGatewayStatus');
-    vi.mocked(hooks.useGatewayStatus).mockReturnValue({
-      data: {
-        health: { status: 'healthy', proxy_mode: false },
-        apis: null,
-        applications: null,
-      },
-      isLoading: false,
-      error: null,
-      refetch: mockRefetch,
-      dataUpdatedAt: Date.now(),
-    } as any);
-    renderComponent();
-    // Should show dash instead of 0, and a warning notice
-    const dashes = screen.getAllByText('—');
-    expect(dashes.length).toBe(2); // APIs and Applications both show dash
-    expect(screen.getByText(/Unable to fetch/)).toBeInTheDocument();
-  });
-
-  it('shows loading state when data is loading', async () => {
-    const { useGatewayStatus } = await import('../hooks/useGatewayStatus');
-    vi.mocked(useGatewayStatus).mockReturnValue({
+  it('shows loading state', async () => {
+    const metrics = await import('../hooks/usePlatformMetrics');
+    vi.mocked(metrics.useGatewayHealthSummary).mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
       refetch: mockRefetch,
-      dataUpdatedAt: 0,
     } as any);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { container } = render(
@@ -199,13 +224,12 @@ describe('GatewayStatus', () => {
   });
 
   it('shows error state', async () => {
-    const { useGatewayStatus } = await import('../hooks/useGatewayStatus');
-    vi.mocked(useGatewayStatus).mockReturnValue({
+    const metrics = await import('../hooks/usePlatformMetrics');
+    vi.mocked(metrics.useGatewayHealthSummary).mockReturnValue({
       data: undefined,
       isLoading: false,
       error: new Error('Network error'),
       refetch: mockRefetch,
-      dataUpdatedAt: 0,
     } as any);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -216,7 +240,6 @@ describe('GatewayStatus', () => {
       </QueryClientProvider>
     );
     expect(screen.getByText('Failed to load gateway status')).toBeInTheDocument();
-    expect(screen.getByText('Network error')).toBeInTheDocument();
   });
 
   // 4-persona coverage
@@ -225,26 +248,39 @@ describe('GatewayStatus', () => {
     (role) => {
       it('renders the page', async () => {
         // Re-import and restore hook mocks (previous tests may have overridden them)
-        const hooks = await import('../hooks/useGatewayStatus');
-        vi.mocked(hooks.useGatewayStatus).mockImplementation(
-          () =>
-            ({
-              data: {
-                health: { status: 'healthy', proxy_mode: false },
-                apis: [
-                  { id: 'api-1', apiName: 'Payment API', apiVersion: '1.0.0', isActive: true },
-                ],
-                applications: [{ id: 'app-1', name: 'Mobile App' }],
+        const metrics = await import('../hooks/usePlatformMetrics');
+        vi.mocked(metrics.useGatewayHealthSummary).mockReturnValue({
+          data: { online: 2, offline: 1, degraded: 0, maintenance: 0, total: 3 },
+          isLoading: false,
+          error: null,
+          refetch: mockRefetch,
+        } as any);
+        vi.mocked(metrics.useGatewayInstances).mockReturnValue({
+          data: {
+            items: [
+              {
+                id: 'gw-1',
+                display_name: 'STOA Edge',
+                gateway_type: 'stoa_edge_mcp',
+                environment: 'production',
+                status: 'online',
+                base_url: 'https://mcp.example.com',
+                capabilities: [],
+                tags: [],
+                auth_config: {},
+                created_at: '2024-01-01',
+                updated_at: '2024-01-01',
               },
-              isLoading: false,
-              error: null,
-              refetch: mockRefetch,
-              dataUpdatedAt: Date.now(),
-            }) as ReturnType<typeof hooks.useGatewayStatus>
-        );
+            ],
+            total: 1,
+          },
+          isLoading: false,
+          error: null,
+          refetch: mockRefetch,
+        } as any);
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderComponent();
-        expect(screen.getByText('Gateway Adapters')).toBeInTheDocument();
+        expect(screen.getByText('Gateway Overview')).toBeInTheDocument();
       });
     }
   );

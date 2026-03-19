@@ -7,6 +7,7 @@ The Protocol Switcher UI uses these endpoints to enable/disable bindings.
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
@@ -41,10 +42,12 @@ from src.schemas.contract import (
     DisableBindingResponse,
     EnableBindingRequest,
     EnableBindingResponse,
+    GeneratedBindingResponse,
     McpToolDefinition,
     McpToolsGenerateResponse,
     McpToolsListResponse,
     ProtocolBindingResponse,
+    PublishContractResponse,
     TenantToolsResponse,
 )
 from src.services.cache_service import contract_cache
@@ -429,6 +432,78 @@ async def delete_contract(
     )
 
 
+# ============ Publish Endpoint ============
+
+
+@router.post("/{contract_id}/publish", response_model=PublishContractResponse)
+async def publish_contract(
+    tenant_id: str,
+    contract_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Publish a draft contract.
+
+    Sets status to 'published' and enables REST + MCP bindings with generated endpoints.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
+    contract = result.scalar_one_or_none()
+
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    if contract.status == "published":
+        raise HTTPException(status_code=409, detail="Contract is already published")
+
+    # Set status to published
+    contract.status = "published"
+
+    # Enable REST and MCP bindings with generated endpoints
+    bindings = await _get_or_create_default_bindings(db, contract)
+    generated: list[GeneratedBindingResponse] = []
+
+    for binding in bindings:
+        if binding.protocol.value in ("rest", "mcp"):
+            endpoint_info = _generate_endpoint_info(contract, binding.protocol)
+            binding.enabled = True
+            binding.endpoint = endpoint_info.get("endpoint")
+            binding.playground_url = endpoint_info.get("playground_url")
+            binding.tool_name = endpoint_info.get("tool_name")
+            binding.generated_at = datetime.utcnow()
+            binding.generation_error = None
+            generated.append(
+                GeneratedBindingResponse(
+                    protocol=binding.protocol.value,
+                    endpoint=binding.endpoint or "",
+                    tool_name=binding.tool_name,
+                )
+            )
+
+    await db.flush()
+
+    # Invalidate cache
+    await contract_cache.delete_by_prefix(f"contracts:{tenant_id}")
+
+    logger.info(
+        "Contract published",
+        contract_id=str(contract_id),
+        tenant_id=tenant_id,
+        bindings_generated=len(generated),
+        user_id=user.id,
+    )
+
+    return PublishContractResponse(
+        contract=_contract_to_response(contract, bindings),
+        bindings_generated=generated,
+    )
+
+
 # ============ Lifecycle Endpoints (CAB-1335) ============
 
 
@@ -754,7 +829,7 @@ async def enable_binding(
     )
     gateways = gw_result.scalars().all()
 
-    contract_spec = {
+    contract_spec: dict[str, Any] = {
         "name": contract.name,
         "version": contract.version,
         "tenant_id": str(contract.tenant_id),

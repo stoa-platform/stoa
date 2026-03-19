@@ -781,6 +781,7 @@ class ApiService {
     sync_status?: string;
     gateway_instance_id?: string;
     environment?: string;
+    gateway_type?: string;
     page?: number;
     page_size?: number;
   }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {

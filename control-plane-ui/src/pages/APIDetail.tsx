@@ -29,7 +29,7 @@ import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { Button } from '@stoa/shared/components/Button';
 import { EnvironmentPipeline } from '../components/EnvironmentPipeline';
-import type { API, APIVersionEntry } from '../types';
+import type { API, APIVersionEntry, GatewayDeployment } from '../types';
 import { DeployAPIDialog } from './GatewayDeployments/DeployAPIDialog';
 
 type TabId = 'overview' | 'spec' | 'versions' | 'deployments' | 'promotions';
@@ -457,7 +457,9 @@ function DeploymentsTab({ api }: { api: API; tenantId: string }) {
   }
 
   // Filter deployments to this API by matching api_catalog_id
-  const deployments = (data?.items || []).filter((d: any) => d.api_catalog_id === api.id);
+  const deployments = (data?.items || []).filter(
+    (d: GatewayDeployment) => d.api_catalog_id === api.id
+  );
 
   const syncStatusBadge: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
@@ -491,7 +493,7 @@ function DeploymentsTab({ api }: { api: API; tenantId: string }) {
         </div>
       ) : (
         <div className="space-y-2">
-          {deployments.map((d: any) => (
+          {deployments.map((d) => (
             <div
               key={d.id}
               className="flex items-center justify-between p-3 rounded-lg border border-neutral-100 dark:border-neutral-800"

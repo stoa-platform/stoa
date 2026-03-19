@@ -9,7 +9,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useEnvironment } from '../../contexts/EnvironmentContext';
+
 import { apiService } from '../../services/api';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -77,7 +77,6 @@ function SummaryCard({ label, value, color }: { label: string; value: number; co
 
 export function DriftDetection() {
   const { isReady, hasRole } = useAuth();
-  const { activeEnvironment: _env } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
 

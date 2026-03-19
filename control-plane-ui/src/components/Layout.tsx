@@ -28,6 +28,7 @@ import {
   Activity,
   Server,
   ArrowUpDown,
+  Rocket,
   BarChart3,
   Menu,
   X,
@@ -174,6 +175,17 @@ const navigationSections: NavSection[] = [
         href: '/credential-mappings',
         icon: KeyRound,
         permission: 'apps:read',
+      },
+    ],
+  },
+  {
+    title: 'nav.apiDeployments',
+    items: [
+      {
+        name: 'nav.deployments',
+        href: '/api-deployments',
+        icon: Rocket,
+        permission: 'apis:read',
       },
     ],
   },

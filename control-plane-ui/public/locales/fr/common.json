@@ -61,6 +61,7 @@
     "gatewayOverview": "Vue d'ensemble",
     "usersAccess": "Utilisateurs & Accès",
     "credentials": "Identifiants",
+    "apiDeployments": "Deploiements API",
     "configSync": "Sync Config",
     "backendHealth": "Santé Backend",
     "apiAccessRules": "Règles d'accès API",

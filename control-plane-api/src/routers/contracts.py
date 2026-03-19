@@ -52,7 +52,7 @@ from src.services.uac_tool_generator import UacToolGenerator
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/v1/contracts", tags=["Contracts"])
+router = APIRouter(prefix="/v1/tenants/{tenant_id}/contracts", tags=["Contracts"])
 
 
 # ============ Helper Functions ============
@@ -201,6 +201,7 @@ def _binding_to_response(binding: ProtocolBinding, traffic_24h: int | None = Non
 
 @router.post("", response_model=ContractResponse, status_code=201)
 async def create_contract(
+    tenant_id: str,
     request: ContractCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -210,9 +211,8 @@ async def create_contract(
 
     Creates the contract and initializes all protocol bindings as disabled.
     """
-    tenant_id = user.tenant_id
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="User must belong to a tenant")
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
     # Check for duplicate name
     existing = await db.execute(
@@ -257,16 +257,16 @@ async def create_contract(
 
 @router.get("", response_model=ContractListResponse)
 async def list_contracts(
+    tenant_id: str,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     status: str | None = Query(default=None, description="Filter by status"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List contracts for the user's tenant (cached, TTL 60s)."""
-    tenant_id = user.tenant_id
-    if not tenant_id and "cpi-admin" not in (user.roles or []):
-        raise HTTPException(status_code=400, detail="User must belong to a tenant")
+    """List contracts for the specified tenant (cached, TTL 60s)."""
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
     # Check cache
     is_admin = "cpi-admin" in (user.roles or [])
@@ -275,13 +275,8 @@ async def list_contracts(
     if cached is not None:
         return cached
 
-    query = select(Contract)
-    count_query = select(func.count(Contract.id))
-
-    # Filter by tenant unless admin
-    if not is_admin:
-        query = query.where(Contract.tenant_id == tenant_id)
-        count_query = count_query.where(Contract.tenant_id == tenant_id)
+    query = select(Contract).where(Contract.tenant_id == tenant_id)
+    count_query = select(func.count(Contract.id)).where(Contract.tenant_id == tenant_id)
 
     if status:
         query = query.where(Contract.status == status)
@@ -310,19 +305,22 @@ async def list_contracts(
 
 @router.get("/{contract_id}", response_model=ContractResponse)
 async def get_contract(
+    tenant_id: str,
     contract_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific contract by ID."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
 
     bindings = await _get_or_create_default_bindings(db, contract)
     binding_responses = []
@@ -353,20 +351,23 @@ async def get_contract(
 
 @router.patch("/{contract_id}", response_model=ContractResponse)
 async def update_contract(
+    tenant_id: str,
     contract_id: uuid.UUID,
     request: ContractUpdate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a contract."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
 
     # Update fields
     if request.display_name is not None:
@@ -398,21 +399,23 @@ async def update_contract(
 
 @router.delete("/{contract_id}", status_code=204)
 async def delete_contract(
+    tenant_id: str,
     contract_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a contract and all its bindings."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
 
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
-
-    tenant_id = contract.tenant_id
     await db.delete(contract)  # Cascade deletes bindings
 
     # Invalidate contract list cache for this tenant
@@ -431,6 +434,7 @@ async def delete_contract(
 
 @router.post("/{contract_id}/deprecate", response_model=ContractDeprecationInfo)
 async def deprecate_contract(
+    tenant_id: str,
     contract_id: uuid.UUID,
     request: DeprecateContractRequest,
     user: User = Depends(get_current_user),
@@ -446,14 +450,16 @@ async def deprecate_contract(
         deprecate_contract as _deprecate,
     )
 
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
 
     try:
         contract = await _deprecate(
@@ -492,6 +498,7 @@ async def deprecate_contract(
 
 @router.post("/{contract_id}/reactivate", response_model=ContractResponse)
 async def reactivate_contract(
+    tenant_id: str,
     contract_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -505,14 +512,16 @@ async def reactivate_contract(
         reactivate_contract as _reactivate,
     )
 
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
 
     try:
         contract = await _reactivate(db=db, contract=contract)
@@ -529,19 +538,22 @@ async def reactivate_contract(
 
 @router.get("/{contract_id}/deprecation", response_model=ContractDeprecationInfo)
 async def get_deprecation_info(
+    tenant_id: str,
     contract_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get deprecation details for a contract."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
 
     return ContractDeprecationInfo(
         contract_id=contract.id,
@@ -562,6 +574,7 @@ async def get_deprecation_info(
     response_model=ContractVersionsResponse,
 )
 async def list_contract_versions(
+    tenant_id: str,
     contract_name: str,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -577,17 +590,8 @@ async def list_contract_versions(
         list_versions,
     )
 
-    tenant_id = user.tenant_id
-    if not tenant_id and "cpi-admin" not in (user.roles or []):
-        raise HTTPException(status_code=400, detail="User must belong to a tenant")
-
-    # For admin, we need a tenant context — use the first matching contract's tenant
-    if not tenant_id:
-        result = await db.execute(select(Contract).where(Contract.name == contract_name).limit(1))
-        first = result.scalar_one_or_none()
-        if not first:
-            raise HTTPException(status_code=404, detail=f"No contract found with name '{contract_name}'")
-        tenant_id = first.tenant_id
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
     versions = await list_versions(db, tenant_id, contract_name)
     if not versions:
@@ -622,6 +626,7 @@ async def list_contract_versions(
 
 @router.get("/{contract_id}/bindings", response_model=BindingsListResponse)
 async def list_bindings(
+    tenant_id: str,
     contract_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -632,14 +637,16 @@ async def list_bindings(
     Returns all 5 protocols (REST, MCP, GraphQL, gRPC, Kafka) with their status.
     Used by the Protocol Switcher UI component.
     """
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
 
     bindings = await _get_or_create_default_bindings(db, contract)
 
@@ -657,6 +664,7 @@ async def list_bindings(
 
 @router.post("/{contract_id}/bindings", response_model=EnableBindingResponse)
 async def enable_binding(
+    tenant_id: str,
     contract_id: uuid.UUID,
     request: EnableBindingRequest,
     user: User = Depends(get_current_user),
@@ -667,14 +675,16 @@ async def enable_binding(
 
     This triggers the UAC engine to generate the binding (endpoint, tool, etc.).
     """
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
 
     # Get or create the binding
     binding_result = await db.execute(
@@ -817,6 +827,7 @@ async def enable_binding(
 
 @router.delete("/{contract_id}/bindings/{protocol}", response_model=DisableBindingResponse)
 async def disable_binding(
+    tenant_id: str,
     contract_id: uuid.UUID,
     protocol: ProtocolType,
     user: User = Depends(get_current_user),
@@ -827,14 +838,16 @@ async def disable_binding(
 
     The binding is soft-disabled (keeps history). The endpoint becomes inactive.
     """
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this contract")
 
     binding_result = await db.execute(
         select(ProtocolBinding).where(
@@ -900,17 +913,21 @@ def _tool_to_response(tool: McpGeneratedTool) -> McpToolDefinition:
     summary="Generate MCP tools from UAC contract",
 )
 async def generate_mcp_tools(
+    tenant_id: str,
     contract_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Trigger MCP tool generation from a UAC contract's endpoints."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalars().first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Not authorized for this tenant")
 
     from src.schemas.uac import UacContractSpec
 
@@ -956,17 +973,21 @@ async def generate_mcp_tools(
     summary="List MCP tools for a contract",
 )
 async def list_mcp_tools(
+    tenant_id: str,
     contract_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List all generated MCP tools for a contract."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    result = await db.execute(
+        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
+    )
     contract = result.scalars().first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-    if not _has_tenant_access(user, contract.tenant_id):
-        raise HTTPException(status_code=403, detail="Not authorized for this tenant")
 
     generator = UacToolGenerator(db)
     tools = await generator.get_tools_for_contract(contract_id)

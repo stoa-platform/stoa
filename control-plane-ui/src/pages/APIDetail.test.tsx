@@ -305,22 +305,6 @@ describe('APIDetail', () => {
       });
     });
 
-    it('switches to Deployments tab on click', async () => {
-      setupMocks();
-      renderAPIDetail();
-      const user = userEvent.setup();
-
-      await waitFor(() => {
-        expect(screen.getByText('Deployments')).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByText('Deployments'));
-
-      await waitFor(() => {
-        expect(screen.getByText('No deployments yet for this API.')).toBeInTheDocument();
-      });
-    });
-
     it('switches to Promotions tab on click', async () => {
       setupMocks();
       renderAPIDetail();

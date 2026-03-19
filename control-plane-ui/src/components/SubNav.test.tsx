@@ -85,14 +85,9 @@ describe('SubNav', () => {
       ]);
     });
 
-    it('gatewayTabs has 4 tabs', () => {
-      expect(gatewayTabs).toHaveLength(4);
-      expect(gatewayTabs.map((t) => t.href)).toEqual([
-        '/gateway',
-        '/gateways',
-        '/drift',
-        '/gateway-deployments',
-      ]);
+    it('gatewayTabs has 3 tabs', () => {
+      expect(gatewayTabs).toHaveLength(3);
+      expect(gatewayTabs.map((t) => t.href)).toEqual(['/gateway', '/gateways', '/drift']);
     });
 
     it('observabilityTabs has 5 tabs', () => {

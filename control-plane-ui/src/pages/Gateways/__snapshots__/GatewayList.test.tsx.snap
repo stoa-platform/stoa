@@ -35,10 +35,6 @@ exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot
       "href": "/drift",
       "text": "Config Sync",
     },
-    {
-      "href": "/gateway-deployments",
-      "text": "Deployments",
-    },
   ],
 }
 `;
@@ -76,10 +72,6 @@ exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`
     {
       "href": "/drift",
       "text": "Config Sync",
-    },
-    {
-      "href": "/gateway-deployments",
-      "text": "Deployments",
     },
   ],
 }
@@ -119,10 +111,6 @@ exports[`GatewayList > snapshot: tenant-admin persona > matches structural snaps
       "href": "/drift",
       "text": "Config Sync",
     },
-    {
-      "href": "/gateway-deployments",
-      "text": "Deployments",
-    },
   ],
 }
 `;
@@ -160,10 +148,6 @@ exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`
     {
       "href": "/drift",
       "text": "Config Sync",
-    },
-    {
-      "href": "/gateway-deployments",
-      "text": "Deployments",
     },
   ],
 }

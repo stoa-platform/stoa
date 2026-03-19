@@ -32,7 +32,7 @@ REQUIRED_PATHS = [
     "/health",
     # CAB-1671: expanded contract coverage for 10 critical routers
     "/v1/consumers",
-    "/v1/contracts",
+    "/v1/tenants/{tenant_id}/contracts",
     "/v1/portal",
     "/v1/platform",
 ]

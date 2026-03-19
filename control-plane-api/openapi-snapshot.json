@@ -97,6 +97,64 @@
         "title": "AISessionIngestRequest",
         "type": "object"
       },
+      "AISessionStatsResponse": {
+        "description": "AI session statistics with per-worker and daily breakdowns.",
+        "properties": {
+          "by_model": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "By Model",
+            "type": "array"
+          },
+          "daily": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Daily",
+            "type": "array"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AISessionTotals",
+            "default": {
+              "avg_cost_per_session": 0.0,
+              "avg_duration_ms": 0,
+              "cost_delta_pct": 0.0,
+              "cost_delta_usd": 0.0,
+              "prev_cost_usd": 0.0,
+              "sessions": 0,
+              "success_count": 0,
+              "success_rate": 0.0,
+              "tokens_delta": 0,
+              "total_cost_usd": 0.0,
+              "total_duration_ms": 0,
+              "total_tokens": 0
+            }
+          },
+          "workers": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Workers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "AISessionStatsResponse",
+        "type": "object"
+      },
       "AISessionStep": {
         "description": "A step in an AI session trace.",
         "properties": {
@@ -148,6 +206,73 @@
           "name"
         ],
         "title": "AISessionStep",
+        "type": "object"
+      },
+      "AISessionTotals": {
+        "description": "AI session aggregated totals.",
+        "properties": {
+          "avg_cost_per_session": {
+            "default": 0,
+            "title": "Avg Cost Per Session",
+            "type": "number"
+          },
+          "avg_duration_ms": {
+            "default": 0,
+            "title": "Avg Duration Ms",
+            "type": "integer"
+          },
+          "cost_delta_pct": {
+            "default": 0,
+            "title": "Cost Delta Pct",
+            "type": "number"
+          },
+          "cost_delta_usd": {
+            "default": 0,
+            "title": "Cost Delta Usd",
+            "type": "number"
+          },
+          "prev_cost_usd": {
+            "default": 0,
+            "title": "Prev Cost Usd",
+            "type": "number"
+          },
+          "sessions": {
+            "default": 0,
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "success_count": {
+            "default": 0,
+            "title": "Success Count",
+            "type": "integer"
+          },
+          "success_rate": {
+            "default": 0,
+            "title": "Success Rate",
+            "type": "number"
+          },
+          "tokens_delta": {
+            "default": 0,
+            "title": "Tokens Delta",
+            "type": "integer"
+          },
+          "total_cost_usd": {
+            "default": 0,
+            "title": "Total Cost Usd",
+            "type": "number"
+          },
+          "total_duration_ms": {
+            "default": 0,
+            "title": "Total Duration Ms",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "title": "AISessionTotals",
         "type": "object"
       },
       "APICreate": {
@@ -1233,6 +1358,130 @@
           "message"
         ],
         "title": "ArgoCDSyncResponse",
+        "type": "object"
+      },
+      "AssignmentCreate": {
+        "description": "Create a default gateway target for an API/environment.",
+        "properties": {
+          "auto_deploy": {
+            "default": false,
+            "title": "Auto Deploy",
+            "type": "boolean"
+          },
+          "environment": {
+            "pattern": "^(dev|staging|production)$",
+            "title": "Environment",
+            "type": "string"
+          },
+          "gateway_id": {
+            "format": "uuid",
+            "title": "Gateway Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gateway_id",
+          "environment"
+        ],
+        "title": "AssignmentCreate",
+        "type": "object"
+      },
+      "AssignmentListResponse": {
+        "description": "Paginated assignment list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AssignmentListResponse",
+        "type": "object"
+      },
+      "AssignmentResponse": {
+        "description": "API gateway assignment response.",
+        "properties": {
+          "api_id": {
+            "format": "uuid",
+            "title": "Api Id",
+            "type": "string"
+          },
+          "auto_deploy": {
+            "title": "Auto Deploy",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "gateway_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Display Name"
+          },
+          "gateway_id": {
+            "format": "uuid",
+            "title": "Gateway Id",
+            "type": "string"
+          },
+          "gateway_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Name"
+          },
+          "gateway_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Type"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "api_id",
+          "gateway_id",
+          "environment",
+          "auto_deploy",
+          "created_at"
+        ],
+        "title": "AssignmentResponse",
         "type": "object"
       },
       "AudienceUpdateRequest": {
@@ -2639,6 +2888,7 @@
         "type": "object"
       },
       "CatalogResponse": {
+        "description": "Full catalog response with categories and flat entry list.",
         "properties": {
           "categories": {
             "items": {
@@ -2649,7 +2899,7 @@
           },
           "entries": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__discovery__CatalogEntry"
+              "$ref": "#/components/schemas/src__catalog__loader__CatalogEntry"
             },
             "title": "Entries",
             "type": "array"
@@ -2801,6 +3051,31 @@
           "unpublished_apis"
         ],
         "title": "CatalogStatsResponse",
+        "type": "object"
+      },
+      "CatalogTool": {
+        "description": "A tool exposed by a catalog API entry.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CatalogTool",
         "type": "object"
       },
       "CertificateBindRequest": {
@@ -5280,6 +5555,36 @@
           }
         },
         "title": "DepartmentBudgetUpdate",
+        "type": "object"
+      },
+      "DeployToEnvRequest": {
+        "description": "Request to deploy an API to gateways in a specific environment.",
+        "properties": {
+          "environment": {
+            "pattern": "^(dev|staging|production)$",
+            "title": "Environment",
+            "type": "string"
+          },
+          "gateway_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Ids"
+          }
+        },
+        "required": [
+          "environment"
+        ],
+        "title": "DeployToEnvRequest",
         "type": "object"
       },
       "DeploymentCreate": {
@@ -9288,6 +9593,47 @@
         "title": "FederationBulkRevokeResponse",
         "type": "object"
       },
+      "FileActionResponse": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "action"
+        ],
+        "title": "FileActionResponse",
+        "type": "object"
+      },
+      "FileContent": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "encoding": {
+            "default": "text",
+            "title": "Encoding",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "title": "FileContent",
+        "type": "object"
+      },
       "FileCreateUpdate": {
         "properties": {
           "content": {
@@ -9405,6 +9751,45 @@
           "count"
         ],
         "title": "FunnelStage",
+        "type": "object"
+      },
+      "GatewayAPIDetailResponse": {
+        "additionalProperties": true,
+        "description": "Gateway API detail (passthrough from gateway admin API).",
+        "properties": {
+          "apiName": {
+            "default": "",
+            "title": "Apiname",
+            "type": "string"
+          },
+          "apiVersion": {
+            "default": "",
+            "title": "Apiversion",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
+          "isActive": {
+            "default": false,
+            "title": "Isactive",
+            "type": "boolean"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          }
+        },
+        "title": "GatewayAPIDetailResponse",
         "type": "object"
       },
       "GatewayAPIResponse": {
@@ -10526,6 +10911,162 @@
           "scopeName"
         ],
         "title": "GatewayScopeResponse",
+        "type": "object"
+      },
+      "GitLabHealthResponse": {
+        "description": "GitLab connection health status.",
+        "properties": {
+          "default_branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Branch"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "GitLabHealthResponse",
+        "type": "object"
+      },
+      "GitLabServerSummary": {
+        "description": "Summary of a GitLab-defined MCP server.",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "git_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Path"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "tools_count": {
+            "default": 0,
+            "title": "Tools Count",
+            "type": "integer"
+          }
+        },
+        "title": "GitLabServerSummary",
+        "type": "object"
+      },
+      "GitLabServersResponse": {
+        "description": "List of MCP servers found in GitLab.",
+        "properties": {
+          "servers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GitLabServerSummary"
+            },
+            "title": "Servers",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "GitLabServersResponse",
         "type": "object"
       },
       "GitOpsStatus": {
@@ -14102,6 +14643,37 @@
           "author"
         ],
         "title": "MergeRequestResponse",
+        "type": "object"
+      },
+      "MergeResultResponse": {
+        "properties": {
+          "iid": {
+            "title": "Iid",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "iid"
+        ],
+        "title": "MergeResultResponse",
+        "type": "object"
+      },
+      "MessageResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "MessageResponse",
         "type": "object"
       },
       "ModeStatItem": {
@@ -19052,10 +19624,11 @@
         "type": "object"
       },
       "SearchResult": {
+        "description": "Search result response.",
         "properties": {
           "entries": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__discovery__CatalogEntry"
+              "$ref": "#/components/schemas/src__catalog__loader__CatalogEntry"
             },
             "title": "Entries",
             "type": "array"
@@ -23832,6 +24405,224 @@
         "title": "TopConsumer",
         "type": "object"
       },
+      "TraceDetailResponse": {
+        "description": "Full trace detail.",
+        "properties": {
+          "api_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Id"
+          },
+          "api_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Name"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary"
+          },
+          "git_author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Author"
+          },
+          "git_author_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Author Email"
+          },
+          "git_branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Branch"
+          },
+          "git_commit_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Commit Message"
+          },
+          "git_commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Commit Sha"
+          },
+          "git_files_changed": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Files Changed"
+          },
+          "git_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Project"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "total_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Duration Ms"
+          },
+          "trigger_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Source"
+          },
+          "trigger_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Type"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "TraceDetailResponse",
+        "type": "object"
+      },
       "TraceIngestResponse": {
         "description": "Trace ingest confirmation.",
         "properties": {
@@ -23896,6 +24687,36 @@
           }
         },
         "title": "TraceLiveResponse",
+        "type": "object"
+      },
+      "TraceStatsResponse": {
+        "description": "Aggregated trace statistics.",
+        "properties": {
+          "avg_duration_ms": {
+            "default": 0,
+            "title": "Avg Duration Ms",
+            "type": "integer"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "By Status",
+            "type": "object"
+          },
+          "success_rate": {
+            "default": 0,
+            "title": "Success Rate",
+            "type": "number"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "TraceStatsResponse",
         "type": "object"
       },
       "TraceTimelineResponse": {
@@ -24153,6 +24974,157 @@
         "title": "TraceTimelineTrigger",
         "type": "object"
       },
+      "TransactionDetailWithDemoResponse": {
+        "description": "Transaction detail with demo mode indicator.",
+        "properties": {
+          "api_name": {
+            "title": "Api Name",
+            "type": "string"
+          },
+          "client_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Ip"
+          },
+          "demo_mode": {
+            "default": false,
+            "title": "Demo Mode",
+            "type": "boolean"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "error_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Source"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "request_headers": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Headers"
+          },
+          "response_headers": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Headers"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionSpan"
+            },
+            "title": "Spans",
+            "type": "array"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_code": {
+            "title": "Status Code",
+            "type": "integer"
+          },
+          "status_text": {
+            "default": "",
+            "title": "Status Text",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "total_duration_ms": {
+            "title": "Total Duration Ms",
+            "type": "integer"
+          },
+          "trace_id": {
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "trace_id",
+          "api_name",
+          "method",
+          "path",
+          "status_code",
+          "status",
+          "started_at",
+          "total_duration_ms",
+          "spans"
+        ],
+        "title": "TransactionDetailWithDemoResponse",
+        "type": "object"
+      },
       "TransactionListResponse": {
         "description": "Transaction list with demo mode indicator.",
         "properties": {
@@ -24179,6 +25151,111 @@
         "title": "TransactionListResponse",
         "type": "object"
       },
+      "TransactionSpan": {
+        "properties": {
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "start_offset_ms": {
+            "title": "Start Offset Ms",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "service",
+          "start_offset_ms",
+          "duration_ms",
+          "status"
+        ],
+        "title": "TransactionSpan",
+        "type": "object"
+      },
+      "TransactionStatsWithDemoResponse": {
+        "description": "Transaction stats with demo mode indicator.",
+        "properties": {
+          "avg_latency_ms": {
+            "title": "Avg Latency Ms",
+            "type": "number"
+          },
+          "by_api": {
+            "additionalProperties": true,
+            "title": "By Api",
+            "type": "object"
+          },
+          "by_status_code": {
+            "additionalProperties": true,
+            "title": "By Status Code",
+            "type": "object"
+          },
+          "demo_mode": {
+            "default": false,
+            "title": "Demo Mode",
+            "type": "boolean"
+          },
+          "error_count": {
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "p95_latency_ms": {
+            "title": "P95 Latency Ms",
+            "type": "number"
+          },
+          "p99_latency_ms": {
+            "title": "P99 Latency Ms",
+            "type": "number"
+          },
+          "requests_per_minute": {
+            "title": "Requests Per Minute",
+            "type": "number"
+          },
+          "success_count": {
+            "title": "Success Count",
+            "type": "integer"
+          },
+          "timeout_count": {
+            "title": "Timeout Count",
+            "type": "integer"
+          },
+          "total_requests": {
+            "title": "Total Requests",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_requests",
+          "success_count",
+          "error_count",
+          "timeout_count",
+          "avg_latency_ms",
+          "p95_latency_ms",
+          "p99_latency_ms",
+          "requests_per_minute",
+          "by_api",
+          "by_status_code"
+        ],
+        "title": "TransactionStatsWithDemoResponse",
+        "type": "object"
+      },
       "TransportTypeEnum": {
         "description": "Transport protocol for external MCP server.",
         "enum": [
@@ -24188,6 +25265,45 @@
         ],
         "title": "TransportTypeEnum",
         "type": "string"
+      },
+      "TreeItem": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "path"
+        ],
+        "title": "TreeItem",
+        "type": "object"
+      },
+      "TreeListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TreeItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TreeListResponse",
+        "type": "object"
       },
       "UniverseResponse": {
         "description": "Universe metadata for Portal filtering (CAB-848).",
@@ -24777,6 +25893,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
           "error_count": {
             "default": 0,
             "title": "Error Count",
@@ -25242,6 +26369,39 @@
         "title": "WebhookDeliveryStatusEnum",
         "type": "string"
       },
+      "WebhookHealthResponse": {
+        "description": "Webhook endpoint health status.",
+        "properties": {
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "supported_events": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Supported Events",
+            "type": "array"
+          },
+          "trace_stats": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Trace Stats",
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "endpoint"
+        ],
+        "title": "WebhookHealthResponse",
+        "type": "object"
+      },
       "WebhookListResponse": {
         "description": "Schema for webhook list response",
         "properties": {
@@ -25262,6 +26422,52 @@
           "total"
         ],
         "title": "WebhookListResponse",
+        "type": "object"
+      },
+      "WebhookProcessedResponse": {
+        "description": "GitLab webhook processing result.",
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trace_id": {
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "event",
+          "trace_id"
+        ],
+        "title": "WebhookProcessedResponse",
         "type": "object"
       },
       "WebhookResponse": {
@@ -25533,6 +26739,129 @@
         "title": "_ValidateKeyBody",
         "type": "object"
       },
+      "src__catalog__loader__CatalogEntry": {
+        "description": "A single API/MCP connector in the curated catalog.",
+        "properties": {
+          "auth_type": {
+            "default": "none",
+            "description": "none | api_key | oauth2 | basic",
+            "title": "Auth Type",
+            "type": "string"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "country": {
+            "description": "ISO 3166-1 alpha-2 or 'EU' for pan-European",
+            "title": "Country",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "documentation_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentation Url"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mcp_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcp Endpoint"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "protocol": {
+            "description": "openapi | mcp | graphql",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "region": {
+            "default": "EU",
+            "title": "Region",
+            "type": "string"
+          },
+          "spec_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Url"
+          },
+          "status": {
+            "default": "community",
+            "description": "verified | community | experimental",
+            "title": "Status",
+            "type": "string"
+          },
+          "tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "tools": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CatalogTool"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "display_name",
+          "description",
+          "category",
+          "country",
+          "protocol"
+        ],
+        "title": "CatalogEntry",
+        "type": "object"
+      },
       "src__routers__applications__ApplicationResponse": {
         "properties": {
           "api_subscriptions": {
@@ -25639,102 +26968,6 @@
           "has_more"
         ],
         "title": "AuditListResponse",
-        "type": "object"
-      },
-      "src__routers__discovery__CatalogEntry": {
-        "properties": {
-          "category": {
-            "title": "Category",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "documentation_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Documentation Url"
-          },
-          "icon": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Icon"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "mcp_endpoint": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mcp Endpoint"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "protocol": {
-            "description": "openapi | mcp | graphql",
-            "title": "Protocol",
-            "type": "string"
-          },
-          "region": {
-            "default": "EU",
-            "title": "Region",
-            "type": "string"
-          },
-          "spec_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Spec Url"
-          },
-          "tags": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Tags",
-            "type": "array"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "display_name",
-          "description",
-          "category",
-          "protocol"
-        ],
-        "title": "CatalogEntry",
         "type": "object"
       },
       "src__routers__gateway_deployments__CatalogEntry": {
@@ -26179,6 +27412,16 @@
     }
   },
   "info": {
+    "contact": {
+      "email": "support@gostoa.dev",
+      "name": "CAB Ing\u00e9nierie",
+      "url": "https://gostoa.dev/"
+    },
+    "description": "\n## STOA Platform API\n\n**The European Agent Gateway** \u2014 AI-Native API Gateway for modern enterprises.\n\n### Key Features\n\n- **MCP Server Subscriptions** \u2014 Subscribe to AI tools and manage API keys\n- **Tools Catalog** \u2014 Browse and discover MCP tools with role-based visibility\n- **Usage Tracking** \u2014 Monitor your API consumption in real-time\n- **Multi-tenant Management** \u2014 Create and manage isolated API tenants\n- **GitOps Integration** \u2014 Automatic sync with GitLab repositories\n- **Event-Driven Architecture** \u2014 Kafka/Redpanda message bus for async operations\n- **Pipeline Monitoring** \u2014 End-to-end tracing of deployments\n- **RBAC** \u2014 Role-based access control via Keycloak\n\n### Quick Start\n\n1. **Get a token** from Keycloak (`POST /realms/stoa/protocol/openid-connect/token`)\n2. **Browse MCP servers** (`GET /v1/mcp/servers`)\n3. **Subscribe to a server** (`POST /v1/mcp/subscriptions`)\n4. **Use your API key** with MCP Gateway (`https://mcp.gostoa.dev`)\n\n### Authentication\n\nAll endpoints require a valid JWT token from Keycloak (realm: `stoa`).\nInclude the token in the `Authorization: Bearer <token>` header.\n\n```\nAuthorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...\n```\n\n### Environments\n\n| Environment | Base URL |\n|-------------|----------|\n| Production | `https://api.gostoa.dev` |\n| Via Gateway | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` |\n\n### Changelog\n\n#### v2.1.0 (Current)\n- Added MCP Server Subscriptions with admin approval workflow\n- Added API key rotation with grace period support\n- Added Dashboard home page stats (`/v1/dashboard`)\n- Added Service Accounts for M2M authentication\n\n#### v2.0.0\n- Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring\n- Added GitLab Webhook integration (`/webhooks/gitlab`)\n- Added Kafka integration for event-driven deployments\n- Added Kafka integration for event-driven gateway orchestration\n\n#### v1.0.0\n- Initial release with tenant, API, and application management\n",
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
     "title": "STOA Control-Plane API",
     "version": "2.0.0"
   },
@@ -27609,6 +28852,24 @@
               ],
               "description": "Filter by gateway environment (dev/staging/prod)",
               "title": "Environment"
+            }
+          },
+          {
+            "description": "Filter by gateway type (stoa, kong, gravitee, etc.)",
+            "in": "query",
+            "name": "gateway_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by gateway type (stoa, kong, gravitee, etc.)",
+              "title": "Gateway Type"
             }
           },
           {
@@ -34053,743 +35314,6 @@
         ]
       }
     },
-    "/v1/contracts": {
-      "get": {
-        "description": "List contracts for the user's tenant (cached, TTL 60s).",
-        "operationId": "list_contracts",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Filter by status",
-            "in": "query",
-            "name": "status",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Filter by status",
-              "title": "Status"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContractListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Contracts",
-        "tags": [
-          "Contracts"
-        ]
-      },
-      "post": {
-        "description": "Create a new Universal API Contract.\n\nCreates the contract and initializes all protocol bindings as disabled.",
-        "operationId": "create_contract",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ContractCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContractResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Contract",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/by-name/{contract_name}/versions": {
-      "get": {
-        "description": "List all versions of a contract by name.\n\nReturns version history including deprecation status, ordered by creation date\n(latest first).",
-        "operationId": "list_contract_versions",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_name",
-            "required": true,
-            "schema": {
-              "title": "Contract Name",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContractVersionsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Contract Versions",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/{contract_id}": {
-      "delete": {
-        "description": "Delete a contract and all its bindings.",
-        "operationId": "delete_contract",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Contract",
-        "tags": [
-          "Contracts"
-        ]
-      },
-      "get": {
-        "description": "Get a specific contract by ID.",
-        "operationId": "get_contract",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContractResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Contract",
-        "tags": [
-          "Contracts"
-        ]
-      },
-      "patch": {
-        "description": "Update a contract.",
-        "operationId": "update_contract",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ContractUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContractResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Update Contract",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/{contract_id}/bindings": {
-      "get": {
-        "description": "List all protocol bindings for a contract.\n\nReturns all 5 protocols (REST, MCP, GraphQL, gRPC, Kafka) with their status.\nUsed by the Protocol Switcher UI component.",
-        "operationId": "list_bindings",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BindingsListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Bindings",
-        "tags": [
-          "Contracts"
-        ]
-      },
-      "post": {
-        "description": "Enable a protocol binding for a contract.\n\nThis triggers the UAC engine to generate the binding (endpoint, tool, etc.).",
-        "operationId": "enable_binding",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EnableBindingRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnableBindingResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Enable Binding",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/{contract_id}/bindings/{protocol}": {
-      "delete": {
-        "description": "Disable a protocol binding for a contract.\n\nThe binding is soft-disabled (keeps history). The endpoint becomes inactive.",
-        "operationId": "disable_binding",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "protocol",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ProtocolType"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DisableBindingResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Disable Binding",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/{contract_id}/deprecate": {
-      "post": {
-        "description": "Deprecate a published contract with optional sunset date.\n\nSets the contract status to 'deprecated' and records deprecation metadata\nincluding reason, sunset date (RFC 8594), and optional replacement contract.",
-        "operationId": "deprecate_contract",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeprecateContractRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContractDeprecationInfo"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Deprecate Contract",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/{contract_id}/deprecation": {
-      "get": {
-        "description": "Get deprecation details for a contract.",
-        "operationId": "get_deprecation_info",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContractDeprecationInfo"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Deprecation Info",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/{contract_id}/mcp-tools": {
-      "get": {
-        "description": "List all generated MCP tools for a contract.",
-        "operationId": "list_mcp_tools",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/McpToolsListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List MCP tools for a contract",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/{contract_id}/mcp-tools/generate": {
-      "post": {
-        "description": "Trigger MCP tool generation from a UAC contract's endpoints.",
-        "operationId": "generate_mcp_tools",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/McpToolsGenerateResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Generate MCP tools from UAC contract",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
-    "/v1/contracts/{contract_id}/reactivate": {
-      "post": {
-        "description": "Reactivate a deprecated contract (undo deprecation).\n\nOnly allowed if the sunset date has not passed.",
-        "operationId": "reactivate_contract",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContractResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Reactivate Contract",
-        "tags": [
-          "Contracts"
-        ]
-      }
-    },
     "/v1/dashboard/activity": {
       "get": {
         "description": "Retourne l'activit\u00e9 r\u00e9cente pour la home page du Portal.\n\nData Sources (CAB-840):\n- Loki for activity logs\n- Falls back to empty list if Loki unavailable",
@@ -34927,6 +35451,42 @@
               ],
               "description": "Filter by protocol: openapi | mcp",
               "title": "Protocol"
+            }
+          },
+          {
+            "description": "Filter by country (ISO 3166-1 alpha-2)",
+            "in": "query",
+            "name": "country",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by country (ISO 3166-1 alpha-2)",
+              "title": "Country"
+            }
+          },
+          {
+            "description": "Filter by status: verified | community | experimental",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status: verified | community | experimental",
+              "title": "Status"
             }
           }
         ],
@@ -35615,7 +36175,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayAPIDetailResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -36793,7 +37355,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/GitLabHealthResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -36818,7 +37382,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/GitLabServersResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -38198,7 +38764,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionStatsWithDemoResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -38244,7 +38812,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionDetailWithDemoResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -43409,6 +43979,328 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/apis/{api_id}/deploy": {
+      "post": {
+        "description": "Deploy an API to gateways in a specific environment.\n\napi_id can be a UUID (catalog entry ID) or a string (Git API name).\nIf the API is not in the catalog, it will be synced from Git on-demand.\nValidates promotion prerequisites (staging/prod require active promotion).\nIf gateway_ids is omitted, uses auto-deploy assignments for the environment.",
+        "operationId": "deploy_to_environment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeployToEnvRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deploy To Environment",
+        "tags": [
+          "API Deployments"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/apis/{api_id}/deployable-environments": {
+      "get": {
+        "description": "Get environments where this API can be deployed.\n\napi_id can be a UUID (catalog entry ID) or a string (Git API name).\nDev is always available. Staging/prod require an active promotion.",
+        "operationId": "get_deployable_environments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Deployable Environments",
+        "tags": [
+          "API Deployments"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/apis/{api_id}/gateway-assignments": {
+      "get": {
+        "description": "List gateway assignments for an API, optionally filtered by environment.",
+        "operationId": "list_assignments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(dev|staging|production)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Environment"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Assignments",
+        "tags": [
+          "API Deployments"
+        ]
+      },
+      "post": {
+        "description": "Assign a default gateway target for an API in a specific environment.",
+        "operationId": "create_assignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignmentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Assignment",
+        "tags": [
+          "API Deployments"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/apis/{api_id}/gateway-assignments/{assignment_id}": {
+      "delete": {
+        "description": "Remove a gateway assignment.",
+        "operationId": "delete_assignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Assignment",
+        "tags": [
+          "API Deployments"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/apis/{api_id}/versions": {
       "get": {
         "description": "List version history (git commits) for a specific API.",
@@ -44781,6 +45673,871 @@
         "summary": "Sign Consumer Csr",
         "tags": [
           "Tenant CA"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts": {
+      "get": {
+        "description": "List contracts for the specified tenant (cached, TTL 60s).",
+        "operationId": "list_contracts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Contracts",
+        "tags": [
+          "Contracts"
+        ]
+      },
+      "post": {
+        "description": "Create a new Universal API Contract.\n\nCreates the contract and initializes all protocol bindings as disabled.",
+        "operationId": "create_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/by-name/{contract_name}/versions": {
+      "get": {
+        "description": "List all versions of a contract by name.\n\nReturns version history including deprecation status, ordered by creation date\n(latest first).",
+        "operationId": "list_contract_versions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_name",
+            "required": true,
+            "schema": {
+              "title": "Contract Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractVersionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Contract Versions",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}": {
+      "delete": {
+        "description": "Delete a contract and all its bindings.",
+        "operationId": "delete_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Contract",
+        "tags": [
+          "Contracts"
+        ]
+      },
+      "get": {
+        "description": "Get a specific contract by ID.",
+        "operationId": "get_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Contract",
+        "tags": [
+          "Contracts"
+        ]
+      },
+      "patch": {
+        "description": "Update a contract.",
+        "operationId": "update_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/bindings": {
+      "get": {
+        "description": "List all protocol bindings for a contract.\n\nReturns all 5 protocols (REST, MCP, GraphQL, gRPC, Kafka) with their status.\nUsed by the Protocol Switcher UI component.",
+        "operationId": "list_bindings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BindingsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Bindings",
+        "tags": [
+          "Contracts"
+        ]
+      },
+      "post": {
+        "description": "Enable a protocol binding for a contract.\n\nThis triggers the UAC engine to generate the binding (endpoint, tool, etc.).",
+        "operationId": "enable_binding",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnableBindingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnableBindingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Enable Binding",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/bindings/{protocol}": {
+      "delete": {
+        "description": "Disable a protocol binding for a contract.\n\nThe binding is soft-disabled (keeps history). The endpoint becomes inactive.",
+        "operationId": "disable_binding",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProtocolType"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisableBindingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Disable Binding",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/deprecate": {
+      "post": {
+        "description": "Deprecate a published contract with optional sunset date.\n\nSets the contract status to 'deprecated' and records deprecation metadata\nincluding reason, sunset date (RFC 8594), and optional replacement contract.",
+        "operationId": "deprecate_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeprecateContractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDeprecationInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deprecate Contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/deprecation": {
+      "get": {
+        "description": "Get deprecation details for a contract.",
+        "operationId": "get_deprecation_info",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDeprecationInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Deprecation Info",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/mcp-tools": {
+      "get": {
+        "description": "List all generated MCP tools for a contract.",
+        "operationId": "list_mcp_tools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpToolsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List MCP tools for a contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/mcp-tools/generate": {
+      "post": {
+        "description": "Trigger MCP tool generation from a UAC contract's endpoints.",
+        "operationId": "generate_mcp_tools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpToolsGenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Generate MCP tools from UAC contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/reactivate": {
+      "post": {
+        "description": "Reactivate a deprecated contract (undo deprecation).\n\nOnly allowed if the sunset date has not passed.",
+        "operationId": "reactivate_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reactivate Contract",
+        "tags": [
+          "Contracts"
         ]
       }
     },
@@ -47074,7 +48831,7 @@
         ],
         "summary": "List Branches",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       },
       "post": {
@@ -47130,7 +48887,7 @@
         ],
         "summary": "Create Branch",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       }
     },
@@ -47210,7 +48967,7 @@
         ],
         "summary": "List Commits",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       }
     },
@@ -47268,7 +49025,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -47291,7 +49050,7 @@
         ],
         "summary": "Delete File",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       },
       "get": {
@@ -47331,7 +49090,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
               }
             },
             "description": "Successful Response"
@@ -47354,7 +49115,7 @@
         ],
         "summary": "Get File",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       },
       "post": {
@@ -47420,7 +49181,9 @@
           "201": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/FileActionResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -47443,7 +49206,7 @@
         ],
         "summary": "Create Or Update File",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       }
     },
@@ -47505,7 +49268,7 @@
         ],
         "summary": "List Merge Requests",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       },
       "post": {
@@ -47561,7 +49324,7 @@
         ],
         "summary": "Create Merge Request",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       }
     },
@@ -47593,7 +49356,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MergeResultResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -47616,7 +49381,7 @@
         ],
         "summary": "Merge Request",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       }
     },
@@ -47659,7 +49424,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TreeListResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -47682,7 +49449,7 @@
         ],
         "summary": "Get Tree",
         "tags": [
-          "Git"
+          "Advanced \u2014 GitOps"
         ]
       }
     },
@@ -51169,7 +52936,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TraceStatsResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -51221,7 +52990,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AISessionStatsResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -51262,7 +53033,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TraceDetailResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -51354,6 +53127,24 @@
               "description": "Period type: daily or monthly",
               "title": "Period",
               "type": "string"
+            }
+          },
+          {
+            "description": "Filter by environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment",
+              "title": "Environment"
             }
           }
         ],
@@ -51785,6 +53576,24 @@
             }
           },
           {
+            "description": "Filter by environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment",
+              "title": "Environment"
+            }
+          },
+          {
             "description": "Max results per page",
             "in": "query",
             "name": "limit",
@@ -51989,7 +53798,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookProcessedResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -52019,7 +53830,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookHealthResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -52031,5 +53844,151 @@
         ]
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "description": "Tenant management operations",
+      "name": "Tenants"
+    },
+    {
+      "description": "API lifecycle management",
+      "name": "APIs"
+    },
+    {
+      "description": "Application and subscription management",
+      "name": "Applications"
+    },
+    {
+      "description": "Deployment operations and status",
+      "name": "Deployments"
+    },
+    {
+      "description": "GitLab integration (commits, MRs, files, branches)",
+      "name": "Advanced \u2014 GitOps"
+    },
+    {
+      "description": "Real-time event streaming (SSE)",
+      "name": "Events"
+    },
+    {
+      "description": "GitLab webhook handlers for GitOps",
+      "name": "Webhooks"
+    },
+    {
+      "description": "Pipeline monitoring and tracing",
+      "name": "Traces"
+    },
+    {
+      "description": "webMethods Gateway administration via OIDC proxy",
+      "name": "Gateway"
+    },
+    {
+      "description": "API subscription and API key management",
+      "name": "Subscriptions"
+    },
+    {
+      "description": "Webhook notifications for subscription events (CAB-315)",
+      "name": "Tenant Webhooks"
+    },
+    {
+      "description": "Certificate validation for mTLS subscriptions (CAB-313)",
+      "name": "certificates"
+    },
+    {
+      "description": "Full-text search across tools and APIs (CAB-307)",
+      "name": "Search"
+    },
+    {
+      "description": "Usage dashboard for API consumers (CAB-280)",
+      "name": "Usage"
+    },
+    {
+      "description": "Home dashboard stats and activity (CAB-299)",
+      "name": "Dashboard"
+    },
+    {
+      "description": "OAuth2 Service Accounts for MCP access (CAB-296)",
+      "name": "Service Accounts"
+    },
+    {
+      "description": "Universal API Contracts with multi-protocol bindings (UAC)",
+      "name": "Contracts"
+    },
+    {
+      "description": "Browse and discover MCP servers",
+      "name": "MCP Servers"
+    },
+    {
+      "description": "Subscribe to MCP servers and manage API keys",
+      "name": "MCP Subscriptions"
+    },
+    {
+      "description": "API key validation for MCP Gateway (internal)",
+      "name": "MCP Validation"
+    },
+    {
+      "description": "Admin approval workflow for MCP subscriptions",
+      "name": "MCP Admin - Subscriptions"
+    },
+    {
+      "description": "MCP server management (admin)",
+      "name": "MCP Admin - Servers"
+    },
+    {
+      "description": "Developer Portal API catalog and MCP server browsing",
+      "name": "Portal"
+    },
+    {
+      "description": "GitOps synchronization for MCP servers",
+      "name": "MCP GitOps"
+    },
+    {
+      "description": "MCP tools discovery and invocation (proxy to MCP Gateway)",
+      "name": "MCP Tools"
+    },
+    {
+      "description": "Platform status and GitOps observability (CAB-654)",
+      "name": "Platform"
+    },
+    {
+      "description": "Gateway instance management (multi-gateway orchestration)",
+      "name": "Gateways"
+    },
+    {
+      "description": "API deployment to gateways (sync engine)",
+      "name": "Gateway Deployments"
+    },
+    {
+      "description": "Gateway-agnostic policy management",
+      "name": "Gateway Policies"
+    },
+    {
+      "description": "Multi-gateway health and sync metrics",
+      "name": "Gateway Observability"
+    },
+    {
+      "description": "Internal gateway auto-registration (ADR-028)",
+      "name": "Gateway Internal"
+    },
+    {
+      "description": "Consumer onboarding and lifecycle management (CAB-1121)",
+      "name": "Consumers"
+    },
+    {
+      "description": "Subscription plan management with quotas (CAB-1121)",
+      "name": "Plans"
+    },
+    {
+      "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)",
+      "name": "Quotas"
+    },
+    {
+      "description": "Gateway discovery for UAC-generated MCP tools (CAB-605)",
+      "name": "MCP Discovery"
+    },
+    {
+      "description": "Source-of-truth classification, drift detection, reconciliation (CAB-1324)",
+      "name": "Data Governance"
+    }
+  ]
 }

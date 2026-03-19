@@ -26,6 +26,17 @@ router = APIRouter(
 )
 
 
+def _parse_api_id(api_id: str) -> tuple[str, UUID | None]:
+    """Parse api_id which can be a UUID (catalog ID) or a string (Git API name).
+
+    Returns (api_id_str, uuid_or_none).
+    """
+    try:
+        return api_id, UUID(api_id)
+    except ValueError:
+        return api_id, None
+
+
 # --- Gateway Assignments ---
 
 
@@ -112,20 +123,23 @@ class DeployToEnvRequest(BaseModel):
 @router.post("/deploy", status_code=201)
 async def deploy_to_environment(
     tenant_id: str,
-    api_id: UUID,
+    api_id: str,
     data: DeployToEnvRequest,
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """Deploy an API to gateways in a specific environment.
 
+    api_id can be a UUID (catalog entry ID) or a string (Git API name).
+    If the API is not in the catalog, it will be synced from Git on-demand.
     Validates promotion prerequisites (staging/prod require active promotion).
     If gateway_ids is omitted, uses auto-deploy assignments for the environment.
     """
     svc = DeploymentOrchestrationService(db)
     try:
         deployments = await svc.deploy_api_to_env(
-            api_catalog_id=api_id,
+            tenant_id=tenant_id,
+            api_identifier=api_id,
             environment=data.environment,
             gateway_ids=data.gateway_ids,
             deployed_by=getattr(user, "preferred_username", "system"),
@@ -144,14 +158,17 @@ async def deploy_to_environment(
 @router.get("/deployable-environments")
 async def get_deployable_environments(
     tenant_id: str,
-    api_id: UUID,
+    api_id: str,
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin", "devops", "viewer"])),
 ):
     """Get environments where this API can be deployed.
 
+    api_id can be a UUID (catalog entry ID) or a string (Git API name).
     Dev is always available. Staging/prod require an active promotion.
     """
     svc = DeploymentOrchestrationService(db)
-    environments = await svc.get_deployable_environments(api_id)
+    environments = await svc.get_deployable_environments(
+        tenant_id=tenant_id, api_identifier=api_id
+    )
     return {"environments": environments}

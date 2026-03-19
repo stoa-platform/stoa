@@ -91,7 +91,8 @@ export function Contracts() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
 
   useEffect(() => {
     loadContracts();

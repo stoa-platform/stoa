@@ -431,7 +431,7 @@ function VersionsTab({ versions, loading }: { versions: APIVersionEntry[]; loadi
   );
 }
 
-function DeploymentsTab({ api }: { api: API; tenantId: string }) {
+function DeploymentsTab({ api, tenantId }: { api: API; tenantId: string }) {
   const toast = useToastActions();
   const queryClient = useQueryClient();
   const [showDeployDialog, setShowDeployDialog] = useState(false);
@@ -551,7 +551,7 @@ function DeploymentsTab({ api }: { api: API; tenantId: string }) {
             queryClient.invalidateQueries({ queryKey: ['gateway-deployments', api.id] });
             toast.success('Deployment initiated');
           }}
-          preselectedApiId={api.id}
+          preselectedApiKey={`${tenantId}:${api.name || api.id}`}
         />
       )}
     </div>

@@ -56,7 +56,7 @@ vi.mock('../config', () => ({
         getAppUrl: (name: string) => `https://argocd.gostoa.dev/applications/${name}`,
       },
       prometheus: { url: 'https://prometheus.gostoa.dev' },
-      grafana: { url: '/grafana/' },
+      grafana: { url: '/grafana/', arenaDashboardUrl: '/grafana/d/arena' },
     },
   },
 }));
@@ -101,9 +101,9 @@ describe('GatewayStatus', () => {
     expect(screen.getByText('webMethods Gateway')).toBeInTheDocument();
   });
 
-  it('shows Connected status badge', () => {
+  it('shows Online status badge (G1: unified with Registry enum)', () => {
     renderComponent();
-    expect(screen.getByText('Connected')).toBeInTheDocument();
+    expect(screen.getByText('Online')).toBeInTheDocument();
   });
 
   it('shows stats cards with API and application counts', () => {
@@ -113,23 +113,23 @@ describe('GatewayStatus', () => {
     expect(screen.getByText('Last Sync')).toBeInTheDocument();
   });
 
-  it('shows SLO Compliance section', () => {
+  it('shows SLO and Error Budget without hardcoded mock values (G3)', () => {
     renderComponent();
     expect(screen.getByText('SLO Compliance')).toBeInTheDocument();
-    expect(screen.getByText('On Track')).toBeInTheDocument();
-  });
-
-  it('shows Error Budget section', () => {
-    renderComponent();
     expect(screen.getByText('Error Budget')).toBeInTheDocument();
-    expect(screen.getByText('67.2%')).toBeInTheDocument();
+    // Both cards show "No metrics available"
+    expect(screen.getAllByText('No metrics available')).toHaveLength(2);
+    // G3: hardcoded values must NOT appear
+    expect(screen.queryByText('99.95%')).not.toBeInTheDocument();
+    expect(screen.queryByText('342ms')).not.toBeInTheDocument();
+    expect(screen.queryByText('67.2%')).not.toBeInTheDocument();
+    expect(screen.queryByText('On Track')).not.toBeInTheDocument();
   });
 
-  it('shows ArgoCD Sync card with status', () => {
+  it('shows Infrastructure Sync card (G4: renamed from ArgoCD Sync)', () => {
     renderComponent();
-    expect(screen.getByText('ArgoCD Sync')).toBeInTheDocument();
+    expect(screen.getByText('Infrastructure Sync')).toBeInTheDocument();
     expect(screen.getByText('Synced')).toBeInTheDocument();
-    // 'Healthy' appears in multiple cards — verify at least one exists
     expect(screen.getAllByText('Healthy').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -156,6 +156,26 @@ describe('GatewayStatus', () => {
   it('shows Refresh button', () => {
     renderComponent();
     expect(screen.getByText('Refresh')).toBeInTheDocument();
+  });
+
+  it('shows dash for API count when fetch fails (G2)', async () => {
+    const hooks = await import('../hooks/useGatewayStatus');
+    vi.mocked(hooks.useGatewayStatus).mockReturnValue({
+      data: {
+        health: { status: 'healthy', proxy_mode: false },
+        apis: null,
+        applications: null,
+      },
+      isLoading: false,
+      error: null,
+      refetch: mockRefetch,
+      dataUpdatedAt: Date.now(),
+    } as any);
+    renderComponent();
+    // Should show dash instead of 0, and a warning notice
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBe(2); // APIs and Applications both show dash
+    expect(screen.getByText(/Unable to fetch/)).toBeInTheDocument();
   });
 
   it('shows loading state when data is loading', async () => {

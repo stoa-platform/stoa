@@ -94,7 +94,7 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
         if (preselectedApiKey) {
           const [, apiName] = preselectedApiKey.split(':');
           const found = result.find((a) => a.name === apiName || a.id === apiName);
-          if (found) setSelectedApi(found.id || found.name);
+          if (found) setSelectedApi(found.name);
         }
       })
       .catch(() => setApis([]))
@@ -284,7 +284,7 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
                   >
                     <option value="">Select an API...</option>
                     {apis.map((api) => (
-                      <option key={api.id || api.name} value={api.id || api.name}>
+                      <option key={api.name} value={api.name}>
                         {api.display_name || api.name} v{api.version}
                       </option>
                     ))}

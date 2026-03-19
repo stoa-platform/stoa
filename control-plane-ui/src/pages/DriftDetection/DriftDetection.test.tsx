@@ -7,7 +7,7 @@ import type { PersonaRole } from '../../test/helpers';
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('../../contexts/EnvironmentContext', () => ({
-  useEnvironment: () => ({ activeEnvironment: 'dev', environments: ['dev', 'staging', 'prod'] }),
+  useEnvironment: () => ({ activeEnvironment: '', environments: ['dev', 'staging', 'prod'] }),
 }));
 
 const mockGetGatewayInstances = vi.fn().mockResolvedValue({ items: [], total: 0 });
@@ -102,9 +102,10 @@ describe('DriftDetection', () => {
 
     renderWithProviders(<DriftDetection />);
     await waitFor(() => {
-      expect(screen.getByText('4')).toBeInTheDocument(); // Total Gateways
-      expect(screen.getByText('3')).toBeInTheDocument(); // Healthy (3 online)
-      expect(screen.getByText('2')).toBeInTheDocument(); // Drifted
+      expect(screen.getByText('Total Gateways')).toBeInTheDocument();
+      expect(screen.getByText('Healthy')).toBeInTheDocument();
+      expect(screen.getByText('Degraded / Offline')).toBeInTheDocument();
+      expect(screen.getByText('Drifted Deployments')).toBeInTheDocument();
     });
   });
 
@@ -124,9 +125,39 @@ describe('DriftDetection', () => {
     expect(screen.getByText('Degraded')).toBeInTheDocument();
   });
 
-  it('shows All Clear when no drift', async () => {
+  it('shows global healthy banner when no issues', async () => {
+    mockGetDeploymentStatusSummary.mockResolvedValue({
+      synced: 5,
+      pending: 0,
+      drifted: 0,
+      error: 0,
+      syncing: 0,
+      deleting: 0,
+      total: 5,
+    });
     renderWithProviders(<DriftDetection />);
-    expect(await screen.findByText('All Clear')).toBeInTheDocument();
+    expect(await screen.findByText('All systems healthy')).toBeInTheDocument();
+  });
+
+  it('shows warning banner when gateways are degraded but no drift', async () => {
+    mockGetGatewayInstances.mockResolvedValue({
+      items: [
+        mockGatewayInstance({ id: 'gw-1', status: 'online' }),
+        mockGatewayInstance({ id: 'gw-2', status: 'degraded' }),
+      ],
+      total: 2,
+    });
+    mockGetDeploymentStatusSummary.mockResolvedValue({
+      synced: 5,
+      pending: 0,
+      drifted: 0,
+      error: 0,
+      syncing: 0,
+      deleting: 0,
+      total: 5,
+    });
+    renderWithProviders(<DriftDetection />);
+    expect(await screen.findByText('Gateway health issues detected')).toBeInTheDocument();
   });
 
   it('renders drifted deployments table', async () => {

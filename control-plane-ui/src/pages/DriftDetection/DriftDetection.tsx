@@ -212,8 +212,16 @@ export function DriftDetection() {
     ? gateways.filter((g) => g.gateway_type === gatewayTypeFilter)
     : gateways;
   const healthyGateways = filteredGateways.filter((g) => g.status === 'online').length;
+  const unhealthyGateways = filteredGateways.filter(
+    (g) => g.status === 'offline' || g.status === 'degraded'
+  ).length;
   const driftedCount = summary?.drifted ?? 0;
   const errorCount = summary?.error ?? 0;
+
+  // Global status: combine gateway health + deployment drift
+  const hasHealthIssues = unhealthyGateways > 0;
+  const hasDriftIssues = driftedCount > 0 || errorCount > 0;
+  const allClear = !hasHealthIssues && !hasDriftIssues;
 
   return (
     <div className="space-y-6">
@@ -222,7 +230,7 @@ export function DriftDetection() {
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Drift Detection</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Monitor gateway health and deployment sync across all gateways
+            Gateway health and deployment sync status
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -257,6 +265,53 @@ export function DriftDetection() {
 
       <SubNav tabs={gatewayTabs} />
 
+      {/* Global Status Banner */}
+      {allClear ? (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3 flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-green-800 dark:text-green-300">
+              All systems healthy
+            </p>
+            <p className="text-xs text-green-600 dark:text-green-400">
+              {filteredGateways.length} gateways online, no deployment drift detected
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div
+          className={`border rounded-lg px-4 py-3 flex items-center gap-3 ${
+            hasHealthIssues
+              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+              : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
+          }`}
+        >
+          <AlertTriangle
+            className={`w-5 h-5 flex-shrink-0 ${hasHealthIssues ? 'text-red-500' : 'text-orange-500'}`}
+          />
+          <div>
+            <p
+              className={`text-sm font-medium ${hasHealthIssues ? 'text-red-800 dark:text-red-300' : 'text-orange-800 dark:text-orange-300'}`}
+            >
+              {hasHealthIssues && hasDriftIssues
+                ? 'Gateway health issues and deployment drift detected'
+                : hasHealthIssues
+                  ? 'Gateway health issues detected'
+                  : 'Deployment drift detected'}
+            </p>
+            <p
+              className={`text-xs ${hasHealthIssues ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'}`}
+            >
+              {hasHealthIssues &&
+                `${unhealthyGateways} gateway${unhealthyGateways > 1 ? 's' : ''} degraded or offline`}
+              {hasHealthIssues && hasDriftIssues && ' — '}
+              {hasDriftIssues &&
+                `${driftedCount + errorCount} deployment${driftedCount + errorCount > 1 ? 's' : ''} drifted or errored`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SummaryCard
@@ -264,24 +319,37 @@ export function DriftDetection() {
           value={filteredGateways.length}
           color="text-neutral-900 dark:text-white"
         />
-        <SummaryCard label="Healthy" value={healthyGateways} color="text-green-600" />
         <SummaryCard
-          label="Drifted"
-          value={driftedCount}
-          color={driftedCount > 0 ? 'text-orange-600' : 'text-neutral-900 dark:text-white'}
+          label="Healthy"
+          value={healthyGateways}
+          color={
+            healthyGateways === filteredGateways.length
+              ? 'text-green-600'
+              : 'text-neutral-900 dark:text-white'
+          }
         />
         <SummaryCard
-          label="Errors"
-          value={errorCount}
-          color={errorCount > 0 ? 'text-red-600' : 'text-neutral-900 dark:text-white'}
+          label="Degraded / Offline"
+          value={unhealthyGateways}
+          color={unhealthyGateways > 0 ? 'text-red-600' : 'text-neutral-900 dark:text-white'}
+        />
+        <SummaryCard
+          label="Drifted Deployments"
+          value={driftedCount + errorCount}
+          color={
+            driftedCount + errorCount > 0 ? 'text-orange-600' : 'text-neutral-900 dark:text-white'
+          }
         />
       </div>
 
-      {/* Gateway Health Grid */}
+      {/* Section 1: Gateway Health */}
       <div>
-        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-3">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-1">
           Gateway Health
         </h2>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+          Process-level health — is each gateway responding to health checks?
+        </p>
         {filteredGateways.length === 0 ? (
           <EmptyState
             title={gatewayTypeFilter ? 'No gateways of this type' : 'No gateways registered'}
@@ -338,17 +406,22 @@ export function DriftDetection() {
         )}
       </div>
 
-      {/* Drifted Deployments */}
+      {/* Section 2: Deployment Sync */}
       <div>
-        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-3">
-          Drifted Deployments
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-1">
+          Deployment Sync
         </h2>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+          Config-level sync — are API configurations on gateways matching the desired state?
+        </p>
         {driftedDeployments.length === 0 ? (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6 text-center">
-            <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <p className="text-green-800 dark:text-green-300 font-medium">All Clear</p>
-            <p className="text-sm text-green-600 dark:text-green-400">
-              No drifted or errored deployments detected.
+          <div className="bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-6 text-center">
+            <CheckCircle2 className="w-6 h-6 text-green-500 mx-auto mb-2" />
+            <p className="text-sm text-neutral-700 dark:text-neutral-300">
+              No deployment drift detected
+            </p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+              All API configurations are in sync with their desired state.
             </p>
           </div>
         ) : (

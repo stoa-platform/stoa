@@ -1204,6 +1204,8 @@ export interface GatewayDeployment {
   gateway_resource_id?: string;
   created_at: string;
   updated_at: string;
+  gateway_name?: string;
+  gateway_environment?: string;
 }
 
 export interface DeploymentStatusSummary {

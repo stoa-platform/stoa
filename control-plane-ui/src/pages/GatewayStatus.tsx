@@ -29,13 +29,13 @@ const healthConfig = {
     bg: 'bg-green-100 dark:bg-green-900/30',
     text: 'text-green-800 dark:text-green-400',
     icon: CheckCircle2,
-    label: 'Connected',
+    label: 'Online',
   },
   unhealthy: {
     bg: 'bg-red-100 dark:bg-red-900/30',
     text: 'text-red-800 dark:text-red-400',
     icon: XCircle,
-    label: 'Disconnected',
+    label: 'Offline',
   },
 } as const;
 
@@ -239,69 +239,92 @@ export default function GatewayStatus() {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <StatsCard title="APIs Synced" value={data?.apis.length || 0} icon={Box} color="blue" />
+            <StatsCard
+              title="APIs Synced"
+              value={data?.apis === null ? '—' : (data?.apis.length ?? 0)}
+              icon={Box}
+              color="blue"
+            />
             <StatsCard
               title="Applications"
-              value={data?.applications.length || 0}
+              value={data?.applications === null ? '—' : (data?.applications.length ?? 0)}
               icon={Activity}
               color="green"
             />
             <StatsCard title="Last Sync" value={lastUpdated} icon={RefreshCw} color="purple" />
           </div>
 
+          {/* Fetch error notice */}
+          {data && (data.apis === null || data.applications === null) && (
+            <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              Unable to fetch{' '}
+              {data.apis === null && data.applications === null
+                ? 'APIs and applications'
+                : data.apis === null
+                  ? 'APIs'
+                  : 'applications'}{' '}
+              from the gateway. The gateway may be unreachable.
+            </div>
+          )}
+
           {/* Resource Details (collapsible) */}
-          {data && (data.apis.length > 0 || data.applications.length > 0) && (
+          {data && ((data.apis?.length ?? 0) > 0 || (data.applications?.length ?? 0) > 0) && (
             <details className="mt-6">
               <summary className="cursor-pointer text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white">
                 View resource details
               </summary>
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* APIs */}
-                <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                    APIs ({data.apis.length})
-                  </h4>
-                  <ul className="space-y-1 text-sm text-neutral-600 dark:text-neutral-400 max-h-40 overflow-y-auto">
-                    {data.apis.slice(0, 10).map((api) => (
-                      <li key={api.id} className="flex items-center">
-                        {api.isActive ? (
-                          <CheckCircle2 className="w-3 h-3 text-green-500 mr-2 flex-shrink-0" />
-                        ) : (
-                          <AlertCircle className="w-3 h-3 text-yellow-500 mr-2 flex-shrink-0" />
-                        )}
-                        {api.apiName}{' '}
-                        <span className="text-neutral-400 dark:text-neutral-500 ml-1">
-                          v{api.apiVersion}
-                        </span>
-                      </li>
-                    ))}
-                    {data.apis.length > 10 && (
-                      <li className="text-neutral-400 dark:text-neutral-500">
-                        ... and {data.apis.length - 10} more
-                      </li>
-                    )}
-                  </ul>
-                </div>
+                {data.apis && data.apis.length > 0 && (
+                  <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                      APIs ({data.apis.length})
+                    </h4>
+                    <ul className="space-y-1 text-sm text-neutral-600 dark:text-neutral-400 max-h-40 overflow-y-auto">
+                      {data.apis.slice(0, 10).map((api) => (
+                        <li key={api.id} className="flex items-center">
+                          {api.isActive ? (
+                            <CheckCircle2 className="w-3 h-3 text-green-500 mr-2 flex-shrink-0" />
+                          ) : (
+                            <AlertCircle className="w-3 h-3 text-yellow-500 mr-2 flex-shrink-0" />
+                          )}
+                          {api.apiName}{' '}
+                          <span className="text-neutral-400 dark:text-neutral-500 ml-1">
+                            v{api.apiVersion}
+                          </span>
+                        </li>
+                      ))}
+                      {data.apis.length > 10 && (
+                        <li className="text-neutral-400 dark:text-neutral-500">
+                          ... and {data.apis.length - 10} more
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Applications */}
-                <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                    Applications ({data.applications.length})
-                  </h4>
-                  <ul className="space-y-1 text-sm text-neutral-600 dark:text-neutral-400 max-h-40 overflow-y-auto">
-                    {data.applications.slice(0, 10).map((app) => (
-                      <li key={app.id} className="flex items-center">
-                        <CheckCircle2 className="w-3 h-3 text-green-500 mr-2 flex-shrink-0" />
-                        {app.name}
-                      </li>
-                    ))}
-                    {data.applications.length > 10 && (
-                      <li className="text-neutral-400 dark:text-neutral-500">
-                        ... and {data.applications.length - 10} more
-                      </li>
-                    )}
-                  </ul>
-                </div>
+                {data.applications && data.applications.length > 0 && (
+                  <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                      Applications ({data.applications.length})
+                    </h4>
+                    <ul className="space-y-1 text-sm text-neutral-600 dark:text-neutral-400 max-h-40 overflow-y-auto">
+                      {data.applications.slice(0, 10).map((app) => (
+                        <li key={app.id} className="flex items-center">
+                          <CheckCircle2 className="w-3 h-3 text-green-500 mr-2 flex-shrink-0" />
+                          {app.name}
+                        </li>
+                      ))}
+                      {data.applications.length > 10 && (
+                        <li className="text-neutral-400 dark:text-neutral-500">
+                          ... and {data.applications.length - 10} more
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
               </div>
             </details>
           )}
@@ -336,40 +359,19 @@ export default function GatewayStatus() {
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <div className="p-2 bg-green-50 dark:bg-green-900/30 rounded-lg">
-                <Target className="w-5 h-5 text-green-600" />
+              <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
+                <Target className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
               </div>
               <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
                 SLO Compliance
               </h3>
             </div>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-              On Track
-            </span>
           </div>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-neutral-600 dark:text-neutral-400">
-                  Availability (99.9% target)
-                </span>
-                <span className="font-medium text-neutral-900 dark:text-white">99.95%</span>
-              </div>
-              <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
-                <div className="h-2 rounded-full bg-green-500" style={{ width: '99.95%' }} />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-neutral-600 dark:text-neutral-400">
-                  Latency P95 (&lt;500ms target)
-                </span>
-                <span className="font-medium text-neutral-900 dark:text-white">342ms</span>
-              </div>
-              <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
-                <div className="h-2 rounded-full bg-green-500" style={{ width: '68%' }} />
-              </div>
-            </div>
+          <div className="text-center py-4">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">No metrics available</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
+              Connect Prometheus to enable SLO tracking
+            </p>
           </div>
         </div>
 
@@ -377,39 +379,20 @@ export default function GatewayStatus() {
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-                <Gauge className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
+                <Gauge className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
               </div>
               <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
                 Error Budget
               </h3>
             </div>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-              30d Window
-            </span>
           </div>
-          <div className="flex items-end gap-4">
-            <div>
-              <p className="text-3xl font-bold text-blue-600">67.2%</p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">remaining this month</p>
-            </div>
-            <div className="flex-1">
-              <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-4">
-                <div
-                  className="h-4 rounded-full bg-gradient-to-r from-blue-500 to-blue-400"
-                  style={{ width: '67.2%' }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                <span>0%</span>
-                <span>Consumed: 32.8%</span>
-                <span>100%</span>
-              </div>
-            </div>
+          <div className="text-center py-4">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">No metrics available</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
+              Connect Prometheus to enable error budget tracking
+            </p>
           </div>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-3">
-            Based on 99.9% availability SLO = 43.2 min downtime/month allowed
-          </p>
         </div>
       </div>
 
@@ -422,7 +405,7 @@ export default function GatewayStatus() {
               <GitCommit className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
             <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
-              ArgoCD Sync
+              Infrastructure Sync
             </h3>
           </div>
           {platform.isLoading ? (

@@ -1,6 +1,7 @@
 """Deployment Orchestration Service — coordinates promotion → assignment → deploy (CAB-1888).
 
 Sits above GatewayDeploymentService, adding:
+- API resolution: accepts Git API name or catalog UUID, ensures catalog sync
 - Promotion prerequisite validation (staging/prod require active promotion)
 - Dev environment bypass (no promotion needed for dev)
 - Auto-deploy via api_gateway_assignments
@@ -22,16 +23,128 @@ logger = logging.getLogger(__name__)
 
 
 class DeploymentOrchestrationService:
-    """Coordinates the full deploy flow: promotion check → assignment lookup → deploy."""
+    """Coordinates the full deploy flow: resolve API → promotion check → deploy."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
         self.deploy_svc = GatewayDeploymentService(db)
         self.assignment_repo = ApiGatewayAssignmentRepository(db)
 
+    async def _resolve_api_catalog(
+        self, tenant_id: str, api_identifier: str
+    ) -> APICatalog:
+        """Resolve an API identifier to a catalog entry.
+
+        Accepts either a UUID (catalog ID) or a string (Git API name/id).
+        If the API is not in the catalog, syncs it from Git on-demand.
+
+        Raises ValueError if the API cannot be found.
+        """
+        # Try as UUID first (catalog entry ID)
+        try:
+            catalog_uuid = UUID(api_identifier)
+            result = await self.db.execute(
+                select(APICatalog).where(
+                    APICatalog.id == catalog_uuid,
+                    APICatalog.deleted_at.is_(None),
+                )
+            )
+            entry = result.scalar_one_or_none()
+            if entry:
+                return entry
+        except ValueError:
+            pass  # Not a UUID — treat as Git API name
+
+        # Try by api_id (Git identifier) + tenant
+        result = await self.db.execute(
+            select(APICatalog).where(
+                APICatalog.api_id == api_identifier,
+                APICatalog.tenant_id == tenant_id,
+                APICatalog.deleted_at.is_(None),
+            )
+        )
+        entry = result.scalar_one_or_none()
+        if entry:
+            return entry
+
+        # Also try by api_name (display name used as ID in some contexts)
+        result = await self.db.execute(
+            select(APICatalog).where(
+                APICatalog.api_name == api_identifier,
+                APICatalog.tenant_id == tenant_id,
+                APICatalog.deleted_at.is_(None),
+            )
+        )
+        entry = result.scalar_one_or_none()
+        if entry:
+            return entry
+
+        # Not in catalog — sync from Git on-demand
+        logger.info(
+            "API '%s' not in catalog for tenant '%s', syncing from Git...",
+            api_identifier, tenant_id,
+        )
+        entry = await self._sync_api_from_git(tenant_id, api_identifier)
+        if entry:
+            return entry
+
+        raise ValueError(
+            f"API '{api_identifier}' not found for tenant '{tenant_id}'. "
+            f"Ensure the API exists in the Git repository."
+        )
+
+    async def _sync_api_from_git(
+        self, tenant_id: str, api_id: str
+    ) -> APICatalog | None:
+        """Sync a single API from Git into the catalog on-demand."""
+        try:
+            from ..services.git_service import git_service
+
+            if not git_service._project:
+                await git_service.connect()
+
+            api_data = await git_service.get_api(tenant_id, api_id)
+            if not api_data:
+                return None
+
+            # Upsert into catalog using the same logic as CatalogSyncService
+            from ..services.catalog_sync_service import CatalogSyncService
+
+            sync_svc = CatalogSyncService(self.db, git_service, enable_gateway_reconciliation=False)
+
+            import contextlib
+
+            openapi_spec = None
+            with contextlib.suppress(Exception):
+                openapi_spec = await git_service.get_api_openapi_spec(tenant_id, api_id)
+
+            commit_sha = None
+            with contextlib.suppress(Exception):
+                commits = git_service._project.commits.list(ref_name="main", per_page=1)
+                if commits:
+                    commit_sha = commits[0].id
+
+            await sync_svc._upsert_api(tenant_id, api_id, api_data, openapi_spec, commit_sha)
+            await self.db.commit()
+
+            # Re-fetch the entry
+            result = await self.db.execute(
+                select(APICatalog).where(
+                    APICatalog.api_id == api_id,
+                    APICatalog.tenant_id == tenant_id,
+                    APICatalog.deleted_at.is_(None),
+                )
+            )
+            return result.scalar_one_or_none()
+
+        except Exception as e:
+            logger.error("Failed to sync API '%s/%s' from Git: %s", tenant_id, api_id, e)
+            return None
+
     async def deploy_api_to_env(
         self,
-        api_catalog_id: UUID,
+        tenant_id: str,
+        api_identifier: str,
         environment: str,
         gateway_ids: list[UUID] | None = None,
         deployed_by: str = "system",
@@ -39,7 +152,8 @@ class DeploymentOrchestrationService:
         """Deploy an API to gateways in a specific environment.
 
         Args:
-            api_catalog_id: API catalog entry ID.
+            tenant_id: Tenant owning the API.
+            api_identifier: API catalog UUID or Git API name/id.
             environment: Target environment (dev/staging/production).
             gateway_ids: Specific gateways to deploy to. If None, uses assignments.
             deployed_by: User who triggered the deployment (for audit).
@@ -50,13 +164,8 @@ class DeploymentOrchestrationService:
         Raises:
             ValueError: If prerequisites are not met.
         """
-        # 1. Validate API catalog entry exists
-        result = await self.db.execute(
-            select(APICatalog).where(APICatalog.id == api_catalog_id)
-        )
-        api_catalog = result.scalar_one_or_none()
-        if not api_catalog:
-            raise ValueError("API catalog entry not found")
+        # 1. Resolve API to catalog entry (sync from Git if needed)
+        api_catalog = await self._resolve_api_catalog(tenant_id, api_identifier)
 
         # 2. Validate promotion prerequisite (staging/prod only — dev is no-ceremony)
         if environment != "dev":
@@ -71,8 +180,7 @@ class DeploymentOrchestrationService:
 
         # 3. Resolve target gateways
         if gateway_ids is None:
-            # Use default assignments for this API/env
-            assignments = await self.assignment_repo.list_auto_deploy(api_catalog_id, environment)
+            assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, environment)
             if not assignments:
                 raise ValueError(
                     f"No gateway assignments with auto_deploy=True for API "
@@ -81,11 +189,10 @@ class DeploymentOrchestrationService:
                 )
             gateway_ids = [a.gateway_id for a in assignments]
         else:
-            # Validate specified gateways belong to the target environment
             await self._validate_gateways_for_env(gateway_ids, environment)
 
         # 4. Deploy via existing GatewayDeploymentService
-        deployments = await self.deploy_svc.deploy_api(api_catalog_id, gateway_ids)
+        deployments = await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
 
         logger.info(
             "Orchestrated deployment: api=%s env=%s gateways=%d by=%s",
@@ -96,22 +203,25 @@ class DeploymentOrchestrationService:
         )
         return deployments
 
-    async def get_deployable_environments(self, api_catalog_id: UUID) -> list[dict]:
+    async def get_deployable_environments(
+        self, tenant_id: str, api_identifier: str
+    ) -> list[dict]:
         """Get environments where this API can be deployed.
 
-        Returns a list of environments with their promotion status.
         Dev is always deployable (no promotion required).
         """
-        result = await self.db.execute(
-            select(APICatalog).where(APICatalog.id == api_catalog_id)
-        )
-        api_catalog = result.scalar_one_or_none()
-        if not api_catalog:
-            return []
+        # Resolve API — but don't fail if not in catalog
+        api_id_for_promotion = api_identifier
+        try:
+            api_catalog = await self._resolve_api_catalog(tenant_id, api_identifier)
+            api_id_for_promotion = api_catalog.api_id
+            tenant_for_lookup = api_catalog.tenant_id
+        except ValueError:
+            tenant_for_lookup = tenant_id
 
         environments = []
 
-        # Dev is always available (no-ceremony)
+        # Dev is always available
         environments.append({
             "environment": "dev",
             "deployable": True,
@@ -120,7 +230,7 @@ class DeploymentOrchestrationService:
 
         # Staging requires promotion from dev
         staging_promotion = await self._get_latest_promotion(
-            api_catalog.api_id, api_catalog.tenant_id, "staging"
+            api_id_for_promotion, tenant_for_lookup, "staging"
         )
         environments.append({
             "environment": "staging",
@@ -130,7 +240,7 @@ class DeploymentOrchestrationService:
 
         # Production requires promotion from staging
         prod_promotion = await self._get_latest_promotion(
-            api_catalog.api_id, api_catalog.tenant_id, "production"
+            api_id_for_promotion, tenant_for_lookup, "production"
         )
         environments.append({
             "environment": "production",
@@ -147,29 +257,18 @@ class DeploymentOrchestrationService:
         target_environment: str,
         approved_by: str,
     ) -> list:
-        """Triggered by promotion event — auto-deploy to assigned gateways.
-
-        Only fires for environments where auto_deploy assignments exist.
-
-        Returns:
-            List of created GatewayDeployment records (empty if no auto-deploy assignments).
-        """
-        # Find the API catalog entry
-        result = await self.db.execute(
-            select(APICatalog).where(
-                APICatalog.api_id == api_id,
-                APICatalog.tenant_id == tenant_id,
-            )
-        )
-        api_catalog = result.scalar_one_or_none()
-        if not api_catalog:
+        """Triggered by promotion event — auto-deploy to assigned gateways."""
+        # Resolve the catalog entry
+        try:
+            api_catalog = await self._resolve_api_catalog(tenant_id, api_id)
+        except ValueError:
             logger.warning(
-                "Auto-deploy skipped: no catalog entry for api=%s tenant=%s",
+                "Auto-deploy skipped: cannot resolve api=%s tenant=%s",
                 api_id, tenant_id,
             )
             return []
 
-        # Get auto-deploy assignments for this environment
+        # Get auto-deploy assignments
         assignments = await self.assignment_repo.list_auto_deploy(
             api_catalog.id, target_environment
         )
@@ -191,7 +290,6 @@ class DeploymentOrchestrationService:
     async def _has_active_promotion(
         self, api_id: str, tenant_id: str, target_environment: str
     ) -> bool:
-        """Check if a promoted promotion exists for this API/env."""
         result = await self.db.execute(
             select(Promotion.id).where(
                 Promotion.api_id == api_id,
@@ -205,7 +303,6 @@ class DeploymentOrchestrationService:
     async def _get_latest_promotion(
         self, api_id: str, tenant_id: str, target_environment: str
     ) -> Promotion | None:
-        """Get the latest completed promotion to an environment."""
         result = await self.db.execute(
             select(Promotion)
             .where(
@@ -222,7 +319,6 @@ class DeploymentOrchestrationService:
     async def _validate_gateways_for_env(
         self, gateway_ids: list[UUID], environment: str
     ) -> None:
-        """Validate that specified gateways belong to the target environment."""
         for gw_id in gateway_ids:
             result = await self.db.execute(
                 select(GatewayInstance).where(GatewayInstance.id == gw_id)

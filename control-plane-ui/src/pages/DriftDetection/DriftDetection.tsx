@@ -77,7 +77,7 @@ function SummaryCard({ label, value, color }: { label: string; value: number; co
 
 export function DriftDetection() {
   const { isReady, hasRole } = useAuth();
-  const { activeEnvironment } = useEnvironment();
+  const { activeEnvironment: _env } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
 
@@ -93,20 +93,18 @@ export function DriftDetection() {
 
   const loadData = useCallback(async () => {
     try {
-      const envParam = activeEnvironment ? { environment: activeEnvironment } : {};
+      // Fetch all gateways regardless of environment (consistent with Registry/Overview)
       const typeParam = gatewayTypeFilter ? { gateway_type: gatewayTypeFilter } : {};
       const [gatewaysResult, driftedResult, errorResult, summaryResult] = await Promise.all([
-        apiService.getGatewayInstances({ page_size: 100, ...envParam }),
+        apiService.getGatewayInstances({ page_size: 100 }),
         apiService.getGatewayDeployments({
           sync_status: 'drifted',
           page_size: 100,
-          ...envParam,
           ...typeParam,
         }),
         apiService.getGatewayDeployments({
           sync_status: 'error',
           page_size: 100,
-          ...envParam,
           ...typeParam,
         }),
         apiService.getDeploymentStatusSummary(),
@@ -124,7 +122,7 @@ export function DriftDetection() {
     } finally {
       setLoading(false);
     }
-  }, [activeEnvironment, gatewayTypeFilter]);
+  }, [gatewayTypeFilter]);
 
   useEffect(() => {
     if (isReady) loadData();

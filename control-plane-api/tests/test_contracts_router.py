@@ -104,12 +104,13 @@ class TestCreateContract:
         assert resp.status_code == 409
         assert "already exists" in resp.json()["detail"]
 
-    def test_create_contract_400_no_tenant(self, app_with_cpi_admin, mock_db_session):
+    def test_create_contract_403_cross_tenant(self, app_with_tenant_admin, mock_db_session):
+        """Tenant-admin user cannot create contracts in another tenant."""
         mock_cache = AsyncMock()
-        with patch(CACHE_PATH, mock_cache), TestClient(app_with_cpi_admin) as client:
-            resp = client.post("/v1/tenants/acme/contracts", json={"name": "payment-service"})
-        assert resp.status_code == 400
-        assert "tenant" in resp.json()["detail"].lower()
+        with patch(CACHE_PATH, mock_cache), TestClient(app_with_tenant_admin) as client:
+            resp = client.post("/v1/tenants/other-tenant/contracts", json={"name": "payment-service"})
+        assert resp.status_code == 403
+        assert "Access denied" in resp.json()["detail"]
 
 
 class TestListContracts:
@@ -204,12 +205,9 @@ class TestGetContract:
 
     def test_get_contract_403_cross_tenant(self, app_with_tenant_admin, mock_db_session):
         contract = _mock_contract(tenant_id="other-tenant")
-        contract_result = MagicMock()
-        contract_result.scalar_one_or_none.return_value = contract
-        mock_db_session.execute = AsyncMock(return_value=contract_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.get(f"/v1/tenants/acme/contracts/{contract.id}")
+            resp = client.get(f"/v1/tenants/other-tenant/contracts/{contract.id}")
 
         assert resp.status_code == 403
 
@@ -249,12 +247,9 @@ class TestUpdateContract:
 
     def test_update_contract_403_cross_tenant(self, app_with_tenant_admin, mock_db_session):
         contract = _mock_contract(tenant_id="other-tenant")
-        contract_result = MagicMock()
-        contract_result.scalar_one_or_none.return_value = contract
-        mock_db_session.execute = AsyncMock(return_value=contract_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.patch(f"/v1/tenants/acme/contracts/{contract.id}", json={"version": "2.0.0"})
+            resp = client.patch(f"/v1/tenants/other-tenant/contracts/{contract.id}", json={"version": "2.0.0"})
 
         assert resp.status_code == 403
 
@@ -290,12 +285,9 @@ class TestDeleteContract:
 
     def test_delete_contract_403_cross_tenant(self, app_with_tenant_admin, mock_db_session):
         contract = _mock_contract(tenant_id="other-tenant")
-        contract_result = MagicMock()
-        contract_result.scalar_one_or_none.return_value = contract
-        mock_db_session.execute = AsyncMock(return_value=contract_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.delete(f"/v1/tenants/acme/contracts/{contract.id}")
+            resp = client.delete(f"/v1/tenants/other-tenant/contracts/{contract.id}")
 
         assert resp.status_code == 403
 
@@ -473,12 +465,9 @@ class TestGenerateMcpTools:
 
     def test_generate_mcp_tools_403_cross_tenant(self, app_with_tenant_admin, mock_db_session):
         contract = _mock_contract(tenant_id="other-tenant")
-        contract_result = MagicMock()
-        contract_result.scalars.return_value.first.return_value = contract
-        mock_db_session.execute = AsyncMock(return_value=contract_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.post(f"/v1/tenants/acme/contracts/{contract.id}/mcp-tools/generate")
+            resp = client.post(f"/v1/tenants/other-tenant/contracts/{contract.id}/mcp-tools/generate")
 
         assert resp.status_code == 403
 

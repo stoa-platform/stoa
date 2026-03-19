@@ -152,7 +152,7 @@ class TestContractsRouter:
         assert response.status_code == 409
         assert "already exists" in response.json()["detail"]
 
-    def test_create_contract_400_no_tenant(
+    def test_create_contract_403_no_tenant(
         self, app_with_no_tenant_user, mock_db_session
     ):
         """Test user without tenant cannot create contract."""
@@ -165,8 +165,8 @@ class TestContractsRouter:
                 },
             )
 
-        assert response.status_code == 400
-        assert "must belong to a tenant" in response.json()["detail"]
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
 
     # ============== List Contracts Tests ==============
 
@@ -259,7 +259,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with TestClient(app_with_other_tenant) as client:
-            response = client.get(f"/v1/tenants/other-tenant/contracts/{sample_contract_data['id']}")
+            response = client.get(f"/v1/tenants/acme/contracts/{sample_contract_data['id']}")
 
         assert response.status_code == 403
         assert "Access denied" in response.json()["detail"]
@@ -573,7 +573,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_other_tenant) as client:
             response = client.patch(
-                f"/v1/tenants/other-tenant/contracts/{sample_contract_data['id']}",
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}",
                 json={"display_name": "Hacked Name"},
             )
 
@@ -622,7 +622,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with TestClient(app_with_other_tenant) as client:
-            response = client.delete(f"/v1/tenants/other-tenant/contracts/{sample_contract_data['id']}")
+            response = client.delete(f"/v1/tenants/acme/contracts/{sample_contract_data['id']}")
 
         assert response.status_code == 403
         assert "Access denied" in response.json()["detail"]

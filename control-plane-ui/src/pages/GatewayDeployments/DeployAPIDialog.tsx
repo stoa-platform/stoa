@@ -1,14 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { apiService } from '../../services/api';
-import type { GatewayDeployment } from '../../types';
-
-interface CatalogEntry {
-  id: string;
-  api_name: string;
-  tenant_id: string;
-  version: string;
-}
+import type { API, GatewayDeployment } from '../../types';
 
 interface GatewayOption {
   id: string;
@@ -29,35 +22,52 @@ interface ExistingDeployment {
   sync_status: string;
 }
 
+interface Tenant {
+  id: string;
+  name: string;
+}
+
 interface DeployAPIDialogProps {
   onClose: () => void;
   onDeployed: () => void;
-  preselectedApiId?: string;
+  /** Pre-select an API (from API Detail page). Format: "tenantId:apiName" */
+  preselectedApiKey?: string;
 }
 
-export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: DeployAPIDialogProps) {
-  const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([]);
+export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: DeployAPIDialogProps) {
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [selectedTenant, setSelectedTenant] = useState('');
+  const [apis, setApis] = useState<API[]>([]);
   const [gateways, setGateways] = useState<GatewayOption[]>([]);
-  const [selectedApi, setSelectedApi] = useState(preselectedApiId || '');
+  const [selectedApi, setSelectedApi] = useState('');
   const [selectedEnv, setSelectedEnv] = useState('');
   const [selectedGateways, setSelectedGateways] = useState<string[]>([]);
   const [deployableEnvs, setDeployableEnvs] = useState<DeployableEnv[]>([]);
   const [existingDeployments, setExistingDeployments] = useState<ExistingDeployment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingApis, setLoadingApis] = useState(false);
   const [loadingEnvs, setLoadingEnvs] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load catalog entries and gateways
+  // Load tenants and gateways on mount
   useEffect(() => {
     async function loadData() {
       try {
-        const [entries, gwResult] = await Promise.all([
-          apiService.getCatalogEntries(),
+        const [tenantList, gwResult] = await Promise.all([
+          apiService.getTenants(),
           apiService.getGatewayInstances({ page_size: 100 }),
         ]);
-        setCatalogEntries(entries);
+        setTenants(tenantList);
         setGateways(gwResult.items);
+
+        // Auto-select first tenant (or preselected)
+        if (preselectedApiKey) {
+          const [tenantId] = preselectedApiKey.split(':');
+          setSelectedTenant(tenantId);
+        } else if (tenantList.length > 0) {
+          setSelectedTenant(tenantList[0].id);
+        }
       } catch {
         setError('Failed to load data');
       } finally {
@@ -65,31 +75,60 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: Deplo
       }
     }
     loadData();
-  }, []);
+  }, [preselectedApiKey]);
+
+  // Load APIs when tenant changes (from Git, same as /apis page)
+  useEffect(() => {
+    if (!selectedTenant) {
+      setApis([]);
+      setSelectedApi('');
+      return;
+    }
+
+    setLoadingApis(true);
+    apiService
+      .getApis(selectedTenant)
+      .then((result) => {
+        setApis(result);
+        // Auto-select preselected API
+        if (preselectedApiKey) {
+          const [, apiName] = preselectedApiKey.split(':');
+          const found = result.find((a) => a.name === apiName || a.id === apiName);
+          if (found) setSelectedApi(found.id || found.name);
+        }
+      })
+      .catch(() => setApis([]))
+      .finally(() => setLoadingApis(false));
+  }, [selectedTenant, preselectedApiKey]);
 
   // Load deployable environments when API is selected
   useEffect(() => {
-    if (!selectedApi) {
+    if (!selectedApi || !selectedTenant) {
       setDeployableEnvs([]);
       setSelectedEnv('');
       return;
     }
 
-    const entry = catalogEntries.find((e) => e.id === selectedApi);
-    if (!entry) return;
-
     setLoadingEnvs(true);
+    // Use the deploy endpoint which will ensure-sync the API to catalog
     apiService
-      .getDeployableEnvironments(entry.tenant_id, selectedApi)
+      .getDeployableEnvironments(selectedTenant, selectedApi)
       .then((result) => {
         setDeployableEnvs(result.environments);
-        // Auto-select first deployable env
         const firstDeployable = result.environments.find((e) => e.deployable);
         if (firstDeployable) setSelectedEnv(firstDeployable.environment);
       })
-      .catch(() => setDeployableEnvs([]))
+      .catch(() => {
+        // If API not in catalog yet, dev is always deployable
+        setDeployableEnvs([
+          { environment: 'dev', deployable: true, promotion_status: 'not_required' },
+          { environment: 'staging', deployable: false, promotion_status: 'not_promoted' },
+          { environment: 'production', deployable: false, promotion_status: 'not_promoted' },
+        ]);
+        setSelectedEnv('dev');
+      })
       .finally(() => setLoadingEnvs(false));
-  }, [selectedApi, catalogEntries]);
+  }, [selectedApi, selectedTenant]);
 
   // Load existing deployments when env changes
   useEffect(() => {
@@ -102,7 +141,11 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: Deplo
       .then((result) => {
         setExistingDeployments(
           result.items
-            .filter((d: GatewayDeployment) => d.api_catalog_id === selectedApi)
+            .filter((d: GatewayDeployment) => {
+              const apiName = d.desired_state?.api_name as string;
+              const apiId = d.desired_state?.api_id as string;
+              return apiName === selectedApi || apiId === selectedApi;
+            })
             .map((d: GatewayDeployment) => ({
               gateway_instance_id: d.gateway_instance_id,
               sync_status: d.sync_status,
@@ -126,16 +169,13 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: Deplo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedApi || !selectedEnv || selectedGateways.length === 0) return;
-
-    const entry = catalogEntries.find((en) => en.id === selectedApi);
-    if (!entry) return;
+    if (!selectedApi || !selectedEnv || !selectedTenant || selectedGateways.length === 0) return;
 
     setSubmitting(true);
     setError(null);
 
     try {
-      await apiService.deployApiToEnv(entry.tenant_id, selectedApi, {
+      await apiService.deployApiToEnv(selectedTenant, selectedApi, {
         environment: selectedEnv,
         gateway_ids: selectedGateways,
       });
@@ -191,29 +231,65 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: Deplo
             </div>
           ) : (
             <>
-              {/* API Selection */}
+              {/* Tenant Selection */}
+              {tenants.length > 1 && (
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                    Tenant
+                  </label>
+                  <select
+                    value={selectedTenant}
+                    onChange={(e) => {
+                      setSelectedTenant(e.target.value);
+                      setSelectedApi('');
+                      setSelectedEnv('');
+                      setSelectedGateways([]);
+                    }}
+                    required
+                    disabled={!!preselectedApiKey}
+                    className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60"
+                  >
+                    <option value="">Select a tenant...</option>
+                    {tenants.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name || t.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* API Selection (from Git, same source as /apis page) */}
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                  API Catalog Entry
+                  API
                 </label>
-                <select
-                  value={selectedApi}
-                  onChange={(e) => {
-                    setSelectedApi(e.target.value);
-                    setSelectedEnv('');
-                    setSelectedGateways([]);
-                  }}
-                  required
-                  disabled={!!preselectedApiId}
-                  className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60"
-                >
-                  <option value="">Select an API...</option>
-                  {catalogEntries.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.api_name} v{entry.version} ({entry.tenant_id})
-                    </option>
-                  ))}
-                </select>
+                {loadingApis ? (
+                  <div className="h-10 w-full bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+                ) : apis.length === 0 && selectedTenant ? (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    No APIs found for this tenant.
+                  </p>
+                ) : (
+                  <select
+                    value={selectedApi}
+                    onChange={(e) => {
+                      setSelectedApi(e.target.value);
+                      setSelectedEnv('');
+                      setSelectedGateways([]);
+                    }}
+                    required
+                    disabled={!!preselectedApiKey || !selectedTenant}
+                    className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60"
+                  >
+                    <option value="">Select an API...</option>
+                    {apis.map((api) => (
+                      <option key={api.id || api.name} value={api.id || api.name}>
+                        {api.display_name || api.name} v{api.version}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* Environment Selection */}
@@ -224,10 +300,6 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: Deplo
                   </label>
                   {loadingEnvs ? (
                     <div className="h-10 w-full bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
-                  ) : deployableEnvs.length === 0 ? (
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                      No environments available.
-                    </p>
                   ) : (
                     <select
                       value={selectedEnv}

@@ -71,17 +71,24 @@ class GatewayDeploymentRepository:
         sync_status: DeploymentSyncStatus | None = None,
         gateway_instance_id: UUID | None = None,
         environment: str | None = None,
+        gateway_type: str | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> tuple[list[GatewayDeployment], int]:
         """List deployments with optional filters and pagination."""
         query = select(GatewayDeployment)
 
-        if environment:
+        # Join to GatewayInstance if we need to filter by environment or gateway_type
+        needs_join = environment is not None or gateway_type is not None
+        if needs_join:
             query = query.join(
                 GatewayInstance,
                 GatewayDeployment.gateway_instance_id == GatewayInstance.id,
-            ).where(GatewayInstance.environment == environment)
+            )
+            if environment:
+                query = query.where(GatewayInstance.environment == environment)
+            if gateway_type:
+                query = query.where(GatewayInstance.gateway_type == gateway_type)
         if sync_status:
             query = query.where(GatewayDeployment.sync_status == sync_status)
         if gateway_instance_id:

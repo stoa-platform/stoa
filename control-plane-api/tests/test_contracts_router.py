@@ -1,6 +1,6 @@
 """Tests for Contracts Router — CAB-1452
 
-Covers: /v1/contracts (CRUD, bindings, MCP tools) and /v1/mcp/generated-tools.
+Covers: /v1/tenants/{tenant_id}/contracts (CRUD, bindings, MCP tools) and /v1/mcp/generated-tools.
 Router uses direct SQLAlchemy queries (no repository pattern), so db.execute is mocked.
 """
 
@@ -82,7 +82,7 @@ class TestCreateContract:
         mock_cache.delete_by_prefix = AsyncMock()
 
         with patch(CACHE_PATH, mock_cache), TestClient(app_with_tenant_admin) as client:
-            resp = client.post("/v1/contracts", json={"name": "payment-service", "version": "1.0.0"})
+            resp = client.post("/v1/tenants/acme/contracts", json={"name": "payment-service", "version": "1.0.0"})
 
         assert resp.status_code == 201
         data = resp.json()
@@ -99,7 +99,7 @@ class TestCreateContract:
         mock_cache.delete_by_prefix = AsyncMock()
 
         with patch(CACHE_PATH, mock_cache), TestClient(app_with_tenant_admin) as client:
-            resp = client.post("/v1/contracts", json={"name": "payment-service"})
+            resp = client.post("/v1/tenants/acme/contracts", json={"name": "payment-service"})
 
         assert resp.status_code == 409
         assert "already exists" in resp.json()["detail"]
@@ -107,7 +107,7 @@ class TestCreateContract:
     def test_create_contract_400_no_tenant(self, app_with_cpi_admin, mock_db_session):
         mock_cache = AsyncMock()
         with patch(CACHE_PATH, mock_cache), TestClient(app_with_cpi_admin) as client:
-            resp = client.post("/v1/contracts", json={"name": "payment-service"})
+            resp = client.post("/v1/tenants/acme/contracts", json={"name": "payment-service"})
         assert resp.status_code == 400
         assert "tenant" in resp.json()["detail"].lower()
 
@@ -133,7 +133,7 @@ class TestListContracts:
         mock_db_session.execute = AsyncMock(side_effect=[count_result, list_result, bindings_result])
 
         with patch(CACHE_PATH, mock_cache), TestClient(app_with_tenant_admin) as client:
-            resp = client.get("/v1/contracts")
+            resp = client.get("/v1/tenants/acme/contracts")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -148,7 +148,7 @@ class TestListContracts:
         mock_cache.set = AsyncMock()
 
         with patch(CACHE_PATH, mock_cache), TestClient(app_with_tenant_admin) as client:
-            resp = client.get("/v1/contracts")
+            resp = client.get("/v1/tenants/acme/contracts")
 
         assert resp.status_code == 200
         mock_db_session.execute.assert_not_awaited()
@@ -167,7 +167,7 @@ class TestListContracts:
         mock_db_session.execute = AsyncMock(side_effect=[count_result, list_result])
 
         with patch(CACHE_PATH, mock_cache), TestClient(app_with_cpi_admin) as client:
-            resp = client.get("/v1/contracts")
+            resp = client.get("/v1/tenants/acme/contracts")
 
         assert resp.status_code == 200
 
@@ -187,7 +187,7 @@ class TestGetContract:
         mock_db_session.execute = AsyncMock(side_effect=[contract_result, bindings_result])
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.get(f"/v1/contracts/{contract.id}")
+            resp = client.get(f"/v1/tenants/acme/contracts/{contract.id}")
 
         assert resp.status_code == 200
         assert resp.json()["name"] == "payment-service"
@@ -198,7 +198,7 @@ class TestGetContract:
         mock_db_session.execute = AsyncMock(return_value=not_found)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.get(f"/v1/contracts/{uuid4()}")
+            resp = client.get(f"/v1/tenants/acme/contracts/{uuid4()}")
 
         assert resp.status_code == 404
 
@@ -209,7 +209,7 @@ class TestGetContract:
         mock_db_session.execute = AsyncMock(return_value=contract_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.get(f"/v1/contracts/{contract.id}")
+            resp = client.get(f"/v1/tenants/acme/contracts/{contract.id}")
 
         assert resp.status_code == 403
 
@@ -233,7 +233,7 @@ class TestUpdateContract:
         mock_cache.delete_by_prefix = AsyncMock()
 
         with patch(CACHE_PATH, mock_cache), TestClient(app_with_tenant_admin) as client:
-            resp = client.patch(f"/v1/contracts/{contract.id}", json={"version": "2.0.0"})
+            resp = client.patch(f"/v1/tenants/acme/contracts/{contract.id}", json={"version": "2.0.0"})
 
         assert resp.status_code == 200
 
@@ -243,7 +243,7 @@ class TestUpdateContract:
         mock_db_session.execute = AsyncMock(return_value=not_found)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.patch(f"/v1/contracts/{uuid4()}", json={"version": "2.0.0"})
+            resp = client.patch(f"/v1/tenants/acme/contracts/{uuid4()}", json={"version": "2.0.0"})
 
         assert resp.status_code == 404
 
@@ -254,7 +254,7 @@ class TestUpdateContract:
         mock_db_session.execute = AsyncMock(return_value=contract_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.patch(f"/v1/contracts/{contract.id}", json={"version": "2.0.0"})
+            resp = client.patch(f"/v1/tenants/acme/contracts/{contract.id}", json={"version": "2.0.0"})
 
         assert resp.status_code == 403
 
@@ -273,7 +273,7 @@ class TestDeleteContract:
         mock_cache.delete_by_prefix = AsyncMock()
 
         with patch(CACHE_PATH, mock_cache), TestClient(app_with_tenant_admin) as client:
-            resp = client.delete(f"/v1/contracts/{contract.id}")
+            resp = client.delete(f"/v1/tenants/acme/contracts/{contract.id}")
 
         assert resp.status_code == 204
         mock_db_session.delete.assert_awaited_once()
@@ -284,7 +284,7 @@ class TestDeleteContract:
         mock_db_session.execute = AsyncMock(return_value=not_found)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.delete(f"/v1/contracts/{uuid4()}")
+            resp = client.delete(f"/v1/tenants/acme/contracts/{uuid4()}")
 
         assert resp.status_code == 404
 
@@ -295,7 +295,7 @@ class TestDeleteContract:
         mock_db_session.execute = AsyncMock(return_value=contract_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.delete(f"/v1/contracts/{contract.id}")
+            resp = client.delete(f"/v1/tenants/acme/contracts/{contract.id}")
 
         assert resp.status_code == 403
 
@@ -318,7 +318,7 @@ class TestListBindings:
         mock_db_session.execute = AsyncMock(side_effect=[contract_result, bindings_result])
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.get(f"/v1/contracts/{contract.id}/bindings")
+            resp = client.get(f"/v1/tenants/acme/contracts/{contract.id}/bindings")
 
         assert resp.status_code == 200
         assert resp.json()["contract_name"] == "payment-service"
@@ -329,7 +329,7 @@ class TestListBindings:
         mock_db_session.execute = AsyncMock(return_value=not_found)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.get(f"/v1/contracts/{uuid4()}/bindings")
+            resp = client.get(f"/v1/tenants/acme/contracts/{uuid4()}/bindings")
 
         assert resp.status_code == 404
 
@@ -353,7 +353,7 @@ class TestEnableBinding:
         mock_db_session.flush = AsyncMock()
 
         with patch(ADAPTER_PATH, MagicMock()), TestClient(app_with_tenant_admin) as client:
-            resp = client.post(f"/v1/contracts/{contract.id}/bindings", json={"protocol": "rest"})
+            resp = client.post(f"/v1/tenants/acme/contracts/{contract.id}/bindings", json={"protocol": "rest"})
 
         assert resp.status_code == 200
         assert resp.json()["protocol"] == "rest"
@@ -365,7 +365,7 @@ class TestEnableBinding:
         mock_db_session.execute = AsyncMock(return_value=not_found)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.post(f"/v1/contracts/{uuid4()}/bindings", json={"protocol": "rest"})
+            resp = client.post(f"/v1/tenants/acme/contracts/{uuid4()}/bindings", json={"protocol": "rest"})
 
         assert resp.status_code == 404
 
@@ -382,7 +382,7 @@ class TestEnableBinding:
         mock_db_session.execute = AsyncMock(side_effect=[contract_result, binding_result])
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.post(f"/v1/contracts/{contract.id}/bindings", json={"protocol": "rest"})
+            resp = client.post(f"/v1/tenants/acme/contracts/{contract.id}/bindings", json={"protocol": "rest"})
 
         assert resp.status_code == 409
 
@@ -404,7 +404,7 @@ class TestDisableBinding:
         mock_db_session.flush = AsyncMock()
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.delete(f"/v1/contracts/{contract.id}/bindings/rest")
+            resp = client.delete(f"/v1/tenants/acme/contracts/{contract.id}/bindings/rest")
 
         assert resp.status_code == 200
         assert resp.json()["status"] == "disabled"
@@ -421,7 +421,7 @@ class TestDisableBinding:
         mock_db_session.execute = AsyncMock(side_effect=[contract_result, binding_result])
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.delete(f"/v1/contracts/{contract.id}/bindings/rest")
+            resp = client.delete(f"/v1/tenants/acme/contracts/{contract.id}/bindings/rest")
 
         assert resp.status_code == 404
 
@@ -438,7 +438,7 @@ class TestDisableBinding:
         mock_db_session.execute = AsyncMock(side_effect=[contract_result, binding_result])
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.delete(f"/v1/contracts/{contract.id}/bindings/rest")
+            resp = client.delete(f"/v1/tenants/acme/contracts/{contract.id}/bindings/rest")
 
         assert resp.status_code == 409
 
@@ -456,7 +456,7 @@ class TestGenerateMcpTools:
         mock_generator.generate_tools = AsyncMock(return_value=[])
 
         with patch(GENERATOR_PATH, return_value=mock_generator), TestClient(app_with_tenant_admin) as client:
-            resp = client.post(f"/v1/contracts/{contract.id}/mcp-tools/generate")
+            resp = client.post(f"/v1/tenants/acme/contracts/{contract.id}/mcp-tools/generate")
 
         assert resp.status_code == 200
         assert resp.json()["generated"] == 0
@@ -467,7 +467,7 @@ class TestGenerateMcpTools:
         mock_db_session.execute = AsyncMock(return_value=not_found)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.post(f"/v1/contracts/{uuid4()}/mcp-tools/generate")
+            resp = client.post(f"/v1/tenants/acme/contracts/{uuid4()}/mcp-tools/generate")
 
         assert resp.status_code == 404
 
@@ -478,7 +478,7 @@ class TestGenerateMcpTools:
         mock_db_session.execute = AsyncMock(return_value=contract_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.post(f"/v1/contracts/{contract.id}/mcp-tools/generate")
+            resp = client.post(f"/v1/tenants/acme/contracts/{contract.id}/mcp-tools/generate")
 
         assert resp.status_code == 403
 
@@ -496,7 +496,7 @@ class TestListMcpTools:
         mock_generator.get_tools_for_contract = AsyncMock(return_value=[])
 
         with patch(GENERATOR_PATH, return_value=mock_generator), TestClient(app_with_tenant_admin) as client:
-            resp = client.get(f"/v1/contracts/{contract.id}/mcp-tools")
+            resp = client.get(f"/v1/tenants/acme/contracts/{contract.id}/mcp-tools")
 
         assert resp.status_code == 200
         assert resp.json()["contract_name"] == "payment-service"
@@ -507,7 +507,7 @@ class TestListMcpTools:
         mock_db_session.execute = AsyncMock(return_value=not_found)
 
         with TestClient(app_with_tenant_admin) as client:
-            resp = client.get(f"/v1/contracts/{uuid4()}/mcp-tools")
+            resp = client.get(f"/v1/tenants/acme/contracts/{uuid4()}/mcp-tools")
 
         assert resp.status_code == 404
 

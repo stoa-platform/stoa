@@ -23,6 +23,8 @@ vi.mock('../../lib/crypto', () => ({
 // Mock apiService
 vi.mock('../../services/api', () => ({
   apiService: {
+    getTenantCA: vi.fn(() => Promise.resolve({ tenant_id: 'test-tenant', status: 'active' })),
+    generateTenantCA: vi.fn(() => Promise.resolve({ tenant_id: 'test-tenant', status: 'active' })),
     signCSR: vi.fn(() =>
       Promise.resolve({
         signed_certificate_pem: '-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----',

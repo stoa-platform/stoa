@@ -87,11 +87,19 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
     }
   }, [commonName, toast]);
 
-  // Step 2: Create CSR and sign
+  // Step 2: Ensure tenant CA exists, then create CSR and sign
   const handleSign = useCallback(async () => {
     if (!keyPair) return;
     setSigning(true);
     try {
+      // Auto-generate tenant CA if none exists
+      try {
+        await apiService.getTenantCA(tenantId);
+      } catch {
+        // 404 means no CA — generate one automatically
+        await apiService.generateTenantCA(tenantId);
+      }
+
       const csrPem = createCSR(keyPair.privateKeyPem, {
         commonName: commonName.trim(),
         organization: 'STOA Platform',

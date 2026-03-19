@@ -7,12 +7,12 @@
 //!   sudo RUST_LOG=info ./stoa-xdp --iface eth0 --pps-limit 500
 
 use anyhow::Context;
-use aya::maps::HashMap;
+use aya::maps::lru_hash_map::LruHashMap;
 use aya::programs::{Xdp, XdpFlags};
 use axum::{routing::get, Router};
 use clap::Parser;
 use log::{info, warn};
-use prometheus::{Encoder, IntCounterVec, IntGauge, Opts, Registry, TextEncoder};
+use prometheus::{Encoder, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder};
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 use stoa_xdp_common::{IpKey, IpStats};
@@ -29,8 +29,8 @@ struct Opt {
     #[clap(long, default_value = "1000")]
     pps_limit: u64,
 
-    /// Prometheus metrics listen address
-    #[clap(long, default_value = "0.0.0.0:9191")]
+    /// Prometheus metrics listen address (localhost-only by default for security)
+    #[clap(long, default_value = "127.0.0.1:9191")]
     metrics_addr: String,
 
     /// Path to compiled eBPF object file
@@ -38,10 +38,18 @@ struct Opt {
     ebpf_obj: String,
 }
 
+/// Prometheus metrics for eBPF XDP rate limiter.
+///
+/// Uses IntGaugeVec (not IntCounterVec) because BPF map values are absolute
+/// snapshots read every second — calling reset() + inc_by() on counters violates
+/// the Prometheus monotonic counter contract and breaks rate() queries in Grafana.
+///
+/// NOTE: src_ip labels contain PII (source IP addresses) under GDPR.
+/// In production, consider hashing or aggregating IPs.
 struct Metrics {
-    packets: IntCounterVec,
-    bytes: IntCounterVec,
-    dropped: IntCounterVec,
+    packets: IntGaugeVec,
+    bytes: IntGaugeVec,
+    dropped: IntGaugeVec,
     active_ips: IntGauge,
     registry: Registry,
 }
@@ -50,16 +58,16 @@ impl Metrics {
     fn new() -> anyhow::Result<Self> {
         let registry = Registry::new();
 
-        let packets = IntCounterVec::new(
-            Opts::new("stoa_ebpf_packets_total", "Total packets per source IP"),
+        let packets = IntGaugeVec::new(
+            Opts::new("stoa_ebpf_packets_current", "Current window packets per source IP"),
             &["src_ip"],
         )?;
-        let bytes = IntCounterVec::new(
-            Opts::new("stoa_ebpf_bytes_total", "Total bytes per source IP"),
+        let bytes = IntGaugeVec::new(
+            Opts::new("stoa_ebpf_bytes_current", "Current window bytes per source IP"),
             &["src_ip"],
         )?;
-        let dropped = IntCounterVec::new(
-            Opts::new("stoa_ebpf_dropped_total", "Dropped packets (rate limited)"),
+        let dropped = IntGaugeVec::new(
+            Opts::new("stoa_ebpf_dropped_current", "Current window dropped packets (rate limited)"),
             &["src_ip"],
         )?;
         let active_ips = IntGauge::new("stoa_ebpf_active_ips", "Number of active source IPs")?;
@@ -120,8 +128,8 @@ async fn main() -> anyhow::Result<()> {
     info!("XDP program attached to {}", opt.iface);
 
     // Set rate limit in BPF map
-    let mut rate_limit: HashMap<_, u32, u64> =
-        HashMap::try_from(ebpf.map_mut("RATE_LIMIT").context("RATE_LIMIT map not found")?)?;
+    let mut rate_limit: LruHashMap<_, u32, u64> =
+        LruHashMap::try_from(ebpf.map_mut("RATE_LIMIT").context("RATE_LIMIT map not found")?)?;
     rate_limit.insert(0, opt.pps_limit, 0)?;
     info!("Rate limit set to {} pps", opt.pps_limit);
 
@@ -139,38 +147,46 @@ async fn main() -> anyhow::Result<()> {
         loop {
             interval.tick().await;
             let ebpf = ebpf_reader.read().await;
-            let ip_stats: HashMap<_, IpKey, IpStats> =
-                match HashMap::try_from(ebpf.map("IP_STATS").unwrap()) {
-                    Ok(m) => m,
-                    Err(e) => {
-                        warn!("failed to read IP_STATS map: {e}");
-                        continue;
-                    }
-                };
+            let map = match ebpf.map("IP_STATS") {
+                Some(m) => m,
+                None => {
+                    warn!("IP_STATS map not found — eBPF program may have been unloaded");
+                    continue;
+                }
+            };
+            let ip_stats: LruHashMap<_, IpKey, IpStats> = match LruHashMap::try_from(map) {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("failed to read IP_STATS map: {e}");
+                    continue;
+                }
+            };
 
             let mut count = 0i64;
             for item in ip_stats.iter() {
                 if let Ok((key, stats)) = item {
                     let ip = Ipv4Addr::from(key.src_ip);
                     let label = ip.to_string();
+                    // Use set() on gauges — absolute values from BPF map snapshots.
+                    // Never use reset()+inc_by() on counters (violates monotonic contract).
                     metrics_clone
                         .packets
                         .with_label_values(&[&label])
-                        .reset();
-                    metrics_clone
-                        .packets
-                        .with_label_values(&[&label])
-                        .inc_by(stats.packets);
-                    metrics_clone.bytes.with_label_values(&[&label]).reset();
+                        .set(stats.packets as i64);
                     metrics_clone
                         .bytes
                         .with_label_values(&[&label])
-                        .inc_by(stats.bytes);
+                        .set(stats.bytes as i64);
                     if stats.packets > pps_limit {
                         metrics_clone
                             .dropped
                             .with_label_values(&[&label])
-                            .inc_by(stats.packets - pps_limit);
+                            .set((stats.packets - pps_limit) as i64);
+                    } else {
+                        metrics_clone
+                            .dropped
+                            .with_label_values(&[&label])
+                            .set(0);
                     }
                     count += 1;
                 }

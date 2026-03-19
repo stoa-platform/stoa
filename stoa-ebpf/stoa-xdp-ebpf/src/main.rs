@@ -8,6 +8,10 @@
 //!
 //! The userspace loader reads the map for Prometheus metrics and can
 //! update the rate limit threshold at runtime.
+//!
+//! **Known limitation**: IPv6 traffic is passed through without rate limiting.
+//! On dual-stack hosts, attackers can bypass XDP protection via IPv6.
+//! IPv6 support is tracked as a future enhancement.
 
 #![no_std]
 #![no_main]
@@ -15,7 +19,7 @@
 use aya_ebpf::{
     bindings::xdp_action,
     macros::{map, xdp},
-    maps::HashMap,
+    maps::LruHashMap,
     programs::XdpContext,
 };
 use aya_log_ebpf::info;
@@ -27,12 +31,15 @@ use network_types::{
 use stoa_xdp_common::{IpKey, IpStats, MAX_ENTRIES, DEFAULT_PPS_LIMIT, WINDOW_NS};
 
 /// Per-IP packet/byte counters + rate limit state.
+/// LruHashMap auto-evicts oldest entries when full — prevents silent policy bypass
+/// when MAX_ENTRIES is reached (65536 IPs).
 #[map]
-static IP_STATS: HashMap<IpKey, IpStats> = HashMap::with_max_entries(MAX_ENTRIES, 0);
+static IP_STATS: LruHashMap<IpKey, IpStats> = LruHashMap::with_max_entries(MAX_ENTRIES, 0);
 
 /// Rate limit threshold (packets per second). Updated by userspace.
+/// Single-entry map — LRU not needed but HashMap requires only 1 slot.
 #[map]
-static RATE_LIMIT: HashMap<u32, u64> = HashMap::with_max_entries(1, 0);
+static RATE_LIMIT: LruHashMap<u32, u64> = LruHashMap::with_max_entries(1, 0);
 
 #[xdp]
 pub fn stoa_xdp_ratelimit(ctx: XdpContext) -> u32 {

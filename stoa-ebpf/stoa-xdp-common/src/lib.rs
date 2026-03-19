@@ -61,16 +61,21 @@ pub struct ApiPolicy {
 }
 
 /// Audit event pushed from kernel to userspace via perf_event_array.
+///
+/// Field ordering matters: all u64 fields first, then u32, then u8 — this
+/// eliminates internal padding that would leak uninitialized kernel memory
+/// through perf_event_array.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct AuditEvent {
     pub timestamp_ns: u64,
+    pub bytes: u64,
     pub src_ip: u32,
     pub method_hash: u32,
     pub path_hash: u32,
     /// 0 = pass, 1 = blocked, 2 = rate-limited.
     pub action: u8,
-    pub bytes: u64,
+    // 3 bytes trailing padding — safe (end of struct, not leaked between fields)
 }
 
 // --- Userspace Pod impls ---

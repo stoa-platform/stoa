@@ -216,6 +216,12 @@ const navigationSections: NavSection[] = [
         icon: Gauge,
         shortcut: ['g', 'g'],
       },
+      {
+        name: 'nav.callFlow',
+        href: '/call-flow',
+        icon: Activity,
+        shortcut: ['g', 'f'],
+      },
       { name: 'nav.logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
       {
         name: 'nav.executions',

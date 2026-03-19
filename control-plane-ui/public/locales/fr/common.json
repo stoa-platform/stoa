@@ -47,6 +47,7 @@
     "analytics": "Analytique d'usage",
     "securityPosture": "Posture de securite",
     "proxyOwner": "Propriétaire de proxy",
+    "callFlow": "Flux d'appels",
     "apiTraffic": "Trafic API",
     "llmCost": "Coûts LLM",
     "subscriptions": "Abonnements",

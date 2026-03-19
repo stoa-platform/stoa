@@ -24,10 +24,28 @@ import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { TimeRangeSelector, RANGE_CONFIG } from '@stoa/shared/components/TimeRangeSelector';
 import { TrendIndicator } from '@stoa/shared/components/TrendIndicator';
 import type { TimeRange } from '@stoa/shared/components/TimeRangeSelector';
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 import { usePrometheusRange } from '../../hooks/usePrometheus';
-import { SparklineChart } from '../../components/charts/SparklineChart';
 import { MetricCard } from '../../components/metrics/MetricCard';
 import { MetricTimeseries } from '../../components/metrics/MetricTimeseries';
+import {
+  ChartCard,
+  ChartEmptyState,
+  CHART_TOOLTIP_STYLE,
+  CHART_AXIS_STYLE,
+  CHART_GRID_STYLE,
+} from '@stoa/shared/components/ChartCard';
 import { config } from '../../config';
 import { observabilityPath } from '../../utils/navigation';
 import type { TopAPI } from '../../services/api';
@@ -280,69 +298,117 @@ export function PlatformMetricsDashboard() {
             </div>
           </section>
 
-          {/* Sparkline Charts Row */}
+          {/* Interactive Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Request Rate */}
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                    Request Rate
-                  </h2>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                    req/s over {rangeCfg.label}
-                  </p>
-                </div>
-                {requestRateSeries.data && requestRateSeries.data.length > 1 && (
+            <ChartCard
+              title="Request Rate"
+              trailing={
+                requestRateSeries.data && requestRateSeries.data.length > 1 ? (
                   <TrendIndicator data={requestRateSeries.data} />
-                )}
-              </div>
-              {requestRateSeries.data ? (
-                <SparklineChart
-                  data={requestRateSeries.data}
-                  color="#3b82f6"
-                  height={120}
-                  width={560}
-                  showArea
-                  className="w-full"
-                />
+                ) : undefined
+              }
+            >
+              {requestRateSeries.data && requestRateSeries.data.length >= 2 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={requestRateSeries.data}>
+                    <CartesianGrid {...CHART_GRID_STYLE} />
+                    <XAxis
+                      dataKey="timestamp"
+                      tick={CHART_AXIS_STYLE}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(ts: number) => {
+                        const d = new Date(ts * 1000);
+                        return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                      }}
+                    />
+                    <YAxis
+                      tick={CHART_AXIS_STYLE}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v: number) =>
+                        v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(Math.round(v * 100) / 100)
+                      }
+                    />
+                    <Tooltip
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelFormatter={(ts) => {
+                        const d = new Date(Number(ts) * 1000);
+                        return d.toLocaleTimeString();
+                      }}
+                      formatter={(value) => [`${Number(value).toFixed(2)} req/s`, 'Rate']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#3b82f6"
+                      fill="#3b82f6"
+                      fillOpacity={0.15}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
-                  {requestRateSeries.error ? 'Metrics unavailable' : 'Loading...'}
-                </div>
+                <ChartEmptyState
+                  message={requestRateSeries.error ? 'Metrics unavailable' : 'Loading...'}
+                  height={200}
+                />
               )}
-            </div>
+            </ChartCard>
 
             {/* Error Rate Over Time */}
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                    Error Rate
-                  </h2>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                    5xx ratio over {rangeCfg.label}
-                  </p>
-                </div>
-                {errorRateSeries.data && errorRateSeries.data.length > 1 && (
+            <ChartCard
+              title="Error Rate"
+              trailing={
+                errorRateSeries.data && errorRateSeries.data.length > 1 ? (
                   <TrendIndicator data={errorRateSeries.data} invertColor />
-                )}
-              </div>
-              {errorRateSeries.data ? (
-                <SparklineChart
-                  data={errorRateSeries.data}
-                  color="#ef4444"
-                  height={120}
-                  width={560}
-                  showArea
-                  className="w-full"
-                />
+                ) : undefined
+              }
+            >
+              {errorRateSeries.data && errorRateSeries.data.length >= 2 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={errorRateSeries.data}>
+                    <CartesianGrid {...CHART_GRID_STYLE} />
+                    <XAxis
+                      dataKey="timestamp"
+                      tick={CHART_AXIS_STYLE}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(ts: number) => {
+                        const d = new Date(ts * 1000);
+                        return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                      }}
+                    />
+                    <YAxis
+                      tick={CHART_AXIS_STYLE}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`}
+                    />
+                    <Tooltip
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelFormatter={(ts) => {
+                        const d = new Date(Number(ts) * 1000);
+                        return d.toLocaleTimeString();
+                      }}
+                      formatter={(value) => [`${(Number(value) * 100).toFixed(2)}%`, 'Error Rate']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#ef4444"
+                      fill="#ef4444"
+                      fillOpacity={0.15}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
-                  {errorRateSeries.error ? 'Metrics unavailable' : 'Loading...'}
-                </div>
+                <ChartEmptyState
+                  message={errorRateSeries.error ? 'Metrics unavailable' : 'Loading...'}
+                  height={200}
+                />
               )}
-            </div>
+            </ChartCard>
           </div>
 
           {/* MCP & AI Activity */}
@@ -496,11 +562,9 @@ export function PlatformMetricsDashboard() {
           </section>
 
           {/* Top Endpoints */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                Top Endpoints
-              </h2>
+          <ChartCard
+            title="Top Endpoints"
+            trailing={
               <a
                 href="/business"
                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
@@ -508,42 +572,53 @@ export function PlatformMetricsDashboard() {
                 View All
                 <ExternalLink className="h-3 w-3" />
               </a>
-            </div>
+            }
+          >
             {topApis.length > 0 ? (
-              <div className="space-y-3">
-                {topApis.map((api, i) => {
-                  const maxCalls = topApis[0]?.calls || 1;
-                  return (
-                    <div key={api.tool_name} className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
-                        {i + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
-                            {api.display_name || api.tool_name}
-                          </span>
-                          <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-2">
-                            {api.calls.toLocaleString()} calls
-                          </span>
-                        </div>
-                        <div className="w-full bg-neutral-100 dark:bg-neutral-700 rounded-full h-1.5">
-                          <div
-                            className="bg-blue-500 h-1.5 rounded-full transition-all"
-                            style={{ width: `${(api.calls / maxCalls) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={topApis} layout="vertical" barCategoryGap="20%">
+                  <CartesianGrid {...CHART_GRID_STYLE} horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tick={CHART_AXIS_STYLE}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) =>
+                      v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v)
+                    }
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="tool_name"
+                    tick={{ ...CHART_AXIS_STYLE, fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={120}
+                    tickFormatter={(v: string) => {
+                      const api = topApis.find((a) => a.tool_name === v);
+                      const name = api?.display_name || v;
+                      return name.length > 18 ? `${name.slice(0, 18)}…` : name;
+                    }}
+                  />
+                  <Tooltip
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                    formatter={(value) => [`${Number(value).toLocaleString()} calls`, 'Volume']}
+                    labelFormatter={(label) => {
+                      const api = topApis.find((a) => a.tool_name === label);
+                      return api?.display_name || label;
+                    }}
+                  />
+                  <Bar dataKey="calls" radius={[0, 4, 4, 0]}>
+                    {topApis.map((_, i) => (
+                      <Cell key={i} fill={i === 0 ? '#3b82f6' : '#93c5fd'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
-              <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-8">
-                No API data available
-              </p>
+              <ChartEmptyState message="No API data available" />
             )}
-          </div>
+          </ChartCard>
         </>
       )}
     </div>

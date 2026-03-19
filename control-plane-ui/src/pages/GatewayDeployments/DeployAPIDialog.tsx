@@ -285,7 +285,7 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
                     <option value="">Select an API...</option>
                     {apis.map((api) => (
                       <option key={api.name} value={api.name}>
-                        {api.display_name || api.name} v{api.version}
+                        {api.name} v{api.version}
                       </option>
                     ))}
                   </select>

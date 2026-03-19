@@ -95,7 +95,8 @@ class TestDeploymentOrchestrationService:
             mock_deploy.return_value = deployments
 
             result = await svc.deploy_api_to_env(
-                api_catalog_id=catalog.id,
+                tenant_id="acme",
+                api_identifier=str(catalog.id),
                 environment="dev",
                 gateway_ids=[gw.id],
                 deployed_by="admin",
@@ -126,7 +127,8 @@ class TestDeploymentOrchestrationService:
 
             with pytest.raises(ValueError, match="no active promotion"):
                 await svc.deploy_api_to_env(
-                    api_catalog_id=catalog.id,
+                    tenant_id="acme",
+                    api_identifier=str(catalog.id),
                     environment="staging",
                     gateway_ids=[uuid4()],
                 )
@@ -155,7 +157,8 @@ class TestDeploymentOrchestrationService:
             mock_deploy.return_value = deployments
 
             result = await svc.deploy_api_to_env(
-                api_catalog_id=catalog.id,
+                tenant_id="acme",
+                api_identifier=str(catalog.id),
                 environment="staging",
                 gateway_ids=[uuid4()],
             )
@@ -186,7 +189,8 @@ class TestDeploymentOrchestrationService:
             mock_deploy.return_value = deployments
 
             result = await svc.deploy_api_to_env(
-                api_catalog_id=catalog.id,
+                tenant_id="acme",
+                api_identifier=str(catalog.id),
                 environment="dev",
                 gateway_ids=None,  # Use assignments
             )
@@ -214,7 +218,8 @@ class TestDeploymentOrchestrationService:
 
             with pytest.raises(ValueError, match="No gateway assignments"):
                 await svc.deploy_api_to_env(
-                    api_catalog_id=catalog.id,
+                    tenant_id="acme",
+                    api_identifier=str(catalog.id),
                     environment="dev",
                     gateway_ids=None,
                 )
@@ -224,19 +229,23 @@ class TestDeploymentOrchestrationService:
         """Should raise when API catalog entry not found."""
         from src.services.deployment_orchestration_service import DeploymentOrchestrationService
 
+        api_id = str(uuid4())
         db = AsyncMock()
         svc = DeploymentOrchestrationService(db)
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        db.execute.return_value = mock_result
-
-        with pytest.raises(ValueError, match="API catalog entry not found"):
-            await svc.deploy_api_to_env(
-                api_catalog_id=uuid4(),
-                environment="dev",
-                gateway_ids=[uuid4()],
-            )
+        with patch.object(
+            svc,
+            "_resolve_api_catalog",
+            new_callable=AsyncMock,
+            side_effect=ValueError(f"API '{api_id}' not found for tenant 'acme'."),
+        ):
+            with pytest.raises(ValueError, match="not found for tenant"):
+                await svc.deploy_api_to_env(
+                    tenant_id="acme",
+                    api_identifier=api_id,
+                    environment="dev",
+                    gateway_ids=[uuid4()],
+                )
 
     @pytest.mark.asyncio
     async def test_auto_deploy_on_promotion_triggers_deploy(self):
@@ -321,7 +330,7 @@ class TestDeploymentOrchestrationService:
                 None,  # production
             ]
 
-            result = await svc.get_deployable_environments(catalog.id)
+            result = await svc.get_deployable_environments("acme", str(catalog.id))
 
             assert len(result) == 3
             assert result[0]["environment"] == "dev"

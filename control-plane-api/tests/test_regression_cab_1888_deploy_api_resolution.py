@@ -63,13 +63,14 @@ class TestRegressionCAB1888DeployApiResolution:
         db = AsyncMock()
         svc = DeploymentOrchestrationService(db)
 
-        # UUID lookup → None, api_id lookup → None, api_name lookup → found
+        # "payments" is not a UUID, so no UUID DB lookup is made.
+        # The service calls db.execute twice: api_id lookup → None, api_name lookup → found.
         mock_none = MagicMock()
         mock_none.scalar_one_or_none.return_value = None
         mock_found = MagicMock()
         mock_found.scalar_one_or_none.return_value = catalog
 
-        db.execute = AsyncMock(side_effect=[mock_none, mock_none, mock_found])
+        db.execute = AsyncMock(side_effect=[mock_none, mock_found])
 
         result = await svc._resolve_api_catalog("acme", "payments")
         assert result == catalog

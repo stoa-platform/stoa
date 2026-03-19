@@ -44,6 +44,7 @@ def sample_record(sample_api_id):
     record.tenant_id = "acme"
     record.api_id = sample_api_id
     record.consumer_id = None
+    record.environment = None
     record.period = "daily"
     record.period_start = now
     record.request_count = 500
@@ -51,6 +52,10 @@ def sample_record(sample_api_id):
     record.total_latency_ms = 100000
     record.p99_latency_ms = 450
     record.total_tokens = 8000
+    record.input_tokens = 0
+    record.output_tokens = 0
+    record.cache_creation_input_tokens = 0
+    record.cache_read_input_tokens = 0
     record.created_at = now
     record.updated_at = now
     return record
@@ -92,6 +97,7 @@ class TestGetSummary:
             tenant_id="acme",
             api_id=sample_api_id,
             period="monthly",
+            environment=None,
             limit=10,
             offset=5,
         )

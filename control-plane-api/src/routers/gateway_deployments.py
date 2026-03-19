@@ -62,6 +62,7 @@ async def list_deployments(
     sync_status: str | None = Query(None, description="Filter by sync status"),
     gateway_instance_id: UUID | None = Query(None),
     environment: str | None = Query(None, description="Filter by gateway environment (dev/staging/prod)"),
+    gateway_type: str | None = Query(None, description="Filter by gateway type (stoa, kong, gravitee, etc.)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -74,6 +75,7 @@ async def list_deployments(
         sync_status=status_filter,
         gateway_instance_id=gateway_instance_id,
         environment=environment,
+        gateway_type=gateway_type,
         page=page,
         page_size=page_size,
     )

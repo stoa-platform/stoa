@@ -87,16 +87,28 @@ export function DriftDetection() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [gatewayTypeFilter, setGatewayTypeFilter] = useState<string>('');
 
   const isAdmin = hasRole('cpi-admin');
 
   const loadData = useCallback(async () => {
     try {
       const envParam = activeEnvironment ? { environment: activeEnvironment } : {};
+      const typeParam = gatewayTypeFilter ? { gateway_type: gatewayTypeFilter } : {};
       const [gatewaysResult, driftedResult, errorResult, summaryResult] = await Promise.all([
         apiService.getGatewayInstances({ page_size: 100, ...envParam }),
-        apiService.getGatewayDeployments({ sync_status: 'drifted', page_size: 100, ...envParam }),
-        apiService.getGatewayDeployments({ sync_status: 'error', page_size: 100, ...envParam }),
+        apiService.getGatewayDeployments({
+          sync_status: 'drifted',
+          page_size: 100,
+          ...envParam,
+          ...typeParam,
+        }),
+        apiService.getGatewayDeployments({
+          sync_status: 'error',
+          page_size: 100,
+          ...envParam,
+          ...typeParam,
+        }),
         apiService.getDeploymentStatusSummary(),
       ]);
 
@@ -112,7 +124,7 @@ export function DriftDetection() {
     } finally {
       setLoading(false);
     }
-  }, [activeEnvironment]);
+  }, [activeEnvironment, gatewayTypeFilter]);
 
   useEffect(() => {
     if (isReady) loadData();
@@ -199,7 +211,10 @@ export function DriftDetection() {
     );
   }
 
-  const healthyGateways = gateways.filter((g) => g.status === 'online').length;
+  const filteredGateways = gatewayTypeFilter
+    ? gateways.filter((g) => g.gateway_type === gatewayTypeFilter)
+    : gateways;
+  const healthyGateways = filteredGateways.filter((g) => g.status === 'online').length;
   const driftedCount = summary?.drifted ?? 0;
   const errorCount = summary?.error ?? 0;
 
@@ -213,13 +228,34 @@ export function DriftDetection() {
             Monitor gateway health and deployment sync across all gateways
           </p>
         </div>
-        <button
-          onClick={loadData}
-          className="inline-flex items-center px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={gatewayTypeFilter}
+            onChange={(e) => {
+              setGatewayTypeFilter(e.target.value);
+              setLoading(true);
+            }}
+            className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800"
+          >
+            <option value="">All gateway types</option>
+            <option value="stoa_edge_mcp">STOA Edge MCP</option>
+            <option value="stoa_sidecar">STOA Link</option>
+            <option value="stoa_proxy">STOA Proxy</option>
+            <option value="kong">Kong</option>
+            <option value="gravitee">Gravitee</option>
+            <option value="webmethods">webMethods</option>
+            <option value="apigee">Apigee</option>
+            <option value="aws_apigateway">AWS API GW</option>
+            <option value="azure_apim">Azure APIM</option>
+          </select>
+          <button
+            onClick={loadData}
+            className="inline-flex items-center px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <SubNav tabs={gatewayTabs} />
@@ -228,7 +264,7 @@ export function DriftDetection() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SummaryCard
           label="Total Gateways"
-          value={gateways.length}
+          value={filteredGateways.length}
           color="text-neutral-900 dark:text-white"
         />
         <SummaryCard label="Healthy" value={healthyGateways} color="text-green-600" />
@@ -249,14 +285,18 @@ export function DriftDetection() {
         <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-3">
           Gateway Health
         </h2>
-        {gateways.length === 0 ? (
+        {filteredGateways.length === 0 ? (
           <EmptyState
-            title="No gateways registered"
-            description="Register a gateway to start monitoring."
+            title={gatewayTypeFilter ? 'No gateways of this type' : 'No gateways registered'}
+            description={
+              gatewayTypeFilter
+                ? 'Clear the filter to see all gateways.'
+                : 'Register a gateway to start monitoring.'
+            }
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {gateways.map((gw) => {
+            {filteredGateways.map((gw) => {
               const cfg = gatewayStatusConfig[gw.status] || fallbackStatus;
               const StatusIcon = cfg.icon;
               return (

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { apiService } from '../../services/api';
-import type { GatewayDeployment } from '../../types';
 
 interface CatalogEntry {
   id: string;
@@ -58,8 +57,8 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: Deplo
         ]);
         setCatalogEntries(entries);
         setGateways(gwResult.items);
-      } catch {
-        setError('Failed to load data');
+      } catch (err: any) {
+        setError(err.response?.data?.detail || 'Failed to load data');
       } finally {
         setLoading(false);
       }
@@ -102,8 +101,8 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: Deplo
       .then((result) => {
         setExistingDeployments(
           result.items
-            .filter((d: GatewayDeployment) => d.api_catalog_id === selectedApi)
-            .map((d: GatewayDeployment) => ({
+            .filter((d: any) => d.api_catalog_id === selectedApi)
+            .map((d: any) => ({
               gateway_instance_id: d.gateway_instance_id,
               sync_status: d.sync_status,
             }))
@@ -140,8 +139,8 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiId }: Deplo
         gateway_ids: selectedGateways,
       });
       onDeployed();
-    } catch {
-      setError('Failed to deploy API');
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to deploy API');
     } finally {
       setSubmitting(false);
     }

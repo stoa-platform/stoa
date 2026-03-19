@@ -57,7 +57,7 @@ export function ApiDeploymentsDashboard() {
 
   const loadData = useCallback(async () => {
     try {
-      const params: Record<string, string | number> = { page: currentPage, page_size: PAGE_SIZE };
+      const params: Record<string, any> = { page: currentPage, page_size: PAGE_SIZE };
       if (statusFilter) params.sync_status = statusFilter;
       if (envFilter) params.environment = envFilter;
 
@@ -70,9 +70,8 @@ export function ApiDeploymentsDashboard() {
       setTotal(deploymentsResult.total);
       setSummary(summaryResult);
       setError(null);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load deployments';
-      setError(message);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to load deployments');
     } finally {
       setLoading(false);
     }
@@ -246,10 +245,10 @@ export function ApiDeploymentsDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {deployments.map((d) => (
+                {deployments.map((d: any) => (
                   <tr key={d.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
                     <td className="px-4 py-3 text-neutral-900 dark:text-white font-medium">
-                      {(d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8)}
+                      {d.desired_state?.api_name || d.api_catalog_id?.slice(0, 8)}
                     </td>
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300">
                       {d.gateway_name || d.gateway_instance_id?.slice(0, 8)}

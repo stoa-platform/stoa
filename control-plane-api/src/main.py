@@ -656,6 +656,10 @@ app.add_middleware(AuditMiddleware)
 
 # Routers
 app.include_router(tenants.router)
+# api_gateway_assignments MUST be before apis — both share /v1/tenants/{tenant_id}/apis/{api_id}
+# prefix, and FastAPI resolves in registration order. Without this, /deploy and
+# /deployable-environments are swallowed by the apis router's /{api_id} catch-all.
+app.include_router(api_gateway_assignments.router)
 app.include_router(apis.router)
 app.include_router(applications.router)
 app.include_router(deployments.router)
@@ -758,7 +762,6 @@ app.include_router(self_service_logs.router)
 app.include_router(gateway_observability.router)
 app.include_router(gateway_instances.router)
 app.include_router(gateway_deployments.router)
-app.include_router(api_gateway_assignments.router)
 app.include_router(gateway_policies.router)
 # Internal gateway registration API (ADR-028 auto-registration)
 app.include_router(gateway_internal.router)

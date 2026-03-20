@@ -124,17 +124,17 @@ class GatewayDeploymentResponse(BaseModel):
     gateway_instance_id: UUID
     desired_state: dict
     desired_at: datetime
-    actual_state: dict | None
-    actual_at: datetime | None
+    actual_state: dict | None = None
+    actual_at: datetime | None = None
     sync_status: str
-    last_sync_attempt: datetime | None
-    last_sync_success: datetime | None
-    sync_error: str | None
+    last_sync_attempt: datetime | None = None
+    last_sync_success: datetime | None = None
+    sync_error: str | None = None
     sync_attempts: int
-    gateway_resource_id: str | None
+    gateway_resource_id: str | None = None
     created_at: datetime
     updated_at: datetime
-    # Joined from GatewayInstance (populated by list queries)
+    # Joined from GatewayInstance (populated by list queries, absent on single-object endpoints)
     gateway_name: str | None = None
     gateway_display_name: str | None = None
     gateway_type: str | None = None

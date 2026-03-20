@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stoa-gateway
+  labels:
+    app: stoa-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stoa-gateway
+  template:
+    metadata:
+      labels:
+        app: stoa-gateway
+    spec:
+      imagePullSecrets:
+        - name: ghcr-creds
+      containers:
+        - name: stoa-gateway
+          image: ghcr.io/stoa-platform/stoa-gateway:latest
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9191
+              name: metrics
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5

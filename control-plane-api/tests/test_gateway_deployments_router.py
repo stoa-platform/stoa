@@ -123,19 +123,31 @@ class TestGetDeploymentStatus:
 class TestGetSingleDeployment:
     def test_get_success(self, client_as_cpi_admin, mock_db_session):
         dep = _mock_deployment()
-        with patch(REPO_PATH) as MockRepo:
-            instance = MockRepo.return_value
-            instance.get_by_id = AsyncMock(return_value=dep)
-            resp = client_as_cpi_admin.get(f"/v1/admin/deployments/{uuid4()}")
+        # Endpoint now uses a direct SELECT with JOIN — mock db.execute result
+        mock_row = MagicMock()
+        mock_row.GatewayDeployment = dep
+        mock_row.gateway_name = "stoa-dev"
+        mock_row.gateway_display_name = "STOA Dev"
+        mock_row.gateway_type = "stoa_edge_mcp"
+        mock_row.gateway_environment = "dev"
 
+        mock_result = MagicMock()
+        mock_result.one_or_none.return_value = mock_row
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        resp = client_as_cpi_admin.get(f"/v1/admin/deployments/{uuid4()}")
         assert resp.status_code == 200
+        body = resp.json()
+        assert body["gateway_name"] == "stoa-dev"
+        assert body["gateway_type"] == "stoa_edge_mcp"
+        assert body["gateway_environment"] == "dev"
 
     def test_get_not_found(self, client_as_cpi_admin, mock_db_session):
-        with patch(REPO_PATH) as MockRepo:
-            instance = MockRepo.return_value
-            instance.get_by_id = AsyncMock(return_value=None)
-            resp = client_as_cpi_admin.get(f"/v1/admin/deployments/{uuid4()}")
+        mock_result = MagicMock()
+        mock_result.one_or_none.return_value = None
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
 
+        resp = client_as_cpi_admin.get(f"/v1/admin/deployments/{uuid4()}")
         assert resp.status_code == 404
 
 

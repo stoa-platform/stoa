@@ -74,21 +74,31 @@ class GatewayDeploymentRepository:
         gateway_type: str | None = None,
         page: int = 1,
         page_size: int = 50,
-    ) -> tuple[list[GatewayDeployment], int]:
-        """List deployments with optional filters and pagination."""
-        query = select(GatewayDeployment)
+    ) -> tuple[list[dict], int]:
+        """List deployments with optional filters and pagination.
 
-        # Join to GatewayInstance if we need to filter by environment or gateway_type
-        needs_join = environment is not None or gateway_type is not None
-        if needs_join:
-            query = query.join(
+        Always joins GatewayInstance to include gateway name, type, and environment.
+        Returns dicts (not ORM objects) with gateway info merged in.
+        """
+        # Always join GatewayInstance for name/type/environment
+        query = (
+            select(
+                GatewayDeployment,
+                GatewayInstance.name.label("gateway_name"),
+                GatewayInstance.display_name.label("gateway_display_name"),
+                GatewayInstance.gateway_type.label("gateway_type"),
+                GatewayInstance.environment.label("gateway_environment"),
+            )
+            .join(
                 GatewayInstance,
                 GatewayDeployment.gateway_instance_id == GatewayInstance.id,
             )
-            if environment:
-                query = query.where(GatewayInstance.environment == environment)
-            if gateway_type:
-                query = query.where(GatewayInstance.gateway_type == gateway_type)
+        )
+
+        if environment:
+            query = query.where(GatewayInstance.environment == environment)
+        if gateway_type:
+            query = query.where(GatewayInstance.gateway_type == gateway_type)
         if sync_status:
             query = query.where(GatewayDeployment.sync_status == sync_status)
         if gateway_instance_id:
@@ -102,8 +112,33 @@ class GatewayDeploymentRepository:
         query = query.offset((page - 1) * page_size).limit(page_size)
 
         result = await self.session.execute(query)
-        deployments = result.scalars().all()
-        return list(deployments), total
+        rows = result.all()
+
+        deployments = []
+        for row in rows:
+            dep = row.GatewayDeployment
+            deployments.append({
+                "id": dep.id,
+                "api_catalog_id": dep.api_catalog_id,
+                "gateway_instance_id": dep.gateway_instance_id,
+                "desired_state": dep.desired_state,
+                "desired_at": dep.desired_at,
+                "actual_state": dep.actual_state,
+                "actual_at": dep.actual_at,
+                "sync_status": dep.sync_status.value if hasattr(dep.sync_status, "value") else dep.sync_status,
+                "last_sync_attempt": dep.last_sync_attempt,
+                "last_sync_success": dep.last_sync_success,
+                "sync_error": dep.sync_error,
+                "sync_attempts": dep.sync_attempts,
+                "gateway_resource_id": dep.gateway_resource_id,
+                "created_at": dep.created_at,
+                "updated_at": dep.updated_at,
+                "gateway_name": row.gateway_name,
+                "gateway_display_name": row.gateway_display_name,
+                "gateway_type": row.gateway_type.value if hasattr(row.gateway_type, "value") else row.gateway_type,
+                "gateway_environment": row.gateway_environment,
+            })
+        return deployments, total
 
     async def list_by_statuses(self, statuses: list[DeploymentSyncStatus]) -> list[GatewayDeployment]:
         """List deployments matching any of the given statuses."""

@@ -134,6 +134,11 @@ class GatewayDeploymentResponse(BaseModel):
     gateway_resource_id: str | None
     created_at: datetime
     updated_at: datetime
+    # Joined from GatewayInstance (populated by list queries)
+    gateway_name: str | None = None
+    gateway_display_name: str | None = None
+    gateway_type: str | None = None
+    gateway_environment: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

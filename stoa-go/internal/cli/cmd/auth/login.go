@@ -147,7 +147,7 @@ func requestDeviceAuthorization() (*DeviceAuthResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -206,7 +206,7 @@ func requestToken(tokenURL, deviceCode string) (*TokenResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

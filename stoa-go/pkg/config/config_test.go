@@ -187,11 +187,7 @@ func TestConfigGetCurrentContext(t *testing.T) {
 func TestConfigSaveAndLoad(t *testing.T) {
 	// Create a temporary directory
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-
-	// Override HOME to use temp directory
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", originalHome)
+	t.Setenv("HOME", tmpDir)
 
 	// Create config to save
 	cfg := &Config{
@@ -243,10 +239,7 @@ func TestConfigSaveAndLoad(t *testing.T) {
 func TestLoadNonExistentConfig(t *testing.T) {
 	// Create a temporary directory with no config file
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", originalHome)
+	t.Setenv("HOME", tmpDir)
 
 	cfg, err := Load()
 	if err != nil {

@@ -120,7 +120,7 @@ func (c *PortAvailableCheck) Run(ctx context.Context) CheckResult {
 	if err != nil {
 		return CheckResult{Pass: false, Message: fmt.Sprintf("in use (port %d)", c.Port)}
 	}
-	ln.Close()
+	_ = ln.Close()
 	return CheckResult{Pass: true, Message: "available"}
 }
 

@@ -72,9 +72,21 @@ class TestDeployAPI:
 class TestListDeployments:
     def test_list_returns_paginated(self, client_as_cpi_admin, mock_db_session):
         dep = _mock_deployment()
+        dep_dict = {
+            "id": dep.id, "api_catalog_id": dep.api_catalog_id,
+            "gateway_instance_id": dep.gateway_instance_id,
+            "desired_state": dep.desired_state, "desired_at": dep.desired_at,
+            "actual_state": dep.actual_state, "actual_at": dep.actual_at,
+            "sync_status": dep.sync_status, "last_sync_attempt": dep.last_sync_attempt,
+            "last_sync_success": dep.last_sync_success, "sync_error": dep.sync_error,
+            "sync_attempts": dep.sync_attempts, "gateway_resource_id": dep.gateway_resource_id,
+            "created_at": dep.created_at, "updated_at": dep.updated_at,
+            "gateway_name": None, "gateway_display_name": None,
+            "gateway_type": None, "gateway_environment": None,
+        }
         with patch(REPO_PATH) as MockRepo:
             instance = MockRepo.return_value
-            instance.list_all = AsyncMock(return_value=([dep], 1))
+            instance.list_all = AsyncMock(return_value=([dep_dict], 1))
             resp = client_as_cpi_admin.get("/v1/admin/deployments")
 
         assert resp.status_code == 200

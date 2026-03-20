@@ -48,7 +48,7 @@ func (c *GatewayHealthCheck) Run(ctx context.Context) CheckResult {
 	if err != nil {
 		return CheckResult{Pass: false, Message: fmt.Sprintf("not responding (%s)", c.URL)}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusOK {
 		return CheckResult{Pass: true, Message: fmt.Sprintf("healthy (%s)", c.URL)}
@@ -142,7 +142,7 @@ func (c *MCPEndpointCheck) Run(ctx context.Context) CheckResult {
 	if err != nil {
 		return CheckResult{Pass: false, Message: "not responding"}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// MCP SSE may return 200 with text/event-stream, or other success codes
 	if resp.StatusCode >= 200 && resp.StatusCode < 400 {

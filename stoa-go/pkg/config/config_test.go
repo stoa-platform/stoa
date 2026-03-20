@@ -261,10 +261,7 @@ func TestLoadNonExistentConfig(t *testing.T) {
 // TestTokenCacheSaveAndLoad tests token cache operations
 func TestTokenCacheSaveAndLoad(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", originalHome)
+	t.Setenv("HOME", tmpDir)
 
 	cache := &TokenCache{
 		AccessToken:  "test-access-token",
@@ -302,10 +299,7 @@ func TestTokenCacheSaveAndLoad(t *testing.T) {
 // TestLoadTokenCacheNonExistent tests loading when token cache doesn't exist
 func TestLoadTokenCacheNonExistent(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", originalHome)
+	t.Setenv("HOME", tmpDir)
 
 	cache, err := LoadTokenCache()
 	if err != nil {

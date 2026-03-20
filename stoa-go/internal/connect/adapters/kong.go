@@ -37,7 +37,7 @@ func (k *KongAdapter) Detect(ctx context.Context, adminURL string) (bool, error)
 	if err != nil {
 		return false, nil // Not reachable = not Kong
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	var result map[string]interface{}
@@ -173,7 +173,7 @@ func (k *KongAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiName 
 	if err != nil {
 		return fmt.Errorf("apply kong plugin: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -239,7 +239,7 @@ func (k *KongAdapter) doGet(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

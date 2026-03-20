@@ -112,7 +112,7 @@ func getTokenUsage(c *client.Client, timeRange string) (*TokenUsageResponse, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch token usage: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return nil, fmt.Errorf("authentication failed. Run 'stoactl auth login' to refresh your token")
@@ -138,7 +138,7 @@ func getTokenCompare(c *client.Client, timeRange string) (*TokenCompareResponse,
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch comparison: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return nil, fmt.Errorf("authentication failed. Run 'stoactl auth login' to refresh your token")

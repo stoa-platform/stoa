@@ -209,7 +209,7 @@ func AppendAuditLog(operation, context, status string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open audit log: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, err = f.WriteString(entry)
 	return err

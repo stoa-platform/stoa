@@ -81,7 +81,7 @@ func (a *Agent) FetchConfig(ctx context.Context) (*GatewayConfigResponse, error)
 		span.SetStatus(codes.Error, "request failed")
 		return nil, fmt.Errorf("config request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
@@ -163,7 +163,7 @@ func (a *Agent) ReportSyncAck(ctx context.Context, results []SyncedPolicyResult)
 		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("sync-ack request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
 

@@ -59,7 +59,7 @@ func runStatus(agentURL string) error {
 	if err != nil {
 		return fmt.Errorf("cannot reach agent at %s: %w", agentURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
@@ -198,7 +198,7 @@ func runSync(agentURL string) error {
 	if err != nil {
 		return fmt.Errorf("cannot reach agent at %s: %w", agentURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 

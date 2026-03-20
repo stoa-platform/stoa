@@ -36,7 +36,7 @@ func (g *GraviteeAdapter) Detect(ctx context.Context, adminURL string) (bool, er
 	if err != nil {
 		return false, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode == http.StatusOK, nil
 }
@@ -181,7 +181,7 @@ func (g *GraviteeAdapter) doGet(ctx context.Context, url string) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

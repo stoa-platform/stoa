@@ -186,7 +186,7 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("register request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
@@ -261,7 +261,7 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("heartbeat request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
 
@@ -358,7 +358,7 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("discovery report request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
 

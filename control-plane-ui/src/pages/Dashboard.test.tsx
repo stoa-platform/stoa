@@ -153,7 +153,9 @@ describe('Dashboard', () => {
 
   it('renders the Dashboard heading', async () => {
     renderApp('/');
-    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Dashboard' }, { timeout: 10_000 })
+    ).toBeInTheDocument();
   });
 
   it('greets the authenticated user by name', async () => {

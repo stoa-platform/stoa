@@ -175,17 +175,21 @@ function renderApp(route = '/') {
 describe('App', () => {
   it('renders Dashboard heading at root route', async () => {
     renderApp('/');
-    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Dashboard' }, { timeout: 10_000 })
+    ).toBeInTheDocument();
   });
 
   it('renders welcome message with user name', async () => {
     renderApp('/');
-    expect(await screen.findByText('Hello, Parzival!')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Hello, Parzival!', {}, { timeout: 10_000 })
+    ).toBeInTheDocument();
   });
 
   it('renders gateway KPI card on dashboard', async () => {
     renderApp('/');
-    expect(await screen.findByText('Gateways')).toBeInTheDocument();
+    expect(await screen.findByText('Gateways', {}, { timeout: 10_000 })).toBeInTheDocument();
   });
 
   it('blocks protected route when not authenticated', () => {

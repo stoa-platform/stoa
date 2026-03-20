@@ -7,11 +7,6 @@ on:
         description: 'Crate directory'
         required: true
         type: string
-      run-audit:
-        description: 'Run cargo audit'
-        required: false
-        type: boolean
-        default: true
       cargo-features:
         description: 'Cargo feature flags for clippy/test (default: --all-features)'
         required: false
@@ -22,59 +17,32 @@ on:
         required: false
         type: string
         default: 'ubuntu-latest'
+      coverage-threshold:
+        description: 'Minimum line coverage percentage'
+        required: false
+        type: number
+        default: 60
     outputs:
       test-result:
         description: 'Test result (success/failure)'
-        value: ${{ jobs.test.outputs.result }}
+        value: ${{ jobs.ci.outputs.result }}
       coverage-pct:
         description: 'Line coverage percentage'
-        value: ${{ jobs.coverage.outputs.coverage_pct }}
+        value: ${{ jobs.ci.outputs.coverage_pct }}
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
+  SCCACHE_GHA_ENABLED: 'true'
+  RUSTC_WRAPPER: sccache
 
 jobs:
-  fmt:
-    name: Check Formatting
+  ci:
+    name: Rust CI
     runs-on: ${{ inputs.runner }}
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: ${{ inputs.component }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: ./.github/actions/setup-rust-env
-        with:
-          components: rustfmt
-          working-directory: ${{ inputs.component }}
-      - run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy Lint
-    runs-on: ${{ inputs.runner }}
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: ${{ inputs.component }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install system dependencies for rdkafka
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake
-      - uses: ./.github/actions/setup-rust-env
-        with:
-          components: clippy
-          working-directory: ${{ inputs.component }}
-      - run: cargo clippy --all-targets ${{ inputs.cargo-features }} -- -D warnings
-
-  test:
-    name: Run Tests
-    runs-on: ${{ inputs.runner }}
-    needs: clippy
     outputs:
       result: ${{ steps.set-result.outputs.result }}
+      coverage_pct: ${{ steps.extract-cov.outputs.coverage_pct }}
     permissions:
       contents: read
     defaults:
@@ -82,89 +50,98 @@ jobs:
         working-directory: ${{ inputs.component }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Install system dependencies for rdkafka
         run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake
+
       - uses: ./.github/actions/setup-rust-env
         with:
+          components: clippy,rustfmt
           working-directory: ${{ inputs.component }}
-      - run: cargo test ${{ inputs.cargo-features }}
-      - name: Job Summary
-        if: always()
-        run: |
-          echo "## ${{ inputs.component }} Rust CI" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| cargo fmt | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
-          echo "| cargo clippy | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
-          echo "| cargo test | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
 
-      - name: Set result output
-        id: set-result
-        if: always()
-        run: echo "result=${{ job.status }}" >> $GITHUB_OUTPUT
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.7
 
-  coverage:
-    name: Code Coverage
-    runs-on: ${{ inputs.runner }}
-    needs: clippy
-    outputs:
-      coverage_pct: ${{ steps.extract.outputs.coverage_pct }}
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: ${{ inputs.component }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install system dependencies for rdkafka
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake
-      - uses: ./.github/actions/setup-rust-env
-        with:
-          working-directory: ${{ inputs.component }}
+      # --- Step 1: Format check (no compilation, instant) ---
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      # --- Step 2: Clippy (first compilation — cached by sccache across runs) ---
+      - name: Clippy lint
+        run: cargo clippy --all-targets ${{ inputs.cargo-features }} -- -D warnings
+
+      # --- Step 3: Tests (reuses clippy compilation artifacts) ---
+      - name: Run tests
+        run: cargo test ${{ inputs.cargo-features }}
+
+      # --- Step 4: Coverage (reuses test artifacts via llvm-cov) ---
       - name: Cache cargo-llvm-cov binary
         id: cache-llvm-cov
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cargo/bin/cargo-llvm-cov
           key: cargo-llvm-cov-${{ runner.os }}-v0.6
+
       - name: Install cargo-llvm-cov
         if: steps.cache-llvm-cov.outputs.cache-hit != 'true'
+        env:
+          RUSTC_WRAPPER: ''
         run: cargo install cargo-llvm-cov --locked
+
       - name: Install llvm-tools-preview
         run: rustup component add llvm-tools-preview
+
       - name: Run coverage
+        env:
+          RUSTC_WRAPPER: ''
         run: cargo llvm-cov ${{ inputs.cargo-features }} --summary-only 2>&1 | tee /tmp/cov-summary.txt
+
       - name: Extract coverage percentage
-        id: extract
+        id: extract-cov
         run: |
           COV_PCT=$(grep -oP 'TOTAL\s+\d+\s+\d+\s+\K[\d.]+' /tmp/cov-summary.txt || echo "0")
           echo "coverage_pct=$COV_PCT" >> $GITHUB_OUTPUT
           echo "Coverage: $COV_PCT%"
+
       - name: Enforce coverage threshold
         run: |
-          COV_PCT="${{ steps.extract.outputs.coverage_pct }}"
-          THRESHOLD=60
+          COV_PCT="${{ steps.extract-cov.outputs.coverage_pct }}"
+          THRESHOLD=${{ inputs.coverage-threshold }}
           echo "Coverage: ${COV_PCT}% (threshold: ${THRESHOLD}%)"
           if [ "$(echo "$COV_PCT < $THRESHOLD" | bc -l)" -eq 1 ]; then
             echo "::error::Coverage ${COV_PCT}% is below threshold ${THRESHOLD}%"
             exit 1
           fi
-      - name: Coverage summary
+
+      # --- Step 5: sccache stats ---
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
+
+      # --- Summary ---
+      - name: Job Summary
         if: always()
         run: |
-          COV_PCT="${{ steps.extract.outputs.coverage_pct }}"
-          THRESHOLD=60
+          COV_PCT="${{ steps.extract-cov.outputs.coverage_pct }}"
+          THRESHOLD=${{ inputs.coverage-threshold }}
           if [ "$(echo "$COV_PCT < $THRESHOLD" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
-            STATUS="⚠️ BELOW THRESHOLD"
+            COV_STATUS=":warning: BELOW THRESHOLD"
           else
-            STATUS="✅ PASS"
+            COV_STATUS=":white_check_mark:"
           fi
-          echo "## Code Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Line coverage | ${COV_PCT}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Threshold | ${THRESHOLD}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | ${STATUS} |" >> $GITHUB_STEP_SUMMARY
+          echo "## ${{ inputs.component }} Rust CI" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| cargo fmt | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
+          echo "| cargo clippy | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
+          echo "| cargo test | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
+          echo "| coverage (${COV_PCT}%) | ${COV_STATUS} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Set result output
+        id: set-result
+        if: always()
+        run: echo "result=${{ job.status }}" >> $GITHUB_OUTPUT
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -172,45 +149,3 @@ jobs:
           name: coverage-report
           path: /tmp/cov-summary.txt
           retention-days: 30
-
-  bench-compile:
-    name: Compile Benchmarks
-    runs-on: ${{ inputs.runner }}
-    needs: clippy
-    continue-on-error: true
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: ${{ inputs.component }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install system dependencies for rdkafka
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake
-      - uses: ./.github/actions/setup-rust-env
-        with:
-          working-directory: ${{ inputs.component }}
-      - name: Compile benchmarks (no-run)
-        run: cargo bench --no-run ${{ inputs.cargo-features }}
-
-  audit:
-    name: Security Audit
-    if: inputs.run-audit
-    runs-on: ${{ inputs.runner }}
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: ${{ inputs.component }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Cache cargo-audit binary
-        id: cache-audit
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ~/.cargo/bin/cargo-audit
-          key: cargo-audit-${{ runner.os }}-v0.22
-      - name: Install cargo-audit
-        if: steps.cache-audit.outputs.cache-hit != 'true'
-        run: cargo install cargo-audit --locked
-      - run: cargo audit

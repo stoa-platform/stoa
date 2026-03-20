@@ -51,12 +51,11 @@ permissions:
   attestations: write
 
 jobs:
-  # === CI: fmt + clippy + test + audit ===
+  # === CI: fmt + clippy + test + coverage (single job, sccache) ===
   ci:
     uses: ./.github/workflows/reusable-rust-ci.yml
     with:
       component: stoa-gateway
-      run-audit: false
       cargo-features: '--features kafka,pingora'
       runner: self-hosted
     permissions:

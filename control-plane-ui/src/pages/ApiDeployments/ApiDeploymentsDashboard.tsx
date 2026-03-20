@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { DeployAPIDialog } from '../GatewayDeployments/DeployAPIDialog';
+import { DeploymentDetailDrawer } from './DeploymentDetailDrawer';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
@@ -53,6 +54,7 @@ export function ApiDeploymentsDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [showDeployDialog, setShowDeployDialog] = useState(false);
+  const [selectedDeployment, setSelectedDeployment] = useState<GatewayDeployment | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -247,7 +249,11 @@ export function ApiDeploymentsDashboard() {
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                 {deployments.map((d) => (
-                  <tr key={d.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
+                  <tr
+                    key={d.id}
+                    onClick={() => setSelectedDeployment(d)}
+                    className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30 cursor-pointer"
+                  >
                     <td className="px-4 py-3 text-neutral-900 dark:text-white font-medium">
                       {(d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8)}
                     </td>
@@ -265,7 +271,7 @@ export function ApiDeploymentsDashboard() {
                     <td className="px-4 py-3 text-xs text-neutral-500 dark:text-neutral-400">
                       {d.last_sync_success ? new Date(d.last_sync_success).toLocaleString() : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {(d.sync_status === 'drifted' || d.sync_status === 'error') && (
                           <button
@@ -328,6 +334,18 @@ export function ApiDeploymentsDashboard() {
             setShowDeployDialog(false);
             loadData();
             toast.success('Deployment initiated');
+          }}
+        />
+      )}
+
+      {/* Detail Drawer */}
+      {selectedDeployment && (
+        <DeploymentDetailDrawer
+          deployment={selectedDeployment}
+          onClose={() => setSelectedDeployment(null)}
+          onAction={() => {
+            setSelectedDeployment(null);
+            loadData();
           }}
         />
       )}

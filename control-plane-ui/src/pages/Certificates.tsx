@@ -446,13 +446,15 @@ export function Certificates() {
         </div>
       )}
 
-      {/* Empty State */}
-      {!loading && certConsumers.length === 0 && (
-        <EmptyState
-          title="No certificates bound"
-          description="Consumers can bind mTLS certificates via the Developer Portal or API. Once bound, certificates appear here for lifecycle management."
-        />
-      )}
+      {/* Empty State — only when no consumer certs AND no issued certs */}
+      {!loading &&
+        certConsumers.length === 0 &&
+        (!issuedCerts || issuedCerts.items.length === 0) && (
+          <EmptyState
+            title="No certificates yet"
+            description="Generate a client certificate using the button above, or bind an existing mTLS certificate via the Developer Portal."
+          />
+        )}
 
       {!loading && certConsumers.length > 0 && filtered.length === 0 && (
         <EmptyState

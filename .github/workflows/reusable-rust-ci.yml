@@ -33,8 +33,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
-  SCCACHE_GHA_ENABLED: 'true'
-  RUSTC_WRAPPER: sccache
 
 jobs:
   ci:
@@ -60,7 +58,22 @@ jobs:
           working-directory: ${{ inputs.component }}
 
       - name: Setup sccache
+        id: sccache
         uses: mozilla-actions/sccache-action@v0.0.7
+        continue-on-error: true
+        env:
+          SCCACHE_GHA_ENABLED: 'true'
+
+      - name: Enable sccache wrapper (if available)
+        if: steps.sccache.outcome == 'success'
+        run: |
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+            echo "sccache available — compilation cache enabled"
+          else
+            echo "sccache not functional — proceeding without it"
+          fi
 
       # --- Step 1: Format check (no compilation, instant) ---
       - name: Check formatting

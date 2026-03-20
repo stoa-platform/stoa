@@ -4,7 +4,7 @@ description: Core behavioral rules — Ship/Show/Ask, DoD, State Machine, Operat
 
 # Workflow Essentials — Core Behavioral Rules
 
-> Single source of truth for rules referenced by ai-factory.md, ai-workflow.md, git-workflow.md, session-startup.md, phase-ownership.md.
+> Single source of truth for rules referenced by ai-factory.md, session-lifecycle.md, git-workflow.md, phase-ownership.md.
 
 ## Ship/Show/Ask Decision Matrix
 

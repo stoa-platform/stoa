@@ -48,7 +48,7 @@ Exports cles:
 - Toujours `createAuthMock(role)` — jamais de mock inline pour useAuth
 - Toute page avec RBAC conditionnel → tester les 4 personas (`describe.each`)
 - `vi.clearAllMocks()` ne reset PAS les implementations → re-initialiser les mocks dans `beforeEach`
-- Voir `test-evolution.md` pour les regles completes
+- Voir `testing-standards.md` pour les regles completes
 
 ## Workflow
 

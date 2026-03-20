@@ -37,6 +37,58 @@ router = APIRouter(
 )
 
 
+# --- Route Reload Endpoint (CAB-1828) ---
+
+
+class GatewayRouteItem(BaseModel):
+    """Route in stoa-gateway ApiRoute format for hot-reload."""
+
+    id: str
+    name: str
+    tenant_id: str
+    path_prefix: str
+    backend_url: str
+    methods: list[str] = []
+    spec_hash: str = ""
+    activated: bool = True
+
+
+@router.get("/routes", response_model=list[GatewayRouteItem])
+async def list_gateway_routes(
+    gateway_name: str | None = Query(None, description="Filter by gateway instance name"),
+    db: AsyncSession = Depends(get_db),
+    x_gateway_key: str | None = Header(None),
+):
+    """Return all synced deployment routes in stoa-gateway ApiRoute format.
+
+    Used by the gateway route hot-reload loop (CAB-1828) to pull the full
+    route table from the control plane. No JWT auth — uses X-Gateway-Key.
+    """
+    if settings.GATEWAY_ADMIN_KEY and x_gateway_key != settings.GATEWAY_ADMIN_KEY:
+        raise HTTPException(status_code=401, detail="Invalid gateway key")
+
+    from src.adapters.stoa.mappers import map_api_spec_to_stoa
+    from src.models.gateway_deployment import DeploymentSyncStatus
+
+    deploy_repo = GatewayDeploymentRepository(db)
+
+    # Get all SYNCED + PENDING deployments (PENDING = recently deployed, should be on gateway)
+    deployments = await deploy_repo.list_by_statuses([
+        DeploymentSyncStatus.SYNCED,
+        DeploymentSyncStatus.PENDING,
+    ])
+
+    routes = []
+    for dep in deployments:
+        ds = dep.desired_state or {}
+        tenant_id = ds.get("tenant_id", "")
+        route = map_api_spec_to_stoa(ds, tenant_id)
+        if route.get("backend_url"):  # Skip routes without a backend
+            routes.append(GatewayRouteItem(**route))
+
+    return routes
+
+
 # --- Pydantic Schemas ---
 
 

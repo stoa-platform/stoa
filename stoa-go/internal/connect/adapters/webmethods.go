@@ -36,7 +36,7 @@ func (w *WebMethodsAdapter) Detect(ctx context.Context, adminURL string) (bool, 
 	if err != nil {
 		return false, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode == http.StatusOK, nil
 }
@@ -172,7 +172,7 @@ func (w *WebMethodsAdapter) doGet(ctx context.Context, url string) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

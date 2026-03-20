@@ -70,9 +70,9 @@ jobs:
           cache-dependency-path: stoa-go/go.sum
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.11.3
           working-directory: stoa-go
 
   goreleaser-check:

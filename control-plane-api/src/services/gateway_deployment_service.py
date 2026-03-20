@@ -39,12 +39,25 @@ class GatewayDeploymentService:
         spec_hash = hashlib.sha256(
             json.dumps(spec_data, sort_keys=True, default=str).encode()
         ).hexdigest()
+
+        # Extract backend_url from OpenAPI servers or api_metadata
+        backend_url = ""
+        metadata = api_catalog.api_metadata or {}
+        if isinstance(metadata, dict):
+            backend_url = metadata.get("backend_url", metadata.get("url", ""))
+        if not backend_url and isinstance(spec_data, dict):
+            servers = spec_data.get("servers", [])
+            if servers and isinstance(servers, list) and isinstance(servers[0], dict):
+                backend_url = servers[0].get("url", "")
+
         return {
             "spec_hash": spec_hash,
             "version": api_catalog.version,
             "api_name": api_catalog.api_name,
             "api_id": api_catalog.api_id,
+            "api_catalog_id": str(api_catalog.id),
             "tenant_id": api_catalog.tenant_id,
+            "backend_url": backend_url,
             "activated": True,
         }
 

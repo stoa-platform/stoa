@@ -88,9 +88,12 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
                     resource_id=data.get("id", payload.get("id", "")),
                     data={"spec_hash": payload.get("spec_hash", "")},
                 )
-            return AdapterResult(success=False, error=f"sync_api failed: HTTP {resp.status_code} — {resp.text}")
+            body = resp.text[:500] if resp.text else "(empty response)"
+            return AdapterResult(success=False, error=f"sync_api failed: HTTP {resp.status_code} — {body}")
         except Exception as e:
-            return AdapterResult(success=False, error=str(e))
+            error_msg = str(e) or f"{type(e).__name__}: (no details)"
+            logger.warning("sync_api exception for tenant %s: [%s] %s", tenant_id, type(e).__name__, error_msg)
+            return AdapterResult(success=False, error=error_msg)
 
     async def delete_api(self, api_id: str, auth_token: str | None = None) -> AdapterResult:
         try:

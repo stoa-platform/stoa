@@ -26,6 +26,8 @@ use crate::memory::MemoryMonitor;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::observability::SnapshotStore;
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
+#[cfg(feature = "pingora")]
+use crate::proxy::pingora_pool::PingoraPool;
 use crate::proxy::{ConsumerCredentialStore, CredentialStore};
 use crate::quota::{
     BudgetCache, BudgetCacheConfig, ConsumerRateLimiter, QuotaManager, QuotaManagerConfig,
@@ -147,6 +149,11 @@ pub struct AppState {
     /// eBPF sync client for kernel-level policy enforcement (CAB-1848).
     /// None when STOA_EBPF_DAEMON_URL is not set.
     pub ebpf_client: Option<Arc<crate::ebpf::EbpfSyncClient>>,
+    /// Pingora shared connection pool for proxy path (CAB-1849).
+    /// Feature-gated: only available when built with `--features pingora`.
+    /// When present, proxy routes use Pingora's cross-worker pool instead of reqwest.
+    #[cfg(feature = "pingora")]
+    pub pingora_pool: Option<Arc<PingoraPool>>,
 }
 
 impl AppState {
@@ -640,6 +647,12 @@ impl AppState {
             ebpf_client: std::env::var("STOA_EBPF_DAEMON_URL")
                 .ok()
                 .map(|url| Arc::new(crate::ebpf::EbpfSyncClient::new(&url))),
+            #[cfg(feature = "pingora")]
+            pingora_pool: {
+                let pool = PingoraPool::new();
+                tracing::info!("Pingora connection pool initialized (shared cross-worker)");
+                Some(Arc::new(pool))
+            },
         }
     }
 

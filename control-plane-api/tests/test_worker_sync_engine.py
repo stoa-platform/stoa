@@ -248,6 +248,7 @@ class TestReconcileAll:
             with patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo):
                 with patch("src.workers.sync_engine.settings") as mock_settings:
                     mock_settings.SYNC_ENGINE_RETRY_MAX = 3
+                    mock_settings.SYNC_ENGINE_INTERVAL_SECONDS = 300
                     with patch.object(engine, "_reconcile_one", side_effect=fake_reconcile_one):
                         await engine._reconcile_all()
 
@@ -274,6 +275,7 @@ class TestReconcileAll:
             with patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo):
                 with patch("src.workers.sync_engine.settings") as mock_settings:
                     mock_settings.SYNC_ENGINE_RETRY_MAX = 3
+                    mock_settings.SYNC_ENGINE_INTERVAL_SECONDS = 300
                     with patch.object(engine, "_reconcile_one", side_effect=fake_reconcile_one):
                         await engine._reconcile_all()
 

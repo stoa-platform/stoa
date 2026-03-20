@@ -59,7 +59,7 @@ jobs:
       python-version: '3.11'
       coverage-threshold: 65
       test-markers: not integration
-      runner: self-hosted
+      runner: ubuntu-latest
     permissions:
       contents: read
       checks: write

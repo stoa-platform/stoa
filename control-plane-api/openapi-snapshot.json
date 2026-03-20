@@ -2784,12 +2784,36 @@
       },
       "CSRSignResponse": {
         "properties": {
+          "fingerprint_sha256": {
+            "title": "Fingerprint Sha256",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
           "issuer_dn": {
             "title": "Issuer Dn",
             "type": "string"
           },
+          "not_after": {
+            "title": "Not After",
+            "type": "string"
+          },
+          "not_before": {
+            "title": "Not Before",
+            "type": "string"
+          },
+          "serial_number": {
+            "title": "Serial Number",
+            "type": "string"
+          },
           "signed_certificate_pem": {
             "title": "Signed Certificate Pem",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
             "type": "string"
           },
           "subject_dn": {
@@ -2802,10 +2826,16 @@
           }
         },
         "required": [
+          "id",
           "signed_certificate_pem",
           "subject_dn",
           "issuer_dn",
-          "validity_days"
+          "serial_number",
+          "fingerprint_sha256",
+          "not_before",
+          "not_after",
+          "validity_days",
+          "status"
         ],
         "title": "CSRSignResponse",
         "type": "object"
@@ -10913,6 +10943,36 @@
         "title": "GatewayScopeResponse",
         "type": "object"
       },
+      "GeneratedBindingResponse": {
+        "description": "A binding generated during contract publication.",
+        "properties": {
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "protocol": {
+            "title": "Protocol",
+            "type": "string"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          }
+        },
+        "required": [
+          "protocol",
+          "endpoint"
+        ],
+        "title": "GeneratedBindingResponse",
+        "type": "object"
+      },
       "GitLabHealthResponse": {
         "description": "GitLab connection health status.",
         "properties": {
@@ -11930,6 +11990,121 @@
           "tools"
         ],
         "title": "InternalToolsListResponse",
+        "type": "object"
+      },
+      "IssuedCertificateListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IssuedCertificateResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "IssuedCertificateListResponse",
+        "type": "object"
+      },
+      "IssuedCertificateResponse": {
+        "properties": {
+          "consumer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Id"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "fingerprint_sha256": {
+            "title": "Fingerprint Sha256",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "issuer_dn": {
+            "title": "Issuer Dn",
+            "type": "string"
+          },
+          "key_algorithm": {
+            "title": "Key Algorithm",
+            "type": "string"
+          },
+          "not_after": {
+            "title": "Not After",
+            "type": "string"
+          },
+          "not_before": {
+            "title": "Not Before",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "serial_number": {
+            "title": "Serial Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_dn": {
+            "title": "Subject Dn",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subject_dn",
+          "issuer_dn",
+          "serial_number",
+          "fingerprint_sha256",
+          "not_before",
+          "not_after",
+          "key_algorithm",
+          "status",
+          "consumer_id",
+          "created_by",
+          "created_at",
+          "revoked_at"
+        ],
+        "title": "IssuedCertificateResponse",
         "type": "object"
       },
       "KeyRotationRequest": {
@@ -18190,6 +18365,27 @@
           "current"
         ],
         "title": "PublicEnvironmentsResponse",
+        "type": "object"
+      },
+      "PublishContractResponse": {
+        "description": "Response after publishing a contract.",
+        "properties": {
+          "bindings_generated": {
+            "items": {
+              "$ref": "#/components/schemas/GeneratedBindingResponse"
+            },
+            "title": "Bindings Generated",
+            "type": "array"
+          },
+          "contract": {
+            "$ref": "#/components/schemas/ContractResponse"
+          }
+        },
+        "required": [
+          "contract",
+          "bindings_generated"
+        ],
+        "title": "PublishContractResponse",
         "type": "object"
       },
       "QuotaCounters": {
@@ -45570,6 +45766,131 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/ca/certificates": {
+      "get": {
+        "description": "List all certificates issued by this tenant's CA.",
+        "operationId": "list_issued_certificates",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by status: active, revoked",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status: active, revoked",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedCertificateListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Issued Certificates",
+        "tags": [
+          "Tenant CA"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/ca/certificates/{cert_id}/revoke": {
+      "post": {
+        "description": "Revoke a single issued certificate.\n\nRequires cpi-admin or tenant-admin role.",
+        "operationId": "revoke_issued_certificate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "cert_id",
+            "required": true,
+            "schema": {
+              "title": "Cert Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revoke Issued Certificate",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Issued Certificate",
+        "tags": [
+          "Tenant CA"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/ca/generate": {
       "post": {
         "description": "Generate a new CA keypair for a tenant.\n\nRequires cpi-admin or tenant-admin role.\nOnly one active CA per tenant is allowed.",
@@ -45620,7 +45941,7 @@
     },
     "/v1/tenants/{tenant_id}/ca/sign": {
       "post": {
-        "description": "Sign a CSR with the tenant's CA private key.\n\nRequires cpi-admin or tenant-admin role.\nThe CSR must have a valid signature.",
+        "description": "Sign a CSR with the tenant's CA private key.\n\nRequires cpi-admin or tenant-admin role.\nThe CSR must have a valid signature.\nThe signed certificate is persisted for lifecycle management.",
         "operationId": "sign_consumer_csr",
         "parameters": [
           {
@@ -46478,6 +46799,64 @@
           }
         ],
         "summary": "Generate MCP tools from UAC contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/publish": {
+      "post": {
+        "description": "Publish a draft contract.\n\nSets status to 'published' and enables REST + MCP bindings with generated endpoints.",
+        "operationId": "publish_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish Contract",
         "tags": [
           "Contracts"
         ]

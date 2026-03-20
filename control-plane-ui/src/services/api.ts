@@ -67,6 +67,7 @@ import type {
   PromotionDiffResponse,
   TenantCAInfo,
   CSRSignResponse,
+  IssuedCertificateListResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -430,6 +431,20 @@ class ApiService {
 
   async revokeTenantCA(tenantId: string): Promise<void> {
     await this.client.delete(`/v1/tenants/${tenantId}/ca`);
+  }
+
+  async listIssuedCertificates(
+    tenantId: string,
+    status?: string
+  ): Promise<IssuedCertificateListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/ca/certificates`, {
+      params: status ? { status } : undefined,
+    });
+    return data;
+  }
+
+  async revokeIssuedCertificate(tenantId: string, certId: string): Promise<void> {
+    await this.client.post(`/v1/tenants/${tenantId}/ca/certificates/${certId}/revoke`);
   }
 
   // Deployments (CAB-1353 lifecycle API)

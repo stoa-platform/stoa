@@ -31,7 +31,7 @@ on:
         description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
         required: false
         type: string
-        default: 'ubuntu-latest'
+        default: 'self-hosted'
     outputs:
       test-result:
         description: 'Build job result (success/failure)'

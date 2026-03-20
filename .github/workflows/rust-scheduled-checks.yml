@@ -1,0 +1,55 @@
+# =============================================================================
+# Scheduled Rust checks: cargo audit + bench compile
+# Runs daily — not needed on every PR (audit = advisory, bench = compile-only)
+# =============================================================================
+
+name: Rust Scheduled Checks
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # Daily at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: stoa-gateway
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Cache cargo-audit binary
+        id: cache-audit
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}-v0.22
+      - name: Install cargo-audit
+        if: steps.cache-audit.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked
+      - run: cargo audit
+        continue-on-error: true
+
+  bench-compile:
+    name: Compile Benchmarks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: stoa-gateway
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install system dependencies for rdkafka
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake
+      - uses: ./.github/actions/setup-rust-env
+        with:
+          working-directory: stoa-gateway
+      - name: Compile benchmarks (no-run)
+        run: cargo bench --no-run --features kafka,pingora
+        continue-on-error: true

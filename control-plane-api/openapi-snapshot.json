@@ -10943,6 +10943,36 @@
         "title": "GatewayScopeResponse",
         "type": "object"
       },
+      "GeneratedBindingResponse": {
+        "description": "A binding generated during contract publication.",
+        "properties": {
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "protocol": {
+            "title": "Protocol",
+            "type": "string"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          }
+        },
+        "required": [
+          "protocol",
+          "endpoint"
+        ],
+        "title": "GeneratedBindingResponse",
+        "type": "object"
+      },
       "GitLabHealthResponse": {
         "description": "GitLab connection health status.",
         "properties": {
@@ -18335,6 +18365,27 @@
           "current"
         ],
         "title": "PublicEnvironmentsResponse",
+        "type": "object"
+      },
+      "PublishContractResponse": {
+        "description": "Response after publishing a contract.",
+        "properties": {
+          "bindings_generated": {
+            "items": {
+              "$ref": "#/components/schemas/GeneratedBindingResponse"
+            },
+            "title": "Bindings Generated",
+            "type": "array"
+          },
+          "contract": {
+            "$ref": "#/components/schemas/ContractResponse"
+          }
+        },
+        "required": [
+          "contract",
+          "bindings_generated"
+        ],
+        "title": "PublishContractResponse",
         "type": "object"
       },
       "QuotaCounters": {
@@ -46748,6 +46799,64 @@
           }
         ],
         "summary": "Generate MCP tools from UAC contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/publish": {
+      "post": {
+        "description": "Publish a draft contract.\n\nSets status to 'published' and enables REST + MCP bindings with generated endpoints.",
+        "operationId": "publish_contract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish Contract",
         "tags": [
           "Contracts"
         ]

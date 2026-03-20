@@ -23,6 +23,7 @@ VPS_FLEET=(
   "webmethods-vps|51.255.201.17|debian|webMethods API Gateway trial (gateway.gostoa.dev)"
   "infisical-vps|213.199.45.108|debian|Infisical vault (vault.gostoa.dev) + Caddy TLS"
   "bench-vps|94.23.107.106|debian|OpenSearch bench + Arena runner (STOA-bench)"
+  "runner-vps|194.163.161.85|github-runner|GitHub Actions self-hosted runner (contabo-runner-1)"
   # HEGEMON workers are dynamic — use hegemon/workers.txt
 )
 

@@ -403,7 +403,7 @@ async def configure_api_oidc(
 
     except Exception as e:
         logger.error(f"Failed to configure OIDC for API {config.api_name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
+        raise HTTPException(status_code=500, detail="Gateway OIDC configuration error") from e
 
 
 # ============================================================================

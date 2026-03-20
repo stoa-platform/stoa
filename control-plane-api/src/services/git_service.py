@@ -262,6 +262,7 @@ settings:
                 "version": api_data.get("version", "1.0.0"),
                 "description": api_data.get("description", ""),
                 "backend_url": api_data.get("backend_url", ""),
+                "tags": api_data.get("tags", []),
                 "status": "draft",
                 "deployments": {
                     "dev": False,

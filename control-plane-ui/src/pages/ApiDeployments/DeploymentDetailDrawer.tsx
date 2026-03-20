@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { X, RotateCcw, Trash2, AlertTriangle, CheckCircle2, Clock, Server } from 'lucide-react';
+import {
+  X,
+  RotateCcw,
+  Trash2,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Server,
+  Zap,
+} from 'lucide-react';
 import { apiService } from '../../services/api';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -107,12 +116,33 @@ export function DeploymentDetailDrawer({
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [loading, setLoading] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    reachable: boolean;
+    status_code?: number;
+    latency_ms?: number;
+    error?: string;
+    path?: string;
+  } | null>(null);
+  const [testing, setTesting] = useState(false);
 
   const apiName = (d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8) || '—';
   const gatewayLabel =
     d.gateway_display_name || d.gateway_name || d.gateway_instance_id?.slice(0, 8) || '—';
   const isRetryable =
     d.sync_status === 'error' || d.sync_status === 'drifted' || d.sync_status === 'pending';
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await apiService.testDeployment(d.id);
+      setTestResult(result);
+    } catch {
+      setTestResult({ reachable: false, error: 'Failed to run test' });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const handleForceSync = async () => {
     setLoading(true);
@@ -223,6 +253,57 @@ export function DeploymentDetailDrawer({
               </div>
             </div>
           )}
+
+          {/* Connectivity Test */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
+                Gateway Connectivity
+              </h3>
+              <button
+                onClick={handleTest}
+                disabled={testing}
+                className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+              >
+                <Zap className={`h-3.5 w-3.5 ${testing ? 'animate-pulse' : ''}`} />
+                {testing ? 'Testing...' : 'Test Now'}
+              </button>
+            </div>
+            {testResult && (
+              <div
+                className={`rounded-lg p-3 text-sm ${
+                  testResult.reachable
+                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  {testResult.reachable ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                  )}
+                  <span
+                    className={`font-medium ${testResult.reachable ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'}`}
+                  >
+                    {testResult.reachable
+                      ? `Reachable — HTTP ${testResult.status_code} (${testResult.latency_ms}ms)`
+                      : 'Unreachable'}
+                  </span>
+                </div>
+                {testResult.path && (
+                  <p className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
+                    GET {testResult.path}
+                  </p>
+                )}
+                {testResult.error && (
+                  <p className="text-xs font-mono text-red-600 dark:text-red-400 mt-1">
+                    {testResult.error}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Timeline */}
           <div>

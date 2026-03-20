@@ -826,6 +826,18 @@ class ApiService {
     return data;
   }
 
+  async testDeployment(id: string): Promise<{
+    reachable: boolean;
+    status_code?: number;
+    latency_ms?: number;
+    error?: string;
+    gateway_url?: string;
+    path?: string;
+  }> {
+    const { data } = await this.client.post(`/v1/admin/deployments/${id}/test`);
+    return data;
+  }
+
   async getCatalogEntries(): Promise<
     { id: string; api_name: string; tenant_id: string; version: string }[]
   > {

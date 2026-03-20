@@ -1,21 +1,26 @@
-"""Tenant CA router — per-tenant CA keypair management and CSR signing (CAB-1787).
+"""Tenant CA router — per-tenant CA keypair management, CSR signing, and certificate lifecycle.
 
 Endpoints:
-  POST /v1/tenants/{tenant_id}/ca/generate  — Generate CA keypair
-  GET  /v1/tenants/{tenant_id}/ca           — Get CA certificate (public only)
-  POST /v1/tenants/{tenant_id}/ca/sign      — Sign a CSR
-  DELETE /v1/tenants/{tenant_id}/ca         — Revoke CA (cpi-admin only)
+  POST   /v1/tenants/{tenant_id}/ca/generate       — Generate CA keypair
+  GET    /v1/tenants/{tenant_id}/ca                 — Get CA certificate (public only)
+  POST   /v1/tenants/{tenant_id}/ca/sign            — Sign a CSR (persists issued cert)
+  DELETE /v1/tenants/{tenant_id}/ca                 — Revoke CA (cpi-admin only)
+  GET    /v1/tenants/{tenant_id}/ca/certificates    — List issued certificates
+  POST   /v1/tenants/{tenant_id}/ca/certificates/{cert_id}/revoke — Revoke a single certificate
 """
 
+import hashlib
 import logging
+import uuid as uuid_mod
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
 from ..database import get_db
+from ..models.signed_certificate import SignedCertificate
 from ..models.tenant import Tenant
 from ..models.tenant_ca import TenantCA
 from ..services.tenant_ca_service import generate_ca_keypair, sign_csr
@@ -59,10 +64,37 @@ class CSRSignRequest(BaseModel):
 
 
 class CSRSignResponse(BaseModel):
+    id: str
     signed_certificate_pem: str
     subject_dn: str
     issuer_dn: str
+    serial_number: str
+    fingerprint_sha256: str
+    not_before: str
+    not_after: str
     validity_days: int
+    status: str
+
+
+class IssuedCertificateResponse(BaseModel):
+    id: str
+    subject_dn: str
+    issuer_dn: str
+    serial_number: str
+    fingerprint_sha256: str
+    not_before: str
+    not_after: str
+    key_algorithm: str
+    status: str
+    consumer_id: str | None
+    created_by: str | None
+    created_at: str
+    revoked_at: str | None
+
+
+class IssuedCertificateListResponse(BaseModel):
+    items: list[IssuedCertificateResponse]
+    total: int
 
 
 # --- Helpers ---
@@ -190,6 +222,7 @@ async def sign_consumer_csr(
 
     Requires cpi-admin or tenant-admin role.
     The CSR must have a valid signature.
+    The signed certificate is persisted for lifecycle management.
     """
     _require_admin_or_tenant_admin(user, tenant_id)
 
@@ -209,19 +242,133 @@ async def sign_consumer_csr(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Parse signed cert to extract subject/issuer for response
+    # Parse signed cert to extract metadata
     from cryptography import x509 as x509_mod
+    from cryptography.hazmat.primitives import serialization
 
     signed_cert = x509_mod.load_pem_x509_certificate(signed_pem.encode("utf-8"))
+    der_bytes = signed_cert.public_bytes(serialization.Encoding.DER)
+    fingerprint = hashlib.sha256(der_bytes).hexdigest()
+    serial_hex = format(signed_cert.serial_number, "x")
 
-    logger.info("Signed CSR for tenant %s by user %s", tenant_id, user.id)
+    # Persist the signed certificate
+    cert_record = SignedCertificate(
+        tenant_id=tenant_id,
+        ca_id=ca.id,
+        subject_dn=signed_cert.subject.rfc4514_string(),
+        issuer_dn=signed_cert.issuer.rfc4514_string(),
+        serial_number=serial_hex,
+        not_before=signed_cert.not_valid_before_utc,
+        not_after=signed_cert.not_valid_after_utc,
+        key_algorithm="RSA-4096",
+        fingerprint_sha256=fingerprint,
+        certificate_pem=signed_pem,
+        created_by=user.id,
+    )
+    db.add(cert_record)
+    await db.flush()
+
+    logger.info("Signed and persisted certificate %s for tenant %s by user %s", cert_record.id, tenant_id, user.id)
 
     return CSRSignResponse(
+        id=str(cert_record.id),
         signed_certificate_pem=signed_pem,
         subject_dn=signed_cert.subject.rfc4514_string(),
         issuer_dn=signed_cert.issuer.rfc4514_string(),
+        serial_number=serial_hex,
+        fingerprint_sha256=fingerprint,
+        not_before=signed_cert.not_valid_before_utc.isoformat(),
+        not_after=signed_cert.not_valid_after_utc.isoformat(),
         validity_days=request.validity_days,
+        status="active",
     )
+
+
+@router.get("/certificates", response_model=IssuedCertificateListResponse)
+async def list_issued_certificates(
+    tenant_id: str,
+    status: str | None = Query(None, description="Filter by status: active, revoked"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> IssuedCertificateListResponse:
+    """List all certificates issued by this tenant's CA."""
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    query = select(SignedCertificate).where(SignedCertificate.tenant_id == tenant_id)
+    if status:
+        query = query.where(SignedCertificate.status == status)
+    query = query.order_by(SignedCertificate.created_at.desc())
+
+    result = await db.execute(query)
+    certs = result.scalars().all()
+
+    # Total count
+    count_query = select(func.count()).select_from(SignedCertificate).where(SignedCertificate.tenant_id == tenant_id)
+    if status:
+        count_query = count_query.where(SignedCertificate.status == status)
+    total = (await db.execute(count_query)).scalar() or 0
+
+    items = [
+        IssuedCertificateResponse(
+            id=str(c.id),
+            subject_dn=c.subject_dn,
+            issuer_dn=c.issuer_dn,
+            serial_number=c.serial_number,
+            fingerprint_sha256=c.fingerprint_sha256,
+            not_before=c.not_before.isoformat(),
+            not_after=c.not_after.isoformat(),
+            key_algorithm=c.key_algorithm,
+            status=c.status,
+            consumer_id=str(c.consumer_id) if c.consumer_id else None,
+            created_by=c.created_by,
+            created_at=c.created_at.isoformat() if c.created_at else "",
+            revoked_at=c.revoked_at.isoformat() if c.revoked_at else None,
+        )
+        for c in certs
+    ]
+
+    return IssuedCertificateListResponse(items=items, total=total)
+
+
+@router.post("/certificates/{cert_id}/revoke", status_code=200)
+async def revoke_issued_certificate(
+    tenant_id: str,
+    cert_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Revoke a single issued certificate.
+
+    Requires cpi-admin or tenant-admin role.
+    """
+    _require_admin_or_tenant_admin(user, tenant_id)
+
+    try:
+        cert_uuid = uuid_mod.UUID(cert_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid certificate ID")
+
+    result = await db.execute(
+        select(SignedCertificate).where(
+            SignedCertificate.id == cert_uuid,
+            SignedCertificate.tenant_id == tenant_id,
+        )
+    )
+    cert = result.scalar_one_or_none()
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+
+    if cert.status == "revoked":
+        raise HTTPException(status_code=409, detail="Certificate is already revoked")
+
+    cert.status = "revoked"
+    cert.revoked_at = func.now()
+    await db.flush()
+
+    logger.info("Revoked certificate %s for tenant %s by user %s", cert_id, tenant_id, user.id)
+
+    return {"detail": "Certificate revoked", "id": cert_id, "fingerprint_sha256": cert.fingerprint_sha256}
 
 
 @router.delete("", status_code=200)

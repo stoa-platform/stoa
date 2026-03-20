@@ -23,6 +23,31 @@ from src.services.gateway_deployment_service import GatewayDeploymentService
 logger = logging.getLogger(__name__)
 
 
+def _deployment_to_dict(dep) -> dict:
+    """Convert a GatewayDeployment ORM object to a dict compatible with GatewayDeploymentResponse."""
+    return {
+        "id": dep.id,
+        "api_catalog_id": dep.api_catalog_id,
+        "gateway_instance_id": dep.gateway_instance_id,
+        "desired_state": dep.desired_state,
+        "desired_at": dep.desired_at,
+        "actual_state": dep.actual_state,
+        "actual_at": dep.actual_at,
+        "sync_status": dep.sync_status.value if hasattr(dep.sync_status, "value") else dep.sync_status,
+        "last_sync_attempt": dep.last_sync_attempt,
+        "last_sync_success": dep.last_sync_success,
+        "sync_error": dep.sync_error,
+        "sync_attempts": dep.sync_attempts,
+        "gateway_resource_id": dep.gateway_resource_id,
+        "created_at": dep.created_at,
+        "updated_at": dep.updated_at,
+        "gateway_name": None,
+        "gateway_display_name": None,
+        "gateway_type": None,
+        "gateway_environment": None,
+    }
+
+
 class CatalogEntry(BaseModel):
     """API catalog entry for deploy dialog."""
 
@@ -54,7 +79,7 @@ async def deploy_api(
     await db.commit()
     for dep in deployments:
         await db.refresh(dep)
-    return deployments
+    return [_deployment_to_dict(dep) for dep in deployments]
 
 
 @router.get("", response_model=PaginatedGatewayDeployments)
@@ -125,7 +150,7 @@ async def get_deployment(
     deployment = await deploy_repo.get_by_id(deployment_id)
     if not deployment:
         raise HTTPException(status_code=404, detail="Deployment not found")
-    return deployment
+    return _deployment_to_dict(deployment)
 
 
 @router.delete("/{deployment_id}", status_code=204)
@@ -157,4 +182,4 @@ async def force_sync(
         raise HTTPException(status_code=404, detail=str(e))
     await db.commit()
     await db.refresh(deployment)
-    return deployment
+    return _deployment_to_dict(deployment)

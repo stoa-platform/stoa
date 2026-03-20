@@ -19,14 +19,16 @@ vi.mock('../hooks/useEnvironmentMode', () => ({
   useEnvironmentMode: () => ({ canEdit: true, canDelete: true }),
 }));
 
-const { mockGetTenants, mockGetConsumers, mockBulkRevoke, mockRevokeCert } = vi.hoisted(() => ({
-  mockGetTenants: vi
-    .fn()
-    .mockResolvedValue([{ id: 'tenant-1', name: 'acme', display_name: 'Acme Corp' }]),
-  mockGetConsumers: vi.fn().mockResolvedValue([]),
-  mockBulkRevoke: vi.fn().mockResolvedValue({ success: 1, failed: 0, skipped: 0, errors: [] }),
-  mockRevokeCert: vi.fn().mockResolvedValue({}),
-}));
+const { mockGetTenants, mockGetConsumers, mockBulkRevoke, mockRevokeCert, mockListIssued } =
+  vi.hoisted(() => ({
+    mockGetTenants: vi
+      .fn()
+      .mockResolvedValue([{ id: 'tenant-1', name: 'acme', display_name: 'Acme Corp' }]),
+    mockGetConsumers: vi.fn().mockResolvedValue([]),
+    mockBulkRevoke: vi.fn().mockResolvedValue({ success: 1, failed: 0, skipped: 0, errors: [] }),
+    mockRevokeCert: vi.fn().mockResolvedValue({}),
+    mockListIssued: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  }));
 
 vi.mock('../services/api', () => ({
   apiService: {
@@ -34,6 +36,7 @@ vi.mock('../services/api', () => ({
     getConsumers: mockGetConsumers,
     bulkRevokeCertificates: mockBulkRevoke,
     revokeCertificate: mockRevokeCert,
+    listIssuedCertificates: mockListIssued,
   },
 }));
 
@@ -103,7 +106,7 @@ describe('Certificates', () => {
     renderCertificates([
       makeCertConsumer({ certificate_fingerprint: undefined, certificate_status: undefined }),
     ]);
-    expect(await screen.findByText(/no certificates bound/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no certificates yet/i)).toBeInTheDocument();
   });
 
   it('renders dashboard cards with correct counts', async () => {

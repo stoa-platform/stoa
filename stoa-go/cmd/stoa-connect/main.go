@@ -93,7 +93,7 @@ func main() {
 		if gatewayID == "" {
 			gatewayID = "unregistered"
 		}
-		fmt.Fprintf(w, `{"status":"ok","version":"%s","commit":"%s","gateway_id":"%s","discovered_apis":%d}`,
+		_, _ = fmt.Fprintf(w, `{"status":"ok","version":"%s","commit":"%s","gateway_id":"%s","discovered_apis":%d}`,
 			Version, Commit, gatewayID, agent.DiscoveredAPIsCount())
 	})
 

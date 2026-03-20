@@ -23,3 +23,17 @@ patches:
         value:
           name: STOA_GATEWAY_EXTERNAL_URL
           value: "https://rec-mcp.gostoa.dev"
+  - target:
+      kind: Deployment
+      name: stoa-sidecar-webmethods
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_ENVIRONMENT
+          value: "rec"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_INSTANCE_NAME
+          value: "stoa-sidecar-webmethods-rec"

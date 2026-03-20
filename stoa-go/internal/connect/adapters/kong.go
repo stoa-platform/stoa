@@ -220,7 +220,7 @@ func (k *KongAdapter) RemovePolicy(ctx context.Context, adminURL string, apiName
 			if err != nil {
 				return fmt.Errorf("delete kong plugin: %w", err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil
 		}
 	}

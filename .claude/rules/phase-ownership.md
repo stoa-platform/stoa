@@ -215,9 +215,9 @@ MEGA entries with phases use this format:
 
 | File | What References Phase Ownership |
 |------|-------------------------------|
-| `session-startup.md` | Step 0 (instance ID), Step 2 (Pick Your Phase algorithm) |
+| `session-lifecycle.md` | Step 0 (instance ID), Step 2 (Pick Your Phase algorithm) |
 | `ai-factory.md` | Pattern 9 (Phase Ownership workflow) |
-| `ai-workflow.md` | CLAIMED state in Item State Machine, CLAIM/RELEASE events |
+| `workflow-essentials.md` | CLAIMED state in Item State Machine, CLAIM/RELEASE events |
 | `crash-recovery.md` | `claimed_phase` in checkpoint schema, claim recovery steps |
 | `decompose/SKILL.md` | Step 9b (initialize claim file after sub-issue creation) |
 | `sync-plan/SKILL.md` | Step 4d (stale claim detection), preservation rules |

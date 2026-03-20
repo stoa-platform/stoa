@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.rbac import require_role
 from src.database import get_db
-from src.models.gateway_deployment import DeploymentSyncStatus
+from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.schemas.gateway import (
     DeploymentStatusSummary,
@@ -145,12 +145,31 @@ async def get_deployment(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
-    """Get deployment details."""
-    deploy_repo = GatewayDeploymentRepository(db)
-    deployment = await deploy_repo.get_by_id(deployment_id)
-    if not deployment:
+    """Get deployment details with gateway info."""
+    from src.models.gateway_instance import GatewayInstance
+
+    result = await db.execute(
+        select(
+            GatewayDeployment,
+            GatewayInstance.name.label("gateway_name"),
+            GatewayInstance.display_name.label("gateway_display_name"),
+            GatewayInstance.gateway_type.label("gateway_type"),
+            GatewayInstance.environment.label("gateway_environment"),
+        )
+        .join(GatewayInstance, GatewayDeployment.gateway_instance_id == GatewayInstance.id)
+        .where(GatewayDeployment.id == deployment_id)
+    )
+    row = result.one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Deployment not found")
-    return _deployment_to_dict(deployment)
+
+    dep = row.GatewayDeployment
+    d = _deployment_to_dict(dep)
+    d["gateway_name"] = row.gateway_name
+    d["gateway_display_name"] = row.gateway_display_name
+    d["gateway_type"] = row.gateway_type.value if hasattr(row.gateway_type, "value") else row.gateway_type
+    d["gateway_environment"] = row.gateway_environment
+    return d
 
 
 @router.delete("/{deployment_id}", status_code=204)

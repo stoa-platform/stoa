@@ -1232,6 +1232,8 @@ export interface GatewayDeployment {
   created_at: string;
   updated_at: string;
   gateway_name?: string;
+  gateway_display_name?: string;
+  gateway_type?: string;
   gateway_environment?: string;
 }
 

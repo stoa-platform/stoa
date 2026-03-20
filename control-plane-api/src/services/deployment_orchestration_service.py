@@ -191,8 +191,13 @@ class DeploymentOrchestrationService:
         else:
             await self._validate_gateways_for_env(gateway_ids, environment)
 
-        # 4. Deploy via existing GatewayDeploymentService
+        # 4. Deploy via existing GatewayDeploymentService (creates PENDING records + Kafka events)
         deployments = await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
+
+        # 5. Attempt inline sync — don't wait for Kafka/periodic worker
+        #    This gives immediate feedback in the UI. If it fails, the background
+        #    SyncEngine will retry on its next cycle.
+        await self._try_inline_sync(deployments)
 
         logger.info(
             "Orchestrated deployment: api=%s env=%s gateways=%d by=%s",
@@ -286,6 +291,62 @@ class DeploymentOrchestrationService:
         )
 
         return await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
+
+    async def _try_inline_sync(self, deployments: list) -> None:
+        """Attempt to sync deployments immediately (inline, not via Kafka/worker).
+
+        This is best-effort — if it fails, the SyncEngine periodic loop will
+        pick up PENDING records on its next cycle. The goal is to provide
+        immediate feedback in the UI instead of waiting 5 minutes.
+        """
+        import contextlib
+        from datetime import UTC, datetime
+
+        from ..adapters.registry import AdapterRegistry
+        from ..models.gateway_deployment import DeploymentSyncStatus
+        from ..repositories.gateway_instance import GatewayInstanceRepository
+
+        gw_repo = GatewayInstanceRepository(self.db)
+
+        for dep in deployments:
+            try:
+                gateway = await gw_repo.get_by_id(dep.gateway_instance_id)
+                if not gateway or gateway.status.value == "offline":
+                    continue
+
+                adapter = AdapterRegistry.create(
+                    gateway.gateway_type.value,
+                    config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+                )
+                await adapter.connect()
+                try:
+                    now = datetime.now(UTC)
+                    dep.sync_status = DeploymentSyncStatus.SYNCING
+                    dep.last_sync_attempt = now
+                    await self.db.flush()
+
+                    tenant_id = (dep.desired_state or {}).get("tenant_id", "")
+                    result = await adapter.sync_api(dep.desired_state, tenant_id)
+
+                    if result.success:
+                        dep.sync_status = DeploymentSyncStatus.SYNCED
+                        dep.actual_state = result.data or dep.desired_state
+                        dep.actual_at = now
+                        dep.gateway_resource_id = result.resource_id or dep.gateway_resource_id
+                        dep.last_sync_success = now
+                        dep.sync_error = None
+                        logger.info("Inline sync succeeded for deployment %s", dep.id)
+                    else:
+                        dep.sync_status = DeploymentSyncStatus.ERROR
+                        dep.sync_error = result.error or "Inline sync failed"
+                        dep.sync_attempts += 1
+                        logger.warning("Inline sync failed for deployment %s: %s", dep.id, result.error)
+                finally:
+                    with contextlib.suppress(Exception):
+                        await adapter.disconnect()
+
+            except Exception as e:
+                logger.warning("Inline sync error for deployment %s: %s (will retry via SyncEngine)", dep.id, e)
 
     async def _has_active_promotion(
         self, api_id: str, tenant_id: str, target_environment: str

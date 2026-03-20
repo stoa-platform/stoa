@@ -1,7 +1,7 @@
 """Create signed_certificates table for certificate lifecycle tracking.
 
-Revision ID: 078
-Revises: 077
+Revision ID: 078_create_signed_certificates
+Revises: 077_create_api_gateway_assignments
 Create Date: 2026-03-20
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "078"
-down_revision = "077"
+revision = "078_create_signed_certificates"
+down_revision = "077_create_api_gateway_assignments"
 branch_labels = None
 depends_on = None
 

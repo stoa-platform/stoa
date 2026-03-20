@@ -272,6 +272,7 @@ mod tests {
             upstream_http_version: Default::default(),
             upstreams: vec![],
             load_balancer: Default::default(),
+            trusted_backend: false,
         }
     }
 

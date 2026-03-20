@@ -63,6 +63,7 @@ impl RestBinder {
                     upstream_http_version: Default::default(),
                     upstreams: vec![],
                     load_balancer: Default::default(),
+                    trusted_backend: true,
                 }
             })
             .collect()
@@ -294,6 +295,7 @@ mod tests {
             upstream_http_version: Default::default(),
             upstreams: vec![],
             load_balancer: Default::default(),
+            trusted_backend: false,
         });
 
         let contract = sample_contract();

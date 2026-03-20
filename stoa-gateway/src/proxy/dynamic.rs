@@ -249,8 +249,9 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         target_url.push_str(q);
     }
 
-    // SSRF protection: block requests to private/internal IP ranges (defense-in-depth)
-    if is_blocked_url(&target_url) {
+    // SSRF protection: block requests to private/internal IP ranges (defense-in-depth).
+    // Skip for admin-registered routes (trusted_backend) — URLs are admin-managed (CAB-1893).
+    if !route.trusted_backend && is_blocked_url(&target_url) {
         warn!(
             route_id = %route.id,
             target_url = %target_url,
@@ -413,9 +414,14 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
 
     // Inject X-Stoa-Timing debug header with gateway/upstream timing
     // and hop count from Via headers (CAB-1316 Phase 2).
-    let hop_chain = hop_detection::parse_via_headers(response.headers());
+    // Short-circuit: only parse Via headers if the response actually contains them (CAB-1893).
     let gw_ms = (upstream_duration * 1000.0) as u64;
-    let timing_value = format!("gw={gw_ms};hops={}", hop_chain.total_hops);
+    let hops = if response.headers().contains_key("via") {
+        hop_detection::parse_via_headers(response.headers()).total_hops
+    } else {
+        0
+    };
+    let timing_value = format!("gw={gw_ms};hops={hops}");
     if let Ok(hv) = HeaderValue::from_str(&timing_value) {
         response.headers_mut().insert("x-stoa-timing", hv);
     }
@@ -499,7 +505,7 @@ async fn forward_request_pingora(
     }
 
     // Inject Via header for hop detection (CAB-1316 Phase 2)
-    if let Ok(v) = HeaderValue::from_str(&hop_detection::build_via_value()) {
+    if let Ok(v) = HeaderValue::from_str(hop_detection::build_via_value()) {
         headers.insert("via", v);
     }
 

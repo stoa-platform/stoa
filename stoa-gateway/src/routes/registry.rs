@@ -68,6 +68,10 @@ pub struct ApiRoute {
     /// Load balancing strategy (default: round_robin)
     #[serde(default)]
     pub load_balancer: LbStrategy,
+    /// Backend URL is admin-managed (registered via /admin/apis) — skip SSRF check (CAB-1893).
+    /// Only URLs from untrusted sources (OAuth2 token endpoints, consumer-provided) need SSRF validation.
+    #[serde(default)]
+    pub trusted_backend: bool,
 }
 
 /// Snapshot of the full route table (immutable once created).
@@ -210,6 +214,7 @@ mod tests {
             upstream_http_version: UpstreamHttpVersion::default(),
             upstreams: vec![],
             load_balancer: LbStrategy::default(),
+            trusted_backend: false,
         }
     }
 

@@ -138,6 +138,9 @@ pub async fn upsert_api(
         aid,
         tid,
     );
+    // Mark admin-registered routes as trusted — SSRF check skipped (CAB-1893)
+    let mut route = route;
+    route.trusted_backend = true;
     let existed = state.route_registry.upsert(route).is_some();
     emitter.step_completed(
         deployment_id,

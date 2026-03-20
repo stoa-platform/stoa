@@ -38,6 +38,7 @@ fn bench_route_lookup(c: &mut Criterion) {
             upstream_http_version: Default::default(),
             upstreams: vec![],
             load_balancer: Default::default(),
+            trusted_backend: false,
         });
     }
 
@@ -66,6 +67,7 @@ fn bench_route_lookup(c: &mut Criterion) {
             upstream_http_version: Default::default(),
             upstreams: vec![],
             load_balancer: Default::default(),
+            trusted_backend: false,
         });
     }
 

@@ -135,8 +135,10 @@ pub fn detect_intermediaries(headers: &HeaderMap) -> Vec<String> {
 }
 
 /// Build the Via header value for outgoing requests from this gateway.
-pub fn build_via_value() -> String {
-    format!("1.1 stoa-gateway ({})", env!("CARGO_PKG_VERSION"))
+/// Cached after first call — the value is constant for the process lifetime (CAB-1893).
+pub fn build_via_value() -> &'static str {
+    static VIA: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VIA.get_or_init(|| format!("1.1 stoa-gateway ({})", env!("CARGO_PKG_VERSION")))
 }
 
 #[cfg(test)]

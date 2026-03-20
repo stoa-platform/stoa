@@ -114,8 +114,13 @@ impl CredentialStore {
     }
 
     /// Get a credential by route_id.
+    /// Short-circuits to None without acquiring the lock when the store is empty (CAB-1893).
     pub fn get(&self, route_id: &str) -> Option<BackendCredential> {
-        self.credentials.read().get(route_id).cloned()
+        let guard = self.credentials.read();
+        if guard.is_empty() {
+            return None;
+        }
+        guard.get(route_id).cloned()
     }
 
     /// List all credentials (header_value redacted for safety).

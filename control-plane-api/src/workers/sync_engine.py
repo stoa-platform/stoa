@@ -14,7 +14,7 @@ import contextlib
 import json
 import logging
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from kafka import KafkaConsumer
@@ -189,10 +189,24 @@ class SyncEngine:
             repo = GatewayDeploymentRepository(session)
             deployments = await repo.list_by_statuses([
                 DeploymentSyncStatus.PENDING,
+                DeploymentSyncStatus.SYNCING,
                 DeploymentSyncStatus.DRIFTED,
                 DeploymentSyncStatus.ERROR,
                 DeploymentSyncStatus.DELETING,
             ])
+
+            if not deployments:
+                return
+
+            # Filter out SYNCING deployments that are still fresh (inline sync in progress)
+            stale_threshold = datetime.now(UTC) - timedelta(
+                seconds=settings.SYNC_ENGINE_INTERVAL_SECONDS
+            )
+            deployments = [
+                dep for dep in deployments
+                if dep.sync_status != DeploymentSyncStatus.SYNCING
+                or (dep.last_sync_attempt and dep.last_sync_attempt < stale_threshold)
+            ]
 
             if not deployments:
                 return

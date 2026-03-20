@@ -267,6 +267,7 @@ class TestSyncEngine:
              patch("src.workers.sync_engine.settings") as mock_settings:
 
             mock_settings.SYNC_ENGINE_RETRY_MAX = 3
+            mock_settings.SYNC_ENGINE_INTERVAL_SECONDS = 300
 
             from src.workers.sync_engine import SyncEngine
 

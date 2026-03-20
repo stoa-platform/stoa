@@ -346,6 +346,9 @@ class DeploymentOrchestrationService:
                         await adapter.disconnect()
 
             except Exception as e:
+                # Reset to PENDING so the SyncEngine periodic loop can retry
+                dep.sync_status = DeploymentSyncStatus.PENDING
+                dep.sync_error = str(e)[:500]
                 logger.warning("Inline sync error for deployment %s: %s (will retry via SyncEngine)", dep.id, e)
 
     async def _has_active_promotion(

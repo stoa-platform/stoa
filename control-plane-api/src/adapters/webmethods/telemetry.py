@@ -68,7 +68,7 @@ class WebMethodsTelemetryAdapter(TelemetryAdapterInterface):
             ) as client:
                 resp = await client.get(f"{_API_PREFIX}/is/health")
                 if resp.status_code == 200:
-                    return resp.json()
+                    return dict(resp.json())
                 return {"error": f"HTTP {resp.status_code}"}
         except Exception as e:
             logger.warning("webMethods health fetch failed: %s", e)

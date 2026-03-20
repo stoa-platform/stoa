@@ -154,7 +154,10 @@ impl GatewayRegistrar {
             version: env!("CARGO_PKG_VERSION").to_string(),
             environment: config.environment.clone(),
             capabilities,
-            admin_url: format!("http://{}:{}", hostname, config.port),
+            admin_url: config
+                .advertise_url
+                .clone()
+                .unwrap_or_else(|| format!("http://{}:{}", hostname, config.port)),
             tenant_id: None, // Platform-wide gateway
         };
 
@@ -515,6 +518,67 @@ mod tests {
         let hostname = registrar.get_hostname();
         assert!(hostname.is_ok());
         assert!(!hostname.unwrap().is_empty());
+    }
+
+    /// Regression test for CAB-1895: auto-registration wrote pod hostname:8080
+    /// instead of K8s service URL. When STOA_ADVERTISE_URL is set, registration
+    /// must use it as admin_url.
+    #[tokio::test]
+    async fn test_regression_cab_1895_advertise_url_overrides_hostname() {
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+
+        let expected_url = "http://stoa-gateway.stoa-system.svc.cluster.local:80";
+
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .and(header("X-Gateway-Key", "test-key"))
+            .and(wiremock::matchers::body_string_contains(expected_url))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": gw_id.to_string(),
+                "name": "gw-edge-prod",
+                "status": "active"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "test-key".to_string());
+        let config = Config {
+            advertise_url: Some(expected_url.to_string()),
+            ..Config::default()
+        };
+
+        let result = registrar.register(&config).await;
+        assert!(result.is_ok(), "Registration should succeed with advertise_url");
+        assert_eq!(result.unwrap(), gw_id);
+    }
+
+    /// When STOA_ADVERTISE_URL is not set, registration falls back to hostname:port.
+    #[tokio::test]
+    async fn test_register_without_advertise_url_uses_hostname() {
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+
+        // Match any request — we just verify admin_url contains `:8080` (default port)
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .and(wiremock::matchers::body_string_contains(":8080"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": gw_id.to_string(),
+                "name": "gw-edge-dev",
+                "status": "active"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "test-key".to_string());
+        let config = Config {
+            advertise_url: None,
+            ..Config::default()
+        };
+
+        let result = registrar.register(&config).await;
+        assert!(result.is_ok(), "Registration should succeed with hostname fallback");
     }
 
     #[tokio::test]

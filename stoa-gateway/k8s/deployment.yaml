@@ -62,6 +62,8 @@ spec:
               value: "1000"
             - name: STOA_GATEWAY_EXTERNAL_URL
               value: "https://mcp.gostoa.dev"
+            - name: STOA_ADVERTISE_URL
+              value: "http://stoa-gateway.stoa-system.svc.cluster.local:80"
             - name: STOA_HEGEMON_ENABLED
               value: "true"
             - name: STOA_KAFKA_ENABLED

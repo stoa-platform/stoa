@@ -57,7 +57,7 @@ jobs:
     with:
       component: stoa-gateway
       run-audit: false
-      cargo-features: '--features kafka'
+      cargo-features: '--features kafka,pingora'
       runner: self-hosted
     permissions:
       contents: read

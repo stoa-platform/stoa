@@ -57,6 +57,12 @@ spec:
               value: "false"
             - name: STOA_LLM_PROXY_ENABLED
               value: "false"
+            - name: STOA_CONTROL_PLANE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stoa-gateway-secrets
+                  key: STOA_CONTROL_PLANE_API_KEY
+                  optional: true
             - name: STOA_ADMIN_API_TOKEN
               valueFrom:
                 secretKeyRef:

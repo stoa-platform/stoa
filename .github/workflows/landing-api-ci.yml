@@ -20,7 +20,7 @@ permissions:
 jobs:
   ci:
     name: Lint and Test (landing-api)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest  # Needs Python 3.12 (unavailable on self-hosted Debian 12)
     services:
       postgres:
         image: postgres:16

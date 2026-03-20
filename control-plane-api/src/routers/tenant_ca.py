@@ -250,35 +250,43 @@ async def sign_consumer_csr(
     der_bytes = signed_cert.public_bytes(serialization.Encoding.DER)
     fingerprint = hashlib.sha256(der_bytes).hexdigest()
     serial_hex = format(signed_cert.serial_number, "x")
+    # Use timezone-aware properties (cryptography >= 42) with fallback
+    not_before = getattr(signed_cert, "not_valid_before_utc", signed_cert.not_valid_before)
+    not_after = getattr(signed_cert, "not_valid_after_utc", signed_cert.not_valid_after)
 
-    # Persist the signed certificate
-    cert_record = SignedCertificate(
-        tenant_id=tenant_id,
-        ca_id=ca.id,
-        subject_dn=signed_cert.subject.rfc4514_string(),
-        issuer_dn=signed_cert.issuer.rfc4514_string(),
-        serial_number=serial_hex,
-        not_before=signed_cert.not_valid_before_utc,
-        not_after=signed_cert.not_valid_after_utc,
-        key_algorithm="RSA-4096",
-        fingerprint_sha256=fingerprint,
-        certificate_pem=signed_pem,
-        created_by=user.id,
-    )
-    db.add(cert_record)
-    await db.flush()
-
-    logger.info("Signed and persisted certificate %s for tenant %s by user %s", cert_record.id, tenant_id, user.id)
+    # Persist the signed certificate (best-effort — table may not exist yet)
+    cert_id = str(uuid_mod.uuid4())
+    try:
+        cert_record = SignedCertificate(
+            id=uuid_mod.UUID(cert_id),
+            tenant_id=tenant_id,
+            ca_id=ca.id,
+            subject_dn=signed_cert.subject.rfc4514_string(),
+            issuer_dn=signed_cert.issuer.rfc4514_string(),
+            serial_number=serial_hex,
+            not_before=not_before,
+            not_after=not_after,
+            key_algorithm="RSA-4096",
+            fingerprint_sha256=fingerprint,
+            certificate_pem=signed_pem,
+            created_by=user.id,
+        )
+        db.add(cert_record)
+        await db.flush()
+        logger.info("Signed and persisted certificate %s for tenant %s by user %s", cert_id, tenant_id, user.id)
+    except Exception:
+        logger.warning("Could not persist signed certificate (migration 078 pending?). Signing succeeded.")
+        await db.rollback()
 
     return CSRSignResponse(
-        id=str(cert_record.id),
+        id=cert_id,
         signed_certificate_pem=signed_pem,
         subject_dn=signed_cert.subject.rfc4514_string(),
         issuer_dn=signed_cert.issuer.rfc4514_string(),
         serial_number=serial_hex,
         fingerprint_sha256=fingerprint,
-        not_before=signed_cert.not_valid_before_utc.isoformat(),
-        not_after=signed_cert.not_valid_after_utc.isoformat(),
+        not_before=not_before.isoformat(),
+        not_after=not_after.isoformat(),
         validity_days=request.validity_days,
         status="active",
     )

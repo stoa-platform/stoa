@@ -35,8 +35,7 @@ Full reference: `.claude/rules/mcp-integrations.md`
 
 ## Cost Awareness
 
-CI model routing: see `autonomous-factory.md` — "H24 Scaling" section.
-Local/subagent model selection: see `cost-guardrails.md`.
+CI model routing and local/subagent model selection: see `cost-model.md`.
 
 ## Plan Structure Standard
 

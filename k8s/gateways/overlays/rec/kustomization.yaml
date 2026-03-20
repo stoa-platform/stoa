@@ -25,6 +25,20 @@ patches:
           value: "https://rec-mcp.gostoa.dev"
   - target:
       kind: Deployment
+      name: stoa-sidecar-kong
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_ENVIRONMENT
+          value: "rec"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_INSTANCE_NAME
+          value: "stoa-sidecar-kong-rec"
+  - target:
+      kind: Deployment
       name: stoa-sidecar-webmethods
     patch: |
       - op: add

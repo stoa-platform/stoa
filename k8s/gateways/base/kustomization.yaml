@@ -7,5 +7,7 @@ resources:
   - kong/service.yaml
   - stoa-gateway/deployment.yaml
   - stoa-gateway/service.yaml
+  - stoa-sidecar-kong/deployment.yaml
+  - stoa-sidecar-kong/service.yaml
   - stoa-sidecar-webmethods/deployment.yaml
   - stoa-sidecar-webmethods/service.yaml

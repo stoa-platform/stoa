@@ -64,7 +64,8 @@ async def list_gateway_routes(
     Used by the gateway route hot-reload loop (CAB-1828) to pull the full
     route table from the control plane. No JWT auth — uses X-Gateway-Key.
     """
-    if settings.GATEWAY_ADMIN_KEY and x_gateway_key != settings.GATEWAY_ADMIN_KEY:
+    expected_key = getattr(settings, "GATEWAY_ADMIN_KEY", None)
+    if expected_key and x_gateway_key != expected_key:
         raise HTTPException(status_code=401, detail="Invalid gateway key")
 
     from src.adapters.stoa.mappers import map_api_spec_to_stoa

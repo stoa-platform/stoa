@@ -108,8 +108,10 @@ func TestReportSyncAck(t *testing.T) {
 type mockSyncAdapter struct {
 	appliedPolicies []string
 	removedPolicies []string
+	syncedRoutes    []adapters.Route
 	applyErr        error
 	removeErr       error
+	syncRoutesErr   error
 }
 
 func (m *mockSyncAdapter) Detect(ctx context.Context, adminURL string) (bool, error) {
@@ -128,6 +130,11 @@ func (m *mockSyncAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiN
 func (m *mockSyncAdapter) RemovePolicy(ctx context.Context, adminURL string, apiName string, policyType string) error {
 	m.removedPolicies = append(m.removedPolicies, apiName+":"+policyType)
 	return m.removeErr
+}
+
+func (m *mockSyncAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) error {
+	m.syncedRoutes = append(m.syncedRoutes, routes...)
+	return m.syncRoutesErr
 }
 
 func TestRunSyncAppliesEnabledPolicies(t *testing.T) {

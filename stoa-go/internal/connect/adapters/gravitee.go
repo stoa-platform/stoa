@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -168,6 +169,74 @@ func (g *GraviteeAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiN
 // RemovePolicy removes a policy from a Gravitee API's plans.
 func (g *GraviteeAdapter) RemovePolicy(ctx context.Context, adminURL string, apiName string, policyType string) error {
 	return fmt.Errorf("gravitee policy sync not yet implemented")
+}
+
+// SyncRoutes pushes CP routes to Gravitee via Management API v2 (API CRUD + lifecycle).
+func (g *GraviteeAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
+	basePath := adminURL + "/management/v2/environments/DEFAULT/apis"
+
+	for _, route := range routes {
+		if !route.Activated {
+			continue
+		}
+
+		apiPayload := map[string]interface{}{
+			"name":              "stoa-" + route.Name,
+			"apiVersion":        "1.0",
+			"definitionVersion": "V4",
+			"type":              "PROXY",
+			"listeners": []map[string]interface{}{
+				{
+					"type": "HTTP",
+					"paths": []map[string]interface{}{
+						{"path": route.PathPrefix},
+					},
+				},
+			},
+			"endpointGroups": []map[string]interface{}{
+				{
+					"name": "default",
+					"type": "http-proxy",
+					"endpoints": []map[string]interface{}{
+						{
+							"name":   "backend",
+							"type":   "http-proxy",
+							"target": route.BackendURL,
+						},
+					},
+				},
+			},
+			"tags": []string{"stoa-managed"},
+		}
+
+		data, err := json.Marshal(apiPayload)
+		if err != nil {
+			return fmt.Errorf("marshal gravitee api: %w", err)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, basePath, strings.NewReader(string(data)))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		g.setAuth(req)
+
+		resp, err := g.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("create gravitee api: %w", err)
+		}
+		respBody, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+			// 409 = already exists, acceptable
+			if resp.StatusCode != http.StatusConflict {
+				return fmt.Errorf("gravitee api create failed (%d): %s", resp.StatusCode, string(respBody))
+			}
+		}
+	}
+
+	return nil
 }
 
 func (g *GraviteeAdapter) doGet(ctx context.Context, url string) ([]byte, error) {

@@ -24,7 +24,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@stoa/shared/components/Button';
 import { useMarketplace, useFeaturedItems } from '../../hooks/useMarketplace';
-import { useUniverses } from '../../hooks/useAPIs';
+import { useUniverses, useAPITags } from '../../hooks/useAPIs';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiCatalogService } from '../../services/apiCatalog';
@@ -90,6 +90,9 @@ export function DiscoverPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [audienceFilter, setAudienceFilter] = useState('');
   const [universeFilter, setUniverseFilter] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [authTypeFilter, setAuthTypeFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'updated_at' | 'created_at'>('name');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [page, setPage] = useState(1);
   const pageSize = 12;
@@ -108,16 +111,20 @@ export function DiscoverPage() {
       search: debouncedSearch || undefined,
       type: typeFilter,
       category: categoryFilter || undefined,
+      tags: selectedTags.length > 0 ? selectedTags : undefined,
+      authType: authTypeFilter || undefined,
+      sortBy,
       page,
       pageSize,
     }),
-    [debouncedSearch, typeFilter, categoryFilter, page]
+    [debouncedSearch, typeFilter, categoryFilter, selectedTags, authTypeFilter, sortBy, page]
   );
 
   const { data, isLoading, isError, refetch } = useMarketplace(filters);
   const { data: featuredItems } = useFeaturedItems();
   const { data: favoritesData } = useFavorites();
   const { data: universes = [] } = useUniverses();
+  const { data: availableTags = [] } = useAPITags();
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
   const showFeatured = !debouncedSearch && typeFilter === 'all' && !categoryFilter && page === 1;
@@ -127,7 +134,14 @@ export function DiscoverPage() {
 
   // Active filters check
   const hasFilters =
-    search || typeFilter !== 'all' || categoryFilter || audienceFilter || universeFilter;
+    search ||
+    typeFilter !== 'all' ||
+    categoryFilter ||
+    audienceFilter ||
+    universeFilter ||
+    selectedTags.length > 0 ||
+    authTypeFilter ||
+    sortBy !== 'name';
 
   // Grouped view: group items by category
   const groupedItems = useMemo<CategoryGroup[]>(() => {
@@ -180,6 +194,16 @@ export function DiscoverPage() {
     setCategoryFilter('');
     setAudienceFilter('');
     setUniverseFilter('');
+    setSelectedTags([]);
+    setAuthTypeFilter('');
+    setSortBy('name');
+    setPage(1);
+  }, []);
+
+  const toggleTag = useCallback((tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
     setPage(1);
   }, []);
 
@@ -403,6 +427,41 @@ export function DiscoverPage() {
               </div>
             )}
 
+            {/* Auth type filter (CAB-1906) */}
+            <div className="relative sm:w-44">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+              <select
+                value={authTypeFilter}
+                onChange={(e) => {
+                  setAuthTypeFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
+              >
+                <option value="">All Auth Types</option>
+                <option value="oauth2">OAuth2</option>
+                <option value="api_key">API Key</option>
+                <option value="mtls">mTLS</option>
+                <option value="basic">Basic</option>
+              </select>
+            </div>
+
+            {/* Sort (CAB-1906) */}
+            <div className="relative sm:w-44">
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as 'name' | 'updated_at' | 'created_at');
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
+              >
+                <option value="name">Sort: A-Z</option>
+                <option value="updated_at">Sort: Recently updated</option>
+                <option value="created_at">Sort: Newest first</option>
+              </select>
+            </div>
+
             {/* Clear */}
             {hasFilters && (
               <button
@@ -414,6 +473,30 @@ export function DiscoverPage() {
               </button>
             )}
           </div>
+
+          {/* Tag filter chips (CAB-1906) */}
+          {availableTags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-neutral-100 dark:border-neutral-700">
+              <span className="text-xs text-neutral-500 dark:text-neutral-400 mr-1">Tags:</span>
+              {availableTags.slice(0, 12).map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
+                    selectedTags.includes(tag)
+                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-400 font-medium'
+                      : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-600'
+                  }`}
+                >
+                  {tag}
+                  {selectedTags.includes(tag) && <span className="ml-1 font-bold">&times;</span>}
+                </button>
+              ))}
+              {availableTags.length > 12 && (
+                <span className="text-xs text-neutral-400">+{availableTags.length - 12} more</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

@@ -84,7 +84,7 @@ describe('useAPIs', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(apiCatalogService.listAPIs).toHaveBeenCalledWith({ ...params, environment: 'dev' });
+    expect(apiCatalogService.listAPIs).toHaveBeenCalledWith(params);
   });
 });
 

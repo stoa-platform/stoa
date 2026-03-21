@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateways-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dev-gw.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-gateway
+                port:
+                  number: 8080
+    - host: dev-kong.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-sidecar-kong
+                port:
+                  number: 8080
+    - host: dev-wm.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-sidecar-webmethods
+                port:
+                  number: 8080

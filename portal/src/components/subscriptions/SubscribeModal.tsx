@@ -5,9 +5,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Loader2, AlertCircle, Check, Zap, Crown, Building2, Shield } from 'lucide-react';
+import { X, Loader2, AlertCircle, Check, Zap, Crown, Building2, Shield, Plus } from 'lucide-react';
 import { Button } from '@stoa/shared/components/Button';
-import { useApplications } from '../../hooks/useApplications';
+import { useApplications, useCreateApplication } from '../../hooks/useApplications';
 import { CertificateUploader } from './CertificateUploader';
 import type { CertificateValidationResult } from '../../services/certificateValidator';
 import type { API, Application } from '../../types';
@@ -105,6 +105,33 @@ export function SubscribeModal({
   const [selectedPlan, setSelectedPlan] = useState<string>('free');
   const [certResult, setCertResult] = useState<CertificateValidationResult | null>(null);
 
+  // CAB-1907: Inline app creation
+  const [showCreateApp, setShowCreateApp] = useState(false);
+  const [newAppName, setNewAppName] = useState('');
+  const [newAppProfile, setNewAppProfile] = useState<
+    'oauth2_public' | 'oauth2_confidential' | 'api_key'
+  >('oauth2_public');
+  const [createAppError, setCreateAppError] = useState<string | null>(null);
+  const createAppMutation = useCreateApplication();
+
+  const handleCreateApp = async () => {
+    if (!newAppName.trim()) return;
+    setCreateAppError(null);
+    try {
+      const created = await createAppMutation.mutateAsync({
+        name: newAppName.trim(),
+        display_name: newAppName.trim(),
+        redirect_uris: [],
+        security_profile: newAppProfile,
+      });
+      setSelectedAppId(created.id);
+      setShowCreateApp(false);
+      setNewAppName('');
+    } catch (err) {
+      setCreateAppError(err instanceof Error ? err.message : 'Failed to create application');
+    }
+  };
+
   const requiresMtls = api.tags?.includes('mtls') ?? false;
   const hasCustomPlans = customPlans && customPlans.length > 0;
 
@@ -116,6 +143,10 @@ export function SubscribeModal({
       setSelectedAppId('');
       setSelectedPlan(defaultPlan ?? (hasCustomPlans ? customPlans[0].slug : 'free'));
       setCertResult(null);
+      setShowCreateApp(false);
+      setNewAppName('');
+      setNewAppProfile('oauth2_public');
+      setCreateAppError(null);
     }
   }, [isOpen, defaultPlan, hasCustomPlans, customPlans]);
 
@@ -214,35 +245,104 @@ export function SubscribeModal({
                       Loading applications...
                     </span>
                   </div>
-                ) : activeApps.length === 0 ? (
-                  <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                    <p className="text-sm text-amber-700 dark:text-amber-400">
-                      You don't have any active applications. Please create an application first
-                      before subscribing to APIs.
-                    </p>
-                    <a
-                      href="/apps"
-                      className="mt-2 inline-block text-sm font-medium text-amber-800 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200"
-                    >
-                      Go to My Applications &rarr;
-                    </a>
+                ) : showCreateApp ? (
+                  /* CAB-1907: Inline app creation form */
+                  <div className="space-y-3 p-4 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg">
+                    <div>
+                      <label
+                        htmlFor="new-app-name"
+                        className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+                      >
+                        Application Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="new-app-name"
+                        type="text"
+                        value={newAppName}
+                        onChange={(e) => setNewAppName(e.target.value)}
+                        placeholder="My Application"
+                        disabled={createAppMutation.isPending}
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:bg-neutral-800 dark:text-white disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="new-app-profile"
+                        className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+                      >
+                        Security Profile
+                      </label>
+                      <select
+                        id="new-app-profile"
+                        value={newAppProfile}
+                        onChange={(e) =>
+                          setNewAppProfile(
+                            e.target.value as 'oauth2_public' | 'oauth2_confidential' | 'api_key'
+                          )
+                        }
+                        disabled={createAppMutation.isPending}
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:bg-neutral-800 dark:text-white disabled:opacity-50"
+                      >
+                        <option value="oauth2_public">OAuth2 Public (PKCE)</option>
+                        <option value="oauth2_confidential">OAuth2 Confidential</option>
+                        <option value="api_key">API Key</option>
+                      </select>
+                    </div>
+                    {createAppError && (
+                      <p className="text-xs text-red-600 dark:text-red-400">{createAppError}</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!newAppName.trim() || createAppMutation.isPending}
+                        loading={createAppMutation.isPending}
+                        onClick={handleCreateApp}
+                      >
+                        Create
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={createAppMutation.isPending}
+                        onClick={() => {
+                          setShowCreateApp(false);
+                          setNewAppName('');
+                          setNewAppProfile('oauth2_public');
+                          setCreateAppError(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 ) : (
-                  <select
-                    id="application"
-                    value={selectedAppId}
-                    onChange={(e) => setSelectedAppId(e.target.value)}
-                    disabled={isLoading}
-                    required
-                    className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed dark:bg-neutral-800 dark:text-white"
-                  >
-                    <option value="">Select an application...</option>
-                    {activeApps.map((app: Application) => (
-                      <option key={app.id} value={app.id}>
-                        {app.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <select
+                      id="application"
+                      value={selectedAppId}
+                      onChange={(e) => setSelectedAppId(e.target.value)}
+                      disabled={isLoading}
+                      required
+                      className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed dark:bg-neutral-800 dark:text-white"
+                    >
+                      <option value="">Select an application...</option>
+                      {activeApps.map((app: Application) => (
+                        <option key={app.id} value={app.id}>
+                          {app.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateApp(true)}
+                      className="inline-flex items-center gap-1.5 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Create new application
+                    </button>
+                  </div>
                 )}
               </div>
 

@@ -371,8 +371,16 @@ export function Layout({ children }: LayoutProps) {
     } catch {
       /* ignore corrupt data */
     }
-    // Default: all sections open (only 5 sections now, all fit on screen)
-    return {};
+    // CAB-1907: Default collapsed — only Overview + API Catalog expanded
+    return {
+      'nav.aiMcp': true,
+      'nav.usersAccess': true,
+      'nav.apiDeployments': true,
+      'nav.gateway': true,
+      'nav.monitoring': true,
+      'nav.governance': true,
+      'nav.admin': true,
+    };
   });
 
   const toggleSection = useCallback((title: string) => {

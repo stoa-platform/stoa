@@ -7,3 +7,4 @@ export { CallsTable } from './CallsTable';
 export { UsageChart } from './UsageChart';
 export { TopTools } from './TopTools';
 export { SubscriptionsList } from './SubscriptionsList';
+export { QuotaBar } from './QuotaBar';

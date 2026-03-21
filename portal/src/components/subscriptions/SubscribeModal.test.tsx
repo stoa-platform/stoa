@@ -5,6 +5,7 @@ import type { API } from '../../types';
 
 vi.mock('../../hooks/useApplications', () => ({
   useApplications: vi.fn(),
+  useCreateApplication: vi.fn(),
 }));
 
 vi.mock('./CertificateUploader', () => ({
@@ -13,7 +14,7 @@ vi.mock('./CertificateUploader', () => ({
   ),
 }));
 
-import { useApplications } from '../../hooks/useApplications';
+import { useApplications, useCreateApplication } from '../../hooks/useApplications';
 
 const mockApi: API = {
   id: 'api-1',
@@ -31,6 +32,8 @@ const defaultProps = {
   api: mockApi,
 };
 
+const mockMutateAsync = vi.fn().mockResolvedValue({ id: 'new-app-id', name: 'My New App' });
+
 describe('SubscribeModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -46,6 +49,10 @@ describe('SubscribeModal', () => {
       },
       isLoading: false,
     } as ReturnType<typeof useApplications>);
+    vi.mocked(useCreateApplication).mockReturnValue({
+      mutateAsync: mockMutateAsync,
+      isPending: false,
+    } as ReturnType<typeof useCreateApplication>);
   });
 
   it('should return null when not open', () => {
@@ -123,14 +130,16 @@ describe('SubscribeModal', () => {
     expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 
-  it('should show empty apps message when no active apps', () => {
+  it('should show empty dropdown with no active apps', () => {
     vi.mocked(useApplications).mockReturnValue({
       data: { items: [], total: 0, page: 1, page_size: 20 },
       isLoading: false,
     } as ReturnType<typeof useApplications>);
 
     render(<SubscribeModal {...defaultProps} />);
-    expect(screen.getByText(/don't have any active applications/)).toBeInTheDocument();
+    // Dropdown shows only the placeholder option; Subscribe stays disabled
+    expect(screen.getByText('Select an application...')).toBeInTheDocument();
+    expect(screen.getByText('Subscribe')).toBeDisabled();
   });
 
   it('should show apps loading state', () => {
@@ -158,5 +167,147 @@ describe('SubscribeModal', () => {
   it('should show info box', () => {
     render(<SubscribeModal {...defaultProps} />);
     expect(screen.getByText(/After subscribing, you can use your application/)).toBeInTheDocument();
+  });
+
+  // ── CAB-1907: Inline app creation ──────────────────────────────────────────
+
+  describe('inline app creation (CAB-1907)', () => {
+    it('should show "Create new application" button below the app dropdown', () => {
+      render(<SubscribeModal {...defaultProps} />);
+      expect(screen.getByText('Create new application')).toBeInTheDocument();
+    });
+
+    it('should show inline form when "Create new application" is clicked', () => {
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+
+      expect(screen.getByLabelText(/application name/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/security profile/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument();
+      // Two Cancel buttons exist (inline form + modal footer) — both should be present
+      expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(2);
+    });
+
+    it('should hide the app dropdown while the inline form is visible', () => {
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+
+      expect(screen.queryByText('Select an application...')).not.toBeInTheDocument();
+    });
+
+    it('should show three security profile options', () => {
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+
+      const profileSelect = screen.getByLabelText(/security profile/i);
+      expect(profileSelect).toBeInTheDocument();
+      // Check all three options are present
+      expect(screen.getByText('OAuth2 Public (PKCE)')).toBeInTheDocument();
+      expect(screen.getByText('OAuth2 Confidential')).toBeInTheDocument();
+      expect(screen.getByText('API Key')).toBeInTheDocument();
+    });
+
+    it('should keep Create button disabled when app name is empty', () => {
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+
+      expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled();
+    });
+
+    it('should enable Create button when app name is non-empty', () => {
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+
+      fireEvent.change(screen.getByLabelText(/application name/i), {
+        target: { value: 'My New App' },
+      });
+
+      expect(screen.getByRole('button', { name: 'Create' })).not.toBeDisabled();
+    });
+
+    it('should dismiss inline form and restore dropdown on Cancel', () => {
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+      fireEvent.change(screen.getByLabelText(/application name/i), {
+        target: { value: 'Temp' },
+      });
+
+      // Click the first Cancel (inline form), not the footer Cancel
+      fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0]);
+
+      // Dropdown is back, form is gone
+      expect(screen.getByText('Select an application...')).toBeInTheDocument();
+      expect(screen.queryByLabelText(/application name/i)).not.toBeInTheDocument();
+    });
+
+    it('should call useCreateApplication with correct payload on Create', async () => {
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+
+      fireEvent.change(screen.getByLabelText(/application name/i), {
+        target: { value: 'My New App' },
+      });
+      fireEvent.change(screen.getByLabelText(/security profile/i), {
+        target: { value: 'api_key' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => {
+        expect(mockMutateAsync).toHaveBeenCalledWith({
+          name: 'My New App',
+          display_name: 'My New App',
+          redirect_uris: [],
+          security_profile: 'api_key',
+        });
+      });
+    });
+
+    it('should auto-select the newly created app and hide the inline form on success', async () => {
+      mockMutateAsync.mockResolvedValueOnce({ id: 'new-app-id', name: 'My New App' });
+
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+      fireEvent.change(screen.getByLabelText(/application name/i), {
+        target: { value: 'My New App' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => {
+        // Inline form is dismissed — dropdown is restored
+        expect(screen.queryByLabelText(/application name/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it('should display an error message when app creation fails', async () => {
+      mockMutateAsync.mockRejectedValueOnce(new Error('Name already taken'));
+
+      render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+      fireEvent.change(screen.getByLabelText(/application name/i), {
+        target: { value: 'Duplicate App' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Name already taken')).toBeInTheDocument();
+      });
+    });
+
+    it('should reset inline form state when modal is reopened', async () => {
+      const { rerender } = render(<SubscribeModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Create new application'));
+      fireEvent.change(screen.getByLabelText(/application name/i), {
+        target: { value: 'Half-typed name' },
+      });
+
+      // Close then reopen the modal
+      rerender(<SubscribeModal {...defaultProps} isOpen={false} />);
+      rerender(<SubscribeModal {...defaultProps} isOpen={true} />);
+
+      // Inline form should be hidden again
+      expect(screen.queryByLabelText(/application name/i)).not.toBeInTheDocument();
+      expect(screen.getByText('Select an application...')).toBeInTheDocument();
+    });
   });
 });

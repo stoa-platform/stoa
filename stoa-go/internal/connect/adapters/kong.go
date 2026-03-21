@@ -228,6 +228,160 @@ func (k *KongAdapter) RemovePolicy(ctx context.Context, adminURL string, apiName
 	return nil // Plugin not found — idempotent
 }
 
+// SyncRoutes pushes CP routes to Kong via declarative config merge (POST /config).
+// Kong DB-less mode: GET current state → merge stoa-managed services/routes → POST /config.
+func (k *KongAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
+	// 1. Get current declarative config
+	configBody, err := k.doGet(ctx, adminURL+"/config")
+	if err != nil {
+		// If /config is not available (Kong with DB), fall back to per-service CRUD
+		return k.syncRoutesPerService(ctx, adminURL, routes)
+	}
+
+	var currentConfig map[string]interface{}
+	if err := json.Unmarshal(configBody, &currentConfig); err != nil {
+		return fmt.Errorf("decode kong config: %w", err)
+	}
+
+	// 2. Build new services/routes from CP routes, keeping non-stoa services
+	var services []map[string]interface{}
+	var kongRoutes []map[string]interface{}
+
+	// Preserve non-stoa-managed services
+	if existing, ok := currentConfig["services"].([]interface{}); ok {
+		for _, s := range existing {
+			svc, ok := s.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			tags, _ := svc["tags"].([]interface{})
+			if !containsTag(tags, "stoa-managed") {
+				services = append(services, svc)
+			}
+		}
+	}
+	// Preserve non-stoa-managed routes
+	if existing, ok := currentConfig["routes"].([]interface{}); ok {
+		for _, r := range existing {
+			rt, ok := r.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			tags, _ := rt["tags"].([]interface{})
+			if !containsTag(tags, "stoa-managed") {
+				kongRoutes = append(kongRoutes, rt)
+			}
+		}
+	}
+
+	// 3. Add stoa-managed services and routes from CP
+	for _, route := range routes {
+		if !route.Activated {
+			continue
+		}
+		svcName := "stoa-" + route.Name
+		services = append(services, map[string]interface{}{
+			"name":     svcName,
+			"url":      route.BackendURL,
+			"tags":     []string{"stoa-managed", "stoa-route-" + route.ID},
+			"enabled":  true,
+		})
+
+		methods := route.Methods
+		if len(methods) == 0 {
+			methods = nil // Kong treats nil as "all methods"
+		}
+
+		kongRoutes = append(kongRoutes, map[string]interface{}{
+			"name":    svcName + "-route",
+			"service": map[string]interface{}{"name": svcName},
+			"paths":   []string{route.PathPrefix},
+			"methods": methods,
+			"tags":    []string{"stoa-managed", "stoa-route-" + route.ID},
+		})
+	}
+
+	// 4. Rebuild config and POST
+	newConfig := map[string]interface{}{
+		"_format_version": "3.0",
+		"services":        services,
+		"routes":          kongRoutes,
+	}
+
+	// Preserve plugins from current config
+	if plugins, ok := currentConfig["plugins"]; ok {
+		newConfig["plugins"] = plugins
+	}
+
+	data, err := json.Marshal(newConfig)
+	if err != nil {
+		return fmt.Errorf("marshal kong config: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, adminURL+"/config", strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	k.setAuth(req)
+
+	resp, err := k.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("post kong config: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("kong config reload failed (%d): %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// syncRoutesPerService falls back to per-service CRUD when /config is not available.
+func (k *KongAdapter) syncRoutesPerService(ctx context.Context, adminURL string, routes []Route) error {
+	for _, route := range routes {
+		if !route.Activated {
+			continue
+		}
+		svcPayload := map[string]interface{}{
+			"name":    "stoa-" + route.Name,
+			"url":     route.BackendURL,
+			"tags":    []string{"stoa-managed"},
+			"enabled": true,
+		}
+		data, err := json.Marshal(svcPayload)
+		if err != nil {
+			return fmt.Errorf("marshal service: %w", err)
+		}
+
+		svcURL := fmt.Sprintf("%s/services/stoa-%s", adminURL, route.Name)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, svcURL, strings.NewReader(string(data)))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		k.setAuth(req)
+
+		resp, err := k.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("upsert kong service: %w", err)
+		}
+		_ = resp.Body.Close()
+	}
+	return nil
+}
+
+func containsTag(tags []interface{}, target string) bool {
+	for _, t := range tags {
+		if s, ok := t.(string); ok && s == target {
+			return true
+		}
+	}
+	return false
+}
+
 func (k *KongAdapter) doGet(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

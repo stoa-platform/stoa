@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -158,6 +159,59 @@ func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, ap
 // RemovePolicy removes a policy action from a webMethods API.
 func (w *WebMethodsAdapter) RemovePolicy(ctx context.Context, adminURL string, apiName string, policyType string) error {
 	return fmt.Errorf("webmethods policy sync not yet implemented")
+}
+
+// SyncRoutes pushes CP routes to webMethods via REST API import.
+func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
+	for _, route := range routes {
+		if !route.Activated {
+			continue
+		}
+
+		// Build a minimal API payload for webMethods import
+		apiPayload := map[string]interface{}{
+			"apiName":        "stoa-" + route.Name,
+			"apiVersion":     "1.0",
+			"apiDescription": fmt.Sprintf("STOA managed route %s", route.Name),
+			"type":           "REST",
+			"isActive":       true,
+			"nativeEndpoint": []map[string]interface{}{
+				{"uri": route.BackendURL},
+			},
+			"resources": []map[string]interface{}{
+				{
+					"resourcePath": route.PathPrefix,
+					"methods":      route.Methods,
+				},
+			},
+			"tags": []string{"stoa-managed"},
+		}
+
+		data, err := json.Marshal(apiPayload)
+		if err != nil {
+			return fmt.Errorf("marshal webmethods api: %w", err)
+		}
+
+		apiURL := adminURL + "/rest/apigateway/apis"
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(string(data)))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		w.setAuth(req)
+
+		resp, err := w.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("create webmethods api: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("webmethods api create failed (%d)", resp.StatusCode)
+		}
+	}
+
+	return nil
 }
 
 func (w *WebMethodsAdapter) doGet(ctx context.Context, url string) ([]byte, error) {

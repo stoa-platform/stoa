@@ -13,14 +13,14 @@ import { config } from './config';
 import { getAccessToken, getApiBaseUrl, createChatConversation } from './services/api';
 
 // Lazy load pages for code splitting - reduces initial bundle by ~60%
-const HomePage = lazy(() => import('./pages/Home').then((m) => ({ default: m.HomePage })));
+// CAB-1905: HomePage removed — / redirects to /discover
 const MCPServersPage = lazy(() =>
   import('./pages/servers').then((m) => ({ default: m.MCPServersPage }))
 );
 const ServerDetailPage = lazy(() =>
   import('./pages/servers').then((m) => ({ default: m.ServerDetailPage }))
 );
-const APICatalog = lazy(() => import('./pages/apis').then((m) => ({ default: m.APICatalog })));
+// CAB-1905: APICatalog merged into DiscoverPage — /apis redirects to /discover
 const APIDetail = lazy(() => import('./pages/apis').then((m) => ({ default: m.APIDetail })));
 const APITestingSandbox = lazy(() =>
   import('./pages/apis').then((m) => ({ default: m.APITestingSandbox }))
@@ -49,12 +49,10 @@ const UnauthorizedPage = lazy(() =>
 const OnboardingWizardPage = lazy(() =>
   import('./pages/onboarding').then((m) => ({ default: m.OnboardingWizardPage }))
 );
-const MarketplacePage = lazy(() =>
-  import('./pages/marketplace').then((m) => ({ default: m.MarketplacePage }))
+const DiscoverPage = lazy(() =>
+  import('./pages/discover').then((m) => ({ default: m.DiscoverPage }))
 );
-const ServiceCatalog = lazy(() =>
-  import('./pages/services').then((m) => ({ default: m.ServiceCatalog }))
-);
+// CAB-1905: MarketplacePage and ServiceCatalog merged into DiscoverPage
 const NotificationsPage = lazy(() =>
   import('./pages/notifications/NotificationsPage').then((m) => ({
     default: m.NotificationsPage,
@@ -483,8 +481,8 @@ function AppContent() {
       <Layout>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            {/* Public routes (within authenticated context) */}
-            <Route path="/" element={<HomePage />} />
+            {/* Home redirects to Discover (CAB-1905) */}
+            <Route path="/" element={<Navigate to="/discover" replace />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/chat-settings" element={<ChatSettingsPage />} />
@@ -508,25 +506,19 @@ function AppContent() {
               }
             />
 
-            {/* Marketplace - unified discovery */}
+            {/* Discover - unified discovery (CAB-1905: merged Marketplace + Service Catalog + API Catalog) */}
             <Route
-              path="/marketplace"
+              path="/discover"
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
-                  <MarketplacePage />
+                  <DiscoverPage />
                 </ProtectedRoute>
               }
             />
 
-            {/* Service Catalog - grouped API view (CAB-1760) */}
-            <Route
-              path="/services"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <ServiceCatalog />
-                </ProtectedRoute>
-              }
-            />
+            {/* Legacy redirects to /discover (CAB-1905) */}
+            <Route path="/marketplace" element={<Navigate to="/discover" replace />} />
+            <Route path="/services" element={<Navigate to="/discover" replace />} />
 
             {/* MCP Servers - requires catalog read */}
             <Route
@@ -556,15 +548,8 @@ function AppContent() {
               element={<Navigate to="/workspace?tab=subscriptions" replace />}
             />
 
-            {/* API Consumer Routes - requires catalog read */}
-            <Route
-              path="/apis"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <APICatalog />
-                </ProtectedRoute>
-              }
-            />
+            {/* API Consumer Routes - /apis redirects to /discover (CAB-1905) */}
+            <Route path="/apis" element={<Navigate to="/discover" replace />} />
             <Route
               path="/apis/:id"
               element={
@@ -631,7 +616,7 @@ function AppContent() {
 
             {/* CAB-1764: Removed pages — redirect to consolidated locations */}
             <Route path="/audit-log" element={<Navigate to="/workspace" replace />} />
-            <Route path="/favorites" element={<Navigate to="/marketplace" replace />} />
+            <Route path="/favorites" element={<Navigate to="/discover" replace />} />
             <Route path="/rate-limits" element={<Navigate to="/workspace?tab=usage" replace />} />
             {/* API Compare — removed from nav, accessible via Marketplace button */}
             <Route

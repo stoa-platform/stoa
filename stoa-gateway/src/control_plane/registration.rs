@@ -524,7 +524,7 @@ mod tests {
     /// instead of K8s service URL. When STOA_ADVERTISE_URL is set, registration
     /// must use it as admin_url.
     #[tokio::test]
-    async fn test_regression_cab_1895_advertise_url_overrides_hostname() {
+    async fn regression_cab_1895_advertise_url_overrides_hostname() {
         let mock_server = MockServer::start().await;
         let gw_id = Uuid::new_v4();
 
@@ -549,7 +549,10 @@ mod tests {
         };
 
         let result = registrar.register(&config).await;
-        assert!(result.is_ok(), "Registration should succeed with advertise_url");
+        assert!(
+            result.is_ok(),
+            "Registration should succeed with advertise_url"
+        );
         assert_eq!(result.unwrap(), gw_id);
     }
 
@@ -578,7 +581,10 @@ mod tests {
         };
 
         let result = registrar.register(&config).await;
-        assert!(result.is_ok(), "Registration should succeed with hostname fallback");
+        assert!(
+            result.is_ok(),
+            "Registration should succeed with hostname fallback"
+        );
     }
 
     #[tokio::test]

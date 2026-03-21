@@ -207,6 +207,13 @@ pub struct Config {
     #[serde(default = "default_auto_register")]
     pub auto_register: bool,
 
+    /// Override URL advertised to the Control Plane for admin API calls.
+    /// When set, registration uses this instead of auto-detected hostname:port.
+    /// Env: STOA_ADVERTISE_URL
+    /// Example: http://stoa-gateway.stoa-system.svc.cluster.local:80
+    #[serde(default)]
+    pub advertise_url: Option<String>,
+
     /// Heartbeat interval in seconds (default: 30)
     /// Env: STOA_HEARTBEAT_INTERVAL_SECS
     #[serde(default = "default_heartbeat_interval")]
@@ -1343,6 +1350,7 @@ impl Default for Config {
             shadow_gitlab_project: None,
             environment: default_environment(),
             auto_register: default_auto_register(),
+            advertise_url: None,
             heartbeat_interval_secs: default_heartbeat_interval(),
             native_tools_enabled: default_native_tools_enabled(),
             kafka_enabled: false,

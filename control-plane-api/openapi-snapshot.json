@@ -346,6 +346,14 @@
             ],
             "title": "Category"
           },
+          "deployed_environments": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Deployed Environments",
+            "type": "array"
+          },
           "description": {
             "default": "",
             "title": "Description",
@@ -40414,6 +40422,24 @@
               ],
               "description": "Filter by audience: public, internal, partner",
               "title": "Audience"
+            }
+          },
+          {
+            "description": "Filter by deployment environment (optional, for subscription/test pages)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by deployment environment (optional, for subscription/test pages)",
+              "title": "Environment"
             }
           }
         ],

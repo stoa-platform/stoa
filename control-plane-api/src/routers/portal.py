@@ -186,7 +186,7 @@ async def list_portal_apis(
     include_unpromoted: bool = Query(False, description="Include APIs not promoted to Portal"),
     universe: str | None = Query(None, description="Filter by universe: oasis, enterprise"),
     audience: str | None = Query(None, description="Filter by audience: public, internal, partner"),
-    environment: str | None = Query(None, description="Filter by deployment environment: dev, staging, production"),
+    environment: str | None = Query(None, description="Filter by deployment environment (optional, for subscription/test pages)"),
 ):
     """
     List all promoted APIs available in the Portal catalog.
@@ -216,6 +216,34 @@ async def list_portal_apis(
             page_size=page_size,
         )
 
+        # Batch-fetch deployed environments for all APIs on this page
+        from sqlalchemy import select as sa_select
+
+        from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
+        from src.models.gateway_instance import GatewayInstance
+
+        api_ids = [api.id for api in apis]
+        deploy_envs: dict[str, list[str]] = {}
+        if api_ids:
+            rows = await db.execute(
+                sa_select(
+                    GatewayDeployment.api_catalog_id,
+                    GatewayInstance.environment,
+                )
+                .join(GatewayInstance, GatewayDeployment.gateway_instance_id == GatewayInstance.id)
+                .where(
+                    GatewayDeployment.api_catalog_id.in_(api_ids),
+                    GatewayDeployment.sync_status.in_([
+                        DeploymentSyncStatus.SYNCED,
+                        DeploymentSyncStatus.DRIFTED,
+                        DeploymentSyncStatus.PENDING,
+                    ]),
+                )
+                .distinct()
+            )
+            for row in rows.all():
+                deploy_envs.setdefault(str(row.api_catalog_id), []).append(row.environment)
+
         return PortalAPIsResponse(
             apis=[
                 APIListItem(
@@ -231,6 +259,7 @@ async def list_portal_apis(
                     tags=api.tags or [],
                     is_promoted=api.portal_published,
                     audience=api.audience or "public",
+                    deployed_environments=sorted(deploy_envs.get(str(api.id), [])),
                 )
                 for api in apis
             ],

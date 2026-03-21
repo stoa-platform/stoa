@@ -45,3 +45,4 @@ class APIListItem(BaseModel):
     tags: list[str] = []
     is_promoted: bool = True
     audience: str = "public"
+    deployed_environments: list[str] = []

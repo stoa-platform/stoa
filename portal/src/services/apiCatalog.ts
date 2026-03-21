@@ -43,6 +43,7 @@ interface PortalAPI {
   deployments?: Record<string, boolean>;
   is_promoted: boolean; // Whether API is promoted to Portal (has portal:published tag)
   audience?: string;
+  deployed_environments?: string[];
   created_at?: string;
   updated_at?: string;
 }
@@ -70,6 +71,7 @@ function transformPortalAPI(portalApi: PortalAPI): API {
     tags: portalApi.tags,
     audience: (portalApi.audience as API['audience']) || 'public',
     deployments: portalApi.deployments,
+    deployedEnvironments: portalApi.deployed_environments || [],
     createdAt: portalApi.created_at || new Date().toISOString(),
     updatedAt: portalApi.updated_at || new Date().toISOString(),
   };

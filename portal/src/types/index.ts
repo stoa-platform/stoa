@@ -200,6 +200,7 @@ export interface API {
   status: 'draft' | 'published' | 'deprecated';
   audience?: APIAudience;
   deployments?: Record<string, boolean>;
+  deployedEnvironments?: string[];
   createdAt: string;
   updatedAt: string;
 }

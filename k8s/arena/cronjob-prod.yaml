@@ -83,7 +83,6 @@ spec:
                     [
                       {"name":"echo-baseline","health":"http://echo-backend.stoa-system.svc:8888/get","proxy":"http://echo-backend.stoa-system.svc:8888/get"},
                       {"name":"stoa-k8s","health":"http://stoa-gateway.stoa-system.svc/health","proxy":"http://stoa-gateway.stoa-system.svc/echo/get","admin_base":"http://stoa-gateway.stoa-system.svc"},
-                      {"name":"agentgateway-k8s","health":"http://agentgateway-arena.stoa-system.svc:3000/health","proxy":"http://agentgateway-arena.stoa-system.svc:3000/echo/get"},
                       {"name":"kong-k8s","health":"http://kong-arena.stoa-system.svc:8001/status","proxy":"http://kong-arena.stoa-system.svc:8000/echo/get"},
                       {"name":"gravitee-k8s","health":"http://gravitee-arena-gw.stoa-system.svc:8082/","proxy":"http://gravitee-arena-gw.stoa-system.svc:8082/echo/get"}
                     ]

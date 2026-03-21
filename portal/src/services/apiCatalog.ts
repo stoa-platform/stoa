@@ -19,6 +19,7 @@ export interface ListAPIsParams {
   tags?: string[];
   includeUnpromoted?: boolean; // Include APIs not promoted to Portal (for admin view)
   audience?: string;
+  environment?: string; // Filter by deployment environment (dev, staging, production)
 }
 
 export interface Universe {
@@ -92,6 +93,7 @@ export const apiCatalogService = {
           status: params?.status,
           include_unpromoted: params?.includeUnpromoted || false,
           audience: params?.audience,
+          environment: params?.environment,
         },
       });
 

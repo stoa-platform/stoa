@@ -84,6 +84,7 @@ class GatewayHealthWorker:
         async with session_factory() as session:
             await self._mark_stale_gateways_offline(session)
             await self._active_health_check_external_gateways(session)
+            await self._purge_stale_gateways(session)
             await session.commit()
 
     async def _mark_stale_gateways_offline(self, session: AsyncSession):
@@ -120,6 +121,44 @@ class GatewayHealthWorker:
             }
 
         logger.info("Marked %d gateways as OFFLINE due to heartbeat timeout", len(stale_gateways))
+
+    async def _purge_stale_gateways(self, session: AsyncSession):
+        """Soft-delete gateway instances that have been offline for longer than the purge TTL.
+
+        Default: 7 days without any heartbeat → soft-deleted (CAB-1897).
+        Protected instances are never purged.
+        """
+        purge_cutoff = datetime.now(UTC) - timedelta(days=settings.GATEWAY_PURGE_AFTER_DAYS)
+
+        stmt = select(GatewayInstance).where(
+            GatewayInstance.status == GatewayInstanceStatus.OFFLINE,
+            GatewayInstance.last_health_check < purge_cutoff,
+            GatewayInstance.deleted_at.is_(None),
+            GatewayInstance.protected.is_(False),
+        )
+        result = await session.execute(stmt)
+        stale_gateways = result.scalars().all()
+
+        if not stale_gateways:
+            return
+
+        now = datetime.now(UTC)
+        for gateway in stale_gateways:
+            logger.info(
+                "Purging stale gateway %s (%s): offline since %s (purge cutoff: %s)",
+                gateway.name,
+                gateway.id,
+                gateway.last_health_check.isoformat() if gateway.last_health_check else "never",
+                purge_cutoff.isoformat(),
+            )
+            gateway.deleted_at = now
+            gateway.deleted_by = "system:auto-purge"
+
+        logger.info(
+            "Auto-purged %d stale gateway instances (offline > %d days)",
+            len(stale_gateways),
+            settings.GATEWAY_PURGE_AFTER_DAYS,
+        )
 
     async def _active_health_check_external_gateways(self, session: AsyncSession):
         """Actively poll external gateways (non-STOA) via their adapter health_check().

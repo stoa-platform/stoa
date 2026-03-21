@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     GATEWAY_HEARTBEAT_TIMEOUT_SECONDS: int = 90
     # Health check interval in seconds (how often to check for stale gateways)
     GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS: int = 30
+    # Auto-purge stale gateways after N days without heartbeat (CAB-1897)
+    GATEWAY_PURGE_AFTER_DAYS: int = 7
     # ArgoCD reconciler interval (how often to sync ArgoCD apps → gateway_instances)
     GATEWAY_RECONCILER_INTERVAL_SECONDS: int = 60
 

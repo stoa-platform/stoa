@@ -239,6 +239,46 @@ func (g *GraviteeAdapter) SyncRoutes(ctx context.Context, adminURL string, route
 	return nil
 }
 
+// InjectCredentials provisions applications and subscriptions on Gravitee.
+func (g *GraviteeAdapter) InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error {
+	basePath := adminURL + "/management/v2/environments/DEFAULT/applications"
+
+	for _, cred := range creds {
+		appPayload := map[string]interface{}{
+			"name":        "stoa-" + cred.ConsumerID,
+			"description": fmt.Sprintf("STOA managed consumer %s", cred.ConsumerID),
+			"settings": map[string]interface{}{
+				"app": map[string]interface{}{
+					"client_id": cred.Key,
+				},
+			},
+		}
+
+		data, err := json.Marshal(appPayload)
+		if err != nil {
+			return fmt.Errorf("marshal gravitee app: %w", err)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, basePath, strings.NewReader(string(data)))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		g.setAuth(req)
+
+		resp, err := g.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("create gravitee application: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+			return fmt.Errorf("gravitee app create failed (%d)", resp.StatusCode)
+		}
+	}
+	return nil
+}
+
 func (g *GraviteeAdapter) doGet(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

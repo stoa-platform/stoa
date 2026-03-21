@@ -111,6 +111,15 @@ export const marketplaceService = {
 
       const filtered = filters ? applyFilters(allItems, filters) : allItems;
 
+      // Sort (CAB-1906) — sorts in-place on the filtered copy
+      if (filters?.sortBy === 'updated_at') {
+        filtered.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      } else if (filters?.sortBy === 'created_at') {
+        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      } else {
+        filtered.sort((a, b) => a.displayName.localeCompare(b.displayName));
+      }
+
       // Client-side pagination
       const page = filters?.page || 1;
       const pageSize = filters?.pageSize || 20;

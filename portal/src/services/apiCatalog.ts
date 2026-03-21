@@ -20,6 +20,7 @@ export interface ListAPIsParams {
   includeUnpromoted?: boolean; // Include APIs not promoted to Portal (for admin view)
   audience?: string;
   environment?: string; // Filter by deployment environment (dev, staging, production)
+  sortBy?: 'name' | 'updated_at' | 'created_at'; // CAB-1906: sort order (default: name)
 }
 
 export interface Universe {
@@ -96,6 +97,7 @@ export const apiCatalogService = {
           include_unpromoted: params?.includeUnpromoted || false,
           audience: params?.audience,
           environment: params?.environment,
+          sort_by: params?.sortBy,
         },
       });
 

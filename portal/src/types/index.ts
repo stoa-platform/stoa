@@ -958,6 +958,7 @@ export interface MarketplaceFilters {
   tags?: string[];
   page?: number;
   pageSize?: number;
+  sortBy?: 'name' | 'updated_at' | 'created_at'; // CAB-1906
 }
 
 export interface MarketplaceStats {

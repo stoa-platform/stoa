@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { BookOpen, Wrench, ArrowRight } from 'lucide-react';
+import { BookOpen, Wrench, ArrowRight, Key, Lock, Shield, Globe, Plug } from 'lucide-react';
 import type { MarketplaceItem } from '../../types';
 
 interface MarketplaceCardProps {
@@ -14,6 +14,12 @@ const statusColors: Record<string, string> = {
   maintenance: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
 };
 
+const audienceColors: Record<string, string> = {
+  public: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  internal: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  partner: 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+};
+
 function getItemLink(item: MarketplaceItem): string {
   if (item.type === 'api' && item.api) {
     return `/apis/${item.api.id}`;
@@ -24,10 +30,38 @@ function getItemLink(item: MarketplaceItem): string {
   return '#';
 }
 
+/** Infer auth type from API tags (convention: tags like "oauth2", "api-key", "mtls") */
+function getAuthType(item: MarketplaceItem): string | null {
+  if (item.type !== 'api') return null;
+  const tags = item.tags.map((t) => t.toLowerCase());
+  if (tags.includes('oauth2') || tags.includes('oidc')) return 'OAuth2';
+  if (tags.includes('mtls') || tags.includes('mutual-tls')) return 'mTLS';
+  if (tags.includes('api-key') || tags.includes('apikey')) return 'API Key';
+  if (tags.includes('basic') || tags.includes('basic-auth')) return 'Basic';
+  return null;
+}
+
+function AuthIcon({ authType }: { authType: string }) {
+  switch (authType) {
+    case 'OAuth2':
+      return <Lock className="h-3 w-3" />;
+    case 'mTLS':
+      return <Shield className="h-3 w-3" />;
+    case 'API Key':
+      return <Key className="h-3 w-3" />;
+    default:
+      return <Globe className="h-3 w-3" />;
+  }
+}
+
 export function MarketplaceCard({ item }: MarketplaceCardProps) {
   const Icon = item.type === 'api' ? BookOpen : Wrench;
   const typeLabel = item.type === 'api' ? 'API' : 'AI Tool';
   const link = getItemLink(item);
+  const authType = getAuthType(item);
+  const endpointCount = item.api?.endpoints?.length ?? 0;
+  const toolCount = item.mcpServer?.tools?.length ?? 0;
+  const audience = item.api?.audience;
 
   return (
     <Link
@@ -65,6 +99,39 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
       <p className="text-sm text-neutral-600 line-clamp-2 mb-3 dark:text-neutral-400">
         {item.description || 'No description available'}
       </p>
+
+      {/* Metadata badges row (CAB-1906) */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        {/* Auth type */}
+        {authType && (
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300">
+            <AuthIcon authType={authType} />
+            {authType}
+          </span>
+        )}
+        {/* Endpoint count for APIs */}
+        {item.type === 'api' && endpointCount > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400">
+            <Plug className="h-3 w-3" />
+            {endpointCount} endpoint{endpointCount !== 1 ? 's' : ''}
+          </span>
+        )}
+        {/* Tool count for MCP servers */}
+        {item.type === 'mcp-server' && toolCount > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400">
+            <Wrench className="h-3 w-3" />
+            {toolCount} tool{toolCount !== 1 ? 's' : ''}
+          </span>
+        )}
+        {/* Audience badge */}
+        {audience && (
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${audienceColors[audience] || audienceColors.public}`}
+          >
+            {audience}
+          </span>
+        )}
+      </div>
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

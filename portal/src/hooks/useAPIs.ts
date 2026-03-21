@@ -14,9 +14,10 @@ import type { API, PaginatedResponse } from '../types';
  */
 export function useAPIs(params?: ListAPIsParams) {
   const { activeEnvironment } = usePortalEnvironment();
+  const envParam = params?.environment ?? activeEnvironment;
   return useQuery<PaginatedResponse<API>>({
     queryKey: [activeEnvironment, 'apis', params],
-    queryFn: () => apiCatalogService.listAPIs(params),
+    queryFn: () => apiCatalogService.listAPIs({ ...params, environment: envParam }),
     staleTime: 30 * 1000, // 30 seconds
   });
 }

@@ -186,6 +186,7 @@ async def list_portal_apis(
     include_unpromoted: bool = Query(False, description="Include APIs not promoted to Portal"),
     universe: str | None = Query(None, description="Filter by universe: oasis, enterprise"),
     audience: str | None = Query(None, description="Filter by audience: public, internal, partner"),
+    environment: str | None = Query(None, description="Filter by deployment environment: dev, staging, production"),
 ):
     """
     List all promoted APIs available in the Portal catalog.
@@ -210,6 +211,7 @@ async def list_portal_apis(
             include_unpublished=include_unpromoted,
             user_roles=list(user.roles or []),
             audience_filter=audience,
+            environment=environment,
             page=page,
             page_size=page_size,
         )

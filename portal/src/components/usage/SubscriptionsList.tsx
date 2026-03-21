@@ -146,16 +146,10 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
                   <span>•</span>
                   <span>Last used {formatLastUsed(sub.last_used_at)}</span>
                 </div>
-                {/* CAB-1907: Usage quota bar — plan limit when available, relative otherwise */}
-                {sub.plan_limit && sub.plan_limit > 0 ? (
-                  <QuotaBar
-                    used={sub.call_count_total}
-                    limit={sub.plan_limit}
-                    label={sub.plan ?? undefined}
-                  />
-                ) : maxCalls > 0 ? (
+                {/* CAB-1907: Usage quota bar (relative to highest) */}
+                {maxCalls > 0 && (
                   <QuotaBar used={sub.call_count_total} limit={maxCalls} showPercent={false} />
-                ) : null}
+                )}
               </div>
 
               <Link

@@ -22,7 +22,7 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: STOA_GATEWAY_EXTERNAL_URL
-          value: "https://dev-mcp.gostoa.dev"
+          value: "https://dev-gw.gostoa.dev"
   - target:
       kind: Deployment
       name: stoa-sidecar-kong
@@ -37,6 +37,11 @@ patches:
         value:
           name: STOA_INSTANCE_NAME
           value: "stoa-sidecar-kong-dev"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_GATEWAY_EXTERNAL_URL
+          value: "https://dev-kong.gostoa.dev"
   - target:
       kind: Deployment
       name: stoa-sidecar-webmethods
@@ -51,3 +56,8 @@ patches:
         value:
           name: STOA_INSTANCE_NAME
           value: "stoa-sidecar-webmethods-dev"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_GATEWAY_EXTERNAL_URL
+          value: "https://dev-wm.gostoa.dev"

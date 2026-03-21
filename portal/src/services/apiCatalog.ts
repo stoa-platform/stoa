@@ -20,6 +20,7 @@ export interface ListAPIsParams {
   includeUnpromoted?: boolean; // Include APIs not promoted to Portal (for admin view)
   audience?: string;
   environment?: string; // Filter by deployment environment (dev, staging, production)
+  sortBy?: 'name' | 'updated_at' | 'created_at'; // CAB-1906: sort order (default: name)
 }
 
 export interface Universe {
@@ -44,6 +45,8 @@ interface PortalAPI {
   is_promoted: boolean; // Whether API is promoted to Portal (has portal:published tag)
   audience?: string;
   deployed_environments?: string[];
+  auth_type?: string | null;
+  endpoint_count?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -72,6 +75,8 @@ function transformPortalAPI(portalApi: PortalAPI): API {
     audience: (portalApi.audience as API['audience']) || 'public',
     deployments: portalApi.deployments,
     deployedEnvironments: portalApi.deployed_environments || [],
+    authType: portalApi.auth_type || null,
+    endpointCount: portalApi.endpoint_count || 0,
     createdAt: portalApi.created_at || new Date().toISOString(),
     updatedAt: portalApi.updated_at || new Date().toISOString(),
   };
@@ -96,6 +101,7 @@ export const apiCatalogService = {
           include_unpromoted: params?.includeUnpromoted || false,
           audience: params?.audience,
           environment: params?.environment,
+          sort_by: params?.sortBy,
         },
       });
 

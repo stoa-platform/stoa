@@ -91,6 +91,7 @@ export function DiscoverPage() {
   const [audienceFilter, setAudienceFilter] = useState('');
   const [universeFilter, setUniverseFilter] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [authTypeFilter, setAuthTypeFilter] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'updated_at' | 'created_at'>('name');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [page, setPage] = useState(1);
@@ -111,11 +112,12 @@ export function DiscoverPage() {
       type: typeFilter,
       category: categoryFilter || undefined,
       tags: selectedTags.length > 0 ? selectedTags : undefined,
+      authType: authTypeFilter || undefined,
       sortBy,
       page,
       pageSize,
     }),
-    [debouncedSearch, typeFilter, categoryFilter, selectedTags, sortBy, page]
+    [debouncedSearch, typeFilter, categoryFilter, selectedTags, authTypeFilter, sortBy, page]
   );
 
   const { data, isLoading, isError, refetch } = useMarketplace(filters);
@@ -138,6 +140,7 @@ export function DiscoverPage() {
     audienceFilter ||
     universeFilter ||
     selectedTags.length > 0 ||
+    authTypeFilter ||
     sortBy !== 'name';
 
   // Grouped view: group items by category
@@ -192,6 +195,7 @@ export function DiscoverPage() {
     setAudienceFilter('');
     setUniverseFilter('');
     setSelectedTags([]);
+    setAuthTypeFilter('');
     setSortBy('name');
     setPage(1);
   }, []);
@@ -422,6 +426,25 @@ export function DiscoverPage() {
                 </select>
               </div>
             )}
+
+            {/* Auth type filter (CAB-1906) */}
+            <div className="relative sm:w-44">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+              <select
+                value={authTypeFilter}
+                onChange={(e) => {
+                  setAuthTypeFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
+              >
+                <option value="">All Auth Types</option>
+                <option value="oauth2">OAuth2</option>
+                <option value="api_key">API Key</option>
+                <option value="mtls">mTLS</option>
+                <option value="basic">Basic</option>
+              </select>
+            </div>
 
             {/* Sort (CAB-1906) */}
             <div className="relative sm:w-44">

@@ -73,6 +73,20 @@ function applyFilters(items: MarketplaceItem[], filters: MarketplaceFilters): Ma
     filtered = filtered.filter((item) => filters.tags!.some((tag) => item.tags.includes(tag)));
   }
 
+  if (filters.authType) {
+    const authTagMap: Record<string, string[]> = {
+      oauth2: ['oauth2', 'oidc'],
+      api_key: ['api-key', 'apikey'],
+      mtls: ['mtls', 'mutual-tls'],
+      basic: ['basic', 'basic-auth'],
+    };
+    const matchTags = authTagMap[filters.authType] || [filters.authType];
+    filtered = filtered.filter((item) => {
+      const lowerTags = item.tags.map((t) => t.toLowerCase());
+      return matchTags.some((mt) => lowerTags.includes(mt));
+    });
+  }
+
   return filtered;
 }
 

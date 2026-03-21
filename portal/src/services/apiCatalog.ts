@@ -45,6 +45,8 @@ interface PortalAPI {
   is_promoted: boolean; // Whether API is promoted to Portal (has portal:published tag)
   audience?: string;
   deployed_environments?: string[];
+  auth_type?: string | null;
+  endpoint_count?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -73,6 +75,8 @@ function transformPortalAPI(portalApi: PortalAPI): API {
     audience: (portalApi.audience as API['audience']) || 'public',
     deployments: portalApi.deployments,
     deployedEnvironments: portalApi.deployed_environments || [],
+    authType: portalApi.auth_type || null,
+    endpointCount: portalApi.endpoint_count || 0,
     createdAt: portalApi.created_at || new Date().toISOString(),
     updatedAt: portalApi.updated_at || new Date().toISOString(),
   };

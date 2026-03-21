@@ -58,8 +58,8 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
   const Icon = item.type === 'api' ? BookOpen : Wrench;
   const typeLabel = item.type === 'api' ? 'API' : 'AI Tool';
   const link = getItemLink(item);
-  const authType = getAuthType(item);
-  const endpointCount = item.api?.endpoints?.length ?? 0;
+  const authType = item.api?.authType || getAuthType(item);
+  const endpointCount = item.api?.endpointCount || item.api?.endpoints?.length || 0;
   const toolCount = item.mcpServer?.tools?.length ?? 0;
   const audience = item.api?.audience;
 

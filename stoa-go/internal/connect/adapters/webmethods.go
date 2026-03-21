@@ -214,6 +214,44 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 	return nil
 }
 
+// InjectCredentials provisions applications and API associations on webMethods.
+func (w *WebMethodsAdapter) InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error {
+	for _, cred := range creds {
+		// 1. Create application
+		appPayload := map[string]interface{}{
+			"name":        "stoa-" + cred.ConsumerID,
+			"description": fmt.Sprintf("STOA managed consumer %s", cred.ConsumerID),
+			"identifiers": []map[string]interface{}{
+				{"key": cred.Key, "name": "apiKey", "value": []string{cred.Key}},
+			},
+		}
+
+		data, err := json.Marshal(appPayload)
+		if err != nil {
+			return fmt.Errorf("marshal webmethods app: %w", err)
+		}
+
+		appURL := adminURL + "/rest/apigateway/applications"
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, appURL, strings.NewReader(string(data)))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		w.setAuth(req)
+
+		resp, err := w.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("create webmethods application: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+			return fmt.Errorf("webmethods app create failed (%d)", resp.StatusCode)
+		}
+	}
+	return nil
+}
+
 func (w *WebMethodsAdapter) doGet(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

@@ -32,6 +32,15 @@ type Route struct {
 	Activated  bool     `json:"activated"`
 }
 
+// Credential represents a consumer credential fetched from Vault for injection.
+type Credential struct {
+	ConsumerID string `json:"consumer_id"`
+	APIName    string `json:"api_name"`
+	AuthType   string `json:"auth_type"` // key-auth, oauth2, basic-auth
+	Key        string `json:"key"`
+	Secret     string `json:"secret,omitempty"`
+}
+
 // GatewayAdapter defines the interface for gateway-specific operations.
 type GatewayAdapter interface {
 	// Detect checks if the admin URL hosts this gateway type.
@@ -48,6 +57,9 @@ type GatewayAdapter interface {
 
 	// SyncRoutes pushes CP routes to the local gateway.
 	SyncRoutes(ctx context.Context, adminURL string, routes []Route) error
+
+	// InjectCredentials provisions consumer credentials on the local gateway.
+	InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error
 }
 
 // AdapterConfig holds common configuration for gateway adapters.

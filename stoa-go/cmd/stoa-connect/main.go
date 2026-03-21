@@ -83,6 +83,17 @@ func main() {
 				Interval: dcfg.Interval,
 			})
 			agent.StartRouteSync(ctx, adapter, dcfg.GatewayAdminURL, connect.RouteSyncConfigFromEnv())
+
+			// Start credential sync loop (requires Vault)
+			vaultCfg := connect.VaultConfigFromEnv()
+			if vaultCfg.Addr != "" {
+				vc, vcErr := connect.NewVaultClient(vaultCfg)
+				if vcErr != nil {
+					log.Printf("warning: vault client init failed: %v", vcErr)
+				} else {
+					agent.StartCredentialSync(ctx, vc, adapter, dcfg.GatewayAdminURL, connect.CredentialSyncConfigFromEnv())
+				}
+			}
 		}
 	}
 

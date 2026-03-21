@@ -63,7 +63,7 @@ spec:
                 - name: ENDPOINTS
                   value: |
                     {
-                      "api": "http://stoa-control-plane-api.stoa-system.svc",
+                      "api": "http://stoa-control-plane-api.stoa-system.svc:8000",
                       "gateway": "http://stoa-gateway.stoa-system.svc",
                       "auth": "http://keycloak.stoa-system.svc"
                     }

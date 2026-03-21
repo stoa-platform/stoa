@@ -403,6 +403,88 @@ func (k *KongAdapter) doGet(ctx context.Context, url string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
+// InjectCredentials provisions consumers and their credentials on Kong.
+// For key-auth: creates consumer + key-auth credential.
+// For oauth2: creates consumer + oauth2 application.
+func (k *KongAdapter) InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error {
+	for _, cred := range creds {
+		consumerName := "stoa-" + cred.ConsumerID
+
+		// 1. Upsert consumer
+		consumerPayload := map[string]interface{}{
+			"username": consumerName,
+			"tags":     []string{"stoa-managed"},
+		}
+		data, err := json.Marshal(consumerPayload)
+		if err != nil {
+			return fmt.Errorf("marshal consumer: %w", err)
+		}
+
+		consumerURL := fmt.Sprintf("%s/consumers/%s", adminURL, consumerName)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, consumerURL, strings.NewReader(string(data)))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		k.setAuth(req)
+
+		resp, err := k.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("upsert kong consumer: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		// 2. Add credential based on auth type
+		var credURL string
+		var credPayload map[string]interface{}
+
+		switch cred.AuthType {
+		case "key-auth":
+			credURL = fmt.Sprintf("%s/consumers/%s/key-auth", adminURL, consumerName)
+			credPayload = map[string]interface{}{"key": cred.Key}
+		case "basic-auth":
+			credURL = fmt.Sprintf("%s/consumers/%s/basic-auth", adminURL, consumerName)
+			credPayload = map[string]interface{}{
+				"username": cred.Key,
+				"password": cred.Secret,
+			}
+		case "oauth2":
+			credURL = fmt.Sprintf("%s/consumers/%s/oauth2", adminURL, consumerName)
+			credPayload = map[string]interface{}{
+				"name":          cred.APIName,
+				"client_id":     cred.Key,
+				"client_secret": cred.Secret,
+			}
+		default:
+			return fmt.Errorf("unsupported auth type for kong: %s", cred.AuthType)
+		}
+
+		credData, err := json.Marshal(credPayload)
+		if err != nil {
+			return fmt.Errorf("marshal credential: %w", err)
+		}
+
+		credReq, err := http.NewRequestWithContext(ctx, http.MethodPost, credURL, strings.NewReader(string(credData)))
+		if err != nil {
+			return err
+		}
+		credReq.Header.Set("Content-Type", "application/json")
+		k.setAuth(credReq)
+
+		credResp, err := k.client.Do(credReq)
+		if err != nil {
+			return fmt.Errorf("create kong credential: %w", err)
+		}
+		_ = credResp.Body.Close()
+
+		// 409 = already exists, acceptable
+		if credResp.StatusCode != http.StatusCreated && credResp.StatusCode != http.StatusOK && credResp.StatusCode != http.StatusConflict {
+			return fmt.Errorf("kong credential create failed (%d)", credResp.StatusCode)
+		}
+	}
+	return nil
+}
+
 func (k *KongAdapter) setAuth(req *http.Request) {
 	if k.cfg.Token != "" {
 		req.Header.Set("Kong-Admin-Token", k.cfg.Token)

@@ -266,7 +266,7 @@ async def test_deployment(
         latency = (time.monotonic() - start) * 1000
 
         return TestResult(
-            reachable=resp.status_code < 500,
+            reachable=resp.status_code < 400,
             status_code=resp.status_code,
             latency_ms=round(latency, 1),
             gateway_url=base_url,

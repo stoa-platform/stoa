@@ -36,7 +36,7 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: STOA_INSTANCE_NAME
-          value: "stoa-sidecar-kong-dev"
+          value: "STOA Link — Kong (dev)"
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
@@ -55,7 +55,7 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: STOA_INSTANCE_NAME
-          value: "stoa-sidecar-webmethods-dev"
+          value: "STOA Link — webMethods (dev)"
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:

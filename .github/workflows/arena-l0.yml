@@ -28,6 +28,7 @@ env:
   DISCARD_FIRST: "1"
   TIMEOUT: "10"
   ARENA_INSTANCE: "gha"
+  PUSHGATEWAY_URL: "https://pushgateway.gostoa.dev"
 
 jobs:
   benchmark:
@@ -39,6 +40,17 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           sparse-checkout: scripts/traffic/arena
+
+      - name: Fetch secrets from Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: https://hcvault.gostoa.dev
+          method: approle
+          roleId: ${{ secrets.VAULT_ROLE_ID }}
+          secretId: ${{ secrets.VAULT_SECRET_ID }}
+          secrets: |
+            stoa/data/k8s/stoa-gateway STOA_ADMIN_API_TOKEN | STOA_ADMIN_TOKEN ;
+            stoa/data/k8s/pushgateway BASIC_AUTH | PUSHGATEWAY_AUTH
 
       - name: Install k6
         run: |
@@ -55,10 +67,8 @@ jobs:
           python-version: "3.12"
 
       - name: Pre-provision echo route
-        env:
-          STOA_ADMIN_TOKEN: ${{ secrets.STOA_GATEWAY_ADMIN_TOKEN }}
         run: |
-          if [ -n "$STOA_ADMIN_TOKEN" ]; then
+          if [ -n "${STOA_ADMIN_TOKEN:-}" ]; then
             ROUTE='{"id":"arena-echo-route","name":"Arena Echo Backend","tenant_id":"arena-bench","path_prefix":"/echo","backend_url":"http://echo-backend.stoa-system.svc:8888","methods":[],"spec_hash":"v1","activated":true}'
             for i in $(seq 1 5); do
               curl -sf -X POST "https://mcp.gostoa.dev/admin/apis" \
@@ -67,12 +77,13 @@ jobs:
                 -d "$ROUTE" --max-time 5 || true
             done
             echo "Echo route provisioned"
+          else
+            echo "⚠️ No STOA_ADMIN_TOKEN — echo route not provisioned (Vault step may have failed)"
           fi
 
       - name: Run Arena L0
         env:
           SCRIPT_PATH: scripts/traffic/arena/benchmark.js
-          PUSHGATEWAY_URL: "unused"
         run: |
           set -euo pipefail
           WORK_DIR="/tmp/arena"
@@ -156,18 +167,9 @@ jobs:
 
       - name: Push to Pushgateway
         if: always()
-        env:
-          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_PUBLIC_URL }}
-          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
         run: |
           METRICS_FILE="/tmp/arena/metrics.txt"
           [ ! -f "$METRICS_FILE" ] && echo "No metrics to push" && exit 0
-
-          if [ -z "${PUSHGATEWAY_URL:-}" ]; then
-            echo "ℹ️ PUSHGATEWAY_PUBLIC_URL not set — metrics saved as artifact only"
-            echo "To enable push: expose pushgateway via ingress and set secret"
-            exit 0
-          fi
 
           CURL_AUTH=""
           [ -n "${PUSHGATEWAY_AUTH:-}" ] && CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
@@ -177,7 +179,7 @@ jobs:
             $CURL_AUTH \
             "${PUSHGATEWAY_URL}/metrics/job/gateway_arena/instance/gha" \
             --max-time 10 2>/dev/null)
-          echo "Pushed metrics (HTTP ${HTTP_CODE:-000})"
+          echo "Pushed metrics to ${PUSHGATEWAY_URL} (HTTP ${HTTP_CODE:-000})"
 
       - name: Upload results
         if: always()

@@ -1,0 +1,126 @@
+# STOA Gateway — Minimal mode for Arena L0 benchmarks
+# All optional features disabled: no HEGEMON, no Kafka, no LLM proxy, no API proxy.
+# Measures pure Rust proxy overhead — fair comparison with AgentGateway.
+# Uses same image as production but with feature toggles off.
+#
+# Ports:
+#   8080 — HTTP proxy + MCP + metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stoa-gateway-minimal
+  namespace: stoa-system
+  labels:
+    app: stoa-gateway-minimal
+    app.kubernetes.io/component: arena
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stoa-gateway-minimal
+  template:
+    metadata:
+      labels:
+        app: stoa-gateway-minimal
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: stoa-gateway
+          image: ghcr.io/stoa-platform/stoa-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: STOA_PORT
+              value: "8080"
+            - name: STOA_HOST
+              value: "0.0.0.0"
+            - name: STOA_LOG_LEVEL
+              value: "warn"
+            - name: STOA_LOG_FORMAT
+              value: "json"
+            # --- All optional features DISABLED ---
+            - name: STOA_HEGEMON_ENABLED
+              value: "false"
+            - name: STOA_KAFKA_ENABLED
+              value: "false"
+            - name: STOA_LLM_PROXY_ENABLED
+              value: "false"
+            - name: STOA_API_PROXY_ENABLED
+              value: "false"
+            # No control plane URL = standalone mode (no auto-registration, no heartbeat)
+            - name: STOA_RATE_LIMIT_DEFAULT
+              value: "0"
+            # --- Performance tuning: skip per-request overhead ---
+            - name: STOA_PROXY_METRICS_ENABLED
+              value: "false"
+            - name: STOA_PROXY_TRACING_ENABLED
+              value: "false"
+          envFrom:
+            - secretRef:
+                name: stoa-gateway-secrets
+                optional: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-gateway-minimal
+  namespace: stoa-system
+  labels:
+    app: stoa-gateway-minimal
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: stoa-gateway-minimal

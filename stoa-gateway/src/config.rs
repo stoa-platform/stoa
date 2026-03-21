@@ -158,6 +158,18 @@ pub struct Config {
     #[serde(default)]
     pub detailed_tracing: bool,
 
+    /// Enable HTTP metrics recording on proxy requests (path normalization + Prometheus observe).
+    /// Disable for pure proxy benchmarks to eliminate ~1.2ms overhead per request.
+    /// Env: STOA_PROXY_METRICS_ENABLED (default: true)
+    #[serde(default = "default_true")]
+    pub proxy_metrics_enabled: bool,
+
+    /// Enable tracing span creation on proxy requests.
+    /// Disable for pure proxy benchmarks to eliminate ~0.4ms overhead per request.
+    /// Env: STOA_PROXY_TRACING_ENABLED (default: true)
+    #[serde(default = "default_true")]
+    pub proxy_tracing_enabled: bool,
+
     // === Gateway Mode (Phase 8) ===
     /// Gateway deployment mode: edge-mcp, sidecar, proxy, shadow
     /// Env: STOA_GATEWAY_MODE (default: edge-mcp)
@@ -1341,6 +1353,8 @@ impl Default for Config {
             otel_endpoint: None,
             otel_sample_rate: default_otel_sample_rate(),
             detailed_tracing: false,
+            proxy_metrics_enabled: true,
+            proxy_tracing_enabled: true,
             gateway_mode: GatewayMode::default(),
             zombie_detection_enabled: default_zombie_detection(),
             agent_session_ttl_secs: default_agent_session_ttl(),

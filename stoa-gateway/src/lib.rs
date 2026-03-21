@@ -662,8 +662,22 @@ async fn http_metrics_middleware(
         return next.run(request).await;
     }
 
+    // Fast path: skip metrics + tracing overhead when both are disabled (pure proxy mode).
+    // Env: STOA_PROXY_METRICS_ENABLED=false + STOA_PROXY_TRACING_ENABLED=false
+    let metrics_enabled = state.config.proxy_metrics_enabled;
+    let tracing_enabled = state.config.proxy_tracing_enabled;
+    if !metrics_enabled && !tracing_enabled {
+        return next.run(request).await;
+    }
+
     let method = request.method().to_string();
-    let path = metrics::normalize_path(raw_path);
+    // Path normalization replaces UUIDs/numeric IDs with :id to prevent Prometheus label
+    // cardinality explosion. Skip when metrics are disabled to save ~0.5ms per request.
+    let path = if metrics_enabled {
+        metrics::normalize_path(raw_path)
+    } else {
+        raw_path.to_string()
+    };
     let request_id = request
         .headers()
         .get("x-request-id")
@@ -695,21 +709,29 @@ async fn http_metrics_middleware(
     // CAB-1842: inject deployment mode as span attribute for Tempo service graph.
     // Uses Instrument (not Span::enter) because next.run().await is async —
     // Span::enter guard is dropped at the first yield point.
+    // Skip span creation when proxy tracing is disabled to save ~0.4ms per request.
+    // Env: STOA_PROXY_TRACING_ENABLED (default: true)
     use tracing::Instrument;
-    let deployment_mode = state.config.gateway_mode.to_string();
-    let request_span = tracing::span!(
-        tracing::Level::INFO,
-        "http.request",
-        otel.kind = "server",
-        "stoa.deployment_mode" = %deployment_mode,
-        http.method = %method,
-        http.route = %path,
-    );
-    let response = next.run(request).instrument(request_span).await;
+    let response = if tracing_enabled {
+        let deployment_mode = state.config.gateway_mode.to_string();
+        let request_span = tracing::span!(
+            tracing::Level::INFO,
+            "http.request",
+            otel.kind = "server",
+            "stoa.deployment_mode" = %deployment_mode,
+            http.method = %method,
+            http.route = %path,
+        );
+        next.run(request).instrument(request_span).await
+    } else {
+        next.run(request).await
+    };
 
     let duration = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();
-    metrics::record_http_request(&method, &path, status, duration);
+    if metrics_enabled {
+        metrics::record_http_request(&method, &path, status, duration);
+    }
 
     // Auto-RCA + snapshot capture on server errors
     if status >= 500 {

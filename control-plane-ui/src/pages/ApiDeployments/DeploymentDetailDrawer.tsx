@@ -274,21 +274,33 @@ export function DeploymentDetailDrawer({
                 className={`rounded-lg p-3 text-sm ${
                   testResult.reachable
                     ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                    : testResult.status_code && testResult.status_code < 500
+                      ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
+                      : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   {testResult.reachable ? (
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  ) : testResult.status_code && testResult.status_code < 500 ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-red-500" />
                   )}
                   <span
-                    className={`font-medium ${testResult.reachable ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'}`}
+                    className={`font-medium ${
+                      testResult.reachable
+                        ? 'text-green-800 dark:text-green-300'
+                        : testResult.status_code && testResult.status_code < 500
+                          ? 'text-amber-800 dark:text-amber-300'
+                          : 'text-red-800 dark:text-red-300'
+                    }`}
                   >
                     {testResult.reachable
                       ? `Reachable — HTTP ${testResult.status_code} (${testResult.latency_ms}ms)`
-                      : 'Unreachable'}
+                      : testResult.status_code
+                        ? `Gateway responded HTTP ${testResult.status_code} — API not serving (${testResult.latency_ms}ms)`
+                        : 'Unreachable'}
                   </span>
                 </div>
                 {testResult.path && (

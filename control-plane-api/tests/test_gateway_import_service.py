@@ -66,9 +66,10 @@ class TestGatewayImportService:
             "src.services.gateway_import_service.GatewayDeploymentRepository",
             return_value=mock_deploy_repo,
         ), patch(
-            "src.services.gateway_import_service.AdapterRegistry"
-        ) as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+            "src.services.gateway_import_service.create_adapter_with_credentials",
+            new_callable=AsyncMock,
+            return_value=mock_adapter,
+        ):
 
             svc = GatewayImportService(mock_db)
             result = await svc.import_from_gateway(gateway.id)
@@ -117,9 +118,10 @@ class TestGatewayImportService:
             "src.services.gateway_import_service.GatewayDeploymentRepository",
             return_value=mock_deploy_repo,
         ), patch(
-            "src.services.gateway_import_service.AdapterRegistry"
-        ) as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+            "src.services.gateway_import_service.create_adapter_with_credentials",
+            new_callable=AsyncMock,
+            return_value=mock_adapter,
+        ):
 
             svc = GatewayImportService(mock_db)
             result = await svc.import_from_gateway(gateway.id)
@@ -164,9 +166,10 @@ class TestGatewayImportService:
             "src.services.gateway_import_service.GatewayDeploymentRepository",
             return_value=mock_deploy_repo,
         ), patch(
-            "src.services.gateway_import_service.AdapterRegistry"
-        ) as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+            "src.services.gateway_import_service.create_adapter_with_credentials",
+            new_callable=AsyncMock,
+            return_value=mock_adapter,
+        ):
 
             svc = GatewayImportService(mock_db)
             previews = await svc.preview_import(gateway.id)
@@ -204,9 +207,10 @@ class TestGatewayImportService:
             "src.services.gateway_import_service.GatewayDeploymentRepository",
             return_value=mock_deploy_repo,
         ), patch(
-            "src.services.gateway_import_service.AdapterRegistry"
-        ) as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+            "src.services.gateway_import_service.create_adapter_with_credentials",
+            new_callable=AsyncMock,
+            return_value=mock_adapter,
+        ):
 
             svc = GatewayImportService(mock_db)
             result = await svc.import_from_gateway(gateway.id)
@@ -239,9 +243,10 @@ class TestGatewayImportService:
             "src.services.gateway_import_service.GatewayDeploymentRepository",
             return_value=mock_deploy_repo,
         ), patch(
-            "src.services.gateway_import_service.AdapterRegistry"
-        ) as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+            "src.services.gateway_import_service.create_adapter_with_credentials",
+            new_callable=AsyncMock,
+            return_value=mock_adapter,
+        ):
 
             svc = GatewayImportService(mock_db)
             with pytest.raises(Exception, match="Connection refused"):
@@ -328,9 +333,10 @@ class TestGatewayImportService:
             "src.services.gateway_import_service.GatewayDeploymentRepository",
             return_value=mock_deploy_repo,
         ), patch(
-            "src.services.gateway_import_service.AdapterRegistry"
-        ) as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+            "src.services.gateway_import_service.create_adapter_with_credentials",
+            new_callable=AsyncMock,
+            return_value=mock_adapter,
+        ):
 
             svc = GatewayImportService(mock_db)
             result = await svc.import_from_gateway(gateway.id)

@@ -23,6 +23,7 @@ from ..adapters.registry import AdapterRegistry
 from ..config import settings
 from ..database import _get_session_factory
 from ..models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
+from ..services.credential_resolver import create_adapter_with_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,9 @@ class GatewayHealthWorker:
 
         stmt = select(GatewayInstance).where(
             GatewayInstance.gateway_type.in_(list(_HEARTBEAT_TYPES)),
-            GatewayInstance.status == GatewayInstanceStatus.ONLINE,
+            GatewayInstance.status.in_(
+                [GatewayInstanceStatus.ONLINE, GatewayInstanceStatus.DEGRADED]
+            ),
             GatewayInstance.last_health_check < cutoff_time,
             GatewayInstance.deleted_at.is_(None),
         )
@@ -191,17 +194,14 @@ class GatewayHealthWorker:
             logger.debug("No adapter registered for gateway type %s, skipping %s", gw_type, gateway.name)
             return
 
-        config = {
-            "base_url": gateway.base_url,
-            "auth_config": gateway.auth_config or {},
-        }
-
         now = datetime.now(UTC)
         health_details = dict(gateway.health_details or {})
         consecutive_failures = health_details.get("consecutive_failures", 0)
 
         try:
-            adapter = AdapterRegistry.create(gw_type, config=config)
+            adapter = await create_adapter_with_credentials(
+                gw_type, gateway.base_url, gateway.auth_config or {},
+            )
             check_result = await asyncio.wait_for(adapter.health_check(), timeout=_HEALTH_CHECK_TIMEOUT)
 
             if check_result.success:

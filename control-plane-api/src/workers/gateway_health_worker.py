@@ -94,7 +94,9 @@ class GatewayHealthWorker:
 
         stmt = select(GatewayInstance).where(
             GatewayInstance.gateway_type.in_(list(_HEARTBEAT_TYPES)),
-            GatewayInstance.status == GatewayInstanceStatus.ONLINE,
+            GatewayInstance.status.in_(
+                [GatewayInstanceStatus.ONLINE, GatewayInstanceStatus.DEGRADED]
+            ),
             GatewayInstance.last_health_check < cutoff_time,
             GatewayInstance.deleted_at.is_(None),
         )

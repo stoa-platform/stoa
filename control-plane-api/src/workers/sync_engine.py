@@ -20,13 +20,13 @@ from uuid import UUID
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
-from ..adapters.registry import AdapterRegistry
 from ..config import settings
 from ..database import _get_session_factory
 from ..models.gateway_deployment import DeploymentSyncStatus
 from ..models.gateway_instance import GatewayInstanceStatus
 from ..repositories.gateway_deployment import GatewayDeploymentRepository
 from ..repositories.gateway_instance import GatewayInstanceRepository
+from ..services.credential_resolver import create_adapter_with_credentials
 from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
@@ -270,9 +270,8 @@ class SyncEngine:
                 )
                 return
 
-            adapter = AdapterRegistry.create(
-                gateway.gateway_type.value,
-                config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+            adapter = await create_adapter_with_credentials(
+                gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
             )
 
             try:
@@ -405,9 +404,8 @@ class SyncEngine:
                 if not gateway or gateway.status == GatewayInstanceStatus.OFFLINE:
                     continue
 
-                adapter = AdapterRegistry.create(
-                    gateway.gateway_type.value,
-                    config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+                adapter = await create_adapter_with_credentials(
+                    gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
                 )
                 try:
                     await adapter.connect()

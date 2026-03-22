@@ -391,8 +391,7 @@ class TestContractsRouter:
         mock_dispatch_result.success = True
         mock_adapter.deploy_contract = AsyncMock(return_value=mock_dispatch_result)
 
-        with patch("src.routers.contracts.AdapterRegistry") as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+        with patch("src.routers.contracts.create_adapter_with_credentials", new_callable=AsyncMock, return_value=mock_adapter):
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
                     f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings",
@@ -450,8 +449,7 @@ class TestContractsRouter:
         mock_fail_result.error = "connection refused"
         mock_adapter.deploy_contract = AsyncMock(return_value=mock_fail_result)
 
-        with patch("src.routers.contracts.AdapterRegistry") as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+        with patch("src.routers.contracts.create_adapter_with_credentials", new_callable=AsyncMock, return_value=mock_adapter):
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
                     f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings",

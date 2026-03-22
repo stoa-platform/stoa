@@ -335,6 +335,17 @@
             "title": "Audience",
             "type": "string"
           },
+          "auth_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Type"
+          },
           "category": {
             "anyOf": [
               {
@@ -362,6 +373,11 @@
           "display_name": {
             "title": "Display Name",
             "type": "string"
+          },
+          "endpoint_count": {
+            "default": 0,
+            "title": "Endpoint Count",
+            "type": "integer"
           },
           "id": {
             "title": "Id",
@@ -3402,6 +3418,29 @@
           "valid"
         ],
         "title": "CertificateValidationResponse",
+        "type": "object"
+      },
+      "CleanupResult": {
+        "description": "Result of the manual gateway cleanup.",
+        "properties": {
+          "purged_count": {
+            "description": "Number of stale instances soft-deleted",
+            "title": "Purged Count",
+            "type": "integer"
+          },
+          "purged_instances": {
+            "description": "Names of purged instances",
+            "items": {
+              "type": "string"
+            },
+            "title": "Purged Instances",
+            "type": "array"
+          }
+        },
+        "required": [
+          "purged_count"
+        ],
+        "title": "CleanupResult",
         "type": "object"
       },
       "CommitInfo": {
@@ -36990,6 +37029,49 @@
         ]
       }
     },
+    "/v1/internal/gateways/cleanup": {
+      "post": {
+        "description": "Manually trigger cleanup of stale gateway instances (CAB-1897).\n\nSoft-deletes instances that have been OFFLINE for longer than\nGATEWAY_PURGE_AFTER_DAYS (default 7 days). Protected instances are skipped.",
+        "operationId": "cleanup_stale_gateways",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cleanup Stale Gateways",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
     "/v1/internal/gateways/register": {
       "post": {
         "description": "Gateway self-registration endpoint.\n\nCalled by STOA gateways at startup. Creates or updates the gateway instance\nrecord based on the deterministic name derived from hostname + mode + environment.\n\nReturns the assigned gateway ID for subsequent heartbeat calls.",
@@ -40440,6 +40522,42 @@
               ],
               "description": "Filter by deployment environment (optional, for subscription/test pages)",
               "title": "Environment"
+            }
+          },
+          {
+            "description": "Sort field: name (default), updated_at, created_at",
+            "in": "query",
+            "name": "sort_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sort field: name (default), updated_at, created_at",
+              "title": "Sort By"
+            }
+          },
+          {
+            "description": "Filter by auth type: oauth2, api_key, mtls, basic",
+            "in": "query",
+            "name": "auth_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by auth type: oauth2, api_key, mtls, basic",
+              "title": "Auth Type"
             }
           }
         ],

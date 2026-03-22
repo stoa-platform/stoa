@@ -127,12 +127,10 @@ class GatewayInstanceService:
         if not instance:
             raise ValueError(f"Gateway instance {instance_id} not found")
 
-        adapter = AdapterRegistry.create(
-            instance.gateway_type.value,
-            config={
-                "base_url": instance.base_url,
-                "auth_config": instance.auth_config,
-            },
+        from src.services.credential_resolver import create_adapter_with_credentials
+
+        adapter = await create_adapter_with_credentials(
+            instance.gateway_type.value, instance.base_url, instance.auth_config,
         )
 
         try:

@@ -68,9 +68,10 @@ async def _resolve_adapter(
             )
             return None
 
-        return AdapterRegistry.create(
-            gateway.gateway_type.value,
-            config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+        from ..services.credential_resolver import create_adapter_with_credentials
+
+        return await create_adapter_with_credentials(
+            gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
         )
     except Exception as e:
         logger.error("Failed to resolve gateway adapter for API %s: %s", api_id, e)

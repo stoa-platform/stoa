@@ -214,6 +214,55 @@ class TestRetrieveCredential:
         assert result is None
 
 
+# ── read_secret ──
+
+
+class TestReadSecret:
+    async def test_found(self):
+        vc = VaultClient(vault_addr="https://vault.dev", vault_token="tok")
+        mock_client = MagicMock()
+        mock_client.is_authenticated.return_value = True
+        mock_client.sys.read_health_status.return_value = {"sealed": False}
+        mock_client.secrets.kv.v2.read_secret_version.return_value = {
+            "data": {"data": {"api_key": "kong-token"}}
+        }
+        vc._client = mock_client
+
+        result = await vc.read_secret("gateways/kong-dev")
+        assert result == {"api_key": "kong-token"}
+        mock_client.secrets.kv.v2.read_secret_version.assert_called_once_with(
+            path="gateways/kong-dev", mount_point="secret",
+        )
+
+    async def test_not_found_returns_none(self):
+        vc = VaultClient(vault_addr="https://vault.dev", vault_token="tok")
+        mock_client = MagicMock()
+        mock_client.is_authenticated.return_value = True
+        mock_client.sys.read_health_status.return_value = {"sealed": False}
+        mock_client.secrets.kv.v2.read_secret_version.side_effect = InvalidPath("not found")
+        vc._client = mock_client
+
+        result = await vc.read_secret("gateways/nonexistent")
+        assert result is None
+
+    async def test_vault_error_returns_none(self):
+        """Unlike retrieve_credential, read_secret returns None on VaultError (graceful)."""
+        vc = VaultClient(vault_addr="https://vault.dev", vault_token="tok")
+        mock_client = MagicMock()
+        mock_client.is_authenticated.return_value = True
+        mock_client.sys.read_health_status.return_value = {"sealed": False}
+        mock_client.secrets.kv.v2.read_secret_version.side_effect = VaultError("timeout")
+        vc._client = mock_client
+
+        result = await vc.read_secret("gateways/kong-dev")
+        assert result is None
+
+    async def test_disabled_returns_none(self):
+        vc = VaultClient(vault_addr="https://vault.dev", enabled=False)
+        result = await vc.read_secret("gateways/kong-dev")
+        assert result is None
+
+
 # ── delete_credential ──
 
 

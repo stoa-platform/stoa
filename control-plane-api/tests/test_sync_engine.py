@@ -91,9 +91,7 @@ class TestSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
-
-            mock_registry.create.return_value = adapter
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -137,9 +135,7 @@ class TestSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
-
-            mock_registry.create.return_value = adapter
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -183,9 +179,7 @@ class TestSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
-
-            mock_registry.create.return_value = adapter
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -229,9 +223,7 @@ class TestSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
-
-            mock_registry.create.return_value = adapter
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -312,10 +304,9 @@ class TestSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry, \
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter), \
              patch("src.workers.sync_engine.kafka_service") as mock_kafka:
 
-            mock_registry.create.return_value = adapter
             mock_kafka.publish = AsyncMock()
 
             from src.workers.sync_engine import SyncEngine
@@ -358,10 +349,9 @@ class TestSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry, \
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter), \
              patch("src.workers.sync_engine.kafka_service") as mock_kafka:
 
-            mock_registry.create.return_value = adapter
             mock_kafka.publish = AsyncMock()
 
             from src.workers.sync_engine import SyncEngine
@@ -399,7 +389,7 @@ class TestSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock) as mock_create:
 
             from src.workers.sync_engine import SyncEngine
 
@@ -410,5 +400,5 @@ class TestSyncEngine:
 
             await engine._reconcile_one(deployment.id)
 
-            # AdapterRegistry.create should NOT be called for offline gateway
-            mock_registry.create.assert_not_called()
+            # create_adapter_with_credentials should NOT be called for offline gateway
+            mock_create.assert_not_awaited()

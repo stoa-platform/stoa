@@ -317,10 +317,8 @@ class TestPolicySyncInSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry, \
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter), \
              patch("src.repositories.gateway_policy.GatewayPolicyRepository", return_value=mock_policy_repo):
-
-            mock_registry.create.return_value = adapter
 
             from src.workers.sync_engine import SyncEngine
 
@@ -373,10 +371,8 @@ class TestPolicySyncInSyncEngine:
         with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
              patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
              patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry, \
+             patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter), \
              patch("src.repositories.gateway_policy.GatewayPolicyRepository", return_value=mock_policy_repo):
-
-            mock_registry.create.return_value = adapter
 
             from src.workers.sync_engine import SyncEngine
 

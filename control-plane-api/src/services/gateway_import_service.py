@@ -12,11 +12,11 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.adapters.registry import AdapterRegistry
 from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
+from src.services.credential_resolver import create_adapter_with_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +57,8 @@ class GatewayImportService:
         if not gateway:
             raise ValueError("Gateway instance not found")
 
-        adapter = AdapterRegistry.create(
-            gateway.gateway_type.value,
-            config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+        adapter = await create_adapter_with_credentials(
+            gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
         )
         await adapter.connect()
         try:
@@ -102,9 +101,8 @@ class GatewayImportService:
         if not gateway:
             raise ValueError("Gateway instance not found")
 
-        adapter = AdapterRegistry.create(
-            gateway.gateway_type.value,
-            config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+        adapter = await create_adapter_with_credentials(
+            gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
         )
         await adapter.connect()
         try:

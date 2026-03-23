@@ -23,7 +23,6 @@ CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 | Control Plane API | Python 3.11, FastAPI, SQLAlchemy | `control-plane-api/` |
 | Console UI | React 18, TypeScript, Keycloak-js | `control-plane-ui/` |
 | Developer Portal | React, Vite, TypeScript | `portal/` |
-| MCP Gateway (archived) | Python 3.11, FastAPI, OPA | `archive/mcp-gateway/` |
 | STOA Gateway | Rust, Tokio, axum | `stoa-gateway/` |
 | STOA Go (stoactl + stoa-connect) | Go 1.22, Cobra, keyring | `stoa-go/` |
 | CLI (legacy) | Python, Typer, Rich | `cli/` |

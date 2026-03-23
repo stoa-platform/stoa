@@ -1,0 +1,570 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 2,
+  "links": [
+    { "title": "Gateway Arena", "url": "/d/gateway-arena", "type": "link" },
+    { "title": "HEGEMON Fleet", "url": "/d/hegemon-fleet", "type": "link" },
+    { "title": "Platform Health", "url": "/d/platform-health", "type": "link" }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Fleet Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } }, "type": "value" }
+          ]
+        }
+      },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "VPS Status",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "node_load1{exported_job=\"node_exporter\", exported_instance=~\"$instance\"} * 0 + 1",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "dtdurations",
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 86400 },
+              { "color": "green", "value": 604800 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 5 },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "Uptime",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "time() - node_boot_time_seconds{exported_job=\"node_exporter\", exported_instance=~\"$instance\"}",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "title": "CPU",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.7 },
+              { "color": "red", "value": 0.9 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 10 },
+      "id": 3,
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "CPU Usage (current)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "1 - avg by (exported_instance) (rate(node_cpu_seconds_total{mode=\"idle\", exported_job=\"node_exporter\", exported_instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 15,
+            "spanNulls": true
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "CPU Usage Over Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "1 - avg by (exported_instance) (rate(node_cpu_seconds_total{mode=\"idle\", exported_job=\"node_exporter\", exported_instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 5,
+      "title": "Load Average (1m)",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "node_load1{exported_job=\"node_exporter\", exported_instance=~\"$instance\"}",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 6,
+      "title": "Load Average (5m / 15m)",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "node_load5{exported_job=\"node_exporter\", exported_instance=~\"$instance\"}",
+          "legendFormat": "{{exported_instance}} (5m)"
+        },
+        {
+          "expr": "node_load15{exported_job=\"node_exporter\", exported_instance=~\"$instance\"}",
+          "legendFormat": "{{exported_instance}} (15m)"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "id": 102,
+      "title": "Memory",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.75 },
+              { "color": "red", "value": 0.9 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 33 },
+      "id": 10,
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "RAM Usage (current)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "1 - (node_memory_MemAvailable_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\"} / node_memory_MemTotal_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\"})",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "bytes",
+          "custom": { "lineWidth": 1, "fillOpacity": 20, "stacking": { "mode": "none" }, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 39 },
+      "id": 11,
+      "title": "RAM Usage Over Time",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "node_memory_MemTotal_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\"} - node_memory_MemAvailable_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\"}",
+          "legendFormat": "{{exported_instance}} (used)"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 47 },
+      "id": 103,
+      "title": "Disk",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.75 },
+              { "color": "orange", "value": 0.85 },
+              { "color": "red", "value": 0.95 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 48 },
+      "id": 20,
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "Disk Usage / (current)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "1 - (node_filesystem_avail_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\", mountpoint=\"/\", fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\", mountpoint=\"/\", fstype!~\"tmpfs|overlay\"})",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "bytes",
+          "custom": { "lineWidth": 1, "fillOpacity": 15, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 54 },
+      "id": 21,
+      "title": "Disk Used Over Time (/)",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "node_filesystem_size_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\", mountpoint=\"/\", fstype!~\"tmpfs|overlay\"} - node_filesystem_avail_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\", mountpoint=\"/\", fstype!~\"tmpfs|overlay\"}",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "bytes",
+          "custom": { "lineWidth": 1, "fillOpacity": 15, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 54 },
+      "id": 22,
+      "title": "Disk Free (/)",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "node_filesystem_avail_bytes{exported_job=\"node_exporter\", exported_instance=~\"$instance\", mountpoint=\"/\", fstype!~\"tmpfs|overlay\"}",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "Bps",
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 62 },
+      "id": 23,
+      "title": "Disk I/O (read + write bytes/s)",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "rate(node_disk_read_bytes_total{exported_job=\"node_exporter\", exported_instance=~\"$instance\", device=~\"[sv]d[a-z]|nvme.*\"}[$__rate_interval])",
+          "legendFormat": "{{exported_instance}} read"
+        },
+        {
+          "expr": "rate(node_disk_written_bytes_total{exported_job=\"node_exporter\", exported_instance=~\"$instance\", device=~\"[sv]d[a-z]|nvme.*\"}[$__rate_interval])",
+          "legendFormat": "{{exported_instance}} write"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 70 },
+      "id": 104,
+      "title": "Network",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "bps",
+          "custom": { "lineWidth": 1, "fillOpacity": 15, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 71 },
+      "id": 30,
+      "title": "Network RX (inbound)",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total{exported_job=\"node_exporter\", exported_instance=~\"$instance\", device=~\"eth.*|ens.*|enp.*\"}[$__rate_interval]) * 8",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "bps",
+          "custom": { "lineWidth": 1, "fillOpacity": 15, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 71 },
+      "id": 31,
+      "title": "Network TX (outbound)",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "rate(node_network_transmit_bytes_total{exported_job=\"node_exporter\", exported_instance=~\"$instance\", device=~\"eth.*|ens.*|enp.*\"}[$__rate_interval]) * 8",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 79 },
+      "id": 105,
+      "title": "System",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 80 },
+      "id": 40,
+      "title": "Open File Descriptors",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "node_filefd_allocated{exported_job=\"node_exporter\", exported_instance=~\"$instance\"}",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "spanNulls": true }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 80 },
+      "id": 41,
+      "title": "Running Processes",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "node_procs_running{exported_job=\"node_exporter\", exported_instance=~\"$instance\"}",
+          "legendFormat": "{{exported_instance}}"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 88 },
+      "id": 106,
+      "title": "Cost Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 89 },
+      "id": 50,
+      "type": "table",
+      "title": "VPS Inventory & Monthly Cost",
+      "options": {
+        "footer": { "reducer": ["sum"], "show": true, "fields": ["Cost (EUR/mo)"] }
+      },
+      "fieldConfig": {
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Cost (EUR/mo)" }, "properties": [{ "id": "unit", "value": "currencyEUR" }] }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "vector(0)",
+          "refId": "A",
+          "hide": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "convertFieldType",
+          "options": {}
+        }
+      ],
+      "pluginVersion": "11.0.0",
+      "description": "Static cost reference — update manually when VPS changes.\n\n| VPS | Provider | IP | Specs | EUR/mo |\n|-----|----------|-----|-------|--------|\n| contabo-runner-github | Contabo | 194.163.161.85 | VPS 30 | 11.20 |\n| contabo-infisical | Contabo | 213.199.45.108 | VPS 30 | 12.60 |\n| contabo-hegemon-w1 | Contabo | 144.91.73.37 | VPS 24 | 5.95 |\n| contabo-hegemon-w2 | Contabo | 164.68.121.123 | VPS 24 | 5.95 |\n| contabo-hegemon-w3 | Contabo | 167.86.115.51 | VPS 24 | 5.95 |\n| contabo-hegemon-w4 | Contabo | 207.180.255.223 | VPS 24 | 5.95 |\n| contabo-hegemon-w5 | Contabo | 207.180.246.92 | VPS 24 | 5.95 |\n| ovh-stoa-gateway | OVH | 51.83.45.13 | VPS | 3.60 |\n| ovh-kong | OVH | 51.195.43.130 | VPS | 3.60 |\n| ovh-agentgateway | OVH | 135.125.204.169 | VPS | 3.60 |\n| ovh-gravitee | OVH | 54.36.209.237 | VPS | 3.60 |\n| ovh-bench | OVH | 94.23.107.106 | VPS | 3.60 |\n| ovh-n8n-tooling | OVH | 51.254.139.205 | VPS | 3.60 |\n| ovh-vault | OVH | 51.255.193.129 | VPS | 3.60 |\n| **TOTAL** | | | | **~83.15** |"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["vps", "monitoring", "infrastructure", "stoa"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "definition": "label_values(node_load1{exported_job=\"node_exporter\"}, exported_instance)",
+        "includeAll": true,
+        "multi": true,
+        "name": "instance",
+        "query": "label_values(node_load1{exported_job=\"node_exporter\"}, exported_instance)",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["10s", "30s", "1m", "5m", "15m"]
+  },
+  "timezone": "Europe/Paris",
+  "title": "VPS Fleet Monitoring",
+  "uid": "vps-fleet",
+  "version": 1
+}

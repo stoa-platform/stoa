@@ -478,6 +478,7 @@ class TestHealthWorkerActivePolling:
 
         worker._mark_stale_gateways_offline = AsyncMock()
         worker._active_health_check_external_gateways = AsyncMock()
+        worker._purge_stale_gateways = AsyncMock()
 
         session = AsyncMock()
         cm = MagicMock()

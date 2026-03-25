@@ -76,6 +76,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -116,6 +117,81 @@ class TestGatewayRegistration:
             assert resp.status_code == 201
             mock_repo.update.assert_awaited_once()
             mock_repo.create.assert_not_called()
+
+    def test_register_cancel_and_replace_soft_deletes_stale(self, client):
+        """When a gateway re-registers with a new hostname (e.g. container
+        recreated), stale entries with the same mode+env are soft-deleted
+        so the Console doesn't show duplicates (CAB-1908)."""
+        stale = _make_gateway_instance(
+            name="old-hostname-connect-production",
+            mode="connect",
+            source="self_register",
+        )
+        new_gw = _make_gateway_instance(
+            name="connect-kong-connect-production",
+            mode="connect",
+            source="self_register",
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            mock_repo = MockRepo.return_value
+            # Step 1: no exact name match (hostname changed)
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            # Step 1b: find stale entries with same mode+env
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[stale])
+            mock_repo.soft_delete = AsyncMock(return_value=stale)
+            # Step 2: no ArgoCD entry
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
+            # Step 3: create new entry
+            mock_repo.create = AsyncMock(return_value=new_gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json=_registration_payload(
+                    hostname="connect-kong",
+                    mode="connect",
+                    environment="production",
+                ),
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 201
+            # Stale entry was soft-deleted
+            mock_repo.soft_delete.assert_awaited_once_with(
+                stale, deleted_by="replaced-by:connect-kong-connect-production"
+            )
+            # New entry was created
+            mock_repo.create.assert_awaited_once()
+
+    def test_register_cancel_and_replace_no_stale(self, client):
+        """No soft-deletes when there are no stale entries (clean registration)."""
+        gw = _make_gateway_instance()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
+            mock_repo.create = AsyncMock(return_value=gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json=_registration_payload(),
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 201
+            mock_repo.soft_delete.assert_not_called()
 
     def test_register_invalid_key_returns_401(self, client):
         """Invalid gateway key is rejected with 401."""
@@ -163,6 +239,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -193,6 +270,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -225,6 +303,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -262,6 +341,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)  # No exact name match
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=argocd_gw)
             mock_repo.update = AsyncMock(return_value=argocd_gw)
 

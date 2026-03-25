@@ -274,6 +274,7 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 	}
 
 	span.SetStatus(codes.Ok, "heartbeat sent")
+	HeartbeatsSent.Inc()
 	return nil
 }
 

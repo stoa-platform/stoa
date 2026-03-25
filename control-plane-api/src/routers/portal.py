@@ -27,6 +27,40 @@ from ..schemas.portal import APIListItem, MCPServerListItem
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/portal", tags=["Portal"])
 
+# Auth type inference from API tags (convention-based)
+_AUTH_TAGS: dict[str, list[str]] = {
+    "OAuth2": ["oauth2", "oidc"],
+    "mTLS": ["mtls", "mutual-tls"],
+    "API Key": ["api-key", "apikey"],
+    "Basic": ["basic", "basic-auth"],
+}
+
+
+def _infer_auth_type(tags: list[str]) -> str | None:
+    """Infer auth type from API tags."""
+    lower_tags = [t.lower() for t in tags]
+    for auth_label, tag_values in _AUTH_TAGS.items():
+        if any(tv in lower_tags for tv in tag_values):
+            return auth_label
+    return None
+
+
+def _count_endpoints(openapi_spec: dict | None) -> int:
+    """Count endpoints (path+method pairs) from OpenAPI spec."""
+    if not openapi_spec or not isinstance(openapi_spec, dict):
+        return 0
+    paths = openapi_spec.get("paths", {})
+    if not isinstance(paths, dict):
+        return 0
+    count = 0
+    for methods in paths.values():
+        if isinstance(methods, dict):
+            count += sum(
+                1 for m in methods if m.lower() in ("get", "post", "put", "delete", "patch", "head", "options")
+            )
+    return count
+
+
 # ============================================================================
 # Universe Mapping (CAB-848: OASIS vs Enterprise separation)
 # ============================================================================
@@ -186,6 +220,11 @@ async def list_portal_apis(
     include_unpromoted: bool = Query(False, description="Include APIs not promoted to Portal"),
     universe: str | None = Query(None, description="Filter by universe: oasis, enterprise"),
     audience: str | None = Query(None, description="Filter by audience: public, internal, partner"),
+    environment: str | None = Query(
+        None, description="Filter by deployment environment (optional, for subscription/test pages)"
+    ),
+    sort_by: str | None = Query(None, description="Sort field: name (default), updated_at, created_at"),
+    auth_type: str | None = Query(None, description="Filter by auth type: oauth2, api_key, mtls, basic"),
 ):
     """
     List all promoted APIs available in the Portal catalog.
@@ -210,9 +249,42 @@ async def list_portal_apis(
             include_unpublished=include_unpromoted,
             user_roles=list(user.roles or []),
             audience_filter=audience,
+            environment=environment,
+            sort_by=sort_by,
+            auth_type=auth_type,
             page=page,
             page_size=page_size,
         )
+
+        # Batch-fetch deployed environments for all APIs on this page
+        from sqlalchemy import select as sa_select
+
+        from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
+        from src.models.gateway_instance import GatewayInstance
+
+        api_ids = [api.id for api in apis]
+        deploy_envs: dict[str, list[str]] = {}
+        if api_ids:
+            rows = await db.execute(
+                sa_select(
+                    GatewayDeployment.api_catalog_id,
+                    GatewayInstance.environment,
+                )
+                .join(GatewayInstance, GatewayDeployment.gateway_instance_id == GatewayInstance.id)
+                .where(
+                    GatewayDeployment.api_catalog_id.in_(api_ids),
+                    GatewayDeployment.sync_status.in_(
+                        [
+                            DeploymentSyncStatus.SYNCED,
+                            DeploymentSyncStatus.DRIFTED,
+                            DeploymentSyncStatus.PENDING,
+                        ]
+                    ),
+                )
+                .distinct()
+            )
+            for row in rows.all():
+                deploy_envs.setdefault(str(row.api_catalog_id), []).append(row.environment)
 
         return PortalAPIsResponse(
             apis=[
@@ -229,6 +301,9 @@ async def list_portal_apis(
                     tags=api.tags or [],
                     is_promoted=api.portal_published,
                     audience=api.audience or "public",
+                    deployed_environments=sorted(deploy_envs.get(str(api.id), [])),
+                    auth_type=_infer_auth_type(api.tags or []),
+                    endpoint_count=_count_endpoints(api.openapi_spec),
                 )
                 for api in apis
             ],

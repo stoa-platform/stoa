@@ -20,6 +20,27 @@ type PolicyAction struct {
 	Config map[string]interface{} `json:"config"`
 }
 
+// Route represents an API route fetched from the Control Plane for sync.
+type Route struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	TenantID   string   `json:"tenant_id"`
+	PathPrefix string   `json:"path_prefix"`
+	BackendURL string   `json:"backend_url"`
+	Methods    []string `json:"methods,omitempty"`
+	SpecHash   string   `json:"spec_hash,omitempty"`
+	Activated  bool     `json:"activated"`
+}
+
+// Credential represents a consumer credential fetched from Vault for injection.
+type Credential struct {
+	ConsumerID string `json:"consumer_id"`
+	APIName    string `json:"api_name"`
+	AuthType   string `json:"auth_type"` // key-auth, oauth2, basic-auth
+	Key        string `json:"key"`
+	Secret     string `json:"secret,omitempty"`
+}
+
 // GatewayAdapter defines the interface for gateway-specific operations.
 type GatewayAdapter interface {
 	// Detect checks if the admin URL hosts this gateway type.
@@ -33,6 +54,12 @@ type GatewayAdapter interface {
 
 	// RemovePolicy removes a policy from the gateway for a specific API.
 	RemovePolicy(ctx context.Context, adminURL string, apiName string, policyType string) error
+
+	// SyncRoutes pushes CP routes to the local gateway.
+	SyncRoutes(ctx context.Context, adminURL string, routes []Route) error
+
+	// InjectCredentials provisions consumer credentials on the local gateway.
+	InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error
 }
 
 // AdapterConfig holds common configuration for gateway adapters.

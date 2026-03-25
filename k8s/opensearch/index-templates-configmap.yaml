@@ -53,44 +53,31 @@ data:
       "template": {
         "settings": {
           "number_of_shards": 1,
-          "number_of_replicas": 1,
-          "index": {
-            "lifecycle": {
-              "name": "stoa-logs-policy",
-              "rollover_alias": "stoa-logs"
-            }
-          }
+          "number_of_replicas": 0
         },
         "mappings": {
           "properties": {
             "@timestamp": { "type": "date" },
-            "tenant_id": { "type": "keyword" },
-            "correlation_id": { "type": "keyword" },
+            "status": { "type": "integer" },
+            "duration_ms": { "type": "float" },
             "method": { "type": "keyword" },
             "path": { "type": "keyword" },
-            "status": { "type": "integer" },
+            "log_type": { "type": "keyword" },
+            "tenant_id": { "type": "keyword" },
             "consumer_id": { "type": "keyword" },
-            "consumer_name": { "type": "keyword" },
-            "api_name": { "type": "keyword" },
-            "api_version": { "type": "keyword" },
-            "latency_ms": { "type": "float" },
-            "request_size_bytes": { "type": "long" },
-            "response_size_bytes": { "type": "long" },
-            "request_body": { "type": "text", "_meta": { "pii": true } },
-            "error_message": { "type": "text" },
-            "error_code": { "type": "keyword" },
-            "gateway_instance": { "type": "keyword" },
-            "environment": { "type": "keyword" },
-            "tags": { "type": "keyword" }
+            "trace_id": { "type": "keyword" },
+            "user_agent": { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+            "message": { "type": "text" },
+            "stream": { "type": "keyword" },
+            "server_timing": { "type": "text" }
           },
           "_meta": {
-            "pii_fields": ["request_body"],
-            "description": "API call logs with PII tagging for GDPR compliance"
+            "description": "Gateway access logs from Fluent Bit"
           }
         }
       },
       "priority": 100,
-      "version": 2
+      "version": 3
     }
   audit-template.json: |
     {

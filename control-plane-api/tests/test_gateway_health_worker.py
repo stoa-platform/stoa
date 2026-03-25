@@ -452,3 +452,130 @@ class TestHeartbeatTypes:
         from src.workers.gateway_health_worker import _HEARTBEAT_TYPES
 
         assert GatewayType.KONG not in _HEARTBEAT_TYPES
+
+
+# ---------------------------------------------------------------------------
+# _purge_stale_gateways() — CAB-1897
+# ---------------------------------------------------------------------------
+
+
+class TestPurgeStaleGateways:
+    async def test_no_stale_gateways_returns_without_modifying(self) -> None:
+        worker = GatewayHealthWorker()
+        mock_session = _make_session(scalars_result=[])
+
+        await worker._purge_stale_gateways(mock_session)
+
+        mock_session.execute.assert_awaited_once()
+
+    async def test_stale_offline_gateway_soft_deleted(self) -> None:
+        worker = GatewayHealthWorker()
+        # Last health check was 10 days ago
+        old_hc = datetime.now(UTC) - timedelta(days=10)
+        gw = _make_gateway(
+            name="stale-gw",
+            status=GatewayInstanceStatus.OFFLINE,
+            last_health_check=old_hc,
+        )
+        gw.protected = False
+        gw.deleted_at = None
+        mock_session = _make_session(scalars_result=[gw])
+
+        await worker._purge_stale_gateways(mock_session)
+
+        assert gw.deleted_at is not None
+        assert gw.deleted_by == "system:auto-purge"
+
+    async def test_recently_offline_gateway_not_purged(self) -> None:
+        """Gateway offline for only 2 days should NOT be purged (default TTL is 7 days)."""
+        worker = GatewayHealthWorker()
+        recent_hc = datetime.now(UTC) - timedelta(days=2)
+        gw = _make_gateway(
+            name="recent-offline-gw",
+            status=GatewayInstanceStatus.OFFLINE,
+            last_health_check=recent_hc,
+        )
+        gw.protected = False
+        gw.deleted_at = None
+        # The query should filter this out — simulate empty result
+        mock_session = _make_session(scalars_result=[])
+
+        await worker._purge_stale_gateways(mock_session)
+
+        # Gateway not in result set, so no modification
+
+    async def test_protected_gateway_not_purged(self) -> None:
+        """Protected gateways should never be purged, regardless of staleness."""
+        worker = GatewayHealthWorker()
+        old_hc = datetime.now(UTC) - timedelta(days=30)
+        gw = _make_gateway(
+            name="protected-gw",
+            status=GatewayInstanceStatus.OFFLINE,
+            last_health_check=old_hc,
+        )
+        gw.protected = True
+        gw.deleted_at = None
+        # The query filters out protected — simulate empty result
+        mock_session = _make_session(scalars_result=[])
+
+        await worker._purge_stale_gateways(mock_session)
+
+        # Gateway not in result set, so no modification
+
+    async def test_multiple_stale_gateways_all_purged(self) -> None:
+        worker = GatewayHealthWorker()
+        old_hc = datetime.now(UTC) - timedelta(days=15)
+        gateways = []
+        for i in range(3):
+            gw = _make_gateway(
+                name=f"stale-gw-{i}",
+                status=GatewayInstanceStatus.OFFLINE,
+                last_health_check=old_hc,
+            )
+            gw.protected = False
+            gw.deleted_at = None
+            gateways.append(gw)
+        mock_session = _make_session(scalars_result=gateways)
+
+        await worker._purge_stale_gateways(mock_session)
+
+        for gw in gateways:
+            assert gw.deleted_at is not None
+            assert gw.deleted_by == "system:auto-purge"
+
+    async def test_purge_logs_count(self, caplog: pytest.LogCaptureFixture) -> None:
+        worker = GatewayHealthWorker()
+        old_hc = datetime.now(UTC) - timedelta(days=10)
+        gw = _make_gateway(
+            name="stale-for-log",
+            status=GatewayInstanceStatus.OFFLINE,
+            last_health_check=old_hc,
+        )
+        gw.protected = False
+        gw.deleted_at = None
+        mock_session = _make_session(scalars_result=[gw])
+
+        with caplog.at_level(logging.INFO, logger="src.workers.gateway_health_worker"):
+            await worker._purge_stale_gateways(mock_session)
+
+        assert any("auto-purged" in msg.lower() for msg in caplog.messages)
+
+    async def test_check_gateway_health_calls_purge(self) -> None:
+        """_check_gateway_health should call _purge_stale_gateways."""
+        worker = GatewayHealthWorker()
+        mock_session = _make_session()
+
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_session)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        mock_factory = MagicMock(return_value=cm)
+
+        worker._mark_stale_gateways_offline = AsyncMock()
+        worker._active_health_check_external_gateways = AsyncMock()
+        purge_mock = AsyncMock()
+        worker._purge_stale_gateways = purge_mock  # type: ignore[assignment]
+
+        with patch("src.workers.gateway_health_worker._get_session_factory", return_value=mock_factory):
+            await worker._check_gateway_health()
+
+        purge_mock.assert_awaited_once_with(mock_session)

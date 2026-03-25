@@ -158,6 +158,18 @@ pub struct Config {
     #[serde(default)]
     pub detailed_tracing: bool,
 
+    /// Enable HTTP metrics recording on proxy requests (path normalization + Prometheus observe).
+    /// Disable for pure proxy benchmarks to eliminate ~1.2ms overhead per request.
+    /// Env: STOA_PROXY_METRICS_ENABLED (default: true)
+    #[serde(default = "default_true")]
+    pub proxy_metrics_enabled: bool,
+
+    /// Enable tracing span creation on proxy requests.
+    /// Disable for pure proxy benchmarks to eliminate ~0.4ms overhead per request.
+    /// Env: STOA_PROXY_TRACING_ENABLED (default: true)
+    #[serde(default = "default_true")]
+    pub proxy_tracing_enabled: bool,
+
     // === Gateway Mode (Phase 8) ===
     /// Gateway deployment mode: edge-mcp, sidecar, proxy, shadow
     /// Env: STOA_GATEWAY_MODE (default: edge-mcp)
@@ -206,6 +218,13 @@ pub struct Config {
     /// Env: STOA_AUTO_REGISTER
     #[serde(default = "default_auto_register")]
     pub auto_register: bool,
+
+    /// Override URL advertised to the Control Plane for admin API calls.
+    /// When set, registration uses this instead of auto-detected hostname:port.
+    /// Env: STOA_ADVERTISE_URL
+    /// Example: http://stoa-gateway.stoa-system.svc.cluster.local:80
+    #[serde(default)]
+    pub advertise_url: Option<String>,
 
     /// Heartbeat interval in seconds (default: 30)
     /// Env: STOA_HEARTBEAT_INTERVAL_SECS
@@ -715,6 +734,33 @@ pub struct Config {
     /// Env: STOA_MEMORY_LIMIT_MB
     #[serde(default = "default_memory_limit_mb")]
     pub memory_limit_mb: u64,
+
+    // === Error Snapshots (CAB-1645) ===
+    /// Enable opt-in error snapshot capture for 5xx responses.
+    /// When enabled, request/response body excerpts are captured with PII masking.
+    /// Env: STOA_SNAPSHOT_ENABLED
+    #[serde(default)]
+    pub snapshot_enabled: bool,
+
+    /// Maximum number of snapshots to keep in the ring buffer.
+    /// Env: STOA_SNAPSHOT_MAX_COUNT
+    #[serde(default = "default_snapshot_max_count")]
+    pub snapshot_max_count: usize,
+
+    /// Maximum age of snapshots in seconds before eviction.
+    /// Env: STOA_SNAPSHOT_MAX_AGE_SECS
+    #[serde(default = "default_snapshot_max_age_secs")]
+    pub snapshot_max_age_secs: u64,
+
+    /// Maximum bytes to capture from request/response bodies.
+    /// Env: STOA_SNAPSHOT_BODY_MAX_BYTES
+    #[serde(default = "default_snapshot_body_max_bytes")]
+    pub snapshot_body_max_bytes: usize,
+
+    /// Extra regex patterns to treat as PII during snapshot masking.
+    /// Env: STOA_SNAPSHOT_EXTRA_PII_PATTERNS (comma-separated)
+    #[serde(default)]
+    pub snapshot_extra_pii_patterns: Vec<String>,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1262,6 +1308,18 @@ fn default_memory_limit_mb() -> u64 {
     512
 }
 
+fn default_snapshot_max_count() -> usize {
+    100
+}
+
+fn default_snapshot_max_age_secs() -> u64 {
+    3600
+}
+
+fn default_snapshot_body_max_bytes() -> usize {
+    4096
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1295,6 +1353,8 @@ impl Default for Config {
             otel_endpoint: None,
             otel_sample_rate: default_otel_sample_rate(),
             detailed_tracing: false,
+            proxy_metrics_enabled: true,
+            proxy_tracing_enabled: true,
             gateway_mode: GatewayMode::default(),
             zombie_detection_enabled: default_zombie_detection(),
             agent_session_ttl_secs: default_agent_session_ttl(),
@@ -1304,6 +1364,7 @@ impl Default for Config {
             shadow_gitlab_project: None,
             environment: default_environment(),
             auto_register: default_auto_register(),
+            advertise_url: None,
             heartbeat_interval_secs: default_heartbeat_interval(),
             native_tools_enabled: default_native_tools_enabled(),
             kafka_enabled: false,
@@ -1400,6 +1461,11 @@ impl Default for Config {
             ip_blocklist_file: None,
             tcp_rate_limit_per_ip: None,
             memory_limit_mb: default_memory_limit_mb(),
+            snapshot_enabled: false,
+            snapshot_max_count: default_snapshot_max_count(),
+            snapshot_max_age_secs: default_snapshot_max_age_secs(),
+            snapshot_body_max_bytes: default_snapshot_body_max_bytes(),
+            snapshot_extra_pii_patterns: vec![],
         }
     }
 }

@@ -329,7 +329,7 @@ async def delete_demo_data(session: AsyncSession) -> int:
     for table, condition in delete_order:
         try:
             result = await session.execute(text(f"DELETE FROM {table} WHERE {condition}"))  # noqa: S608
-            deleted: int = result.rowcount or 0  # type: ignore[assignment]
+            deleted = getattr(result, "rowcount", 0) or 0
             if deleted > 0:
                 print(f"  Deleted {deleted} rows from {table}")
                 total += deleted
@@ -466,9 +466,10 @@ async def seed_demo_tenant(session: AsyncSession) -> dict[str, Any]:
 
     # 4. Create subscriptions with API keys
     for consumer_idx, server_name in DEMO_SUBSCRIPTIONS:
-        server_id = server_ids.get(server_name)
-        if not server_id or consumer_idx >= len(consumer_ids):
+        server_id_opt = server_ids.get(server_name)
+        if not server_id_opt or consumer_idx >= len(consumer_ids):
             continue
+        server_id = server_id_opt
 
         consumer_id = consumer_ids[consumer_idx]
         consumer_def = DEMO_CONSUMERS[consumer_idx]

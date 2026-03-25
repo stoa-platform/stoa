@@ -73,20 +73,10 @@ The CP API needs to reach VPS admin ports for health checks via adapters:
 **Firewall rule**: Allow inbound from OVH K8s worker IPs to these ports.
 OVH K8s egress IP: check `kubectl get nodes -o wide` for external IPs.
 
-## Staging (Hetzner K3s)
+## Staging
 
-Add to Helm values or K3s deployment:
-
-```yaml
-# In stoa-infra Helm values for staging
-stoaGateway:
-  env:
-    STOA_CONTROL_PLANE_URL: "https://api.staging.gostoa.dev"
-    STOA_CONTROL_PLANE_API_KEY: "<key>"
-    STOA_INSTANCE_NAME: "stoa-staging-k3s"
-    STOA_ENVIRONMENT: "staging"
-    STOA_AUTO_REGISTER: "true"
-```
+> **Note**: Hetzner K3s staging cluster was decommissioned in March 2026 (CAB-1751).
+> No staging gateway instances are currently active.
 
 ## Verification
 

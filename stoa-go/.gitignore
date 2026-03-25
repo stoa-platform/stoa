@@ -30,3 +30,7 @@ Thumbs.db
 
 # Local config (don't commit real credentials)
 .stoa/
+
+# Go binaries
+stoactl
+stoa-connect

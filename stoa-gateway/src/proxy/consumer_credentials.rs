@@ -72,9 +72,14 @@ impl ConsumerCredentialStore {
     }
 
     /// Look up a consumer credential.
+    /// Short-circuits without String allocations when the store is empty (CAB-1893).
     pub fn get(&self, route_id: &str, consumer_id: &str) -> Option<ConsumerCredential> {
+        let guard = self.credentials.read();
+        if guard.is_empty() {
+            return None;
+        }
         let key = (route_id.to_owned(), consumer_id.to_owned());
-        self.credentials.read().get(&key).cloned()
+        guard.get(&key).cloned()
     }
 
     /// List all consumer credentials (snapshot).

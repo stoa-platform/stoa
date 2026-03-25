@@ -26,8 +26,8 @@ export interface GatewayApplicationResponse {
 
 export interface GatewayStatusResponse {
   health: GatewayHealthResponse;
-  apis: GatewayAPIResponse[];
-  applications: GatewayApplicationResponse[];
+  apis: GatewayAPIResponse[] | null;
+  applications: GatewayApplicationResponse[] | null;
   fetchedAt: string;
 }
 
@@ -61,8 +61,8 @@ export async function getGatewayStatus(): Promise<GatewayStatusResponse> {
         healthResult.status === 'fulfilled'
           ? healthResult.value
           : { ...fallbackHealth, error: String((healthResult as PromiseRejectedResult).reason) },
-      apis: apisResult.status === 'fulfilled' ? apisResult.value : [],
-      applications: appsResult.status === 'fulfilled' ? appsResult.value : [],
+      apis: apisResult.status === 'fulfilled' ? apisResult.value : null,
+      applications: appsResult.status === 'fulfilled' ? appsResult.value : null,
       fetchedAt: new Date().toISOString(),
     };
   } catch {
@@ -70,8 +70,8 @@ export async function getGatewayStatus(): Promise<GatewayStatusResponse> {
     // but guarantees the dashboard always renders.
     return {
       health: fallbackHealth,
-      apis: [],
-      applications: [],
+      apis: null,
+      applications: null,
       fetchedAt: new Date().toISOString(),
     };
   }

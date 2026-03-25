@@ -12,6 +12,9 @@ on:
       - "stoa-go/**"
       - ".github/workflows/stoa-go-ci.yml"
 
+permissions:
+  contents: read
+
 defaults:
   run:
     working-directory: stoa-go
@@ -27,7 +30,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: stoa-go/go.mod
           cache-dependency-path: stoa-go/go.sum
 
       - name: Tidy dependencies
@@ -63,13 +66,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: stoa-go/go.mod
           cache-dependency-path: stoa-go/go.sum
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.11.3
           working-directory: stoa-go
 
   goreleaser-check:
@@ -84,11 +87,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: stoa-go/go.mod
           cache-dependency-path: stoa-go/go.sum
 
       - name: Check GoReleaser config
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: latest

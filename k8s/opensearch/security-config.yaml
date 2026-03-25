@@ -1,21 +1,19 @@
 # OpenSearch Security Configuration — Production
-# Applies via securityadmin.sh after pod restart.
-# Source of truth for: config.yml, roles.yml, roles_mapping.yml, internal_users.yml
+# All 7 security config files required by securityadmin.sh.
 #
 # Usage:
 #   1. Update this ConfigMap
 #   2. kubectl apply -f k8s/opensearch/security-config.yaml
-#   3. Create/update the Secret from this ConfigMap:
-#      kubectl create secret generic opensearch-cluster-master-securityconfig \
-#        --from-file=config.yml=<(kubectl get cm opensearch-security-source -n opensearch -o jsonpath='{.data.config\.yml}') \
-#        --from-file=roles.yml=<(kubectl get cm opensearch-security-source -n opensearch -o jsonpath='{.data.roles\.yml}') \
-#        --from-file=roles_mapping.yml=<(kubectl get cm opensearch-security-source -n opensearch -o jsonpath='{.data.roles_mapping\.yml}') \
-#        --dry-run=client -o yaml | kubectl apply -f -
-#   4. Restart OpenSearch: kubectl delete pod opensearch-cluster-master-0 -n opensearch
-#   5. Run securityadmin.sh inside the pod
+#   3. Run the init job: kubectl create job --from=cronjob/opensearch-security-init security-init-manual -n opensearch
+#      OR manually: kubectl exec opensearch-cluster-master-0 -n opensearch -c opensearch -- \
+#        /usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh \
+#        -cd /usr/share/opensearch/config/opensearch-security/ \
+#        -cacert /usr/share/opensearch/config/certs/root-ca.pem \
+#        -cert /usr/share/opensearch/config/certs/kirk.pem \
+#        -key /usr/share/opensearch/config/certs/kirk-key.pem -icl -nhnv
 #
-# NOTE: internal_users.yml hashes are NOT stored here (secrets management).
-#       They live in Vault (k8s/opensearch) and are injected at deploy time.
+# NOTE: internal_users.yml hashes use REPLACE_FROM_VAULT placeholders.
+#       Real hashes are injected by the init job from Vault secret.
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -57,11 +55,117 @@ data:
               type: openid
               challenge: false
               config:
-                subject_key: sub
-                roles_key: realm_access.roles
+                subject_key: preferred_username
+                roles_key: roles
                 openid_connect_url: "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
             authentication_backend:
               type: noop
+
+  roles.yml: |
+    _meta:
+      type: "roles"
+      config_version: 2
+
+    stoa_logs_admin:
+      reserved: false
+      cluster_permissions:
+        - "cluster_monitor"
+      index_permissions:
+        - index_patterns:
+            - "stoa-logs-*"
+            - "stoa-api-*"
+            - "stoa-gw-*"
+          allowed_actions:
+            - "crud"
+            - "create_index"
+
+    stoa_gw_admin:
+      reserved: false
+      cluster_permissions:
+        - "cluster_monitor"
+      index_permissions:
+        - index_patterns:
+            - "stoa-gw-*"
+          allowed_actions:
+            - "crud"
+            - "create_index"
+
+    stoa_gw_writer:
+      reserved: false
+      index_permissions:
+        - index_patterns:
+            - "stoa-gw-*"
+            - "stoa-logs-*"
+          allowed_actions:
+            - "crud"
+            - "create_index"
+
+    stoa_logs_writer:
+      reserved: false
+      index_permissions:
+        - index_patterns:
+            - "stoa-logs-*"
+          allowed_actions:
+            - "crud"
+            - "create_index"
+
+    stoa_tenant_viewer:
+      reserved: false
+      index_permissions:
+        - index_patterns:
+            - "stoa-logs-*"
+          dls: '{"term": {"tenant_id": "${attr.jwt.tenant_id}"}}'
+          allowed_actions:
+            - "read"
+
+    stoa_tenant_writer:
+      reserved: false
+      index_permissions:
+        - index_patterns:
+            - "stoa-api-*"
+          dls: '{"term": {"tenant_id": "${attr.jwt.tenant_id}"}}'
+          allowed_actions:
+            - "crud"
+            - "create_index"
+
+  internal_users.yml: |
+    _meta:
+      type: "internalusers"
+      config_version: 2
+
+    admin:
+      hash: "REPLACE_FROM_VAULT"
+      reserved: true
+      backend_roles:
+        - "admin"
+      description: "Admin user"
+
+    kibanaserver:
+      hash: "REPLACE_FROM_VAULT"
+      reserved: true
+      description: "OpenSearch Dashboards internal user"
+
+    logwriter:
+      hash: "REPLACE_FROM_VAULT"
+      reserved: false
+      backend_roles:
+        - "stoa-log-ingest"
+      description: "Fluent Bit log writer"
+
+  action_groups.yml: |
+    _meta:
+      type: "actiongroups"
+      config_version: 2
+
+  tenants.yml: |
+    _meta:
+      type: "tenants"
+      config_version: 2
+
+  nodes_dn.yml: |
+    _meta:
+      type: "nodesdn"
+      config_version: 2
 
   roles_mapping.yml: |
     _meta:

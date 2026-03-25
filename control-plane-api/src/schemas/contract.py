@@ -260,6 +260,24 @@ class TenantToolsResponse(BaseModel):
     total: int
 
 
+# ============ Publish Contract Schemas ============
+
+
+class GeneratedBindingResponse(BaseModel):
+    """A binding generated during contract publication."""
+
+    protocol: str
+    endpoint: str
+    tool_name: str | None = None
+
+
+class PublishContractResponse(BaseModel):
+    """Response after publishing a contract."""
+
+    contract: ContractResponse
+    bindings_generated: list[GeneratedBindingResponse]
+
+
 # ============ Contract Lifecycle Schemas (CAB-1335) ============
 
 

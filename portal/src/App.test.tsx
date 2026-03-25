@@ -81,6 +81,10 @@ vi.mock('./pages/apis', () => ({
   APITestingSandbox: () => <div data-testid="api-sandbox">Sandbox</div>,
 }));
 
+vi.mock('./pages/discover', () => ({
+  DiscoverPage: () => <div data-testid="discover-page">Discover</div>,
+}));
+
 vi.mock('./pages/apps', () => ({
   MyApplications: () => <div data-testid="apps-page">Apps</div>,
   ApplicationDetail: () => <div data-testid="app-detail">App Detail</div>,
@@ -271,10 +275,10 @@ describe('App', () => {
   });
 
   describe('routing', () => {
-    it('should render home page on /', async () => {
+    it('should redirect / to /discover (CAB-1905)', async () => {
       renderApp('/');
 
-      expect(await screen.findByTestId('home-page')).toBeInTheDocument();
+      expect(await screen.findByTestId('discover-page')).toBeInTheDocument();
     });
 
     it('should render profile page on /profile', async () => {
@@ -295,10 +299,10 @@ describe('App', () => {
       expect(await screen.findByTestId('subscriptions-page')).toBeInTheDocument();
     });
 
-    it('should render API catalog on /apis', async () => {
+    it('should redirect /apis to /discover (CAB-1905)', async () => {
       renderApp('/apis');
 
-      expect(await screen.findByTestId('api-catalog')).toBeInTheDocument();
+      expect(await screen.findByTestId('discover-page')).toBeInTheDocument();
     });
 
     it('should render apps page on /apps', async () => {
@@ -313,10 +317,10 @@ describe('App', () => {
       expect(await screen.findByTestId('usage-page')).toBeInTheDocument();
     });
 
-    it('should redirect unknown routes to home', async () => {
+    it('should redirect unknown routes to /discover (CAB-1905)', async () => {
       renderApp('/nonexistent');
 
-      expect(await screen.findByTestId('home-page')).toBeInTheDocument();
+      expect(await screen.findByTestId('discover-page')).toBeInTheDocument();
     });
 
     it('should redirect /tools to /servers', async () => {

@@ -73,7 +73,7 @@ func main() {
 	dcfg := connect.DiscoveryConfigFromEnv()
 	agent.StartDiscovery(ctx, dcfg)
 
-	// Start policy sync loop (reuses discovery adapter if available)
+	// Start policy sync loop and route sync loop (reuse discovery adapter)
 	if dcfg.GatewayAdminURL != "" {
 		adapter, _, resolveErr := connect.ResolveAdapter(ctx, dcfg)
 		if resolveErr != nil {
@@ -82,6 +82,18 @@ func main() {
 			agent.StartSync(ctx, adapter, dcfg.GatewayAdminURL, connect.SyncConfig{
 				Interval: dcfg.Interval,
 			})
+			agent.StartRouteSync(ctx, adapter, dcfg.GatewayAdminURL, connect.RouteSyncConfigFromEnv())
+
+			// Start credential sync loop (requires Vault)
+			vaultCfg := connect.VaultConfigFromEnv()
+			if vaultCfg.Addr != "" {
+				vc, vcErr := connect.NewVaultClient(vaultCfg)
+				if vcErr != nil {
+					log.Printf("warning: vault client init failed: %v", vcErr)
+				} else {
+					agent.StartCredentialSync(ctx, vc, adapter, dcfg.GatewayAdminURL, connect.CredentialSyncConfigFromEnv())
+				}
+			}
 		}
 	}
 

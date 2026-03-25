@@ -120,7 +120,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           tags: |
@@ -156,7 +156,7 @@ jobs:
           cosign sign --yes ${images}
 
       - name: Generate SLSA provenance (attestation)
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           subject-digest: ${{ steps.build.outputs.digest }}

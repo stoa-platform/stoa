@@ -28,6 +28,6 @@
     "@types/node": "^25.3.3",
     "dotenv": "^17.2.4",
     "playwright-bdd": "^8.4.2",
-    "typescript": "^5.3.3"
+    "typescript": "^6.0.2"
   }
 }

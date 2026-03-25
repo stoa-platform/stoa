@@ -240,9 +240,10 @@ func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, ad
 	// Update Prometheus metrics
 	allOk := true
 	for _, r := range results {
-		if r.Status == "applied" || r.Status == "removed" {
+		switch r.Status {
+		case "applied", "removed":
 			SyncPoliciesApplied.Inc()
-		} else if r.Status == "failed" {
+		case "failed":
 			SyncPoliciesFailed.Inc()
 			allOk = false
 		}

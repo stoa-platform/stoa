@@ -1,0 +1,37 @@
+# K8s Service for fapi-echo running on Contabo worker-3 (VPS).
+# Uses headless Service + manual Endpoints since ExternalName doesn't
+# support port remapping and the VPS has a static IP.
+#
+# fapi-echo runs on 164.68.121.123:8889 (worker-3, CAB-1869).
+# This makes it reachable as fapi-echo.stoa-system.svc:8889 from within K8s.
+apiVersion: v1
+kind: Service
+metadata:
+  name: fapi-echo
+  namespace: stoa-system
+  labels:
+    app: fapi-echo
+    environment: production
+spec:
+  type: ClusterIP
+  clusterIP: None  # headless — DNS resolves directly to endpoint IPs
+  ports:
+    - port: 8889
+      targetPort: 8889
+      protocol: TCP
+      name: http
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: fapi-echo
+  namespace: stoa-system
+  labels:
+    app: fapi-echo
+subsets:
+  - addresses:
+      - ip: 164.68.121.123  # Contabo worker-3
+    ports:
+      - port: 8889
+        protocol: TCP
+        name: http

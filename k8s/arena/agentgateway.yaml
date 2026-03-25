@@ -1,7 +1,7 @@
 # agentgateway (Linux Foundation / Solo.io) for Arena benchmarks
 # Single pod, standalone mode, ConfigMap-based config.
 # No persistence, no ingress — benchmark traffic only via ClusterIP.
-# Image: alpha (v1.0.0-alpha.4) — suitable for benchmarking, not production.
+# Image: v1.0.1 (GA release, 2026-03-20)
 #
 # Ports:
 #   3000  — MCP/HTTP proxy (Streamable HTTP, JSON-RPC 2.0)
@@ -18,12 +18,12 @@ metadata:
 data:
   config.yaml: |
     # agentgateway standalone config for Arena benchmarks
-    # Routes /echo/* to echo-backend, exposes echo as MCP tool via OpenAPI bridge
+    # Routes /echo/* to echo-backend via static backend
     binds:
     - port: 3000
       listeners:
       - routes:
-        # Health endpoint (agentgateway has no built-in /health)
+        # Health endpoint (synthetic — agentgateway has built-in /healthz on 15021)
         - name: health
           matches:
           - path:
@@ -38,10 +38,7 @@ data:
           - path:
               pathPrefix: /echo
           backends:
-          - http:
-              targets:
-              - host: echo-backend.stoa-system.svc
-                port: 8888
+          - host: echo-backend.stoa-system.svc:8888
         # MCP endpoint (Streamable HTTP — JSON-RPC 2.0)
         - name: mcp
           matches:
@@ -56,7 +53,7 @@ data:
           - mcp:
               targets:
               - name: echo-tool
-                mcp:
+                sse:
                   host: http://echo-backend.stoa-system.svc:8888/mcp
 ---
 apiVersion: apps/v1
@@ -78,7 +75,7 @@ spec:
     spec:
       containers:
         - name: agentgateway
-          image: ghcr.io/agentgateway/agentgateway:v1.0.0-alpha.4
+          image: ghcr.io/agentgateway/agentgateway:v1.0.1
           args: ["-f", "/etc/agentgateway/config.yaml"]
           ports:
             - containerPort: 3000

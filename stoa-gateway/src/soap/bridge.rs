@@ -65,6 +65,7 @@ pub fn json_to_soap_envelope(operation_name: &str, namespace: &str, params: &Val
 /// Parses the XML response, finds `<soap:Body>`, and converts child elements
 /// to a flat JSON object. Detects SOAP faults and returns them as errors.
 pub fn soap_response_to_json(xml: &str) -> Result<Value, String> {
+    use quick_xml::escape::unescape;
     use quick_xml::events::Event;
     use quick_xml::Reader;
 
@@ -110,7 +111,8 @@ pub fn soap_response_to_json(xml: &str) -> Result<Value, String> {
                 }
             }
             Ok(Event::Text(ref e)) if in_body => {
-                let text = e.unescape().unwrap_or_default().to_string();
+                let decoded = e.decode().unwrap_or_default();
+                let text = unescape(&decoded).unwrap_or_default().to_string();
                 let text = text.trim().to_string();
                 if text.is_empty() {
                     continue;

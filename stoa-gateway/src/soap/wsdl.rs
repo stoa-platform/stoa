@@ -3,6 +3,7 @@
 //! Parses WSDL 1.1 documents to extract service operations.
 //! Uses quick-xml for fast, zero-copy XML parsing.
 
+use quick_xml::escape::unescape;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use serde::{Deserialize, Serialize};
@@ -164,7 +165,8 @@ pub fn parse_wsdl(xml: &str) -> Result<SoapService, WsdlError> {
                 }
             }
             Ok(Event::Text(ref e)) if in_documentation => {
-                let text = e.unescape().unwrap_or_default().to_string();
+                let decoded = e.decode().unwrap_or_default();
+                let text = unescape(&decoded).unwrap_or_default().to_string();
                 if !text.trim().is_empty() {
                     current_doc = Some(text.trim().to_string());
                 }

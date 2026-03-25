@@ -9,7 +9,6 @@ from src.services.credential_resolver import (
     resolve_gateway_auth_config,
 )
 
-
 # ── resolve_gateway_auth_config ──
 
 
@@ -89,6 +88,42 @@ class TestResolveGatewayAuthConfig:
         assert result == {"type": "api_key"}
         assert "vault_path" not in result
 
+    async def test_regression_cab_1908_vault_only_raises_on_failure(self):
+        """CAB-1908: vault_path-only config with Vault unavailable must raise, not return {}."""
+        auth = {"vault_path": "gateways/kong-prod"}
+        mock_vault = MagicMock()
+        mock_vault.read_secret = AsyncMock(return_value=None)
+
+        with (
+            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
+            pytest.raises(ValueError, match="no fallback credentials"),
+        ):
+            await resolve_gateway_auth_config(auth)
+
+    async def test_regression_cab_1908_vault_only_raises_on_exception(self):
+        """CAB-1908: vault_path-only config with Vault exception must raise, not return {}."""
+        auth = {"vault_path": "gateways/kong-prod"}
+        mock_vault = MagicMock()
+        mock_vault.read_secret = AsyncMock(side_effect=Exception("connection refused"))
+
+        with (
+            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
+            pytest.raises(ValueError, match="no fallback credentials"),
+        ):
+            await resolve_gateway_auth_config(auth)
+
+    async def test_regression_cab_1908_hybrid_config_falls_back(self):
+        """CAB-1908: vault_path + direct creds with Vault unavailable must use fallback."""
+        auth = {"vault_path": "gateways/kong-prod", "api_key": "direct-fallback-key"}
+        mock_vault = MagicMock()
+        mock_vault.read_secret = AsyncMock(return_value=None)
+
+        with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault):
+            result = await resolve_gateway_auth_config(auth)
+
+        assert result == {"api_key": "direct-fallback-key"}
+        assert "vault_path" not in result
+
 
 # ── create_adapter_with_credentials ──
 
@@ -101,12 +136,16 @@ class TestCreateAdapterWithCredentials:
         mock_vault.read_secret = AsyncMock(return_value={"api_key": "kong-token"})
 
         mock_adapter = MagicMock()
-        with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault), \
-             patch("src.services.credential_resolver.AdapterRegistry") as mock_registry:
+        with (
+            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
+            patch("src.services.credential_resolver.AdapterRegistry") as mock_registry,
+        ):
             mock_registry.create.return_value = mock_adapter
 
             result = await create_adapter_with_credentials(
-                "kong", "http://kong:8001", auth,
+                "kong",
+                "http://kong:8001",
+                auth,
             )
 
         assert result is mock_adapter
@@ -124,7 +163,9 @@ class TestCreateAdapterWithCredentials:
             mock_registry.create.return_value = mock_adapter
 
             result = await create_adapter_with_credentials(
-                "kong", "http://kong:8001", auth,
+                "kong",
+                "http://kong:8001",
+                auth,
             )
 
         assert result is mock_adapter
@@ -132,3 +173,15 @@ class TestCreateAdapterWithCredentials:
             "kong",
             config={"base_url": "http://kong:8001", "auth_config": {"api_key": "direct-key"}},
         )
+
+    async def test_regression_cab_1908_vault_only_propagates_error(self):
+        """CAB-1908: create_adapter raises ValueError when Vault-only config fails."""
+        auth = {"vault_path": "gateways/kong-prod"}
+        mock_vault = MagicMock()
+        mock_vault.read_secret = AsyncMock(return_value=None)
+
+        with (
+            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
+            pytest.raises(ValueError, match="no fallback credentials"),
+        ):
+            await create_adapter_with_credentials("kong", "http://kong:8001", auth)

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, Bell, User, LogOut, ExternalLink } from 'lucide-react';
+import { Menu, Bell, User, LogOut, ExternalLink, Settings } from 'lucide-react';
 import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useAuth } from '../../contexts/AuthContext';
@@ -137,6 +137,15 @@ export function Header({ onMenuClick }: HeaderProps) {
                     <User className="h-4 w-4" aria-hidden="true" />
                     My Profile
                   </Link>
+                  <Link
+                    to="/chat-settings"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                  >
+                    <Settings className="h-4 w-4" aria-hidden="true" />
+                    Chat Settings
+                  </Link>
+                  <div className="border-t border-neutral-100 dark:border-neutral-700 my-1" />
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);

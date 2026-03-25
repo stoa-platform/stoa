@@ -5,6 +5,7 @@
 
 import { CreditCard, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { QuotaBar } from './QuotaBar';
 import type { ActiveSubscription } from '../../types';
 
 interface SubscriptionsListProps {
@@ -79,6 +80,9 @@ function ListSkeleton() {
 }
 
 export function SubscriptionsList({ subscriptions, isLoading = false }: SubscriptionsListProps) {
+  // CAB-1907: max calls for relative quota bars (all bars proportional to highest)
+  const maxCalls = Math.max(...subscriptions.map((s) => s.call_count_total), 1);
+
   if (isLoading) {
     return (
       <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
@@ -137,11 +141,15 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
                   </span>
                   <StatusBadge status={sub.status} />
                 </div>
-                <div className="flex items-center gap-3 text-xs text-neutral-400 dark:text-neutral-500">
+                <div className="flex items-center gap-3 text-xs text-neutral-400 dark:text-neutral-500 mb-1">
                   <span>{sub.call_count_total.toLocaleString()} calls</span>
                   <span>•</span>
                   <span>Last used {formatLastUsed(sub.last_used_at)}</span>
                 </div>
+                {/* CAB-1907: Usage quota bar (relative to highest) */}
+                {maxCalls > 0 && (
+                  <QuotaBar used={sub.call_count_total} limit={maxCalls} showPercent={false} />
+                )}
               </div>
 
               <Link

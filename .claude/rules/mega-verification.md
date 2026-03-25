@@ -1,6 +1,6 @@
 ---
 description: MEGA ticket close gate enforcement — prevents false Dones on multi-phase tickets
-globs: ".claude/rules/workflow-essentials.md,.claude/rules/instance-dispatch.md,.claude/rules/session-startup.md,.github/workflows/linear-close-on-merge.yml,.github/workflows/claude-linear-dispatch.yml"
+globs: ".claude/rules/workflow-essentials.md,.claude/rules/instance-dispatch.md,.claude/rules/session-lifecycle.md,.github/workflows/linear-close-on-merge.yml,.github/workflows/claude-linear-dispatch.yml"
 ---
 
 # MEGA Verification — Close Gate Enforcement
@@ -29,7 +29,7 @@ A ticket is a MEGA if ANY of these are true:
 
 ## Enforcement Points
 
-### 1. Manual Sessions (session-startup.md Step 5)
+### 1. Manual Sessions (session-lifecycle.md Step 5)
 
 When closing a ticket in Step 5 — Linear MCP sync:
 - **Standalone ticket** (no parent, no children): mark Done as before
@@ -71,7 +71,7 @@ ORCHESTRE runs `/verify-mega --all-done-7d` every Monday:
 | File | Reference |
 |------|-----------|
 | `workflow-essentials.md` | MEGA Close Gate table (gates 1-4) + Invariant #6 |
-| `session-startup.md` | Step 5 — differentiate standalone vs sub-ticket vs MEGA |
+| `session-lifecycle.md` | Step 5 — differentiate standalone vs sub-ticket vs MEGA |
 | `instance-dispatch.md` | ORCHESTRE Rules — `/verify-mega` before closing MEGAs |
 | `linear-close-on-merge.yml` | MEGA bypass in Done mutation |
 | `claude-linear-dispatch.yml` | MEGA bypass in close-loop |

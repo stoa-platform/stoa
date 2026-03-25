@@ -1,5 +1,14 @@
 import { useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  ChartCard,
+  ChartEmptyState,
+  CHART_TOOLTIP_STYLE,
+  CHART_AXIS_STYLE,
+  CHART_GRID_STYLE,
+  CHART_EMPTY_STATE_HEIGHT,
+} from '@stoa/shared/components/ChartCard';
 
 interface DataPoint {
   timestamp: string;
@@ -16,13 +25,34 @@ interface UsageChartProps {
   height?: number;
 }
 
-export function UsageChart({ data, metric, title, height = 200 }: UsageChartProps) {
-  const { values, max, min, trend, formattedValues } = useMemo(() => {
-    const vals = data.map((d) => d[metric]);
-    const maxVal = Math.max(...vals, 1);
-    const minVal = Math.min(...vals, 0);
+const BAR_COLORS: Record<string, string> = {
+  calls: '#3B82F6',
+  successRate: '#10B981',
+  avgLatencyMs: '#F97316',
+  costUnits: '#8B5CF6',
+};
 
-    // Calculate trend (compare last 3 points vs previous 3)
+function formatValue(value: number, metric: string): string {
+  if (metric === 'successRate') return `${(value * 100).toFixed(1)}%`;
+  if (metric === 'costUnits') return `$${value.toFixed(4)}`;
+  if (metric === 'avgLatencyMs') return `${value.toFixed(0)}ms`;
+  return value.toLocaleString();
+}
+
+function formatLabel(timestamp: string): string {
+  const date = new Date(timestamp);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function UsageChart({
+  data,
+  metric,
+  title,
+  height = CHART_EMPTY_STATE_HEIGHT,
+}: UsageChartProps) {
+  const { trend, chartData } = useMemo(() => {
+    const vals = data.map((d) => d[metric]);
+
     let trendVal = 0;
     if (vals.length >= 6) {
       const recent = vals.slice(-3).reduce((a, b) => a + b, 0) / 3;
@@ -30,26 +60,13 @@ export function UsageChart({ data, metric, title, height = 200 }: UsageChartProp
       trendVal = previous > 0 ? ((recent - previous) / previous) * 100 : 0;
     }
 
-    // Format values for display
-    const formatted = vals.map((v) => {
-      if (metric === 'successRate') return `${(v * 100).toFixed(1)}%`;
-      if (metric === 'costUnits') return `$${v.toFixed(4)}`;
-      if (metric === 'avgLatencyMs') return `${v.toFixed(0)}ms`;
-      return v.toLocaleString();
-    });
+    const formatted = data.map((d) => ({
+      ...d,
+      label: formatLabel(d.timestamp),
+    }));
 
-    return { values: vals, max: maxVal, min: minVal, trend: trendVal, formattedValues: formatted };
+    return { trend: trendVal, chartData: formatted };
   }, [data, metric]);
-
-  const getBarHeight = (value: number): number => {
-    if (max === min) return 50;
-    return ((value - min) / (max - min)) * 100;
-  };
-
-  const formatLabel = (timestamp: string): string => {
-    const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
 
   const TrendIcon = trend > 5 ? TrendingUp : trend < -5 ? TrendingDown : Minus;
   const trendColor =
@@ -71,75 +88,56 @@ export function UsageChart({ data, metric, title, height = 200 }: UsageChartProp
             ? 'text-red-600'
             : 'text-neutral-500';
 
-  const barColor = {
-    calls: 'bg-blue-500',
-    successRate: 'bg-green-500',
-    avgLatencyMs: 'bg-orange-500',
-    costUnits: 'bg-purple-500',
-  }[metric];
-
   if (data.length === 0) {
     return (
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
-        <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">{title}</h3>
-        <div
-          className="flex items-center justify-center text-neutral-400 dark:text-neutral-500 text-sm"
-          style={{ height }}
-        >
-          No data available
-        </div>
-      </div>
+      <ChartCard
+        title={title}
+        trailing={
+          <div className={`flex items-center gap-1 text-sm ${trendColor}`}>
+            <TrendIcon className="h-4 w-4" />
+            <span>{Math.abs(trend).toFixed(1)}%</span>
+          </div>
+        }
+      >
+        <ChartEmptyState height={height} />
+      </ChartCard>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{title}</h3>
+    <ChartCard
+      title={title}
+      trailing={
         <div className={`flex items-center gap-1 text-sm ${trendColor}`}>
           <TrendIcon className="h-4 w-4" />
           <span>{Math.abs(trend).toFixed(1)}%</span>
         </div>
-      </div>
-
-      {/* Chart */}
-      <div className="relative" style={{ height }}>
-        <div className="absolute inset-0 flex items-end gap-1">
-          {values.map((value, index) => (
-            <div key={index} className="flex-1 flex flex-col items-center group">
-              {/* Tooltip */}
-              <div className="opacity-0 group-hover:opacity-100 absolute bottom-full mb-2 px-2 py-1 bg-neutral-800 text-white text-xs rounded whitespace-nowrap transition-opacity z-10">
-                <div className="font-medium">{formattedValues[index]}</div>
-                <div className="text-neutral-400">{formatLabel(data[index].timestamp)}</div>
-              </div>
-
-              {/* Bar */}
-              <div
-                className={`w-full ${barColor} rounded-t transition-all hover:opacity-80`}
-                style={{ height: `${getBarHeight(value)}%` }}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Y-axis labels */}
-        <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-xs text-neutral-400 dark:text-neutral-500 -ml-8 w-8 text-right">
-          <span>
-            {metric === 'successRate' ? `${(max * 100).toFixed(0)}%` : max.toLocaleString()}
-          </span>
-          <span>
-            {metric === 'successRate' ? `${(min * 100).toFixed(0)}%` : min.toLocaleString()}
-          </span>
-        </div>
-      </div>
-
-      {/* X-axis labels */}
-      <div className="flex justify-between mt-2 text-xs text-neutral-400 dark:text-neutral-500">
-        <span>{data.length > 0 ? formatLabel(data[0].timestamp) : ''}</span>
-        <span>{data.length > 0 ? formatLabel(data[data.length - 1].timestamp) : ''}</span>
-      </div>
-    </div>
+      }
+    >
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={chartData}>
+          <CartesianGrid {...CHART_GRID_STYLE} />
+          <XAxis dataKey="label" tick={CHART_AXIS_STYLE} axisLine={false} tickLine={false} />
+          <YAxis
+            tick={CHART_AXIS_STYLE}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v: number) =>
+              metric === 'successRate'
+                ? `${(v * 100).toFixed(0)}%`
+                : v >= 1000
+                  ? `${(v / 1000).toFixed(1)}K`
+                  : String(Math.round(v))
+            }
+          />
+          <Tooltip
+            contentStyle={CHART_TOOLTIP_STYLE}
+            formatter={(value) => [formatValue(Number(value), metric), title]}
+          />
+          <Bar dataKey={metric} fill={BAR_COLORS[metric] || '#3B82F6'} radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }
 

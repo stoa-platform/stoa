@@ -1,12 +1,14 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-16 (Phase 2 Unified Chat Settings PRs #1807, #1809)
+> Derniere MAJ: 2026-03-22 (Vault credential resolver for gateway adapters PR #1964)
 
 ## ✅ DONE
 
 > Full history: 2500+ pts across 160+ issues. See Linear for complete audit trail.
 
 ### Cycle 12 (Mar 3+)
+- ✅ Vault credential resolver for gateway adapters — PR #1964
+  - `VaultClient.read_secret()`, `credential_resolver.py`, 9 call sites updated, 12 new tests
 - 🔴 CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10
   - Spike DONE, ADR-056 DONE, KC 26.5.3 sufficient. Decomposed: 5 subs (CAB-1739-1743)
 - ✅ fix(gateway): audit remediations — Council 8.75/10, PR #1633

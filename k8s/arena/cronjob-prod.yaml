@@ -10,14 +10,14 @@ metadata:
     stoa.dev/environment: prod
     stoa.dev/managed-by: manual
 spec:
-  schedule: "*/30 * * * *"
+  schedule: "0 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 1800
+      activeDeadlineSeconds: 3600
       template:
         metadata:
           labels:
@@ -69,8 +69,10 @@ spec:
                       name: opensearch-credentials
                       key: admin-password
                       optional: true
-                  # L0 = proxy overhead baseline across 5 gateways.
+                  # L0 = proxy overhead baseline across 4 gateways + 1 minimal variant.
                   # echo-baseline = 0-overhead reference (direct to echo-backend).
+                  # stoa-minimal-k8s = STOA with all features disabled (pure Rust proxy).
+                  # stoa-k8s = STOA production config (full middleware stack).
                   # Overhead = gateway - baseline per scenario.
                   # All gateways proxy the same echo-backend for fair comparison.
                 - name: STOA_ADMIN_TOKEN
@@ -83,9 +85,9 @@ spec:
                     [
                       {"name":"echo-baseline","health":"http://echo-backend.stoa-system.svc:8888/get","proxy":"http://echo-backend.stoa-system.svc:8888/get"},
                       {"name":"stoa-k8s","health":"http://stoa-gateway.stoa-system.svc/health","proxy":"http://stoa-gateway.stoa-system.svc/echo/get","admin_base":"http://stoa-gateway.stoa-system.svc"},
-                      {"name":"agentgateway-k8s","health":"http://agentgateway-arena.stoa-system.svc:3000/health","proxy":"http://agentgateway-arena.stoa-system.svc:3000/echo/get"},
+                      {"name":"stoa-minimal-k8s","health":"http://stoa-gateway-minimal.stoa-system.svc/health","proxy":"http://stoa-gateway-minimal.stoa-system.svc/echo/get","admin_base":"http://stoa-gateway-minimal.stoa-system.svc"},
                       {"name":"kong-k8s","health":"http://kong-arena.stoa-system.svc:8001/status","proxy":"http://kong-arena.stoa-system.svc:8000/echo/get"},
-                      {"name":"gravitee-k8s","health":"http://gravitee-arena-gw.stoa-system.svc:8082/","proxy":"http://gravitee-arena-gw.stoa-system.svc:8082/echo/get"}
+                      {"name":"agentgateway-k8s","health":"http://agentgateway-arena.stoa-system.svc:3000/health","proxy":"http://agentgateway-arena.stoa-system.svc:3000/echo/get"}
                     ]
               resources:
                 # Guaranteed QoS: requests == limits (no CPU throttling)

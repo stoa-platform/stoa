@@ -39,7 +39,7 @@ spec:
                 - /scripts/run-env-verify.sh
               env:
                 - name: PUBLIC_ENVIRONMENTS_URL
-                  value: "http://stoa-control-plane-api.stoa-system.svc/v1/environments/public"
+                  value: "http://stoa-control-plane-api.stoa-system.svc:8000/v1/environments/public"
                 - name: PUSHGATEWAY_URL
                   value: "http://pushgateway.monitoring.svc:9091"
                 - name: TIMEOUT

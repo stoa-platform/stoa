@@ -11,7 +11,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 CACHE_PATH = "src.routers.contracts.contract_cache"
-ADAPTER_PATH = "src.routers.contracts.AdapterRegistry"
+ADAPTER_PATH = "src.routers.contracts.create_adapter_with_credentials"
 GENERATOR_PATH = "src.routers.contracts.UacToolGenerator"
 
 

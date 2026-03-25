@@ -58,10 +58,21 @@ spec:
               value: "stoa"
             - name: STOA_KEYCLOAK_CLIENT_ID
               value: "stoa-mcp-gateway"
+            # --- Auto-Registration (ADR-028) ---
+            - name: STOA_INSTANCE_NAME
+              value: "stoa-gateway"
+            - name: STOA_GATEWAY_MODE
+              value: "edge-mcp"
+            - name: STOA_ENVIRONMENT
+              value: "prod"
+            - name: STOA_AUTO_REGISTER
+              value: "true"
             - name: STOA_RATE_LIMIT_DEFAULT
               value: "1000"
             - name: STOA_GATEWAY_EXTERNAL_URL
               value: "https://mcp.gostoa.dev"
+            - name: STOA_ADVERTISE_URL
+              value: "http://stoa-gateway.stoa-system.svc.cluster.local:80"
             - name: STOA_HEGEMON_ENABLED
               value: "true"
             - name: STOA_KAFKA_ENABLED

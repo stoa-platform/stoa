@@ -73,6 +73,20 @@ function applyFilters(items: MarketplaceItem[], filters: MarketplaceFilters): Ma
     filtered = filtered.filter((item) => filters.tags!.some((tag) => item.tags.includes(tag)));
   }
 
+  if (filters.authType) {
+    const authTagMap: Record<string, string[]> = {
+      oauth2: ['oauth2', 'oidc'],
+      api_key: ['api-key', 'apikey'],
+      mtls: ['mtls', 'mutual-tls'],
+      basic: ['basic', 'basic-auth'],
+    };
+    const matchTags = authTagMap[filters.authType] || [filters.authType];
+    filtered = filtered.filter((item) => {
+      const lowerTags = item.tags.map((t) => t.toLowerCase());
+      return matchTags.some((mt) => lowerTags.includes(mt));
+    });
+  }
+
   return filtered;
 }
 
@@ -110,6 +124,15 @@ export const marketplaceService = {
       };
 
       const filtered = filters ? applyFilters(allItems, filters) : allItems;
+
+      // Sort (CAB-1906) — sorts in-place on the filtered copy
+      if (filters?.sortBy === 'updated_at') {
+        filtered.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      } else if (filters?.sortBy === 'created_at') {
+        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      } else {
+        filtered.sort((a, b) => a.displayName.localeCompare(b.displayName));
+      }
 
       // Client-side pagination
       const page = filters?.page || 1;

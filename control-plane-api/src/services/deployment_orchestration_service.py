@@ -302,9 +302,9 @@ class DeploymentOrchestrationService:
         import contextlib
         from datetime import UTC, datetime
 
-        from ..adapters.registry import AdapterRegistry
         from ..models.gateway_deployment import DeploymentSyncStatus
         from ..repositories.gateway_instance import GatewayInstanceRepository
+        from ..services.credential_resolver import create_adapter_with_credentials
 
         gw_repo = GatewayInstanceRepository(self.db)
 
@@ -314,9 +314,8 @@ class DeploymentOrchestrationService:
                 if not gateway or gateway.status.value == "offline":
                     continue
 
-                adapter = AdapterRegistry.create(
-                    gateway.gateway_type.value,
-                    config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+                adapter = await create_adapter_with_credentials(
+                    gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
                 )
                 await adapter.connect()
                 try:

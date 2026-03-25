@@ -283,7 +283,9 @@ async def register_gateway(
     if existing:
         existing.version = payload.version
         existing.capabilities = payload.capabilities
-        existing.base_url = payload.admin_url
+        # Preserve manually-set HTTPS base_url over auto-detected internal URL
+        if not (existing.base_url and existing.base_url.startswith("https://")):
+            existing.base_url = payload.admin_url
         existing.status = GatewayInstanceStatus.ONLINE
         existing.last_health_check = now
         existing.mode = normalized_mode
@@ -292,6 +294,23 @@ async def register_gateway(
         await db.commit()
         logger.info("Gateway re-registered: id=%s, name=%s", instance.id, instance.name)
         return instance
+
+    # 1b. Cancel-and-replace: soft-delete stale self_register entries with same
+    #     mode+env but different name (hostname changed after container recreation).
+    #     This prevents duplicate gateways in the Console UI.
+    stale_entries = await repo.find_self_registered_by_mode_env(
+        mode=normalized_mode,
+        environment=payload.environment,
+        exclude_name=instance_name,
+    )
+    for stale in stale_entries:
+        await repo.soft_delete(stale, deleted_by=f"replaced-by:{instance_name}")
+        logger.info(
+            "Gateway cancel-and-replace: soft-deleted stale entry id=%s, name=%s (replaced by %s)",
+            stale.id,
+            stale.name,
+            instance_name,
+        )
 
     # 2. Check if ArgoCD reconciler already created an entry for this type+env.
     #    Adopt it instead of creating a duplicate (Phase 4: ArgoCD as source of truth).

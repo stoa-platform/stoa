@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stoa-platform/stoa-go/internal/connect"
 	"github.com/stoa-platform/stoa-go/internal/connect/telemetry"
 	"github.com/stoa-platform/stoa-go/pkg/config"
@@ -108,6 +109,7 @@ func main() {
 		_, _ = fmt.Fprintf(w, `{"status":"ok","version":"%s","commit":"%s","gateway_id":"%s","discovered_apis":%d}`,
 			Version, Commit, gatewayID, agent.DiscoveredAPIsCount())
 	})
+	mux.Handle("/metrics", promhttp.Handler())
 
 	srv := &http.Server{
 		Addr:              ":" + port,

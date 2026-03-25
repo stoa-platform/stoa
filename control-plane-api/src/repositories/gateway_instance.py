@@ -120,6 +120,29 @@ class GatewayInstanceRepository:
         await self.session.refresh(instance)
         return instance
 
+    async def find_self_registered_by_mode_env(
+        self,
+        mode: str,
+        environment: str,
+        exclude_name: str | None = None,
+    ) -> list[GatewayInstance]:
+        """Find all self-registered gateways with the same mode + environment.
+
+        Used by the cancel-and-replace logic: when a gateway re-registers with
+        a new hostname (e.g. after container recreation), find the stale entries
+        to soft-delete so the Console doesn't show duplicates.
+        """
+        query = select(GatewayInstance).where(
+            GatewayInstance.mode == mode,
+            GatewayInstance.environment == environment,
+            GatewayInstance.source == "self_register",
+            GatewayInstance.deleted_at.is_(None),
+        )
+        if exclude_name:
+            query = query.where(GatewayInstance.name != exclude_name)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
     async def soft_delete(self, instance: GatewayInstance, deleted_by: str) -> GatewayInstance:
         """Soft-delete a gateway instance (set deleted_at + deleted_by)."""
         instance.deleted_at = datetime.now(UTC)

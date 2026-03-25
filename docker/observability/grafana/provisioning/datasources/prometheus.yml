@@ -22,15 +22,8 @@ datasources:
       timeInterval: "15s"
       httpMethod: POST
 
-  # Hetzner K3s staging — kube-prometheus-stack on Hetzner staging cluster
-  - name: Prometheus-Hetzner-Staging
-    type: prometheus
-    access: proxy
-    url: ${PROMETHEUS_HETZNER_URL:-http://prometheus:9090}
-    editable: true
-    jsonData:
-      timeInterval: "15s"
-      httpMethod: POST
+  # Hetzner K3s staging — DECOMMISSIONED 2026-03 (CAB-1751)
+  # Datasource kept for historical dashboard compatibility but no longer active
 
   - name: Loki
     type: loki

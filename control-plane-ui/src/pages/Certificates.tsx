@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
-import type { Consumer, CertificateStatus } from '../types';
+import type { Consumer, CertificateStatus, IssuedCertificate } from '../types';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
@@ -21,7 +21,15 @@ import { CertificateGenerationWizard } from '../components/CertificateGeneration
 import { Button } from '@stoa/shared/components/Button';
 import { SubNav } from '../components/SubNav';
 import { consumersTabs } from '../components/subNavGroups';
-import { ShieldCheck, AlertTriangle, ShieldOff, Clock, ArrowUpDown, Plus } from 'lucide-react';
+import {
+  ShieldCheck,
+  AlertTriangle,
+  ShieldOff,
+  Clock,
+  ArrowUpDown,
+  Plus,
+  FileSignature,
+} from 'lucide-react';
 
 type SortField = 'name' | 'status' | 'expiry' | 'fingerprint';
 type SortDir = 'asc' | 'desc';
@@ -69,6 +77,13 @@ export function Certificates() {
   } = useQuery({
     queryKey: ['consumers', activeTenant],
     queryFn: () => apiService.getConsumers(activeTenant),
+    enabled: !!activeTenant,
+  });
+
+  // Fetch issued certificates from tenant CA
+  const { data: issuedCerts, isLoading: issuedLoading } = useQuery({
+    queryKey: ['issued-certificates', activeTenant],
+    queryFn: () => apiService.listIssuedCertificates(activeTenant),
     enabled: !!activeTenant,
   });
 
@@ -168,9 +183,35 @@ export function Certificates() {
     [sortField]
   );
 
-  const invalidateConsumers = useCallback(() => {
+  const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['consumers', activeTenant] });
+    queryClient.invalidateQueries({ queryKey: ['issued-certificates', activeTenant] });
   }, [queryClient, activeTenant]);
+
+  const handleRevokeIssuedCert = useCallback(
+    async (cert: IssuedCertificate) => {
+      const confirmed = await confirm({
+        title: 'Revoke Certificate',
+        message: `Revoke certificate "${cert.subject_dn}" (${cert.fingerprint_sha256.substring(0, 16)}...)? This certificate will no longer be trusted.`,
+        confirmLabel: 'Revoke',
+        cancelLabel: 'Cancel',
+        variant: 'danger',
+      });
+      if (!confirmed) return;
+
+      try {
+        await apiService.revokeIssuedCertificate(activeTenant, cert.id);
+        toast.success('Certificate revoked', `${cert.subject_dn} has been revoked`);
+        invalidateAll();
+      } catch (err: unknown) {
+        toast.error(
+          'Revoke failed',
+          err instanceof Error ? err.message : 'Failed to revoke certificate'
+        );
+      }
+    },
+    [activeTenant, confirm, toast, invalidateAll]
+  );
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -208,7 +249,7 @@ export function Certificates() {
         `${result.success} revoked, ${result.skipped} skipped, ${result.failed} failed`
       );
       setSelectedIds(new Set());
-      invalidateConsumers();
+      invalidateAll();
     } catch (err: unknown) {
       toast.error(
         'Bulk revoke failed',
@@ -217,7 +258,7 @@ export function Certificates() {
     } finally {
       setBulkRevoking(false);
     }
-  }, [selectedIds, activeTenant, confirm, toast, invalidateConsumers]);
+  }, [selectedIds, activeTenant, confirm, toast, invalidateAll]);
 
   const handleRevokeSingle = useCallback(
     async (consumer: Consumer) => {
@@ -233,7 +274,7 @@ export function Certificates() {
       try {
         await apiService.revokeCertificate(activeTenant, consumer.id);
         toast.success('Certificate revoked', `${consumer.name}'s certificate has been revoked`);
-        invalidateConsumers();
+        invalidateAll();
       } catch (err: unknown) {
         toast.error(
           'Revoke failed',
@@ -241,7 +282,7 @@ export function Certificates() {
         );
       }
     },
-    [activeTenant, confirm, toast, invalidateConsumers]
+    [activeTenant, confirm, toast, invalidateAll]
   );
 
   if (loading && tenants.length === 0) {
@@ -405,13 +446,15 @@ export function Certificates() {
         </div>
       )}
 
-      {/* Empty State */}
-      {!loading && certConsumers.length === 0 && (
-        <EmptyState
-          title="No certificates bound"
-          description="Consumers can bind mTLS certificates via the Developer Portal or API. Once bound, certificates appear here for lifecycle management."
-        />
-      )}
+      {/* Empty State — only when no consumer certs AND no issued certs */}
+      {!loading &&
+        certConsumers.length === 0 &&
+        (!issuedCerts || issuedCerts.items.length === 0) && (
+          <EmptyState
+            title="No certificates yet"
+            description="Generate a client certificate using the button above, or bind an existing mTLS certificate via the Developer Portal."
+          />
+        )}
 
       {!loading && certConsumers.length > 0 && filtered.length === 0 && (
         <EmptyState
@@ -554,6 +597,123 @@ export function Certificates() {
         </div>
       )}
 
+      {/* Issued Certificates — history of all CA-signed certificates */}
+      {!issuedLoading && issuedCerts && issuedCerts.items.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <FileSignature className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              Issued Certificates
+            </h2>
+            <span className="text-sm text-neutral-500 dark:text-neutral-400">
+              ({issuedCerts.total})
+            </span>
+          </div>
+          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+              <thead className="bg-neutral-50 dark:bg-neutral-900">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    Subject
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    Fingerprint
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    Created
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    Expires
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
+                {issuedCerts.items.map((cert: IssuedCertificate) => {
+                  const daysLeft = getDaysUntilExpiry(cert.not_after);
+                  return (
+                    <tr
+                      key={cert.id}
+                      className="hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <p className="text-sm font-medium text-neutral-900 dark:text-white">
+                          {cert.subject_dn}
+                        </p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                          {cert.key_algorithm}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            cert.status === 'revoked'
+                              ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                              : daysLeft <= 30
+                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                          }`}
+                        >
+                          {cert.status === 'revoked'
+                            ? 'Revoked'
+                            : daysLeft <= 0
+                              ? 'Expired'
+                              : 'Active'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
+                          {cert.fingerprint_sha256.substring(0, 16)}...
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 dark:text-white">
+                        {new Date(cert.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <p className="text-sm text-neutral-900 dark:text-white">
+                          {new Date(cert.not_after).toLocaleDateString()}
+                        </p>
+                        <p
+                          className={`text-xs ${
+                            daysLeft <= 7
+                              ? 'text-red-600 dark:text-red-400 font-medium'
+                              : daysLeft <= 30
+                                ? 'text-orange-600 dark:text-orange-400'
+                                : 'text-neutral-500 dark:text-neutral-400'
+                          }`}
+                        >
+                          {daysLeft <= 0 ? 'Expired' : `${daysLeft}d remaining`}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        {canEdit && cert.status === 'active' && (
+                          <button
+                            onClick={() => handleRevokeIssuedCert(cert)}
+                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            Revoke
+                          </button>
+                        )}
+                        {cert.revoked_at && (
+                          <span className="text-xs text-neutral-400">
+                            {new Date(cert.revoked_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {selectedConsumer && (
         <ConsumerDetailModal
           consumer={selectedConsumer}
@@ -573,7 +733,7 @@ export function Certificates() {
           onClose={() => setShowWizard(false)}
           onComplete={() => {
             setShowWizard(false);
-            invalidateConsumers();
+            invalidateAll();
           }}
         />
       )}

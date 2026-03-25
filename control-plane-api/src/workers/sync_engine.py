@@ -14,19 +14,19 @@ import contextlib
 import json
 import logging
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
-from ..adapters.registry import AdapterRegistry
 from ..config import settings
 from ..database import _get_session_factory
 from ..models.gateway_deployment import DeploymentSyncStatus
 from ..models.gateway_instance import GatewayInstanceStatus
 from ..repositories.gateway_deployment import GatewayDeploymentRepository
 from ..repositories.gateway_instance import GatewayInstanceRepository
+from ..services.credential_resolver import create_adapter_with_credentials
 from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
@@ -189,10 +189,24 @@ class SyncEngine:
             repo = GatewayDeploymentRepository(session)
             deployments = await repo.list_by_statuses([
                 DeploymentSyncStatus.PENDING,
+                DeploymentSyncStatus.SYNCING,
                 DeploymentSyncStatus.DRIFTED,
                 DeploymentSyncStatus.ERROR,
                 DeploymentSyncStatus.DELETING,
             ])
+
+            if not deployments:
+                return
+
+            # Filter out SYNCING deployments that are still fresh (inline sync in progress)
+            stale_threshold = datetime.now(UTC) - timedelta(
+                seconds=settings.SYNC_ENGINE_INTERVAL_SECONDS
+            )
+            deployments = [
+                dep for dep in deployments
+                if dep.sync_status != DeploymentSyncStatus.SYNCING
+                or (dep.last_sync_attempt and dep.last_sync_attempt < stale_threshold)
+            ]
 
             if not deployments:
                 return
@@ -256,9 +270,8 @@ class SyncEngine:
                 )
                 return
 
-            adapter = AdapterRegistry.create(
-                gateway.gateway_type.value,
-                config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+            adapter = await create_adapter_with_credentials(
+                gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
             )
 
             try:
@@ -391,9 +404,8 @@ class SyncEngine:
                 if not gateway or gateway.status == GatewayInstanceStatus.OFFLINE:
                     continue
 
-                adapter = AdapterRegistry.create(
-                    gateway.gateway_type.value,
-                    config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+                adapter = await create_adapter_with_credentials(
+                    gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
                 )
                 try:
                     await adapter.connect()

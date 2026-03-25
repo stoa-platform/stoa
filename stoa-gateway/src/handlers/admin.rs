@@ -138,6 +138,9 @@ pub async fn upsert_api(
         aid,
         tid,
     );
+    // Mark admin-registered routes as trusted — SSRF check skipped (CAB-1893)
+    let mut route = route;
+    route.trusted_backend = true;
     let existed = state.route_registry.upsert(route).is_some();
     emitter.step_completed(
         deployment_id,
@@ -1403,7 +1406,10 @@ pub async fn reload_routes_from_cp(state: &AppState) -> Result<usize, String> {
         .as_deref()
         .ok_or_else(|| "STOA_CONTROL_PLANE_URL not configured".to_string())?;
 
-    let url = format!("{}/v1/apis", cp_url.trim_end_matches('/'));
+    let url = format!(
+        "{}/v1/internal/gateways/routes",
+        cp_url.trim_end_matches('/')
+    );
 
     let mut request = state.http_client.get(&url);
     if let Some(ref token) = state.config.control_plane_api_key {

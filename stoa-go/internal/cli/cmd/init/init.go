@@ -136,7 +136,7 @@ func writeTemplate(path, tmplContent string, data templateData) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return tmpl.Execute(f, data)
 }

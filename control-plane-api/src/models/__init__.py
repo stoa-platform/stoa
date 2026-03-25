@@ -1,3 +1,4 @@
+from .api_gateway_assignment import ApiGatewayAssignment
 from .backend_api import BackendApi, BackendApiAuthType, BackendApiStatus
 from .catalog import (
     APICatalog,
@@ -62,9 +63,11 @@ from .prospect_feedback import ProspectFeedback
 from .proxy_backend import ProxyBackend, ProxyBackendAuthType, ProxyBackendStatus
 from .saas_api_key import SaasApiKey, SaasApiKeyStatus
 from .security_event import SecurityEvent
+from .signed_certificate import SignedCertificate
 from .skill import Skill, SkillScope
 from .subscription import Subscription, SubscriptionStatus
 from .tenant import Tenant, TenantProvisioningStatus, TenantStatus
+from .tenant_ca import TenantCA
 from .traces import PipelineTrace, TraceStatus, TraceStep, trace_store
 from .usage_summary import UsageSummary
 from .webhook import (

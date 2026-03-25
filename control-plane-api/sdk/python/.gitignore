@@ -1,0 +1,3 @@
+# Generated SDK — do not commit
+# Regenerate with: ./scripts/sdk/generate-python-sdk.sh
+stoa-platform-client/

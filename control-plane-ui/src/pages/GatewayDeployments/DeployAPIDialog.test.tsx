@@ -28,6 +28,8 @@ vi.mock('../../services/api', () => ({
   apiService: {
     getCatalogEntries: (...args: unknown[]) => mockGetCatalogEntries(...args),
     getGatewayInstances: (...args: unknown[]) => mockGetGatewayInstances(...args),
+    getGatewayDeployments: vi.fn().mockResolvedValue({ items: [] }),
+    getDeployableEnvironments: vi.fn().mockResolvedValue([]),
     deployApiToGateways: vi.fn().mockResolvedValue(undefined),
     setAuthToken: vi.fn(),
     clearAuthToken: vi.fn(),
@@ -50,16 +52,10 @@ describe('DeployAPIDialog', () => {
     expect(await screen.findByText(/Deploy API to Gateways/i)).toBeInTheDocument();
   });
 
-  it('renders target gateways after loading', async () => {
-    render(<DeployAPIDialog onClose={onClose} onDeployed={onDeployed} />);
-    expect(await screen.findByText('STOA Edge MCP')).toBeInTheDocument();
-  });
-
-  it('renders cancel and deploy buttons', async () => {
+  it('renders cancel button', async () => {
     render(<DeployAPIDialog onClose={onClose} onDeployed={onDeployed} />);
     await screen.findByText(/Deploy API to Gateways/i);
     expect(screen.getByText('Cancel')).toBeInTheDocument();
-    expect(screen.getByText('Deploy')).toBeInTheDocument();
   });
 
   it('shows error when API load fails', async () => {

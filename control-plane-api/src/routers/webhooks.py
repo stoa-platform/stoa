@@ -1,4 +1,5 @@
 """Webhooks router - GitLab webhook handlers for GitOps with full tracing"""
+
 import hmac
 import logging
 
@@ -14,11 +15,32 @@ from ..services.trace_service import TraceService
 
 logger = logging.getLogger(__name__)
 
+
+class WebhookProcessedResponse(BaseModel):
+    """GitLab webhook processing result."""
+
+    status: str
+    event: str
+    trace_id: str
+    duration_ms: int | None = None
+    author: str | None = None
+
+
+class WebhookHealthResponse(BaseModel):
+    """Webhook endpoint health status."""
+
+    status: str
+    endpoint: str
+    supported_events: list[str] = []
+    trace_stats: dict = {}
+
+
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
 
 class GitLabPushEvent(BaseModel):
     """GitLab push webhook payload (simplified)"""
+
     object_kind: str  # "push"
     event_name: str  # "push"
     ref: str  # "refs/heads/main"
@@ -35,6 +57,7 @@ class GitLabPushEvent(BaseModel):
 
 class GitLabMergeRequestEvent(BaseModel):
     """GitLab merge request webhook payload (simplified)"""
+
     object_kind: str  # "merge_request"
     event_type: str  # "merge_request"
     user: dict
@@ -56,7 +79,7 @@ def verify_gitlab_token(token: str | None, expected_token: str) -> bool:
     return hmac.compare_digest(token, expected_token)
 
 
-@router.post("/gitlab")
+@router.post("/gitlab", response_model=WebhookProcessedResponse)
 async def gitlab_webhook(
     request: Request,
     x_gitlab_token: str | None = Header(None, alias="X-Gitlab-Token"),
@@ -135,7 +158,7 @@ async def gitlab_webhook(
         )
 
         # Step 2: Token Verification (CAB-DDoS: always enforce)
-        webhook_secret = getattr(settings, 'GITLAB_WEBHOOK_SECRET', '')
+        webhook_secret = getattr(settings, "GITLAB_WEBHOOK_SECRET", "")
         if not verify_gitlab_token(x_gitlab_token, webhook_secret):
             await service.add_step(
                 trace,
@@ -181,7 +204,9 @@ async def gitlab_webhook(
         # Pipeline complete
         await service.complete(trace, TraceStatusDB.SUCCESS)
 
-        logger.info(f"Pipeline trace {trace.id}: {trace.status.value} in {trace.total_duration_ms}ms (author: {git_author})")
+        logger.info(
+            f"Pipeline trace {trace.id}: {trace.status.value} in {trace.total_duration_ms}ms (author: {git_author})"
+        )
 
         return {
             "status": "processed",
@@ -199,11 +224,7 @@ async def gitlab_webhook(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def handle_push_event_traced_pg(
-    payload: dict,
-    trace,
-    service: TraceService
-) -> dict:
+async def handle_push_event_traced_pg(payload: dict, trace, service: TraceService) -> dict:
     """
     Handle push events with full tracing (PostgreSQL version).
 
@@ -286,13 +307,15 @@ async def handle_push_event_traced_pg(
                     "requested_by": user_name,
                     "trace_id": trace.id,
                 },
-                user_id=user_name
+                user_id=user_name,
             )
-            events_published.append({
-                "event_id": event_id,
-                "tenant_id": tenant_id,
-                "api_name": api_name,
-            })
+            events_published.append(
+                {
+                    "event_id": event_id,
+                    "tenant_id": tenant_id,
+                    "api_name": api_name,
+                }
+            )
 
         await service.add_step(
             trace,
@@ -339,14 +362,16 @@ async def handle_push_event_traced_pg(
                         "requested_by": user_name,
                         "trace_id": trace.id,
                     },
-                    user_id=user_name
+                    user_id=user_name,
                 )
-                mcp_events_published.append({
-                    "event_id": event_id,
-                    "tenant_id": tenant_id,
-                    "server_name": server_name,
-                    "scope": scope,
-                })
+                mcp_events_published.append(
+                    {
+                        "event_id": event_id,
+                        "tenant_id": tenant_id,
+                        "server_name": server_name,
+                        "scope": scope,
+                    }
+                )
 
             await service.add_step(
                 trace,
@@ -378,11 +403,7 @@ async def handle_push_event_traced_pg(
     }
 
 
-async def handle_merge_request_event_traced_pg(
-    payload: dict,
-    trace,
-    service: TraceService
-) -> dict:
+async def handle_merge_request_event_traced_pg(payload: dict, trace, service: TraceService) -> dict:
     """Handle merge request events with tracing (PostgreSQL version)."""
     object_attrs = payload.get("object_attributes", {})
     state = object_attrs.get("state")
@@ -408,7 +429,7 @@ async def handle_merge_request_event_traced_pg(
                 "requested_by": user_name,
                 "trace_id": trace.id,
             },
-            user_id=user_name
+            user_id=user_name,
         )
 
         await service.add_step(
@@ -434,11 +455,7 @@ async def handle_merge_request_event_traced_pg(
     return {"action": "sync_triggered", "mr_iid": mr_iid}
 
 
-async def handle_tag_push_event_traced_pg(
-    payload: dict,
-    trace,
-    service: TraceService
-) -> dict:
+async def handle_tag_push_event_traced_pg(payload: dict, trace, service: TraceService) -> dict:
     """Handle tag push events with tracing (PostgreSQL version)."""
     ref = payload.get("ref", "")
     tag_name = ref.replace("refs/tags/", "")
@@ -448,7 +465,7 @@ async def handle_tag_push_event_traced_pg(
 
 
 # Health check for webhook endpoint
-@router.get("/gitlab/health")
+@router.get("/gitlab/health", response_model=WebhookHealthResponse)
 async def webhook_health(db: AsyncSession = Depends(get_db)):
     """Health check for GitLab webhook endpoint with trace stats from PostgreSQL."""
     service = TraceService(db)

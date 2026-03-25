@@ -299,13 +299,13 @@ class TestContractGatewayInstances:
 
 
 # ---------------------------------------------------------------------------
-# Contracts Router — /v1/contracts
+# Contracts Router — /v1/tenants/{tenant_id}/contracts
 # ---------------------------------------------------------------------------
 
 class TestContractContracts:
     """Contract tests for the UAC contracts router."""
 
-    PREFIX = "/v1/contracts"
+    PREFIX = "/v1/tenants/acme/contracts"
 
     def test_list_contracts_route_exists(self, client_as_tenant_admin):
         _assert_route_exists(client_as_tenant_admin, "get", self.PREFIX)

@@ -69,7 +69,7 @@ jobs:
             "$BASELINE_DIR"
 
       - name: Upload baseline artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-baseline-${{ github.sha }}
           path: ${{ env.BASELINE_DIR }}/
@@ -109,7 +109,7 @@ jobs:
 
       # Try to download baseline from the most recent main push
       - name: Download baseline artifact
-        uses: dawidd6/action-download-artifact@v16
+        uses: dawidd6/action-download-artifact@v18
         with:
           name: perf-baseline-.*
           name_is_regexp: true
@@ -133,7 +133,7 @@ jobs:
 
       - name: Upload PR results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-pr-results-${{ github.event.pull_request.number }}
           path: ${{ env.PR_RESULTS_DIR }}/

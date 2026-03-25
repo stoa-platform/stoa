@@ -1,4 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { CHART_TOOLTIP_STYLE, ChartEmptyState } from '@stoa/shared/components/ChartCard';
 
 interface ErrorEntry {
   code: string;
@@ -24,11 +25,7 @@ export function ErrorBreakdown({ errors }: ErrorBreakdownProps) {
   const data = errors.filter((e) => e.count > 0);
 
   if (data.length === 0) {
-    return (
-      <div className="h-[250px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
-        No errors in this period
-      </div>
-    );
+    return <ChartEmptyState message="No errors in this period" />;
   }
 
   return (
@@ -53,12 +50,7 @@ export function ErrorBreakdown({ errors }: ErrorBreakdownProps) {
           ))}
         </Pie>
         <Tooltip
-          contentStyle={{
-            backgroundColor: '#1F2937',
-            border: '1px solid #374151',
-            borderRadius: 8,
-            fontSize: 12,
-          }}
+          contentStyle={CHART_TOOLTIP_STYLE}
           formatter={(value) => [`${value} requests`, 'Errors']}
         />
         <Legend

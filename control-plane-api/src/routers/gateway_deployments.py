@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.rbac import require_role
 from src.database import get_db
-from src.models.gateway_deployment import DeploymentSyncStatus
+from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.schemas.gateway import (
     DeploymentStatusSummary,
@@ -21,6 +21,31 @@ from src.schemas.gateway import (
 from src.services.gateway_deployment_service import GatewayDeploymentService
 
 logger = logging.getLogger(__name__)
+
+
+def _deployment_to_dict(dep) -> dict:
+    """Convert a GatewayDeployment ORM object to a dict compatible with GatewayDeploymentResponse."""
+    return {
+        "id": dep.id,
+        "api_catalog_id": dep.api_catalog_id,
+        "gateway_instance_id": dep.gateway_instance_id,
+        "desired_state": dep.desired_state,
+        "desired_at": dep.desired_at,
+        "actual_state": dep.actual_state,
+        "actual_at": dep.actual_at,
+        "sync_status": dep.sync_status.value if hasattr(dep.sync_status, "value") else dep.sync_status,
+        "last_sync_attempt": dep.last_sync_attempt,
+        "last_sync_success": dep.last_sync_success,
+        "sync_error": dep.sync_error,
+        "sync_attempts": dep.sync_attempts,
+        "gateway_resource_id": dep.gateway_resource_id,
+        "created_at": dep.created_at,
+        "updated_at": dep.updated_at,
+        "gateway_name": None,
+        "gateway_display_name": None,
+        "gateway_type": None,
+        "gateway_environment": None,
+    }
 
 
 class CatalogEntry(BaseModel):
@@ -54,7 +79,7 @@ async def deploy_api(
     await db.commit()
     for dep in deployments:
         await db.refresh(dep)
-    return deployments
+    return [_deployment_to_dict(dep) for dep in deployments]
 
 
 @router.get("", response_model=PaginatedGatewayDeployments)
@@ -62,6 +87,7 @@ async def list_deployments(
     sync_status: str | None = Query(None, description="Filter by sync status"),
     gateway_instance_id: UUID | None = Query(None),
     environment: str | None = Query(None, description="Filter by gateway environment (dev/staging/prod)"),
+    gateway_type: str | None = Query(None, description="Filter by gateway type (stoa, kong, gravitee, etc.)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -74,6 +100,7 @@ async def list_deployments(
         sync_status=status_filter,
         gateway_instance_id=gateway_instance_id,
         environment=environment,
+        gateway_type=gateway_type,
         page=page,
         page_size=page_size,
     )
@@ -118,12 +145,31 @@ async def get_deployment(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
-    """Get deployment details."""
-    deploy_repo = GatewayDeploymentRepository(db)
-    deployment = await deploy_repo.get_by_id(deployment_id)
-    if not deployment:
+    """Get deployment details with gateway info."""
+    from src.models.gateway_instance import GatewayInstance
+
+    result = await db.execute(
+        select(
+            GatewayDeployment,
+            GatewayInstance.name.label("gateway_name"),
+            GatewayInstance.display_name.label("gateway_display_name"),
+            GatewayInstance.gateway_type.label("gateway_type"),
+            GatewayInstance.environment.label("gateway_environment"),
+        )
+        .join(GatewayInstance, GatewayDeployment.gateway_instance_id == GatewayInstance.id)
+        .where(GatewayDeployment.id == deployment_id)
+    )
+    row = result.one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Deployment not found")
-    return deployment
+
+    dep = row.GatewayDeployment
+    d = _deployment_to_dict(dep)
+    d["gateway_name"] = row.gateway_name
+    d["gateway_display_name"] = row.gateway_display_name
+    d["gateway_type"] = row.gateway_type.value if hasattr(row.gateway_type, "value") else row.gateway_type
+    d["gateway_environment"] = row.gateway_environment
+    return d
 
 
 @router.delete("/{deployment_id}", status_code=204)
@@ -155,4 +201,82 @@ async def force_sync(
         raise HTTPException(status_code=404, detail=str(e))
     await db.commit()
     await db.refresh(deployment)
-    return deployment
+    return _deployment_to_dict(deployment)
+
+
+class TestResult(BaseModel):
+    """Result of a deployment connectivity test."""
+
+    reachable: bool
+    status_code: int | None = None
+    latency_ms: float | None = None
+    error: str | None = None
+    gateway_url: str | None = None
+    path: str | None = None
+
+
+@router.post("/{deployment_id}/test", response_model=TestResult)
+async def test_deployment(
+    deployment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_role(["cpi-admin", "tenant-admin"])),
+):
+    """Test that a deployment is actually reachable through its gateway.
+
+    Sends a HEAD request to the gateway at the expected API path and
+    reports back status code, latency, and any errors.
+    """
+    import time
+
+    import httpx
+
+    from src.models.gateway_instance import GatewayInstance
+
+    result = await db.execute(
+        select(
+            GatewayDeployment,
+            GatewayInstance.base_url,
+            GatewayInstance.auth_config,
+        )
+        .join(GatewayInstance, GatewayDeployment.gateway_instance_id == GatewayInstance.id)
+        .where(GatewayDeployment.id == deployment_id)
+    )
+    row = result.one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+
+    dep = row.GatewayDeployment
+    base_url = row.base_url
+    auth_config = row.auth_config or {}
+
+    ds = dep.desired_state or {}
+    tenant_id = ds.get("tenant_id", "")
+    api_name = ds.get("api_name", ds.get("api_id", ""))
+    path = f"/apis/{tenant_id}/{api_name}"
+
+    headers = {}
+    admin_token = auth_config.get("admin_token", "") if isinstance(auth_config, dict) else ""
+    if admin_token:
+        headers["Authorization"] = f"Bearer {admin_token}"
+
+    try:
+        start = time.monotonic()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{base_url}{path}", headers=headers)
+        latency = (time.monotonic() - start) * 1000
+
+        return TestResult(
+            reachable=resp.status_code < 400,
+            status_code=resp.status_code,
+            latency_ms=round(latency, 1),
+            gateway_url=base_url,
+            path=path,
+        )
+    except Exception as e:
+        error_msg = str(e) or f"{type(e).__name__}"
+        return TestResult(
+            reachable=False,
+            error=error_msg,
+            gateway_url=base_url,
+            path=path,
+        )

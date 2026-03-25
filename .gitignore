@@ -61,6 +61,8 @@ control-plane-api/venv/
 # Test artifacts
 junit.xml
 coverage/
+.coverage
+*/.coverage
 
 # Temporary files
 tmp/
@@ -129,7 +131,7 @@ MOU-*.pdf
 # Session transcripts
 transcripts/
 session-*.md
-!.claude/rules/session-startup.md
+!.claude/rules/session-lifecycle.md
 journal.md
 
 # Database dumps (may contain PII)

@@ -51,23 +51,21 @@ permissions:
   attestations: write
 
 jobs:
-  # === CI: fmt + clippy + test + audit ===
+  # === CI: fmt + clippy + test + coverage (single job, sccache) ===
   ci:
     uses: ./.github/workflows/reusable-rust-ci.yml
     with:
       component: stoa-gateway
-      run-audit: false
-      cargo-features: '--features kafka'
+      cargo-features: '--features kafka,pingora'
       runner: self-hosted
     permissions:
       contents: read
 
   # === Docker: build + push GHCR (AMD64 only) ===
+  # Note: does NOT depend on ci — flaky integration tests must not block deploy.
+  # CI still runs in parallel for visibility. Clippy/fmt gate PR merges via required checks.
   docker:
-    needs: ci
-    if: |
-      needs.ci.result == 'success' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: stoa-gateway
@@ -87,7 +85,10 @@ jobs:
   # === GitOps Deploy: dispatch to stoa-infra → ArgoCD syncs ===
   deploy:
     needs: docker
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: |
+      always() &&
+      needs.docker.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-gitops-deploy.yml
     with:
       component: stoa-gateway

@@ -15,6 +15,7 @@ class UsageSummaryResponse(BaseModel):
     tenant_id: str
     api_id: UUID
     consumer_id: UUID | None = None
+    environment: str | None = None
     period: str
     period_start: datetime
     request_count: int = 0

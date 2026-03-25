@@ -7,6 +7,10 @@
 //! 4. Pushes audit events via PerfEventArray
 //!
 //! Attach: `tc qdisc add dev eth0 clsact && tc filter add dev eth0 ingress bpf ...`
+//!
+//! **Known limitation**: IPv6 traffic is passed through without classification.
+//! On dual-stack hosts, attackers can bypass TC policy enforcement via IPv6.
+//! IPv6 support is tracked as a future enhancement.
 
 #![no_std]
 #![no_main]
@@ -16,7 +20,7 @@ use aya_ebpf::{
     bindings::TC_ACT_PIPE,
     bindings::TC_ACT_SHOT,
     macros::{classifier, map},
-    maps::{HashMap, PerfEventArray},
+    maps::{HashMap, LruHashMap, PerCpuHashMap, PerfEventArray},
     programs::TcContext,
 };
 use aya_log_ebpf::info;
@@ -27,13 +31,15 @@ use stoa_xdp_common::{ApiKey, ApiPolicy, ApiStats, AuditEvent, MAX_API_ENTRIES, 
 // --- BPF Maps ---
 
 /// Per-API metrics: key = path hash, value = {packets, bytes, last_reset_ns}
+/// PerCpuHashMap eliminates race conditions on multi-CPU systems — each CPU
+/// maintains its own copy. Userspace aggregates across CPUs when reading.
 #[map]
-static API_STATS: HashMap<ApiKey, ApiStats> = HashMap::with_max_entries(MAX_API_ENTRIES, 0);
+static API_STATS: PerCpuHashMap<ApiKey, ApiStats> = PerCpuHashMap::with_max_entries(MAX_API_ENTRIES, 0);
 
 /// Per-API policy: key = path hash, value = {max_pps, blocked}
-/// Populated by userspace from policies.json
+/// Populated by userspace from policies.json. LruHashMap for auto-eviction.
 #[map]
-static API_POLICY: HashMap<ApiKey, ApiPolicy> = HashMap::with_max_entries(MAX_API_ENTRIES, 0);
+static API_POLICY: LruHashMap<ApiKey, ApiPolicy> = LruHashMap::with_max_entries(MAX_API_ENTRIES, 0);
 
 /// Audit event stream to userspace
 #[map]
@@ -68,7 +74,12 @@ fn try_classify(ctx: TcContext) -> Result<i32, ()> {
         return Ok(TC_ACT_PIPE);
     }
     let src_ip = u32::from_be(ipv4hdr.src_addr);
-    let ip_hdr_len = Ipv4Hdr::LEN; // Standard 20 bytes (options rare in practice)
+    // Read IHL from header — do NOT hardcode 20 bytes. Packets with IP options
+    // (IHL > 5) would be misparsed, allowing attackers to bypass the classifier.
+    let ip_hdr_len = ((ipv4hdr.ihl() as usize) & 0x0F) * 4;
+    if ip_hdr_len < 20 || ip_hdr_len > 60 {
+        return Ok(TC_ACT_PIPE); // Invalid IHL — let the stack handle it
+    }
 
     // Parse TCP
     let tcp_offset = EthHdr::LEN + ip_hdr_len;
@@ -168,11 +179,11 @@ fn try_classify(ctx: TcContext) -> Result<i32, ()> {
     // --- Audit Event ---
     let event = AuditEvent {
         timestamp_ns: now_ns,
+        bytes: pkt_bytes,
         src_ip,
         method_hash,
         path_hash,
         action: action_code,
-        bytes: pkt_bytes,
     };
     AUDIT_EVENTS.output(&ctx, &event, 0);
 

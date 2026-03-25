@@ -1,0 +1,126 @@
+# Resource Lifecycle Label Policies
+# CAB-1877: Common label taxonomy + Kyverno enforcement
+#
+# Label taxonomy:
+#   Required:
+#     app.kubernetes.io/part-of: stoa-platform       (already enforced by require-labels)
+#     app.kubernetes.io/component: <component-type>   (gateway, backend, frontend, operator, monitoring, demo)
+#     stoa.dev/environment: <env>                     (prod, staging, dev)
+#     stoa.dev/managed-by: <manager>                  (argocd, helm, manual, cronjob)
+#   Optional:
+#     stoa.dev/owner: <team>                          (platform, devops, sre)
+#     stoa.dev/ttl: <ISO-duration>                    (P7D, P30D, P90D — for cleanup CronJob)
+#
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-lifecycle-labels
+  annotations:
+    policies.kyverno.io/title: Require Lifecycle Labels
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/description: >-
+      Enforces the STOA label taxonomy on Deployments, StatefulSets, and
+      CronJobs in stoa-system. Ensures every workload is tagged with
+      component type, environment, and management method.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-component-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - CronJob
+              namespaces:
+                - stoa-system
+      validate:
+        message: >-
+          The label 'app.kubernetes.io/component' is required.
+          Valid values: gateway, backend, frontend, operator, monitoring, demo, arena, security, observability.
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/component: "?*"
+    - name: require-environment-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - CronJob
+              namespaces:
+                - stoa-system
+      validate:
+        message: >-
+          The label 'stoa.dev/environment' is required.
+          Valid values: prod, staging, dev.
+        pattern:
+          metadata:
+            labels:
+              stoa.dev/environment: "?*"
+    - name: require-managed-by-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - CronJob
+              namespaces:
+                - stoa-system
+      validate:
+        message: >-
+          The label 'stoa.dev/managed-by' is required.
+          Valid values: argocd, helm, manual, cronjob.
+        pattern:
+          metadata:
+            labels:
+              stoa.dev/managed-by: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: inject-default-labels
+  annotations:
+    policies.kyverno.io/title: Inject Default Labels
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/description: >-
+      Mutates resources in stoa-system to inject default labels when missing.
+      Sets stoa.dev/managed-by=manual and stoa.dev/environment=prod as defaults.
+spec:
+  rules:
+    - name: default-managed-by
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - CronJob
+              namespaces:
+                - stoa-system
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              +(stoa.dev/managed-by): manual
+    - name: default-environment
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - CronJob
+              namespaces:
+                - stoa-system
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              +(stoa.dev/environment): prod

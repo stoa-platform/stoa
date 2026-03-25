@@ -82,7 +82,7 @@ describe('gatewayApi', () => {
       expect(result.applications).toEqual([]);
     });
 
-    it('returns empty arrays when apis/applications calls fail', async () => {
+    it('returns null for apis/applications when their calls fail (G2)', async () => {
       const health = { status: 'healthy' as const, proxy_mode: false };
       mockGet
         .mockResolvedValueOnce({ data: health } as any)
@@ -91,11 +91,11 @@ describe('gatewayApi', () => {
 
       const result = await getGatewayStatus();
       expect(result.health).toEqual(health);
-      expect(result.apis).toEqual([]);
-      expect(result.applications).toEqual([]);
+      expect(result.apis).toBeNull();
+      expect(result.applications).toBeNull();
     });
 
-    it('returns complete fallback when all calls fail', async () => {
+    it('returns complete fallback with nulls when all calls fail', async () => {
       mockGet
         .mockRejectedValueOnce(new Error('fail'))
         .mockRejectedValueOnce(new Error('fail'))
@@ -103,8 +103,8 @@ describe('gatewayApi', () => {
 
       const result = await getGatewayStatus();
       expect(result.health.status).toBe('unhealthy');
-      expect(result.apis).toEqual([]);
-      expect(result.applications).toEqual([]);
+      expect(result.apis).toBeNull();
+      expect(result.applications).toBeNull();
       expect(result.fetchedAt).toBeDefined();
     });
   });

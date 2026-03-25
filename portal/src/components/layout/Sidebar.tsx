@@ -1,13 +1,13 @@
 import { NavLink } from 'react-router-dom';
 import {
   BookOpen,
-  User,
   X,
-  BarChart3,
   ExternalLink,
   Briefcase,
-  Store,
+  Compass,
   LucideIcon,
+  ShieldCheck,
+  FlaskConical,
 } from 'lucide-react';
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,12 +30,18 @@ interface NavItem {
   external?: boolean;
 }
 
+// CAB-1905: Simplified to 5 items — Profile + Console moved to header dropdown
 const navItems: NavItem[] = [
   {
-    name: 'Marketplace',
-    href: '/marketplace',
-    icon: Store,
-    enabled: config.features.enableMarketplace,
+    name: 'Discover',
+    href: '/discover',
+    icon: Compass,
+    scope: 'stoa:catalog:read',
+  },
+  {
+    name: 'Playground',
+    href: '/servers',
+    icon: FlaskConical,
     scope: 'stoa:catalog:read',
   },
   {
@@ -45,17 +51,15 @@ const navItems: NavItem[] = [
     permission: 'apps:read',
   },
   {
-    name: 'Analytics',
-    href: '/usage',
-    icon: BarChart3,
-    enabled: config.features.enableSubscriptions,
-    scope: 'stoa:metrics:read',
+    name: 'Governance',
+    href: '/governance',
+    icon: ShieldCheck,
+    permission: 'apis:update',
   },
-  { name: 'Profile', href: '/profile', icon: User },
   {
-    name: 'Console',
-    href: config.services.console.url,
-    icon: ExternalLink,
+    name: 'Documentation',
+    href: config.services.docs.url,
+    icon: BookOpen,
     external: true,
   },
 ];

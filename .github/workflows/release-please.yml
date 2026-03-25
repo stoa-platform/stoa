@@ -33,6 +33,9 @@ jobs:
       gateway_release_created: ${{ steps.release.outputs['stoa-gateway--release_created'] }}
       gateway_tag_name: ${{ steps.release.outputs['stoa-gateway--tag_name'] }}
       gateway_version: ${{ steps.release.outputs['stoa-gateway--version'] }}
+      stoa_go_release_created: ${{ steps.release.outputs['stoa-go--release_created'] }}
+      stoa_go_tag_name: ${{ steps.release.outputs['stoa-go--tag_name'] }}
+      stoa_go_version: ${{ steps.release.outputs['stoa-go--version'] }}
       # Aggregate: true if any component released
       any_release_created: ${{ steps.aggregate.outputs.any_release }}
       released_services: ${{ steps.aggregate.outputs.services }}
@@ -74,6 +77,11 @@ jobs:
             ANY="true"
             echo "stoa-gateway released: ${{ steps.release.outputs['stoa-gateway--tag_name'] }}"
           fi
+          if [ "${{ steps.release.outputs['stoa-go--release_created'] }}" = "true" ]; then
+            SERVICES="${SERVICES:+$SERVICES,}stoa-go"
+            ANY="true"
+            echo "stoa-go released: ${{ steps.release.outputs['stoa-go--tag_name'] }}"
+          fi
 
           echo "any_release=$ANY" >> $GITHUB_OUTPUT
           echo "services=$SERVICES" >> $GITHUB_OUTPUT
@@ -97,6 +105,9 @@ jobs:
           if [ "${{ steps.release.outputs['stoa-gateway--release_created'] }}" = "true" ]; then
             echo "| stoa-gateway | ${{ steps.release.outputs['stoa-gateway--version'] }} | ${{ steps.release.outputs['stoa-gateway--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
           fi
+          if [ "${{ steps.release.outputs['stoa-go--release_created'] }}" = "true" ]; then
+            echo "| stoa-go | ${{ steps.release.outputs['stoa-go--version'] }} | ${{ steps.release.outputs['stoa-go--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
+          fi
 
   trigger-docker:
     needs: release-please
@@ -105,3 +116,12 @@ jobs:
     secrets: inherit
     with:
       services: ${{ needs.release-please.outputs.released_services }}
+
+  trigger-goreleaser:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.stoa_go_release_created == 'true' }}
+    uses: ./.github/workflows/stoa-go-release.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.release-please.outputs.stoa_go_tag_name }}
+      version: ${{ needs.release-please.outputs.stoa_go_version }}

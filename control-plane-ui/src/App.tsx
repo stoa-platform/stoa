@@ -77,8 +77,10 @@ const GatewayRegistry = lazy(() => gatewaysModule().then((m) => ({ default: m.Ga
 const GatewayModes = lazy(() =>
   gatewaysModule().then((m) => ({ default: m.GatewayModesDashboard }))
 );
-const GatewayDeployments = lazy(() =>
-  import('./pages/GatewayDeployments').then((m) => ({ default: m.GatewayDeploymentsDashboard }))
+const ApiDeployments = lazy(() =>
+  import('./pages/ApiDeployments/ApiDeploymentsDashboard').then((m) => ({
+    default: m.ApiDeploymentsDashboard,
+  }))
 );
 const DriftDetection = lazy(() =>
   import('./pages/DriftDetection').then((m) => ({ default: m.DriftDetection }))
@@ -118,16 +120,9 @@ const RequestExplorer = lazy(() =>
 // CAB-1114: OpenSearch Dashboards for API trace logs (retained for deep-link fallback)
 const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 
-// CAB-1118: Skeleton pages for upcoming features
-const ShadowDiscovery = lazy(() =>
-  import('./pages/ShadowDiscovery').then((m) => ({ default: m.ShadowDiscovery }))
-);
-const TokenOptimizer = lazy(() =>
-  import('./pages/TokenOptimizer').then((m) => ({ default: m.TokenOptimizer }))
-);
-const Policies = lazy(() => import('./pages/Policies').then((m) => ({ default: m.Policies })));
+// CAB-1764: Skeleton pages (ShadowDiscovery, TokenOptimizer, Policies, Workflows) removed from nav
+// Routes redirect to home. Pages retained in codebase for reintroduction when implemented.
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
-const Workflows = lazy(() => import('./pages/Workflows').then((m) => ({ default: m.Workflows })));
 
 // CAB-1251: SaaS Self-Service pages
 const saasApiKeysModule = () => import('./pages/SaasApiKeys');
@@ -311,10 +306,14 @@ function ProtectedRoutes() {
                   path="/external-mcp-servers"
                   element={<Navigate to="/mcp-servers?tab=custom" replace />}
                 />
+                <Route path="/api-deployments" element={<ApiDeployments />} />
+                <Route
+                  path="/gateway-deployments"
+                  element={<Navigate to="/api-deployments" replace />}
+                />
                 <Route path="/gateway" element={<GatewayStatus />} />
                 <Route path="/gateways/modes" element={<GatewayModes />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />
-                <Route path="/gateway-deployments" element={<GatewayDeployments />} />
                 <Route path="/drift" element={<DriftDetection />} />
                 <Route path="/gateway-observability" element={<GatewayObservability />} />
                 <Route path="/operations" element={<OperationsDashboard />} />
@@ -335,12 +334,12 @@ function ProtectedRoutes() {
                 {/* Native request explorer (replace OpenSearch iframe) */}
                 <Route path="/logs" element={<RequestExplorer />} />
                 <Route path="/logs/opensearch" element={<LogsEmbed />} />
-                {/* CAB-1118: Skeleton pages for upcoming features */}
-                <Route path="/shadow-discovery" element={<ShadowDiscovery />} />
-                <Route path="/token-optimizer" element={<TokenOptimizer />} />
-                <Route path="/policies" element={<Policies />} />
+                {/* CAB-1764: Skeleton pages removed from nav, redirected */}
+                <Route path="/shadow-discovery" element={<Navigate to="/" replace />} />
+                <Route path="/token-optimizer" element={<Navigate to="/" replace />} />
+                <Route path="/policies" element={<Navigate to="/" replace />} />
                 <Route path="/audit-log" element={<AuditLog />} />
-                <Route path="/workflows" element={<Workflows />} />
+                <Route path="/workflows" element={<Navigate to="/" replace />} />
                 {/* CAB-1251: SaaS Self-Service */}
                 <Route
                   path="/backend-apis"

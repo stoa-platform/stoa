@@ -42,6 +42,9 @@ class UsageSummary(Base):
     cache_creation_input_tokens = Column(BigInteger, nullable=False, default=0, server_default="0")
     cache_read_input_tokens = Column(BigInteger, nullable=False, default=0, server_default="0")
 
+    # Environment scoping (CAB-1665)
+    environment = Column(String(50), nullable=True)
+
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

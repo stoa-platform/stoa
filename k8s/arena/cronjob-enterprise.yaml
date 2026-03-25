@@ -5,8 +5,10 @@ metadata:
   namespace: stoa-system
   labels:
     app: gateway-arena-enterprise
-    environment: production
-    layer: enterprise
+    app.kubernetes.io/component: arena
+    app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: manual
 spec:
   schedule: "0 * * * *"
   concurrencyPolicy: Forbid
@@ -90,11 +92,10 @@ spec:
                 - name: OIDC_TOKEN_URL
                   value: "http://keycloak.stoa-system.svc/realms/stoa/protocol/openid-connect/token"
                   # GATEWAYS: 20-dimension enterprise AI readiness benchmark.
-                  # 4 gateways: 2 AI-native + 2 traditional (baseline contrast).
+                  # 4 gateways: 2 AI-native (STOA, AgentGateway) + 1 traditional (Kong) + 1 minimal baseline.
                   #
-                  # Kong Enterprise excluded: AI License (separate from Enterprise)
-                  # not available for automated CI. MCP plugins in Tech Preview (3.12+).
-                  # See METHODOLOGY.md for full evaluation notes.
+                  # Gravitee removed: scores near-zero on all AI dimensions (no MCP), 50% availability issues.
+                  # Kong kept as traditional gateway baseline (most widely adopted).
                   #
                   # mcp_base: null = no MCP support (scores 0 on MCP dims)
                   # mcp_protocol: "stoa" (REST) or "streamable-http" (JSON-RPC 2.0)
@@ -120,6 +121,15 @@ spec:
                         ]
                       },
                       {
+                        "name": "stoa-minimal-k8s",
+                        "target": "http://stoa-gateway-minimal.stoa-system.svc",
+                        "mcp_base": null,
+                        "mcp_protocol": null,
+                        "admin_base": "http://stoa-gateway-minimal.stoa-system.svc",
+                        "health": "http://stoa-gateway-minimal.stoa-system.svc/health",
+                        "features": []
+                      },
+                      {
                         "name": "agentgateway-k8s",
                         "target": "http://agentgateway-arena.stoa-system.svc:3000",
                         "mcp_base": "http://agentgateway-arena.stoa-system.svc:3000/mcp",
@@ -130,17 +140,6 @@ spec:
                           "llm_routing", "llm_cost", "llm_circuit_breaker",
                           "native_tools_crud", "api_bridge",
                           "pii_detection", "distributed_tracing", "federation"
-                        ]
-                      },
-                      {
-                        "name": "gravitee-k8s",
-                        "target": "http://gravitee-arena-gw.stoa-system.svc:8082",
-                        "mcp_base": null,
-                        "mcp_protocol": null,
-                        "admin_base": null,
-                        "health": "http://gravitee-arena-gw.stoa-system.svc:8082/",
-                        "features": [
-                          "distributed_tracing", "quota_burst", "resilience"
                         ]
                       },
                       {

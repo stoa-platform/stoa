@@ -1,0 +1,36 @@
+category_id: ai-services
+category_name: AI Services
+icon: brain
+
+entries:
+  - id: mcp-anthropic
+    name: anthropic-mcp
+    display_name: "Anthropic Claude (MCP)"
+    description: "Anthropic Claude AI via Model Context Protocol — tool use, analysis, generation"
+    country: US
+    region: global
+    mcp_endpoint: https://api.anthropic.com/v1/mcp
+    protocol: mcp
+    auth_type: api_key
+    tools:
+      - name: generate
+        description: Generate text completions
+      - name: analyze
+        description: Analyze documents and data
+    status: community
+    tags: [ai, llm, mcp, anthropic]
+    documentation_url: https://docs.anthropic.com/
+    icon: brain
+
+  - id: mcp-openai
+    name: openai-mcp
+    display_name: "OpenAI (MCP)"
+    description: "OpenAI GPT models via MCP-compatible endpoint"
+    country: US
+    region: global
+    protocol: mcp
+    auth_type: api_key
+    status: experimental
+    tags: [ai, llm, mcp, openai]
+    documentation_url: https://platform.openai.com/docs
+    icon: brain

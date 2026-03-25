@@ -3,6 +3,7 @@
     "overview": "Vue d'ensemble",
     "dashboard": "Tableau de bord",
     "operations": "Opérations",
+    "platformStatus": "État de la plateforme",
     "myUsage": "Mon utilisation",
     "business": "Business",
     "apiCatalog": "Catalogue API",
@@ -46,6 +47,7 @@
     "analytics": "Analytique d'usage",
     "securityPosture": "Posture de securite",
     "proxyOwner": "Propriétaire de proxy",
+    "callFlow": "Flux d'appels",
     "apiTraffic": "Trafic API",
     "llmCost": "Coûts LLM",
     "subscriptions": "Abonnements",
@@ -54,7 +56,22 @@
     "contracts": "Contrats",
     "promotions": "Promotions",
     "internalApis": "APIs internes",
-    "aiFactory": "AI Factory"
+    "aiFactory": "AI Factory",
+    "aiOps": "AI Ops",
+    "gatewayOverview": "Vue d'ensemble",
+    "usersAccess": "Utilisateurs & Accès",
+    "credentials": "Identifiants",
+    "apiDeployments": "Deploiements API",
+    "configSync": "Sync Config",
+    "backendHealth": "Santé Backend",
+    "apiAccessRules": "Règles d'accès API",
+    "admin": "Administration",
+    "prospects": "Prospects",
+    "accessRequests": "Demandes d'accès",
+    "users": "Utilisateurs",
+    "roles": "Rôles",
+    "settings": "Paramètres",
+    "identity": "Identité"
   },
   "layout": {
     "controlPlane": "Panneau de contrôle",
@@ -144,7 +161,9 @@
   "login": {
     "title": "STOA Control Plane",
     "subtitle": "Gestion d'API multi-tenant",
-    "button": "Se connecter avec Keycloak"
+    "button": "Se connecter avec Keycloak",
+    "googleButton": "Se connecter avec Google",
+    "divider": "ou"
   },
   "tenants": {
     "title": "Tenants",

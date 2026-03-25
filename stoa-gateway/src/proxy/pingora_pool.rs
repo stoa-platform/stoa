@@ -117,11 +117,9 @@ impl PingoraPool {
                 error!(error = %e, "Pingora: failed to write request body");
                 return (StatusCode::BAD_GATEWAY, "Failed to send body").into_response();
             }
-        } else {
-            if let Err(e) = session.finish_request_body().await {
-                error!(error = %e, "Pingora: failed to finish request");
-                return (StatusCode::BAD_GATEWAY, "Failed to finish request").into_response();
-            }
+        } else if let Err(e) = session.finish_request_body().await {
+            error!(error = %e, "Pingora: failed to finish request");
+            return (StatusCode::BAD_GATEWAY, "Failed to finish request").into_response();
         }
 
         // Read response header
@@ -166,7 +164,8 @@ impl PingoraPool {
 
         // Release connection back to pool for reuse
         self.connector
-            .release_http_session(session, &peer, Some(Duration::from_secs(90)));
+            .release_http_session(session, &peer, Some(Duration::from_secs(90)))
+            .await;
 
         // Build axum response
         let mut response = Response::new(Body::from(body_bytes));
@@ -182,11 +181,9 @@ impl PingoraPool {
             match self.connector.get_http_session(&peer).await {
                 Ok((session, reused)) => {
                     // Release it back immediately
-                    self.connector.release_http_session(
-                        session,
-                        &peer,
-                        Some(Duration::from_secs(90)),
-                    );
+                    self.connector
+                        .release_http_session(session, &peer, Some(Duration::from_secs(90)))
+                        .await;
                     reused
                 }
                 Err(_) => false,

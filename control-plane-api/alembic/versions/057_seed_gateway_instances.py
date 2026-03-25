@@ -61,33 +61,8 @@ GATEWAYS = [
         "mode": None,
         "tags": '["prod", "showcase", "arena"]',
     },
-    # --- Staging ---
-    {
-        "id": str(uuid.uuid4()),
-        "name": "stoa-staging",
-        "display_name": "STOA Gateway (Staging)",
-        "gateway_type": "stoa_edge_mcp",
-        "environment": "staging",
-        "base_url": "https://staging-mcp.gostoa.dev",
-        "auth_config": "{}",
-        "status": "online",
-        "capabilities": '["mcp", "rest", "oidc", "rate_limiting"]',
-        "mode": "edge-mcp",
-        "tags": '["staging"]',
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "name": "kong-staging",
-        "display_name": "Kong DB-less (Staging)",
-        "gateway_type": "kong",
-        "environment": "staging",
-        "base_url": "http://kong-arena.stoa-system.svc:8001",
-        "auth_config": "{}",
-        "status": "online",
-        "capabilities": '["rest", "rate_limiting"]',
-        "mode": None,
-        "tags": '["staging", "showcase", "arena"]',
-    },
+    # --- Staging (Hetzner K3s decommissioned 2026-03) ---
+    # stoa-staging and kong-staging removed — cluster no longer exists
     # --- Development ---
     {
         "id": str(uuid.uuid4()),

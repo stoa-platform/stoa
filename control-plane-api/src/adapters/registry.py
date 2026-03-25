@@ -78,6 +78,10 @@ def _register_builtin_adapters() -> None:
 
     AdapterRegistry.register("stoa", StoaGatewayAdapter)
 
+    # ADR-024: STOA gateway modes share the same adapter
+    for mode in ("stoa_edge_mcp", "stoa_sidecar", "stoa_proxy", "stoa_shadow"):
+        AdapterRegistry.register(mode, StoaGatewayAdapter)
+
     from .kong import KongGatewayAdapter
 
     AdapterRegistry.register("kong", KongGatewayAdapter)

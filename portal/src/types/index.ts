@@ -200,6 +200,9 @@ export interface API {
   status: 'draft' | 'published' | 'deprecated';
   audience?: APIAudience;
   deployments?: Record<string, boolean>;
+  deployedEnvironments?: string[];
+  authType?: string | null; // CAB-1906: inferred from tags (OAuth2, API Key, mTLS, Basic)
+  endpointCount?: number; // CAB-1906: from OpenAPI spec
   createdAt: string;
   updatedAt: string;
 }
@@ -955,8 +958,10 @@ export interface MarketplaceFilters {
   category?: string;
   status?: string;
   tags?: string[];
+  authType?: string; // CAB-1906: oauth2, api_key, mtls, basic
   page?: number;
   pageSize?: number;
+  sortBy?: 'name' | 'updated_at' | 'created_at'; // CAB-1906
 }
 
 export interface MarketplaceStats {
@@ -1093,4 +1098,36 @@ export interface APIComparisonResult {
   api_ids: string[];
   api_names: Record<string, string>;
   fields: APIComparisonField[];
+}
+
+// ============ Governance Types (CAB-1525) ============
+
+export interface GovernanceStats {
+  pending_approvals: number;
+  apis_by_status: Record<string, number>;
+  total_subscriptions: number;
+  active_subscriptions: number;
+}
+
+export type APILifecycleStatus = 'draft' | 'published' | 'deprecated';
+
+export interface APILifecycleTransition {
+  from: APILifecycleStatus;
+  to: APILifecycleStatus;
+  label: string;
+  requiresApproval: boolean;
+}
+
+export interface GovernanceApproval {
+  id: string;
+  type: 'subscription' | 'api_publish';
+  requester_name: string;
+  requester_email: string;
+  resource_name: string;
+  resource_id: string;
+  details: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
 }

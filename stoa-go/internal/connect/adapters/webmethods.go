@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func (w *WebMethodsAdapter) Detect(ctx context.Context, adminURL string) (bool, 
 	if err != nil {
 		return false, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode == http.StatusOK, nil
 }
@@ -160,6 +161,97 @@ func (w *WebMethodsAdapter) RemovePolicy(ctx context.Context, adminURL string, a
 	return fmt.Errorf("webmethods policy sync not yet implemented")
 }
 
+// SyncRoutes pushes CP routes to webMethods via REST API import.
+func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
+	for _, route := range routes {
+		if !route.Activated {
+			continue
+		}
+
+		// Build a minimal API payload for webMethods import
+		apiPayload := map[string]interface{}{
+			"apiName":        "stoa-" + route.Name,
+			"apiVersion":     "1.0",
+			"apiDescription": fmt.Sprintf("STOA managed route %s", route.Name),
+			"type":           "REST",
+			"isActive":       true,
+			"nativeEndpoint": []map[string]interface{}{
+				{"uri": route.BackendURL},
+			},
+			"resources": []map[string]interface{}{
+				{
+					"resourcePath": route.PathPrefix,
+					"methods":      route.Methods,
+				},
+			},
+			"tags": []string{"stoa-managed"},
+		}
+
+		data, err := json.Marshal(apiPayload)
+		if err != nil {
+			return fmt.Errorf("marshal webmethods api: %w", err)
+		}
+
+		apiURL := adminURL + "/rest/apigateway/apis"
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(string(data)))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		w.setAuth(req)
+
+		resp, err := w.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("create webmethods api: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("webmethods api create failed (%d)", resp.StatusCode)
+		}
+	}
+
+	return nil
+}
+
+// InjectCredentials provisions applications and API associations on webMethods.
+func (w *WebMethodsAdapter) InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error {
+	for _, cred := range creds {
+		// 1. Create application
+		appPayload := map[string]interface{}{
+			"name":        "stoa-" + cred.ConsumerID,
+			"description": fmt.Sprintf("STOA managed consumer %s", cred.ConsumerID),
+			"identifiers": []map[string]interface{}{
+				{"key": cred.Key, "name": "apiKey", "value": []string{cred.Key}},
+			},
+		}
+
+		data, err := json.Marshal(appPayload)
+		if err != nil {
+			return fmt.Errorf("marshal webmethods app: %w", err)
+		}
+
+		appURL := adminURL + "/rest/apigateway/applications"
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, appURL, strings.NewReader(string(data)))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		w.setAuth(req)
+
+		resp, err := w.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("create webmethods application: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+			return fmt.Errorf("webmethods app create failed (%d)", resp.StatusCode)
+		}
+	}
+	return nil
+}
+
 func (w *WebMethodsAdapter) doGet(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -172,7 +264,7 @@ func (w *WebMethodsAdapter) doGet(ctx context.Context, url string) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

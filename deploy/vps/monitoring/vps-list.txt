@@ -1,0 +1,21 @@
+# VPS Fleet Inventory
+# Format: IP|SSH_USER|LABEL|ROLE
+# Lines starting with # are ignored
+#
+# Contabo HEGEMON workers
+194.163.161.85|root|contabo-runner-github|ci-runner
+213.199.45.108|root|contabo-infisical|secrets
+144.91.73.37|hegemon|contabo-hegemon-w1|worker
+164.68.121.123|hegemon|contabo-hegemon-w2|worker
+167.86.115.51|hegemon|contabo-hegemon-w3|worker
+207.180.255.223|hegemon|contabo-hegemon-w4|worker
+207.180.246.92|hegemon|contabo-hegemon-w5|worker
+# OVH Gateway VPS
+51.83.45.13|debian|ovh-stoa-gateway|gateway
+51.195.43.130|stoa|ovh-kong|gateway
+135.125.204.169|stoa|ovh-agentgateway|gateway
+54.36.209.237|debian|ovh-gravitee|gateway
+94.23.107.106|debian|ovh-bench|bench
+# OVH Tooling VPS
+51.254.139.205|debian|ovh-n8n-tooling|tooling
+51.255.193.129|debian|ovh-vault|secrets

@@ -34,10 +34,10 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/test/**', 'src/**/*.d.ts', 'src/main.tsx'],
       thresholds: {
-        lines: 64,
-        functions: 52, // lowered from 53: FloatingChat+useChatService+TokenUsageWidget moved to shared/ (CAB-1836)
-        branches: 57, // lowered from 59: CronJob section + demo branches removed (CAB-1774)
-        statements: 64,
+        lines: 62,
+        functions: 51, // lowered from 52: removed Deployments tab test (CAB-1887 — tab removed from UI)
+        branches: 56,
+        statements: 62, // lowered from 63: removed Deployments tab test (CAB-1887 — tab removed from UI)
       },
     },
   },

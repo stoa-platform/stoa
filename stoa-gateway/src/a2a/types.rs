@@ -339,3 +339,428 @@ pub const AGENT_UNAVAILABLE: i32 = -32003;
 
 /// A2A Protocol version (upgraded to v1.0 — CAB-1754)
 pub const A2A_PROTOCOL_VERSION: &str = "1.0";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // ─── AgentCard serialization ───
+
+    #[test]
+    fn test_agent_card_round_trip() {
+        let card = AgentCard {
+            name: "Test Agent".to_string(),
+            description: "A test agent".to_string(),
+            url: "http://localhost:8080/a2a".to_string(),
+            protocol_version: A2A_PROTOCOL_VERSION.to_string(),
+            capabilities: AgentCapabilities {
+                streaming: true,
+                push_notifications: false,
+                state_transition_history: true,
+            },
+            authentication: Some(AgentAuthentication {
+                schemes: vec!["bearer".to_string()],
+                credentials: None,
+            }),
+            skills: vec![AgentSkill {
+                id: "translate".to_string(),
+                name: "Translate".to_string(),
+                description: "Translates text".to_string(),
+                tags: vec!["nlp".to_string()],
+                examples: vec!["Translate hello to French".to_string()],
+                input_modes: vec!["text".to_string()],
+                output_modes: vec!["text".to_string()],
+            }],
+            provider: Some(AgentProvider {
+                organization: "STOA".to_string(),
+                url: Some("https://gostoa.dev".to_string()),
+            }),
+        };
+
+        let json = serde_json::to_value(&card).expect("serialize");
+        // camelCase field names
+        assert_eq!(json["protocolVersion"], "1.0");
+        assert!(json["capabilities"]["streaming"].as_bool().expect("bool"));
+        assert_eq!(json["skills"][0]["id"], "translate");
+
+        let deserialized: AgentCard = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(deserialized.name, "Test Agent");
+        assert!(deserialized.capabilities.streaming);
+        assert_eq!(deserialized.skills.len(), 1);
+    }
+
+    #[test]
+    fn test_agent_card_optional_fields_omitted() {
+        let card = AgentCard {
+            name: "Minimal".to_string(),
+            description: "Minimal agent".to_string(),
+            url: "http://localhost".to_string(),
+            protocol_version: "1.0".to_string(),
+            capabilities: AgentCapabilities {
+                streaming: false,
+                push_notifications: false,
+                state_transition_history: false,
+            },
+            authentication: None,
+            skills: vec![],
+            provider: None,
+        };
+
+        let json = serde_json::to_value(&card).expect("serialize");
+        assert!(json.get("authentication").is_none());
+        assert!(json.get("skills").is_none()); // skip_serializing_if = Vec::is_empty
+        assert!(json.get("provider").is_none());
+    }
+
+    // ─── JSON-RPC 2.0 ───
+
+    #[test]
+    fn test_jsonrpc_request_deserialize() {
+        let raw = json!({
+            "jsonrpc": "2.0",
+            "method": "tasks/send",
+            "params": {"id": "task-1"},
+            "id": 1
+        });
+        let req: JsonRpcRequest = serde_json::from_value(raw).expect("deserialize");
+        assert_eq!(req.jsonrpc, "2.0");
+        assert_eq!(req.method, "tasks/send");
+        assert_eq!(req.params["id"], "task-1");
+    }
+
+    #[test]
+    fn test_jsonrpc_request_default_params() {
+        let raw = json!({
+            "jsonrpc": "2.0",
+            "method": "agent/info",
+            "id": "abc"
+        });
+        let req: JsonRpcRequest = serde_json::from_value(raw).expect("deserialize");
+        assert!(req.params.is_null()); // serde default
+    }
+
+    #[test]
+    fn test_jsonrpc_response_success() {
+        let resp = JsonRpcResponse::success(json!(1), json!({"status": "ok"}));
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert!(resp.result.is_some());
+        assert!(resp.error.is_none());
+        assert_eq!(resp.id, json!(1));
+
+        let json = serde_json::to_value(&resp).expect("serialize");
+        assert!(json.get("error").is_none()); // skip_serializing_if
+        assert_eq!(json["result"]["status"], "ok");
+    }
+
+    #[test]
+    fn test_jsonrpc_response_error() {
+        let resp = JsonRpcResponse::error(json!("req-42"), METHOD_NOT_FOUND, "Method not found");
+        assert!(resp.result.is_none());
+        assert!(resp.error.is_some());
+
+        let err = resp.error.as_ref().expect("error");
+        assert_eq!(err.code, -32601);
+        assert_eq!(err.message, "Method not found");
+
+        let json = serde_json::to_value(&resp).expect("serialize");
+        assert!(json.get("result").is_none()); // skip_serializing_if
+        assert_eq!(json["error"]["code"], -32601);
+    }
+
+    #[test]
+    fn test_jsonrpc_response_string_id() {
+        let resp = JsonRpcResponse::success(json!("uuid-123"), json!(null));
+        assert_eq!(resp.id, json!("uuid-123"));
+    }
+
+    // ─── TaskState enum ───
+
+    #[test]
+    fn test_task_state_serialization() {
+        assert_eq!(
+            serde_json::to_value(TaskState::Submitted).expect("ser"),
+            json!("submitted")
+        );
+        assert_eq!(
+            serde_json::to_value(TaskState::Working).expect("ser"),
+            json!("working")
+        );
+        assert_eq!(
+            serde_json::to_value(TaskState::InputRequired).expect("ser"),
+            json!("inputrequired")
+        );
+        assert_eq!(
+            serde_json::to_value(TaskState::Completed).expect("ser"),
+            json!("completed")
+        );
+        assert_eq!(
+            serde_json::to_value(TaskState::Failed).expect("ser"),
+            json!("failed")
+        );
+        assert_eq!(
+            serde_json::to_value(TaskState::Canceled).expect("ser"),
+            json!("canceled")
+        );
+        assert_eq!(
+            serde_json::to_value(TaskState::AuthRequired).expect("ser"),
+            json!("authrequired")
+        );
+        assert_eq!(
+            serde_json::to_value(TaskState::Rejected).expect("ser"),
+            json!("rejected")
+        );
+    }
+
+    #[test]
+    fn test_task_state_round_trip() {
+        for state in [
+            TaskState::Submitted,
+            TaskState::Working,
+            TaskState::Completed,
+            TaskState::Failed,
+            TaskState::Canceled,
+            TaskState::InputRequired,
+            TaskState::AuthRequired,
+            TaskState::Rejected,
+        ] {
+            let json = serde_json::to_value(&state).expect("serialize");
+            let back: TaskState = serde_json::from_value(json).expect("deserialize");
+            assert_eq!(back, state);
+        }
+    }
+
+    // ─── Part tagged enum ───
+
+    #[test]
+    fn test_part_text_serialization() {
+        let part = Part::Text {
+            text: "Hello world".to_string(),
+        };
+        let json = serde_json::to_value(&part).expect("serialize");
+        assert_eq!(json["type"], "text");
+        assert_eq!(json["text"], "Hello world");
+    }
+
+    #[test]
+    fn test_part_file_serialization() {
+        let part = Part::File {
+            file: FileContent {
+                name: Some("report.pdf".to_string()),
+                mime_type: Some("application/pdf".to_string()),
+                bytes: Some("base64data".to_string()),
+                uri: None,
+            },
+        };
+        let json = serde_json::to_value(&part).expect("serialize");
+        assert_eq!(json["type"], "file");
+        assert_eq!(json["file"]["name"], "report.pdf");
+        assert!(json["file"].get("uri").is_none());
+    }
+
+    #[test]
+    fn test_part_data_serialization() {
+        let part = Part::Data {
+            data: json!({"key": "value", "count": 42}),
+        };
+        let json = serde_json::to_value(&part).expect("serialize");
+        assert_eq!(json["type"], "data");
+        assert_eq!(json["data"]["count"], 42);
+    }
+
+    #[test]
+    fn test_part_round_trip_all_variants() {
+        let parts = vec![
+            Part::Text {
+                text: "hi".to_string(),
+            },
+            Part::File {
+                file: FileContent {
+                    name: None,
+                    mime_type: None,
+                    bytes: None,
+                    uri: Some("https://example.com/f.txt".to_string()),
+                },
+            },
+            Part::Data {
+                data: json!([1, 2, 3]),
+            },
+        ];
+        for part in parts {
+            let json = serde_json::to_value(&part).expect("serialize");
+            let back: Part = serde_json::from_value(json).expect("deserialize");
+            let re_json = serde_json::to_value(&back).expect("re-serialize");
+            let orig_json = serde_json::to_value(&part).expect("orig");
+            assert_eq!(re_json, orig_json);
+        }
+    }
+
+    // ─── Task ───
+
+    #[test]
+    fn test_task_full_round_trip() {
+        let task = Task {
+            id: "task-001".to_string(),
+            context_id: Some("ctx-abc".to_string()),
+            status: TaskStatus {
+                state: TaskState::Working,
+                message: Some(Message {
+                    role: MessageRole::Agent,
+                    parts: vec![Part::Text {
+                        text: "Processing...".to_string(),
+                    }],
+                    metadata: HashMap::new(),
+                }),
+                timestamp: Some("2026-03-18T12:00:00Z".to_string()),
+            },
+            history: vec![Message {
+                role: MessageRole::User,
+                parts: vec![Part::Text {
+                    text: "Translate hello".to_string(),
+                }],
+                metadata: HashMap::new(),
+            }],
+            artifacts: vec![Artifact {
+                name: Some("translation".to_string()),
+                description: None,
+                parts: vec![Part::Text {
+                    text: "Bonjour".to_string(),
+                }],
+                index: Some(0),
+                last_chunk: Some(true),
+                metadata: HashMap::new(),
+            }],
+            metadata: HashMap::new(),
+        };
+
+        let json = serde_json::to_value(&task).expect("serialize");
+        assert_eq!(json["contextId"], "ctx-abc");
+        assert_eq!(json["status"]["state"], "working");
+
+        let back: Task = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back.id, "task-001");
+        assert_eq!(back.context_id, Some("ctx-abc".to_string()));
+        assert_eq!(back.history.len(), 1);
+        assert_eq!(back.artifacts.len(), 1);
+    }
+
+    #[test]
+    fn test_task_minimal_omits_empty_collections() {
+        let task = Task {
+            id: "t1".to_string(),
+            context_id: None,
+            status: TaskStatus {
+                state: TaskState::Submitted,
+                message: None,
+                timestamp: None,
+            },
+            history: vec![],
+            artifacts: vec![],
+            metadata: HashMap::new(),
+        };
+
+        let json = serde_json::to_value(&task).expect("serialize");
+        assert!(json.get("contextId").is_none());
+        assert!(json.get("history").is_none()); // skip_serializing_if = Vec::is_empty
+        assert!(json.get("artifacts").is_none());
+        assert!(json.get("metadata").is_none()); // skip_serializing_if = HashMap::is_empty
+    }
+
+    // ─── context_id alias ───
+
+    #[test]
+    fn test_task_send_params_session_id_alias() {
+        let raw = json!({
+            "id": "task-1",
+            "sessionId": "sess-old",
+            "message": {
+                "role": "user",
+                "parts": [{"type": "text", "text": "hi"}]
+            }
+        });
+        let params: TaskSendParams = serde_json::from_value(raw).expect("deserialize");
+        assert_eq!(params.context_id, Some("sess-old".to_string()));
+    }
+
+    #[test]
+    fn test_task_send_params_context_id() {
+        let raw = json!({
+            "id": "task-2",
+            "contextId": "ctx-new",
+            "message": {
+                "role": "user",
+                "parts": [{"type": "text", "text": "hello"}]
+            }
+        });
+        let params: TaskSendParams = serde_json::from_value(raw).expect("deserialize");
+        assert_eq!(params.context_id, Some("ctx-new".to_string()));
+    }
+
+    // ─── ToolInvocation ───
+
+    #[test]
+    fn test_tool_invocation_round_trip() {
+        let inv = ToolInvocation {
+            tool: "weather_lookup".to_string(),
+            arguments: json!({"city": "Paris"}),
+        };
+        let json = serde_json::to_value(&inv).expect("serialize");
+        assert_eq!(json["tool"], "weather_lookup");
+        assert_eq!(json["arguments"]["city"], "Paris");
+
+        let back: ToolInvocation = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back.tool, "weather_lookup");
+    }
+
+    #[test]
+    fn test_tool_invocation_default_arguments() {
+        let raw = json!({"tool": "ping"});
+        let inv: ToolInvocation = serde_json::from_value(raw).expect("deserialize");
+        assert_eq!(inv.tool, "ping");
+        assert!(inv.arguments.is_null()); // serde default
+    }
+
+    // ─── TaskGetParams / TaskCancelParams ───
+
+    #[test]
+    fn test_task_get_params() {
+        let raw = json!({"id": "t-1", "historyLength": 5});
+        let params: TaskGetParams = serde_json::from_value(raw).expect("deserialize");
+        assert_eq!(params.id, "t-1");
+        assert_eq!(params.history_length, Some(5));
+    }
+
+    #[test]
+    fn test_task_cancel_params() {
+        let raw = json!({"id": "t-2"});
+        let params: TaskCancelParams = serde_json::from_value(raw).expect("deserialize");
+        assert_eq!(params.id, "t-2");
+    }
+
+    // ─── Error codes ───
+
+    #[test]
+    fn test_error_code_values() {
+        assert_eq!(PARSE_ERROR, -32700);
+        assert_eq!(INVALID_REQUEST, -32600);
+        assert_eq!(METHOD_NOT_FOUND, -32601);
+        assert_eq!(INVALID_PARAMS, -32602);
+        assert_eq!(TASK_NOT_FOUND, -32001);
+        assert_eq!(TASK_NOT_CANCELABLE, -32002);
+        assert_eq!(AGENT_UNAVAILABLE, -32003);
+    }
+
+    // ─── MessageRole ───
+
+    #[test]
+    fn test_message_role_serialization() {
+        assert_eq!(
+            serde_json::to_value(MessageRole::User).expect("ser"),
+            json!("user")
+        );
+        assert_eq!(
+            serde_json::to_value(MessageRole::Agent).expect("ser"),
+            json!("agent")
+        );
+    }
+}

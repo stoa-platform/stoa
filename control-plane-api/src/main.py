@@ -18,6 +18,7 @@ from starlette.responses import Response
 
 from .config import settings
 from .consumers.deployment_consumer import deployment_consumer
+from .consumers.promotion_deploy_consumer import promotion_deploy_consumer
 from .features.error_snapshots import (
     add_error_snapshot_middleware,
     connect_error_snapshots,
@@ -34,6 +35,7 @@ from .opensearch.audit_middleware import AuditMiddleware
 from .routers import (
     access_requests,
     admin_prospects,
+    api_gateway_assignments,
     apis,
     applications,
     argocd_admin,
@@ -227,6 +229,8 @@ async def lifespan(app: FastAPI):
         try:
             deployment_consumer_task = asyncio.create_task(deployment_consumer.start())
             logger.info("Deployment notification consumer started")
+            asyncio.create_task(promotion_deploy_consumer.start())
+            logger.info("Promotion auto-deploy consumer started")
         except Exception as e:
             logger.warning("Failed to start deployment notification consumer", error=str(e))
 
@@ -305,9 +309,10 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down...")
 
-    # Stop deployment notification consumer
+    # Stop deployment notification consumer + promotion auto-deploy consumer
     if ENABLE_DEPLOYMENT_NOTIFIER and deployment_consumer_task:
         await deployment_consumer.stop()
+        await promotion_deploy_consumer.stop()
         deployment_consumer_task.cancel()
         with suppress(asyncio.CancelledError):
             await deployment_consumer_task
@@ -456,7 +461,7 @@ app = FastAPI(
             "description": "Application and subscription management",
         },
         {"name": "Deployments", "description": "Deployment operations and status"},
-        {"name": "Git", "description": "GitLab integration (commits, MRs, files) — Advanced"},
+        {"name": "Advanced — GitOps", "description": "GitLab integration (commits, MRs, files, branches)"},
         {"name": "Events", "description": "Real-time event streaming (SSE)"},
         {"name": "Webhooks", "description": "GitLab webhook handlers for GitOps"},
         {"name": "Traces", "description": "Pipeline monitoring and tracing"},
@@ -651,6 +656,10 @@ app.add_middleware(AuditMiddleware)
 
 # Routers
 app.include_router(tenants.router)
+# api_gateway_assignments MUST be before apis — both share /v1/tenants/{tenant_id}/apis/{api_id}
+# prefix, and FastAPI resolves in registration order. Without this, /deploy and
+# /deployable-environments are swallowed by the apis router's /{api_id} catch-all.
+app.include_router(api_gateway_assignments.router)
 app.include_router(apis.router)
 app.include_router(applications.router)
 app.include_router(deployments.router)

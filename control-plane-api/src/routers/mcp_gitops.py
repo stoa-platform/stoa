@@ -5,6 +5,7 @@ monitoring sync status.
 
 These endpoints are admin-only.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,8 +25,10 @@ router = APIRouter(prefix="/v1/mcp/gitops", tags=["MCP GitOps"])
 # Response Models
 # ============================================================================
 
+
 class SyncResponse(BaseModel):
     """Response for sync operations."""
+
     success: bool
     message: str
     servers_synced: int = 0
@@ -37,6 +40,7 @@ class SyncResponse(BaseModel):
 
 class SyncStatusResponse(BaseModel):
     """Response for sync status."""
+
     total_servers: int
     synced: int
     pending: int
@@ -47,24 +51,52 @@ class SyncStatusResponse(BaseModel):
     errors: list = []
 
 
+class GitLabHealthResponse(BaseModel):
+    """GitLab connection health status."""
+
+    status: str
+    project: str | None = None
+    project_id: int | None = None
+    default_branch: str | None = None
+    error: str | None = None
+
+
+class GitLabServerSummary(BaseModel):
+    """Summary of a GitLab-defined MCP server."""
+
+    name: str | None = None
+    tenant_id: str | None = None
+    display_name: str | None = None
+    category: str | None = None
+    status: str | None = None
+    tools_count: int = 0
+    git_path: str | None = None
+
+
+class GitLabServersResponse(BaseModel):
+    """List of MCP servers found in GitLab."""
+
+    total: int = 0
+    servers: list[GitLabServerSummary] = []
+
+
 # ============================================================================
 # Admin Check
 # ============================================================================
+
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
     """Require admin role for GitOps operations."""
     admin_roles = {"cpi-admin", "admin"}
     if not any(role in admin_roles for role in (user.roles or [])):
-        raise HTTPException(
-            status_code=403,
-            detail="Admin role required for GitOps operations"
-        )
+        raise HTTPException(status_code=403, detail="Admin role required for GitOps operations")
     return user
 
 
 # ============================================================================
 # GitOps Sync Endpoints
 # ============================================================================
+
 
 @router.post("/sync", response_model=SyncResponse)
 async def trigger_full_sync(
@@ -224,7 +256,8 @@ async def get_sync_status(
 # GitLab Status
 # ============================================================================
 
-@router.get("/gitlab/health")
+
+@router.get("/gitlab/health", response_model=GitLabHealthResponse)
 async def get_gitlab_health(
     user: User = Depends(require_admin),
 ):
@@ -255,7 +288,7 @@ async def get_gitlab_health(
         }
 
 
-@router.get("/gitlab/servers")
+@router.get("/gitlab/servers", response_model=GitLabServersResponse)
 async def list_gitlab_servers(
     user: User = Depends(require_admin),
 ):

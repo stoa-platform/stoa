@@ -8,8 +8,10 @@ metadata:
   namespace: stoa-system
   labels:
     app: tls-cert-monitor
-    component: security
+    app.kubernetes.io/component: security
     app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: manual
 spec:
   schedule: "0 6 * * *"  # Daily at 06:00 UTC
   concurrencyPolicy: Forbid

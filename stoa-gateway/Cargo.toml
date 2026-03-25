@@ -79,7 +79,7 @@ rdkafka = { version = "0.39", features = ["cmake-build"], optional = true }
 pnet = { version = "0.35", optional = true }
 
 # === WASM Plugin Runtime (CAB-1644) ===
-wasmtime = { version = "42", optional = true }
+wasmtime = { version = "43", optional = true }
 toml = "1.0"                                         # Plugin manifest parsing
 
 # === Pingora Connection Pool (CAB-1849) ===

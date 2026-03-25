@@ -58,7 +58,11 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
             if resp.status_code == 200:
                 data = resp.json()
                 return AdapterResult(success=True, data=data)
-            return AdapterResult(success=False, error=f"Health check failed: HTTP {resp.status_code}")
+            body = resp.text.strip() or "(empty response)"
+            return AdapterResult(
+                success=False,
+                error=f"Health check failed: HTTP {resp.status_code} — {body}",
+            )
         except Exception as e:
             return AdapterResult(success=False, error=str(e))
 

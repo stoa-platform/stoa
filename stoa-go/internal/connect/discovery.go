@@ -127,12 +127,19 @@ func (a *Agent) StartDiscovery(ctx context.Context, dcfg DiscoveryConfig) {
 
 // runDiscovery performs a single discovery cycle.
 func (a *Agent) runDiscovery(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
+	start := time.Now()
 	apis, err := adapter.Discover(ctx, adminURL)
+	ObserveAdminAPICall(start)
+	DiscoveryCycles.Inc()
+
 	if err != nil {
 		log.Printf("discovery error: %v", err)
+		GatewayUp.Set(0)
 		return
 	}
 
+	GatewayUp.Set(1)
+	APIsTotal.Set(float64(len(apis)))
 	log.Printf("discovered %d APIs from gateway", len(apis))
 
 	// Convert to payload type for storage and reporting

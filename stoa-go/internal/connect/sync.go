@@ -237,6 +237,22 @@ func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, ad
 		results = append(results, result)
 	}
 
+	// Update Prometheus metrics
+	allOk := true
+	for _, r := range results {
+		if r.Status == "applied" || r.Status == "removed" {
+			SyncPoliciesApplied.Inc()
+		} else if r.Status == "failed" {
+			SyncPoliciesFailed.Inc()
+			allOk = false
+		}
+	}
+	if allOk {
+		SyncStatus.Set(1)
+	} else {
+		SyncStatus.Set(0)
+	}
+
 	// Report sync results to CP
 	if err := a.ReportSyncAck(ctx, results); err != nil {
 		span.RecordError(err)

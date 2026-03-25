@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.1...stoa-go-v0.3.2) (2026-03-25)
+
+
+### Bug Fixes
+
+* **ci:** fix Arena L0/L2 failures and add serverless GHA benchmark ([#1950](https://github.com/stoa-platform/stoa/issues/1950)) ([0cc0548](https://github.com/stoa-platform/stoa/commit/0cc0548c24521979236471acb6cd189c8ca4c479))
+* **security:** persist opensearch security config + dashboard in git (CAB-1866) ([#1863](https://github.com/stoa-platform/stoa/issues/1863)) ([78ad9de](https://github.com/stoa-platform/stoa/commit/78ad9de2b19b144a28dacbdd087e7211298bb8aa))
+
 ## [0.3.1](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.0...stoa-go-v0.3.1) (2026-03-23)
 
 

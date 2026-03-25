@@ -80,7 +80,7 @@ pnet = { version = "0.35", optional = true }
 
 # === WASM Plugin Runtime (CAB-1644) ===
 wasmtime = { version = "42", optional = true }
-toml = "0.8"                                         # Plugin manifest parsing
+toml = "1.0"                                         # Plugin manifest parsing
 
 # === Pingora Connection Pool (CAB-1849) ===
 pingora-core = { version = "0.8", optional = true }

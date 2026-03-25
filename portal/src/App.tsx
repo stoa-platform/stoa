@@ -13,14 +13,14 @@ import { config } from './config';
 import { getAccessToken, getApiBaseUrl, createChatConversation } from './services/api';
 
 // Lazy load pages for code splitting - reduces initial bundle by ~60%
-const HomePage = lazy(() => import('./pages/Home').then((m) => ({ default: m.HomePage })));
+// CAB-1905: HomePage removed — / redirects to /discover
 const MCPServersPage = lazy(() =>
   import('./pages/servers').then((m) => ({ default: m.MCPServersPage }))
 );
 const ServerDetailPage = lazy(() =>
   import('./pages/servers').then((m) => ({ default: m.ServerDetailPage }))
 );
-const APICatalog = lazy(() => import('./pages/apis').then((m) => ({ default: m.APICatalog })));
+// CAB-1905: APICatalog merged into DiscoverPage — /apis redirects to /discover
 const APIDetail = lazy(() => import('./pages/apis').then((m) => ({ default: m.APIDetail })));
 const APITestingSandbox = lazy(() =>
   import('./pages/apis').then((m) => ({ default: m.APITestingSandbox }))
@@ -49,29 +49,26 @@ const UnauthorizedPage = lazy(() =>
 const OnboardingWizardPage = lazy(() =>
   import('./pages/onboarding').then((m) => ({ default: m.OnboardingWizardPage }))
 );
-const MarketplacePage = lazy(() =>
-  import('./pages/marketplace').then((m) => ({ default: m.MarketplacePage }))
+const DiscoverPage = lazy(() =>
+  import('./pages/discover').then((m) => ({ default: m.DiscoverPage }))
 );
+// CAB-1905: MarketplacePage and ServiceCatalog merged into DiscoverPage
 const NotificationsPage = lazy(() =>
   import('./pages/notifications/NotificationsPage').then((m) => ({
     default: m.NotificationsPage,
   }))
 );
-const AuditLogPage = lazy(() =>
-  import('./pages/audit-log/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
-);
-const FavoritesPage = lazy(() =>
-  import('./pages/favorites/FavoritesPage').then((m) => ({ default: m.FavoritesPage }))
-);
-const RateLimitsPage = lazy(() =>
-  import('./pages/rate-limits/RateLimitsPage').then((m) => ({ default: m.RateLimitsPage }))
-);
+// CAB-1764: AuditLogPage, FavoritesPage, RateLimitsPage removed from nav
+// Pages retained in codebase, routes redirect to consolidated locations
 const APIComparePage = lazy(() =>
   import('./pages/api-compare/APIComparePage').then((m) => ({ default: m.APIComparePage }))
 );
 const SignupPage = lazy(() => import('./pages/signup').then((m) => ({ default: m.SignupPage })));
 const ChatSettingsPage = lazy(() =>
   import('./pages/ChatSettings').then((m) => ({ default: m.ChatSettings }))
+);
+const GovernancePage = lazy(() =>
+  import('./pages/governance').then((m) => ({ default: m.GovernancePage }))
 );
 
 // Loading indicator for lazy-loaded pages
@@ -484,11 +481,19 @@ function AppContent() {
       <Layout>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            {/* Public routes (within authenticated context) */}
-            <Route path="/" element={<HomePage />} />
+            {/* Home redirects to Discover (CAB-1905) */}
+            <Route path="/" element={<Navigate to="/discover" replace />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/chat-settings" element={<ChatSettingsPage />} />
+            <Route
+              path="/governance"
+              element={
+                <ProtectedRoute permission="apis:update">
+                  <GovernancePage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/onboarding" element={<OnboardingWizardPage />} />
 
             {/* Workspace - tabbed view for apps and subscriptions */}
@@ -501,15 +506,19 @@ function AppContent() {
               }
             />
 
-            {/* Marketplace - unified discovery */}
+            {/* Discover - unified discovery (CAB-1905: merged Marketplace + Service Catalog + API Catalog) */}
             <Route
-              path="/marketplace"
+              path="/discover"
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
-                  <MarketplacePage />
+                  <DiscoverPage />
                 </ProtectedRoute>
               }
             />
+
+            {/* Legacy redirects to /discover (CAB-1905) */}
+            <Route path="/marketplace" element={<Navigate to="/discover" replace />} />
+            <Route path="/services" element={<Navigate to="/discover" replace />} />
 
             {/* MCP Servers - requires catalog read */}
             <Route
@@ -539,15 +548,8 @@ function AppContent() {
               element={<Navigate to="/workspace?tab=subscriptions" replace />}
             />
 
-            {/* API Consumer Routes - requires catalog read */}
-            <Route
-              path="/apis"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <APICatalog />
-                </ProtectedRoute>
-              }
-            />
+            {/* API Consumer Routes - /apis redirects to /discover (CAB-1905) */}
+            <Route path="/apis" element={<Navigate to="/discover" replace />} />
             <Route
               path="/apis/:id"
               element={
@@ -612,30 +614,11 @@ function AppContent() {
             {/* Notifications (CAB-1470) */}
             <Route path="/notifications" element={<NotificationsPage />} />
 
-            {/* Audit Log (CAB-1470) */}
-            <Route
-              path="/audit-log"
-              element={
-                <ProtectedRoute permission="audit:read">
-                  <AuditLogPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Favorites (CAB-1470) */}
-            <Route path="/favorites" element={<FavoritesPage />} />
-
-            {/* Rate Limits (CAB-1470) */}
-            <Route
-              path="/rate-limits"
-              element={
-                <ProtectedRoute scope="stoa:metrics:read">
-                  <RateLimitsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* API Compare (CAB-1470) */}
+            {/* CAB-1764: Removed pages — redirect to consolidated locations */}
+            <Route path="/audit-log" element={<Navigate to="/workspace" replace />} />
+            <Route path="/favorites" element={<Navigate to="/discover" replace />} />
+            <Route path="/rate-limits" element={<Navigate to="/workspace?tab=usage" replace />} />
+            {/* API Compare — removed from nav, accessible via Marketplace button */}
             <Route
               path="/api-compare"
               element={
@@ -644,16 +627,6 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-
-            {/* Provider routes — redirected to catalog/console (ADR-055) */}
-            <Route path="/my-servers" element={<Navigate to="/servers" replace />} />
-            <Route path="/my-apis" element={<Navigate to="/apis" replace />} />
-            <Route path="/contracts/new" element={<Navigate to="/workspace" replace />} />
-            <Route path="/contracts/:id" element={<Navigate to="/workspace" replace />} />
-            <Route path="/consumers/register" element={<Navigate to="/" replace />} />
-            <Route path="/gateways" element={<Navigate to="/" replace />} />
-            <Route path="/credentials" element={<Navigate to="/" replace />} />
-            <Route path="/webhooks" element={<Navigate to="/" replace />} />
 
             {/* Provider routes — redirected to catalog/console (ADR-055) */}
             <Route path="/my-servers" element={<Navigate to="/servers" replace />} />

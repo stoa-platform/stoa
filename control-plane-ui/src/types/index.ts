@@ -173,10 +173,37 @@ export interface TenantCAInfo {
 }
 
 export interface CSRSignResponse {
+  id: string;
   signed_certificate_pem: string;
   subject_dn: string;
   issuer_dn: string;
+  serial_number: string;
+  fingerprint_sha256: string;
+  not_before: string;
+  not_after: string;
   validity_days: number;
+  status: string;
+}
+
+export interface IssuedCertificate {
+  id: string;
+  subject_dn: string;
+  issuer_dn: string;
+  serial_number: string;
+  fingerprint_sha256: string;
+  not_before: string;
+  not_after: string;
+  key_algorithm: string;
+  status: string;
+  consumer_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface IssuedCertificateListResponse {
+  items: IssuedCertificate[];
+  total: number;
 }
 
 // Environment types (ADR-040 — Born GitOps)
@@ -1204,6 +1231,10 @@ export interface GatewayDeployment {
   gateway_resource_id?: string;
   created_at: string;
   updated_at: string;
+  gateway_name?: string;
+  gateway_display_name?: string;
+  gateway_type?: string;
+  gateway_environment?: string;
 }
 
 export interface DeploymentStatusSummary {

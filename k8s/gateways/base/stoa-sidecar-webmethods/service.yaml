@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-sidecar-webmethods
+spec:
+  selector:
+    app: stoa-sidecar-webmethods
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+    - port: 9191
+      targetPort: 9191
+      name: metrics

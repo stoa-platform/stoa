@@ -176,3 +176,60 @@ class TestGetUsageDetails:
             assert response.status_code == 200
             call_kwargs = mock_svc.call_args.kwargs
             assert call_kwargs["period"] == "monthly"
+
+
+# ---------- Environment Filter (CAB-1665) ----------
+
+
+class TestUsageMeteringEnvironmentFilter:
+    """GET /v1/usage/summary?environment= and /details?environment= — CAB-1665."""
+
+    def test_summary_with_environment(self, client_as_tenant_admin, mock_summary_response):
+        """When environment is provided, it is forwarded to the service."""
+        with patch(
+            "src.services.usage_metering.UsageMeteringService.get_summary",
+            new_callable=AsyncMock,
+            return_value=mock_summary_response,
+        ) as mock_svc:
+            response = client_as_tenant_admin.get("/v1/usage/summary?environment=staging")
+            assert response.status_code == 200
+            call_kwargs = mock_svc.call_args.kwargs
+            assert call_kwargs["environment"] == "staging"
+
+    def test_summary_without_environment(self, client_as_tenant_admin, mock_summary_response):
+        """When environment is omitted, None is forwarded."""
+        with patch(
+            "src.services.usage_metering.UsageMeteringService.get_summary",
+            new_callable=AsyncMock,
+            return_value=mock_summary_response,
+        ) as mock_svc:
+            response = client_as_tenant_admin.get("/v1/usage/summary")
+            assert response.status_code == 200
+            call_kwargs = mock_svc.call_args.kwargs
+            assert call_kwargs["environment"] is None
+
+    def test_details_with_environment(self, client_as_tenant_admin, sample_api_id, mock_detail_response):
+        """When environment is provided on details, it is forwarded to the service."""
+        with patch(
+            "src.services.usage_metering.UsageMeteringService.get_details",
+            new_callable=AsyncMock,
+            return_value=mock_detail_response,
+        ) as mock_svc:
+            response = client_as_tenant_admin.get(
+                f"/v1/usage/details?api_id={sample_api_id}&environment=prod"
+            )
+            assert response.status_code == 200
+            call_kwargs = mock_svc.call_args.kwargs
+            assert call_kwargs["environment"] == "prod"
+
+    def test_details_without_environment(self, client_as_tenant_admin, sample_api_id, mock_detail_response):
+        """When environment is omitted on details, None is forwarded."""
+        with patch(
+            "src.services.usage_metering.UsageMeteringService.get_details",
+            new_callable=AsyncMock,
+            return_value=mock_detail_response,
+        ) as mock_svc:
+            response = client_as_tenant_admin.get(f"/v1/usage/details?api_id={sample_api_id}")
+            assert response.status_code == 200
+            call_kwargs = mock_svc.call_args.kwargs
+            assert call_kwargs["environment"] is None

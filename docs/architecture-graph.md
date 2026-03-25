@@ -104,6 +104,5 @@ graph TD
 | Cluster | Provider | Nodes | Namespaces/Hosts |
 |---------|----------|-------|------------------|
 | OVH Managed Kubernetes (GRA9) | OVH | 3 | 6 |
-| Hetzner K3s (Staging) | Hetzner | 1 | 1 |
 | OVH VPS Fleet | OVH | 4 | 4 |
-| Hetzner Dedicated (Infisical) | Hetzner | 1 | 1 |
+| OVH VPS (Infisical) | OVH | 1 | 1 |

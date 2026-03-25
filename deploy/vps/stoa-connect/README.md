@@ -56,6 +56,31 @@ curl -sH "Authorization: Bearer ${TOKEN}" \
 # Navigate to /gateways/modes → see Connect card
 ```
 
+## CI/CD Flow
+
+```
+stoa-go/** change → PR → stoa-go-ci.yml (lint + test + build + goreleaser-check)
+                       ↓
+                  merge to main
+                       ↓
+              release-please.yml → creates "stoa-go-v0.X.Y" tag
+                       ↓
+              stoa-go-release.yml → goreleaser builds linux/darwin amd64+arm64 binaries
+                       ↓
+              GitHub Releases (stoa-platform/stoactl) → tarballs + checksums
+                       ↓
+              deploy.sh <vps-host> → downloads binary → SCP → systemd restart
+```
+
+**Workflows:**
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `stoa-go-ci.yml` | PR on `stoa-go/**` | golangci-lint, go test, go build, goreleaser check |
+| `stoa-go-release.yml` | Release Please tag | goreleaser builds + publishes binaries |
+
+**Version pinning:** Set `STOA_CONNECT_VERSION=v0.3.1` before running `deploy.sh` to install a specific version (default: `latest`).
+
 ## Troubleshooting
 
 | Symptom | Fix |

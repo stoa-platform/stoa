@@ -8,7 +8,7 @@ instead of user JWT, so sidecars (STOA Link) can discover tools without OIDC.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -35,6 +35,106 @@ router = APIRouter(
     prefix="/v1/internal/gateways",
     tags=["Gateway Internal"],
 )
+
+
+# --- Route Reload Endpoint (CAB-1828) ---
+
+
+class CleanupResult(BaseModel):
+    """Result of the manual gateway cleanup."""
+
+    purged_count: int = Field(..., description="Number of stale instances soft-deleted")
+    purged_instances: list[str] = Field(default_factory=list, description="Names of purged instances")
+
+
+@router.post("/cleanup", response_model=CleanupResult)
+async def cleanup_stale_gateways(
+    x_gateway_key: str = Header(..., alias="X-Gateway-Key"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually trigger cleanup of stale gateway instances (CAB-1897).
+
+    Soft-deletes instances that have been OFFLINE for longer than
+    GATEWAY_PURGE_AFTER_DAYS (default 7 days). Protected instances are skipped.
+    """
+    _validate_gateway_key(x_gateway_key)
+
+    purge_cutoff = datetime.now(UTC) - timedelta(days=settings.GATEWAY_PURGE_AFTER_DAYS)
+
+    from sqlalchemy import select
+
+    stmt = select(GatewayInstance).where(
+        GatewayInstance.status == GatewayInstanceStatus.OFFLINE,
+        GatewayInstance.last_health_check < purge_cutoff,
+        GatewayInstance.deleted_at.is_(None),
+        GatewayInstance.protected.is_(False),
+    )
+    result = await db.execute(stmt)
+    stale_gateways = result.scalars().all()
+
+    now = datetime.now(UTC)
+    purged_names = []
+    for gw in stale_gateways:
+        gw.deleted_at = now
+        gw.deleted_by = "system:manual-cleanup"
+        purged_names.append(gw.name)
+        logger.info("Manual cleanup: purged stale gateway %s (%s)", gw.name, gw.id)
+
+    await db.commit()
+
+    return CleanupResult(purged_count=len(purged_names), purged_instances=purged_names)
+
+
+class GatewayRouteItem(BaseModel):
+    """Route in stoa-gateway ApiRoute format for hot-reload."""
+
+    id: str
+    name: str
+    tenant_id: str
+    path_prefix: str
+    backend_url: str
+    methods: list[str] = []
+    spec_hash: str = ""
+    activated: bool = True
+
+
+@router.get("/routes", response_model=list[GatewayRouteItem])
+async def list_gateway_routes(
+    gateway_name: str | None = Query(None, description="Filter by gateway instance name"),
+    db: AsyncSession = Depends(get_db),
+    x_gateway_key: str | None = Header(None),
+):
+    """Return all synced deployment routes in stoa-gateway ApiRoute format.
+
+    Used by the gateway route hot-reload loop (CAB-1828) to pull the full
+    route table from the control plane. No JWT auth — uses X-Gateway-Key.
+    """
+    expected_key = getattr(settings, "GATEWAY_ADMIN_KEY", None)
+    if expected_key and x_gateway_key != expected_key:
+        raise HTTPException(status_code=401, detail="Invalid gateway key")
+
+    from src.adapters.stoa.mappers import map_api_spec_to_stoa
+    from src.models.gateway_deployment import DeploymentSyncStatus
+
+    deploy_repo = GatewayDeploymentRepository(db)
+
+    # Get all SYNCED + PENDING deployments (PENDING = recently deployed, should be on gateway)
+    deployments = await deploy_repo.list_by_statuses(
+        [
+            DeploymentSyncStatus.SYNCED,
+            DeploymentSyncStatus.PENDING,
+        ]
+    )
+
+    routes = []
+    for dep in deployments:
+        ds = dep.desired_state or {}
+        tenant_id = ds.get("tenant_id", "")
+        route = map_api_spec_to_stoa(ds, tenant_id)
+        if route.get("backend_url"):  # Skip routes without a backend
+            routes.append(GatewayRouteItem(**route))
+
+    return routes
 
 
 # --- Pydantic Schemas ---
@@ -348,9 +448,7 @@ class SyncedPolicyResult(BaseModel):
 class SyncAckPayload(BaseModel):
     """Payload from stoa-connect reporting policy sync results."""
 
-    synced_policies: list[SyncedPolicyResult] = Field(
-        default_factory=list, description="Sync results per policy"
-    )
+    synced_policies: list[SyncedPolicyResult] = Field(default_factory=list, description="Sync results per policy")
     sync_timestamp: str = Field(..., description="ISO timestamp of sync completion")
 
 
@@ -448,7 +546,9 @@ async def get_internal_tools(
     for t in tools:
         if not t.enabled:
             continue
-        input_schema = _json.loads(t.input_schema) if t.input_schema else {"type": "object", "properties": {}, "required": []}
+        input_schema = (
+            _json.loads(t.input_schema) if t.input_schema else {"type": "object", "properties": {}, "required": []}
+        )
         result.append(
             InternalToolDef(
                 name=t.tool_name,

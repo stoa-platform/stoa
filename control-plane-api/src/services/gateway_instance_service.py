@@ -138,11 +138,14 @@ class GatewayInstanceService:
             result = await adapter.health_check()
 
             new_status = GatewayInstanceStatus.ONLINE if result.success else GatewayInstanceStatus.DEGRADED
-            await self.repo.update_status(instance, status=new_status, health_details=result.data)
+            details = result.data or {}
+            if not result.success and result.error:
+                details = {**details, "error": result.error}
+            await self.repo.update_status(instance, status=new_status, health_details=details)
 
             return {
                 "status": new_status.value,
-                "details": result.data,
+                "details": details,
                 "gateway_name": instance.name,
                 "gateway_type": instance.gateway_type.value,
             }

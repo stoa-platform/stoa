@@ -131,14 +131,13 @@ class TestResolveAdapter:
         with (
             patch("src.repositories.gateway_deployment.GatewayDeploymentRepository", return_value=mock_deploy_repo),
             patch("src.repositories.gateway_instance.GatewayInstanceRepository", return_value=mock_gw_repo),
-            patch("src.services.provisioning_service.AdapterRegistry") as mock_registry,
+            patch("src.services.credential_resolver.create_adapter_with_credentials", new_callable=AsyncMock, return_value=mock_adapter) as mock_create,
         ):
-            mock_registry.create.return_value = mock_adapter
             result = await _resolve_adapter(db, "api-1", "tenant-1")
 
         assert result is mock_adapter
-        mock_registry.create.assert_called_once_with(
-            "kong", config={"base_url": "https://kong.example.com", "auth_config": {"token": "secret"}}
+        mock_create.assert_awaited_once_with(
+            "kong", "https://kong.example.com", {"token": "secret"},
         )
 
     async def test_no_deployment_returns_none(self):

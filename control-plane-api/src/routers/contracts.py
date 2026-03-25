@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.adapters.registry import AdapterRegistry
 from src.auth.dependencies import User, get_current_user
 from src.config import settings
 from src.database import get_db
@@ -51,6 +50,7 @@ from src.schemas.contract import (
     TenantToolsResponse,
 )
 from src.services.cache_service import contract_cache
+from src.services.credential_resolver import create_adapter_with_credentials
 from src.services.uac_tool_generator import UacToolGenerator
 
 logger = get_logger(__name__)
@@ -839,9 +839,8 @@ async def enable_binding(
     dispatch_errors: list[str] = []
     for gw in gateways:
         try:
-            adapter = AdapterRegistry.create(
-                gw.gateway_type.value,
-                config={"base_url": gw.base_url, "auth_config": gw.auth_config},
+            adapter = await create_adapter_with_credentials(
+                gw.gateway_type.value, gw.base_url, gw.auth_config,
             )
             await adapter.connect()
             result = await adapter.deploy_contract(contract_spec)

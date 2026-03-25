@@ -35,7 +35,7 @@ hostname = "0.4"                         # Get local hostname for auto-registrat
 # === NEW - Phase 2: MCP SSE Transport ===
 tokio-stream = "0.1"                    # SSE event streams
 futures = "0.3"                          # Stream combinators
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }  # CAB-1758: WS proxy backend connections
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }  # CAB-1758: WS proxy backend connections
 uuid = { version = "1", features = ["v4", "serde"] }  # Session IDs
 rand = "0.10"                                # Thread-local PRNG for traceparent (perf)
 socket2 = "0.6"                             # TCP backlog tuning (perf)
@@ -80,7 +80,7 @@ pnet = { version = "0.35", optional = true }
 
 # === WASM Plugin Runtime (CAB-1644) ===
 wasmtime = { version = "42", optional = true }
-toml = "0.8"                                         # Plugin manifest parsing
+toml = "1.0"                                         # Plugin manifest parsing
 
 # === Pingora Connection Pool (CAB-1849) ===
 pingora-core = { version = "0.8", optional = true }

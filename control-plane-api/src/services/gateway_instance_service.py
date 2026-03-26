@@ -141,7 +141,10 @@ class GatewayInstanceService:
             details = result.data or {}
             if not result.success and result.error:
                 details = {**details, "error": result.error}
-            await self.repo.update_status(instance, status=new_status, health_details=details)
+            # Merge health check result into existing health_details to preserve
+            # heartbeat data (discovered_apis, uptime_seconds, etc.)
+            merged = {**(instance.health_details or {}), **details, "last_health_check_result": new_status.value}
+            await self.repo.update_status(instance, status=new_status, health_details=merged)
 
             return {
                 "status": new_status.value,
@@ -150,13 +153,15 @@ class GatewayInstanceService:
                 "gateway_type": instance.gateway_type.value,
             }
         except Exception as e:
+            # Merge error into existing health_details instead of replacing
+            merged = {**(instance.health_details or {}), "error": str(e), "last_health_check_result": "offline"}
             await self.repo.update_status(
                 instance,
-                status=GatewayInstanceStatus.OFFLINE,
-                health_details={"error": str(e)},
+                status=GatewayInstanceStatus.DEGRADED,
+                health_details=merged,
             )
             return {
-                "status": "offline",
+                "status": "degraded",
                 "details": {"error": str(e)},
                 "gateway_name": instance.name,
                 "gateway_type": instance.gateway_type.value,

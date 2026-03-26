@@ -738,7 +738,7 @@ function GatewayRow({
       </div>
 
       {/* Actions */}
-      <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex-shrink-0 flex items-center gap-1 w-16 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
         {isDeleted ? (
           <button
             onClick={(e) => {
@@ -752,7 +752,7 @@ function GatewayRow({
           </button>
         ) : (
           <>
-            {gw.mode !== 'connect' && (
+            {gw.source !== 'self_register' && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();

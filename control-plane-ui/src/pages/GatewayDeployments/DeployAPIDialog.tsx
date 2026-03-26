@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { X, AlertCircle, CheckCircle2, Search } from 'lucide-react';
 import { apiService } from '../../services/api';
 import type { API, GatewayDeployment } from '../../types';
 
@@ -44,6 +44,7 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
   const [selectedGateways, setSelectedGateways] = useState<string[]>([]);
   const [deployableEnvs, setDeployableEnvs] = useState<DeployableEnv[]>([]);
   const [existingDeployments, setExistingDeployments] = useState<ExistingDeployment[]>([]);
+  const [apiSearchTerm, setApiSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingApis, setLoadingApis] = useState(false);
   const [loadingEnvs, setLoadingEnvs] = useState(false);
@@ -154,6 +155,17 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
       })
       .catch(() => setExistingDeployments([]));
   }, [selectedEnv, selectedApi]);
+
+  // Filter APIs by search term
+  const filteredApis = useMemo(() => {
+    if (!apiSearchTerm) return apis;
+    const term = apiSearchTerm.toLowerCase();
+    return apis.filter(
+      (api) =>
+        api.name.toLowerCase().includes(term) ||
+        (api.version && api.version.toLowerCase().includes(term))
+    );
+  }, [apis, apiSearchTerm]);
 
   // Filter gateways by selected environment
   const filteredGateways = gateways.filter((gw) => selectedEnv && gw.environment === selectedEnv);
@@ -271,24 +283,46 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
                     No APIs found for this tenant.
                   </p>
                 ) : (
-                  <select
-                    value={selectedApi}
-                    onChange={(e) => {
-                      setSelectedApi(e.target.value);
-                      setSelectedEnv('');
-                      setSelectedGateways([]);
-                    }}
-                    required
-                    disabled={!!preselectedApiKey || !selectedTenant}
-                    className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60"
-                  >
-                    <option value="">Select an API...</option>
-                    {apis.map((api) => (
-                      <option key={api.name} value={api.name}>
-                        {api.name} v{api.version}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    {apis.length > 5 && !preselectedApiKey && (
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                        <input
+                          type="text"
+                          placeholder="Search APIs..."
+                          value={apiSearchTerm}
+                          onChange={(e) => setApiSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                    <select
+                      value={selectedApi}
+                      onChange={(e) => {
+                        setSelectedApi(e.target.value);
+                        setSelectedEnv('');
+                        setSelectedGateways([]);
+                      }}
+                      required
+                      disabled={!!preselectedApiKey || !selectedTenant}
+                      size={filteredApis.length > 5 ? 6 : undefined}
+                      className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60"
+                    >
+                      {!selectedApi && filteredApis.length <= 5 && (
+                        <option value="">Select an API...</option>
+                      )}
+                      {filteredApis.map((api) => (
+                        <option key={api.name} value={api.name}>
+                          {api.name} v{api.version}
+                        </option>
+                      ))}
+                    </select>
+                    {apiSearchTerm && filteredApis.length === 0 && (
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        No APIs match &quot;{apiSearchTerm}&quot;
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 

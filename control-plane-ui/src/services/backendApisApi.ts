@@ -52,6 +52,11 @@ class BackendApisService {
     return data;
   }
 
+  async getBackendApi(tenantId: string, apiId: string): Promise<BackendApi> {
+    const { data } = await apiService.get(`/v1/tenants/${tenantId}/backend-apis/${apiId}`);
+    return data;
+  }
+
   async deleteBackendApi(tenantId: string, apiId: string): Promise<void> {
     await apiService.delete(`/v1/tenants/${tenantId}/backend-apis/${apiId}`);
   }

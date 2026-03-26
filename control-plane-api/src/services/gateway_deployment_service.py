@@ -3,6 +3,7 @@
 Extracts business logic from the gateway_deployments router and adds Kafka
 event emission for the sync engine to consume.
 """
+
 import hashlib
 import json
 import logging
@@ -36,9 +37,7 @@ class GatewayDeploymentService:
         Computes a SHA256 spec_hash from the OpenAPI spec or metadata.
         """
         spec_data = api_catalog.openapi_spec or api_catalog.api_metadata or {}
-        spec_hash = hashlib.sha256(
-            json.dumps(spec_data, sort_keys=True, default=str).encode()
-        ).hexdigest()
+        spec_hash = hashlib.sha256(json.dumps(spec_data, sort_keys=True, default=str).encode()).hexdigest()
 
         # Extract backend_url from OpenAPI servers or api_metadata
         backend_url = ""
@@ -50,6 +49,17 @@ class GatewayDeploymentService:
             if servers and isinstance(servers, list) and isinstance(servers[0], dict):
                 backend_url = servers[0].get("url", "")
 
+        # Extract HTTP methods from OpenAPI spec paths
+        methods: set[str] = set()
+        if isinstance(spec_data, dict):
+            paths = spec_data.get("paths", {})
+            if isinstance(paths, dict):
+                for path_item in paths.values():
+                    if isinstance(path_item, dict):
+                        for method in path_item:
+                            if method.lower() in {"get", "post", "put", "patch", "delete", "head", "options"}:
+                                methods.add(method.upper())
+
         return {
             "spec_hash": spec_hash,
             "version": api_catalog.version,
@@ -58,6 +68,7 @@ class GatewayDeploymentService:
             "api_catalog_id": str(api_catalog.id),
             "tenant_id": api_catalog.tenant_id,
             "backend_url": backend_url,
+            "methods": sorted(methods) if methods else ["GET", "POST", "PUT", "DELETE"],
             "activated": True,
         }
 
@@ -74,9 +85,7 @@ class GatewayDeploymentService:
         Raises:
             ValueError: If API catalog entry or gateway not found.
         """
-        result = await self.db.execute(
-            select(APICatalog).where(APICatalog.id == api_catalog_id)
-        )
+        result = await self.db.execute(select(APICatalog).where(APICatalog.id == api_catalog_id))
         api_catalog = result.scalar_one_or_none()
         if not api_catalog:
             raise ValueError("API catalog entry not found")
@@ -149,9 +158,7 @@ class GatewayDeploymentService:
         await self._emit_sync_request(deployment)
         return deployment
 
-    async def _emit_sync_requests(
-        self, deployments: list[GatewayDeployment], tenant_id: str
-    ) -> None:
+    async def _emit_sync_requests(self, deployments: list[GatewayDeployment], tenant_id: str) -> None:
         """Emit Kafka events for a batch of deployments."""
         for dep in deployments:
             try:

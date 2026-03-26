@@ -58,8 +58,9 @@ def map_policy_to_apigee_product(policy_spec: dict, tenant_id: str) -> dict:
 
     if policy_type == "rate_limit":
         config = policy_spec.get("config", {})
-        quota = config.get("max_requests", 100)
-        interval = config.get("window_seconds", 60)
+        # Canonical keys: maxRequests/intervalSeconds; fallback to legacy max_requests/window_seconds
+        quota = config.get("maxRequests", config.get("max_requests", 100))
+        interval = config.get("intervalSeconds", config.get("window_seconds", 60))
         product["quota"] = str(quota)
         product["quotaInterval"] = str(interval)
         product["quotaTimeUnit"] = "second" if interval <= 1 else "minute"

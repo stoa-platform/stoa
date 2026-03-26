@@ -724,18 +724,21 @@ class TestDeleteApi:
             {"type": "blob", "path": "tenants/acme/apis/weather/openapi.yaml"},
             {"type": "tree", "path": "tenants/acme/apis/weather/policies"},
         ]
-        svc._project.files.delete = MagicMock()
+        svc._project.commits.create = MagicMock()
         result = await svc.delete_api("acme", "weather")
         assert result is True
-        assert svc._project.files.delete.call_count == 2
+        svc._project.commits.create.assert_called_once()
+        call_args = svc._project.commits.create.call_args[0][0]
+        assert len(call_args["actions"]) == 2
+        assert all(a["action"] == "delete" for a in call_args["actions"])
 
     async def test_empty_tree_succeeds(self):
         svc = _connected_service()
         svc._project.repository_tree.return_value = []
-        svc._project.files.delete = MagicMock()
+        svc._project.commits.create = MagicMock()
         result = await svc.delete_api("acme", "weather")
         assert result is True
-        svc._project.files.delete.assert_not_called()
+        svc._project.commits.create.assert_not_called()
 
     async def test_exception_propagates(self):
         svc = _connected_service()

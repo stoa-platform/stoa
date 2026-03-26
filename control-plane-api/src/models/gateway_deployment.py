@@ -5,6 +5,7 @@ status between what the Control Plane wants (desired_state) and what the
 gateway actually has (actual_state). Used by the Sync Engine for
 reconciliation.
 """
+
 import enum
 import uuid
 
@@ -17,12 +18,22 @@ from src.database import Base
 
 class DeploymentSyncStatus(enum.StrEnum):
     """Synchronization status of a gateway deployment."""
-    PENDING = "pending"       # Desired state set, not yet synced
-    SYNCING = "syncing"       # Sync in progress
-    SYNCED = "synced"         # Desired == actual
-    DRIFTED = "drifted"       # Actual != desired (detected by reconciler)
-    ERROR = "error"           # Last sync attempt failed
-    DELETING = "deleting"     # Marked for removal from gateway
+
+    PENDING = "pending"  # Desired state set, not yet synced
+    SYNCING = "syncing"  # Sync in progress
+    SYNCED = "synced"  # Desired == actual
+    DRIFTED = "drifted"  # Actual != desired (detected by reconciler)
+    ERROR = "error"  # Last sync attempt failed
+    DELETING = "deleting"  # Marked for removal from gateway
+
+
+class PolicySyncStatus(enum.StrEnum):
+    """Synchronization status of policies bound to a deployment."""
+
+    PENDING = "pending"  # Policies not yet synced
+    SYNCED = "synced"  # All policies applied successfully
+    PARTIAL = "partial"  # Some policies failed
+    ERROR = "error"  # Policy sync failed entirely
 
 
 class GatewayDeployment(Base):
@@ -31,6 +42,7 @@ class GatewayDeployment(Base):
     Tracks the desired state (what the Control Plane wants) vs actual state
     (what the gateway reports), enabling drift detection and reconciliation.
     """
+
     __tablename__ = "gateway_deployments"
 
     # Primary key
@@ -74,6 +86,17 @@ class GatewayDeployment(Base):
     sync_error = Column(Text, nullable=True)
     sync_attempts = Column(Integer, nullable=False, default=0, server_default="0")
 
+    # Policy sync tracking
+    policy_sync_status = Column(
+        SQLEnum(
+            PolicySyncStatus,
+            name="policy_sync_status_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=True,
+    )
+    policy_sync_error = Column(Text, nullable=True)
+
     # Gateway-side resource ID (assigned by the gateway when the API is registered)
     gateway_resource_id = Column(String(255), nullable=True)
 
@@ -87,14 +110,13 @@ class GatewayDeployment(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint('api_catalog_id', 'gateway_instance_id', name='uq_deployment_api_gateway'),
-        Index('ix_gw_deploy_sync_status', 'sync_status'),
-        Index('ix_gw_deploy_gateway', 'gateway_instance_id'),
-        Index('ix_gw_deploy_api', 'api_catalog_id'),
+        UniqueConstraint("api_catalog_id", "gateway_instance_id", name="uq_deployment_api_gateway"),
+        Index("ix_gw_deploy_sync_status", "sync_status"),
+        Index("ix_gw_deploy_gateway", "gateway_instance_id"),
+        Index("ix_gw_deploy_api", "api_catalog_id"),
     )
 
     def __repr__(self) -> str:
         return (
-            f"<GatewayDeployment api={self.api_catalog_id} "
-            f"gw={self.gateway_instance_id} status={self.sync_status}>"
+            f"<GatewayDeployment api={self.api_catalog_id} " f"gw={self.gateway_instance_id} status={self.sync_status}>"
         )

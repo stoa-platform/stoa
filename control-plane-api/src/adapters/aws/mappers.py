@@ -73,8 +73,9 @@ def map_policy_to_aws_usage_plan(policy_spec: dict, tenant_id: str) -> dict:
     """
     policy_id = policy_spec.get("id", "")
     config = policy_spec.get("config", {})
-    max_requests = config.get("max_requests", 100)
-    window_seconds = config.get("window_seconds", 60)
+    # Canonical keys: maxRequests/intervalSeconds; fallback to legacy max_requests/window_seconds
+    max_requests = config.get("maxRequests", config.get("max_requests", 100))
+    window_seconds = config.get("intervalSeconds", config.get("window_seconds", 60))
 
     # AWS throttle is in requests/second
     rate_limit = max_requests / max(window_seconds, 1)

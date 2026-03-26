@@ -752,17 +752,19 @@ function GatewayRow({
           </button>
         ) : (
           <>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onHealthCheck();
-              }}
-              disabled={isChecking}
-              className="p-1.5 rounded-md text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
-              title="Health check"
-            >
-              <HeartPulse className={`w-4 h-4 ${isChecking ? 'animate-pulse' : ''}`} />
-            </button>
+            {gw.mode !== 'connect' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onHealthCheck();
+                }}
+                disabled={isChecking}
+                className="p-1.5 rounded-md text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+                title="Health check"
+              >
+                <HeartPulse className={`w-4 h-4 ${isChecking ? 'animate-pulse' : ''}`} />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();

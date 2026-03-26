@@ -145,3 +145,147 @@ async fn test_ssrf_private_ip_blocked() {
     let response = router.oneshot(request).await.expect("ok");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
+
+// === Regression tests: Admin endpoint SSRF pre-check (CAB-1920) ===
+
+fn build_admin_router() -> axum::Router {
+    let config = Config {
+        admin_api_token: Some("test-token".to_string()),
+        auto_register: false,
+        ..Config::default()
+    };
+    let state = AppState::new(config);
+    stoa_gateway::build_router(state)
+}
+
+/// CAB-1920: Admin POST /admin/apis must reject localhost backend_url.
+#[tokio::test]
+async fn regression_admin_ssrf_rejects_localhost() {
+    let router = build_admin_router();
+
+    let payload = serde_json::json!({
+        "id": "test-api-1",
+        "name": "ssrf-test",
+        "tenant_id": "acme",
+        "path_prefix": "/apis/acme/ssrf",
+        "backend_url": "http://localhost:8080/secret",
+        "methods": [],
+        "spec_hash": "abc",
+        "activated": true
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/admin/apis")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer test-token")
+        .body(Body::from(serde_json::to_string(&payload).expect("json")))
+        .expect("valid request");
+
+    let response = router.oneshot(request).await.expect("ok");
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = axum::body::to_bytes(response.into_body(), 1_048_576)
+        .await
+        .expect("body");
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("private/internal"),
+        "Expected SSRF rejection, got: {}",
+        body_str
+    );
+}
+
+/// CAB-1920: Admin POST /admin/apis must reject private IP backend_url.
+#[tokio::test]
+async fn regression_admin_ssrf_rejects_private_ip() {
+    let router = build_admin_router();
+
+    let payload = serde_json::json!({
+        "id": "test-api-2",
+        "name": "internal-api",
+        "tenant_id": "acme",
+        "path_prefix": "/apis/acme/internal",
+        "backend_url": "http://10.0.0.5:9200/elasticsearch",
+        "methods": [],
+        "spec_hash": "abc",
+        "activated": true
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/admin/apis")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer test-token")
+        .body(Body::from(serde_json::to_string(&payload).expect("json")))
+        .expect("valid request");
+
+    let response = router.oneshot(request).await.expect("ok");
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+/// CAB-1920: Admin POST /admin/apis must reject empty backend_url.
+#[tokio::test]
+async fn regression_admin_rejects_empty_backend_url() {
+    let router = build_admin_router();
+
+    let payload = serde_json::json!({
+        "id": "test-api-3",
+        "name": "empty-url-api",
+        "tenant_id": "acme",
+        "path_prefix": "/apis/acme/empty",
+        "backend_url": "",
+        "methods": [],
+        "spec_hash": "abc",
+        "activated": true
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/admin/apis")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer test-token")
+        .body(Body::from(serde_json::to_string(&payload).expect("json")))
+        .expect("valid request");
+
+    let response = router.oneshot(request).await.expect("ok");
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = axum::body::to_bytes(response.into_body(), 1_048_576)
+        .await
+        .expect("body");
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("backend_url must not be empty"),
+        "Expected empty URL rejection, got: {}",
+        body_str
+    );
+}
+
+/// CAB-1920: Admin POST /admin/apis must accept valid public backend_url.
+#[tokio::test]
+async fn regression_admin_accepts_public_backend() {
+    let router = build_admin_router();
+
+    let payload = serde_json::json!({
+        "id": "test-api-4",
+        "name": "public-api",
+        "tenant_id": "acme",
+        "path_prefix": "/apis/acme/public",
+        "backend_url": "https://api.example.com/v1",
+        "methods": ["GET"],
+        "spec_hash": "abc",
+        "activated": true
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/admin/apis")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer test-token")
+        .body(Body::from(serde_json::to_string(&payload).expect("json")))
+        .expect("valid request");
+
+    let response = router.oneshot(request).await.expect("ok");
+    assert_eq!(response.status(), StatusCode::CREATED);
+}

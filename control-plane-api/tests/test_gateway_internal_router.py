@@ -197,6 +197,7 @@ class TestGatewayRegistrationTenant:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -233,6 +234,7 @@ class TestGatewayRegistrationTenant:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 

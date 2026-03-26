@@ -16,8 +16,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-DASHBOARDS_DIR="${REPO_ROOT}/docker/observability/grafana/dashboards"
-OUTPUT_DIR="${REPO_ROOT}/k8s/observability/dashboards"
+STOA_INFRA_DIR="${STOA_INFRA_DIR:-${REPO_ROOT}/../stoa-infra}"
+DASHBOARDS_DIR="${STOA_INFRA_DIR}/docker/observability/grafana/dashboards"
+OUTPUT_DIR="${STOA_INFRA_DIR}/k8s/observability/dashboards"
 DRY_RUN=false
 SPECIFIC=""
 

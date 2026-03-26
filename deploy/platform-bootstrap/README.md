@@ -60,7 +60,6 @@ The `platform-config-ci.yml` workflow:
 
 - Push to `main` branch with changes in:
   - `deploy/platform-bootstrap/**`
-  - `gitops-templates/webmethods/**`
 - Manual trigger via `workflow_dispatch`
 
 ## Manual Deployment

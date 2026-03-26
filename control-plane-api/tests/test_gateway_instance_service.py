@@ -228,7 +228,7 @@ class TestGatewayInstanceService:
             svc.repo = mock_repo
 
             result = await svc.health_check(gw.id)
-            assert result["status"] == "offline"
+            assert result["status"] == "degraded"
             assert "refused" in result["details"]["error"]
 
 

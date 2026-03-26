@@ -1,6 +1,7 @@
 # Platform Configuration CI/CD
 # Validates and deploys platform bootstrap configs (APIs, Applications, Scopes, Policies)
-# Triggered on changes to deploy/platform-bootstrap/ or gitops-templates/webmethods/
+# Triggered on changes to deploy/platform-bootstrap/
+# Note: gitops-templates/ migrated to stoa-infra (CAB-1911)
 
 name: Platform Config CI/CD
 
@@ -9,12 +10,10 @@ on:
     branches: [main]
     paths:
       - 'deploy/platform-bootstrap/**'
-      - 'gitops-templates/webmethods/**'
   pull_request:
     branches: [main]
     paths:
       - 'deploy/platform-bootstrap/**'
-      - 'gitops-templates/webmethods/**'
   workflow_dispatch:
     inputs:
       environment:

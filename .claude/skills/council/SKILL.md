@@ -13,6 +13,20 @@ Read and understand the feature/ADR/change description. Gather context from:
 - `plan.md` — where this fits in priorities
 - Relevant code files if technical
 
+## Step 1b: Context Compiler — Impact Score
+
+Run the Context Compiler to get the blast radius **before** scoring:
+
+1. Determine the primary component from $ARGUMENTS (or from the ticket description if CAB-XXXX is provided)
+2. Run: `docs/scripts/build-context.sh --component <component> --intent "$ARGUMENTS"`
+   - If a ticket ID is available: add `--ticket "CAB-XXXX"`
+3. Read the generated context pack in `docs/context-packs/`
+4. Extract the **Impact Score** and level (LOW/MEDIUM/HIGH/CRITICAL)
+5. Include the Impact Score in each persona's evaluation context
+6. If **CRITICAL (>= 31)**: flag it explicitly in the Council report header
+
+If `build-context.sh` or `stoa-impact.db` is not available, skip this step with a warning and proceed without impact scoring.
+
 ## Step 2: Run the Council — 4 Personas
 
 Evaluate $ARGUMENTS through each persona:
@@ -68,6 +82,7 @@ Present each persona's evaluation:
 
 ---
 **Average**: X.XX/10
+**Impact Score**: N (LOW|MEDIUM|HIGH|CRITICAL)
 **Global Verdict**: Go | Fix | Redo
 **Adjustments to apply**: <numbered list of all adjustments from all personas>
 ```
@@ -118,7 +133,7 @@ linear.create_issue(
 ## Context
 <1-2 paragraphs: what and why>
 
-## Council Validation — X.XX/10 {Go|Fix}
+## Council Validation — X.XX/10 {Go|Fix} | Impact Score: N (LEVEL)
 
 | Persona | Score | Verdict |
 |---------|-------|---------|

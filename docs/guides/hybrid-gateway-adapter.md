@@ -147,6 +147,6 @@ docker compose -f deploy/docker-compose/docker-compose.webmethods.yml up -d
 ./scripts/test-gateway-api.sh http://localhost:5555
 
 # Run reconciliation in dry-run
-ansible-playbook ansible/reconcile-webmethods/reconcile-webmethods.yml \
+ansible-playbook stoa-infra:ansible/reconcile-webmethods/reconcile-webmethods.yml \
   -e "env=dev" --check
 ```

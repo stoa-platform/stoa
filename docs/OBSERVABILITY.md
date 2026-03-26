@@ -219,7 +219,7 @@ Pre-computed SLO metrics (defined in `prometheus-rules.yaml`):
 | Location | Purpose |
 |----------|---------|
 | `deploy/grafana/dashboards/` | Production dashboards (deployed via ConfigMaps) |
-| `docker/observability/grafana/dashboards/` | Development/local dashboards |
+| `stoa-infra:docker/observability/grafana/dashboards/` | Development/local dashboards |
 
 ### Deployed Dashboards
 
@@ -251,7 +251,7 @@ Template Variables:
 
 ### SLO Dashboard
 
-**File**: `docker/observability/grafana/dashboards/slo-dashboard.json`
+**File**: `stoa-infra:docker/observability/grafana/dashboards/slo-dashboard.json`
 
 Panels:
 - Availability gauge (target: 99.9%)
@@ -271,7 +271,7 @@ kubectl apply -f deploy/grafana/dashboards/stoa-gateway-configmap.yaml
 
 # Deploy SLO dashboard (via ConfigMap)
 kubectl create configmap grafana-dashboard-slo \
-  --from-file=slo-dashboard.json=docker/observability/grafana/dashboards/slo-dashboard.json \
+  --from-file=slo-dashboard.json=stoa-infra:docker/observability/grafana/dashboards/slo-dashboard.json \
   -n stoa-monitoring
 kubectl label configmap grafana-dashboard-slo -n stoa-monitoring grafana_dashboard=1
 ```
@@ -522,14 +522,14 @@ kubectl logs -n stoa-system -l app.kubernetes.io/component=promtail
 
 ### GitOps Log Level Configuration
 
-Log levels are configured via GitOps YAML files in `gitops-templates/logging/`:
+Log levels are configured via GitOps YAML files in `stoa-infra:gitops-templates/logging/`:
 
 | File | Description |
 |------|-------------|
 | `_defaults.yaml` | Default log levels for all environments |
-| `environments/dev.yaml` | Development (DEBUG, all debug options enabled) |
-| `environments/staging.yaml` | Staging (INFO, auth debug enabled) |
-| `environments/prod.yaml` | Production (WARNING, minimal logging) |
+| `stoa-infra:environments/dev.yaml` | Development (DEBUG, all debug options enabled) |
+| `stoa-infra:environments/staging.yaml` | Staging (INFO, auth debug enabled) |
+| `stoa-infra:environments/prod.yaml` | Production (WARNING, minimal logging) |
 
 ### Environment Variables
 
@@ -585,7 +585,7 @@ sum by (tenant_id) (count_over_time({component="control-plane-api"} | json | lev
 
 ### Alerting Rules (Loki)
 
-Loki alerting rules are defined in `docker/observability/loki/rules/stoa-alerts.yaml`:
+Loki alerting rules are defined in `stoa-infra:docker/observability/loki/rules/stoa-alerts.yaml`:
 
 | Alert | Condition | Severity |
 |-------|-----------|----------|
@@ -602,8 +602,8 @@ New dashboards for error tracking and service health:
 
 | Dashboard | File | Description |
 |-----------|------|-------------|
-| Error Tracking | `docker/observability/grafana/dashboards/error-tracking.json` | Errors by component, 401 tracking, top errors |
-| Service Health | `docker/observability/grafana/dashboards/service-health.json` | External service status, latency, connection logs |
+| Error Tracking | `stoa-infra:docker/observability/grafana/dashboards/error-tracking.json` | Errors by component, 401 tracking, top errors |
+| Service Health | `stoa-infra:docker/observability/grafana/dashboards/service-health.json` | External service status, latency, connection logs |
 
 ## Configuration Reference
 
@@ -650,5 +650,5 @@ observability:
 | `deploy/prometheus/alerting-rules.yaml` | PrometheusRule CRD (CAB-310) |
 | `deploy/grafana/dashboards/stoa-gateway-traceability.json` | STOA Gateway dashboard (CAB-282) |
 | `deploy/grafana/dashboards/stoa-gateway-configmap.yaml` | Dashboard ConfigMap |
-| `docker/observability/grafana/dashboards/slo-dashboard.json` | SLO Dashboard |
+| `stoa-infra:docker/observability/grafana/dashboards/slo-dashboard.json` | SLO Dashboard |
 | `charts/stoa-platform/values.yaml` | Helm chart observability config |

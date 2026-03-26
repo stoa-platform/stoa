@@ -8,7 +8,7 @@
 
 ## Overview
 
-STOA Platform uses Kafka/Redpanda for event-driven architecture. All topics follow the `stoa.*` naming convention and are configured declaratively in `kafka/topic-policies.yaml`.
+STOA Platform uses Kafka/Redpanda for event-driven architecture. All topics follow the `stoa.*` naming convention and are configured declaratively in `stoa-infra:kafka/topic-policies.yaml`.
 
 ## Topic Inventory
 
@@ -45,7 +45,7 @@ apt-get install python3-yaml # Ubuntu
 ### Local Kafka/Redpanda
 
 ```bash
-cd kafka/
+cd stoa-infra/kafka/
 
 # Dry-run (preview)
 ./create-topics.sh dry-run
@@ -60,7 +60,7 @@ python3 create-topics.py --broker localhost:9092
 ### Kubernetes (Production)
 
 ```bash
-cd kafka/
+cd stoa-infra/kafka/
 
 # Set environment
 export KAFKA_NAMESPACE=kafka
@@ -108,7 +108,7 @@ kubectl exec -n kafka redpanda-0 -- \
 ### Automated Verification
 
 ```bash
-cd kafka/
+cd stoa-infra/kafka/
 ./verify-topics.sh
 ```
 
@@ -223,7 +223,7 @@ kubectl exec -n kafka redpanda-0 -- \
 
 ## Adding New Topics
 
-1. Edit `kafka/topic-policies.yaml`:
+1. Edit `stoa-infra:kafka/topic-policies.yaml`:
 
 ```yaml
 topics:
@@ -246,7 +246,7 @@ class Topics:
 3. Create the topic:
 
 ```bash
-cd kafka/
+cd stoa-infra/kafka/
 ./create-topics.sh
 ```
 
@@ -284,10 +284,10 @@ kubectl exec -n kafka redpanda-0 -- \
 
 | File | Purpose |
 |------|---------|
-| `kafka/topic-policies.yaml` | Declarative topic configuration (source of truth) |
-| `kafka/create-topics.sh` | Shell script to create topics from YAML |
-| `kafka/create-topics.py` | Python script for programmatic topic creation |
-| `kafka/verify-topics.sh` | Verification script to check topic configuration |
+| `stoa-infra:kafka/topic-policies.yaml` | Declarative topic configuration (source of truth) |
+| `stoa-infra:kafka/create-topics.sh` | Shell script to create topics from YAML |
+| `stoa-infra:kafka/create-topics.py` | Python script for programmatic topic creation |
+| `stoa-infra:kafka/verify-topics.sh` | Verification script to check topic configuration |
 | `control-plane-api/src/services/kafka_service.py` | Topics class with topic name constants |
 
 ## References

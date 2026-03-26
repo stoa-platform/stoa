@@ -274,5 +274,5 @@ kubectl delete ingress mcp-gateway-canary -n stoa-system
 
 - [Shadow Mode Implementation](mcp-gateway/src/middleware/shadow.py)
 - [Canary Ingress Config](k8s/ingress/mcp-gateway-canary.yaml)
-- [Prometheus Rules](docker/observability/prometheus/rules/mcp-migration-alerts.yaml)
-- [Grafana Dashboard](docker/observability/grafana/dashboards/mcp-gateway-migration.json)
+- [Prometheus Rules](stoa-infra:docker/observability/prometheus/rules/mcp-migration-alerts.yaml)
+- [Grafana Dashboard](stoa-infra:docker/observability/grafana/dashboards/mcp-gateway-migration.json)

@@ -72,8 +72,8 @@ Infisical (vault.gostoa.dev) — Legacy, read-only reference during transition
 
 | File | Purpose |
 |------|---------|
-| `deploy/vps/vault/` | Vault server deployment (docker-compose, config, policies) |
-| `deploy/external-secrets/` | ESO SecretStore + ExternalSecret CRs |
+| `stoa-infra:deploy/vps/vault/` | Vault server deployment (docker-compose, config, policies) |
+| `stoa-infra:deploy/external-secrets/` | ESO SecretStore + ExternalSecret CRs |
 | `scripts/ops/rotate-secrets.sh` | Credential rotation (human-only) |
 | `scripts/ops/migrate-to-vault.sh` | Infisical → Vault migration |
 

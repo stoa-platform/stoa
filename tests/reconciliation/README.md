@@ -170,5 +170,5 @@ Failed: 0
 
 - [CAB-367 — GitOps Reconciliation](https://linear.app/hlfh-workspace/issue/CAB-367)
 - [Test Plan](docs/TEST-PLAN.md)
-- [Ansible Playbook](../../ansible/reconcile-webmethods/)
-- [ArgoCD Integration](../../argocd/hooks/)
+- Ansible: `stoa-infra:ansible/reconcile-webmethods/`
+- ArgoCD: `stoa-infra:argocd/`

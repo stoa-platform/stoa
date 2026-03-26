@@ -83,7 +83,7 @@ S1: Council → Slack → `/go` → S2. S2: plan → Slack → `/go-plan` → im
 ## Token Observatory
 
 ### Data Flow
-VPS hourly cron (`deploy/vps/monitoring/cron-token-metrics.sh`) → metrics.log + Pushgateway → Grafana + Daily Slack report
+VPS hourly cron (`stoa-infra:deploy/vps/monitoring/cron-token-metrics.sh`) → metrics.log + Pushgateway → Grafana + Daily Slack report
 
 ### Thresholds
 | Level | Daily Cost | Action |

@@ -425,13 +425,13 @@ database:
 
 ```bash
 # Deploy PostgreSQL
-kubectl apply -f deploy/database/postgres-statefulset.yaml
+kubectl apply -f stoa-infra:deploy/database/postgres-statefulset.yaml
 
 # Wait for database
 kubectl wait --for=condition=ready pod/control-plane-db-0 -n stoa-system --timeout=120s
 
 # Run migrations
-kubectl apply -f deploy/database/alembic-migration-job.yaml
+kubectl apply -f stoa-infra:deploy/database/alembic-migration-job.yaml
 
 # Check migration status
 kubectl logs job/alembic-migration -n stoa-system

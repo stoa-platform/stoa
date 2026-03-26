@@ -75,7 +75,8 @@ echo -e "  Source key:  $STOA_SSH_KEY"
 echo ""
 
 # Also include HEGEMON workers if workers.txt exists
-HEGEMON_WORKERS_FILE="$SCRIPT_DIR/../../deploy/vps/hegemon/workers.txt"
+STOA_INFRA_DIR="${STOA_INFRA_DIR:-$SCRIPT_DIR/../../../stoa-infra}"
+HEGEMON_WORKERS_FILE="$STOA_INFRA_DIR/deploy/vps/hegemon/workers.txt"
 EXTRA_HOSTS=()
 if [ -f "$HEGEMON_WORKERS_FILE" ]; then
   while IFS='|' read -r name ip || [ -n "$name" ]; do

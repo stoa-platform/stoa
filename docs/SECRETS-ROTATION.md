@@ -389,16 +389,16 @@ User → vault write ssh-client-signer/sign/admin public_key=@~/.ssh/id_ed25519.
 
 ```bash
 # 1. Configure SSH engine + CA + roles (once)
-./deploy/vps/vault/setup-ssh-engine.sh
+./stoa-infra:deploy/vps/vault/setup-ssh-engine.sh
 
 # 2. Deploy CA trust to all VPS (once per fleet change)
-./deploy/vps/vault/deploy-ssh-trust.sh
+./stoa-infra:deploy/vps/vault/deploy-ssh-trust.sh
 
 # 3. Sign your key (daily)
-./deploy/vps/vault/setup-ssh-engine.sh --sign ~/.ssh/id_ed25519.pub
+./stoa-infra:deploy/vps/vault/setup-ssh-engine.sh --sign ~/.ssh/id_ed25519.pub
 
 # 4. Verify
-./deploy/vps/vault/deploy-ssh-trust.sh --verify
+./stoa-infra:deploy/vps/vault/deploy-ssh-trust.sh --verify
 ```
 
 **Migration**: Both mechanisms coexist. Static keys (`authorized_keys`) still work alongside
@@ -427,10 +427,10 @@ pki_int/   → Intermediate CA (EC P-256, 5y TTL, issues leaf certs)
 
 ```bash
 # 1. Configure PKI engines + CA hierarchy + roles (once)
-./deploy/vps/vault/setup-pki-engine.sh
+./stoa-infra:deploy/vps/vault/setup-pki-engine.sh
 
 # 2. Issue a test certificate
-./deploy/vps/vault/setup-pki-engine.sh --issue mcp.gostoa.dev
+./stoa-infra:deploy/vps/vault/setup-pki-engine.sh --issue mcp.gostoa.dev
 ```
 
 **Future**: cert-manager + Vault issuer for automatic K8s cert rotation.
@@ -441,12 +441,12 @@ pki_int/   → Intermediate CA (EC P-256, 5y TTL, issues leaf certs)
 |--------|----------|---------|
 | `rotate-secrets.sh` | `scripts/ops/` | Multi-component secret rotation (KC, personas, OIDC, VPS services) |
 | `configure-keycloak-policy.sh` | `scripts/ops/` | Password policy + brute-force hardening |
-| `vault-agent deploy.sh` | `deploy/vps/vault-agent/` | Deploy Vault Agent to VPS (systemd + templates) |
-| `vault-agent deploy-hegemon.sh` | `deploy/vps/vault-agent/` | Deploy vault-loader.sh to HEGEMON workers |
-| `vault-config.sh` | `deploy/external-secrets/` | Configure Vault K8s auth for ESO |
-| `setup-ssh-engine.sh` | `deploy/vps/vault/` | Configure Vault SSH CA signing engine + roles |
-| `deploy-ssh-trust.sh` | `deploy/vps/vault/` | Deploy SSH CA public key to all VPS |
-| `setup-pki-engine.sh` | `deploy/vps/vault/` | Configure Vault PKI CA hierarchy + mTLS roles |
+| `vault-agent deploy.sh` | `stoa-infra:deploy/vps/vault-agent/` | Deploy Vault Agent to VPS (systemd + templates) |
+| `vault-agent deploy-hegemon.sh` | `stoa-infra:deploy/vps/vault-agent/` | Deploy vault-loader.sh to HEGEMON workers |
+| `vault-config.sh` | `stoa-infra:deploy/external-secrets/` | Configure Vault K8s auth for ESO |
+| `setup-ssh-engine.sh` | `stoa-infra:deploy/vps/vault/` | Configure Vault SSH CA signing engine + roles |
+| `deploy-ssh-trust.sh` | `stoa-infra:deploy/vps/vault/` | Deploy SSH CA public key to all VPS |
+| `setup-pki-engine.sh` | `stoa-infra:deploy/vps/vault/` | Configure Vault PKI CA hierarchy + mTLS roles |
 | `infisical-token` | `~/.local/bin/` | Get Infisical access token (legacy, dual-write) |
 | `infisical-rotate-secret` | `~/.local/bin/` | Rotate Infisical Machine Identity (legacy) |
 
@@ -494,4 +494,4 @@ All secret operations are traced in Vault's audit log. K8s and VPS mutations are
 - Vault PKI: https://developer.hashicorp.com/vault/docs/secrets/pki
 - ESO + Vault: https://external-secrets.io/latest/provider/hashicorp-vault/
 - `.claude/rules/secrets-management.md` — Internal AI Factory reference
-- `deploy/vps/vault-agent/README.md` — VPS deploy guide
+- `stoa-infra:deploy/vps/vault-agent/README.md` — VPS deploy guide

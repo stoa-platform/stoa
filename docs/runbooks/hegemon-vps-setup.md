@@ -34,7 +34,7 @@ export VPS_IP=<new-vps-ip>
 Installs packages, creates `hegemon` user, hardens SSH, configures firewall, creates swap.
 
 ```bash
-./deploy/vps/hegemon/setup-base.sh $VPS_IP
+./stoa-infra:deploy/vps/hegemon/setup-base.sh $VPS_IP
 ```
 
 **What it does** (6 steps):
@@ -55,7 +55,7 @@ ssh -i ~/.ssh/id_ed25519_stoa hegemon@$VPS_IP 'whoami && sudo -n echo OK && tmux
 Installs Claude Code CLI, Node.js, git deploy key, environment template, memory watchdog.
 
 ```bash
-./deploy/vps/hegemon/setup-claude.sh $VPS_IP
+./stoa-infra:deploy/vps/hegemon/setup-claude.sh $VPS_IP
 ```
 
 **What it does** (6 steps):

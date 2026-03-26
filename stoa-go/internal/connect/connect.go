@@ -230,11 +230,13 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 
 	payload := HeartbeatPayload{
 		UptimeSeconds:  int(time.Since(a.startTime).Seconds()),
+		RoutesCount:    a.computeRoutesCount(),
 		DiscoveredAPIs: len(a.lastDiscoveredAPIs),
 	}
 
 	span.SetAttributes(
 		attribute.Int("stoa.uptime_seconds", payload.UptimeSeconds),
+		attribute.Int("stoa.routes_count", payload.RoutesCount),
 		attribute.Int("stoa.discovered_apis", payload.DiscoveredAPIs),
 	)
 
@@ -373,6 +375,23 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 
 	span.SetStatus(codes.Ok, "discovery reported")
 	return nil
+}
+
+// computeRoutesCount computes the total number of routes from discovered APIs.
+// Each path on an active API counts as one route (CAB-1916).
+func (a *Agent) computeRoutesCount() int {
+	count := 0
+	for _, api := range a.lastDiscoveredAPIs {
+		if api.IsActive {
+			paths := len(api.Paths)
+			if paths == 0 {
+				// API with no explicit paths still counts as 1 route
+				paths = 1
+			}
+			count += paths
+		}
+	}
+	return count
 }
 
 // DiscoveredAPIsCount returns the count of last discovered APIs.

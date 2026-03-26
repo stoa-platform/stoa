@@ -1,4 +1,5 @@
 """GitLab service for GitOps operations"""
+
 import asyncio
 import logging
 import re
@@ -26,6 +27,7 @@ GITLAB_MAX_RETRIES = 3
 
 class GitLabRateLimitError(Exception):
     """GitLab 429 rate limit exceeded"""
+
     pass
 
 
@@ -47,7 +49,7 @@ async def _fetch_with_protection(
                 last_error = TimeoutError(f"{name} timed out")
             except Exception as e:
                 if "429" in str(e) or "rate limit" in str(e).lower():
-                    wait_time = 2 ** attempt
+                    wait_time = 2**attempt
                     logger.warning(f"GitLab rate limit hit for '{name}', waiting {wait_time}s (attempt {attempt + 1})")
                     await asyncio.sleep(wait_time)
                     last_error = GitLabRateLimitError(str(e))
@@ -81,11 +83,12 @@ def _normalize_api_data(raw_data: dict) -> dict:
             "deployments": {
                 "dev": deployments.get("dev", False),
                 "staging": deployments.get("staging", False),
-            }
+            },
         }
 
     # Simple format - return as-is
     return raw_data
+
 
 class GitLabService:
     """Service for GitLab operations - GitOps source of truth"""
@@ -97,10 +100,7 @@ class GitLabService:
     async def connect(self):
         """Initialize GitLab connection"""
         try:
-            self._gl = gitlab.Gitlab(
-                settings.GITLAB_URL,
-                private_token=settings.GITLAB_TOKEN
-            )
+            self._gl = gitlab.Gitlab(settings.GITLAB_URL, private_token=settings.GITLAB_TOKEN)
             self._gl.auth()
 
             # Get the main APIM project
@@ -171,14 +171,16 @@ settings:
                     "action": "create",
                     "file_path": f"{tenant_path}/applications/.gitkeep",
                     "content": "",
-                }
+                },
             ]
 
-            self._project.commits.create({
-                "branch": "main",
-                "commit_message": f"Create tenant {tenant_id}",
-                "actions": actions,
-            })
+            self._project.commits.create(
+                {
+                    "branch": "main",
+                    "commit_message": f"Create tenant {tenant_id}",
+                    "actions": actions,
+                }
+            )
 
             logger.info(f"Created tenant structure for {tenant_id}")
             return True
@@ -193,10 +195,7 @@ settings:
             raise RuntimeError("GitLab not connected")
 
         try:
-            file = self._project.files.get(
-                f"{self._get_tenant_path(tenant_id)}/tenant.yaml",
-                ref="main"
-            )
+            file = self._project.files.get(f"{self._get_tenant_path(tenant_id)}/tenant.yaml", ref="main")
             return yaml.safe_load(file.decode())
         except gitlab.exceptions.GitlabGetError:
             return None
@@ -204,27 +203,24 @@ settings:
     async def _ensure_tenant_exists(self, tenant_id: str) -> bool:
         """Check if tenant exists, create structure if not"""
         try:
-            self._project.files.get(
-                f"{self._get_tenant_path(tenant_id)}/tenant.yaml",
-                ref="main"
-            )
+            self._project.files.get(f"{self._get_tenant_path(tenant_id)}/tenant.yaml", ref="main")
             return True
         except gitlab.exceptions.GitlabGetError:
             # Tenant doesn't exist, create minimal structure
             logger.info(f"Tenant {tenant_id} doesn't exist, creating structure...")
-            await self.create_tenant_structure(tenant_id, {
-                "name": tenant_id,
-                "display_name": tenant_id,
-            })
+            await self.create_tenant_structure(
+                tenant_id,
+                {
+                    "name": tenant_id,
+                    "display_name": tenant_id,
+                },
+            )
             return True
 
     async def _api_exists(self, tenant_id: str, api_name: str) -> bool:
         """Check if API already exists"""
         try:
-            self._project.files.get(
-                f"{self._get_api_path(tenant_id, api_name)}/api.yaml",
-                ref="main"
-            )
+            self._project.files.get(f"{self._get_api_path(tenant_id, api_name)}/api.yaml", ref="main")
             return True
         except gitlab.exceptions.GitlabGetError:
             return False
@@ -267,7 +263,7 @@ settings:
                 "deployments": {
                     "dev": False,
                     "staging": False,
-                }
+                },
             }
 
             api_yaml = yaml.dump(api_content, default_flow_style=False, allow_unicode=True)
@@ -284,23 +280,27 @@ settings:
                     "action": "create",
                     "file_path": f"{api_path}/policies/.gitkeep",
                     "content": "",
-                }
+                },
             ]
 
             # Add OpenAPI spec if provided
             if api_data.get("openapi_spec"):
-                actions.append({
-                    "action": "create",
-                    "file_path": f"{api_path}/openapi.yaml",
-                    "content": api_data["openapi_spec"],
-                })
+                actions.append(
+                    {
+                        "action": "create",
+                        "file_path": f"{api_path}/openapi.yaml",
+                        "content": api_data["openapi_spec"],
+                    }
+                )
 
             # Single atomic commit with all files
-            self._project.commits.create({
-                "branch": "main",
-                "commit_message": f"Create API {api_name} for tenant {tenant_id}",
-                "actions": actions,
-            })
+            self._project.commits.create(
+                {
+                    "branch": "main",
+                    "commit_message": f"Create API {api_name} for tenant {tenant_id}",
+                    "actions": actions,
+                }
+            )
 
             logger.info(f"Created API {api_name} for tenant {tenant_id}")
             return api_data.get("id", api_name)
@@ -320,10 +320,7 @@ settings:
             raise RuntimeError("GitLab not connected")
 
         try:
-            file = self._project.files.get(
-                f"{self._get_api_path(tenant_id, api_name)}/api.yaml",
-                ref="main"
-            )
+            file = self._project.files.get(f"{self._get_api_path(tenant_id, api_name)}/api.yaml", ref="main")
             raw_data = yaml.safe_load(file.decode())
             return _normalize_api_data(raw_data)
         except gitlab.exceptions.GitlabGetError:
@@ -341,13 +338,11 @@ settings:
             # Try openapi.yaml first, then openapi.json
             for filename in ["openapi.yaml", "openapi.yml", "openapi.json"]:
                 try:
-                    file = self._project.files.get(
-                        f"{self._get_api_path(tenant_id, api_name)}/{filename}",
-                        ref="main"
-                    )
+                    file = self._project.files.get(f"{self._get_api_path(tenant_id, api_name)}/{filename}", ref="main")
                     content = file.decode()
                     if filename.endswith(".json"):
                         import json
+
                         return json.loads(content)
                     else:
                         return yaml.safe_load(content)
@@ -365,10 +360,7 @@ settings:
             raise RuntimeError("GitLab not connected")
 
         try:
-            tree = self._project.repository_tree(
-                path=f"{self._get_tenant_path(tenant_id)}/apis",
-                ref="main"
-            )
+            tree = self._project.repository_tree(path=f"{self._get_tenant_path(tenant_id)}/apis", ref="main")
 
             apis = []
             for item in tree:
@@ -392,10 +384,7 @@ settings:
             raise RuntimeError("GitLab not connected")
 
         try:
-            tree = self._project.repository_tree(
-                path=f"{self._get_tenant_path(tenant_id)}/apis",
-                ref="main"
-            )
+            tree = self._project.repository_tree(path=f"{self._get_tenant_path(tenant_id)}/apis", ref="main")
         except gitlab.exceptions.GitlabGetError:
             return []
 
@@ -404,8 +393,7 @@ settings:
         async def fetch_api(api_id: str) -> dict | None:
             try:
                 return await _fetch_with_protection(
-                    lambda aid=api_id: self.get_api(tenant_id, aid),
-                    f"api:{tenant_id}/{api_id}"
+                    lambda aid=api_id: self.get_api(tenant_id, aid), f"api:{tenant_id}/{api_id}"
                 )
             except Exception as e:
                 logger.warning(f"Failed to fetch API {tenant_id}/{api_id}: {e}")
@@ -414,17 +402,13 @@ settings:
         results = await asyncio.gather(*[fetch_api(aid) for aid in api_dirs])
         return [api for api in results if api is not None]
 
-    async def get_all_openapi_specs_parallel(
-        self,
-        tenant_id: str,
-        api_ids: list[str]
-    ) -> dict[str, dict | None]:
+    async def get_all_openapi_specs_parallel(self, tenant_id: str, api_ids: list[str]) -> dict[str, dict | None]:
         """Fetch OpenAPI specs for multiple APIs in parallel (CAB-688)."""
+
         async def fetch_spec(api_id: str) -> tuple[str, dict | None]:
             try:
                 spec = await _fetch_with_protection(
-                    lambda aid=api_id: self.get_api_openapi_spec(tenant_id, aid),
-                    f"openapi:{tenant_id}/{api_id}"
+                    lambda aid=api_id: self.get_api_openapi_spec(tenant_id, aid), f"openapi:{tenant_id}/{api_id}"
                 )
                 return (api_id, spec)
             except Exception as e:
@@ -438,9 +422,7 @@ settings:
         """Get full repository tree in ONE call (CAB-688 obligation #5)."""
         if not self._project:
             raise RuntimeError("GitLab not connected")
-        return self._project.repository_tree(
-            path=path, ref="main", recursive=True, per_page=1000, all=True
-        )
+        return self._project.repository_tree(path=path, ref="main", recursive=True, per_page=1000, all=True)
 
     def parse_tree_to_tenant_apis(self, tree: list[dict]) -> dict[str, list[str]]:
         """Parse recursive tree into {tenant_id: [api_ids]} structure."""
@@ -464,10 +446,7 @@ settings:
             raise RuntimeError("GitLab not connected")
 
         try:
-            file = self._project.files.get(
-                f"{self._get_api_path(tenant_id, api_name)}/api.yaml",
-                ref="main"
-            )
+            file = self._project.files.get(f"{self._get_api_path(tenant_id, api_name)}/api.yaml", ref="main")
             current = yaml.safe_load(file.decode())
             current.update(api_data)
 
@@ -487,17 +466,28 @@ settings:
             raise RuntimeError("GitLab not connected")
 
         try:
-            # Delete entire API directory by deleting files
+            # Delete entire API directory in a single atomic commit
             api_path = self._get_api_path(tenant_id, api_name)
             tree = self._project.repository_tree(path=api_path, ref="main", recursive=True)
 
+            actions = []
             for item in tree:
                 if item["type"] == "blob":
-                    self._project.files.delete(
-                        file_path=item["path"],
-                        commit_message=f"Delete API {api_name}",
-                        branch="main"
+                    actions.append(
+                        {
+                            "action": "delete",
+                            "file_path": item["path"],
+                        }
                     )
+
+            if actions:
+                self._project.commits.create(
+                    {
+                        "branch": "main",
+                        "commit_message": f"Delete API {api_name}",
+                        "actions": actions,
+                    }
+                )
 
             logger.info(f"Deleted API {api_name} for tenant {tenant_id}")
             return True
@@ -562,18 +552,20 @@ settings:
         # Normalize tools
         tools = []
         for tool in spec.get("tools", []):
-            tools.append({
-                "name": tool.get("name"),
-                "display_name": tool.get("displayName", tool.get("name")),
-                "description": tool.get("description", ""),
-                "endpoint": tool.get("endpoint", ""),
-                "method": tool.get("method", "POST"),
-                "enabled": tool.get("enabled", True),
-                "requires_approval": tool.get("requiresApproval", False),
-                "input_schema": tool.get("inputSchema", {}),
-                "timeout": tool.get("timeout", "30s"),
-                "rate_limit": tool.get("rateLimit", {}).get("requestsPerMinute", 60),
-            })
+            tools.append(
+                {
+                    "name": tool.get("name"),
+                    "display_name": tool.get("displayName", tool.get("name")),
+                    "description": tool.get("description", ""),
+                    "endpoint": tool.get("endpoint", ""),
+                    "method": tool.get("method", "POST"),
+                    "enabled": tool.get("enabled", True),
+                    "requires_approval": tool.get("requiresApproval", False),
+                    "input_schema": tool.get("inputSchema", {}),
+                    "timeout": tool.get("timeout", "30s"),
+                    "rate_limit": tool.get("rateLimit", {}).get("requestsPerMinute", 60),
+                }
+            )
 
         return {
             "name": metadata.get("name", ""),
@@ -612,10 +604,7 @@ settings:
         server_path = self._get_mcp_server_path(tenant_id, server_name)
 
         try:
-            file = self._project.files.get(
-                f"{server_path}/server.yaml",
-                ref="main"
-            )
+            file = self._project.files.get(f"{server_path}/server.yaml", ref="main")
             raw_data = yaml.safe_load(file.decode())
             return self._normalize_mcp_server_data(raw_data, server_path)
         except gitlab.exceptions.GitlabGetError:
@@ -689,46 +678,52 @@ settings:
 
         try:
             # Build YAML content in Kubernetes-style format
-            server_yaml = yaml.dump({
-                "apiVersion": "gostoa.dev/v1",
-                "kind": "MCPServer",
-                "metadata": {
-                    "name": server_name,
-                    "tenant": tenant_id,
-                    "version": server_data.get("version", "1.0.0"),
-                    "labels": {
-                        "managed-by": "gitops",
+            server_yaml = yaml.dump(
+                {
+                    "apiVersion": "gostoa.dev/v1",
+                    "kind": "MCPServer",
+                    "metadata": {
+                        "name": server_name,
+                        "tenant": tenant_id,
+                        "version": server_data.get("version", "1.0.0"),
+                        "labels": {
+                            "managed-by": "gitops",
+                        },
+                    },
+                    "spec": {
+                        "displayName": server_data.get("display_name", server_name),
+                        "description": server_data.get("description", ""),
+                        "icon": server_data.get("icon", ""),
+                        "category": server_data.get("category", "public"),
+                        "status": server_data.get("status", "active"),
+                        "documentationUrl": server_data.get("documentation_url", ""),
+                        "visibility": server_data.get("visibility", {"public": True}),
+                        "subscription": {
+                            "requiresApproval": server_data.get("requires_approval", False),
+                            "autoApproveRoles": server_data.get("auto_approve_roles", []),
+                            "defaultPlan": server_data.get("default_plan", "free"),
+                        },
+                        "tools": server_data.get("tools", []),
+                        "backend": server_data.get("backend", {}),
                     },
                 },
-                "spec": {
-                    "displayName": server_data.get("display_name", server_name),
-                    "description": server_data.get("description", ""),
-                    "icon": server_data.get("icon", ""),
-                    "category": server_data.get("category", "public"),
-                    "status": server_data.get("status", "active"),
-                    "documentationUrl": server_data.get("documentation_url", ""),
-                    "visibility": server_data.get("visibility", {"public": True}),
-                    "subscription": {
-                        "requiresApproval": server_data.get("requires_approval", False),
-                        "autoApproveRoles": server_data.get("auto_approve_roles", []),
-                        "defaultPlan": server_data.get("default_plan", "free"),
-                    },
-                    "tools": server_data.get("tools", []),
-                    "backend": server_data.get("backend", {}),
-                },
-            }, default_flow_style=False, allow_unicode=True)
+                default_flow_style=False,
+                allow_unicode=True,
+            )
 
-            self._project.commits.create({
-                "branch": "main",
-                "commit_message": f"Create MCP server {server_name}",
-                "actions": [
-                    {
-                        "action": "create",
-                        "file_path": f"{server_path}/server.yaml",
-                        "content": server_yaml,
-                    },
-                ],
-            })
+            self._project.commits.create(
+                {
+                    "branch": "main",
+                    "commit_message": f"Create MCP server {server_name}",
+                    "actions": [
+                        {
+                            "action": "create",
+                            "file_path": f"{server_path}/server.yaml",
+                            "content": server_yaml,
+                        },
+                    ],
+                }
+            )
 
             logger.info(f"Created MCP server {server_name}")
             return server_name
@@ -745,10 +740,7 @@ settings:
         server_path = self._get_mcp_server_path(tenant_id, server_name)
 
         try:
-            file = self._project.files.get(
-                f"{server_path}/server.yaml",
-                ref="main"
-            )
+            file = self._project.files.get(f"{server_path}/server.yaml", ref="main")
             current = yaml.safe_load(file.decode())
 
             # Update spec fields
@@ -792,17 +784,21 @@ settings:
             actions = []
             for item in tree:
                 if item["type"] == "blob":
-                    actions.append({
-                        "action": "delete",
-                        "file_path": item["path"],
-                    })
+                    actions.append(
+                        {
+                            "action": "delete",
+                            "file_path": item["path"],
+                        }
+                    )
 
             if actions:
-                self._project.commits.create({
-                    "branch": "main",
-                    "commit_message": f"Delete MCP server {server_name}",
-                    "actions": actions,
-                })
+                self._project.commits.create(
+                    {
+                        "branch": "main",
+                        "commit_message": f"Delete MCP server {server_name}",
+                        "actions": actions,
+                    }
+                )
 
             logger.info(f"Deleted MCP server {server_name}")
             return True

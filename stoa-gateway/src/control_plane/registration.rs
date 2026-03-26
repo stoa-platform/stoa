@@ -67,6 +67,9 @@ pub struct HeartbeatPayload {
     /// Number of registered policies
     pub policies_count: usize,
 
+    /// Number of discovered APIs / tools (CAB-1916)
+    pub discovered_apis: usize,
+
     /// Total requests processed (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requests_total: Option<u64>,
@@ -304,6 +307,7 @@ impl GatewayRegistrar {
                     uptime_seconds: self.start_time.elapsed().as_secs(),
                     routes_count: state.route_registry.count(),
                     policies_count: state.policy_registry.count(),
+                    discovered_apis: state.tool_registry.count(),
                     requests_total: Some(crate::metrics::get_requests_total()),
                     error_rate: Some(crate::metrics::get_error_rate()),
                 };
@@ -455,6 +459,7 @@ mod tests {
             uptime_seconds: 3600,
             routes_count: 10,
             policies_count: 5,
+            discovered_apis: 3,
             requests_total: Some(1000),
             error_rate: None,
         };
@@ -462,6 +467,7 @@ mod tests {
         let json = serde_json::to_string(&payload).expect("Should serialize");
         assert!(json.contains("3600"));
         assert!(json.contains("1000"));
+        assert!(json.contains("\"discovered_apis\":3"));
         assert!(!json.contains("error_rate")); // None should be skipped
     }
 
@@ -471,6 +477,7 @@ mod tests {
             uptime_seconds: 7200,
             routes_count: 5,
             policies_count: 3,
+            discovered_apis: 8,
             requests_total: Some(5000),
             error_rate: Some(0.02),
         };
@@ -766,6 +773,7 @@ mod tests {
             uptime_seconds: 60,
             routes_count: 5,
             policies_count: 2,
+            discovered_apis: 3,
             requests_total: None,
             error_rate: None,
         };
@@ -791,6 +799,7 @@ mod tests {
             uptime_seconds: 60,
             routes_count: 0,
             policies_count: 0,
+            discovered_apis: 0,
             requests_total: None,
             error_rate: None,
         };

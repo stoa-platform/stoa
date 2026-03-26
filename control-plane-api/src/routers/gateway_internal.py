@@ -387,14 +387,16 @@ async def gateway_heartbeat(
     instance.last_health_check = now
     instance.status = GatewayInstanceStatus.ONLINE
 
-    # Store metrics in health_details
+    # Store metrics in health_details.
+    # CAB-1916: heartbeat stores `discovered_apis_count` (int), never
+    # `discovered_apis` — that key is reserved for the discovery array.
     instance.health_details = {
         **(instance.health_details or {}),
         "last_heartbeat": now.isoformat(),
         "uptime_seconds": payload.uptime_seconds,
         "routes_count": payload.routes_count,
         "policies_count": payload.policies_count,
-        "discovered_apis": payload.discovered_apis,
+        "discovered_apis_count": payload.discovered_apis,
         "requests_total": payload.requests_total,
         "error_rate": payload.error_rate,
     }

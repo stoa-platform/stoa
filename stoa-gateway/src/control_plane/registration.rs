@@ -3,6 +3,10 @@
 //! Implements the "Apple ecosystem" experience where gateways self-register
 //! with the Control Plane at startup and maintain presence via heartbeat.
 //!
+//! Registration retries with exponential backoff (5s → 10s → 20s → ... → 300s max)
+//! so that gateways that start before the Control Plane become visible once the
+//! CP is ready (CAB-1915).
+//!
 //! # Example
 //!
 //! ```ignore
@@ -11,11 +15,8 @@
 //!     "gw_secret_key".to_string(),
 //! );
 //!
-//! // Register at startup
-//! let gateway_id = registrar.register(&config).await?;
-//!
-//! // Start background heartbeat (every 30s)
-//! registrar.start_heartbeat(state.clone());
+//! // Start background registration + heartbeat (retries until CP is ready)
+//! registrar.start_registration_and_heartbeat(config, state, 30);
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -216,6 +217,68 @@ impl GatewayRegistrar {
         }
     }
 
+    /// Start background registration with retry, then heartbeat loop (CAB-1915).
+    ///
+    /// In K8s, the gateway may start before the Control Plane API is ready.
+    /// This method retries registration with exponential backoff (5s → 300s max),
+    /// then starts the heartbeat loop once registered.
+    pub fn start_registration_and_heartbeat(
+        self: Arc<Self>,
+        config: Config,
+        state: Arc<AppState>,
+        heartbeat_interval_secs: u64,
+    ) {
+        let registrar = self.clone();
+
+        tokio::spawn(async move {
+            const INITIAL_DELAY_SECS: u64 = 5;
+            const MAX_DELAY_SECS: u64 = 300;
+
+            let mut delay_secs = INITIAL_DELAY_SECS;
+            let mut attempt = 0u32;
+
+            loop {
+                attempt += 1;
+
+                match registrar.register(&config).await {
+                    Ok(id) => {
+                        if attempt > 1 {
+                            info!(
+                                gateway_id = %id,
+                                attempts = attempt,
+                                "Registered with Control Plane after retry"
+                            );
+                        } else {
+                            info!(gateway_id = %id, "Registered with Control Plane");
+                        }
+                        // Registration succeeded — run heartbeat loop forever
+                        registrar
+                            .run_heartbeat_loop(&state, heartbeat_interval_secs)
+                            .await;
+                        return; // heartbeat loop only exits if we want to stop
+                    }
+                    Err(RegistrationError::InvalidApiKey) => {
+                        error!(
+                            "Gateway registration rejected: invalid API key — \
+                             check STOA_CONTROL_PLANE_API_KEY. Will not retry."
+                        );
+                        return; // Permanent failure, no point retrying
+                    }
+                    Err(e) => {
+                        warn!(
+                            error = %e,
+                            attempt = attempt,
+                            retry_in_secs = delay_secs,
+                            "Registration failed, will retry"
+                        );
+                        tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+                        delay_secs = (delay_secs * 2).min(MAX_DELAY_SECS);
+                    }
+                }
+            }
+        });
+    }
+
     /// Start background heartbeat loop
     ///
     /// Spawns a tokio task that sends heartbeats at the configured interval.
@@ -223,30 +286,35 @@ impl GatewayRegistrar {
         let registrar = self.clone();
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+            registrar.run_heartbeat_loop(&state, interval_secs).await;
+        });
+    }
 
-            loop {
-                interval.tick().await;
+    /// Internal heartbeat loop — sends heartbeats at the configured interval.
+    async fn run_heartbeat_loop(&self, state: &AppState, interval_secs: u64) {
+        let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
 
-                let gateway_id = *registrar.gateway_id.read().await;
+        loop {
+            interval.tick().await;
 
-                if let Some(id) = gateway_id {
-                    let payload = HeartbeatPayload {
-                        uptime_seconds: registrar.start_time.elapsed().as_secs(),
-                        routes_count: state.route_registry.count(),
-                        policies_count: state.policy_registry.count(),
-                        requests_total: Some(crate::metrics::get_requests_total()),
-                        error_rate: Some(crate::metrics::get_error_rate()),
-                    };
+            let gateway_id = *self.gateway_id.read().await;
 
-                    if let Err(e) = registrar.send_heartbeat(id, payload).await {
-                        warn!(error = %e, "Failed to send heartbeat");
-                    } else {
-                        debug!(gateway_id = %id, "Heartbeat sent");
-                    }
+            if let Some(id) = gateway_id {
+                let payload = HeartbeatPayload {
+                    uptime_seconds: self.start_time.elapsed().as_secs(),
+                    routes_count: state.route_registry.count(),
+                    policies_count: state.policy_registry.count(),
+                    requests_total: Some(crate::metrics::get_requests_total()),
+                    error_rate: Some(crate::metrics::get_error_rate()),
+                };
+
+                if let Err(e) = self.send_heartbeat(id, payload).await {
+                    warn!(error = %e, "Failed to send heartbeat");
+                } else {
+                    debug!(gateway_id = %id, "Heartbeat sent");
                 }
             }
-        });
+        }
     }
 
     /// Send a single heartbeat
@@ -729,5 +797,82 @@ mod tests {
 
         let result = registrar.send_heartbeat(gw_id, payload).await;
         assert!(result.is_err());
+    }
+
+    /// Regression test for CAB-1915: gateway that starts before CP API must
+    /// retry registration until CP becomes available, then start heartbeat.
+    /// The old code tried once at startup and silently gave up on failure,
+    /// leaving the edge-mcp gateway invisible in the Console.
+    #[tokio::test]
+    async fn regression_cab_1915_retry_registration_on_cp_unavailable() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+        let attempt_count = Arc::new(AtomicU32::new(0));
+
+        // First 2 attempts fail with 503 (CP not ready), third succeeds.
+        let counter = attempt_count.clone();
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .respond_with(move |_: &wiremock::Request| {
+                let n = counter.fetch_add(1, Ordering::SeqCst);
+                if n < 2 {
+                    ResponseTemplate::new(503).set_body_string("service unavailable")
+                } else {
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "id": gw_id.to_string(),
+                        "name": "gw-edgemcp-prod",
+                        "status": "active"
+                    }))
+                }
+            })
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "test-key".to_string());
+
+        // Verify initial registration fails (simulating CP not ready)
+        let config = Config::default();
+        let result = registrar.register(&config).await;
+        assert!(
+            result.is_err(),
+            "First attempt should fail (CP returns 503)"
+        );
+
+        // Second attempt also fails
+        let result = registrar.register(&config).await;
+        assert!(
+            result.is_err(),
+            "Second attempt should fail (CP returns 503)"
+        );
+
+        // Third attempt succeeds (CP is now ready)
+        let result = registrar.register(&config).await;
+        assert!(result.is_ok(), "Third attempt should succeed (CP is ready)");
+        assert_eq!(result.unwrap(), gw_id);
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
+    }
+
+    /// Regression test for CAB-1915: invalid API key should NOT be retried
+    /// (permanent failure, not a transient issue).
+    #[tokio::test]
+    async fn regression_cab_1915_no_retry_on_invalid_api_key() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "bad-key".to_string());
+        let config = Config::default();
+
+        let result = registrar.register(&config).await;
+        assert!(matches!(
+            result.unwrap_err(),
+            RegistrationError::InvalidApiKey
+        ));
     }
 }

@@ -423,6 +423,236 @@ func TestMapPolicyConfig(t *testing.T) {
 	}
 }
 
+func TestWebMethodsSyncRoutes(t *testing.T) {
+	var createdAPIs []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			// No existing APIs
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"apiResponse": []interface{}{}})
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodPost:
+			body, _ := io.ReadAll(r.Body)
+			var payload map[string]interface{}
+			_ = json.Unmarshal(body, &payload)
+			createdAPIs = append(createdAPIs, payload["apiName"].(string))
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-api-1"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
+	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+		{Name: "petstore", BackendURL: "http://petstore.example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
+	})
+	if err != nil {
+		t.Fatalf("sync routes error: %v", err)
+	}
+	if len(createdAPIs) != 1 || createdAPIs[0] != "stoa-petstore" {
+		t.Errorf("expected [stoa-petstore], got %v", createdAPIs)
+	}
+}
+
+func TestWebMethodsSyncRoutesIdempotent(t *testing.T) {
+	var putCount, postCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			// API already exists
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"apiResponse": []map[string]interface{}{
+					{"id": "existing-1", "apiName": "stoa-petstore", "apiVersion": "1.0", "isActive": true},
+				},
+			})
+		case r.URL.Path == "/rest/apigateway/apis/existing-1" && r.Method == http.MethodPut:
+			putCount++
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "existing-1"})
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodPost:
+			postCount++
+			w.WriteHeader(http.StatusCreated)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
+	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+		{Name: "petstore", BackendURL: "http://petstore.example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
+	})
+	if err != nil {
+		t.Fatalf("sync routes error: %v", err)
+	}
+	if putCount != 1 {
+		t.Errorf("expected 1 PUT (update), got %d", putCount)
+	}
+	if postCount != 0 {
+		t.Errorf("expected 0 POST (no duplicate create), got %d", postCount)
+	}
+}
+
+func TestWebMethodsSyncRoutesSkipInactive(t *testing.T) {
+	var requestCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"apiResponse": []interface{}{}})
+			return
+		}
+		requestCount++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{})
+	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+		{Name: "active-route", BackendURL: "http://example.com", PathPrefix: "/a", Methods: []string{"GET"}, Activated: true},
+		{Name: "inactive-route", BackendURL: "http://example.com", PathPrefix: "/b", Methods: []string{"GET"}, Activated: false},
+	})
+	if err != nil {
+		t.Fatalf("sync routes error: %v", err)
+	}
+	// Only 1 POST for the active route, inactive is skipped before any HTTP call
+	if requestCount != 1 {
+		t.Errorf("expected 1 create request (inactive skipped), got %d", requestCount)
+	}
+}
+
+func TestWebMethodsSyncRoutesSpecHashSkip(t *testing.T) {
+	var syncCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"apiResponse": []interface{}{}})
+			return
+		}
+		syncCount++
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-1"})
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{})
+	routes := []Route{
+		{Name: "petstore", BackendURL: "http://example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true, SpecHash: "abc123"},
+	}
+
+	// First sync: should create
+	if err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
+		t.Fatalf("first sync error: %v", err)
+	}
+	if syncCount != 1 {
+		t.Fatalf("expected 1 sync on first call, got %d", syncCount)
+	}
+
+	// Second sync with same hash: should skip
+	syncCount = 0
+	if err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
+		t.Fatalf("second sync error: %v", err)
+	}
+	if syncCount != 0 {
+		t.Errorf("expected 0 syncs (hash unchanged), got %d", syncCount)
+	}
+
+	// Third sync with different hash: should sync again
+	routes[0].SpecHash = "def456"
+	syncCount = 0
+	if err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
+		t.Fatalf("third sync error: %v", err)
+	}
+	if syncCount != 1 {
+		t.Errorf("expected 1 sync (hash changed), got %d", syncCount)
+	}
+}
+
+func TestWebMethodsInjectCredentialsWithAPIAssociation(t *testing.T) {
+	var appCreated bool
+	var associatedPath string
+	var associatedPayload map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/applications" && r.Method == http.MethodPost:
+			appCreated = true
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-42"})
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"apiResponse": []map[string]interface{}{
+					{"id": "api-99", "apiName": "Petstore", "apiVersion": "1.0", "isActive": true},
+				},
+			})
+		case strings.HasPrefix(r.URL.Path, "/rest/apigateway/applications/") && strings.HasSuffix(r.URL.Path, "/apis") && r.Method == http.MethodPost:
+			associatedPath = r.URL.Path
+			body, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(body, &associatedPayload)
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
+	err := adapter.InjectCredentials(context.Background(), server.URL, []Credential{
+		{ConsumerID: "user-1", APIName: "Petstore", Key: "key-abc", AuthType: "key-auth"},
+	})
+	if err != nil {
+		t.Fatalf("inject credentials error: %v", err)
+	}
+	if !appCreated {
+		t.Error("expected application to be created")
+	}
+	if associatedPath != "/rest/apigateway/applications/app-42/apis" {
+		t.Errorf("expected association to app-42, got path: %s", associatedPath)
+	}
+	apiIDs, ok := associatedPayload["apiIDs"].([]interface{})
+	if !ok || len(apiIDs) != 1 || apiIDs[0] != "api-99" {
+		t.Errorf("expected apiIDs=[api-99], got %v", associatedPayload["apiIDs"])
+	}
+}
+
+func TestWebMethodsResolveAPIIDSingleFetch(t *testing.T) {
+	var fetchCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet {
+			fetchCount++
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"apiResponse": []map[string]interface{}{
+					{"id": "api-single", "apiName": "Petstore", "apiVersion": "1.0", "isActive": true},
+				},
+			})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{})
+	id, err := adapter.resolveAPIID(context.Background(), server.URL, "Petstore")
+	if err != nil {
+		t.Fatalf("resolve error: %v", err)
+	}
+	if id != "api-single" {
+		t.Errorf("expected api-single, got %s", id)
+	}
+	if fetchCount != 1 {
+		t.Errorf("expected exactly 1 HTTP call to /apis, got %d", fetchCount)
+	}
+}
+
 func TestWebMethodsDiscoverWithBasicAuth(t *testing.T) {
 	var receivedUser, receivedPass string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

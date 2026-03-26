@@ -102,10 +102,10 @@ kubectl rollout restart -n stoa-system deploy/loki
 
 ```bash
 # Re-apply index templates (if missing):
-cd deploy/opensearch/scripts && ./init-opensearch.sh --force
+cd stoa-infra:deploy/opensearch/scripts && ./init-opensearch.sh --force
 
 # Re-apply ISM policies (if indices growing unbounded):
-cd deploy/opensearch/scripts && ./init-opensearch.sh --force
+cd stoa-infra:deploy/opensearch/scripts && ./init-opensearch.sh --force
 
 # Fix DLS role for a tenant (if tenant sees no data):
 # Verify the role exists:
@@ -122,7 +122,7 @@ kubectl get configmap -n stoa-system grafana-datasources -o yaml | grep -A5 deri
 ```bash
 # Rollback OpenSearch to previous index template version:
 # Templates are versioned — deploy previous ConfigMap:
-kubectl apply -f k8s/opensearch/index-templates-configmap.yaml
+kubectl apply -f stoa-infra:k8s/opensearch/index-templates-configmap.yaml
 
 # Rollback Grafana dashboards:
 kubectl apply -f k8s/grafana/dashboards-configmap.yaml
@@ -179,19 +179,19 @@ kubectl exec -n stoa-system deploy/grafana -- \
 
 ### Grafana Dashboards
 
-- Gateway Unified: `docker/observability/grafana/dashboards/gateway-unified.json` (19 panels)
-- Tenant Observability: `docker/observability/grafana/dashboards/tenant-observability.json` (17 panels)
+- Gateway Unified: `stoa-infra:docker/observability/grafana/dashboards/gateway-unified.json` (19 panels)
+- Tenant Observability: `stoa-infra:docker/observability/grafana/dashboards/tenant-observability.json` (17 panels)
 
 ### OpenSearch Configuration
 
-- Index templates: `deploy/opensearch/index-templates/`
-- ISM policies: `deploy/opensearch/index-templates/ism-policies.json`
+- Index templates: `stoa-infra:deploy/opensearch/index-templates/`
+- ISM policies: `stoa-infra:deploy/opensearch/index-templates/ism-policies.json`
 - Security roles (DLS/FLS): `deploy/docker-compose/config/opensearch/security/roles.yml`
-- K8s ConfigMaps: `k8s/opensearch/`
+- K8s ConfigMaps: `stoa-infra:k8s/opensearch/`
 
 ### Trace Correlation
 
-- Loki -> Tempo: `derivedFields` in `docker/observability/grafana/provisioning/datasources/prometheus.yml:44-48`
+- Loki -> Tempo: `derivedFields` in `stoa-infra:docker/observability/grafana/provisioning/datasources/prometheus.yml:44-48`
 - Tempo -> Loki: `tracesToLogsV2` in same file, lines 72-74
 
 ### Related Tickets

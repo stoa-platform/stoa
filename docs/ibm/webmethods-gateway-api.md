@@ -1047,7 +1047,7 @@ Internal:  http://localhost:5555/rest/apigateway/apis
 
 ## Ansible Integration
 
-See `/ansible/playbooks/register-api-gateway.yaml` for automated API registration including:
+See `stoa-infra:ansible/playbooks/register-api-gateway.yaml` for automated API registration including:
 1. Download and convert OpenAPI spec
 2. Create endpoint alias
 3. Import API via file upload

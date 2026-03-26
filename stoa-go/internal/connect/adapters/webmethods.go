@@ -13,15 +13,17 @@ import (
 
 // WebMethodsAdapter implements GatewayAdapter for webMethods API Gateway (port 5555).
 type WebMethodsAdapter struct {
-	client *http.Client
-	cfg    AdapterConfig
+	client      *http.Client
+	cfg         AdapterConfig
+	syncedHashes map[string]string // tracks last-synced SpecHash per route name
 }
 
 // NewWebMethodsAdapter creates a new webMethods adapter.
 func NewWebMethodsAdapter(cfg AdapterConfig) *WebMethodsAdapter {
 	return &WebMethodsAdapter{
-		client: &http.Client{Timeout: 10 * time.Second},
-		cfg:    cfg,
+		client:       &http.Client{Timeout: 10 * time.Second},
+		cfg:          cfg,
+		syncedHashes: make(map[string]string),
 	}
 }
 
@@ -216,22 +218,8 @@ func getOrDefault(config map[string]interface{}, key string, defaultVal interfac
 	return defaultVal
 }
 
-// resolveAPIID finds the webMethods API ID by name.
+// resolveAPIID finds the webMethods API ID by name in a single HTTP call.
 func (w *WebMethodsAdapter) resolveAPIID(ctx context.Context, adminURL string, apiName string) (string, error) {
-	// Use Discover to get parsed APIs (handles both flat and nested response shapes)
-	apis, err := w.Discover(ctx, adminURL)
-	if err != nil {
-		return "", fmt.Errorf("list apis for resolve: %w", err)
-	}
-
-	for _, api := range apis {
-		if api.Name == apiName {
-			// We need the wM ID, not just the name. Re-fetch from raw response.
-			break
-		}
-	}
-
-	// Direct lookup from raw response for the ID
 	apisURL := adminURL + "/rest/apigateway/apis"
 	body, err := w.doGet(ctx, apisURL)
 	if err != nil {
@@ -254,7 +242,6 @@ func (w *WebMethodsAdapter) resolveAPIID(ctx context.Context, adminURL string, a
 		}
 	}
 
-	_ = apis // suppress unused warning
 	return "", fmt.Errorf("webmethods API not found: %s", apiName)
 }
 
@@ -364,15 +351,31 @@ func (w *WebMethodsAdapter) RemovePolicy(ctx context.Context, adminURL string, a
 }
 
 // SyncRoutes pushes CP routes to webMethods via REST API import.
+// Idempotent: checks if API exists by name, uses PUT to update if so, POST only for new APIs.
+// Skips unchanged routes based on SpecHash reconciliation.
 func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
+	// Build index of existing APIs by name → ID (single HTTP call)
+	existingAPIs, err := w.listAPIsIndexedByName(ctx, adminURL)
+	if err != nil {
+		return fmt.Errorf("list existing apis: %w", err)
+	}
+
 	for _, route := range routes {
 		if !route.Activated {
 			continue
 		}
 
-		// Build a minimal API payload for webMethods import
+		wmName := "stoa-" + route.Name
+
+		// SpecHash reconciliation: skip if unchanged since last sync
+		if route.SpecHash != "" {
+			if lastHash, ok := w.syncedHashes[wmName]; ok && lastHash == route.SpecHash {
+				continue
+			}
+		}
+
 		apiPayload := map[string]interface{}{
-			"apiName":        "stoa-" + route.Name,
+			"apiName":        wmName,
 			"apiVersion":     "1.0",
 			"apiDescription": fmt.Sprintf("STOA managed route %s", route.Name),
 			"type":           "REST",
@@ -394,8 +397,19 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			return fmt.Errorf("marshal webmethods api: %w", err)
 		}
 
-		apiURL := adminURL + "/rest/apigateway/apis"
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(string(data)))
+		var method string
+		var apiURL string
+		if existingID, exists := existingAPIs[wmName]; exists {
+			// Update existing API
+			method = http.MethodPut
+			apiURL = fmt.Sprintf("%s/rest/apigateway/apis/%s", adminURL, existingID)
+		} else {
+			// Create new API
+			method = http.MethodPost
+			apiURL = adminURL + "/rest/apigateway/apis"
+		}
+
+		req, err := http.NewRequestWithContext(ctx, method, apiURL, strings.NewReader(string(data)))
 		if err != nil {
 			return err
 		}
@@ -404,22 +418,62 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 
 		resp, err := w.client.Do(req)
 		if err != nil {
-			return fmt.Errorf("create webmethods api: %w", err)
+			return fmt.Errorf("sync webmethods api: %w", err)
 		}
 		_ = resp.Body.Close()
 
+		// 409 Conflict on POST = API already exists, treat as success
+		if resp.StatusCode == http.StatusConflict {
+			continue
+		}
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("webmethods api create failed (%d)", resp.StatusCode)
+			return fmt.Errorf("webmethods api sync failed (%d)", resp.StatusCode)
+		}
+
+		// Track synced hash
+		if route.SpecHash != "" {
+			w.syncedHashes[wmName] = route.SpecHash
 		}
 	}
 
 	return nil
 }
 
+// listAPIsIndexedByName returns a map of API name → API ID from a single list call.
+func (w *WebMethodsAdapter) listAPIsIndexedByName(ctx context.Context, adminURL string) (map[string]string, error) {
+	apisURL := adminURL + "/rest/apigateway/apis"
+	body, err := w.doGet(ctx, apisURL)
+	if err != nil {
+		return nil, err
+	}
+
+	var apisResp wmAPIsResponse
+	if err := json.Unmarshal(body, &apisResp); err != nil {
+		return nil, err
+	}
+
+	index := make(map[string]string)
+	for _, raw := range apisResp.APIResponse {
+		var wrapper wmAPIWrapper
+		if err := json.Unmarshal(raw, &wrapper); err == nil && wrapper.API.APIName != "" {
+			index[wrapper.API.APIName] = wrapper.API.ID
+			continue
+		}
+		var flat wmAPI
+		if err := json.Unmarshal(raw, &flat); err == nil && flat.APIName != "" {
+			index[flat.APIName] = flat.ID
+			continue
+		}
+	}
+
+	return index, nil
+}
+
 // InjectCredentials provisions applications and API associations on webMethods.
+// Two-step process: (1) create application, (2) associate with APIs.
 func (w *WebMethodsAdapter) InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error {
 	for _, cred := range creds {
-		// 1. Create application
+		// Step 1: Create application
 		appPayload := map[string]interface{}{
 			"name":        "stoa-" + cred.ConsumerID,
 			"description": fmt.Sprintf("STOA managed consumer %s", cred.ConsumerID),
@@ -445,10 +499,56 @@ func (w *WebMethodsAdapter) InjectCredentials(ctx context.Context, adminURL stri
 		if err != nil {
 			return fmt.Errorf("create webmethods application: %w", err)
 		}
+
+		// Read response body to extract application ID
+		respBody, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
-			return fmt.Errorf("webmethods app create failed (%d)", resp.StatusCode)
+			return fmt.Errorf("webmethods app create failed (%d): %s", resp.StatusCode, string(respBody))
+		}
+
+		// Extract application ID from response
+		var appResp struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(respBody, &appResp); err != nil || appResp.ID == "" {
+			// If we can't get the ID (e.g., 409 Conflict), skip association
+			continue
+		}
+
+		// Step 2: Associate application with APIs
+		if cred.APIName != "" {
+			apiID, err := w.resolveAPIID(ctx, adminURL, cred.APIName)
+			if err != nil {
+				return fmt.Errorf("resolve API for credential association: %w", err)
+			}
+
+			assocPayload := map[string]interface{}{
+				"apiIDs": []string{apiID},
+			}
+			assocData, err := json.Marshal(assocPayload)
+			if err != nil {
+				return fmt.Errorf("marshal api association: %w", err)
+			}
+
+			assocURL := fmt.Sprintf("%s/rest/apigateway/applications/%s/apis", adminURL, appResp.ID)
+			assocReq, err := http.NewRequestWithContext(ctx, http.MethodPost, assocURL, strings.NewReader(string(assocData)))
+			if err != nil {
+				return err
+			}
+			assocReq.Header.Set("Content-Type", "application/json")
+			w.setAuth(assocReq)
+
+			assocResp, err := w.client.Do(assocReq)
+			if err != nil {
+				return fmt.Errorf("associate webmethods app with api: %w", err)
+			}
+			_ = assocResp.Body.Close()
+
+			if assocResp.StatusCode != http.StatusOK && assocResp.StatusCode != http.StatusCreated && assocResp.StatusCode != http.StatusConflict {
+				return fmt.Errorf("webmethods app-api association failed (%d)", assocResp.StatusCode)
+			}
 		}
 	}
 	return nil

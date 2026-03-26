@@ -191,6 +191,79 @@ func TestHeartbeatNotRegistered(t *testing.T) {
 	}
 }
 
+// --- CAB-1916: routes_count computed from discovered APIs ---
+
+func TestComputeRoutesCountEmpty(t *testing.T) {
+	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
+	if got := a.computeRoutesCount(); got != 0 {
+		t.Errorf("computeRoutesCount() = %d, want 0", got)
+	}
+}
+
+func TestComputeRoutesCountWithPaths(t *testing.T) {
+	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
+	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+		{Name: "petstore", Paths: []string{"/pets", "/pets/{id}"}, IsActive: true},
+		{Name: "payments", Paths: []string{"/charge"}, IsActive: true},
+	}
+	if got := a.computeRoutesCount(); got != 3 {
+		t.Errorf("computeRoutesCount() = %d, want 3", got)
+	}
+}
+
+func TestComputeRoutesCountSkipsInactive(t *testing.T) {
+	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
+	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+		{Name: "active", Paths: []string{"/ok"}, IsActive: true},
+		{Name: "inactive", Paths: []string{"/skip1", "/skip2"}, IsActive: false},
+	}
+	if got := a.computeRoutesCount(); got != 1 {
+		t.Errorf("computeRoutesCount() = %d, want 1", got)
+	}
+}
+
+func TestComputeRoutesCountNoPaths(t *testing.T) {
+	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
+	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+		{Name: "minimal", IsActive: true},
+	}
+	if got := a.computeRoutesCount(); got != 1 {
+		t.Errorf("computeRoutesCount() = %d, want 1 (API with no paths counts as 1)", got)
+	}
+}
+
+func TestHeartbeatSendsRoutesCount(t *testing.T) {
+	var receivedPayload HeartbeatPayload
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&receivedPayload); err != nil {
+			t.Errorf("decode heartbeat: %v", err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: server.URL,
+		GatewayAPIKey:   "key",
+	})
+	agent.gatewayID = "gw-123"
+	agent.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+		{Name: "petstore", Paths: []string{"/pets", "/pets/{id}"}, IsActive: true},
+	}
+
+	err := agent.Heartbeat(context.Background())
+	if err != nil {
+		t.Fatalf("heartbeat failed: %v", err)
+	}
+	if receivedPayload.RoutesCount != 2 {
+		t.Errorf("routes_count = %d, want 2", receivedPayload.RoutesCount)
+	}
+	if receivedPayload.DiscoveredAPIs != 1 {
+		t.Errorf("discovered_apis = %d, want 1", receivedPayload.DiscoveredAPIs)
+	}
+}
+
 func TestStartHeartbeatStopsOnCancel(t *testing.T) {
 	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

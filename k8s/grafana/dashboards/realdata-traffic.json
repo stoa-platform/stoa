@@ -1,0 +1,1083 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Real-data traffic observability — MCP protocol, tool calls, resilience, security, and expected failure baselines (CAB-1860)",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["stoa"],
+      "title": "Related Dashboards",
+      "type": "dashboards"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "panels": [],
+      "title": "Row 1 — MCP Protocol",
+      "type": "row"
+    },
+    {
+      "title": "MCP Discovery Latency (P50 / P95 / P99)",
+      "description": "Latency distribution for MCP tool discovery requests",
+      "type": "timeseries",
+      "id": 1,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "stacking": { "mode": "none" },
+            "gradientMode": "scheme",
+            "showPoints": "never"
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(stoa_tool_discovery_duration_seconds_bucket{tenant=~\"$tenant\"}[5m])) by (le))",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_tool_discovery_duration_seconds_bucket{tenant=~\"$tenant\"}[5m])) by (le))",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(stoa_tool_discovery_duration_seconds_bucket{tenant=~\"$tenant\"}[5m])) by (le))",
+          "legendFormat": "P99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "title": "Tool Call Success Rate",
+      "description": "Percentage of successful MCP tool calls over time",
+      "type": "timeseries",
+      "id": 2,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "spanNulls": false,
+            "stacking": { "mode": "none" },
+            "thresholdsStyle": { "mode": "area" }
+          },
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.95 },
+              { "color": "green", "value": 0.99 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "min", "lastNotNull"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(stoa_mcp_tools_calls_total{status=\"success\", tenant=~\"$tenant\"}[5m])) / sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}[5m]))",
+          "legendFormat": "Success Rate",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Active SSE Connections",
+      "description": "Currently active SSE and WebSocket connections",
+      "type": "timeseries",
+      "id": 3,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" },
+            "gradientMode": "opacity"
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "stoa_mcp_sse_connections_active",
+          "legendFormat": "SSE",
+          "refId": "A"
+        },
+        {
+          "expr": "stoa_mcp_ws_connections_active",
+          "legendFormat": "WebSocket",
+          "refId": "B"
+        },
+        {
+          "expr": "stoa_mcp_sessions_active",
+          "legendFormat": "Sessions",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "title": "Discovery Failures",
+      "description": "Tool discovery failure rate",
+      "type": "stat",
+      "id": 4,
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_tool_discovery_failures_total[1h]))",
+          "legendFormat": "Failures (1h)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Route Reloads",
+      "description": "Route reload count and loaded routes gauge",
+      "type": "stat",
+      "id": 5,
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "stoa_route_reload_routes_loaded",
+          "legendFormat": "Routes Loaded",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "MCP Request Throughput",
+      "description": "Total MCP tool call rate by tenant",
+      "type": "timeseries",
+      "id": 6,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}[5m])) by (tenant)",
+          "legendFormat": "{{ tenant }}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "id": 101,
+      "panels": [],
+      "title": "Row 2 — Tool Calls",
+      "type": "row"
+    },
+    {
+      "title": "Per-Tool Latency P95",
+      "description": "P95 latency broken down by individual tool",
+      "type": "timeseries",
+      "id": 10,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_tool_duration_seconds_bucket{tenant=~\"$tenant\"}[5m])) by (le, tool))",
+          "legendFormat": "{{ tool }}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Tool Error Rate by Tool",
+      "description": "Error rate per individual tool (errors / total calls)",
+      "type": "timeseries",
+      "id": 11,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 40,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(stoa_mcp_tools_calls_total{status=\"error\", tenant=~\"$tenant\"}[5m])) by (tool) / sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}[5m])) by (tool)",
+          "legendFormat": "{{ tool }}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Tool Call Volume by Status",
+      "description": "Tool invocation breakdown by success/error status",
+      "type": "timeseries",
+      "id": 12,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 30,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "success" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "error" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "mean"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(stoa_mcp_tools_calls_total{tenant=~\"$tenant\"}[5m])) by (status)",
+          "legendFormat": "{{ status }}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Upstream Latency (Backend)",
+      "description": "Latency attributed to upstream backends (P50/P95/P99)",
+      "type": "timeseries",
+      "id": 13,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(stoa_upstream_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "Upstream P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_upstream_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "Upstream P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(stoa_upstream_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "Upstream P99",
+          "refId": "C"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "id": 102,
+      "panels": [],
+      "title": "Row 3 — Resilience",
+      "type": "row"
+    },
+    {
+      "title": "Circuit Breaker State",
+      "description": "Per-upstream circuit breaker state: 0=Closed (healthy), 1=Open (tripped), 2=Half-Open (probing)",
+      "type": "timeseries",
+      "id": 20,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 2,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "spanNulls": false,
+            "stacking": { "mode": "none" },
+            "lineInterpolation": "stepAfter"
+          },
+          "color": { "mode": "palette-classic" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "Closed", "color": "green" } } },
+            { "type": "value", "options": { "1": { "text": "Open", "color": "red" } } },
+            { "type": "value", "options": { "2": { "text": "Half-Open", "color": "orange" } } }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "stoa_circuit_breaker_state",
+          "legendFormat": "{{ upstream }}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Rate Limit Hits",
+      "description": "Rate-limited requests per tenant over time",
+      "type": "timeseries",
+      "id": 21,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 30,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "mean"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_rate_limit_hits_total{tenant=~\"$tenant\"}[5m])) by (tenant)",
+          "legendFormat": "{{ tenant }}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Fallback Attempts vs Exhausted",
+      "description": "Fallback retry attempts compared to fully exhausted fallback chains",
+      "type": "timeseries",
+      "id": 22,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 43 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Exhausted" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(stoa_fallback_attempts_total[5m]))",
+          "legendFormat": "Attempts",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(stoa_fallback_exhausted_total[5m]))",
+          "legendFormat": "Exhausted",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "API Proxy Circuit Opens",
+      "description": "API proxy requests blocked due to open circuit breakers",
+      "type": "timeseries",
+      "id": 23,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 43 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 40,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "fixedColor": "orange", "mode": "fixed" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_api_proxy_circuit_open_total[5m]))",
+          "legendFormat": "Circuit Open Blocks",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Token Budget Usage",
+      "description": "Token budget consumption and exceeded events per tenant",
+      "type": "timeseries",
+      "id": 24,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 43 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(stoa_token_budget_tokens_total{tenant=~\"$tenant\"}[5m])) by (tenant, direction)",
+          "legendFormat": "{{ tenant }} {{ direction }}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(stoa_token_budget_exceeded_total{tenant=~\"$tenant\"}[5m])) by (tenant)",
+          "legendFormat": "{{ tenant }} EXCEEDED",
+          "refId": "B"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 51 },
+      "id": 103,
+      "panels": [],
+      "title": "Row 4 — Security",
+      "type": "row"
+    },
+    {
+      "title": "Auth Failures (mTLS + DPoP)",
+      "description": "mTLS validation failures and DPoP proof failures over time",
+      "type": "timeseries",
+      "id": 30,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 30,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "mean"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_mtls_validations_total{result!=\"success\"}[5m])) by (result)",
+          "legendFormat": "mTLS {{ result }}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(stoa_dpop_validations_total{result!=\"success\"}[5m])) by (result)",
+          "legendFormat": "DPoP {{ result }}",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(increase(stoa_sender_constraint_checks_total{result!=\"success\"}[5m])) by (result)",
+          "legendFormat": "Sender {{ result }}",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "title": "mTLS Binding Mismatches",
+      "description": "Certificate-token binding mismatch detections (potential impersonation)",
+      "type": "timeseries",
+      "id": 31,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 40,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "fixedColor": "red", "mode": "fixed" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_mtls_binding_checks_total{result=\"mismatch\"}[5m]))",
+          "legendFormat": "Binding Mismatches",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Guardrails — PII & Injection",
+      "description": "PII detections and prompt injection blocks",
+      "type": "timeseries",
+      "id": 32,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 60 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 40,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_guardrails_pii_detected_total[5m])) by (action)",
+          "legendFormat": "PII {{ action }}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(stoa_guardrails_injection_blocked_total[5m])) by (tool)",
+          "legendFormat": "Injection {{ tool }}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Expiring Certificates",
+      "description": "Number of mTLS certificates expiring soon",
+      "type": "stat",
+      "id": 33,
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 60 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "stoa_mtls_certs_expiring_soon",
+          "legendFormat": "Expiring",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Pre-TLS Rejections",
+      "description": "TCP connections rejected before TLS handshake",
+      "type": "stat",
+      "id": 34,
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 60 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 100 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_tcp_connections_rejected_pre_tls_total[1h]))",
+          "legendFormat": "Rejected (1h)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Security Profile Enforcement",
+      "description": "FAPI/mTLS profile enforcement results by profile type",
+      "type": "timeseries",
+      "id": 35,
+      "gridPos": { "h": 8, "w": 8, "x": 12, "y": 64 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 30,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_profile_enforcement_total[5m])) by (result, profile)",
+          "legendFormat": "{{ profile }} {{ result }}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 72 },
+      "id": 104,
+      "panels": [],
+      "title": "Row 5 — Expected Failures (Baseline)",
+      "type": "row"
+    },
+    {
+      "title": "Expected vs Unexpected Errors",
+      "description": "Baseline of known error patterns (rate limits, auth challenges, quota exceeded) vs unexpected errors. Green = expected operational noise, Red = investigate.",
+      "type": "timeseries",
+      "id": 40,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 73 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 30,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Expected: Rate Limited" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Expected: Token Budget" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Expected: Circuit Open" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Unexpected Errors" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "mean"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(stoa_rate_limit_hits_total[5m]))",
+          "legendFormat": "Expected: Rate Limited",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(stoa_token_budget_exceeded_total[5m]))",
+          "legendFormat": "Expected: Token Budget",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(stoa_api_proxy_circuit_open_total[5m]))",
+          "legendFormat": "Expected: Circuit Open",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(stoa_mcp_tools_calls_total{status=\"error\"}[5m])) - sum(rate(stoa_rate_limit_hits_total[5m])) - sum(rate(stoa_token_budget_exceeded_total[5m])) - sum(rate(stoa_api_proxy_circuit_open_total[5m]))",
+          "legendFormat": "Unexpected Errors",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "title": "Guardrail Activations (Expected)",
+      "description": "PII filtering, content moderation, and prompt guard activations — these are expected protective actions, not errors",
+      "type": "timeseries",
+      "id": 41,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 73 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_guardrails_pii_detected_total[5m])) by (action)",
+          "legendFormat": "PII {{ action }}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(stoa_guardrails_content_filtered_total[5m])) by (category)",
+          "legendFormat": "Content {{ category }}",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(increase(stoa_prompt_guard_detected_total[5m])) by (category)",
+          "legendFormat": "Prompt Guard {{ category }}",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "title": "Diagnostic RCA Events",
+      "description": "Root cause analysis diagnostic invocations by category",
+      "type": "timeseries",
+      "id": 42,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 81 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 20,
+            "spanNulls": false,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(stoa_diagnostics_total[5m])) by (category)",
+          "legendFormat": "{{ category }}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Error Snapshot Store",
+      "description": "Error snapshots captured for post-mortem analysis and current store size",
+      "type": "timeseries",
+      "id": 43,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 81 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "stacking": { "mode": "none" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(stoa_snapshots_captured_total[5m]))",
+          "legendFormat": "Snapshots Captured",
+          "refId": "A"
+        },
+        {
+          "expr": "stoa_snapshot_store_size",
+          "legendFormat": "Store Size",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(stoa_snapshots_evicted_total[5m]))",
+          "legendFormat": "Evicted",
+          "refId": "C"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["stoa", "traffic", "realdata", "mcp"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(stoa_mcp_tools_calls_total, tenant)",
+        "includeAll": true,
+        "multi": true,
+        "name": "tenant",
+        "query": { "query": "label_values(stoa_mcp_tools_calls_total, tenant)", "refId": "A" },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "STOA Real-Data Traffic",
+  "uid": "stoa-realdata-traffic",
+  "version": 1
+}

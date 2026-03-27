@@ -1,0 +1,151 @@
+# CAB-1860: Real-Data Traffic Alert Rules
+# Prometheus alerting rules for real traffic observability
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-realdata-traffic-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+  annotations:
+    gostoa.dev/created-by: cab-1860
+spec:
+  groups:
+    # ============================================
+    # Alert 1: High Tool Error Rate
+    # ============================================
+    - name: stoa.realdata-traffic.error-rate
+      rules:
+        - alert: StoaRealdataHighErrorRate
+          expr: |
+            (
+              sum(rate(stoa_mcp_tools_calls_total{status="error"}[5m]))
+              / sum(rate(stoa_mcp_tools_calls_total[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            component: stoa-gateway
+            dashboard: stoa-realdata-traffic
+          annotations:
+            summary: "Real-data traffic error rate above 5%"
+            description: "Tool call error rate is {{ $value | humanizePercentage }} (threshold: 5%). Check Row 2 — Tool Calls in the Real-Data Traffic dashboard."
+            dashboard_url: "/d/stoa-realdata-traffic/stoa-real-data-traffic?orgId=1"
+
+        - alert: StoaRealdataCriticalErrorRate
+          expr: |
+            (
+              sum(rate(stoa_mcp_tools_calls_total{status="error"}[5m]))
+              / sum(rate(stoa_mcp_tools_calls_total[5m]))
+            ) > 0.15
+          for: 3m
+          labels:
+            severity: critical
+            component: stoa-gateway
+            dashboard: stoa-realdata-traffic
+          annotations:
+            summary: "Real-data traffic error rate above 15%"
+            description: "Tool call error rate is {{ $value | humanizePercentage }} (threshold: 15%). Immediate investigation required."
+            dashboard_url: "/d/stoa-realdata-traffic/stoa-real-data-traffic?orgId=1"
+
+    # ============================================
+    # Alert 2: Latency Spike
+    # ============================================
+    - name: stoa.realdata-traffic.latency
+      rules:
+        - alert: StoaRealdataLatencySpike
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(stoa_mcp_tool_duration_seconds_bucket[5m])) by (le)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            component: stoa-gateway
+            dashboard: stoa-realdata-traffic
+          annotations:
+            summary: "Tool call P95 latency above 2s"
+            description: "MCP tool call P95 latency is {{ $value | humanizeDuration }} (threshold: 2s). Check upstream backends and circuit breaker state."
+            dashboard_url: "/d/stoa-realdata-traffic/stoa-real-data-traffic?orgId=1"
+
+        - alert: StoaRealdataDiscoveryLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(stoa_tool_discovery_duration_seconds_bucket[5m])) by (le)
+            ) > 5
+          for: 5m
+          labels:
+            severity: warning
+            component: stoa-gateway
+            dashboard: stoa-realdata-traffic
+          annotations:
+            summary: "Tool discovery P95 latency above 5s"
+            description: "MCP tool discovery P95 latency is {{ $value | humanizeDuration }}. Clients may experience slow initial connections."
+            dashboard_url: "/d/stoa-realdata-traffic/stoa-real-data-traffic?orgId=1"
+
+    # ============================================
+    # Alert 3: Auth Failure Spike
+    # ============================================
+    - name: stoa.realdata-traffic.auth
+      rules:
+        - alert: StoaRealdataAuthFailureSpike
+          expr: |
+            (
+              sum(rate(stoa_mtls_validations_total{result!="success"}[5m]))
+              + sum(rate(stoa_dpop_validations_total{result!="success"}[5m]))
+            ) > 10
+          for: 3m
+          labels:
+            severity: warning
+            component: stoa-gateway
+            dashboard: stoa-realdata-traffic
+          annotations:
+            summary: "Auth failure rate spike (mTLS + DPoP)"
+            description: "Combined mTLS and DPoP failures exceeding 10/s. Possible certificate expiry, misconfiguration, or attack."
+            dashboard_url: "/d/stoa-realdata-traffic/stoa-real-data-traffic?orgId=1"
+
+        - alert: StoaRealdataMtlsBindingMismatch
+          expr: |
+            sum(rate(stoa_mtls_binding_checks_total{result="mismatch"}[5m])) > 0
+          for: 1m
+          labels:
+            severity: critical
+            component: stoa-gateway
+            dashboard: stoa-realdata-traffic
+          annotations:
+            summary: "mTLS certificate-token binding mismatch detected"
+            description: "A client is presenting a certificate that doesn't match its token binding. This may indicate token theft or impersonation."
+            dashboard_url: "/d/stoa-realdata-traffic/stoa-real-data-traffic?orgId=1"
+
+    # ============================================
+    # Alert 4: Circuit Breaker Open
+    # ============================================
+    - name: stoa.realdata-traffic.resilience
+      rules:
+        - alert: StoaRealdataCircuitBreakerOpen
+          expr: |
+            stoa_circuit_breaker_state == 1
+          for: 2m
+          labels:
+            severity: warning
+            component: stoa-gateway
+            dashboard: stoa-realdata-traffic
+          annotations:
+            summary: "Circuit breaker OPEN for upstream {{ $labels.upstream }}"
+            description: "Upstream {{ $labels.upstream }} circuit breaker has been open for >2 minutes. Requests are being rejected. Check upstream health."
+            dashboard_url: "/d/stoa-realdata-traffic/stoa-real-data-traffic?orgId=1"
+
+        - alert: StoaRealdataFallbackExhausted
+          expr: |
+            sum(rate(stoa_fallback_exhausted_total[5m])) > 0.1
+          for: 5m
+          labels:
+            severity: critical
+            component: stoa-gateway
+            dashboard: stoa-realdata-traffic
+          annotations:
+            summary: "Fallback chains being exhausted"
+            description: "All fallback options are failing at {{ $value }}/s. No healthy upstream available for some requests."
+            dashboard_url: "/d/stoa-realdata-traffic/stoa-real-data-traffic?orgId=1"

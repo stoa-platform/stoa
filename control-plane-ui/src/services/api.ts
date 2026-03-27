@@ -1098,6 +1098,18 @@ class ApiService {
     return data;
   }
 
+  // Chat conversation metrics — tenant-level aggregates (CAB-1868)
+  async getChatConversationMetrics(tenantId: string): Promise<ChatConversationMetrics> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/tenant`);
+    return data;
+  }
+
+  // Chat model distribution — conversations per model (CAB-1868)
+  async getChatModelDistribution(tenantId: string): Promise<ChatModelDistribution> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/models`);
+    return data;
+  }
+
   async createChatConversation(
     tenantId: string,
     title = 'New conversation'
@@ -1492,6 +1504,25 @@ export interface TokenUsageStats {
   today_tokens: number;
   top_users: { user_id: string; tokens: number }[];
   daily_breakdown: { date: string; tokens: number }[];
+}
+
+// Chat conversation metrics (CAB-1868)
+export interface ChatConversationMetrics {
+  tenant_id: string;
+  total_conversations: number;
+  total_messages: number;
+  total_tokens: number;
+  unique_users: number;
+}
+
+export interface ModelDistributionEntry {
+  model: string;
+  conversations: number;
+}
+
+export interface ChatModelDistribution {
+  models: ModelDistributionEntry[];
+  total_conversations: number;
 }
 
 // Platform Status types (CAB-654)

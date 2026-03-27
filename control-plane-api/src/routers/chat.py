@@ -41,6 +41,7 @@ from ..schemas.chat import (
     ConversationResponse,
     ConversationUpdate,
     MessageSend,
+    ModelDistributionResponse,
     ProviderKeySet,
     TenantChatSettings,
     TokenBudgetStatusResponse,
@@ -515,6 +516,27 @@ async def get_usage_stats(
     repo = ChatTokenUsageRepository(db)
     stats = await repo.get_usage_stats(tenant_id, days=days, group_by_source=group_by == "source")
     return TokenUsageStatsResponse(**stats)
+
+
+# ---------------------------------------------------------------------------
+# Model distribution (CAB-1868)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/usage/models",
+    response_model=ModelDistributionResponse,
+    summary="Get model usage distribution across conversations (admin)",
+)
+@require_tenant_access
+async def get_model_distribution(
+    tenant_id: str,
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
+    svc: ChatService = Depends(_service),
+) -> ModelDistributionResponse:
+    models = await svc.get_model_distribution(tenant_id)
+    total = sum(m["conversations"] for m in models)
+    return ModelDistributionResponse(models=models, total_conversations=total)
 
 
 # ---------------------------------------------------------------------------

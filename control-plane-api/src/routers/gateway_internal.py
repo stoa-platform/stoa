@@ -95,6 +95,7 @@ class GatewayRouteItem(BaseModel):
     backend_url: str
     methods: list[str] = []
     spec_hash: str = ""
+    openapi_spec: bytes | None = None
     activated: bool = True
 
 
@@ -132,7 +133,13 @@ async def list_gateway_routes(
         tenant_id = ds.get("tenant_id", "")
         route = map_api_spec_to_stoa(ds, tenant_id)
         if route.get("backend_url"):  # Skip routes without a backend
-            routes.append(GatewayRouteItem(**route))
+            # Encode openapi_spec dict → JSON bytes for outbound-only delivery (CAB-1929)
+            spec = route.pop("openapi_spec", None)
+            item = GatewayRouteItem(**route)
+            if spec is not None:
+                import json as _json
+                item.openapi_spec = _json.dumps(spec).encode()
+            routes.append(item)
 
     return routes
 

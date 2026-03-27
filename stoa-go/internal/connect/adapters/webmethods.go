@@ -554,6 +554,256 @@ func (w *WebMethodsAdapter) InjectCredentials(ctx context.Context, adminURL stri
 	return nil
 }
 
+// --- OIDC Support (OIDCAdapter interface) ---
+
+// wmAlias represents an alias from webMethods API Gateway.
+type wmAlias struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type wmAliasListResponse struct {
+	Alias []wmAlias `json:"alias"`
+}
+
+// wmStrategy represents a strategy from webMethods API Gateway.
+type wmStrategy struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type wmStrategyListResponse struct {
+	Strategies []wmStrategy `json:"strategy"`
+}
+
+// listAliases fetches all aliases from webMethods.
+func (w *WebMethodsAdapter) listAliases(ctx context.Context, adminURL string) ([]wmAlias, error) {
+	body, err := w.doGet(ctx, adminURL+"/rest/apigateway/alias")
+	if err != nil {
+		return nil, fmt.Errorf("list aliases: %w", err)
+	}
+	var resp wmAliasListResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("decode aliases: %w", err)
+	}
+	return resp.Alias, nil
+}
+
+// listStrategies fetches all strategies from webMethods.
+func (w *WebMethodsAdapter) listStrategies(ctx context.Context, adminURL string) ([]wmStrategy, error) {
+	body, err := w.doGet(ctx, adminURL+"/rest/apigateway/strategies")
+	if err != nil {
+		return nil, fmt.Errorf("list strategies: %w", err)
+	}
+	var resp wmStrategyListResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("decode strategies: %w", err)
+	}
+	return resp.Strategies, nil
+}
+
+// UpsertAuthServer creates or updates an OIDC auth server alias on webMethods.
+func (w *WebMethodsAdapter) UpsertAuthServer(ctx context.Context, adminURL string, spec AuthServerSpec) error {
+	scopes := spec.Scopes
+	if len(scopes) == 0 {
+		scopes = []string{"openid"}
+	}
+	payload := map[string]interface{}{
+		"name": spec.Name, "description": spec.Description, "type": "authServerAlias",
+		"discoveryURL": spec.DiscoveryURL, "introspectionURL": spec.IntrospectionURL,
+		"clientId": spec.ClientID, "clientSecret": spec.ClientSecret, "scopes": scopes,
+	}
+	existing, err := w.listAliases(ctx, adminURL)
+	if err != nil {
+		return err
+	}
+	var existingID string
+	for _, a := range existing {
+		if a.Name == spec.Name && a.Type == "authServerAlias" {
+			existingID = a.ID
+			break
+		}
+	}
+	return w.upsertResource(ctx, adminURL, "/rest/apigateway/alias", existingID, payload)
+}
+
+// DeleteAuthServer removes an auth server alias by name.
+func (w *WebMethodsAdapter) DeleteAuthServer(ctx context.Context, adminURL string, name string) error {
+	existing, err := w.listAliases(ctx, adminURL)
+	if err != nil {
+		return err
+	}
+	for _, a := range existing {
+		if a.Name == name && a.Type == "authServerAlias" {
+			return w.doDelete(ctx, fmt.Sprintf("%s/rest/apigateway/alias/%s", adminURL, a.ID))
+		}
+	}
+	return nil
+}
+
+// UpsertStrategy creates or updates an OAuth2 strategy on webMethods.
+func (w *WebMethodsAdapter) UpsertStrategy(ctx context.Context, adminURL string, spec StrategySpec) error {
+	strategyType := spec.Type
+	if strategyType == "" {
+		strategyType = "OAUTH2"
+	}
+	payload := map[string]interface{}{
+		"name": spec.Name, "description": spec.Description, "type": strategyType,
+		"authServerAlias": spec.AuthServerAlias, "clientId": spec.ClientID,
+		"audience": spec.Audience,
+	}
+	existing, err := w.listStrategies(ctx, adminURL)
+	if err != nil {
+		return err
+	}
+	var existingID string
+	for _, s := range existing {
+		if s.Name == spec.Name {
+			existingID = s.ID
+			break
+		}
+	}
+	return w.upsertResource(ctx, adminURL, "/rest/apigateway/strategies", existingID, payload)
+}
+
+// UpsertScope creates a scope mapping on webMethods.
+func (w *WebMethodsAdapter) UpsertScope(ctx context.Context, adminURL string, spec ScopeSpec) error {
+	keycloakScope := spec.KeycloakScope
+	if keycloakScope == "" {
+		keycloakScope = "openid"
+	}
+	payload := map[string]interface{}{
+		"scopeName": spec.ScopeName, "description": spec.Description,
+		"audience": spec.Audience, "apiIds": spec.APIIDs,
+		"authServerAlias": spec.AuthServerAlias, "keycloakScope": keycloakScope,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal scope: %w", err)
+	}
+	scopeURL := adminURL + "/rest/apigateway/scopes"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, scopeURL, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	w.setAuth(req)
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("create scope: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("scope create failed (%d): %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+// --- Alias Support (AliasAdapter interface) ---
+
+// UpsertAlias creates or updates an endpoint alias on webMethods.
+func (w *WebMethodsAdapter) UpsertAlias(ctx context.Context, adminURL string, spec AliasSpec) error {
+	aliasType := spec.Type
+	if aliasType == "" {
+		aliasType = "endpoint"
+	}
+	connTimeout := spec.ConnectionTimeout
+	if connTimeout == 0 {
+		connTimeout = 30
+	}
+	readTimeout := spec.ReadTimeout
+	if readTimeout == 0 {
+		readTimeout = 60
+	}
+	optimization := spec.Optimization
+	if optimization == "" {
+		optimization = "None"
+	}
+	payload := map[string]interface{}{
+		"name": spec.Name, "description": spec.Description, "type": aliasType,
+		"endPointURI": spec.EndpointURI, "connectionTimeout": connTimeout,
+		"readTimeout": readTimeout, "optimizationTechnique": optimization,
+		"passSecurityHeaders": spec.PassSecurityHeaders,
+	}
+	existing, err := w.listAliases(ctx, adminURL)
+	if err != nil {
+		return err
+	}
+	var existingID string
+	for _, a := range existing {
+		if a.Name == spec.Name && a.Type != "authServerAlias" {
+			existingID = a.ID
+			break
+		}
+	}
+	return w.upsertResource(ctx, adminURL, "/rest/apigateway/alias", existingID, payload)
+}
+
+// DeleteAlias removes an alias by name.
+func (w *WebMethodsAdapter) DeleteAlias(ctx context.Context, adminURL string, name string) error {
+	existing, err := w.listAliases(ctx, adminURL)
+	if err != nil {
+		return err
+	}
+	for _, a := range existing {
+		if a.Name == name {
+			return w.doDelete(ctx, fmt.Sprintf("%s/rest/apigateway/alias/%s", adminURL, a.ID))
+		}
+	}
+	return nil
+}
+
+// --- Shared helpers ---
+
+func (w *WebMethodsAdapter) upsertResource(ctx context.Context, adminURL string, basePath string, existingID string, payload map[string]interface{}) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal resource: %w", err)
+	}
+	var method, resourceURL string
+	if existingID != "" {
+		method = http.MethodPut
+		resourceURL = fmt.Sprintf("%s%s/%s", adminURL, basePath, existingID)
+	} else {
+		method = http.MethodPost
+		resourceURL = adminURL + basePath
+	}
+	req, err := http.NewRequestWithContext(ctx, method, resourceURL, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	w.setAuth(req)
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("upsert resource: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("upsert failed (%d): %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+func (w *WebMethodsAdapter) doDelete(ctx context.Context, deleteURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
+	if err != nil {
+		return err
+	}
+	w.setAuth(req)
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("delete resource: %w", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("delete failed (%d)", resp.StatusCode)
+	}
+	return nil
+}
 func (w *WebMethodsAdapter) doGet(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

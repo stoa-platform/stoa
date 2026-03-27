@@ -97,6 +97,14 @@ class GatewayDeployment(Base):
     )
     policy_sync_error = Column(Text, nullable=True)
 
+    # Optional link to the promotion that triggered this deployment
+    promotion_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("promotions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Gateway-side resource ID (assigned by the gateway when the API is registered)
     gateway_resource_id = Column(String(255), nullable=True)
 

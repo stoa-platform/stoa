@@ -822,6 +822,179 @@ class TestGatewaySyncAck:
             assert resp.status_code == 404
 
 
+def _make_deployment(**overrides):
+    """Create a mock GatewayDeployment."""
+    from src.models.gateway_deployment import DeploymentSyncStatus
+
+    dep_id = overrides.pop("id", uuid4())
+    defaults = {
+        "id": dep_id,
+        "api_catalog_id": uuid4(),
+        "gateway_instance_id": uuid4(),
+        "sync_status": DeploymentSyncStatus.PENDING,
+        "last_sync_attempt": None,
+        "last_sync_success": None,
+        "sync_error": None,
+        "sync_attempts": 0,
+        "promotion_id": None,
+    }
+    defaults.update(overrides)
+    mock = MagicMock()
+    for k, v in defaults.items():
+        setattr(mock, k, v)
+    return mock
+
+
+class TestRouteSyncAck:
+    """POST /v1/internal/gateways/{id}/route-sync-ack"""
+
+    def test_route_sync_ack_success(self, client):
+        """Two deployments applied → sync_status=SYNCED + last_sync_success set."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep1 = _make_deployment()
+        dep2 = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+
+            async def get_by_id_side_effect(dep_id):
+                for d in [dep1, dep2]:
+                    if d.id == dep_id:
+                        return d
+                return None
+
+            mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
+            mock_deploy_repo.update = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep1.id), "status": "applied"},
+                        {"deployment_id": str(dep2.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["processed"] == 2
+            assert data["not_found"] == 0
+            assert dep1.sync_status == DeploymentSyncStatus.SYNCED
+            assert dep1.last_sync_success is not None
+            assert dep1.sync_error is None
+            assert dep2.sync_status == DeploymentSyncStatus.SYNCED
+
+    def test_route_sync_ack_failed(self, client):
+        """One deployment failed → sync_status=ERROR + sync_error set."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "failed", "error": "connection refused"},
+                    ],
+                    "sync_timestamp": "2026-03-27T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["processed"] == 1
+            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            assert dep.sync_error == "connection refused"
+
+    def test_route_sync_ack_mixed(self, client):
+        """One applied + one failed → each updated independently."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep_ok = _make_deployment()
+        dep_fail = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+
+            async def get_by_id_side_effect(dep_id):
+                for d in [dep_ok, dep_fail]:
+                    if d.id == dep_id:
+                        return d
+                return None
+
+            mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
+            mock_deploy_repo.update = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep_ok.id), "status": "applied"},
+                        {"deployment_id": str(dep_fail.id), "status": "failed", "error": "timeout"},
+                    ],
+                    "sync_timestamp": "2026-03-27T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["processed"] == 2
+            assert data["not_found"] == 0
+            assert dep_ok.sync_status == DeploymentSyncStatus.SYNCED
+            assert dep_ok.sync_error is None
+            assert dep_fail.sync_status == DeploymentSyncStatus.ERROR
+            assert dep_fail.sync_error == "timeout"
+
+    def test_route_sync_ack_deployment_not_found(self, client):
+        """Non-existent deployment_id → 200 with not_found=1 (no crash)."""
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=None)
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(uuid4()), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["processed"] == 0
+            assert data["not_found"] == 1
+
+
 class TestHelperFunctions:
     """Unit tests for internal helper functions."""
 
@@ -872,3 +1045,205 @@ class TestHelperFunctions:
 
         # connect maps to GatewayType.STOA (bridge agent, not a new adapter type)
         assert _mode_to_gateway_type("connect") == GatewayType.STOA
+
+
+class TestRouteSyncAckPromotionCompletion:
+    """Tests for promotion auto-completion triggered by route-sync-ack."""
+
+    def test_route_ack_triggers_promotion_complete(self, client):
+        """Single promotion, single gateway — ack applied → promotion PROMOTED."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        promo_id = uuid4()
+        dep = _make_deployment(promotion_id=promo_id)
+
+        mock_promotion = MagicMock()
+        mock_promotion.id = promo_id
+        mock_promotion.status = "promoting"
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_status == DeploymentSyncStatus.SYNCED
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
+
+    def test_route_ack_partial_does_not_complete(self, client):
+        """1 promotion, 2 gateways, only 1 ack → promotion NOT completed yet."""
+        promo_id = uuid4()
+        dep1 = _make_deployment(promotion_id=promo_id)
+        dep2 = _make_deployment(promotion_id=promo_id)  # Not in the ack payload
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+
+            async def get_by_id_side_effect(dep_id):
+                if dep_id == dep1.id:
+                    return dep1
+                return None
+
+            mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep1.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            # check_promotion_completion IS called — the service internally
+            # decides whether to complete based on remaining deployments
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
+
+    def test_route_ack_all_synced_completes(self, client):
+        """1 promotion, 2 gateways, 2 acks applied → check called once for the promotion."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        promo_id = uuid4()
+        dep1 = _make_deployment(promotion_id=promo_id)
+        dep2 = _make_deployment(promotion_id=promo_id)
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+
+            async def get_by_id_side_effect(dep_id):
+                for d in [dep1, dep2]:
+                    if d.id == dep_id:
+                        return d
+                return None
+
+            mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep1.id), "status": "applied"},
+                        {"deployment_id": str(dep2.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep1.sync_status == DeploymentSyncStatus.SYNCED
+            assert dep2.sync_status == DeploymentSyncStatus.SYNCED
+            # Called once — promo_id is deduplicated via set
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
+
+    def test_route_ack_error_fails_promotion(self, client):
+        """1 promotion, 1 gateway, ack failed → check called (service handles failure)."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        promo_id = uuid4()
+        dep = _make_deployment(promotion_id=promo_id)
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "failed", "error": "timeout"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
+
+    def test_route_ack_mixed_error_and_pending(self, client):
+        """1 promotion, 2 gateways, 1 error ack + 1 not yet acked → check called once."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        promo_id = uuid4()
+        dep_err = _make_deployment(promotion_id=promo_id)
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep_err)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep_err.id), "status": "failed", "error": "connection refused"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep_err.sync_status == DeploymentSyncStatus.ERROR
+            # check is called — the service will see 1 ERROR + 1 PENDING still remaining
+            # and will NOT complete/fail yet
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)

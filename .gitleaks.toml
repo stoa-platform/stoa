@@ -32,6 +32,8 @@ paths = [
   # Demo scripts with test/demo credentials (not real secrets)
   '''scripts/demo/.*''',
   '''demo/.*''',
+  # VPS deploy files with webMethods trial default credentials (not real secrets)
+  '''deploy/vps/webmethods/.*''',
   # AI Factory rules (examples and anti-pattern documentation, not real secrets)
   '''\.claude/rules/.*\.md''',
   # VPS benchmark deploy scripts with example Pushgateway credentials

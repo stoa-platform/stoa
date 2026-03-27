@@ -274,6 +274,15 @@ class SyncEngine:
                 )
                 return
 
+            # Skip agent-managed gateways (stoa-connect pulls sync from CP)
+            if gateway.source == "self_register":
+                logger.debug(
+                    "Gateway %s is agent-managed (self_register), skipping push sync for deployment %s",
+                    gateway.name,
+                    deployment_id,
+                )
+                return
+
             adapter = None
             try:
                 adapter = await create_adapter_with_credentials(

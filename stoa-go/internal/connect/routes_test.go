@@ -3,6 +3,7 @@ package connect
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -187,6 +188,130 @@ func TestStartRouteSyncSkipsNoURL(t *testing.T) {
 
 	// Should not panic
 	agent.StartRouteSync(ctx, &mockSyncAdapter{}, "", RouteSyncConfig{})
+}
+
+func TestRunRouteSyncSendsAckWithDeploymentIDs(t *testing.T) {
+	var ackReceived bool
+	var ackPayload RouteSyncAckPayload
+
+	routes := []adapters.Route{
+		{ID: "r1", Name: "api-a", DeploymentID: "dep-1", PathPrefix: "/a", BackendURL: "http://svc-a:8080", Activated: true},
+		{ID: "r2", Name: "api-b", DeploymentID: "dep-2", PathPrefix: "/b", BackendURL: "http://svc-b:8080", Activated: true},
+		{ID: "r3", Name: "api-c", PathPrefix: "/c", BackendURL: "http://svc-c:8080", Activated: true}, // no DeploymentID
+	}
+
+	cpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/internal/gateways/routes":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(routes)
+		case r.URL.Path == "/v1/internal/gateways/gw-test/route-sync-ack" && r.Method == "POST":
+			ackReceived = true
+			_ = json.NewDecoder(r.Body).Decode(&ackPayload)
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer cpServer.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: cpServer.URL,
+		GatewayAPIKey:   "key",
+	})
+	agent.gatewayID = "gw-test"
+
+	adapter := &mockSyncAdapter{}
+	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
+
+	if !ackReceived {
+		t.Fatal("expected route-sync-ack to be sent")
+	}
+	// Only routes with DeploymentID should be in ack (2 out of 3)
+	if len(ackPayload.SyncedRoutes) != 2 {
+		t.Errorf("expected 2 ack results (routes with DeploymentID), got %d", len(ackPayload.SyncedRoutes))
+	}
+	for _, r := range ackPayload.SyncedRoutes {
+		if r.Status != "applied" {
+			t.Errorf("expected status applied, got %s", r.Status)
+		}
+	}
+}
+
+func TestRunRouteSyncAckReportsFailedStatus(t *testing.T) {
+	var ackPayload RouteSyncAckPayload
+
+	routes := []adapters.Route{
+		{ID: "r1", Name: "api-a", DeploymentID: "dep-1", PathPrefix: "/a", BackendURL: "http://svc-a:8080", Activated: true},
+	}
+
+	cpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/internal/gateways/routes":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(routes)
+		case r.URL.Path == "/v1/internal/gateways/gw-test/route-sync-ack" && r.Method == "POST":
+			_ = json.NewDecoder(r.Body).Decode(&ackPayload)
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer cpServer.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: cpServer.URL,
+		GatewayAPIKey:   "key",
+	})
+	agent.gatewayID = "gw-test"
+
+	adapter := &mockSyncAdapter{syncRoutesErr: fmt.Errorf("gateway unreachable")}
+	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
+
+	if len(ackPayload.SyncedRoutes) != 1 {
+		t.Fatalf("expected 1 ack result, got %d", len(ackPayload.SyncedRoutes))
+	}
+	if ackPayload.SyncedRoutes[0].Status != "failed" {
+		t.Errorf("expected status failed, got %s", ackPayload.SyncedRoutes[0].Status)
+	}
+	if ackPayload.SyncedRoutes[0].Error == "" {
+		t.Error("expected error message in failed ack result")
+	}
+}
+
+func TestRunRouteSyncNoAckWithoutDeploymentIDs(t *testing.T) {
+	ackCalled := false
+
+	routes := []adapters.Route{
+		{ID: "r1", Name: "api-a", PathPrefix: "/a", BackendURL: "http://svc-a:8080", Activated: true},
+	}
+
+	cpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/internal/gateways/routes":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(routes)
+		case "/v1/internal/gateways/gw-test/route-sync-ack":
+			ackCalled = true
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer cpServer.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: cpServer.URL,
+		GatewayAPIKey:   "key",
+	})
+	agent.gatewayID = "gw-test"
+
+	adapter := &mockSyncAdapter{}
+	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
+
+	if ackCalled {
+		t.Error("expected no ack call when routes have no DeploymentID")
+	}
 }
 
 func TestRouteSyncConfigFromEnv(t *testing.T) {

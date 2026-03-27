@@ -25,15 +25,16 @@ type PolicyAction struct {
 
 // Route represents an API route fetched from the Control Plane for sync.
 type Route struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	TenantID   string   `json:"tenant_id"`
-	PathPrefix string   `json:"path_prefix"`
-	BackendURL string   `json:"backend_url"`
-	Methods    []string `json:"methods,omitempty"`
-	SpecHash    string   `json:"spec_hash,omitempty"`
-	OpenAPISpec []byte   `json:"openapi_spec,omitempty"`
-	Activated   bool     `json:"activated"`
+	ID           string   `json:"id"`
+	DeploymentID string   `json:"deployment_id,omitempty"`
+	Name         string   `json:"name"`
+	TenantID     string   `json:"tenant_id"`
+	PathPrefix   string   `json:"path_prefix"`
+	BackendURL   string   `json:"backend_url"`
+	Methods      []string `json:"methods,omitempty"`
+	SpecHash     string   `json:"spec_hash,omitempty"`
+	OpenAPISpec  []byte   `json:"openapi_spec,omitempty"`
+	Activated    bool     `json:"activated"`
 }
 
 // Credential represents a consumer credential fetched from Vault for injection.

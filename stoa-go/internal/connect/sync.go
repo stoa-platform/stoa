@@ -179,6 +179,75 @@ func (a *Agent) ReportSyncAck(ctx context.Context, results []SyncedPolicyResult)
 	return nil
 }
 
+// RouteSyncAckPayload is sent to POST /v1/internal/gateways/{id}/route-sync-ack.
+type RouteSyncAckPayload struct {
+	SyncedRoutes  []SyncedRouteResult `json:"synced_routes"`
+	SyncTimestamp string              `json:"sync_timestamp"`
+}
+
+// SyncedRouteResult reports the sync result for one route deployment.
+type SyncedRouteResult struct {
+	DeploymentID string `json:"deployment_id"`
+	Status       string `json:"status"` // "applied", "failed"
+	Error        string `json:"error,omitempty"`
+}
+
+// ReportRouteSyncAck sends route sync results to the CP.
+func (a *Agent) ReportRouteSyncAck(ctx context.Context, results []SyncedRouteResult) error {
+	if a.gatewayID == "" {
+		return fmt.Errorf("not registered")
+	}
+
+	ctx, span := a.startSpan(ctx, "stoa-connect.routes.ack",
+		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.Int("stoa.synced_routes", len(results)),
+	)
+	defer span.End()
+
+	payload := RouteSyncAckPayload{
+		SyncedRoutes:  results,
+		SyncTimestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "marshal failed")
+		return fmt.Errorf("marshal route-sync-ack: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/v1/internal/gateways/%s/route-sync-ack", a.cfg.ControlPlaneURL, a.gatewayID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "create request failed")
+		return fmt.Errorf("create route-sync-ack request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "request failed")
+		return fmt.Errorf("route-sync-ack request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		err := fmt.Errorf("route-sync-ack failed (%d): %s", resp.StatusCode, string(body))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "route-sync-ack rejected")
+		return err
+	}
+
+	span.SetStatus(codes.Ok, "route-sync-ack sent")
+	return nil
+}
+
 // RunSync performs a single policy sync cycle: fetch config → apply/remove → ack.
 func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.sync",

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -265,9 +266,9 @@ func TestHeartbeatSendsRoutesCount(t *testing.T) {
 }
 
 func TestStartHeartbeatStopsOnCancel(t *testing.T) {
-	callCount := 0
+	var callCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
+		callCount.Add(1)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
@@ -287,7 +288,7 @@ func TestStartHeartbeatStopsOnCancel(t *testing.T) {
 	cancel()
 	time.Sleep(100 * time.Millisecond)
 
-	if callCount < 2 {
-		t.Errorf("expected at least 2 heartbeats, got %d", callCount)
+	if callCount.Load() < 2 {
+		t.Errorf("expected at least 2 heartbeats, got %d", callCount.Load())
 	}
 }

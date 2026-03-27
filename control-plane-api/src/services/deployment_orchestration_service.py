@@ -257,6 +257,7 @@ class DeploymentOrchestrationService:
         tenant_id: str,
         target_environment: str,
         approved_by: str,
+        promotion_id: UUID | None = None,
     ) -> list:
         """Triggered by promotion event — auto-deploy to assigned gateways."""
         # Resolve the catalog entry
@@ -289,7 +290,15 @@ class DeploymentOrchestrationService:
             approved_by,
         )
 
-        return await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
+        deployments = await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
+
+        # Stamp deployments with the promotion that triggered them
+        if promotion_id and deployments:
+            for dep in deployments:
+                dep.promotion_id = promotion_id
+            await self.db.flush()
+
+        return deployments
 
     async def _try_inline_sync(self, deployments: list) -> None:
         """Attempt to sync deployments immediately (inline, not via Kafka/worker).

@@ -27,6 +27,7 @@ from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.repositories.gateway_policy import GatewayPolicyRepository
 from src.schemas.contract import McpToolDefinition, TenantToolsResponse
 from src.schemas.gateway import GatewayInstanceResponse
+from src.services.promotion_service import PromotionService
 from src.services.uac_tool_generator import UacToolGenerator
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ class GatewayRouteItem(BaseModel):
     """Route in stoa-gateway ApiRoute format for hot-reload."""
 
     id: str
+    deployment_id: str = ""
     name: str
     tenant_id: str
     path_prefix: str
@@ -135,7 +137,7 @@ async def list_gateway_routes(
         if route.get("backend_url"):  # Skip routes without a backend
             # Encode openapi_spec dict → JSON bytes for outbound-only delivery (CAB-1929)
             spec = route.pop("openapi_spec", None)
-            item = GatewayRouteItem(**route)
+            item = GatewayRouteItem(**route, deployment_id=str(dep.id))
             if spec is not None:
                 import json as _json
                 item.openapi_spec = _json.dumps(spec).encode()
@@ -532,6 +534,107 @@ async def sync_ack(
         "removed": removed,
         "failed": failed,
     }
+
+
+class SyncedRouteResult(BaseModel):
+    """Result of syncing a single route deployment on the gateway."""
+
+    deployment_id: str = Field(..., description="GatewayDeployment UUID")
+    status: str = Field(..., description="Sync result: applied or failed")
+    error: str | None = Field(default=None, description="Error message if failed")
+
+
+class RouteSyncAckPayload(BaseModel):
+    """Payload from stoa-connect reporting route sync results."""
+
+    synced_routes: list[SyncedRouteResult] = Field(default_factory=list, description="Sync results per route")
+    sync_timestamp: str = Field(..., description="ISO timestamp of sync completion")
+
+
+@router.post("/{gateway_id}/route-sync-ack", status_code=200)
+async def route_sync_ack(
+    gateway_id: UUID,
+    payload: RouteSyncAckPayload,
+    x_gateway_key: str = Header(..., alias="X-Gateway-Key"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Acknowledge route sync results from stoa-connect.
+
+    Called by stoa-connect after pushing routes to the local gateway.
+    Updates GatewayDeployment sync_status based on the results.
+    """
+    _validate_gateway_key(x_gateway_key)
+
+    deploy_repo = GatewayDeploymentRepository(db)
+    now = datetime.now(UTC)
+
+    processed = 0
+    not_found = 0
+
+    from src.models.gateway_deployment import DeploymentSyncStatus
+
+    for result in payload.synced_routes:
+        try:
+            dep_uuid = UUID(result.deployment_id)
+        except ValueError:
+            logger.warning("route-sync-ack: invalid deployment_id=%s", result.deployment_id)
+            not_found += 1
+            continue
+
+        deployment = await deploy_repo.get_by_id(dep_uuid)
+        if not deployment:
+            logger.warning(
+                "route-sync-ack: deployment not found id=%s gateway=%s",
+                result.deployment_id,
+                gateway_id,
+            )
+            not_found += 1
+            continue
+
+        if result.status == "applied":
+            deployment.sync_status = DeploymentSyncStatus.SYNCED
+            deployment.last_sync_success = now
+            deployment.sync_error = None
+        elif result.status == "failed":
+            deployment.sync_status = DeploymentSyncStatus.ERROR
+            deployment.sync_error = result.error
+        else:
+            logger.warning("route-sync-ack: unknown status=%s for deployment=%s", result.status, result.deployment_id)
+            continue
+
+        deployment.last_sync_attempt = now
+        await deploy_repo.update(deployment)
+        processed += 1
+
+    await db.commit()
+
+    # Check if any updated deployments are linked to a promotion
+    promotion_ids_to_check: set[UUID] = set()
+    for result in payload.synced_routes:
+        try:
+            dep_uuid = UUID(result.deployment_id)
+        except ValueError:
+            continue
+        dep = await deploy_repo.get_by_id(dep_uuid)
+        if dep and dep.promotion_id:
+            promotion_ids_to_check.add(dep.promotion_id)
+
+    for promo_id in promotion_ids_to_check:
+        try:
+            promotion_svc = PromotionService(db)
+            await promotion_svc.check_promotion_completion(promo_id)
+            await db.commit()
+        except Exception as e:
+            logger.warning("Promotion completion check failed for %s: %s", promo_id, e)
+
+    logger.info(
+        "Gateway route-sync-ack: id=%s, processed=%d, not_found=%d",
+        gateway_id,
+        processed,
+        not_found,
+    )
+
+    return {"processed": processed, "not_found": not_found}
 
 
 class InternalToolDef(BaseModel):

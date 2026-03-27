@@ -444,6 +444,8 @@ func TestWebMethodsSyncRoutes(t *testing.T) {
 			createdAPIs = append(createdAPIs, payload["apiName"].(string))
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-api-1"})
+		case r.URL.Path == "/rest/apigateway/apis/new-api-1" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-api-1", "apiName": "stoa-petstore", "isActive": true})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -479,6 +481,8 @@ func TestWebMethodsSyncRoutesIdempotent(t *testing.T) {
 			putCount++
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "existing-1"})
+		case r.URL.Path == "/rest/apigateway/apis/existing-1" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "existing-1", "apiName": "stoa-petstore", "isActive": true})
 		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodPost:
 			postCount++
 			w.WriteHeader(http.StatusCreated)
@@ -504,16 +508,22 @@ func TestWebMethodsSyncRoutesIdempotent(t *testing.T) {
 }
 
 func TestWebMethodsSyncRoutesSkipInactive(t *testing.T) {
-	var requestCount int
+	var createCount int
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet {
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"apiResponse": []interface{}{}})
-			return
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodPost:
+			createCount++
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-active-1"})
+		case strings.HasPrefix(r.URL.Path, "/rest/apigateway/apis/") && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-active-1", "apiName": "stoa-active-route", "isActive": true})
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		requestCount++
-		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
@@ -526,8 +536,8 @@ func TestWebMethodsSyncRoutesSkipInactive(t *testing.T) {
 		t.Fatalf("sync routes error: %v", err)
 	}
 	// Only 1 POST for the active route, inactive is skipped before any HTTP call
-	if requestCount != 1 {
-		t.Errorf("expected 1 create request (inactive skipped), got %d", requestCount)
+	if createCount != 1 {
+		t.Errorf("expected 1 create request (inactive skipped), got %d", createCount)
 	}
 }
 
@@ -536,13 +546,18 @@ func TestWebMethodsSyncRoutesSpecHashSkip(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet {
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"apiResponse": []interface{}{}})
-			return
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodPost:
+			syncCount++
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-1"})
+		case strings.HasPrefix(r.URL.Path, "/rest/apigateway/apis/") && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-1", "apiName": "stoa-petstore", "isActive": true})
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		syncCount++
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-1"})
 	}))
 	defer server.Close()
 
@@ -1257,6 +1272,8 @@ func TestWebMethodsSyncRoutesWithDeactivation(t *testing.T) {
 			createCount++
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-1"})
+		case r.URL.Path == "/rest/apigateway/apis/new-1" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-1", "apiName": "stoa-new-route", "isActive": true})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -1276,5 +1293,117 @@ func TestWebMethodsSyncRoutesWithDeactivation(t *testing.T) {
 	}
 	if createCount != 1 {
 		t.Errorf("expected 1 create for active route, got %d", createCount)
+	}
+}
+
+func TestWebMethodsSyncRoutesVerifiesActiveAfterCreate(t *testing.T) {
+	var getVerifyCalled bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"apiResponse": []interface{}{}})
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodPost:
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "created-1"})
+		case r.URL.Path == "/rest/apigateway/apis/created-1" && r.Method == http.MethodGet:
+			getVerifyCalled = true
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id": "created-1", "apiName": "stoa-petstore", "isActive": true,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
+	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+		{Name: "petstore", BackendURL: "http://example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
+	})
+	if err != nil {
+		t.Fatalf("sync routes error: %v", err)
+	}
+	if !getVerifyCalled {
+		t.Error("expected GET verification call after POST create")
+	}
+}
+
+func TestWebMethodsSyncRoutesActivatesIfNotActive(t *testing.T) {
+	var activateCalled bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"apiResponse": []map[string]interface{}{
+					{"id": "existing-1", "apiName": "stoa-petstore", "apiVersion": "1.0", "isActive": true},
+				},
+			})
+		case r.URL.Path == "/rest/apigateway/apis/existing-1" && r.Method == http.MethodPut:
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "existing-1"})
+		case r.URL.Path == "/rest/apigateway/apis/existing-1" && r.Method == http.MethodGet:
+			// API is NOT active after PUT
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id": "existing-1", "apiName": "stoa-petstore", "isActive": false,
+			})
+		case r.URL.Path == "/rest/apigateway/apis/existing-1/activate" && r.Method == http.MethodPut:
+			activateCalled = true
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
+	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+		{Name: "petstore", BackendURL: "http://example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
+	})
+	if err != nil {
+		t.Fatalf("sync routes error: %v", err)
+	}
+	if !activateCalled {
+		t.Error("expected ActivateAPI to be called when isActive=false")
+	}
+}
+
+func TestWebMethodsSyncRoutesFailsIfActivateFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"apiResponse": []map[string]interface{}{
+					{"id": "existing-1", "apiName": "stoa-petstore", "apiVersion": "1.0", "isActive": true},
+				},
+			})
+		case r.URL.Path == "/rest/apigateway/apis/existing-1" && r.Method == http.MethodPut:
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "existing-1"})
+		case r.URL.Path == "/rest/apigateway/apis/existing-1" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id": "existing-1", "apiName": "stoa-petstore", "isActive": false,
+			})
+		case r.URL.Path == "/rest/apigateway/apis/existing-1/activate" && r.Method == http.MethodPut:
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
+	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+		{Name: "petstore", BackendURL: "http://example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
+	})
+	if err == nil {
+		t.Fatal("expected error when activation fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "stoa-petstore") {
+		t.Errorf("error should contain API name, got: %s", err.Error())
 	}
 }

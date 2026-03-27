@@ -77,6 +77,63 @@ type TelemetryEvent struct {
 	APIID     string    `json:"api_id,omitempty"`
 }
 
+// AuthServerSpec describes an OIDC auth server alias for gateways that support OIDC.
+type AuthServerSpec struct {
+	Name             string   `json:"name"`
+	Description      string   `json:"description,omitempty"`
+	DiscoveryURL     string   `json:"discovery_url"`
+	IntrospectionURL string   `json:"introspection_url,omitempty"`
+	ClientID         string   `json:"client_id"`
+	ClientSecret     string   `json:"client_secret,omitempty"`
+	Scopes           []string `json:"scopes,omitempty"`
+}
+
+// StrategySpec describes an OAuth2 strategy linked to an auth server.
+type StrategySpec struct {
+	Name            string `json:"name"`
+	Description     string `json:"description,omitempty"`
+	Type            string `json:"type,omitempty"`   // default: OAUTH2
+	AuthServerAlias string `json:"auth_server_alias"`
+	ClientID        string `json:"client_id,omitempty"`
+	Audience        string `json:"audience"` // CRITICAL: empty string, not omitted
+}
+
+// ScopeSpec describes a scope mapping for an OIDC-enabled gateway.
+type ScopeSpec struct {
+	ScopeName       string   `json:"scope_name"`       // format: {Alias}:{Scope}
+	Description     string   `json:"description,omitempty"`
+	Audience        string   `json:"audience"`          // CRITICAL: empty string, not omitted
+	APIIDs          []string `json:"api_ids,omitempty"`
+	AuthServerAlias string   `json:"auth_server_alias"`
+	KeycloakScope   string   `json:"keycloak_scope,omitempty"` // default: openid
+}
+
+// AliasSpec describes an endpoint alias for gateways that support aliases.
+type AliasSpec struct {
+	Name                string `json:"name"`
+	Description         string `json:"description,omitempty"`
+	Type                string `json:"type,omitempty"` // endpoint, authServerAlias
+	EndpointURI         string `json:"endpoint_uri"`
+	ConnectionTimeout   int    `json:"connection_timeout,omitempty"`
+	ReadTimeout         int    `json:"read_timeout,omitempty"`
+	Optimization        string `json:"optimization,omitempty"`
+	PassSecurityHeaders bool   `json:"pass_security_headers,omitempty"`
+}
+
+// OIDCAdapter extends GatewayAdapter for OIDC-capable gateways.
+type OIDCAdapter interface {
+	UpsertAuthServer(ctx context.Context, adminURL string, spec AuthServerSpec) error
+	UpsertStrategy(ctx context.Context, adminURL string, spec StrategySpec) error
+	UpsertScope(ctx context.Context, adminURL string, spec ScopeSpec) error
+	DeleteAuthServer(ctx context.Context, adminURL string, name string) error
+}
+
+// AliasAdapter extends GatewayAdapter for alias-capable gateways.
+type AliasAdapter interface {
+	UpsertAlias(ctx context.Context, adminURL string, spec AliasSpec) error
+	DeleteAlias(ctx context.Context, adminURL string, name string) error
+}
+
 // AdapterConfig holds common configuration for gateway adapters.
 type AdapterConfig struct {
 	// Token is the admin API token (e.g., Kong-Admin-Token).

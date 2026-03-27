@@ -295,6 +295,20 @@ class ChatService:
             "unique_users": unique_users,
         }
 
+    async def get_model_distribution(self, tenant_id: str) -> list[dict[str, Any]]:
+        """Return conversation count grouped by model for a tenant."""
+        q = (
+            select(
+                ChatConversation.model,
+                func.count(ChatConversation.id).label("conversations"),
+            )
+            .where(ChatConversation.tenant_id == tenant_id)
+            .group_by(ChatConversation.model)
+            .order_by(func.count(ChatConversation.id).desc())
+        )
+        rows = (await self.session.execute(q)).all()
+        return [{"model": r.model, "conversations": r.conversations} for r in rows]
+
     # ------------------------------------------------------------------
     # Message streaming
     # ------------------------------------------------------------------

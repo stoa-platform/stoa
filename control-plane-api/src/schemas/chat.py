@@ -210,6 +210,20 @@ class TokenUsageStatsResponse(BaseModel):
     daily_breakdown: list[DailyBreakdown]
 
 
+class ModelDistributionEntry(BaseModel):
+    """A single model usage entry."""
+
+    model: str
+    conversations: int
+
+
+class ModelDistributionResponse(BaseModel):
+    """Model distribution across tenant conversations."""
+
+    models: list[ModelDistributionEntry]
+    total_conversations: int
+
+
 class SSEMessageStart(BaseModel):
     """SSE: message_start — emitted once at the start of assistant reply."""
 

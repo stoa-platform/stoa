@@ -1,7 +1,10 @@
 // Package adapters provides per-gateway discovery and policy sync implementations.
 package adapters
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // DiscoveredAPI represents an API/service discovered on a gateway.
 type DiscoveredAPI struct {
@@ -60,6 +63,18 @@ type GatewayAdapter interface {
 
 	// InjectCredentials provisions consumer credentials on the local gateway.
 	InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error
+}
+
+// TelemetryEvent represents a normalized API invocation event (common schema).
+type TelemetryEvent struct {
+	Timestamp time.Time `json:"timestamp"`
+	Method    string    `json:"method"`
+	Path      string    `json:"path"`
+	Status    int       `json:"status"`
+	LatencyMs int64     `json:"latency_ms"`
+	TenantID  string    `json:"tenant_id,omitempty"`
+	APIName   string    `json:"api_name,omitempty"`
+	APIID     string    `json:"api_id,omitempty"`
 }
 
 // AdapterConfig holds common configuration for gateway adapters.

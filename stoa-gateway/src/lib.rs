@@ -712,7 +712,7 @@ async fn http_metrics_middleware(
     // Skip span creation when proxy tracing is disabled to save ~0.4ms per request.
     // Env: STOA_PROXY_TRACING_ENABLED (default: true)
     use tracing::Instrument;
-    let response = if tracing_enabled {
+    let (response, captured_trace_id) = if tracing_enabled {
         let deployment_mode = state.config.gateway_mode.to_string();
         let request_span = tracing::span!(
             tracing::Level::INFO,
@@ -722,10 +722,25 @@ async fn http_metrics_middleware(
             http.method = %method,
             http.route = %path,
         );
-        next.run(request).instrument(request_span).await
+        // CAB-1866: capture trace_id inside the span so access_log_middleware can read it.
+        // access_log is an outer layer — by the time it sees the response, this span has
+        // already closed and tracing::Span::current() returns Span::none().
+        let (resp, trace_id) = async {
+            let r = next.run(request).await;
+            let tid = crate::telemetry::extract_trace_id();
+            (r, tid)
+        }
+        .instrument(request_span)
+        .await;
+        (resp, trace_id)
     } else {
-        next.run(request).await
+        let resp = next.run(request).await;
+        (resp, "-".to_string())
     };
+    let mut response = response;
+    response
+        .extensions_mut()
+        .insert(crate::access_log::CapturedTraceId(captured_trace_id));
 
     let duration = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();

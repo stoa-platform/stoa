@@ -219,12 +219,6 @@ fn init_tracing(config: &Config) {
         .with_target(true)
         .with_current_span(true);
 
-    // CAB-1866: eprintln because tracing subscriber is not yet initialized
-    eprintln!(
-        "[stoa-gateway] OTel config: enabled={}, endpoint={:?}",
-        config.otel_enabled, config.otel_endpoint
-    );
-
     if config.otel_enabled {
         use stoa_gateway::telemetry::{init_telemetry_tracer, TelemetryConfig};
 
